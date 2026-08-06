@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Updated** | 2026-07-28 |
+| **Updated** | 2026-08-06 |
 | **Scope authority** | `docs/ops/completion-registry.json` |
 | **Generated view** | `docs/ops/completeness-scorecard.md` |
 
@@ -69,39 +69,31 @@ The authoritative browser transport is deliberately asymmetric:
 There is no JSON WebSocket compatibility mode. Pre-1.0 greenfield status lets
 the binary boundary remain singular and testable.
 
-## Next buildable product slice
+## Next buildable coding slice
 
 The next dependency-satisfied coding item is
-`product.community.member-mutes`.
+`foundation.maintainable-core`. Its active slice extracts host-prompt
+resolution and replay reconstruction from the commands composition root into a
+typed owner without moving transaction, idempotency, capability, or persistence
+ownership and without changing rejects, event order, result/trace payloads, run
+identifiers, or replay equality.
 
-Its required shape is:
+After that extraction, local 1.0 closure proceeds in this order:
 
-1. append typed mute/unmute facts to one private relationship stream per member
-   and target public profile;
-2. project the current mute set without exposing credential principals;
-3. apply one shared personalized-author suppression policy to discussion
-   threads, public search, and subscription inbox reads;
-4. expose bounded mute-list pagination plus profile and inbox controls;
-5. prove two-member isolation, reversibility, moderation independence, rebuild,
-   cursor stability, and browser recovery.
+1. complete the remaining maintainable-core concentrations recorded in
+   [16-maintainable-core](16-maintainable-core.md);
+2. replace direct user-to-slot assignment history with named game-scoped
+   personas and immutable occupancy epochs across setup, authority,
+   replacement, replay/export, projections, and role surfaces;
+3. implement the typed member data-lifecycle and retention contract;
+4. re-declare proof tiers at each frontier checkpoint, run sprint proof during
+   the active slice, and run full proof before landing the completed sprint.
 
-It does not add direct-message blocking, private-channel blocking, global
-moderation, ranking, or recommendation semantics.
-
-## Local closure after member mutes
-
-After the mute slice is complete:
-
-1. update the completion registry and regenerate the scorecard;
-2. re-declare proof tiers so completed untouched surfaces are frozen and the
-   next real frontier remains active;
-3. run `npm run proof:lanes -- --mode sprint --run` during the checkpoint;
-4. run `npm run proof:lanes -- --mode full --run` before landing the sprint;
-5. retain the mash-scale report and role/browser proof artifacts from that exact
-   commit.
-
-Projection snapshots remain deferred until a representative replay benchmark
-exceeds a declared latency or resource SLO.
+The public history explorer is accepted product direction but is explicitly
+deferred beyond 1.0. The persona/occupancy model it depends on is required 1.0
+substrate because live authority and historical authorship must share one truth
+model before release. Projection snapshots remain deferred until a
+representative replay benchmark exceeds a declared latency or resource SLO.
 
 ## 1.0 substrate after local product closure
 
@@ -118,7 +110,7 @@ Local product closure does not authorize release. Hosted work proceeds in this
 order:
 
 1. deploy the exact clean `main` commit to isolated Railway staging API,
-   frontend, Postgres, media volume, variables, domains, and WorkOS environment;
+   frontend, Postgres, object storage, variables, domains, and WorkOS environment;
 2. verify staging API/frontend health and same-commit attribution;
 3. capture non-fixture hosted identity and deployed gameplay evidence;
 4. run the real hosted concurrent-race matrix;

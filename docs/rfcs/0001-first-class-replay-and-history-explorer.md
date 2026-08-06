@@ -940,7 +940,13 @@ The accepted product shape is:
 - server-authoritative folds and redaction;
 - no autoplay, raw ledger, omniscient mode, private replay, or snapshots-by-default.
 
-Slice 1, the game-persona and occupancy foundation, is the next implementation plan.
-It is intentionally a direct domain refactor rather than a compatibility layer: named
-history, live authority, setup, replacement, and later replay must share one occupancy
-model before the explorer is built on top.
+Slice 1, the game-persona and occupancy foundation, is required 1.0 substrate
+and follows closure of the active maintainable-core frontier. It is
+intentionally a direct domain refactor rather than a compatibility layer: named
+history, live authority, setup, replacement, and later replay must share one
+occupancy model.
+
+The explorer query and UI slices remain accepted direction but are explicitly
+deferred beyond 1.0. They become active only after the required platform scope
+is complete and the owner opens the public-history frontier; the canonical
+scope decision lives in `docs/ops/completion-registry.json`.

@@ -564,6 +564,32 @@
       "remaining": []
     },
     {
+      "id": "product.game.persona-occupancy",
+      "section": "game",
+      "order": 60,
+      "title": "Game persona and occupancy epochs",
+      "execution_class": "code",
+      "status": "open",
+      "summary": "The current user-to-slot assignment model proves replacement continuity but does not yet give named game-scoped personas and time-bounded occupancy epochs one shared event-sourced identity model for live authority and historical authorship.",
+      "complete_when": [
+        "Named game-scoped personas and stable slots are joined by immutable occupancy epochs, and setup, live authority, replacement, replay, export, projection rebuilds, and browser recovery consume that single model without compatibility aliases."
+      ],
+      "depends_on": [
+        "foundation.event-store-projections",
+        "product.game.replacement-continuity",
+        "product.game.endgame-reveal-history"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0001-first-class-replay-and-history-explorer.md"
+        }
+      ],
+      "remaining": [
+        "Replace direct user-to-slot assignment history with named game personas and immutable occupancy epochs across setup, authority, replacement, projections, replay/export, and role-surface proof."
+      ]
+    },
+    {
       "id": "product.mash.day-event-model",
       "section": "mash",
       "order": 10,
@@ -1821,6 +1847,7 @@
       ],
       "depends_on": [
         "product.game.core-loop",
+        "product.game.persona-occupancy",
         "foundation.release-topology",
         "foundation.security-release-baseline",
         "foundation.maintainable-core"
@@ -2159,6 +2186,31 @@
         "Define a replay benchmark and SLO before deciding whether snapshot implementation is warranted."
       ],
       "decision_trigger": "Promote only when a representative long-game replay benchmark exceeds the declared latency or resource SLO."
+    },
+    {
+      "id": "optional.public-history-explorer",
+      "section": "optional",
+      "order": 20,
+      "title": "Public history explorer",
+      "execution_class": "optional",
+      "status": "deferred",
+      "summary": "The accepted public-knowledge-as-of explorer remains a post-1.0 presentation capability; 1.0 requires the persona/occupancy truth model it will consume, not the explorer UI itself.",
+      "complete_when": [
+        "Active and completed public games expose server-authoritative snapshot-plus-timeline replay with stable exact-moment links and the RFC's redaction boundary."
+      ],
+      "depends_on": [
+        "product.game.persona-occupancy"
+      ],
+      "evidence": [
+        {
+          "kind": "source",
+          "value": "docs/rfcs/0001-first-class-replay-and-history-explorer.md"
+        }
+      ],
+      "remaining": [
+        "Implement the public replay query, fold, exact-moment links, and explorer surface after the required 1.0 persona/occupancy substrate and release closure are complete."
+      ],
+      "decision_trigger": "Promote only after required 1.0 platform scope is complete and the owner explicitly opens the post-1.0 public-history product frontier."
     }
   ],
   "orchestration_rules": [

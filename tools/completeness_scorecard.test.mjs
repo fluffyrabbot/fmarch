@@ -20,10 +20,10 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   assert.deepEqual(summary.byExecutionClass.code, {
     complete: 40,
     partial: 0,
-    open: 2,
+    open: 3,
     blocked: 0,
     deferred: 0,
-    total: 42,
+    total: 43,
   });
   assert.deepEqual(summary.byExecutionClass["external-evidence"], {
     complete: 0,
@@ -50,6 +50,24 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
     "complete",
   );
   assert.equal(nextBuildableCodeItem(registry)?.id, "foundation.maintainable-core");
+  assert.equal(
+    registry.items.find((item) => item.id === "product.game.persona-occupancy")
+      ?.status,
+    "open",
+  );
+  assert.equal(
+    registry.items.find((item) => item.id === "optional.public-history-explorer")
+      ?.status,
+    "deferred",
+  );
+  assert.deepEqual(summary.byExecutionClass.optional, {
+    complete: 0,
+    partial: 0,
+    open: 0,
+    blocked: 0,
+    deferred: 2,
+    total: 2,
+  });
 });
 
 test("generated scorecard exactly matches the canonical registry", async () => {
