@@ -3,12 +3,13 @@
 //! This module owns credential-attempt scope persistence/auditing and
 //! delivery-intent creation, cancellation, and audit rows. The provider-neutral
 //! delivery worker remains in [`crate::identity_delivery`]. HTTP handlers and
-//! DTOs stay in the API composition root.
+//! DTOs live behind [`crate::auth_http::AuthHttpState`].
 
-use super::identity_delivery::{delivery_aad, IdentityDeliveryKind};
-use super::{
-    hash_session_token, rate_limited, unix_now_seconds, ApiError, ApiState, AuthDeliveryReceipt,
+use super::auth_http::{
+    hash_session_token, rate_limited, unix_now_seconds, AuthDeliveryReceipt, AuthHttpState,
 };
+use super::identity_delivery::{delivery_aad, IdentityDeliveryKind};
+use super::ApiError;
 use axum::http::{HeaderMap, StatusCode};
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
@@ -80,7 +81,7 @@ pub(super) const AUTH_ATTEMPT_SOURCE_SIGNATURE_HEADER: &str = "x-fmarch-auth-sou
 pub(super) const AUTH_ATTEMPT_SOURCE_TIMESTAMP_HEADER: &str = "x-fmarch-auth-source-timestamp";
 
 pub(super) async fn enforce_auth_attempt_limit(
-    state: &ApiState,
+    state: &AuthHttpState,
     headers: &HeaderMap,
     account_id: &str,
 ) -> Result<AuthAttemptScope, ApiError> {
@@ -125,7 +126,7 @@ pub(super) async fn enforce_auth_attempt_limit(
 }
 
 pub(super) async fn enforce_registration_source_limit(
-    state: &ApiState,
+    state: &AuthHttpState,
     headers: &HeaderMap,
 ) -> Result<(), ApiError> {
     let policy = state.auth_attempt_policy.clone();
@@ -142,7 +143,7 @@ pub(super) async fn enforce_registration_source_limit(
 }
 
 pub(super) async fn enforce_recovery_request_limit(
-    state: &ApiState,
+    state: &AuthHttpState,
     headers: &HeaderMap,
     account_id: &str,
 ) -> Result<(), ApiError> {
@@ -166,7 +167,7 @@ pub(super) async fn enforce_recovery_request_limit(
 }
 
 pub(super) async fn enforce_public_request_limit(
-    state: &ApiState,
+    state: &AuthHttpState,
     scope_hash: &str,
     max_attempts: i32,
     policy: &AuthAttemptPolicy,
@@ -306,7 +307,7 @@ fn decode_hex_32(value: &str) -> Option<[u8; 32]> {
 }
 
 pub(super) async fn record_failed_auth_attempt(
-    state: &ApiState,
+    state: &AuthHttpState,
     scope: &AuthAttemptScope,
     account_id: &str,
     operation: &str,
@@ -554,7 +555,7 @@ pub(super) fn auth_attempt_policy_from_env() -> AuthAttemptPolicy {
 }
 
 pub(super) async fn deliver_auth_credential(
-    state: &ApiState,
+    state: &AuthHttpState,
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     request: &AuthCredentialDeliveryRequest<'_>,
 ) -> Result<AuthDeliveryReceipt, ApiError> {

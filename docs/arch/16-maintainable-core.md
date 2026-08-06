@@ -32,7 +32,7 @@ The line counts below are a 2026-08-05 orientation snapshot, not a target.
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
 | `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; continue the maintainable-core frontier at remaining API route families |
-| `crates/api/src/lib.rs` (~9.6k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k) | Auth attempt/delivery orchestration and live publication are closed behind typed boundaries; router composition, auth/session HTTP handlers, community reads/writes, game transport, and command adaptation remain concentrated | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; live transport → live-publication port | Extract the auth/account/session HTTP route family without reopening attempt/delivery persistence |
+| `crates/api/src/lib.rs` (~5.8k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k) | Auth HTTP, attempt/delivery orchestration, and live publication are closed behind typed boundaries; router composition, community reads/writes, game transport, command adaptation, and WebSocket sessions remain concentrated | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; live transport → live-publication port | Continue at projection effect/private-channel ownership, then return to the next independently changing API route family |
 | `crates/projections/src/lib.rs` (~9.1k) | Event dispatch and unrelated game, community, identity, media-reference, scheduler, and private-channel projections | Projection dispatcher plus one module per projection family and shared SQL primitives | family projectors → shared transaction primitives; dispatcher → families | Extract effect/private-channel projectors using the typed records established by the Clippy cleanup |
 | `crates/commands/src/day_runtime.rs` | DayEvent write/runtime (schedule, participate, resolve, sealed automation, narrative publish); see [17](17-day-runtime-ownership.md) | Sole emitter of `DayEvent*` and sole write-path caller of `game_platform` day_schedule / auto_resolution / narrative | day_runtime → shared command helpers + pure game_platform; day_scheduler → day_runtime only | Keep phase lifecycle in lib; further split only if program attach or narrative needs an independent change |
 | `crates/commands/tests/pipeline.rs` (~77.1k) | Cross-domain command scenarios, fixtures, helpers, and operator proof cases | Shared hermetic harness plus scenario-family integration modules | scenario modules → harness/public command API; never scenario ↔ scenario | Split by command family while preserving serial Postgres proof semantics |
@@ -57,8 +57,27 @@ rate-limit auditing, and delivery-intent creation, cancellation, and audit rows.
 `AuthAttemptAudit`, `AuthCredentialDeliveryRequest`, and `AuthDeliveryAudit`
 collapse the former high-arity helpers without changing SQL, JSON audit keys,
 status codes, or transaction boundaries. `identity_delivery.rs` remains the
-provider-neutral worker/adapter boundary; HTTP handlers, DTOs, session auth,
-and `ApiState` builders stay in the composition root.
+provider-neutral worker/adapter boundary; `auth_http.rs` consumes both through
+its typed HTTP state.
+
+## Closed API boundary: auth, account, and session HTTP
+
+`crates/api/src/auth_http.rs` owns the auth router fragment, request/response
+DTOs, account registration/login/recovery and method lifecycle, session
+issue/rotate/logout/revoke behavior, invites, credential-delivery retry, and
+HTTP-focused authentication helpers. `AuthHttpState` is the bounded dependency
+set for those handlers: pool, attempt policy, delivery gateway, password
+admission, verifier, session policy, and ticket issuance configuration.
+
+The API composition root owns one `AuthHttpState`, mounts the route family as a
+unit, and delegates its public test/configuration builders. WebSocket ticket
+creation and connection-session orchestration remain transport-owned in
+`lib.rs`; they consume only the narrow authentication helpers and typed auth
+state. The boundary contract prevents auth handlers and DTOs from returning to
+the root, persistence from leaving `authentication.rs`, provider execution from
+leaving `identity_delivery.rs`, or WebSocket sessions from drifting into the
+HTTP family. Public URLs, JSON, status codes, transaction and audit behavior,
+rate limits, bearer semantics, and session revocation remain unchanged.
 
 ## Closed API boundary: live projection publication
 
@@ -157,9 +176,9 @@ boundary pressure:
   ownership frontier rather than hidden lint debt;
 - command submission, action validation, prompt reconstruction, and operator
   proof audit functions await bounded request contexts;
-- authentication attempt/delivery and live-publication ownership are typed and
-  carry no local lint expectations; remaining auth/session HTTP handlers await
-  route-family extraction and typed request contexts;
+- auth HTTP, authentication attempt/delivery, and live-publication ownership are
+  typed and carry no local lint expectations; remaining community/game
+  transport families await bounded route contexts;
 - direct wire enum payload ownership remains until transport allocation is
   benchmark-driven or the adapter boundary is reshaped;
 

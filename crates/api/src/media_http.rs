@@ -69,7 +69,7 @@ async fn media_upload(
     body: Bytes,
 ) -> Result<impl IntoResponse, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_user_id = require_active_enabled_account(&state, token).await?;
+    let principal_user_id = require_active_enabled_account(&state.auth, token).await?;
     let _media_permit = acquire_workload_slot(
         &state.media_slots,
         "media processing capacity is exhausted; retry shortly",
@@ -268,7 +268,7 @@ async fn media_thread_variant(
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_user_id = require_active_enabled_account(&state, token).await?;
+    let principal_user_id = require_active_enabled_account(&state.auth, token).await?;
     if channel != "main" {
         require_channel_thread_access(
             &state,

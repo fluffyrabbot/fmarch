@@ -306,7 +306,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media HTTP, authentication attempt/delivery, and live publication, domain pack model/validation, and resolver action/trigger/outcome ownership are isolated behind typed boundaries. Remaining resolver coordinator, API route families, projection, command-test, and proof-runner concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media and auth HTTP, authentication attempt/delivery, and live publication, domain pack model/validation, and resolver action/trigger/outcome ownership are isolated behind typed boundaries. Remaining resolver coordinator, API community/game transport, projection, command-test, and proof-runner concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -333,11 +333,19 @@
         },
         {
           "kind": "source",
+          "value": "crates/api/src/auth_http.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/api/src/live_projection.rs"
         },
         {
           "kind": "source",
           "value": "crates/api/tests/live_projection_boundary.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/api/tests/auth_http_boundary.rs"
         },
         {
           "kind": "source",
@@ -377,28 +385,26 @@
         "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract the API auth/account/session HTTP route family from crates/api/src/lib.rs into a bounded auth_http module: move the auth router fragment, request/response DTOs, account registration/login/recovery and method-management handlers, session issue/rotate/logout/revoke handlers, invite handlers, and their HTTP-focused helpers behind a typed AuthHttpState boundary; keep authentication.rs as the attempt/delivery persistence owner and identity_delivery.rs as the provider adapter; and preserve status codes, response bodies, transaction boundaries, audit metadata, cookie/bearer semantics, rate limits, and session-revocation behavior.",
+        "objective": "Extract the projections effect and private-channel families from crates/projections/src/lib.rs into bounded effect_projection and private_channel_projection modules: move their event dispatch arms, typed row/input records, SQL mutation helpers, deterministic readers, snapshot/rebuild hooks, and field decoders behind family-owned projection functions; keep the top-level dispatcher and shared transaction/snapshot primitives in lib.rs; and preserve event ordering, idempotent upsert/delete semantics, rebuild hashes, visibility rules, and existing public reader contracts.",
         "paths": [
-          "crates/api/src/lib.rs",
-          "crates/api/src/auth_http.rs",
-          "crates/api/src/authentication.rs",
-          "crates/api/src/identity_delivery.rs",
-          "crates/api/tests/auth_methods.rs",
-          "crates/api/tests/authenticated_transport.rs",
+          "crates/projections/src/lib.rs",
+          "crates/projections/src/effect_projection.rs",
+          "crates/projections/src/private_channel_projection.rs",
+          "crates/projections/tests",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
-          "cargo test -p api",
-          "npm run test:release-topology",
+          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1",
+          "npm run test:projection-baseline",
           "cargo clippy --workspace --all-targets --all-features -- -D warnings",
           "npm run proof:lanes -- --mode sprint --run",
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not fold authentication attempt/delivery SQL back into the HTTP module or move provider delivery execution out of identity_delivery.rs.",
-          "Do not change public auth URLs, JSON shapes, identity schema, credential hashing, rate-limit policy, audit rows, or session lifetime semantics as an accidental side effect of ownership extraction.",
-          "Do not mix WebSocket authentication, live publication, command transport, community routes, or game routes into this atomic auth HTTP change.",
-          "Do not mark foundation.maintainable-core complete; remaining resolver coordinator, API community/game transport, projection, command-test, and proof-runner concentrations remain."
+          "Do not redesign the projection dispatcher, event schema, public projection structs, migrations, or rebuild protocol as an accidental side effect of ownership extraction.",
+          "Do not merge effect and private-channel visibility semantics into one generic projection abstraction; each family keeps its own typed vocabulary and SQL invariants.",
+          "Do not mix identity, community, scheduler, media-reference, or unrelated game projectors into this atomic change.",
+          "Do not mark foundation.maintainable-core complete; remaining resolver coordinator, API community/game transport, other projection families, command-test, and proof-runner concentrations remain."
         ]
       }
     },
