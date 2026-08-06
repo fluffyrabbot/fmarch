@@ -5,8 +5,29 @@ import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  completeDevTestGameConfiguration,
+  defaultDevTestGamePaths,
+  devTestGameHelp,
+  liveProjectionProofBurstSize,
+  liveProjectionProofConfig,
+  normalizeDevTestGameConfiguration,
+} from "./dev_test_game_configuration.mjs";
+import {
+  buildSessionCard,
+  namedGamesRegistryDocument,
+  parseNamedGamesRegistry,
+  proofRunArtifactWrite,
+  relativeArtifactPath,
+  roleLoginUrl,
+  sessionArtifactWrites,
+  sessionArtifactsForConfiguration,
+  sessionCardConsoleLines,
+  verificationProofArtifactWrites,
+  withSessionVerification,
+} from "./dev_test_game_session_artifacts.mjs";
 import {
   assertDevTestGameProofRun,
   buildDevTestGameProofRun,
@@ -85,15 +106,6 @@ import {
   vanillizerSeedCommandPlan,
 } from "./dev_test_game_vanillizer_scenario.mjs";
 import {
-  devTestGameEarliestReachedProofPath,
-} from "./dev_test_game_earliest_reached_proof_contract.mjs";
-import {
-  devTestGameHostDecidesProofPath,
-} from "./dev_test_game_host_decides_proof_contract.mjs";
-import {
-  devTestGameHostDecidesRaceProofPath,
-} from "./dev_test_game_host_decides_race_proof_contract.mjs";
-import {
   matchesDayVoteElimination,
   matchesPhaseAdvance,
 } from "./dev_test_game_host_prompt_public_resolution.mjs";
@@ -108,55 +120,11 @@ export {
   uiBootstrapSetupRoster,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const frontendRoot = path.join(repoRoot, "frontend");
-const artifactDir = path.join(repoRoot, "target", "dev-test-game");
-const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
-if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
-  throw new Error("FMARCH_MEDIA_ROOT must not be empty");
-}
-const mediaRoot =
-  configuredMediaRoot === undefined
-    ? path.join(artifactDir, "media-store")
-    : path.resolve(repoRoot, configuredMediaRoot);
-const sessionJsonPath = path.join(artifactDir, "session.json");
-const sessionMdPath = path.join(artifactDir, "session.md");
-const proofRunJsonPath = path.join(artifactDir, "proof-run.json");
-const earliestReachedProofJsonPath = path.join(repoRoot, devTestGameEarliestReachedProofPath);
-const hostDecidesProofJsonPath = path.join(repoRoot, devTestGameHostDecidesProofPath);
-const hostDecidesRaceProofJsonPath = path.join(
-  repoRoot,
-  devTestGameHostDecidesRaceProofPath,
-);
-const hostSetupSessionJsonPath = path.join(artifactDir, "host-setup-session.json");
-const hostSetupSessionMdPath = path.join(artifactDir, "host-setup-session.md");
-const hostSetupProofJsonPath = path.join(artifactDir, "host-setup-proof.json");
-const namedGamesPath = path.join(artifactDir, "named-games.json");
-export const defaultDatabaseUrl = "postgres://fmarch:fmarch@localhost:5544/fmarch";
-export const defaultGameName = "local";
-export const defaultApiStartupTimeoutMs = 15 * 60 * 1000;
 const factionDayChatChannel = "private:mafia_day_chat";
 const factionDayChatPostBody = "Faction day chat post from dev:test-game.";
 const hardeningRetryChannel = "main";
-export const liveProjectionProofBurstSize = 5;
-export const defaultLiveProjectionProofCapacity = 4;
-
-export function liveProjectionProofConfig(env = process.env) {
-  const capacity = Number(
-    env.FMARCH_LIVE_PROJECTION_CAPACITY ?? defaultLiveProjectionProofCapacity,
-  );
-  if (!Number.isInteger(capacity) || capacity < 1) {
-    throw new Error("FMARCH_LIVE_PROJECTION_CAPACITY must be a positive integer");
-  }
-  if (capacity >= liveProjectionProofBurstSize) {
-    throw new Error(
-      `FMARCH_LIVE_PROJECTION_CAPACITY must stay below the ${liveProjectionProofBurstSize}-message lag proof burst`,
-    );
-  }
-  return Object.freeze({ capacity, burstSize: liveProjectionProofBurstSize });
-}
 const host = "127.0.0.1";
-const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
+const frontendRequire = createRequire(defaultDevTestGamePaths.frontendPackageJson);
 
 function isStaleVotePhaseLockedMessage(message) {
   return (
@@ -167,6 +135,7 @@ function isStaleVotePhaseLockedMessage(message) {
 
 let apiServer;
 let vite;
+let configuration;
 let args;
 let databaseUrl;
 let game;
@@ -180,42 +149,34 @@ let seedMode;
 let commandEnvelopeId = 1;
 let serverOutput = "";
 let apiServerExit;
-let apiStartupTimeoutMs = defaultApiStartupTimeoutMs;
+let apiStartupTimeoutMs;
 let proofStabilityAudit;
 let identityBootstrap;
 let localAccounts;
 let seedSessionTokens;
 
 export async function main(rawArgs = process.argv.slice(2), env = process.env) {
-  args = parseArgs(rawArgs);
+  configuration = normalizeDevTestGameConfiguration({ rawArgs, env });
+  args = configuration.args;
   if (args.help) {
-    printHelp();
+    console.log(devTestGameHelp());
     return;
   }
-  if (
-    [
-      args.verify,
-      args.verifyHostSetupOnly,
-      args.verifyEarliestReachedOnly,
-      args.verifyHostDecidesOnly,
-    ].filter(Boolean)
-      .length > 1
-  ) {
-    throw new Error("only one dev-test-game verification mode may be selected");
-  }
-
-  databaseUrl = args.databaseUrl ?? env.DATABASE_URL ?? defaultDatabaseUrl;
-  gameName = args.name ?? env.FMARCH_DEV_TEST_GAME_NAME ?? defaultGameName;
   const registry = await readNamedGames();
-  const selection = selectGame({ args, gameName, registry });
-  game = selection.game;
-  seedMode = selection.seedMode;
-  tokenPrefix = args.tokenPrefix ?? `dev-test-${gameName}-${game}-${crypto.randomUUID()}`;
+  configuration = completeDevTestGameConfiguration({
+    configuration,
+    registry,
+  });
+  databaseUrl = configuration.databaseUrl;
+  gameName = configuration.gameName;
+  game = configuration.game;
+  seedMode = configuration.seedMode;
+  tokenPrefix = configuration.tokenPrefix;
   tokens = createTokenSet(tokenPrefix);
   expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
-  apiBaseUrl = args.apiBaseUrl;
-  frontendBaseUrl = args.frontendBaseUrl;
-  apiStartupTimeoutMs = args.apiStartupTimeoutMs ?? defaultApiStartupTimeoutMs;
+  apiBaseUrl = configuration.apiBaseUrl;
+  frontendBaseUrl = configuration.frontendBaseUrl;
+  apiStartupTimeoutMs = configuration.apiStartupTimeoutMs;
   commandEnvelopeId = 1;
   serverOutput = "";
   apiServerExit = undefined;
@@ -223,7 +184,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   localAccounts = new Map();
   seedSessionTokens = new Map();
 
-  await mkdir(artifactDir, { recursive: true });
+  await mkdir(configuration.paths.artifactDir, { recursive: true });
   if (apiBaseUrl === undefined) {
     await assertPostgresReachable(databaseUrl);
     apiBaseUrl = await startApi();
@@ -234,17 +195,10 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   identityBootstrap = await seedRootAdminSession();
   const seedResult = await seedGame();
   const sessions = await createSessions();
-  const sessionArtifacts = args.verifyHostSetupOnly
-    ? sessionArtifactsForPaths({
-        jsonPath: hostSetupSessionJsonPath,
-        markdownPath: hostSetupSessionMdPath,
-        proofRunPath: hostSetupProofJsonPath,
-      })
-    : sessionArtifactsForPaths({
-        jsonPath: sessionJsonPath,
-        markdownPath: sessionMdPath,
-        proofRunPath: proofRunJsonPath,
-      });
+  const sessionArtifacts = sessionArtifactsForConfiguration(
+    configuration.paths,
+    { hostSetupOnly: configuration.verificationMode === "host-setup" },
+  );
 
   if (frontendBaseUrl === undefined) {
     frontendBaseUrl = await startFrontend(apiBaseUrl);
@@ -279,65 +233,55 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
       artifacts: sessionArtifacts,
     });
   }
-  await writeSessionArtifacts(card, sessionArtifacts);
+  await writeArtifactWrites(
+    sessionArtifactWrites({
+      card,
+      repoRoot: configuration.paths.repoRoot,
+    }),
+  );
   await writeNamedGame(gameName, card);
   printSessionCard(card);
 
-  if (
-    args.verify ||
-    args.verifyHostSetupOnly ||
-    args.verifyEarliestReachedOnly ||
-    args.verifyHostDecidesOnly
-  ) {
-    const verification = args.verifyHostSetupOnly
+  if (configuration.verificationMode !== null) {
+    const verification = configuration.verificationMode === "host-setup"
       ? await verifyHostSetupOnly(card)
-      : args.verifyEarliestReachedOnly
+      : configuration.verificationMode === "earliest-reached"
         ? await verifyEarliestReachedOnly(card)
-        : args.verifyHostDecidesOnly
+        : configuration.verificationMode === "host-decides"
           ? await verifyHostDecidesOnly(card)
           : await verifySessionCard(card);
-    card.verification = verification;
-    await writeSessionArtifacts(card, sessionArtifacts);
-    if (verification.earliestReachedTie !== undefined) {
-      await writeFile(
-        earliestReachedProofJsonPath,
-        `${JSON.stringify(verification.earliestReachedTie, null, 2)}\n`,
-      );
-    }
-    if (verification.hostDecidesTie !== undefined) {
-      await writeFile(
-        hostDecidesProofJsonPath,
-        `${JSON.stringify(verification.hostDecidesTie, null, 2)}\n`,
-      );
-    }
-    const hostDecidesRace =
-      verification.hostDecidesRace ??
-      verification.multiplayerHardening?.concurrentHostPromptSelectionRace;
-    if (hostDecidesRace !== undefined) {
-      await writeFile(
-        hostDecidesRaceProofJsonPath,
-        `${JSON.stringify(hostDecidesRace, null, 2)}\n`,
-      );
-    }
-    const hostSetupProof = buildDevTestGameHostSetupProof(card, verification);
-    await writeFile(
-      hostSetupProofJsonPath,
-      `${JSON.stringify(hostSetupProof, null, 2)}\n`,
+    card = withSessionVerification(card, verification);
+    await writeArtifactWrites(
+      sessionArtifactWrites({
+        card,
+        repoRoot: configuration.paths.repoRoot,
+      }),
     );
-    if (args.verifyHostSetupOnly) {
-      console.log(`\nverified host setup browser proof: ${path.relative(repoRoot, hostSetupProofJsonPath)}`);
-    } else if (args.verifyEarliestReachedOnly) {
+    await writeArtifactWrites(
+      verificationProofArtifactWrites({
+        card,
+        verification,
+        paths: configuration.paths,
+      }),
+    );
+    if (configuration.verificationMode === "host-setup") {
       console.log(
-        `\nverified earliest reached browser proof: ${path.relative(repoRoot, earliestReachedProofJsonPath)}`,
+        `\nverified host setup browser proof: ${relativeArtifactPath(configuration.paths, configuration.paths.proof.hostSetup)}`,
       );
-    } else if (args.verifyHostDecidesOnly) {
+    } else if (configuration.verificationMode === "earliest-reached") {
       console.log(
-        `\nverified HostDecides browser proof: ${path.relative(repoRoot, hostDecidesProofJsonPath)}`,
+        `\nverified earliest reached browser proof: ${relativeArtifactPath(configuration.paths, configuration.paths.proof.earliestReached)}`,
+      );
+    } else if (configuration.verificationMode === "host-decides") {
+      console.log(
+        `\nverified HostDecides browser proof: ${relativeArtifactPath(configuration.paths, configuration.paths.proof.hostDecides)}`,
       );
     } else {
       const proofRun = buildDevTestGameProofRun(card);
       assertDevTestGameProofRun(proofRun);
-      await writeFile(proofRunJsonPath, `${JSON.stringify(proofRun, null, 2)}\n`);
+      await writeArtifactWrites([
+        proofRunArtifactWrite({ proofRun, paths: configuration.paths }),
+      ]);
       console.log(`\nverified browser entry: ${verification.roles.join(", ")}`);
     }
   }
@@ -348,23 +292,6 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     console.log("\nKeeping the API and frontend alive. Press Ctrl-C to stop.");
     await new Promise(() => {});
   }
-}
-
-export function buildDevTestGameHostSetupProof(
-  card,
-  verification,
-  { generatedAt = new Date().toISOString() } = {},
-) {
-  return {
-    proof: "dev-test-game-host-setup-proof",
-    status: "passed",
-    game: card.game,
-    generatedAt,
-    proofBoundary:
-      "Local dev-test-game host setup role URL browser proof over the seeded setup route plus a disposable setup game. Proves setup route rendering, policy round-trip, stale duplicate AddSlot rejection, setup refresh after reject, roster assignment, role assignment, and readiness recovery; it does not prove the full core loop, multiplayer hardening, hosted deployment, beta readiness, or production readiness.",
-    hostSetup: verification.hostSetup,
-    mediaResponseGuard: verification.mediaResponseGuard,
-  };
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
@@ -389,17 +316,20 @@ async function startApi() {
   if (args.apiPort !== undefined) {
     await assertPortAvailable(port, "API");
   }
-  await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
-  await runFmarchMigrations({ cwd: repoRoot, databaseUrl });
+  await mkdir(configuration.paths.mediaRoot, { recursive: true, mode: 0o700 });
+  await runFmarchMigrations({
+    cwd: configuration.paths.repoRoot,
+    databaseUrl,
+  });
   const baseUrl = `http://${host}:${port}`;
   console.log(`starting Rust API on ${baseUrl} with cargo run -p server`);
   apiServer = spawn("cargo", ["run", "-p", "server"], {
-    cwd: repoRoot,
+    cwd: configuration.paths.repoRoot,
     env: {
       ...process.env,
       DATABASE_URL: databaseUrl,
       FMARCH_BIND: `${host}:${port}`,
-      FMARCH_MEDIA_ROOT: mediaRoot,
+      FMARCH_MEDIA_ROOT: configuration.paths.mediaRoot,
       FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY:
         process.env.FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY ?? "true",
       FMARCH_AUTH_SOURCE_SIGNING_KEY:
@@ -464,13 +394,13 @@ async function startFrontend(currentApiBaseUrl) {
     await assertPortAvailable(args.frontendPort, "frontend");
   }
   const previousCwd = process.cwd();
-  process.chdir(frontendRoot);
+  process.chdir(configuration.paths.frontendRoot);
   try {
     const { createServer: createViteServer } = await import(
       frontendRequire.resolve("vite")
     );
     vite = await createViteServer({
-      root: frontendRoot,
+      root: configuration.paths.frontendRoot,
       server: {
         host,
         port: args.frontendPort ?? 0,
@@ -835,24 +765,6 @@ async function createAccountLoginCredential({
   };
 }
 
-function roleLoginUrl({ frontendBaseUrl, session }) {
-  const params = new URLSearchParams({ returnTo: session.returnTo });
-  let route = "/auth/login";
-  if (session.credentialKind === "invite" || session.inviteToken !== undefined) {
-    route = "/auth/invite";
-    params.set("invite", session.inviteToken);
-    if (session.accountId !== undefined) {
-      params.set("account", session.accountId);
-    }
-  } else if (session.credentialKind === "account") {
-    route = "/auth/login/classic";
-    params.set("account", session.accountId);
-  } else if (typeof session.token === "string" && session.token !== "") {
-    route = "/auth/invite";
-  }
-  return `${frontendBaseUrl}${route}?${params.toString()}`;
-}
-
 async function sendCommand(principalUserId, command) {
   const response = await sendCommandResult(principalUserId, command);
   if (response.body?.kind !== "Ack") {
@@ -949,483 +861,16 @@ function commandSummary(principalUserId, command, response) {
   };
 }
 
-export function buildSessionCard({
-  game,
-  gameName,
-  seedMode,
-  databaseUrl,
-  apiBaseUrl,
-  frontendBaseUrl,
-  seedCommands,
-  setupBootstrap = null,
-  identityBootstrap = null,
-  sessions,
-  artifacts = sessionArtifactsForPaths({
-    jsonPath: sessionJsonPath,
-    markdownPath: sessionMdPath,
-    proofRunPath: proofRunJsonPath,
-  }),
-}) {
-  const withFrontendUrls = Object.fromEntries(
-    Object.entries(sessions).map(([role, session]) => [
-      role,
-      {
-        ...session,
-        loginUrl: roleLoginUrl({ frontendBaseUrl, session }),
-        directUrl: `${frontendBaseUrl}${session.returnTo}`,
-      },
-    ]),
-  );
-  return {
-    status: "ready",
-    name: gameName,
-    game,
-    pack: "mafiascum",
-    phase: "D01",
-    seedMode,
-    databaseUrl,
-    apiBaseUrl,
-    frontendBaseUrl,
-    seedCommandCount:
-      seedCommands.length + (setupBootstrap?.commandCount ?? 0),
-    directSeedCommandCount: seedCommands.length,
-    setupBootstrap,
-    identityBootstrap,
-    sessions: withFrontendUrls,
-    artifacts,
-  };
-}
-
-function sessionArtifactsForPaths({ jsonPath, markdownPath, proofRunPath }) {
-  return Object.freeze({
-    json: path.relative(repoRoot, jsonPath),
-    markdown: path.relative(repoRoot, markdownPath),
-    proofRun: path.relative(repoRoot, proofRunPath),
-  });
-}
-
-async function writeSessionArtifacts(card, artifacts) {
-  await writeFile(
-    path.join(repoRoot, artifacts.json),
-    `${JSON.stringify(card, null, 2)}\n`,
-  );
-  await writeFile(path.join(repoRoot, artifacts.markdown), markdownSessionCard(card));
+async function writeArtifactWrites(writes) {
+  for (const write of writes) {
+    await writeFile(write.filePath, write.contents);
+  }
 }
 
 function printSessionCard(card) {
-  console.log("\nfmarch dev test game is ready");
-  console.log(`name: ${card.name}`);
-  console.log(`game: ${card.game}`);
-  console.log(`seed: ${card.seedMode}`);
-  console.log(`frontend: ${card.frontendBaseUrl}`);
-  console.log(`api: ${card.apiBaseUrl}`);
-  console.log(`artifact: ${card.artifacts.markdown}`);
-  for (const [role, session] of Object.entries(card.sessions)) {
-    console.log(`\n${role}`);
-    console.log(`  url:    ${session.loginUrl}`);
-    const token = session.inviteToken ?? session.token;
-    if (token !== undefined) {
-      console.log(`  token:  ${token}`);
-    }
-    if (session.accountId !== undefined) {
-      console.log(`  account: ${session.accountId}`);
-      if (typeof session.password === "string") {
-        console.log(`  password: ${session.password}`);
-      }
-    }
+  for (const line of sessionCardConsoleLines(card)) {
+    console.log(line);
   }
-}
-
-export function markdownSessionCard(card) {
-  const lines = [
-    "# fmarch Dev Test Game",
-    "",
-    `- status: ${card.status}`,
-    `- name: ${card.name}`,
-    `- game: ${card.game}`,
-    `- pack: ${card.pack}`,
-    `- phase: ${card.phase}`,
-    `- seed: ${card.seedMode}`,
-    `- frontend: ${card.frontendBaseUrl}`,
-    `- api: ${card.apiBaseUrl}`,
-    ...(card.setupBootstrap === null
-      ? []
-      : [
-          `- setup bootstrap: ${card.setupBootstrap.status} via ${card.setupBootstrap.roleUrl}`,
-          `- setup bootstrap commands: ${card.setupBootstrap.commandCount}`,
-        ]),
-    ...(card.identityBootstrap === null
-      ? []
-      : [
-          `- identity bootstrap: ${card.identityBootstrap.rootSessionSource} -> ${card.identityBootstrap.browserCredentialIssuer}`,
-          `- dev session endpoint enabled: ${card.identityBootstrap.devSessionEndpointEnabled}`,
-        ]),
-    "",
-    "Open a role login URL, enter the seeded account password, and submit. Invite tokens and account IDs are prefilled in the URL; session tokens are repeated below for recovery/debug use.",
-    "",
-  ];
-  for (const [role, session] of Object.entries(card.sessions)) {
-    const token = session.inviteToken ?? session.token;
-    lines.push(
-      `## ${role}`,
-      "",
-      `Role login URL: ${session.loginUrl}`,
-      "",
-      ...(token === undefined ? [] : [`Credential token: ${token}`]),
-      ...(session.accountId === undefined
-        ? []
-        : [
-            `Account: ${session.accountId}`,
-            ...(typeof session.password === "string"
-              ? [`Password: ${session.password}`]
-              : []),
-          ]),
-      "",
-    );
-  }
-  if (card.verification !== undefined) {
-    lines.push("## Verification", "", `Roles: ${card.verification.roles.join(", ")}`, "");
-    if (card.verification.sessions !== undefined) {
-      for (const [role, verified] of Object.entries(card.verification.sessions)) {
-        lines.push(
-          "",
-          `- ${role}: ${verified.capabilityKinds.join(", ")} via ${verified.cookie.valuePrefix}...`,
-        );
-      }
-      lines.push("");
-    }
-    if (card.verification.proofStability !== undefined) {
-      const hostConfirmClicks = card.verification.proofStability.hostConfirmClicks;
-      lines.push(
-        "## Proof Stability Audit",
-        "",
-        `Status: ${card.verification.proofStability.status}`,
-        "",
-        `Host confirms: ${hostConfirmClicks.total} total; ${hostConfirmClicks.concurrentClickCount ?? 0} concurrent browser clicks; ${hostConfirmClicks.retryClickCount} retried; ${hostConfirmClicks.domFallbackCount} DOM fallbacks; ${hostConfirmClicks.forceFallbackCount} force fallbacks`,
-        "",
-      );
-      if (hostConfirmClicks.events.length > 0) {
-        lines.push("Host confirm retry/fallback events:", "");
-        for (const event of hostConfirmClicks.events) {
-          lines.push(
-            `- ${event.actionId} ${event.roleLabel}: ${event.method} after ${event.attempts} attempts`,
-          );
-        }
-        lines.push("");
-      }
-    }
-    if (card.verification.coreLoop !== undefined) {
-      lines.push(
-        "## Core Loop Proof",
-        "",
-        `Status: ${card.verification.coreLoop.status}`,
-        "",
-        `Proof: ${card.verification.coreLoop.proof}`,
-        "",
-        `Rejected vote: ${card.verification.coreLoop.rejectedVote.message}`,
-        "",
-      );
-    }
-    if (card.verification.dayVoteResolution !== undefined) {
-      lines.push(
-        "## Day Vote Resolution Proof",
-        "",
-        `Status: ${card.verification.dayVoteResolution.status}`,
-        "",
-        `Proof: ${card.verification.dayVoteResolution.proof}`,
-        "",
-        `Outcome: ${card.verification.dayVoteResolution.dayVoteOutcome.status} ${card.verification.dayVoteResolution.dayVoteOutcome.winner_slot}`,
-        "",
-      );
-    }
-    if (card.verification.dayVoteNoLynch !== undefined) {
-      lines.push(
-        "## Day Vote No-Lynch Proof",
-        "",
-        `Status: ${card.verification.dayVoteNoLynch.status}`,
-        "",
-        `Proof: ${card.verification.dayVoteNoLynch.proof}`,
-        "",
-        `Outcome: ${card.verification.dayVoteNoLynch.dayVoteOutcome.status} ${card.verification.dayVoteNoLynch.dayVoteOutcome.tallies.no_lynch}`,
-        "",
-      );
-    }
-    if (card.verification.vanillizerRoleAction !== undefined) {
-      lines.push(
-        "## Vanillizer Role Action Proof",
-        "",
-        `Status: ${card.verification.vanillizerRoleAction.status}`,
-        "",
-        `Proof: ${card.verification.vanillizerRoleAction.proof}`,
-        "",
-        `Actor role URL: ${card.verification.vanillizerRoleAction.actorRoleUrl}`,
-        "",
-        `Target role URL: ${card.verification.vanillizerRoleAction.targetRoleUrl}`,
-        "",
-        `Target role: ${card.verification.vanillizerRoleAction.targetBefore.commandState.role.key} -> ${card.verification.vanillizerRoleAction.targetAfterReload.commandState.role.key}`,
-        "",
-      );
-    }
-    if (card.verification.cohostConsole !== undefined) {
-      lines.push(
-        "## Cohost Console Proof",
-        "",
-        `Status: ${card.verification.cohostConsole.status}`,
-        "",
-        `Proof: ${card.verification.cohostConsole.proof}`,
-        "",
-        `Extend deadline: ${card.verification.cohostConsole.extendDeadline.statusMessage}`,
-        "",
-        `Host-only controls visible: ${card.verification.cohostConsole.hostOnlyControlsVisible}`,
-        "",
-        `Host-only resolve: ${card.verification.cohostConsole.hostOnlyResolveReject.statusMessage}`,
-        "",
-      );
-    }
-    if (card.verification.cohostLaterPhaseDeadline !== undefined) {
-      lines.push(
-        "## Cohost Later-Phase Deadline Proof",
-        "",
-        `Status: ${card.verification.cohostLaterPhaseDeadline.status}`,
-        "",
-        `Proof: ${card.verification.cohostLaterPhaseDeadline.proof}`,
-        "",
-        `Extend deadline: ${card.verification.cohostLaterPhaseDeadline.extendDeadline.statusMessage}`,
-        "",
-        `Phase after reload: ${card.verification.cohostLaterPhaseDeadline.reload.phaseAfterReload.id} deadline ${card.verification.cohostLaterPhaseDeadline.reload.phaseAfterReload.deadline}`,
-        "",
-      );
-    }
-    if (card.verification.actionLoop !== undefined) {
-      lines.push(
-        "## Action Loop Proof",
-        "",
-        `Status: ${card.verification.actionLoop.status}`,
-        "",
-        `Proof: ${card.verification.actionLoop.proof}`,
-        "",
-        `Invalid action: ${card.verification.actionLoop.invalidAction.message}`,
-        "",
-        `Legal action: ${card.verification.actionLoop.legalAction.message}`,
-        "",
-      );
-      if (card.verification.actionLoop.d02VoteNightTransition !== undefined) {
-        lines.push(
-          `D02 vote/night: ${card.verification.actionLoop.d02VoteNightTransition.dayVoteOutcome.status} -> ${card.verification.actionLoop.d02VoteNightTransition.n02ActionSurface.commandState.phase.phaseId}`,
-          "",
-        );
-      }
-    }
-    if (card.verification.invalidActionRecovery !== undefined) {
-      lines.push(
-        "## Invalid Action Recovery Proof",
-        "",
-        `Status: ${card.verification.invalidActionRecovery.status}`,
-        "",
-        `Proof: ${card.verification.invalidActionRecovery.proof}`,
-        "",
-        `Reject: ${card.verification.invalidActionRecovery.reject.message}`,
-        "",
-        `Receipt: ${card.verification.invalidActionRecovery.currentReceipt.message}`,
-        "",
-        `Legal action visible: ${card.verification.invalidActionRecovery.legalActionVisible}`,
-        "",
-      );
-    }
-    if (card.verification.resolutionReceipts !== undefined) {
-      lines.push(
-        "## Resolution Receipt Proof",
-        "",
-        `Status: ${card.verification.resolutionReceipts.status}`,
-        "",
-        `Proof: ${card.verification.resolutionReceipts.proof}`,
-        "",
-        `Target notice: ${card.verification.resolutionReceipts.targetNotice.effect} ${card.verification.resolutionReceipts.targetNotice.status}`,
-        "",
-        `Normal player notice leaked: ${card.verification.resolutionReceipts.normalPlayerNoticeVisible}`,
-        "",
-      );
-    }
-    if (card.verification.deadPlayerRecovery !== undefined) {
-      lines.push(
-        "## Dead Player Recovery Proof",
-        "",
-        `Status: ${card.verification.deadPlayerRecovery.status}`,
-        "",
-        `Proof: ${card.verification.deadPlayerRecovery.proof}`,
-        "",
-        `Actor status: ${card.verification.deadPlayerRecovery.commandState.actorStatus}`,
-        "",
-        `Direct vote: ${card.verification.deadPlayerRecovery.directVote.statusMessage}`,
-        "",
-        `Direct post: ${card.verification.deadPlayerRecovery.directPost.statusMessage}`,
-        "",
-        `Direct action: ${card.verification.deadPlayerRecovery.directAction.statusMessage}`,
-        "",
-      );
-    }
-    if (card.verification.playerActionBoundary !== undefined) {
-      lines.push(
-        "## Player Action Boundary Proof",
-        "",
-        `Status: ${card.verification.playerActionBoundary.status}`,
-        "",
-        `Proof: ${card.verification.playerActionBoundary.proof}`,
-        "",
-        `Factional kill visible: ${card.verification.playerActionBoundary.factionalKillVisible}`,
-        "",
-        `Direct factional kill: ${card.verification.playerActionBoundary.directFactionalKill.statusMessage}`,
-        "",
-      );
-    }
-    if (card.verification.privateChannel !== undefined) {
-      lines.push(
-        "## Private Channel Proof",
-        "",
-        `Status: ${card.verification.privateChannel.status}`,
-        "",
-        `Proof: ${card.verification.privateChannel.proof}`,
-        "",
-        `Allowed post: ${card.verification.privateChannel.allowed.submitPost.message}`,
-        "",
-        `Denied route: ${card.verification.privateChannel.denied.status} ${card.verification.privateChannel.denied.actionLabel}`,
-        "",
-      );
-    }
-    if (card.verification.replacementConsole !== undefined) {
-      lines.push(
-        "## Replacement Console Proof",
-        "",
-        `Status: ${card.verification.replacementConsole.status}`,
-        "",
-        `Proof: ${card.verification.replacementConsole.proof}`,
-        "",
-        `Host-issued invite: ${card.verification.replacementConsole.hostIssuedInvite.statusText}`,
-        "",
-        `Redeemed invite recovery: ${card.verification.replacementConsole.redeemedInviteRecovery.message}`,
-        "",
-        `Revoked replacement session recovery: ${card.verification.replacementConsole.replacementSessionRevocation.routeErrorStatus}`,
-        "",
-        `Replacement session refresh recovery: ${card.verification.replacementConsole.replacementSessionRefresh.postStatus.message}`,
-        "",
-        `Invalid replacement recovery: ${card.verification.replacementConsole.invalidReplacementRecovery.reject.error}`,
-        "",
-        `Process replacement: ${card.verification.replacementConsole.processReplacement.statusMessage}`,
-        "",
-        `Projected occupant: ${card.verification.replacementConsole.projectedReplacement.occupantLabel}`,
-        "",
-        `Replacement duplicate retry: ${card.verification.replacementConsole.replacementIdempotentRetry.retryReplacement.message}`,
-        "",
-        `Stale host invite recovery: ${card.verification.replacementConsole.staleHostInviteRecovery.retry.message}`,
-        "",
-        `Stale outgoing recovery: ${card.verification.replacementConsole.staleOutgoingPlayer.reject.message}`,
-        "",
-        `Stale replacement recovery: ${card.verification.replacementConsole.staleReplacementAfterSuccess.reject.error}`,
-        "",
-        `Incoming replacement: ${card.verification.replacementConsole.incomingPlayer.browserEntry.principalUserId} ${card.verification.replacementConsole.incomingPlayer.postStatus.message}`,
-        "",
-      );
-    }
-    if (card.verification.multiplayerHardening !== undefined) {
-      lines.push(
-        "## Multiplayer Hardening Proof",
-        "",
-        `Status: ${card.verification.multiplayerHardening.status}`,
-        "",
-        `Proof: ${card.verification.multiplayerHardening.proof}`,
-        "",
-        `Duplicate retry: ${card.verification.multiplayerHardening.idempotentRetry.retryPost.message}`,
-        "",
-        `Reconnect: attempt ${card.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.attempt} ${card.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.state}`,
-        "",
-        `Live lag resync: ${card.verification.multiplayerHardening.liveProjectionLagResync.resyncRecoveryCount} recoveries, ${card.verification.multiplayerHardening.liveProjectionLagResync.recoveryEpisodes.map((episode) => episode.continuationDeltaKind).join("/")}, reconnects ${card.verification.multiplayerHardening.liveProjectionLagResync.reconnectEventCount}`,
-        "",
-        `Stale player vote: ${card.verification.multiplayerHardening.stalePlayerVote.reject.message}`,
-        "",
-        `Stale dead-target vote: ${card.verification.multiplayerHardening.staleDeadTargetVote.reject.message}`,
-        "",
-        `Dead current vote: ${card.verification.multiplayerHardening.deadCurrentVote.target.label} cleared`,
-        "",
-        `Concurrent vote race: ${card.verification.multiplayerHardening.concurrentVoteRace.targetSlot} count ${card.verification.multiplayerHardening.concurrentVoteRace.apiProjection.count}`,
-        "",
-        `Concurrent player vote/resolve race: ${card.verification.multiplayerHardening.concurrentPlayerVoteResolveRace.outcomeSummary}`,
-        "",
-        `Concurrent player action/advance race: ${card.verification.multiplayerHardening.concurrentPlayerActionAdvanceRace.reject.message}`,
-        "",
-        `Concurrent cohost deadline/resolve race: ${card.verification.multiplayerHardening.concurrentCohostDeadlineResolveRace.outcomeSummary}`,
-        "",
-        `Concurrent replacement private-post race: ${card.verification.multiplayerHardening.concurrentReplacementPrivatePostRace.outcomeSummary}`,
-        "",
-        `Concurrent replacement vote race: ${card.verification.multiplayerHardening.concurrentReplacementVoteRace.outcomeSummary}`,
-        "",
-        `Concurrent replacement action race: ${card.verification.multiplayerHardening.concurrentReplacementActionRace.outcomeSummary}`,
-        "",
-        `Incoming replacement action: ${card.verification.multiplayerHardening.replacementIncomingAction.outcomeSummary}`,
-        "",
-        `Replacement action reconnect: ${card.verification.multiplayerHardening.replacementActionReconnect.outcomeSummary}`,
-        "",
-        `Stale replacement action after resolve: ${card.verification.multiplayerHardening.replacementStaleActionAfterResolve.reject.message}`,
-        "",
-        `Host lifecycle: ${card.verification.multiplayerHardening.hostLifecycleControl.markDead.statusMessage}`,
-        "",
-        `Stale host lifecycle: ${card.verification.multiplayerHardening.staleHostLifecycle.reject.message}`,
-        "",
-        `Host modkill: ${card.verification.multiplayerHardening.hostModkillControl.modkill.statusMessage}`,
-        "",
-        `Stale host modkill: ${card.verification.multiplayerHardening.staleHostModkill.reject.message}`,
-        "",
-        `Concurrent host lifecycle race: ${card.verification.multiplayerHardening.concurrentHostLifecycleRace.reject.message}`,
-        "",
-        `Concurrent HostDecides selection race: ${card.verification.multiplayerHardening.concurrentHostPromptSelectionRace.reject.message}`,
-        "",
-        `Concurrent host complete race: ${card.verification.multiplayerHardening.concurrentHostCompleteRace.reject.message}`,
-        "",
-        `Concurrent host publish race: ${card.verification.multiplayerHardening.concurrentHostPublishRace.reject.message}`,
-        "",
-      );
-      if (card.verification.multiplayerHardening.concurrentPlayerCompleteRace !== undefined) {
-        lines.push(
-          `Concurrent player complete race: ${card.verification.multiplayerHardening.concurrentPlayerCompleteRace.outcomeSummary}`,
-          "",
-        );
-      }
-      lines.push(
-        `Action idempotent retry: ${card.verification.multiplayerHardening.actionIdempotentRetry.retry.message}`,
-        "",
-        `Stale same action: ${card.verification.multiplayerHardening.staleSameActionRecovery.reject.message}`,
-        "",
-        `Stale action conflict: ${card.verification.multiplayerHardening.staleActionConflict.reject.message}`,
-        "",
-        `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
-        "",
-        `Concurrent host resolve race: ${card.verification.multiplayerHardening.concurrentHostResolveRace.reject.message}`,
-        "",
-        `Concurrent host advance race: ${card.verification.multiplayerHardening.concurrentHostAdvanceRace.reject.message}`,
-        "",
-        `Concurrent host deadline race: ${card.verification.multiplayerHardening.concurrentHostDeadlineAdvanceRace.reject.message}`,
-        "",
-        `Concurrent host mixed advance race: ${card.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.reject.message}`,
-        "",
-        `Stale host resolve: ${card.verification.multiplayerHardening.staleHostResolve.reject.message}`,
-        "",
-        `Stale host advance: ${card.verification.multiplayerHardening.staleHostAdvance.reject.message}`,
-        "",
-        `Stale host publish: ${card.verification.multiplayerHardening.staleHostPublish.reject.message}`,
-        "",
-        `Stale host prompt: ${card.verification.multiplayerHardening.staleHostPrompt.reject.message}`,
-        "",
-        `Stale host complete: ${card.verification.multiplayerHardening.staleHostComplete.reject.message}`,
-        "",
-        `Stale player complete: ${card.verification.multiplayerHardening.stalePlayerComplete.reject.message}`,
-        "",
-        `Stale host deadline: ${card.verification.multiplayerHardening.staleHostDeadline.reject.message}`,
-        "",
-        `Stale cohost deadline: ${card.verification.multiplayerHardening.staleCohostDeadline.reject.message}`,
-        "",
-      );
-    }
-  }
-  return `${lines.join("\n")}\n`;
 }
 
 async function verifySessionCard(card) {
@@ -19740,7 +19185,11 @@ async function verifyPlayerLagResyncEpisode({
     eventStart,
   );
   const burst = [];
-  for (let index = 0; index < liveProjectionProofBurstSize; index += 1) {
+  for (
+    let index = 0;
+    index < liveProjectionProofBurstSize;
+    index += 1
+  ) {
     const commandId = crypto.randomUUID();
     const body = `Live lag episode ${episode} burst ${index} from dev:test-game ${commandId}.`;
     let result = null;
@@ -26880,7 +26329,11 @@ async function throwCriticalHostActionConfirmClickError(
 }
 
 async function importFrontendModule(relativePath) {
-  return await import(pathToFileURL(path.join(frontendRoot, relativePath)).href);
+  return await import(
+    pathToFileURL(
+      path.join(configuration.paths.frontendRoot, relativePath),
+    ).href
+  );
 }
 
 async function sendBrowserCommand(page, { command, commandId }) {
@@ -27216,7 +26669,7 @@ async function runSql(url, sql) {
 async function runProcess(command, args) {
   return await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
-      cwd: repoRoot,
+      cwd: configuration.paths.repoRoot,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -27371,9 +26824,8 @@ async function stopChild(child, label) {
 
 async function readNamedGames() {
   try {
-    const body = await readFile(namedGamesPath, "utf8");
-    const parsed = JSON.parse(body);
-    return parsed !== null && typeof parsed === "object" ? parsed : {};
+    const body = await readFile(configuration.paths.namedGames, "utf8");
+    return parseNamedGamesRegistry(body);
   } catch (error) {
     if (error.code === "ENOENT") {
       return {};
@@ -27384,110 +26836,10 @@ async function readNamedGames() {
 
 async function writeNamedGame(name, card) {
   const registry = await readNamedGames();
-  registry[name] = {
-    game: card.game,
-    updatedAt: new Date().toISOString(),
-    session: card.artifacts,
-  };
-  await writeFile(namedGamesPath, `${JSON.stringify(registry, null, 2)}\n`);
-}
-
-export function selectGame({
-  args,
-  gameName,
-  registry,
-  randomUuid = () => crypto.randomUUID(),
-}) {
-  if (args.reset && args.reuse) {
-    throw new Error("--reset and --reuse are mutually exclusive");
-  }
-  const registered = registry[gameName]?.game;
-  if (args.reuse) {
-    const reuseGame = args.game ?? registered;
-    if (reuseGame === undefined) {
-      throw new Error(`no named game '${gameName}' exists to reuse; run with --reset first`);
-    }
-    return { game: reuseGame, seedMode: "reuse" };
-  }
-  if (args.reset) {
-    return { game: args.game ?? randomUuid(), seedMode: "seed" };
-  }
-  if (registered !== undefined && args.game === undefined) {
-    return { game: registered, seedMode: "reuse-if-present" };
-  }
-  return { game: args.game ?? randomUuid(), seedMode: "seed" };
-}
-
-export function parseArgs(values) {
-  const parsed = {};
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index];
-    switch (value) {
-      case "--api-base-url":
-        parsed.apiBaseUrl = requireValue(values, ++index, value).replace(/\/$/, "");
-        break;
-      case "--api-port":
-        parsed.apiPort = parsePositiveInt(requireValue(values, ++index, value), value);
-        break;
-      case "--api-startup-timeout-ms":
-        parsed.apiStartupTimeoutMs = parsePositiveInt(requireValue(values, ++index, value), value);
-        break;
-      case "--frontend-base-url":
-        parsed.frontendBaseUrl = requireValue(values, ++index, value).replace(/\/$/, "");
-        break;
-      case "--database-url":
-        parsed.databaseUrl = requireValue(values, ++index, value);
-        break;
-      case "--frontend-port":
-        parsed.frontendPort = parsePositiveInt(requireValue(values, ++index, value), value);
-        break;
-      case "--game":
-        parsed.game = requireValue(values, ++index, value);
-        break;
-      case "--name":
-        parsed.name = requireValue(values, ++index, value);
-        break;
-      case "--reset":
-        parsed.reset = true;
-        break;
-      case "--reuse":
-        parsed.reuse = true;
-        break;
-      case "--token-prefix":
-        parsed.tokenPrefix = requireValue(values, ++index, value);
-        break;
-      case "--verify":
-        parsed.verify = true;
-        break;
-      case "--verify-host-setup-only":
-        parsed.verifyHostSetupOnly = true;
-        break;
-      case "--verify-earliest-reached-only":
-        parsed.verifyEarliestReachedOnly = true;
-        break;
-      case "--verify-host-decides-only":
-        parsed.verifyHostDecidesOnly = true;
-        break;
-      case "--no-keepalive":
-        parsed.noKeepalive = true;
-        break;
-      case "--help":
-      case "-h":
-        parsed.help = true;
-        break;
-      default:
-        throw new Error(`unknown argument: ${value}`);
-    }
-  }
-  return parsed;
-}
-
-function parsePositiveInt(value, flag) {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`${flag} must be a positive integer`);
-  }
-  return parsed;
+  await writeFile(
+    configuration.paths.namedGames,
+    namedGamesRegistryDocument(registry, name, card),
+  );
 }
 
 function recordServerOutput(chunk) {
@@ -27507,40 +26859,4 @@ function lastServerOutputLine() {
     .map((line) => line.trim())
     .filter(Boolean);
   return lines.at(-1) ?? "";
-}
-
-function requireValue(values, index, flag) {
-  const value = values[index];
-  if (value === undefined || value.startsWith("--")) {
-    throw new Error(`${flag} requires a value`);
-  }
-  return value;
-}
-
-function printHelp() {
-  console.log(`Usage: npm run dev:test-game -- [options]
-
-Starts a local Rust API and SvelteKit frontend, seeds one mafiascum D01 game,
-creates browser-login tokens, prints role URLs, and writes target/dev-test-game/session.md.
-With --verify, it also writes target/dev-test-game/proof-run.json.
-
-Options:
-  --api-base-url URL       Use an existing API instead of starting cargo run -p server
-  --api-port PORT          Port for a started API
-  --api-startup-timeout-ms Milliseconds to wait for a started API (default: ${defaultApiStartupTimeoutMs})
-  --frontend-base-url URL  Use an existing frontend instead of starting Vite
-  --database-url URL       DATABASE_URL for a started API (default: ${defaultDatabaseUrl})
-  --frontend-port PORT     Port for a started frontend
-  --name NAME              Friendly named game slot (default: ${defaultGameName})
-  --game UUID              Use a specific game id
-  --reset                  Seed a fresh game for the name
-  --reuse                  Reuse the named or explicit game without reseeding
-  --token-prefix TEXT      Prefix for generated opaque login tokens
-  --verify                 Verify host and player browser entry before returning
-  --verify-host-setup-only Verify only the host setup role URL browser proof
-  --verify-earliest-reached-only Verify only the disposable EarliestReached role URL browser proof
-  --verify-host-decides-only     Verify only the disposable HostDecides role URL browser proof
-  --no-keepalive           Stop started servers after seeding and writing artifacts
-  --help                   Show this help
-`);
 }

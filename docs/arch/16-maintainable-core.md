@@ -26,17 +26,17 @@ those contracts are still intentional.
 
 ## Responsibility inventory
 
-The line counts below are a 2026-08-05 orientation snapshot, not a target.
+The line counts below are a 2026-08-06 orientation snapshot, not a target.
 
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; continue the active frontier at proof-runner configuration and artifact assembly |
+| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; clear the bounded operator-proof audit-input debt first |
 | `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery and live publication are closed behind typed boundaries; the root is router/state/error composition | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; command transport → command application port/live-publication port | Keep the composition root thin; split a route family further only when a new independent change exposes a narrower owner |
-| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; continue the active frontier at proof-runner configuration and artifact assembly |
-| `crates/commands/src/lib.rs` (~5.1k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs` | Action submission/admission/capacity, host-prompt resolution/replay, and DayEvent runtime are closed behind typed boundaries; command dispatch, shared admission/transaction/persistence, and phase lifecycle remain in the root | Thin command transaction/dispatch owner plus bounded action, prompt, and day-runtime families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families | Split another command family only when its next independent change requires it; continue the active frontier at proof-runner configuration and artifact assembly |
+| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; clear the bounded operator-proof audit-input debt first |
+| `crates/commands/src/lib.rs` (~5.1k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs`; `operator_proof.rs` (~5.8k) | Action submission/admission/capacity, host-prompt resolution/replay, and DayEvent runtime are closed behind typed boundaries; command dispatch, shared admission/transaction/persistence, phase lifecycle, and operator-proof reporting remain concentrated | Thin command transaction/dispatch owner plus bounded action, prompt, day-runtime, and operator-proof families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families; proof report evaluation → immutable audit inputs | Replace the remaining positional operator-proof artifact audit inputs with one bounded request context and remove its exact lint expectation |
 | `crates/commands/tests/pipeline.rs` (~77.1k) | Cross-domain command scenarios, fixtures, helpers, and operator proof cases | Shared hermetic harness plus scenario-family integration modules | scenario modules → harness/public command API; never scenario ↔ scenario | Split by command family while preserving serial Postgres proof semantics |
-| `tools/dev_test_game.mjs` / `.test.mjs` (~27.5k/~30.0k) | CLI parsing, environment setup, orchestration, browser roles, evidence assembly, and contract tests | Small CLI/composition root over scenario, runtime, artifact, and assertion libraries | CLI → orchestration → scenario/runtime ports; artifacts depend only on normalized results | Extract immutable proof-runner configuration and session-artifact assembly before further scenario growth; keep process/browser orchestration in the composition root |
+| `tools/dev_test_game.mjs` / `.test.mjs` (~26.9k/~29.9k); `dev_test_game_configuration.mjs` (~0.3k); `dev_test_game_session_artifacts.mjs` (~0.7k) | Immutable CLI/environment/default/path normalization and session JSON/Markdown/stdout/proof-input assembly are closed behind dedicated owners; mutable process, network, browser, scenario, and assertion orchestration remains concentrated in the root | Small CLI/composition root over configuration, scenario, runtime, artifact, and assertion libraries | configuration → path contracts; artifacts → normalized values only; CLI root → configuration/artifacts/orchestration; assertions remain in the root | Split another scenario/runtime family only when its next independent change requires it; do not return configuration, path, or representation assembly to the root |
 
 ## First closed boundary: API media HTTP
 
@@ -310,6 +310,35 @@ family so their kill, trigger, event, and trace construction cannot drift back
 into the coordinator. The resolver boundary contract enforces the ownership and
 forbids local lint suppression. Announcement order, prompt order, seeded tie
 selection, win-trigger handoff, and generated golden semantics remain unchanged.
+
+## Closed proof-runner boundaries: configuration and session artifacts
+
+`tools/dev_test_game_configuration.mjs` is the single owner of CLI grammar,
+defaults, CLI/environment precedence, verification-mode exclusivity,
+named-game selection inputs, immutable workspace/media/artifact paths, help
+text, and the bounded live-projection proof configuration. Configuration is
+resolved in two stages so the composition root can read the named-game registry
+from the normalized path before finalizing game, seed-mode, and token-prefix
+values. Help still returns before registry or process work, and reset/reuse
+selection remains deterministic under an injected UUID source.
+
+`tools/dev_test_game_session_artifacts.mjs` owns role-login URL construction,
+session-card schema, canonical and focused artifact references, JSON and
+Markdown bytes, stdout lines, named-game registry documents, host-setup proof
+inputs, and immutable write descriptors for focused, race, and full proof
+artifacts. It performs no filesystem, process, browser, network, or assertion
+work. `tools/dev_test_game.mjs` remains the composition root: it performs the
+actual writes, owns mutable server and browser lifecycles, runs scenarios,
+asserts the full proof run before writing it, handles signals, and preserves
+cleanup and exit behavior.
+
+Focused configuration and artifact tests cover every flag/default/precedence,
+path and named-game rule, URL/card/JSON/Markdown/stdout schema, digest and
+redaction pass-through, proof destination and fallback, and trailing-newline
+contract. `dev_test_game_boundary.test.mjs` prevents either value owner from
+acquiring I/O/orchestration dependencies, prevents ownership from drifting back
+into the root, and requires matching contracts to import the extracted modules
+directly instead of a compatibility façade.
 
 ## Exact lint-debt register
 

@@ -318,7 +318,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, and live publication, command action submission/validation and host-prompt resolution/replay, domain pack model/validation, resolver action/trigger/outcome, and projection effect/private-channel ownership are isolated behind typed boundaries. Remaining resolver coordinator, other projection, command-test, operator-proof, and proof-runner concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, and live publication, command action submission/validation and host-prompt resolution/replay, domain pack model/validation, resolver action/trigger/outcome, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver coordinator, other projection, command-test, operator-proof, and proof-runner scenario/orchestration concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -445,6 +445,30 @@
         },
         {
           "kind": "source",
+          "value": "tools/dev_test_game.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_configuration.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_configuration.test.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_session_artifacts.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_session_artifacts.test.mjs"
+        },
+        {
+          "kind": "source",
+          "value": "tools/dev_test_game_boundary.test.mjs"
+        },
+        {
+          "kind": "source",
           "value": "docs/ops/proof-lane-manifest.json"
         },
         {
@@ -453,33 +477,31 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver coordinator, other projection, command-test, operator-proof, and proof-runner responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining resolver coordinator, other projection, command-test, operator-proof, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the exact lint expectations as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract immutable proof-runner configuration and session-artifact assembly from tools/dev_test_game.mjs into dedicated configuration and artifact owners: normalize CLI/environment/default precedence, verification-mode exclusivity, game-selection inputs, media/artifact paths, and session JSON/Markdown/proof-run inputs behind explicit values; keep the CLI entrypoint, mutable process lifecycle, browser/scenario orchestration, network commands, and proof assertions in the composition root; split the matching contract tests and add a source-boundary test; preserve every flag, environment override, default, named-game selection rule, artifact path/schema/digest/redaction rule, stdout rendering, cleanup path, and exit behavior.",
+        "objective": "Replace the remaining positional operator-proof status-audit evaluator inputs in crates/commands/src/operator_proof.rs with one bounded request context: group the declared artifact path, expected report input paths, manifest version, freshness policy/time, resolved filesystem path, and parsed report behind an explicit immutable value; make report evaluation a private implementation detail below the existing filesystem-loading entrypoint; remove the exact clippy::too_many_arguments expectation; add table-driven state coverage plus a source-boundary contract; preserve every ProofRunArtifactState variant and field, path/version/input mismatch precedence, relative workspace-path resolution, filesystem timestamp and max-age semantics, malformed/missing/drift decisions, serialized report schema, and public CLI behavior.",
         "paths": [
-          "tools/dev_test_game.mjs",
-          "tools/dev_test_game.test.mjs",
-          "tools/dev_test_game_configuration.mjs",
-          "tools/dev_test_game_configuration.test.mjs",
-          "tools/dev_test_game_session_artifacts.mjs",
-          "tools/dev_test_game_session_artifacts.test.mjs",
-          "tools/dev_test_game_boundary.test.mjs",
+          "crates/commands/src/operator_proof.rs",
+          "crates/commands/tests/operator_proof_boundary.rs",
+          "crates/commands/tests/pipeline.rs",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
-          "npm run test:dev-test-game-contract",
-          "npm run test:dev-test-game-artifact-path-contract",
+          "cargo test -p commands --lib operator_proof",
+          "cargo test -p commands --test operator_proof_boundary",
+          "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline operator_proof -- --test-threads=1",
+          "cargo clippy --workspace --all-targets --all-features -- -D warnings",
           "npm run test:proof-lane-contract",
           "npm run proof:lanes -- --mode sprint --run",
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not rewrite browser scenarios, API orchestration, process supervision, database setup, or network command behavior as part of the configuration/artifact extraction.",
-          "Do not change CLI flags, environment precedence, defaults, verification-mode validation, named-game reuse/reset semantics, artifact destinations, JSON/Markdown schemas, digests, redaction, or cleanup behavior.",
-          "Do not turn ignored local proof artifacts into completion evidence or add a compatibility facade around the old global configuration shape.",
-          "Do not mark foundation.maintainable-core complete; resolver coordinator, other projection families, command-test, operator-proof, and remaining proof-runner concentrations remain."
+          "Do not redesign the operator-proof manifest, report formats, artifact inventory, fixture catalog, or CLI binaries as part of the request-context extraction.",
+          "Do not change mismatch precedence, freshness calculations, trusted/non-trusted classification, artifact version rules, relative-path handling, or saved snapshot semantics.",
+          "Do not preserve the eight-argument evaluator as a compatibility overload; the workspace is greenfield and its sole caller should construct the typed request directly.",
+          "Do not mark foundation.maintainable-core complete; resolver coordinator, other projection families, command-test, broader operator-proof, and remaining proof-runner scenario/orchestration concentrations remain."
         ]
       }
     },

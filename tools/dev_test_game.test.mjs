@@ -3,16 +3,15 @@ import { mkdir, readFile, realpath, rm, utimes, writeFile } from "node:fs/promis
 import path from "node:path";
 import { test } from "node:test";
 import {
-  buildSessionCard,
-  buildDevTestGameHostSetupProof,
   createTokenSet,
   hostCommandStatusReachedExpectedState,
-  liveProjectionProofConfig,
-  markdownSessionCard,
-  parseArgs,
   seedCommandPlanForGame,
-  selectGame,
 } from "./dev_test_game.mjs";
+import {
+  buildDevTestGameHostSetupProof,
+  buildSessionCard,
+  markdownSessionCard,
+} from "./dev_test_game_session_artifacts.mjs";
 import {
   buildSetupBootstrapCommandEvidence,
   seedSetupCommandPlanForGame as setupBootstrapCommandPlanForGame,
@@ -920,54 +919,6 @@ import {
   selectedOperatorHandoffReceiptAdminProofCommand,
 } from "./dev_test_game_selected_operator_handoff_receipt_admin_proof.mjs";
 
-test("dev test-game args expose reset reuse naming and verification controls", () => {
-  assert.deepEqual(
-    parseArgs([
-      "--name",
-      "morning",
-      "--reset",
-      "--api-port",
-      "4101",
-      "--api-startup-timeout-ms",
-      "900000",
-      "--frontend-port",
-      "4102",
-      "--verify-host-setup-only",
-      "--no-keepalive",
-    ]),
-    {
-      name: "morning",
-      reset: true,
-      apiPort: 4101,
-      apiStartupTimeoutMs: 900000,
-      frontendPort: 4102,
-      verifyHostSetupOnly: true,
-      noKeepalive: true,
-    },
-  );
-
-  assert.throws(() => parseArgs(["--frontend-port", "nope"]), /positive integer/);
-  assert.equal(
-    parseArgs(["--verify-host-decides-only"]).verifyHostDecidesOnly,
-    true,
-  );
-});
-
-test("live projection lag proof config always overflows its burst", () => {
-  assert.deepEqual(liveProjectionProofConfig({}), {
-    capacity: 4,
-    burstSize: 5,
-  });
-  assert.deepEqual(
-    liveProjectionProofConfig({ FMARCH_LIVE_PROJECTION_CAPACITY: "3" }),
-    { capacity: 3, burstSize: 5 },
-  );
-  assert.throws(
-    () => liveProjectionProofConfig({ FMARCH_LIVE_PROJECTION_CAPACITY: "5" }),
-    /must stay below/,
-  );
-});
-
 test("EarliestReached browser proof has a standalone artifact contract", () => {
   const proof = {
     status: "passed",
@@ -1163,57 +1114,6 @@ test("live projection lag observability contract matches the server trace", asyn
     }),
     false,
   );
-});
-
-test("session cards can target focused proof artifacts without clobbering canonical proof inputs", () => {
-  const game = "45454545-4545-4545-8545-454545454545";
-  const sessions = {
-    hostSetup: {
-      principalUserId: "host_h",
-      credentialKind: "invite",
-      token: "host-setup-token",
-      inviteToken: "host-setup-token",
-      returnTo: `/g/${game}/setup`,
-      expectedCapabilityKind: "HostOf",
-    },
-  };
-
-  const canonical = buildSessionCard({
-    gameName: "canonical",
-    game,
-    seedMode: "seeded",
-    databaseUrl: "postgres://db/fmarch",
-    apiBaseUrl: "http://127.0.0.1:4101",
-    frontendBaseUrl: "http://127.0.0.1:4102",
-    seedCommands: [],
-    sessions,
-  });
-  assert.deepEqual(canonical.artifacts, {
-    json: "target/dev-test-game/session.json",
-    markdown: "target/dev-test-game/session.md",
-    proofRun: "target/dev-test-game/proof-run.json",
-  });
-
-  const focused = buildSessionCard({
-    gameName: "host-setup",
-    game,
-    seedMode: "seeded",
-    databaseUrl: "postgres://db/fmarch",
-    apiBaseUrl: "http://127.0.0.1:4101",
-    frontendBaseUrl: "http://127.0.0.1:4102",
-    seedCommands: [],
-    sessions,
-    artifacts: {
-      json: "target/dev-test-game/host-setup-session.json",
-      markdown: "target/dev-test-game/host-setup-session.md",
-      proofRun: "target/dev-test-game/host-setup-proof.json",
-    },
-  });
-  assert.deepEqual(focused.artifacts, {
-    json: "target/dev-test-game/host-setup-session.json",
-    markdown: "target/dev-test-game/host-setup-session.md",
-    proofRun: "target/dev-test-game/host-setup-proof.json",
-  });
 });
 
 test("dev test-game browser role entry uses accounts and invites only", async () => {
@@ -11591,42 +11491,6 @@ test("hosted handoff proof catalog requires explicit readiness decisions", async
       artifactCases: [futureProofCase],
       artifactExists: async () => false,
     }),
-  );
-});
-
-test("named game selection is idempotent by default with explicit reset and reuse", () => {
-  const registry = {
-    local: { game: "11111111-1111-4111-8111-111111111111" },
-  };
-  assert.deepEqual(
-    selectGame({ args: {}, gameName: "local", registry }),
-    {
-      game: "11111111-1111-4111-8111-111111111111",
-      seedMode: "reuse-if-present",
-    },
-  );
-  assert.deepEqual(
-    selectGame({
-      args: { reset: true },
-      gameName: "local",
-      registry,
-      randomUuid: () => "22222222-2222-4222-8222-222222222222",
-    }),
-    {
-      game: "22222222-2222-4222-8222-222222222222",
-      seedMode: "seed",
-    },
-  );
-  assert.deepEqual(
-    selectGame({ args: { reuse: true }, gameName: "local", registry }),
-    {
-      game: "11111111-1111-4111-8111-111111111111",
-      seedMode: "reuse",
-    },
-  );
-  assert.throws(
-    () => selectGame({ args: { reuse: true }, gameName: "missing", registry: {} }),
-    /no named game 'missing'/,
   );
 });
 
