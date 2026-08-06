@@ -31,12 +31,12 @@ The line counts below are a 2026-08-05 orientation snapshot, not a target.
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; continue the maintainable-core frontier at command prompt resolution |
+| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; continue the active frontier at proof-runner configuration and artifact assembly |
 | `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery and live publication are closed behind typed boundaries; the root is router/state/error composition | Thin composition root plus route-family modules with typed request contexts | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; command transport → command application port/live-publication port | Keep the composition root thin; split a route family further only when a new independent change exposes a narrower owner |
-| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; continue the active frontier at command prompt resolution |
-| `crates/commands/src/lib.rs` (~6.0k); `action_submission.rs` (~0.7k); `day_runtime.rs` | Action submission/admission/capacity and DayEvent runtime are closed behind typed boundaries; command dispatch, shared transaction/persistence, phase lifecycle, and prompt reconstruction remain in the root | Thin command transaction/dispatch owner plus bounded action, prompt, and day-runtime families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families | Extract host-prompt resolution/rebuild behind one typed request context; keep shared transaction and append/project ownership in the root |
+| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; continue the active frontier at proof-runner configuration and artifact assembly |
+| `crates/commands/src/lib.rs` (~5.1k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs` | Action submission/admission/capacity, host-prompt resolution/replay, and DayEvent runtime are closed behind typed boundaries; command dispatch, shared admission/transaction/persistence, and phase lifecycle remain in the root | Thin command transaction/dispatch owner plus bounded action, prompt, and day-runtime families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families | Split another command family only when its next independent change requires it; continue the active frontier at proof-runner configuration and artifact assembly |
 | `crates/commands/tests/pipeline.rs` (~77.1k) | Cross-domain command scenarios, fixtures, helpers, and operator proof cases | Shared hermetic harness plus scenario-family integration modules | scenario modules → harness/public command API; never scenario ↔ scenario | Split by command family while preserving serial Postgres proof semantics |
-| `tools/dev_test_game.mjs` / `.test.mjs` (~27.5k/~30.0k) | CLI parsing, environment setup, orchestration, browser roles, evidence assembly, and contract tests | Small CLI/composition root over scenario, runtime, artifact, and assertion libraries | CLI → orchestration → scenario/runtime ports; artifacts depend only on normalized results | Extract proof-runner configuration and artifact assembly before further scenario growth |
+| `tools/dev_test_game.mjs` / `.test.mjs` (~27.5k/~30.0k) | CLI parsing, environment setup, orchestration, browser roles, evidence assembly, and contract tests | Small CLI/composition root over scenario, runtime, artifact, and assertion libraries | CLI → orchestration → scenario/runtime ports; artifacts depend only on normalized results | Extract immutable proof-runner configuration and session-artifact assembly before further scenario growth; keep process/browser orchestration in the composition root |
 
 ## First closed boundary: API media HTTP
 
@@ -197,6 +197,28 @@ admission, target ordering, grant/counter semantics, event JSON, instant result
 and trace envelopes, transaction boundaries, and active-action views remain
 unchanged.
 
+## Closed command boundary: host-prompt resolution and replay
+
+`crates/commands/src/host_prompt_resolution.rs` owns the admitted prompt
+operation: pending-prompt lookup, pack-declared decision/effect selection,
+typed public-resolution derivation, PK result/trace construction, prompt-driven
+phase-advance adaptation, and deterministic reconstruction of stored
+host-prompt resolution envelopes. `HostPromptResolutionRequest` and
+`HostPromptResolutionContext` are the single dispatch handoff;
+`PkResolutionContext` replaces the former eight positional reconstruction
+arguments.
+
+The command root remains the sole top-level dispatcher and owns game/capability
+admission, transaction/idempotency orchestration, and the shared `persist`
+append-and-project port consumed by the prompt owner. The replay audit delegates
+only host-prompt reconstruction and keeps ordinary phase replay plus report
+assembly in the root. The source boundary contract prevents prompt policy,
+lookup, result/trace construction, or phase-event adaptation from drifting back,
+and prevents capability resolution, SQL, or generic persistence from moving
+outward. Prompt reject variants, policy matching, public-resolution equality,
+event order, run identifiers, JSON envelopes, timestamps, and replay behavior
+remain unchanged.
+
 ## Closed projection boundaries: effects and private channels
 
 `crates/projections/src/effect_projection.rs` owns persistent role and engine
@@ -297,9 +319,9 @@ boundary pressure:
 - resolver action, trigger, and outcome boundaries are typed and carry no local
   lint expectations; remaining coordinator concentration is tracked as an
   ownership frontier rather than hidden lint debt;
-- action submission/validation is typed and carries no local lint expectations;
-  prompt reconstruction and operator-proof audit functions still await bounded
-  request contexts;
+- action submission/validation and host-prompt resolution/replay are typed and
+  carry no local lint expectations; operator-proof artifact audit inputs still
+  await one bounded request context;
 - auth, community, game-read, command/import, and live-delivery HTTP plus
   authentication attempt/delivery and live-publication ownership are typed and
   carry no local lint expectations;

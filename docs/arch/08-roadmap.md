@@ -72,11 +72,12 @@ the binary boundary remain singular and testable.
 ## Next buildable coding slice
 
 The next dependency-satisfied coding item is
-`foundation.maintainable-core`. Its active slice extracts host-prompt
-resolution and replay reconstruction from the commands composition root into a
-typed owner without moving transaction, idempotency, capability, or persistence
-ownership and without changing rejects, event order, result/trace payloads, run
-identifiers, or replay equality.
+`foundation.maintainable-core`. Its active slice extracts immutable proof-runner
+configuration and session-artifact assembly from `tools/dev_test_game.mjs`
+behind normalized inputs, while the composition root keeps process lifecycle,
+browser/scenario orchestration, network commands, and proof assertions. CLI and
+environment precedence, verification modes, artifact paths and schemas,
+redaction, exit behavior, and retained proof semantics must remain unchanged.
 
 After that extraction, local 1.0 closure proceeds in this order:
 
