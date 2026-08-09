@@ -130,8 +130,8 @@
       "status": 0
     },
     "cargo:commands-pg": {
-      "seconds": 80.1,
-      "measured_at": "2026-08-06T22:35:14.907Z",
+      "seconds": 129.9,
+      "measured_at": "2026-08-09T00:39:53.736Z",
       "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --test-threads=4",
       "status": 0
     },
@@ -142,9 +142,9 @@
       "status": 0
     },
     "cargo:commands-audit": {
-      "seconds": 413.5,
-      "measured_at": "2026-08-06T23:52:03.228Z",
-      "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --ignored --test-threads=4",
+      "seconds": 552.2,
+      "measured_at": "2026-08-09T00:49:50.804Z",
+      "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test semantic_audit -- --test-threads=4",
       "status": 0
     },
     "cargo:operator-proof": {

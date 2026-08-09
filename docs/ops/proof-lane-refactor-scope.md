@@ -2,7 +2,8 @@
 
 Status: active; leaf execution and fast truthful selection delivered 2026-07-26;
 command proof cost boundaries and bounded generated-shrink execution delivered
-2026-08-06.
+2026-08-06; physical command-target extraction and exact selector ownership
+delivered 2026-08-08.
 
 ## Delivered foundation
 
@@ -14,15 +15,17 @@ canonical execution key after cost ordering, and the manifest contract rejects
 an npm leaf that invokes another declared leaf.
 
 The remaining work packages below are still intentionally open: structured
-receipts and resume, run-scoped Postgres and artifacts, physical command-test
-family extraction, and resource-aware scheduling.
+receipts and resume, run-scoped Postgres and artifacts, and resource-aware
+scheduling.
 
 The original command lane accumulated 365 tests and later measured 1,059s on a
 warm checkout. It is now four truthful leaves: hermetic unit/boundary tests,
 parallel ordinary Postgres integration, serial cancellation/concurrency proof,
 and an explicit semantic/generated audit. The ordinary Postgres lane retains
 126 transaction, authorization, persistence, projection, and representative
-resolution boundaries and measured 85.02s with four isolated SQLx workers.
+resolution boundaries. Its extracted target discovers no semantic-audit cases;
+the 2026-08-08 full-sweep receipt measured 131.1 seconds and the independent
+baseline recorder measured 129.9 seconds with four isolated SQLx workers.
 
 The selector now compares against `origin/main`, so another worktree's stale
 local `main` ref cannot manufacture a large historical diff. Push mode is the
@@ -34,13 +37,10 @@ for updating the tracked baseline.
 
 ## Problem
 
-The proof selector now has a sound path-to-leaf model and a fast ordinary push
-path, but the executable suites and resource model still contain the dominant
-latency:
+The proof selector now has a sound path-to-leaf model, a fast ordinary push
+path, and physically separate ordinary and semantic-audit command targets, but
+the resource model still contains the dominant latency:
 
-- `crates/commands/tests/pipeline.rs` remains a large residual source module even
-  though its execution costs now have separate ownership. Physical family
-  extraction is still needed for reviewability and path-precise audit arming.
 - Database-dependent npm lanes rely on ambient `DATABASE_URL`; concurrent runs
   can share the mutable `fmarch` database and contaminate one another.
 - The tracked baseline does not yet cover every lane. Execution has no timeout,
@@ -98,35 +98,42 @@ only for the same commit and manifest digest.
 - Preserve the former active-frontier sweep as explicit sprint mode.
 - Contract-test the stale-local-main regression and the sentinel cost budget.
 
-### 4. Split command proof by semantic cost — first boundary delivered 2026-08-06
+### 4. Split command proof by semantic cost — delivered 2026-08-08
 
 - `cargo:commands-unit` owns hermetic command and boundary tests.
 - `cargo:commands-pg` owns 126 ordinary Postgres transaction, authorization,
   persistence, projection, and representative resolution cases and runs with
-  four test workers. It completes in 85.02 seconds, down from the former
-  1,059.3-second aggregate command lane.
+  four test workers. The extracted target reports 126 passed and zero ignored;
+  the 2026-08-08 full sweep measured 130.58 seconds of test execution with a
+  131.1-second receipt, and the independent recorder measured 129.9 seconds.
 - `cargo:commands-concurrency` owns the serial cancellation matrix.
-- `cargo:commands-audit` owns 217 ignored-but-compiled semantic and generated
-  cases, including the 29-family generated matrix, and remains in full mode.
-  The authoritative full sweep observed 407.9 seconds and the independent
-  baseline recorder observed 413.5 seconds, 36.7% below the former tracked
-  653.4-second cost. The lane declares the 8 MiB test-thread stack required by
-  the deepest EpicMafia replay rather than depending on host defaults.
+- `cargo:commands-audit` owns a dedicated 217-case `semantic_audit` integration
+  target, including the 29-family generated matrix, and remains in full mode.
+  The 2026-08-08 full sweep measured 566.56 seconds of test execution with a
+  567.0-second receipt, and the independent recorder measured 550.92 seconds
+  with a 552.2-second receipt. Earlier pre-extraction runs on the 2026-08-06
+  host measured 407.9 and 413.5 seconds, so the extraction makes no
+  execution-speed claim: its gain is removing the audit corpus from ordinary
+  target compilation and discovery and arming it only for owned inputs or full
+  proof. The lane declares the 8 MiB test-thread stack required by the deepest
+  EpicMafia replay rather than depending on host defaults.
 - `operator_proof::minimizer` is an in-process library; generated tests reuse
   their SQLx pool instead of spawning Cargo and reconnecting to Postgres.
 - The generated shrink matrix owns one SQLx-isolated database per test run and
   drains its 58-case manifest through eight named worker runtimes. Each worker
   owns one connection and an explicit 8 MiB stack; aggregate entries are sorted
   by family and seed before publication. Two unchanged measured runs completed
-  in 153.91s and 165.53s and produced the same SHA-256 digest
+  in 153.91s and 165.53s on 2026-08-06; the same matrix took 208.97s on the
+  slower 2026-08-08 host and produced the same SHA-256 digest
   (`8b571b10dd894ff6285454680b94b06e7baa5df1fff2aecc001121d00a52532d`).
 - The 55 derived minimized/nonminimal/bad-expectation fixtures were deleted;
   generated audit evidence is disposable under `target/operator-proof`, while
   `night-passing.json` remains the single CLI fixture.
-
-The next physical extraction should move the semantic audit and its generator
-support into a dedicated integration module so changes can arm it by path
-without mapping the residual pipeline file as a whole.
+- The former 71k-line residual source is physically split into 109 ordinary
+  residual cases, 217 direct audit cases, and one source-shared support module;
+  the 17 DayEvent cases keep the ordinary lane at 126 cases. Selector contracts
+  prove ordinary-case edits do not arm the audit, audit-case edits do, and
+  shared-support edits honestly arm both targets.
 
 ### 5. Own Postgres as a run resource
 
@@ -170,13 +177,11 @@ without mapping the residual pipeline file as a whole.
 
 ## Recommended Implementation Order
 
-1. Extract the semantic audit into a dedicated integration module without
-   changing the delivered lane split.
-2. Introduce manifest-v2 dependencies/resources, timeouts, structured receipts,
+1. Introduce manifest-v2 dependencies/resources, timeouts, structured receipts,
    `--only`, and commit-safe `--resume`.
-3. Add run-scoped Postgres and artifact directories, keeping execution serial.
-4. Enable bounded parallel scheduling only after isolation contracts pass.
-5. Measure a full sweep, update cost bands, and then simplify the compatibility
+2. Add run-scoped Postgres and artifact directories, keeping execution serial.
+3. Enable bounded parallel scheduling only after isolation contracts pass.
+4. Measure a full sweep, update cost bands, and then simplify the compatibility
    npm aliases that are no longer operationally useful.
 
 ## Non-Goals
