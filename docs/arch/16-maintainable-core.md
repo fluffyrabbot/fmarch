@@ -31,9 +31,10 @@ The line counts below are a 2026-08-06 orientation snapshot, not a target.
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it; clear the bounded identity-delivery lifecycle input debt first |
-| `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `identity_delivery.rs` (~1.0k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery and live publication are closed behind typed boundaries; provider-neutral identity-delivery cancellation and audit records remain positional below the HTTP boundary | Thin composition root plus route-family modules with typed request contexts and a provider-neutral identity-delivery worker with typed lifecycle records | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; identity-delivery lifecycle records → worker transaction; command transport → command application port/live-publication port | Replace identity-delivery cancellation and audit field lists with immutable lifecycle records while keeping the SQL transaction explicit |
-| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change; clear the bounded identity-delivery lifecycle input debt first |
+| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it |
+| `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `identity_delivery.rs` (~1.0k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery, provider-neutral identity-delivery lifecycle records, and live publication are closed behind typed boundaries | Thin composition root plus route-family modules with typed request contexts and a provider-neutral identity-delivery worker with typed lifecycle records | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; identity-delivery lifecycle records → worker transaction; command transport → command application port/live-publication port | Split the next API family only when an independent change exposes a coherent ownership boundary; do not reopen lifecycle records |
+| `crates/media/src/variants.rs` (~2.2k) | Variant generation, immutable persistence, snapshot verification, repair, and lookup are coherent; the verified attached-file read still receives seven positional filesystem and diagnostic inputs | Variant store plus an immutable attached-read request that keeps the already-open file descriptor and its verification identity together | variant store → attached-read primitive → descriptor-relative filesystem checks | Replace the attached-read field list with one immutable request while retaining the owned file handle and before/after attachment checks |
+| `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change |
 | `crates/commands/src/lib.rs` (~5.1k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs` (~1.1k) | Action submission/admission/capacity, host-prompt resolution/replay, and DayEvent resolution application are closed behind typed request boundaries; command dispatch, shared admission/transaction/persistence, and phase lifecycle remain concentrated | Thin command transaction/dispatch owner plus bounded action, prompt, and day-runtime families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families | Split broader command ownership only when its next independent change exposes a coherent boundary; do not reopen the DayEvent request |
 | `crates/operator_proof/src/lib.rs` (~6.1k); proof binaries under `src/bin/`; focused boundary test | Operator report contracts, artifact classification, manifest loading, and local proof executables are no longer production command ownership | Dedicated operator-proof library and executable package | operator-proof → public command/projection APIs; operator API → operator-proof report contracts; commands may use it only as a test dependency | Separate the fixture minimizer core from CLI I/O and keep generated matrices out of the ordinary command gate |
 | `crates/commands/tests/pipeline/residual_cases.rs` (~13.9k); `semantic_audit/cases.rs` (~49.2k); source-shared `residual_support.rs` (~8.7k) | Ordinary Postgres scenarios and the full semantic/generated corpus are physically separate; only harness support is shared | Ordinary pipeline target, dedicated semantic-audit target, serial concurrency target, and one shared support owner | scenario/audit targets → shared harness/public command API; never scenario ↔ scenario | Split support by coherent fixture family only when independent change pressure appears; keep audit cases out of ordinary compilation and path arming |
@@ -379,6 +380,30 @@ ordering, rejection behavior, scheduler behavior, and projection rebuild. The
 indirection, actor drift, transaction capture, reordered application, or a
 replacement lint allowance.
 
+## Closed identity-delivery boundary: cancellation and audit records
+
+`IdentityDeliveryCancellationRequest` is the immutable boundary between a
+claimed intent row that has failed the credential-active check and its
+transactional cancellation. The claim owner constructs it directly from the
+locked row; the transaction stays explicit, and the cancellation retains the
+existing status, outcome, retry, claim-token, receipt, envelope-redaction, and
+timestamp mutations.
+
+`IdentityDeliveryAuditRecord` owns the exact event, actor, principal,
+credential, delivery, provider, outcome, and receipt fields persisted by the
+worker. Cancellation and finalization construct the record directly, so the
+cancel path no longer fabricates a dummy `ClaimedIdentityDelivery` merely to
+write audit metadata. The worker still locks the source credential before the
+claimed intent, holds both through provider completion, records the audit in
+the same transaction as its state transition, and commits only after
+finalization.
+
+`identity_delivery_boundary.rs` fixes those ownership, lock-order, SQL, JSON,
+and transaction contracts. Focused serial SQLx coverage exercises inactive
+credential cancellation, retryable failure followed by delivery, and permanent
+provider failure while checking actor/principal/provider attribution, envelope
+handling, claim clearing, receipts, and exact audit metadata.
+
 ## Exact lint-debt register
 
 The strict baseline intentionally records, rather than hides, remaining
@@ -392,10 +417,9 @@ boundary pressure:
   allowances; operator-proof status and artifact classification live in their
   own crate rather than the production command module;
 - auth, community, game-read, command/import, and live-delivery HTTP plus
-  authentication attempt/delivery and live-publication ownership are typed;
-  provider-neutral identity-delivery cancellation and audit persistence still
-  carry two bounded high-arity lint entries awaiting immutable lifecycle
-  records;
+  authentication attempt/delivery, provider-neutral identity-delivery
+  cancellation/audit persistence, and live-publication ownership are typed and
+  carry no local high-arity lint entries;
 - effect and private-channel projection ownership is typed and carries no local
   lint expectations; unrelated projection families remain deliberately
   separate rather than hidden behind a generic SQL projector;

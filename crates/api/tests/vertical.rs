@@ -142,6 +142,19 @@ impl IdentityDeliveryGateway for PermanentFailureIdentityDeliveryGateway {
     }
 }
 
+#[derive(Debug)]
+struct UnexpectedIdentityDeliveryGateway;
+
+impl IdentityDeliveryGateway for UnexpectedIdentityDeliveryGateway {
+    fn provider_id(&self) -> &'static str {
+        "fixture-cancel"
+    }
+
+    fn deliver<'a>(&'a self, _: &'a IdentityDeliveryAttempt) -> IdentityDeliveryFuture<'a> {
+        Box::pin(async move { panic!("inactive credentials must be cancelled before delivery") })
+    }
+}
+
 #[derive(Debug, Default)]
 struct RecoveryProofIdentityDeliveryGateway {
     attempts: Mutex<Vec<(Uuid, i32, String)>>,
@@ -7664,6 +7677,51 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
             ("auth_delivery_retried".to_string(), "admin_a".to_string()),
         ]
     );
+    let outcome_audits = sqlx::query_as::<_, (String, String, String, serde_json::Value)>(
+        r#"
+        SELECT event_kind, actor_user_id, token_hash, metadata
+        FROM identity_lifecycle_audit
+        WHERE principal_user_id = 'delivery_user'
+          AND event_kind IN ('auth_delivery_retryable_failed', 'auth_delivery_retried')
+        ORDER BY id
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(outcome_audits.len(), 2);
+    assert_eq!(outcome_audits[0].0, "auth_delivery_retryable_failed");
+    assert_eq!(outcome_audits[0].1, "delivery_user");
+    assert_eq!(outcome_audits[0].2, credential_hash);
+    assert_eq!(
+        outcome_audits[0].3,
+        serde_json::json!({
+            "delivery_id": delivery_id,
+            "delivery_kind": "invite",
+            "account_id": "delivery@example.test",
+            "adapter": "local-deterministic",
+            "provider_id": "local-deterministic",
+            "outcome_kind": "retryable_failure",
+            "outcome_code": "local_transient",
+            "provider_receipt_id": null
+        })
+    );
+    assert_eq!(outcome_audits[1].0, "auth_delivery_retried");
+    assert_eq!(outcome_audits[1].1, "admin_a");
+    assert_eq!(outcome_audits[1].2, outcome_audits[0].2);
+    assert_eq!(
+        outcome_audits[1].3,
+        serde_json::json!({
+            "delivery_id": delivery_id,
+            "delivery_kind": "invite",
+            "account_id": "delivery@example.test",
+            "adapter": "local-deterministic",
+            "provider_id": "local-deterministic",
+            "outcome_kind": "delivered",
+            "outcome_code": null,
+            "provider_receipt_id": provider_receipt_id
+        })
+    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -7751,6 +7809,62 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
     assert_eq!(persisted.1, "fixture-permanent");
     assert_eq!(persisted.2, "permanent_failure");
     assert_eq!(persisted.3.as_deref(), Some("recipient_rejected"));
+    let terminal_state = sqlx::query_as::<
+        _,
+        (
+            String,
+            Option<Uuid>,
+            Option<i64>,
+            Option<serde_json::Value>,
+            Option<String>,
+            Option<i64>,
+            Option<i64>,
+        ),
+    >(
+        r#"
+        SELECT credential_hash, claim_token, claim_expires_at, credential_envelope,
+               provider_receipt_id, next_attempt_at, delivered_at
+        FROM auth_delivery_intent
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(terminal_state.1.is_none());
+    assert!(terminal_state.2.is_none());
+    assert!(terminal_state.3.is_some());
+    assert!(terminal_state.4.is_none());
+    assert!(terminal_state.5.is_none());
+    assert!(terminal_state.6.is_none());
+    let terminal_audit = sqlx::query_as::<_, (String, String, String, serde_json::Value)>(
+        r#"
+        SELECT event_kind, actor_user_id, token_hash, metadata
+        FROM identity_lifecycle_audit
+        WHERE principal_user_id = 'permanent_delivery_user'
+          AND event_kind = 'auth_delivery_permanent_failed'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(terminal_audit.0, "auth_delivery_permanent_failed");
+    assert_eq!(terminal_audit.1, "permanent_delivery_user");
+    assert_eq!(terminal_audit.2, terminal_state.0);
+    assert_eq!(
+        terminal_audit.3,
+        serde_json::json!({
+            "delivery_id": delivery_id,
+            "delivery_kind": "invite",
+            "account_id": "permanent-delivery@example.test",
+            "adapter": "fixture-permanent",
+            "provider_id": "fixture-permanent",
+            "outcome_kind": "permanent_failure",
+            "outcome_code": "recipient_rejected",
+            "provider_receipt_id": null
+        })
+    );
 
     let response = app
         .oneshot(
@@ -7764,6 +7878,159 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::CONFLICT);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPool) {
+    let gateway = Arc::new(UnexpectedIdentityDeliveryGateway);
+    let app = api::router_with_state(
+        test_api_state(pool.clone())
+            .with_dev_auth(true)
+            .with_identity_delivery_gateway(gateway.clone()),
+    );
+    let admin_token = "cancel-delivery-admin-token";
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": admin_token,
+                        "principal_user_id": "cancel_delivery_admin",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    create_test_auth_account(
+        &app,
+        admin_token,
+        "cancel-delivery@example.test",
+        "correct horse battery",
+        "cancel_delivery_user",
+    )
+    .await;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/invites")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::from(
+                    serde_json::json!({
+                        "invite_token": "cancel-delivery-invite-token",
+                        "account_id": "cancel-delivery@example.test",
+                        "expected_principal_user_id": "cancel_delivery_user",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let delivery_id = Uuid::parse_str(invite["delivery_id"].as_str().expect("delivery id"))
+        .expect("typed delivery id");
+    let credential_hash = sqlx::query_scalar::<_, String>(
+        "SELECT credential_hash FROM auth_delivery_intent WHERE delivery_id = $1",
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::query("UPDATE auth_invite SET revoked_at = 1 WHERE token_hash = $1")
+        .bind(&credential_hash)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let cancelled_at = unix_now_seconds();
+    assert!(
+        process_next_identity_delivery(&pool, gateway.as_ref(), cancelled_at)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let cancelled = sqlx::query_as::<
+        _,
+        (
+            String,
+            String,
+            Option<String>,
+            Option<i64>,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+            Option<Uuid>,
+            Option<i64>,
+            Option<serde_json::Value>,
+        ),
+    >(
+        r#"
+        SELECT status, outcome_kind, outcome_code, next_attempt_at, delivered_at,
+               last_error, provider_receipt_id, claim_token, claim_expires_at,
+               credential_envelope
+        FROM auth_delivery_intent
+        WHERE delivery_id = $1
+        "#,
+    )
+    .bind(delivery_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(cancelled.0, "cancelled");
+    assert_eq!(cancelled.1, "cancelled");
+    assert_eq!(cancelled.2.as_deref(), Some("credential_inactive"));
+    assert!(cancelled.3.is_none());
+    assert!(cancelled.4.is_none());
+    assert_eq!(cancelled.5.as_deref(), Some("credential_inactive"));
+    assert!(cancelled.6.is_none());
+    assert!(cancelled.7.is_none());
+    assert!(cancelled.8.is_none());
+    assert!(cancelled.9.is_none());
+
+    let audit = sqlx::query_as::<_, (i64, String, String, String, String, serde_json::Value)>(
+        r#"
+        SELECT event_at, event_kind, actor_user_id, principal_user_id, token_hash, metadata
+        FROM identity_lifecycle_audit
+        WHERE event_kind = 'auth_delivery_cancelled'
+          AND principal_user_id = 'cancel_delivery_user'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audit.0, cancelled_at);
+    assert_eq!(audit.1, "auth_delivery_cancelled");
+    assert_eq!(audit.2, "cancel_delivery_user");
+    assert_eq!(audit.3, "cancel_delivery_user");
+    assert_eq!(audit.4, credential_hash);
+    assert_eq!(
+        audit.5,
+        serde_json::json!({
+            "delivery_id": delivery_id,
+            "delivery_kind": "invite",
+            "account_id": "cancel-delivery@example.test",
+            "adapter": "fixture-cancel",
+            "provider_id": "fixture-cancel",
+            "outcome_kind": "cancelled",
+            "outcome_code": "credential_inactive",
+            "provider_receipt_id": null
+        })
+    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

@@ -419,6 +419,33 @@ struct ClaimedIdentityDelivery {
     claim_token: Uuid,
 }
 
+#[derive(Debug)]
+struct IdentityDeliveryCancellationRequest<'a> {
+    delivery_id: Uuid,
+    kind: IdentityDeliveryKind,
+    account_id: &'a str,
+    principal_user_id: &'a str,
+    credential_hash: &'a str,
+    provider_id: &'a str,
+    cancelled_at: i64,
+}
+
+#[derive(Debug)]
+struct IdentityDeliveryAuditRecord<'a> {
+    event_at: i64,
+    event_kind: &'a str,
+    actor_user_id: &'a str,
+    principal_user_id: &'a str,
+    credential_hash: &'a str,
+    delivery_id: Uuid,
+    delivery_kind: IdentityDeliveryKind,
+    account_id: &'a str,
+    provider_id: &'a str,
+    outcome_kind: &'a str,
+    outcome_code: Option<&'a str>,
+    provider_receipt_id: Option<&'a str>,
+}
+
 pub async fn process_identity_delivery_intent(
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
@@ -509,17 +536,16 @@ async fn claim_delivery(
     };
     let kind = IdentityDeliveryKind::parse(&delivery_kind).expect("validated delivery kind");
     if !credential_is_active(&mut tx, kind, credential_hash.as_str()).await? {
-        cancel_claimed_delivery(
-            &mut tx,
+        let request = IdentityDeliveryCancellationRequest {
             delivery_id,
             kind,
-            account_id.as_str(),
-            principal_user_id.as_str(),
-            credential_hash.as_str(),
+            account_id: account_id.as_str(),
+            principal_user_id: principal_user_id.as_str(),
+            credential_hash: credential_hash.as_str(),
             provider_id,
-            now,
-        )
-        .await?;
+            cancelled_at: now,
+        };
+        cancel_claimed_delivery(&mut tx, request).await?;
         tx.commit().await?;
         return Ok(None);
     }
@@ -664,16 +690,9 @@ async fn lock_claimed_delivery(
     .is_some())
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn cancel_claimed_delivery(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    delivery_id: Uuid,
-    kind: IdentityDeliveryKind,
-    account_id: &str,
-    principal_user_id: &str,
-    credential_hash: &str,
-    provider_id: &str,
-    now: i64,
+    request: IdentityDeliveryCancellationRequest<'_>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
@@ -692,34 +711,26 @@ async fn cancel_claimed_delivery(
         WHERE delivery_id = $1
         "#,
     )
-    .bind(delivery_id)
-    .bind(now)
+    .bind(request.delivery_id)
+    .bind(request.cancelled_at)
     .execute(&mut **tx)
     .await?;
-    let claim = ClaimedIdentityDelivery {
-        attempt: IdentityDeliveryAttempt {
-            delivery_id,
-            kind,
-            account_id: account_id.to_string(),
-            principal_user_id: principal_user_id.to_string(),
-            credential_hash: credential_hash.to_string(),
-            credential_expires_at: now + 1,
-            credential_material: None,
-            attempt_number: 0,
-        },
-        credential_envelope: None,
-        provider_id: provider_id.to_string(),
-        claim_token: Uuid::nil(),
-    };
     record_delivery_audit(
         tx,
-        "auth_delivery_cancelled",
-        &claim,
-        principal_user_id,
-        "cancelled",
-        Some("credential_inactive"),
-        None,
-        now,
+        IdentityDeliveryAuditRecord {
+            event_at: request.cancelled_at,
+            event_kind: "auth_delivery_cancelled",
+            actor_user_id: request.principal_user_id,
+            principal_user_id: request.principal_user_id,
+            credential_hash: request.credential_hash,
+            delivery_id: request.delivery_id,
+            delivery_kind: request.kind,
+            account_id: request.account_id,
+            provider_id: request.provider_id,
+            outcome_kind: "cancelled",
+            outcome_code: Some("credential_inactive"),
+            provider_receipt_id: None,
+        },
     )
     .await
 }
@@ -851,13 +862,20 @@ async fn finalize_delivery(
     };
     record_delivery_audit(
         tx,
-        event_kind,
-        &claim,
-        actor_user_id,
-        outcome.kind(),
-        outcome.code(),
-        provider_receipt_id.as_deref(),
-        now,
+        IdentityDeliveryAuditRecord {
+            event_at: now,
+            event_kind,
+            actor_user_id,
+            principal_user_id: claim.attempt.principal_user_id.as_str(),
+            credential_hash: claim.attempt.credential_hash.as_str(),
+            delivery_id: claim.attempt.delivery_id,
+            delivery_kind: claim.attempt.kind,
+            account_id: claim.attempt.account_id.as_str(),
+            provider_id: claim.provider_id.as_str(),
+            outcome_kind: outcome.kind(),
+            outcome_code: outcome.code(),
+            provider_receipt_id: provider_receipt_id.as_deref(),
+        },
     )
     .await?;
     let receipt = IdentityDeliveryReceipt {
@@ -873,19 +891,9 @@ async fn finalize_delivery(
     Ok(Some(receipt))
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "delivery audit fields remain explicit until identity delivery owns a typed audit record"
-)]
 async fn record_delivery_audit(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    event_kind: &str,
-    claim: &ClaimedIdentityDelivery,
-    actor_user_id: &str,
-    outcome_kind: &str,
-    outcome_code: Option<&str>,
-    provider_receipt_id: Option<&str>,
-    now: i64,
+    record: IdentityDeliveryAuditRecord<'_>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
@@ -894,21 +902,21 @@ async fn record_delivery_audit(
         ) VALUES ($1, $2, $3, $4, $5, NULL, $6::JSONB)
         "#,
     )
-    .bind(now)
-    .bind(event_kind)
-    .bind(actor_user_id)
-    .bind(&claim.attempt.principal_user_id)
-    .bind(&claim.attempt.credential_hash)
+    .bind(record.event_at)
+    .bind(record.event_kind)
+    .bind(record.actor_user_id)
+    .bind(record.principal_user_id)
+    .bind(record.credential_hash)
     .bind(
         serde_json::json!({
-            "delivery_id": claim.attempt.delivery_id,
-            "delivery_kind": claim.attempt.kind.as_str(),
-            "account_id": claim.attempt.account_id,
-            "adapter": claim.provider_id,
-            "provider_id": claim.provider_id,
-            "outcome_kind": outcome_kind,
-            "outcome_code": outcome_code,
-            "provider_receipt_id": provider_receipt_id
+            "delivery_id": record.delivery_id,
+            "delivery_kind": record.delivery_kind.as_str(),
+            "account_id": record.account_id,
+            "adapter": record.provider_id,
+            "provider_id": record.provider_id,
+            "outcome_kind": record.outcome_kind,
+            "outcome_code": record.outcome_code,
+            "provider_receipt_id": record.provider_receipt_id
         })
         .to_string(),
     )
