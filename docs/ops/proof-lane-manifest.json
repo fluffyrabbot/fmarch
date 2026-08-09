@@ -22,7 +22,7 @@
     "cargo:commands-unit": { "kind": "shell", "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary --test day_runtime_boundary" },
     "cargo:commands-pg": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --test-threads=4" },
     "cargo:commands-concurrency": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test runtime_cancellation -- --test-threads=1" },
-    "cargo:commands-audit": { "kind": "shell", "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --ignored --test-threads=4" },
+    "cargo:commands-audit": { "kind": "shell", "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test semantic_audit -- --test-threads=4" },
     "cargo:operator-proof": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p operator_proof -- --test-threads=1" },
     "cargo:game-platform": { "kind": "shell", "command": "cargo test -p game_platform --all-features" },
     "cargo:wire": { "kind": "shell", "command": "cargo test -p wire" },
@@ -136,7 +136,17 @@
     {
       "id": "commands:semantic-audit",
       "tier": "active",
-      "paths": ["crates/commands/tests/pipeline.rs"],
+      "paths": ["crates/commands/tests/semantic_audit/"],
+      "lanes": ["cargo:commands-audit", "cargo:clippy-workspace"]
+    },
+    {
+      "id": "commands:pipeline-support",
+      "tier": "active",
+      "paths": [
+        "crates/commands/Cargo.toml",
+        "crates/commands/tests/pipeline/common.rs",
+        "crates/commands/tests/pipeline/residual_support.rs"
+      ],
       "lanes": [
         "cargo:commands-pg",
         "cargo:commands-audit",

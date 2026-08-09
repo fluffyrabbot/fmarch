@@ -46,6 +46,37 @@ const FIXTURE_GRAPH = {
   server: ['api', 'identity', 'operator_api'],
 };
 
+test('command audit is a dedicated exact-size integration target', () => {
+  const ordinaryPath = join(
+    REPO_ROOT,
+    'crates',
+    'commands',
+    'tests',
+    'pipeline',
+    'residual_cases.rs',
+  );
+  const auditPath = join(
+    REPO_ROOT,
+    'crates',
+    'commands',
+    'tests',
+    'semantic_audit',
+    'cases.rs',
+  );
+  const testAttribute = /^#\[(?:sqlx::test|tokio::test|test)\b/gm;
+  const ordinarySource = readFileSync(ordinaryPath, 'utf8');
+  const auditSource = readFileSync(auditPath, 'utf8');
+
+  assert.equal([...ordinarySource.matchAll(testAttribute)].length, 109);
+  assert.equal([...auditSource.matchAll(testAttribute)].length, 217);
+  assert.ok(!ordinarySource.includes('#[ignore'));
+  assert.ok(!auditSource.includes('#[ignore'));
+  assert.ok(!existsSync(join(REPO_ROOT, 'crates', 'commands', 'tests', 'pipeline.rs')));
+  assert.match(manifest.lanes['cargo:commands-pg'].command, /--test pipeline\b/);
+  assert.match(manifest.lanes['cargo:commands-audit'].command, /--test semantic_audit\b/);
+  assert.doesNotMatch(manifest.lanes['cargo:commands-audit'].command, /--ignored\b/);
+});
+
 test('workspace crate graph excludes test-only reverse dependencies', () => {
   const graph = crateGraphFromMetadata({
     packages: [
@@ -474,14 +505,41 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
   assert.ok(commandSource.laneIds.includes('cargo:commands-pg'));
   assert.ok(!commandSource.laneIds.includes('cargo:commands-audit'));
 
-  const generatedAudit = selectLanes({
-    changed: ['crates/commands/tests/pipeline.rs'],
+  const ordinaryPipeline = selectLanes({
+    changed: ['crates/commands/tests/pipeline/residual_cases.rs'],
     manifest,
     crateGraph: FIXTURE_GRAPH,
     mode: 'inner',
   });
-  assert.ok(generatedAudit.laneIds.includes('cargo:commands-pg'));
-  assert.ok(generatedAudit.laneIds.includes('cargo:commands-audit'));
+  assert.ok(ordinaryPipeline.laneIds.includes('cargo:commands-pg'));
+  assert.ok(!ordinaryPipeline.laneIds.includes('cargo:commands-audit'));
+
+  const sharedPipelineSupport = selectLanes({
+    changed: ['crates/commands/tests/pipeline/residual_support.rs'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  assert.ok(sharedPipelineSupport.laneIds.includes('cargo:commands-pg'));
+  assert.ok(sharedPipelineSupport.laneIds.includes('cargo:commands-audit'));
+
+  const commandTargetManifest = selectLanes({
+    changed: ['crates/commands/Cargo.toml'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  assert.ok(commandTargetManifest.laneIds.includes('cargo:commands-pg'));
+  assert.ok(commandTargetManifest.laneIds.includes('cargo:commands-audit'));
+
+  const semanticAudit = selectLanes({
+    changed: ['crates/commands/tests/semantic_audit/cases.rs'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  assert.ok(semanticAudit.laneIds.includes('cargo:commands-audit'));
+  assert.ok(!semanticAudit.laneIds.includes('cargo:commands-pg'));
 
   const minimizer = selectLanes({
     changed: ['crates/operator_proof/src/minimizer.rs'],

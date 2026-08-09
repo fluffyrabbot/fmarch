@@ -273,7 +273,7 @@ TEST_FAMILY_COVERAGE = {
                 "needle": "day_substep_goldens_expose_canonical_host_console_ordering",
             },
             {
-                "path": "crates/commands/tests/pipeline.rs",
+                "path": "crates/commands/tests/pipeline/residual_cases.rs",
                 "needle": "chinese",
             },
         ],
@@ -288,7 +288,7 @@ TEST_FAMILY_COVERAGE = {
         "evidence": [
             {"path": "packs/mafia_universe/pack.json", "needle": "town_cop"},
             {
-                "path": "crates/commands/tests/pipeline.rs",
+                "path": "crates/commands/tests/pipeline/residual_cases.rs",
                 "needle": "mafia_universe",
             },
         ],
@@ -324,7 +324,7 @@ TEST_FAMILY_COVERAGE = {
                 "needle": "golden_cleanse_preempts_ignite",
             },
             {
-                "path": "crates/commands/tests/pipeline.rs",
+                "path": "crates/commands/tests/pipeline/residual_cases.rs",
                 "needle": "poison",
             },
         ],
@@ -396,7 +396,10 @@ TEST_FAMILY_COVERAGE = {
         "integrated": True,
         "evidence": [
             {"path": "crates/domain/tests/golden.rs", "needle": "golden_ita_session"},
-            {"path": "crates/commands/tests/pipeline.rs", "needle": "ita"},
+            {
+                "path": "crates/commands/tests/pipeline/residual_cases.rs",
+                "needle": "ita",
+            },
         ],
         "notes": "ITA runtime coverage maps to ITA session/shot goldens and command/projection verticals",
     },
@@ -449,7 +452,10 @@ TEST_FAMILY_COVERAGE = {
         "integrated": True,
         "evidence": [
             {"path": "crates/domain/tests/golden.rs", "needle": "WinReached"},
-            {"path": "crates/commands/tests/pipeline.rs", "needle": "win"},
+            {
+                "path": "crates/commands/tests/pipeline/residual_cases.rs",
+                "needle": "win",
+            },
         ],
         "notes": "win policy coverage maps to WinReached goldens and command/projection verticals",
     },
@@ -476,7 +482,10 @@ TEST_FAMILY_COVERAGE = {
         "integrated": True,
         "evidence": [
             {"path": "crates/domain/tests/golden.rs", "needle": "golden_"},
-            {"path": "crates/commands/tests/pipeline.rs", "needle": "ResolvePhase"},
+            {
+                "path": "crates/commands/tests/pipeline/residual_cases.rs",
+                "needle": "ResolvePhase",
+            },
         ],
         "notes": "general resolve families map to the domain golden harness plus ResolvePhase verticals",
     },
@@ -488,7 +497,10 @@ TEST_FAMILY_COVERAGE = {
         "integrated": True,
         "evidence": [
             {"path": "crates/domain/tests/golden.rs", "needle": "golden_chinese"},
-            {"path": "crates/commands/tests/pipeline.rs", "needle": "chinese"},
+            {
+                "path": "crates/commands/tests/pipeline/residual_cases.rs",
+                "needle": "chinese",
+            },
         ],
         "notes": "culture resolve tests map to Chinese and Mafia Universe culture-pack goldens and verticals",
     },
@@ -552,7 +564,10 @@ TEST_FAMILY_COVERAGE = {
         "integrated": True,
         "evidence": [
             {"path": "crates/domain/tests/golden.rs", "needle": "phase_window"},
-            {"path": "crates/commands/tests/pipeline.rs", "needle": "AdvancePhase"},
+            {
+                "path": "crates/commands/tests/pipeline/residual_cases.rs",
+                "needle": "AdvancePhase",
+            },
         ],
         "notes": "phase resolution maps to phase-window goldens and command phase-transition tests",
     },
@@ -833,7 +848,16 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
     pack_src_text = read_text(fmarch_root / "crates/domain/src/pack.rs")
     resolver_text = read_text(fmarch_root / "crates/domain/src/resolver.rs")
     commands_text = read_text(fmarch_root / "crates/commands/src/lib.rs")
-    command_tests_text = read_text(fmarch_root / "crates/commands/tests/pipeline.rs")
+    command_tests_text = "\n".join(
+        read_text(path)
+        for path in (
+            fmarch_root / "crates/commands/tests/pipeline/common.rs",
+            fmarch_root / "crates/commands/tests/pipeline/day_events.rs",
+            fmarch_root / "crates/commands/tests/pipeline/residual_support.rs",
+            fmarch_root / "crates/commands/tests/pipeline/residual_cases.rs",
+            fmarch_root / "crates/commands/tests/semantic_audit/cases.rs",
+        )
+    )
     projections_text = read_text(fmarch_root / "crates/projections/src/lib.rs")
     docs_text = "\n".join(
         read_text(p) for p in sorted((fmarch_root / "docs/arch").glob("*.md"))

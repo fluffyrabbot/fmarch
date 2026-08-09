@@ -1695,7 +1695,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         "cargo run -q -p operator_proof --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json"
     ));
     assert!(proof_html.contains(
-        "cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report -- --ignored --nocapture"
+        "cargo test -p commands --test semantic_audit generated_shrink_matrix_writes_compact_operator_report -- --nocapture"
     ));
     assert!(proof_html.contains(
         "check_generated_shrink_matrix_gap_audit.py --output target/operator-proof/current-generated-shrink-gap-audit-report.json --check"
@@ -2219,7 +2219,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         true
     );
     assert!(generated_shrink_status_row["command"].as_str().unwrap().contains(
-        "cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report"
+        "cargo test -p commands --test semantic_audit generated_shrink_matrix_writes_compact_operator_report"
     ));
 
     let response = app
@@ -4569,7 +4569,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "\"command\":\"DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p operator_proof --bin audit_determinism_fuzz_artifact",
                 "\"row_id\":\"proof-run-operator-proof-generated-shrink-matrix\"",
                 "\"path\":\"target/operator-proof/current-generated-shrink-matrix-report.tmp.json\"",
-                "\"command\":\"RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report",
+                "\"command\":\"RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test semantic_audit generated_shrink_matrix_writes_compact_operator_report",
                 "\"row_id\":\"proof-run-missing-artifact-provenance-guard\"",
                 "\"state\":\"missing\"",
                 "\"row_id\":\"proof-run-malformed-artifact-metadata-guard\"",

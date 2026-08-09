@@ -2366,7 +2366,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    proof-run index access control/content. An API unit test parses the manifest, rejects unknown
    manifest fields, rejects unknown command-template placeholders, requires selectors for
    `cargo test` entries, checks game/local scope consistency, and confirms each listed selector
-   still names an async test in `crates/commands/tests/pipeline.rs`; the same test validates
+   still names an async test in the ordinary pipeline or dedicated semantic-audit target; the same test validates
    stable proof-run ID uniqueness/shape, and the operator vertical proves a representative
    proof-run row anchor renders.
    A seeded
@@ -2888,13 +2888,13 @@ coverage, and a playable vertical scenario through the command pipeline.
    `operator-proof-generated-shrink-matrix` currently has artifact state `trusted`, artifact path
    `target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, rendered command
    `RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test
-   pipeline generated_shrink_matrix_writes_compact_operator_report -- --ignored --nocapture && test -f
+   semantic_audit generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f
    target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary
    `Runs the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter,
    BabysitterProjectionState, Hider, HiderProjectionState, Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, StrongmanVengefulProjectionState, BodyguardStrongmanVengefulFixpoint, BodyguardStrongmanVengefulProjectionState, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, LoversProjectionState, Bomb, and BombProjectionState against one SQLx-isolated local Postgres database on eight bounded worker
    runtimes, sorts entries by family and seed, writes a versioned report with two cases per family
-   plus success and bad-expectation shrink preservation metadata, is ignored in the default command
-   pipeline and run explicitly with --ignored, and does not prove exhaustive randomized coverage.`
+   plus success and bad-expectation shrink preservation metadata, runs only in the dedicated
+   semantic_audit target, and does not prove exhaustive randomized coverage.`
    This row is trusted through the artifact classifier with `ok: true`,
    `family_count: 29`, `case_count: 58`, `expected_family_count: 29`, `expected_case_count: 58`,
    and `family_manifest_matched: true`.

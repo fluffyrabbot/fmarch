@@ -3,14 +3,17 @@ name = "commands"
 version = "0.1.0"
 edition.workspace = true
 publish.workspace = true
-# Directory harness at tests/pipeline/; residual body still lives at
-# tests/pipeline.rs and is include!'d — disable autotests so that file is not
-# a second integration binary (cargo forbids tests/pipeline.rs + tests/pipeline/).
+# Integration targets are declared explicitly so shared support files under
+# tests/pipeline/ cannot become accidental standalone crates.
 autotests = false
 
 [[test]]
 name = "pipeline"
 path = "tests/pipeline/main.rs"
+
+[[test]]
+name = "semantic_audit"
+path = "tests/semantic_audit/main.rs"
 
 [[test]]
 name = "runtime_cancellation"

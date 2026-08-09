@@ -3387,12 +3387,12 @@ mod tests {
     use super::*;
     use std::{collections::HashSet, env, fs, process::Command as ProcessCommand};
 
-    // Pipeline harness is a directory crate; selectors may live in the residual
-    // body or the day-family module.
+    // Command proof selectors span the ordinary pipeline and the physically
+    // separate semantic-audit target.
     const COMMANDS_PIPELINE_RS: &str = concat!(
-        include_str!("../../commands/tests/pipeline.rs"),
         include_str!("../../commands/tests/pipeline/day_events.rs"),
-        include_str!("../../commands/tests/pipeline/residual.rs"),
+        include_str!("../../commands/tests/pipeline/residual_cases.rs"),
+        include_str!("../../commands/tests/semantic_audit/cases.rs"),
     );
     const ENGINE_AND_PACKS_MD: &str = include_str!("../../../docs/arch/09-engine-and-packs.md");
     const ENGINE_PORT_CHECKLIST_MD: &str =

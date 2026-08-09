@@ -1103,7 +1103,7 @@
         },
         {
           "kind": "source",
-          "value": "crates/commands/tests/pipeline.rs"
+          "value": "crates/commands/tests/pipeline/residual_cases.rs"
         },
         {
           "kind": "source",
@@ -1177,7 +1177,7 @@
         },
         {
           "kind": "source",
-          "value": "crates/commands/tests/pipeline.rs"
+          "value": "crates/commands/tests/pipeline/residual_cases.rs"
         },
         {
           "kind": "source",

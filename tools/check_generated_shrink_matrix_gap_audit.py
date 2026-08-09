@@ -24,7 +24,10 @@ ARTIFACT_VERSION = 1
 DEFAULT_OUTPUT = "target/operator-proof/current-generated-shrink-gap-audit-report.json"
 CHECKLIST_PATH = "docs/arch/11-engine-port-checklist.md"
 OPERATOR_PROOF_PATH = "crates/operator_proof/src/lib.rs"
-PIPELINE_TEST_PATH = "crates/commands/tests/pipeline.rs"
+PIPELINE_TEST_PATH = (
+    "crates/commands/tests/pipeline/residual_support.rs",
+    "crates/commands/tests/semantic_audit/cases.rs",
+)
 PROOF_BOUNDARY = (
     "No-Postgres mechanical audit over the Phase 4 checklist expectation set, "
     "source/test evidence needles, and generated_shrink_matrix_expected_families(); "
@@ -35,7 +38,7 @@ PROOF_BOUNDARY = (
 
 @dataclass(frozen=True)
 class EvidenceNeedle:
-    path: str
+    path: str | tuple[str, ...]
     needle: str
 
 
@@ -49,8 +52,16 @@ class ExpectedFamily:
     recommended_next_slice: str
 
 
-def needle(path: str, text: str) -> EvidenceNeedle:
+def needle(path: str | tuple[str, ...], text: str) -> EvidenceNeedle:
     return EvidenceNeedle(path=path, needle=text)
+
+
+def evidence_paths(evidence: EvidenceNeedle) -> tuple[str, ...]:
+    return (evidence.path,) if isinstance(evidence.path, str) else evidence.path
+
+
+def evidence_path_label(evidence: EvidenceNeedle) -> str:
+    return " | ".join(evidence_paths(evidence))
 
 
 def phase4_family(
@@ -404,23 +415,17 @@ def find_missing_needles(root: Path, family: ExpectedFamily) -> list[dict[str, s
                 }
             )
     for evidence in family.source_needles:
-        try:
-            source_text = read_text(root / evidence.path)
-        except FileNotFoundError:
+        source_texts: list[str] = []
+        for path in evidence_paths(evidence):
+            try:
+                source_texts.append(read_text(root / path))
+            except FileNotFoundError:
+                continue
+        if not any(evidence.needle in source_text for source_text in source_texts):
             missing.append(
                 {
                     "family": family.family,
-                    "path": evidence.path,
-                    "needle": evidence.needle,
-                    "kind": "source",
-                }
-            )
-            continue
-        if evidence.needle not in source_text:
-            missing.append(
-                {
-                    "family": family.family,
-                    "path": evidence.path,
+                    "path": evidence_path_label(evidence),
                     "needle": evidence.needle,
                     "kind": "source",
                 }
@@ -469,7 +474,12 @@ def build_report(root: Path, output: str) -> dict[str, Any]:
             "checklist": CHECKLIST_PATH,
             "operator_proof_manifest": OPERATOR_PROOF_PATH,
             "source_evidence": sorted(
-                {evidence.path for family in EXPECTED_FAMILIES for evidence in family.source_needles}
+                {
+                    path
+                    for family in EXPECTED_FAMILIES
+                    for evidence in family.source_needles
+                    for path in evidence_paths(evidence)
+                }
             ),
         },
         "expected_family_count": len(expected_by_family),
@@ -490,7 +500,7 @@ def build_report(root: Path, output: str) -> dict[str, Any]:
                 "manifest_case_count": manifest.get(family.family),
                 "checklist_needles": list(family.checklist_needles),
                 "source_needles": [
-                    {"path": evidence.path, "needle": evidence.needle}
+                    {"path": evidence_path_label(evidence), "needle": evidence.needle}
                     for evidence in family.source_needles
                 ],
                 "recommended_next_slice_if_missing": family.recommended_next_slice,

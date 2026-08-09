@@ -9,6 +9,10 @@
 //! — the unfixable User≠Slot call (doc 01): replacement keeps the slot's votes
 //! and posts while moving authority from the outgoing to the incoming user.
 
+// Each shared helper is used by at least one of the two deliberately disjoint
+// integration targets; it need not be used by both targets independently.
+#[allow(dead_code)]
 mod common;
 mod day_events;
+#[allow(dead_code, unused_imports)]
 mod residual;
