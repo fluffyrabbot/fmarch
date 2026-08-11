@@ -33,7 +33,7 @@ The line counts below are a 2026-08-06 orientation snapshot, not a target.
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
 | `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it |
 | `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `identity_delivery.rs` (~1.0k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery, provider-neutral identity-delivery lifecycle records, and live publication are closed behind typed boundaries | Thin composition root plus route-family modules with typed request contexts and a provider-neutral identity-delivery worker with typed lifecycle records | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; identity-delivery lifecycle records → worker transaction; command transport → command application port/live-publication port | Split the next API family only when an independent change exposes a coherent ownership boundary; do not reopen lifecycle records |
-| `crates/media/src/variants.rs` (~2.2k) | Variant generation, immutable persistence, snapshot verification, repair, and lookup are coherent; the verified attached-file read still receives seven positional filesystem and diagnostic inputs | Variant store plus an immutable attached-read request that keeps the already-open file descriptor and its verification identity together | variant store → attached-read primitive → descriptor-relative filesystem checks | Replace the attached-read field list with one immutable request while retaining the owned file handle and before/after attachment checks |
+| `crates/media/src/variants.rs` (~2.3k) | Variant generation, immutable persistence, snapshot verification, repair, lookup, and descriptor-relative reads are coherent; each attached read receives one immutable request that owns its already-open file | Variant store plus an immutable attached-read request that keeps the descriptor and verification identity together | variant store → attached-read primitive → descriptor-relative filesystem checks | Split the next media responsibility only when an independent change exposes a coherent boundary; do not reopen the attached-read request |
 | `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change |
 | `crates/commands/src/lib.rs` (~5.1k); `action_submission.rs` (~0.7k); `host_prompt_resolution.rs` (~1.0k including focused tests); `day_runtime.rs` (~1.1k) | Action submission/admission/capacity, host-prompt resolution/replay, and DayEvent resolution application are closed behind typed request boundaries; command dispatch, shared admission/transaction/persistence, and phase lifecycle remain concentrated | Thin command transaction/dispatch owner plus bounded action, prompt, and day-runtime families | bounded families → shared command admission/persistence ports + projections/domain; dispatch → bounded families | Split broader command ownership only when its next independent change exposes a coherent boundary; do not reopen the DayEvent request |
 | `crates/operator_proof/src/lib.rs` (~6.1k); proof binaries under `src/bin/`; focused boundary test | Operator report contracts, artifact classification, manifest loading, and local proof executables are no longer production command ownership | Dedicated operator-proof library and executable package | operator-proof → public command/projection APIs; operator API → operator-proof report contracts; commands may use it only as a test dependency | Separate the fixture minimizer core from CLI I/O and keep generated matrices out of the ordinary command gate |
@@ -404,6 +404,28 @@ credential cancellation, retryable failure followed by delivery, and permanent
 provider failure while checking actor/principal/provider attribution, envelope
 handling, claim clearing, receipts, and exact audit metadata.
 
+## Closed media boundary: attached variant reads
+
+`AttachedVariantReadRequest` is the private immutable handoff from manifest and
+member lookup to the descriptor-relative read primitive. It owns the already-
+open regular `File`, borrows its parent directory descriptor, entry name,
+logical path, and diagnostic label, and carries the byte cap and `ContentId`.
+Manifest open, persisted-member verification, and snapshot-member lookup each
+construct the request directly; the former seven-argument helper and its Clippy
+allowance no longer exist.
+
+The primitive still verifies attachment before metadata inspection, rejects an
+already-oversized inode, reserves exactly the observed size, reads through the
+max-plus-one sentinel, rejects concurrent growth, repairs private mode, syncs
+the file and parent directory, and verifies attachment again before returning.
+Manifest parsing and member validation remain after that operation, while
+format, recipe, id, store, and final manifest commit-token attachment checks
+retain their original order. The source boundary contract fixes the request,
+three direct construction sites, exact diagnostics, and operation ordering; a
+focused runtime test covers exact-cap reads, mode repair, and typed oversize
+failure alongside the existing variant snapshot, corruption, regeneration,
+durability, and symlink tests.
+
 ## Exact lint-debt register
 
 The strict baseline intentionally records, rather than hides, remaining
@@ -423,9 +445,9 @@ boundary pressure:
 - effect and private-channel projection ownership is typed and carries no local
   lint expectations; unrelated projection families remain deliberately
   separate rather than hidden behind a generic SQL projector;
-- attached media-variant file reading retains one bounded high-arity allowance
-  pending a typed verified-read context; the safety checks and attached file
-  handle must remain in one operation when that debt is cleared;
+- attached media-variant file reading uses one typed descriptor-owning request
+  and carries no local high-arity allowance; its before/after attachment,
+  bounded read, permission, and durability checks remain one operation;
 - direct wire enum payload ownership remains until transport allocation is
   benchmark-driven or the adapter boundary is reshaped;
 

@@ -409,6 +409,16 @@ struct VerifiedVariantSnapshot {
     requested: Option<StoredVariant>,
 }
 
+struct AttachedVariantReadRequest<'a> {
+    directory: &'a File,
+    name: &'a str,
+    file: File,
+    logical_path: &'a Path,
+    max_len: u64,
+    id: ContentId,
+    label: &'a str,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum VariantLookupStage {
     ManifestOpened,
@@ -607,15 +617,15 @@ impl MediaStore {
         else {
             return Ok(None);
         };
-        let manifest_bytes = read_capped_attached(
-            &recipe_directory,
-            MANIFEST_NAME,
-            manifest_file.try_clone()?,
-            &manifest_path,
-            MANIFEST_MAX_BYTES,
+        let manifest_bytes = read_capped_attached(AttachedVariantReadRequest {
+            directory: &recipe_directory,
+            name: MANIFEST_NAME,
+            file: manifest_file.try_clone()?,
+            logical_path: &manifest_path,
+            max_len: MANIFEST_MAX_BYTES,
             id,
-            "manifest",
-        )?;
+            label: "manifest",
+        })?;
         let set = parse_manifest(id, &manifest_bytes)?;
         Ok(Some(OpenVariantSnapshot {
             id_directory,
@@ -736,15 +746,15 @@ impl MediaStore {
         let reopened =
             open_regular_file(format_directory, record.key.kind.component(), &logical_path)?
                 .ok_or_else(|| corrupt_set(id, "variant vanished immediately after persistence"))?;
-        let bytes = read_capped_attached(
-            format_directory,
-            record.key.kind.component(),
-            reopened,
-            &logical_path,
-            record.encoded_len,
+        let bytes = read_capped_attached(AttachedVariantReadRequest {
+            directory: format_directory,
+            name: record.key.kind.component(),
+            file: reopened,
+            logical_path: &logical_path,
+            max_len: record.encoded_len,
             id,
-            "variant",
-        )?;
+            label: "variant",
+        })?;
         verify_member_bytes(id, record, &bytes)?;
         self.verify_format_attached(id, recipe_directory, record.key.format, format_directory)?;
         self.verify_recipe_attached(id, id_directory, recipe_directory)
@@ -775,15 +785,15 @@ impl MediaStore {
             &logical_path,
         )?
         .ok_or_else(|| corrupt_set(id, &format!("manifest member {} is missing", record.key)))?;
-        let bytes = read_capped_attached(
-            &format_directory,
-            record.key.kind.component(),
+        let bytes = read_capped_attached(AttachedVariantReadRequest {
+            directory: &format_directory,
+            name: record.key.kind.component(),
             file,
-            &logical_path,
-            record.encoded_len,
+            logical_path: &logical_path,
+            max_len: record.encoded_len,
             id,
-            "variant",
-        )?;
+            label: "variant",
+        })?;
         verify_member_bytes(id, record, &bytes)?;
         self.verify_format_attached(id, recipe_directory, record.key.format, &format_directory)?;
         self.verify_recipe_attached(id, id_directory, recipe_directory)?;
@@ -1392,16 +1402,16 @@ fn read_file_exact(mut file: &File, length: usize) -> Result<Vec<u8>, MediaError
     Ok(bytes)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn read_capped_attached(
-    directory: &File,
-    name: &str,
-    mut file: File,
-    logical_path: &Path,
-    max_len: u64,
-    id: ContentId,
-    label: &str,
-) -> Result<Vec<u8>, MediaError> {
+fn read_capped_attached(request: AttachedVariantReadRequest<'_>) -> Result<Vec<u8>, MediaError> {
+    let AttachedVariantReadRequest {
+        directory,
+        name,
+        mut file,
+        logical_path,
+        max_len,
+        id,
+        label,
+    } = request;
     verify_attached_entry(directory, name, &file, logical_path)?;
     let metadata = file.metadata()?;
     if metadata.len() > max_len {
@@ -1582,6 +1592,70 @@ mod tests {
             }
         }
         result
+    }
+
+    #[test]
+    fn attached_variant_read_accepts_exact_cap_repairs_mode_and_rejects_oversize() {
+        let directory = tempdir().unwrap();
+        let directory_file = open_root_directory(directory.path()).unwrap();
+        let id = ContentId::from_bytes([9; CONTENT_ID_BYTES]);
+        let exact_path = directory.path().join("exact");
+        fs::write(&exact_path, b"exact").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            fs::set_permissions(&exact_path, fs::Permissions::from_mode(0o666)).unwrap();
+        }
+        let exact_file = open_regular_file(&directory_file, "exact", &exact_path)
+            .unwrap()
+            .unwrap();
+        let bytes = read_capped_attached(AttachedVariantReadRequest {
+            directory: &directory_file,
+            name: "exact",
+            file: exact_file,
+            logical_path: &exact_path,
+            max_len: 5,
+            id,
+            label: "variant",
+        })
+        .unwrap();
+        assert_eq!(bytes, b"exact");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            assert_eq!(
+                fs::metadata(&exact_path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+
+        let oversized_path = directory.path().join("oversized");
+        fs::write(&oversized_path, b"too-large").unwrap();
+        let oversized_file = open_regular_file(&directory_file, "oversized", &oversized_path)
+            .unwrap()
+            .unwrap();
+        let error = read_capped_attached(AttachedVariantReadRequest {
+            directory: &directory_file,
+            name: "oversized",
+            file: oversized_file,
+            logical_path: &oversized_path,
+            max_len: 3,
+            id,
+            label: "manifest",
+        })
+        .unwrap_err();
+        match error {
+            MediaError::CorruptVariantSet {
+                id: actual_id,
+                reason,
+            } => {
+                assert_eq!(actual_id, id);
+                assert_eq!(reason, "manifest exceeds its declared cap");
+            }
+            other => panic!("unexpected oversized attached-read error: {other:?}"),
+        }
     }
 
     #[test]
