@@ -720,18 +720,24 @@ fn collect_plan_evidence(
             {
                 *index_used = true;
             }
-            for key in [
-                "Actual Rows",
-                "Rows Removed by Filter",
-                "Rows Removed by Index Recheck",
-            ] {
-                *rows_examined = rows_examined.saturating_add(
-                    values
-                        .get(key)
-                        .and_then(|value| value.as_f64())
-                        .unwrap_or_default()
-                        .ceil() as u64,
-                );
+            let is_scan = values
+                .get("Node Type")
+                .and_then(|value| value.as_str())
+                .is_some_and(|node_type| node_type.ends_with("Scan"));
+            if is_scan {
+                for key in [
+                    "Actual Rows",
+                    "Rows Removed by Filter",
+                    "Rows Removed by Index Recheck",
+                ] {
+                    *rows_examined = rows_examined.saturating_add(
+                        values
+                            .get(key)
+                            .and_then(|value| value.as_f64())
+                            .unwrap_or_default()
+                            .ceil() as u64,
+                    );
+                }
             }
             for value in values.values() {
                 collect_plan_evidence(value, rows_examined, index_used);
@@ -759,4 +765,40 @@ fn user_id(number: usize) -> String {
 
 fn elapsed_ms(duration: Duration) -> u64 {
     duration.as_millis().try_into().unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::collect_plan_evidence;
+
+    #[test]
+    fn plan_evidence_counts_scan_work_without_double_counting_parent_rows() {
+        let plan = serde_json::json!([{
+            "Plan": {
+                "Node Type": "Limit",
+                "Actual Rows": 60,
+                "Plans": [{
+                    "Node Type": "Sort",
+                    "Actual Rows": 60,
+                    "Plans": [{
+                        "Node Type": "Bitmap Heap Scan",
+                        "Actual Rows": 60,
+                        "Rows Removed by Filter": 1,
+                        "Plans": [{
+                            "Node Type": "Bitmap Index Scan",
+                            "Index Name": "day_event_participation_page_idx",
+                            "Actual Rows": 60
+                        }]
+                    }]
+                }]
+            }
+        }]);
+        let mut rows_examined = 0;
+        let mut index_used = false;
+
+        collect_plan_evidence(&plan, &mut rows_examined, &mut index_used);
+
+        assert_eq!(rows_examined, 121);
+        assert!(index_used);
+    }
 }
