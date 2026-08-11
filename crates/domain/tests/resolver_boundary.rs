@@ -5,11 +5,14 @@ fn resolver_source(path: &str) -> String {
     std::fs::read_to_string(root.join(path)).unwrap()
 }
 
+fn resolver_coordinator_source() -> String {
+    std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/resolver.rs"))
+        .unwrap()
+}
+
 #[test]
 fn resolver_action_trigger_and_outcome_families_have_one_typed_owner_without_local_lint_debt() {
-    let coordinator =
-        std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/resolver.rs"))
-            .unwrap();
+    let coordinator = resolver_coordinator_source();
     let action = resolver_source("action.rs");
     let outcome = resolver_source("outcome.rs");
     let trigger = resolver_source("trigger.rs");
@@ -85,4 +88,53 @@ fn resolver_action_trigger_and_outcome_families_have_one_typed_owner_without_loc
         !outcome.contains("#[expect") && !outcome.contains("#[allow(clippy"),
         "the outcome boundary must not hide architectural lint debt"
     );
+}
+
+#[test]
+fn resolution_trace_construction_has_one_typed_owner_and_preserves_validation_order() {
+    let coordinator = resolver_coordinator_source();
+    let trace = resolver_source("trace.rs");
+
+    assert!(coordinator.contains("mod trace;"));
+    assert!(trace.contains("pub(super) struct ResolutionTraceInput<'a>"));
+    assert!(trace.contains("pub(super) applied: &'a ResolutionApplied"));
+    assert!(trace.contains("pub(super) trace_edges: Vec<TraceEdge>"));
+    assert!(trace.contains("pub(super) trace_decisions: Vec<DecisionTrace>"));
+    assert!(trace.contains("pub(super) trace_notes: Vec<String>"));
+    assert!(trace.contains("pub(super) fn build_resolution_trace("));
+    assert!(trace.contains("for indexed in &applied.events"));
+    assert!(trace.contains("InnerEvent::DayVoteOutcome(_) => \"day_vote_outcome\""));
+    assert!(trace.contains("stage: \"inner_event\".to_string()"));
+    assert!(trace.contains("outcome: \"survival_win_awarded\".to_string()"));
+    assert!(trace.contains("trace_version: crate::events::TRACE_VERSION"));
+
+    assert_eq!(
+        coordinator.matches("ResolutionTraceInput {").count(),
+        1,
+        "finalization must construct the trace input directly exactly once"
+    );
+    assert!(coordinator.contains("let trace = build_resolution_trace(ResolutionTraceInput {"));
+    assert!(!coordinator.contains("fn build_trace("));
+    assert!(!coordinator.contains("stage: \"inner_event\".to_string()"));
+    assert!(!coordinator.contains("InnerEvent::DayVoteOutcome(_) => \"day_vote_outcome\""));
+
+    let build = coordinator
+        .find("let trace = build_resolution_trace(ResolutionTraceInput {")
+        .unwrap();
+    let validate_applied = coordinator
+        .find("crate::events::validate_resolution_applied(&applied, RESULT_VERSION)")
+        .unwrap();
+    let validate_trace = coordinator
+        .find("crate::events::validate_resolution_trace(&trace, crate::events::TRACE_VERSION)")
+        .unwrap();
+    let output = coordinator
+        .find("ResolutionOutput {\n        applied,")
+        .unwrap();
+    assert!(build < validate_applied);
+    assert!(validate_applied < validate_trace);
+    assert!(validate_trace < output);
+
+    assert!(!trace.contains("use super::*"));
+    assert!(!trace.contains("#[expect"));
+    assert!(!trace.contains("#[allow(clippy"));
 }

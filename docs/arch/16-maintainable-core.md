@@ -31,7 +31,7 @@ The line counts below are a 2026-08-06 orientation snapshot, not a target.
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~9.2k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k) | Kill/protection, trigger-fixpoint, duel, and day-vote/outcome ownership are closed behind typed boundaries; action collection/ordering and result construction remain concentrated | Resolver coordinator plus bounded action, trigger, and outcome families | outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection or result construction only when its next independent change requires it |
+| `crates/domain/src/resolver.rs` (~8.5k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k); `resolver/trace.rs` (~0.8k) | Kill/protection, trigger-fixpoint, duel/day-vote outcome, and exhaustive trace construction are closed behind typed boundaries; action collection/ordering and broad phase orchestration remain concentrated | Resolver coordinator plus bounded action, trigger, outcome, and trace families | trace → event contract; outcome → action/trigger/domain state/validated pack; trigger → action resolution/domain state/validated pack; coordinator → bounded families | Split remaining action collection only when its next independent change requires it; do not return trace classification to the coordinator |
 | `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `identity_delivery.rs` (~1.0k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery, provider-neutral identity-delivery lifecycle records, and live publication are closed behind typed boundaries | Thin composition root plus route-family modules with typed request contexts and a provider-neutral identity-delivery worker with typed lifecycle records | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; identity-delivery lifecycle records → worker transaction; command transport → command application port/live-publication port | Split the next API family only when an independent change exposes a coherent ownership boundary; do not reopen lifecycle records |
 | `crates/media/src/variants.rs` (~2.3k) | Variant generation, immutable persistence, snapshot verification, repair, lookup, and descriptor-relative reads are coherent; each attached read receives one immutable request that owns its already-open file | Variant store plus an immutable attached-read request that keeps the descriptor and verification identity together | variant store → attached-read primitive → descriptor-relative filesystem checks | Split the next media responsibility only when an independent change exposes a coherent boundary; do not reopen the attached-read request |
 | `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change |
@@ -313,6 +313,24 @@ into the coordinator. The resolver boundary contract enforces the ownership and
 forbids local lint suppression. Announcement order, prompt order, seeded tie
 selection, win-trigger handoff, and generated golden semantics remain unchanged.
 
+## Closed resolver boundary: resolution trace construction
+
+`crates/domain/src/resolver/trace.rs` is the single owner of exhaustive
+`InnerEvent` classification into outcome decisions, generated actions, effect
+changes, survival awards, and diagnostic notes. `ResolutionTraceInput` borrows
+the constructed `ResolutionApplied` envelope and owns the precomputed edges,
+decisions, and notes, so trace assembly has one immutable handoff instead of a
+positional coordinator helper.
+
+Finalization constructs that input directly after wrapping ordered events. No
+forwarding `build_trace` façade remains in the coordinator. Event-index
+traversal, exact stage/source/outcome strings and JSON detail, generated/effect/
+decision/note ordering, trace envelope fields, and the existing applied-then-
+trace validation sequence remain unchanged. The resolver source-boundary
+contract fixes the one construction site, ownership markers, validation order,
+and absence of local lint suppression; the full domain golden and trace suites
+continue to fix seeded semantics.
+
 ## Closed proof-runner boundaries: configuration and session artifacts
 
 `tools/dev_test_game_configuration.mjs` is the single owner of CLI grammar,
@@ -431,9 +449,10 @@ durability, and symlink tests.
 The strict baseline intentionally records, rather than hides, remaining
 boundary pressure:
 
-- resolver action, trigger, and outcome boundaries are typed and carry no local
-  lint expectations; remaining coordinator concentration is tracked as an
-  ownership frontier rather than hidden lint debt;
+- resolver action, trigger, outcome, and trace boundaries are typed and carry no
+  local lint expectations; remaining action collection and coordinator
+  concentration is tracked as an ownership frontier rather than hidden lint
+  debt;
 - action submission/validation, host-prompt resolution/replay, and DayEvent
   resolution application are typed and carry no local lint expectations or
   allowances; operator-proof status and artifact classification live in their

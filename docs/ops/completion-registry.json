@@ -318,7 +318,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, provider-neutral identity-delivery cancellation/audit persistence, and live publication, media attached-variant reads, command action submission/validation, host-prompt resolution/replay, DayEvent resolution application, operator-proof report/tool ownership, command verification cost boundaries, domain pack model/validation, resolver action/trigger/outcome, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, provider-neutral identity-delivery cancellation/audit persistence, and live publication, media attached-variant reads, command action submission/validation, host-prompt resolution/replay, DayEvent resolution application, operator-proof report/tool ownership, command verification cost boundaries, domain pack model/validation, resolver action/trigger/outcome/trace, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver action collection/coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -469,6 +469,10 @@
         },
         {
           "kind": "source",
+          "value": "crates/domain/src/resolver/trace.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/domain/tests/resolver_boundary.rs"
         },
         {
@@ -517,14 +521,16 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining resolver action collection/coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the remaining localized lint expectations and allowances as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract exhaustive resolution-trace construction from crates/domain/src/resolver.rs into a private crates/domain/src/resolver/trace.rs owner. Introduce one immutable ResolutionTraceInput value that borrows the validated ResolutionApplied envelope while owning the precomputed trace edges, decisions, and notes; construct it directly during finalization; move the complete InnerEvent-to-outcome, generated-action, effect-change, survival-award, and note classification into the new module without a compatibility wrapper; add a resolver source-boundary contract that fixes ownership and dependency direction. Preserve event-index traversal, decision ordering, generated/effect/note ordering, exact stage/source/outcome strings and JSON detail, trace version and envelope fields, validation order, seeded resolver outputs, and golden semantics.",
+        "objective": "Extract night-action preparation from crates/domain/src/resolver.rs into a private crates/domain/src/resolver/intake.rs owner. Move the resolved Action representation, non-withdrawn template/window collection, missing-compulsive emission, faction-action coordination, generic constraint predicates and precedence, counter/cooldown consumption emission, history-sensitive action recording, and deterministic per-ability action ordering behind one immutable NightActionPreparationInput and one owned NightActionPreparationOutput. Construct the input directly in resolve_night, return prepared actions plus the exact prefix events and trace decisions, and have action/trigger families depend on the intake-owned Action type without a root re-export or compatibility wrapper. Add a resolver source-boundary contract that fixes ownership, direct construction, and dependency direction. Preserve submission traversal and filtering, faction-vote tie/selection order, every constraint short-circuit and reason, counter IDs and event fields, loud/announcing and history event order, pack-derived stage order, priority/submission ordering, seeded outputs, and golden semantics.",
         "paths": [
           "crates/domain/src/resolver.rs",
-          "crates/domain/src/resolver/trace.rs",
+          "crates/domain/src/resolver/intake.rs",
+          "crates/domain/src/resolver/action.rs",
+          "crates/domain/src/resolver/trigger.rs",
           "crates/domain/tests/resolver_boundary.rs",
           "docs/arch/16-maintainable-core.md"
         ],
@@ -537,10 +543,10 @@
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not redesign resolver event production, win or treestump policy, action ordering, pack policy, event schemas, result or trace versions, public resolver APIs, or deterministic seed behavior as part of trace ownership extraction.",
-          "Do not change the exhaustive event classification, event-index-derived strings, generated/effect/decision/note ordering, JSON detail keys, validation calls, or final ResolutionOutput assembly.",
-          "Do not preserve build_trace in the coordinator as a forwarding compatibility facade; the workspace is greenfield and finalization should construct the typed trace input directly.",
-          "Do not mark foundation.maintainable-core complete; resolver action collection and broader coordination, other projection families, physical command-test family, and remaining proof-runner scenario/orchestration concentrations remain."
+          "Do not redesign night ability execution, redirects, block resolution, kill/protection/trigger/outcome policy, pack validation, event schemas or versions, public resolver APIs, or deterministic seed behavior as part of action-intake ownership extraction.",
+          "Do not change the accepted-action set, submission or faction-vote traversal, constraint precedence and short-circuiting, exact interference reasons, counter/cooldown math, event/decision ordering or JSON detail, ability priority ordering, or history-record status semantics.",
+          "Do not leave Action or the moved preparation helpers in the coordinator as re-exports or forwarding compatibility facades; update sibling resolver families to import the intake owner directly.",
+          "Do not mark foundation.maintainable-core complete; night stage execution and broader coordinator, other projection families, physical command-test family, and remaining proof-runner scenario/orchestration concentrations remain."
         ]
       }
     },
