@@ -213,3 +213,64 @@ fn night_action_preparation_has_one_typed_owner_and_direct_consumers() {
     assert!(!intake.contains("#[expect"));
     assert!(!intake.contains("#[allow(clippy"));
 }
+
+#[test]
+fn redirect_resolution_has_one_typed_owner_and_single_coordinator_call() {
+    let coordinator = resolver_coordinator_source();
+    let redirect = resolver_source("redirect.rs");
+
+    assert!(coordinator.contains("mod redirect;"));
+    assert!(redirect.contains("use super::intake::{ability_order, Action};"));
+    assert!(redirect.contains("pub(super) struct RedirectResolutionContext<'context, 'action>"));
+    assert!(redirect.contains("pub(super) actions: &'context mut [Action<'action>]"));
+    assert!(redirect.contains("pub(super) pack: &'context Pack"));
+    assert!(redirect.contains("pub(super) empowered_slots: &'context BTreeSet<SlotId>"));
+    assert!(redirect.contains("pub(super) trace_edges: &'context mut Vec<TraceEdge>"));
+    assert!(redirect.contains("pub(super) trace_decisions: &'context mut Vec<DecisionTrace>"));
+    assert!(redirect.contains("pub(super) trace_notes: &'context mut Vec<String>"));
+    assert!(redirect.contains("pub(super) fn resolve_redirects("));
+    assert!(redirect.contains("struct RedirectRule"));
+    assert!(redirect.contains("struct RedirectRules"));
+    assert!(redirect.contains("struct RedirectApplication"));
+    assert!(redirect.contains("struct RedirectStep"));
+    assert!(redirect.contains("fn redirect_target_space("));
+    assert!(redirect.contains("fn build_redirect_rules("));
+    assert!(redirect.contains("fn apply_redirect_rules("));
+    assert!(redirect.contains("fn redirect_trace_edge("));
+    assert!(redirect.contains("fn redirect_eligible("));
+
+    assert_eq!(
+        coordinator.matches("RedirectResolutionContext {").count(),
+        1,
+        "the redirect stage must construct the mutable context directly once"
+    );
+    assert_eq!(
+        coordinator.matches("resolve_redirects(").count(),
+        1,
+        "the coordinator must invoke redirect resolution exactly once"
+    );
+    assert!(coordinator.contains("resolve_redirects(RedirectResolutionContext {"));
+    assert!(coordinator.contains("empowered_slots: &empowered_slots,"));
+
+    for moved_owner in [
+        "struct RedirectRule",
+        "struct RedirectRules",
+        "struct RedirectApplication",
+        "struct RedirectStep",
+        "fn redirect_target_space(",
+        "fn build_redirect_rules(",
+        "fn apply_redirect_rules(",
+        "fn redirect_trace_edge(",
+        "outcome: \"action_redirect_bypassed\".to_string()",
+        "truncating redirect graph rules",
+    ] {
+        assert!(
+            !coordinator.contains(moved_owner),
+            "the coordinator must not retain `{moved_owner}`"
+        );
+    }
+    assert!(!coordinator.contains("pub(super) use redirect::"));
+    assert!(!redirect.contains("use super::*"));
+    assert!(!redirect.contains("#[expect"));
+    assert!(!redirect.contains("#[allow(clippy"));
+}

@@ -31,7 +31,7 @@ The line counts below are a 2026-08-06 orientation snapshot, not a target.
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~7.7k); `resolver/intake.rs` (~0.7k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k); `resolver/trace.rs` (~0.8k) | Night-action intake, kill/protection, trigger-fixpoint, duel/day-vote outcome, and exhaustive trace construction are closed behind typed boundaries; redirect execution and broad phase orchestration remain concentrated | Resolver coordinator plus bounded intake, action, trigger, outcome, and trace families | intake → domain state/validated pack; action and trigger → intake-owned action; trace → event contract; outcome → action/trigger/domain state/validated pack; coordinator → bounded families | Extract redirect graph planning and target rewriting as the next coherent resolver owner; do not return intake or trace classification to the coordinator |
+| `crates/domain/src/resolver.rs` (~7.4k); `resolver/intake.rs` (~0.7k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k); `resolver/redirect.rs` (~0.3k); `resolver/trace.rs` (~0.8k) | Night-action intake, redirect graph planning/target rewriting, kill/protection, trigger-fixpoint, duel/day-vote outcome, and exhaustive trace construction are closed behind typed boundaries; block/empower suppression and broad phase orchestration remain concentrated | Resolver coordinator plus bounded intake, redirect, action, trigger, outcome, and trace families | intake → domain state/validated pack; redirect, action, and trigger → intake-owned action; redirect → validated pack/trace contract; trace → event contract; outcome → action/trigger/domain state/validated pack; coordinator → bounded families | Extract block suppression and empower discovery as the next coherent resolver owner; do not reopen redirect or intake ownership |
 | `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `identity_delivery.rs` (~1.0k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery, provider-neutral identity-delivery lifecycle records, and live publication are closed behind typed boundaries | Thin composition root plus route-family modules with typed request contexts and a provider-neutral identity-delivery worker with typed lifecycle records | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; identity-delivery lifecycle records → worker transaction; command transport → command application port/live-publication port | Split the next API family only when an independent change exposes a coherent ownership boundary; do not reopen lifecycle records |
 | `crates/media/src/variants.rs` (~2.3k) | Variant generation, immutable persistence, snapshot verification, repair, lookup, and descriptor-relative reads are coherent; each attached read receives one immutable request that owns its already-open file | Variant store plus an immutable attached-read request that keeps the descriptor and verification identity together | variant store → attached-read primitive → descriptor-relative filesystem checks | Split the next media responsibility only when an independent change exposes a coherent boundary; do not reopen the attached-read request |
 | `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change |
@@ -279,6 +279,26 @@ of local lint suppression. Submission traversal, faction-vote selection,
 constraint short-circuiting and reasons, counter identifiers, stage ordering,
 seeded determinism, and generated goldens remain unchanged.
 
+## Closed resolver boundary: redirect resolution
+
+`crates/domain/src/resolver/redirect.rs` is the single owner of redirect target-
+space derivation, stable rule construction, per-target bounded application,
+redirect trace edges, empowered bypass decisions, loop-cap notes, and live target
+mutation. `resolve_night` constructs one `RedirectResolutionContext` at the
+`IrAbility::Redirect` stage after the existing block/empower discovery and
+supplies the prepared actions, validated pack, empowered slots, and trace sinks.
+The redirect owner imports the intake-owned `Action` directly; no resolver-root
+re-export or forwarding façade exists.
+
+Each redirect action still forms one group that can apply at most once to a
+target. Ability priority and submission order, first-seen pull target space,
+swap/rotate/retarget/pull construction, graph and application caps, empowered
+bypass timing, exact decision/edge/note JSON, post-redirect history and visit
+behavior, seeded determinism, and generated goldens remain unchanged. The
+source-boundary contract fixes the typed dependency surface, single coordinator
+construction/call site, moved implementation markers, and absence of local lint
+suppression.
+
 ## Closed resolver boundary: trigger fixpoint
 
 `crates/domain/src/resolver/trigger.rs` is the single owner of trigger
@@ -311,9 +331,10 @@ positional counter-event builder.
 
 The action family also owns the `ProtectionSource`, `KillRecord`, guard/hide
 dependency, and interference records shared with the coordinator and trigger
-fixpoint. Intake owns action collection and precedence; the coordinator still
-owns redirect and broad phase orchestration, but it cannot implement kill resolution, stacked
-attribution, or protection-policy event construction. The boundary contract
+fixpoint. Intake owns action collection and precedence; redirect owns target
+rewriting; the coordinator still owns block/empower and broad phase
+orchestration, but it cannot implement kill resolution, stacked attribution, or
+protection-policy event construction. The boundary contract
 enforces that ownership and forbids local lint suppression. The superseded
 event-builder and guard/witch high-arity allowances are removed without changes
 to event order, trace payloads, seeded determinism, or generated goldens.
@@ -470,9 +491,10 @@ durability, and symlink tests.
 The strict baseline intentionally records, rather than hides, remaining
 boundary pressure:
 
-- resolver intake, action, trigger, outcome, and trace boundaries are typed and
-  carry no local lint expectations; remaining redirect execution and coordinator
-  concentration is tracked as an ownership frontier rather than hidden lint debt;
+- resolver intake, redirect, action, trigger, outcome, and trace boundaries are
+  typed and carry no local lint expectations; remaining block/empower execution
+  and coordinator concentration are tracked as an ownership frontier rather than
+  hidden lint debt;
 - action submission/validation, host-prompt resolution/replay, and DayEvent
   resolution application are typed and carry no local lint expectations or
   allowances; operator-proof status and artifact classification live in their
