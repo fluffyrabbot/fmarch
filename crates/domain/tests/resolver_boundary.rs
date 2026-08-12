@@ -138,3 +138,78 @@ fn resolution_trace_construction_has_one_typed_owner_and_preserves_validation_or
     assert!(!trace.contains("#[expect"));
     assert!(!trace.contains("#[allow(clippy"));
 }
+
+#[test]
+fn night_action_preparation_has_one_typed_owner_and_direct_consumers() {
+    let coordinator = resolver_coordinator_source();
+    let intake = resolver_source("intake.rs");
+    let action = resolver_source("action.rs");
+    let trigger = resolver_source("trigger.rs");
+
+    assert!(coordinator.contains("mod intake;"));
+    assert!(intake.contains("pub(super) struct Action<'a>"));
+    assert!(intake.contains("pub(super) struct NightActionPreparationInput<'a>"));
+    assert!(intake.contains("pub(super) resolution: &'a ResolutionInput"));
+    assert!(intake.contains("pub(super) struct NightActionPreparationOutput<'a>"));
+    assert!(intake.contains("pub(super) actions: Vec<Action<'a>>"));
+    assert!(intake.contains("pub(super) prefix_events: Vec<InnerEvent>"));
+    assert!(intake.contains("pub(super) trace_decisions: Vec<DecisionTrace>"));
+    assert!(intake.contains("pub(super) history: NightActionHistory"));
+    assert!(intake.contains("pub(super) struct NightActionHistory;"));
+    assert!(intake.contains("pub(super) fn events("));
+    assert!(intake.contains("pub(super) fn prepare_night_actions("));
+    assert!(intake.contains("fn emit_missing_compulsive_actions("));
+    assert!(intake.contains("fn apply_faction_action_coordination("));
+    assert!(intake.contains("fn apply_action_constraints("));
+    assert!(intake.contains("fn history_sensitive_action_events("));
+    assert!(intake.contains("pub(super) fn ability_order("));
+
+    assert_eq!(
+        coordinator
+            .matches("NightActionPreparationInput { resolution: input }")
+            .count(),
+        1,
+        "resolve_night must construct the immutable intake directly once"
+    );
+    assert!(coordinator.contains("let NightActionPreparationOutput {"));
+    assert!(coordinator.contains("events.extend(history.events(input, &actions));"));
+    assert!(action.contains("use super::intake::Action;"));
+    assert!(trigger.contains("use super::intake::Action;"));
+
+    for moved_owner in [
+        "struct Action<'a>",
+        "fn emit_missing_compulsive_actions(",
+        "fn apply_faction_action_coordination(",
+        "fn apply_action_constraints(",
+        "fn record_history_sensitive_actions(",
+        "fn ability_order(",
+    ] {
+        assert!(
+            !coordinator.contains(moved_owner),
+            "the coordinator must not retain `{moved_owner}`"
+        );
+    }
+    assert!(!coordinator.contains("pub(super) use intake::Action"));
+    assert!(!action.contains("struct Action<'a>"));
+    assert!(!trigger.contains("struct Action<'a>"));
+
+    let prepare = coordinator
+        .find("let NightActionPreparationOutput {")
+        .unwrap();
+    let stage_order = coordinator
+        .find("let stage_order = night_ability_order(pack)")
+        .unwrap();
+    let history = coordinator
+        .find("events.extend(history.events(input, &actions));")
+        .unwrap();
+    let beloved = coordinator
+        .find("resolve_beloved_princess_prompts(input, &mut events, &mut trace_decisions);")
+        .unwrap();
+    assert!(prepare < stage_order);
+    assert!(stage_order < history);
+    assert!(history < beloved);
+
+    assert!(!intake.contains("use super::*"));
+    assert!(!intake.contains("#[expect"));
+    assert!(!intake.contains("#[allow(clippy"));
+}

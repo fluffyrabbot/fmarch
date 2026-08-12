@@ -4,6 +4,7 @@
 //! this module owns matching, generated action/event construction, iteration,
 //! and the optional night-only dependency cascade between fixpoint rounds.
 
+use super::intake::Action;
 use super::*;
 
 #[derive(Clone)]

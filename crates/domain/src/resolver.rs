@@ -19,15 +19,15 @@ use crate::events::{
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
     night_ability_order, visibility_required_families, win_required_families, ActionTemplate,
-    ActivationGateReason, ActorRef, BackupPriorityPolicy, BadgeOperation,
-    ConversionDeadTargetPolicy, ConversionMode, ConversionPendingDeathPolicy, DayNoteRolePayload,
-    DeathRetaliationTiming, DeathRevealMode, EffectDuration, EffectSourceDeathRevealKind,
-    EffectVisibility, FactionVoteTieBreaker, GrantKind, GrantSpec, GuardWitchSameTargetPolicy,
-    ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy, ItaVoteConflictPolicy,
-    KillStackingPolicy, NightResolutionConflictFamily, Pack, PhaseKind, PhaseParity, RedirectKind,
-    ResultMemoryOutput, ResultMemoryScope, RoleModifier, SuppressionScope, TargetRef, TargetSpec,
-    TieBreaker, TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule, VisibilityFamily,
-    VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
+    ActorRef, BackupPriorityPolicy, BadgeOperation, ConversionDeadTargetPolicy, ConversionMode,
+    ConversionPendingDeathPolicy, DayNoteRolePayload, DeathRetaliationTiming, DeathRevealMode,
+    EffectDuration, EffectSourceDeathRevealKind, EffectVisibility, GrantKind, GrantSpec,
+    GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy,
+    ItaVoteConflictPolicy, KillStackingPolicy, NightResolutionConflictFamily, Pack, PhaseKind,
+    RedirectKind, ResultMemoryOutput, ResultMemoryScope, RoleModifier, SuppressionScope, TargetRef,
+    TargetSpec, TieBreaker, TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule,
+    VisibilityFamily, VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition,
+    WinFamily, Window,
 };
 use crate::state::{
     apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, PhaseId,
@@ -37,6 +37,7 @@ use crate::state::{
 use serde::{Deserialize, Serialize};
 
 mod action;
+mod intake;
 mod outcome;
 mod trace;
 mod trigger;
@@ -48,6 +49,11 @@ use action::{
     night_resolution_aggregates_kill_attackers, resolve_one_kill, ActionInterference,
     ActionResolutionContext, CounterUseInput, GuardDependency, HideDependency, KillAction,
     KillRecord, ProtectionResolutionContext, ProtectionSource,
+};
+
+use intake::{
+    ability_order, prepare_night_actions, Action, NightActionPreparationInput,
+    NightActionPreparationOutput,
 };
 
 use outcome::{resolve_day_vote, resolve_duel_actions, DayVoteResolutionContext};
@@ -144,21 +150,6 @@ impl DetRng {
     fn next_f64(&mut self) -> f64 {
         const SCALE: f64 = 1.0 / ((1u64 << 53) as f64);
         ((self.next_u64() >> 11) as f64) * SCALE
-    }
-}
-
-/// One resolved night action: a submission paired with its role action template.
-struct Action<'a> {
-    sub: &'a Submission,
-    template: &'a ActionTemplate,
-    /// Live targets (after any redirect rewrite).
-    targets: Vec<SlotId>,
-    blocked: bool,
-}
-
-impl<'a> Action<'a> {
-    fn has_ability(&self, ability: IrAbility) -> bool {
-        self.template.has_ability(ability)
     }
 }
 
@@ -2551,10 +2542,6 @@ fn action_counter_id(template_id: &str) -> String {
     format!("x_shot:{template_id}")
 }
 
-fn cooldown_counter_id(template_id: &str) -> String {
-    format!("cooldown:{template_id}")
-}
-
 fn day_session_counter_id(session_id: &str, template_id: &str) -> String {
     format!("day_session:{session_id}:{template_id}")
 }
@@ -2590,24 +2577,6 @@ fn action_counter_exhausted(
             && counter.counter_id == counter_id
             && (counter.remaining == 0
                 || action_counter_used_count(input, actor, template_id) >= limit)
-    })
-}
-
-fn action_on_cooldown(
-    input: &ResolutionInput,
-    actor: &str,
-    template_id: &str,
-    cooldown_cycles: u16,
-) -> bool {
-    let counter_id = cooldown_counter_id(template_id);
-    input.state.use_counters.iter().any(|counter| {
-        counter.actor == actor
-            && counter.counter_id == counter_id
-            && counter.phase_kind == input.state.phase_kind
-            && input.state.phase_number
-                <= counter
-                    .phase_number
-                    .saturating_add(u32::from(cooldown_cycles))
     })
 }
 
@@ -2659,29 +2628,6 @@ fn action_use_counted(
     })
 }
 
-fn cooldown_use_counted(
-    input: &ResolutionInput,
-    actor: SlotId,
-    template_id: String,
-    action_id: String,
-    cooldown_cycles: u16,
-) -> InnerEvent {
-    InnerEvent::ActionUseCounted {
-        counter_id: cooldown_counter_id(&template_id),
-        actor,
-        template_id,
-        consumed_action: action_id,
-        cadence_policy: "cooldown".to_string(),
-        phase_scope: "phase_kind".to_string(),
-        limit: cooldown_cycles,
-        used: 1,
-        remaining: cooldown_cycles,
-        phase_id: input.phase_id.clone(),
-        phase_kind: input.state.phase_kind,
-        phase_number: input.state.phase_number,
-    }
-}
-
 fn day_session_use_counted(
     input: &ResolutionInput,
     actor: SlotId,
@@ -2730,28 +2676,6 @@ fn inventory_use_counted(
         phase_kind: input.state.phase_kind,
         phase_number: input.state.phase_number,
     }
-}
-
-fn phase_parity_matches(phase_number: u32, parity: PhaseParity) -> bool {
-    match parity {
-        PhaseParity::Odd => phase_number % 2 == 1,
-        PhaseParity::Even => phase_number.is_multiple_of(2),
-    }
-}
-
-fn activation_gate_reason(
-    template: &ActionTemplate,
-    phase_kind: PhaseKind,
-    phase_number: u32,
-) -> Option<&'static str> {
-    let gate = template.constraints.active_from.as_ref()?;
-    if gate.phase_kind == phase_kind && phase_number >= gate.phase_number {
-        return None;
-    }
-    Some(match gate.reason {
-        ActivationGateReason::Novice => "novice_inactive",
-        ActivationGateReason::Activated => "activated_inactive",
-    })
 }
 
 fn alive_slot_ids(input: &ResolutionInput) -> Vec<SlotId> {
@@ -2862,13 +2786,6 @@ fn emit_grant_notification(
     });
 }
 
-fn has_history_sensitive_modifier(action: &Action<'_>) -> bool {
-    action.template.has_modifier(Modifier::NonConsecutive)
-        || action.template.has_modifier(Modifier::Indecisive)
-        || action.template.has_modifier(Modifier::Roaming)
-        || action.template.has_modifier(Modifier::Compulsive)
-}
-
 fn phase_window_matches(window: Window, phase_kind: PhaseKind) -> bool {
     match window {
         Window::Any => true,
@@ -2889,599 +2806,6 @@ fn phase_window_mismatch_reason(window: Window, phase_kind: PhaseKind) -> Option
         Window::Night => Some("night_specific"),
         Window::Twilight => Some("twilight_specific"),
         Window::Instant => Some("instant_specific"),
-    }
-}
-
-fn repeated_target_limiter_reason(
-    input: &ResolutionInput,
-    action: &Action<'_>,
-) -> Option<&'static str> {
-    let reason = if action.template.has_modifier(Modifier::NonConsecutive) {
-        "non_consecutive"
-    } else if action.template.has_modifier(Modifier::Indecisive) {
-        "indecisive"
-    } else if action.template.has_modifier(Modifier::Roaming) {
-        "roaming"
-    } else {
-        return None;
-    };
-    let repeated = input.state.action_history.iter().any(|record| {
-        let in_scope = if action.template.has_modifier(Modifier::Roaming) {
-            record.phase_kind == PhaseKind::Night
-        } else {
-            record.phase_kind == PhaseKind::Night
-                && record.phase_number + 1 == input.state.phase_number
-        };
-        record.actor == action.sub.actor
-            && record.template_id == action.template.id
-            && in_scope
-            && record.status == "resolved"
-            && action
-                .targets
-                .iter()
-                .any(|target| record.targets.contains(target))
-    });
-    repeated.then_some(reason)
-}
-
-fn target_shape_error(action: &Action<'_>) -> Option<&'static str> {
-    match action.template.targets {
-        TargetSpec::None if !action.targets.is_empty() => Some("target_count"),
-        TargetSpec::One if action.targets.len() != 1 => Some("target_count"),
-        TargetSpec::Many | TargetSpec::Group
-            if action.targets.is_empty()
-                || action.targets.len() > action.template.constraints.max_targets as usize =>
-        {
-            Some("target_count")
-        }
-        _ => None,
-    }
-}
-
-fn duplicate_target_error(action: &Action<'_>) -> bool {
-    if !action.template.constraints.unique_targets {
-        return false;
-    }
-    let unique: std::collections::BTreeSet<&str> =
-        action.targets.iter().map(String::as_str).collect();
-    unique.len() != action.targets.len()
-}
-
-fn self_target_error(action: &Action<'_>) -> bool {
-    !action.template.constraints.self_allowed
-        && action
-            .targets
-            .iter()
-            .any(|target| target == &action.sub.actor)
-}
-
-fn personal_target_error(action: &Action<'_>) -> bool {
-    action.template.constraints.personal_only
-        && action
-            .targets
-            .iter()
-            .any(|target| target != &action.sub.actor)
-}
-
-fn target_role_filter_error(input: &ResolutionInput, action: &Action<'_>) -> bool {
-    let Some(filter) = action.template.constraints.target_role_filter else {
-        return false;
-    };
-    let vanilla_roles = &input.pack.investigation_results.role_sets.vanilla_roles;
-    if vanilla_roles.is_empty() {
-        return true;
-    }
-    action.targets.iter().any(|target| {
-        let Some(role) = slot_role(input, target) else {
-            return true;
-        };
-        let is_vanilla = vanilla_roles.iter().any(|candidate| candidate == role);
-        match filter {
-            crate::pack::TargetRoleFilter::PowerRole => is_vanilla,
-            crate::pack::TargetRoleFilter::Vanilla => !is_vanilla,
-        }
-    })
-}
-
-fn disloyal_target_error(input: &ResolutionInput, action: &Action<'_>) -> bool {
-    if !action.template.has_modifier(Modifier::Disloyal) {
-        return false;
-    }
-    let Some(actor_alignment) = slot_alignment(input, &action.sub.actor) else {
-        return true;
-    };
-    action.targets.iter().any(|target| {
-        slot_alignment(input, target)
-            .is_none_or(|target_alignment| target_alignment == actor_alignment)
-    })
-}
-
-fn apply_faction_action_coordination(
-    input: &ResolutionInput,
-    actions: &mut [Action],
-    events: &mut Vec<InnerEvent>,
-) {
-    if !input.pack.faction_actions.enabled {
-        return;
-    }
-
-    for spec in &input.pack.faction_actions.actions {
-        let mut candidates = Vec::new();
-        for (idx, action) in actions.iter().enumerate() {
-            if action.blocked || action.template.id != spec.action_id || action.targets.is_empty() {
-                continue;
-            }
-            let Some(actor_slot) = input
-                .state
-                .slots
-                .iter()
-                .find(|slot| slot.slot_id == action.sub.actor)
-            else {
-                continue;
-            };
-            if actor_slot.alignment.as_deref() == Some(spec.alignment.as_str()) {
-                candidates.push(idx);
-            }
-        }
-        if candidates.len() <= spec.max_resolved_submissions as usize {
-            continue;
-        }
-
-        let mut votes: BTreeMap<SlotId, Vec<usize>> = BTreeMap::new();
-        for idx in candidates {
-            votes
-                .entry(actions[idx].targets[0].clone())
-                .or_default()
-                .push(idx);
-        }
-        let Some(max_votes) = votes.values().map(Vec::len).max() else {
-            continue;
-        };
-        let tied_targets: Vec<SlotId> = votes
-            .iter()
-            .filter_map(|(target, indices)| (indices.len() == max_votes).then_some(target.clone()))
-            .collect();
-
-        if tied_targets.len() > 1 && spec.target_tie == FactionVoteTieBreaker::BlockAll {
-            for indices in votes.values() {
-                for idx in indices {
-                    actions[*idx].blocked = true;
-                    events.push(InnerEvent::ActionInterfered {
-                        actor: actions[*idx].sub.actor.clone(),
-                        reason: "faction_vote_tie".to_string(),
-                    });
-                }
-            }
-            continue;
-        }
-
-        let selected_idx = tied_targets
-            .iter()
-            .filter_map(|target| votes.get(target))
-            .flatten()
-            .copied()
-            .min_by(|a, b| {
-                actions[*a]
-                    .sub
-                    .submitted_at
-                    .cmp(&actions[*b].sub.submitted_at)
-                    .then(actions[*a].sub.action_id.cmp(&actions[*b].sub.action_id))
-                    .then(actions[*a].sub.actor.cmp(&actions[*b].sub.actor))
-            });
-        let Some(selected_idx) = selected_idx else {
-            continue;
-        };
-
-        for indices in votes.values() {
-            for idx in indices {
-                if *idx == selected_idx {
-                    continue;
-                }
-                actions[*idx].blocked = true;
-                events.push(InnerEvent::ActionInterfered {
-                    actor: actions[*idx].sub.actor.clone(),
-                    reason: "faction_vote_superseded".to_string(),
-                });
-            }
-        }
-    }
-}
-
-fn alive_non_town_count(input: &ResolutionInput) -> usize {
-    input
-        .state
-        .slots
-        .iter()
-        .filter(|slot| slot.is_alive())
-        .filter(|slot| slot.alignment.as_deref() != Some("town"))
-        .count()
-}
-
-fn alive_slot_count(input: &ResolutionInput) -> usize {
-    input
-        .state
-        .slots
-        .iter()
-        .filter(|slot| slot.is_alive())
-        .count()
-}
-
-fn lazy_endgame_error(input: &ResolutionInput, action: &Action<'_>) -> bool {
-    action.template.constraints.lazy_requires_multiple_non_town && alive_non_town_count(input) <= 1
-}
-
-fn disabled_endgame_error(input: &ResolutionInput, action: &Action<'_>) -> bool {
-    action
-        .template
-        .constraints
-        .disabled_at_or_below_alive
-        .map(|threshold| alive_slot_count(input) <= threshold as usize)
-        .unwrap_or(false)
-}
-
-fn base_role_submission(action: &Action<'_>) -> bool {
-    !action.sub.metadata.contains_key("grant_id")
-}
-
-fn role_modifier_team_kill_error(input: &ResolutionInput, action: &Action<'_>) -> bool {
-    if !input
-        .pack
-        .night_resolution
-        .team_kill_action_ids
-        .iter()
-        .any(|id| id == &action.template.id)
-    {
-        return false;
-    }
-    let Some(actor_slot) = input
-        .state
-        .slots
-        .iter()
-        .find(|slot| slot.slot_id == action.sub.actor)
-    else {
-        return false;
-    };
-    let Some(role) = input.pack.roles.get(&actor_slot.role_key) else {
-        return false;
-    };
-    let lost = role.has_modifier(RoleModifier::Lost);
-    let recluse = role.has_modifier(RoleModifier::Recluse);
-    if !lost && !recluse {
-        return false;
-    }
-    if actor_slot.alignment.as_deref() != Some("mafia") {
-        return true;
-    }
-    let mut living_teammates = input.state.slots.iter().filter(|slot| {
-        slot.slot_id != actor_slot.slot_id
-            && slot.is_alive()
-            && slot.alignment.as_deref() == Some("mafia")
-    });
-    if lost {
-        return living_teammates.count() > 0;
-    }
-    living_teammates.any(|slot| {
-        input
-            .pack
-            .roles
-            .get(&slot.role_key)
-            .map(|role| !role.has_modifier(RoleModifier::Recluse))
-            .unwrap_or(true)
-    })
-}
-
-fn role_modifier_team_kill_reason<'a>(input: &'a ResolutionInput, action: &Action<'_>) -> &'a str {
-    input
-        .state
-        .slots
-        .iter()
-        .find(|slot| slot.slot_id == action.sub.actor)
-        .and_then(|slot| input.pack.roles.get(&slot.role_key))
-        .filter(|role| role.has_modifier(RoleModifier::Recluse))
-        .map(|_| "recluse")
-        .unwrap_or("lost")
-}
-
-fn emit_missing_compulsive_actions(
-    input: &ResolutionInput,
-    actions: &[Action<'_>],
-    events: &mut Vec<InnerEvent>,
-) {
-    for slot in input.state.slots.iter().filter(|slot| slot.is_alive()) {
-        let Some(role) = input.pack.roles.get(&slot.role_key) else {
-            continue;
-        };
-        for template in &role.actions {
-            if !template.has_modifier(Modifier::Compulsive)
-                || !matches!(template.window, Window::Night | Window::Any)
-            {
-                continue;
-            }
-            let submitted = actions.iter().any(|action| {
-                action.sub.actor == slot.slot_id && action.template.id == template.id
-            });
-            if submitted {
-                continue;
-            }
-            events.push(InnerEvent::ActionInterfered {
-                actor: slot.slot_id.clone(),
-                reason: "compulsive_missing".to_string(),
-            });
-            events.push(InnerEvent::ActionRecorded {
-                actor: slot.slot_id.clone(),
-                template_id: template.id.clone(),
-                targets: Vec::new(),
-                phase_id: input.phase_id.clone(),
-                phase_kind: input.state.phase_kind,
-                phase_number: input.state.phase_number,
-                status: "missing".to_string(),
-            });
-        }
-    }
-}
-
-fn apply_action_constraints(
-    input: &ResolutionInput,
-    actions: &mut [Action],
-    events: &mut Vec<InnerEvent>,
-    trace_decisions: &mut Vec<DecisionTrace>,
-) {
-    let audience = alive_slot_ids(input);
-    let mut base_role_submissions_seen: BTreeSet<(String, String)> = BTreeSet::new();
-    for action in actions {
-        if action.blocked {
-            continue;
-        }
-
-        if base_role_submission(action) {
-            let key = (action.sub.actor.clone(), action.template.id.clone());
-            if !action.template.has_modifier(Modifier::Simultaneous)
-                && !base_role_submissions_seen.insert(key)
-            {
-                action.blocked = true;
-                events.push(InnerEvent::ActionInterfered {
-                    actor: action.sub.actor.clone(),
-                    reason: "duplicate_submission".to_string(),
-                });
-                continue;
-            }
-        }
-
-        if let Some(reason) = target_shape_error(action) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: reason.to_string(),
-            });
-            continue;
-        }
-
-        if duplicate_target_error(action) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: "duplicate_target".to_string(),
-            });
-            continue;
-        }
-
-        if self_target_error(action) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: "self_target".to_string(),
-            });
-            continue;
-        }
-
-        if personal_target_error(action) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: "personal".to_string(),
-            });
-            continue;
-        }
-
-        if target_role_filter_error(input, action) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: "invalid_target_role".to_string(),
-            });
-            continue;
-        }
-
-        if disloyal_target_error(input, action) {
-            action.blocked = true;
-            trace_decisions.push(DecisionTrace {
-                stage: "night:action_constraints".to_string(),
-                source: format!("action:{}", action.sub.action_id),
-                outcome: "action_suppressed".to_string(),
-                detail: serde_json::json!({
-                    "action_id": action.sub.action_id.clone(),
-                    "template_id": action.template.id.clone(),
-                    "actor": action.sub.actor.clone(),
-                    "actor_alignment": slot_alignment(input, &action.sub.actor),
-                    "targets": action.targets.clone(),
-                    "target_alignments": action
-                        .targets
-                        .iter()
-                        .map(|target| serde_json::json!({
-                            "target": target,
-                            "alignment": slot_alignment(input, target),
-                        }))
-                        .collect::<Vec<_>>(),
-                    "reason": "disloyal",
-                }),
-            });
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: "disloyal".to_string(),
-            });
-            continue;
-        }
-
-        if lazy_endgame_error(input, action) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: "lazy".to_string(),
-            });
-            continue;
-        }
-
-        if disabled_endgame_error(input, action) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: "disabled_endgame".to_string(),
-            });
-            continue;
-        }
-
-        if role_modifier_team_kill_error(input, action) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: role_modifier_team_kill_reason(input, action).to_string(),
-            });
-            continue;
-        }
-
-        if let Some(parity) = action.template.constraints.phase_parity {
-            if !phase_parity_matches(input.state.phase_number, parity) {
-                action.blocked = true;
-                events.push(InnerEvent::ActionInterfered {
-                    actor: action.sub.actor.clone(),
-                    reason: match parity {
-                        PhaseParity::Odd => "odd_night".to_string(),
-                        PhaseParity::Even => "even_night".to_string(),
-                    },
-                });
-                continue;
-            }
-        }
-
-        if let Some(parity) = action.template.constraints.cycle_parity {
-            if !phase_parity_matches(input.state.phase_number, parity) {
-                action.blocked = true;
-                events.push(InnerEvent::ActionInterfered {
-                    actor: action.sub.actor.clone(),
-                    reason: match parity {
-                        PhaseParity::Odd => "odd_cycle".to_string(),
-                        PhaseParity::Even => "even_cycle".to_string(),
-                    },
-                });
-                continue;
-            }
-        }
-
-        if let Some(reason) = activation_gate_reason(
-            action.template,
-            input.state.phase_kind,
-            input.state.phase_number,
-        ) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: reason.to_string(),
-            });
-            continue;
-        }
-
-        if let Some(reason) = repeated_target_limiter_reason(input, action) {
-            action.blocked = true;
-            events.push(InnerEvent::ActionInterfered {
-                actor: action.sub.actor.clone(),
-                reason: reason.to_string(),
-            });
-            continue;
-        }
-
-        if let Some(limit) = action.template.constraints.x_shots {
-            if action_counter_exhausted(input, &action.sub.actor, &action.template.id, limit) {
-                action.blocked = true;
-                events.push(InnerEvent::ActionInterfered {
-                    actor: action.sub.actor.clone(),
-                    reason: "x_shot_exhausted".to_string(),
-                });
-                continue;
-            }
-            events.push(action_use_counted(
-                input,
-                action.sub.actor.clone(),
-                action.template.id.clone(),
-                action.sub.action_id.clone(),
-                limit,
-            ));
-        }
-
-        if let Some(cooldown_cycles) = action.template.constraints.cooldown_cycles {
-            if action_on_cooldown(
-                input,
-                &action.sub.actor,
-                &action.template.id,
-                cooldown_cycles,
-            ) {
-                action.blocked = true;
-                events.push(InnerEvent::ActionInterfered {
-                    actor: action.sub.actor.clone(),
-                    reason: "cooldown".to_string(),
-                });
-                continue;
-            }
-            events.push(cooldown_use_counted(
-                input,
-                action.sub.actor.clone(),
-                action.template.id.clone(),
-                action.sub.action_id.clone(),
-                cooldown_cycles,
-            ));
-        }
-
-        if action.template.has_modifier(Modifier::Loud) {
-            events.push(InnerEvent::EffectNotification {
-                effect: "loud".to_string(),
-                status: action.template.id.clone(),
-                audience: audience.clone(),
-                phase_id: None,
-            });
-        }
-        if action.template.has_modifier(Modifier::Announcing) {
-            events.push(InnerEvent::EffectNotification {
-                effect: "announcing".to_string(),
-                status: action.template.id.clone(),
-                audience: audience.clone(),
-                phase_id: None,
-            });
-        }
-    }
-}
-
-fn record_history_sensitive_actions(
-    input: &ResolutionInput,
-    actions: &[Action<'_>],
-    events: &mut Vec<InnerEvent>,
-) {
-    for action in actions {
-        if !has_history_sensitive_modifier(action) {
-            continue;
-        }
-        events.push(InnerEvent::ActionRecorded {
-            actor: action.sub.actor.clone(),
-            template_id: action.template.id.clone(),
-            targets: action.targets.clone(),
-            phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
-            status: if action.blocked {
-                "suppressed"
-            } else {
-                "resolved"
-            }
-            .to_string(),
-        });
     }
 }
 
@@ -4332,31 +3656,14 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     require_valid_night_ability_order(pack);
     require_night_resolution_suppression_precedence(pack);
 
-    // Build the action list from non-withdrawn submissions, resolving each to
-    // its role's action template. Submissions whose template can't be found are
-    // dropped (the platform owns submission legality; the engine is total).
-    let mut actions: Vec<Action> = Vec::new();
-    for sub in &input.submissions {
-        if sub.withdrawn {
-            continue;
-        }
-        let Some(template) = lookup_submission_template(input, sub) else {
-            continue;
-        };
-        if !phase_window_matches(template.window, input.state.phase_kind) {
-            continue;
-        }
-        actions.push(Action {
-            sub,
-            template,
-            targets: sub.targets.clone(),
-            blocked: false,
-        });
-    }
+    let NightActionPreparationOutput {
+        mut actions,
+        prefix_events: mut events,
+        mut trace_decisions,
+        history,
+    } = prepare_night_actions(NightActionPreparationInput { resolution: input });
 
-    let mut events: Vec<InnerEvent> = Vec::new();
     let mut trace_edges: Vec<TraceEdge> = Vec::new();
-    let mut trace_decisions: Vec<DecisionTrace> = Vec::new();
     // Determinism diagnostics (redirect/trigger loop-cap hits). Trace-bound; see below.
     let mut trace_notes: Vec<String> = Vec::new();
 
@@ -4375,10 +3682,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     let mut pending_wolf_carry_tokens = input.state.wolf_carry_tokens.clone();
     let mut empowered_slots: BTreeSet<SlotId> = BTreeSet::new();
     let mut action_chance_rng = DetRng::new(input.seed ^ 0x4e49_4748_545f_4348);
-
-    emit_missing_compulsive_actions(input, &actions, &mut events);
-    apply_faction_action_coordination(input, &mut actions, &mut events);
-    apply_action_constraints(input, &mut actions, &mut events, &mut trace_decisions);
 
     let stage_order = night_ability_order(pack)
         .unwrap_or_else(|err| panic!("invalid pack precedence for night resolution: {err}"));
@@ -5903,7 +5206,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
 
     apply_effect_source_death_reveals(input, &killed, &mut events, &mut trace_decisions);
 
-    record_history_sensitive_actions(input, &actions, &mut events);
+    events.extend(history.events(input, &actions));
 
     resolve_beloved_princess_prompts(input, &mut events, &mut trace_decisions);
 
@@ -6802,31 +6105,6 @@ fn night_resolution_trigger_participates_in_fixpoint(pack: &Pack, trigger: &Trig
             });
     }
     true
-}
-
-/// Indices of actions with the given ability, ordered by descending
-/// `Constraints.priority`, then by ascending `submitted_at`, then by `action_id`
-/// for a total, stable order.
-fn ability_order(actions: &[Action], ability: IrAbility) -> Vec<usize> {
-    let mut idxs: Vec<usize> = actions
-        .iter()
-        .enumerate()
-        .filter(|(_, a)| a.has_ability(ability))
-        .map(|(i, _)| i)
-        .collect();
-    idxs.sort_by(|&a, &b| {
-        let pa = actions[a].template.constraints.priority;
-        let pb = actions[b].template.constraints.priority;
-        pb.cmp(&pa)
-            .then(
-                actions[a]
-                    .sub
-                    .submitted_at
-                    .cmp(&actions[b].sub.submitted_at),
-            )
-            .then(actions[a].sub.action_id.cmp(&actions[b].sub.action_id))
-    });
-    idxs
 }
 
 fn info_audience(
