@@ -4,6 +4,9 @@ const hasCapability = (entry, capability) =>
 const replacementCommand = (proof) =>
   proof?.replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement;
 
+const hasOpaquePersonaId = (value) =>
+  typeof value === "string" && value.trim().length > 0;
+
 const completedCommand = (proof) =>
   proof?.complete?.commandStatus?.requestEnvelope?.body?.body?.command
     ?.CompleteGame;
@@ -256,9 +259,10 @@ export function replacementResolvedPrivatePostAckMatches(proof, scenario) {
     proof?.replacement?.state === "ack" &&
     proof?.replacement?.serverEnvelope?.body?.kind === "Ack" &&
     replacement?.slot === scenario.actorSlot &&
-    replacement?.incoming_user === scenario.replacementPrincipalUserId &&
-    proof?.hostReplacementAfterProcess?.occupantLabel ===
-      scenario.replacementOccupantLabel &&
+    hasOpaquePersonaId(replacement?.outgoing_persona_id) &&
+    replacement?.incoming_principal_user_id === scenario.replacementPrincipalUserId &&
+    proof?.hostReplacementAfterProcess?.assignedPrincipalUserId ===
+      scenario.replacementPrincipalUserId &&
     proof?.commandStateBeforeClose?.actorSlot === scenario.actorSlot &&
     proof?.commandStateBeforeClose?.actorStatus === "alive" &&
     proof?.commandStateBeforeClose?.phase?.phaseId === "D01" &&
@@ -370,9 +374,10 @@ export function replacementCompletedPrivatePostRejectMatches(
     hasCapability(proof?.replacementEntry, "SlotOccupant") &&
     proof?.replacement?.state === "ack" &&
     replacement?.slot === scenario.actorSlot &&
-    replacement?.incoming_user === scenario.replacementPrincipalUserId &&
-    proof?.hostReplacementAfterProcess?.occupantLabel ===
-      scenario.replacementOccupantLabel &&
+    hasOpaquePersonaId(replacement?.outgoing_persona_id) &&
+    replacement?.incoming_principal_user_id === scenario.replacementPrincipalUserId &&
+    proof?.hostReplacementAfterProcess?.assignedPrincipalUserId ===
+      scenario.replacementPrincipalUserId &&
     proof?.commandStateBeforeClose?.actorSlot === scenario.actorSlot &&
     proof?.commandStateBeforeClose?.gameCompleted === false &&
     channelContextHasMemberCapability(

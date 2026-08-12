@@ -96,10 +96,12 @@ exploration remains future operator UX.
 Grouped by aggregate concern. Names are stable contracts once shipped.
 
 **Game lifecycle:** `GameCreated`, `HostAssigned`, `CohostAdded`, `SignupsOpened`,
-`SlotAdded`, `SlotAssigned`, `GameStarted`, `GameCompleted`, `GameArchived`
+`SlotAdded`, `GamePersonaRegistered`, `SlotOccupancyStarted`, `GameStarted`, `GameCompleted`, `GameArchived`
 
-**Membership / replacement:** `ReplacementRequested`, `ReplacementCompleted`
-(carries `slot_id`, `outgoing_user`, `incoming_user`), `SlotModkilled`
+**Persona / occupancy:** `GamePersonaRegistered`, `GamePersonaRenamed`,
+`SlotOccupancyStarted`, `SlotOccupancyEnded`, `ReplacementRequested`, `SlotModkilled`.
+Replacement is a shared-transition pair of immutable occupancy facts; principals remain
+in the private persona projection and never become slot-authorship facts.
 
 **Phase:** `PhaseAdvanced` (typed), `DeadlineSet`, `DeadlineExtended`, `ThreadLocked`,
 `ThreadUnlocked`

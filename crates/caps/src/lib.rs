@@ -11,7 +11,7 @@
 //!   are PURE and exhaustively testable. No IO. The least-authority predicates
 //!   (`grants`) live here.
 //! - [`resolve`] is the IO half: given a [`Principal`] + game context it reads
-//!   the `game_authority` and `slot_occupancy` projections to DERIVE the set of
+//!   the `game_authority` and open occupancy-epoch projections to DERIVE the set of
 //!   capabilities the principal holds — never from ambient globals. Capability is
 //!   resolved ONCE at the boundary; inner code receives a [`CapabilitySet`] and
 //!   asks it `grants(required)`. It does not re-derive authority.
@@ -153,7 +153,7 @@ pub enum CapError {
 /// Resolve the capabilities a `principal` holds in `game` (the IO half).
 ///
 /// Reads ONLY committed projections (`game_authority`, `spectator_membership`,
-/// `slot_occupancy`, and `slot_state`) so the result reflects real game state, never a stale client
+/// open occupancy epochs and `slot_state`) so the result reflects real game state, never a stale client
 /// claim or an ambient global. After a replacement the outgoing user's
 /// slot-derived capabilities are gone and the incoming user's are granted —
 /// because occupancy is the live mapping and the slot id is stable (doc 06 /
@@ -219,7 +219,9 @@ async fn resolve_with(
     }
 
     let occupied_slots: BTreeSet<String> = sqlx::query(
-        "SELECT slot_id FROM slot_occupancy WHERE game_id = $1 AND occupant_user_id = $2 ORDER BY slot_id",
+        "SELECT o.slot_id FROM slot_occupancy_epoch o \
+         JOIN game_persona_private p ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
+         WHERE o.game_id = $1 AND p.principal_user_id = $2 AND o.ended_seq IS NULL ORDER BY o.slot_id",
     )
     .bind(game)
     .bind(user)
@@ -234,9 +236,10 @@ async fn resolve_with(
 
     let dead_occupant: bool = sqlx::query_scalar(
         "SELECT EXISTS(\
-            SELECT 1 FROM slot_occupancy o \
+            SELECT 1 FROM slot_occupancy_epoch o \
+            JOIN game_persona_private p ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
             JOIN slot_state s ON s.game_id = o.game_id AND s.slot_id = o.slot_id \
-            WHERE o.game_id = $1 AND o.occupant_user_id = $2 AND NOT s.alive\
+            WHERE o.game_id = $1 AND p.principal_user_id = $2 AND o.ended_seq IS NULL AND NOT s.alive\
          )",
     )
     .bind(game)
@@ -249,8 +252,9 @@ async fn resolve_with(
 
     let channels = sqlx::query(
         "SELECT DISTINCT m.channel_id FROM private_channel_member m \
-         JOIN slot_occupancy o ON o.game_id = m.game_id AND o.slot_id = m.slot_id \
-         WHERE m.game_id = $1 AND o.occupant_user_id = $2 ORDER BY m.channel_id",
+         JOIN slot_occupancy_epoch o ON o.game_id = m.game_id AND o.slot_id = m.slot_id AND o.ended_seq IS NULL \
+         JOIN game_persona_private p ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
+         WHERE m.game_id = $1 AND p.principal_user_id = $2 ORDER BY m.channel_id",
     )
     .bind(game)
     .bind(user)

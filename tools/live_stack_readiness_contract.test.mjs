@@ -123,8 +123,13 @@ function liveStackReadinessFixture() {
             },
             assignSlot: {
               status: "ack",
-              commandKind: "AssignSlot",
-              command: { game: "game-a", slot: "slot_1", user: "player_mira" },
+              commandKind: "SeatPersona",
+              command: {
+                game: "game-a",
+                slot: "slot_1",
+                principal_user_id: "player_mira",
+                public_name: "player_mira",
+              },
               streamSeqs: [2],
             },
             assignRole: {
@@ -152,7 +157,7 @@ function liveStackReadinessFixture() {
           },
           commands: {
             addSlot: { commandKind: "AddSlot" },
-            assignSlot: { commandKind: "AssignSlot" },
+            assignSlot: { commandKind: "SeatPersona" },
             assignRole: {
               commandKind: "AssignRole",
               command: { role_key: "vanilla_townie" },

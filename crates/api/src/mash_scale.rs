@@ -517,7 +517,7 @@ async fn seed_game(pool: &PgPool, game: Uuid) -> Result<(), MashScaleError> {
         commands::handle(
             pool,
             &Principal::user(HOST),
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.clone(),
                 user,

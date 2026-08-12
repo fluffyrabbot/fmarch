@@ -544,7 +544,7 @@ export function markdownSessionCard(card) {
         "",
         `Process replacement: ${card.verification.replacementConsole.processReplacement.statusMessage}`,
         "",
-        `Projected occupant: ${card.verification.replacementConsole.projectedReplacement.occupantLabel}`,
+        `Assigned principal: ${card.verification.replacementConsole.projectedReplacement.assignedPrincipalUserId}`,
         "",
         `Replacement duplicate retry: ${card.verification.replacementConsole.replacementIdempotentRetry.retryReplacement.message}`,
         "",
@@ -659,6 +659,5 @@ export function markdownSessionCard(card) {
   }
   return `${lines.join("\n")}\n`;
 }
-
 
 

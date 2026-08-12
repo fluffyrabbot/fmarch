@@ -541,7 +541,7 @@ async function seedLiveHostGame() {
     AddSlot: { game: smokeGame, slot: "slot-7" },
   });
   await postCommand(3, hostPrincipal, {
-    AssignSlot: { game: smokeGame, slot: "slot-7", user: "player-mira" },
+    SeatPersona: { game: smokeGame, slot: "slot-7", principal_user_id: "player-mira" , public_name: "player-mira" },
   });
   await postCommand(4, hostPrincipal, {
     AssignRole: {
@@ -554,10 +554,10 @@ async function seedLiveHostGame() {
     AddSlot: { game: smokeGame, slot: "slot-target" },
   });
   await postCommand(6, hostPrincipal, {
-    AssignSlot: {
+    SeatPersona: {
       game: smokeGame,
       slot: "slot-target",
-      user: "player-target",
+      principal_user_id: "player-target", public_name: "player-target",
     },
   });
   await postCommand(7, hostPrincipal, {

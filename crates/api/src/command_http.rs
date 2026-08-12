@@ -298,7 +298,8 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
     match command {
         wire::Command::CreateGame { game, .. }
         | wire::Command::AddSlot { game, .. }
-        | wire::Command::AssignSlot { game, .. }
+        | wire::Command::SeatPersona { game, .. }
+        | wire::Command::RenameGamePersona { game, .. }
         | wire::Command::AssignRole { game, .. }
         | wire::Command::SetSlotStatus { game, .. }
         | wire::Command::AddSlotStatusTag { game, .. }
@@ -342,7 +343,8 @@ fn command_affects_host_console(command: &wire::Command) -> bool {
     matches!(
         command,
         wire::Command::AddSlot { .. }
-            | wire::Command::AssignSlot { .. }
+            | wire::Command::SeatPersona { .. }
+            | wire::Command::RenameGamePersona { .. }
             | wire::Command::AssignRole { .. }
             | wire::Command::SetSlotStatus { .. }
             | wire::Command::AddSlotStatusTag { .. }

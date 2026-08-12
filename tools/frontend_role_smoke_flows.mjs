@@ -118,7 +118,7 @@ export const mockStateProjections = Object.freeze({
       slots: [
         {
           slot_id: "slot-7",
-          occupant_user_id: "player-mira",
+          assigned_principal_user_id: "player-mira",
           status: state.slotStatus,
           alive: state.slotStatus === "alive",
         },

@@ -48,7 +48,7 @@ export const setupCommandEvidenceKeys = Object.freeze([
 
 export const setupCommandEvidenceKindByKey = Object.freeze({
   addSlot: "AddSlot",
-  assignSlot: "AssignSlot",
+  assignSlot: "SeatPersona",
   assignRole: "AssignRole",
   setPostPolicy: "SetPostPolicy",
   startGame: "StartGame",
@@ -80,7 +80,7 @@ export function seedSetupCommandPlanForGame(game) {
       { AddSlot: { game, slot: row.slot } },
     ]),
     ...seededSetupRoster.flatMap((row) => [
-      ["host_h", { AssignSlot: { game, slot: row.slot, user: row.user } }],
+      ["host_h", { SeatPersona: { game, slot: row.slot, principal_user_id: row.user, public_name: row.user } }],
       [
         "host_h",
         { AssignRole: { game, slot: row.slot, role_key: row.roleKey } },
@@ -215,7 +215,7 @@ export function buildSetupBootstrapCommandEvidence({ commands, policyCommand }) 
   return buildSetupCommandEvidence({
     addSlot: commandList.find((command) => command?.commandKind === "AddSlot"),
     assignSlot: commandList.find(
-      (command) => command?.commandKind === "AssignSlot",
+      (command) => command?.commandKind === "SeatPersona",
     ),
     assignRole: commandList.find(
       (command) => command?.commandKind === "AssignRole",
@@ -300,17 +300,23 @@ export async function assignSetupSlot({
   await row
     .locator('select[name="principalUserId"]')
     .selectOption(principalUserId);
+  await row
+    .locator('input[name="publicName"]')
+    .fill(`Persona ${slotId}`);
   await row.getByRole("button", { name: "Assign player", exact: true }).click();
   return await waitForHostSetupCommand({
     setupPage,
     statusTestId: "host-setup-assign-slot-status",
-    commandKind: "AssignSlot",
+    commandKind: "SeatPersona",
     commandPredicate: (command) =>
-      command?.slot === slotId && command?.user === principalUserId,
+      command?.slot === slotId &&
+      command?.principal_user_id === principalUserId &&
+      command?.public_name === `Persona ${slotId}`,
     statePredicate: (setupState) =>
       setupState?.slots?.some(
         (slot) =>
-          slot.slotId === slotId && slot.occupantUserId === principalUserId,
+          slot.slotId === slotId &&
+          slot.assignedPrincipalUserId === principalUserId,
       ),
   });
 }

@@ -98,15 +98,14 @@ impl MemberLifecycleEvent {
     }
 
     /// Status after this fact is applied, when the fact itself moves lifecycle
-    /// status. Returns `None` for progress facts that leave status unchanged
-    /// (credentials wipe, authorship step, export receipt).
+    /// status. `MemberAuthorshipPseudonymized` is terminal: its handler has
+    /// already removed credential authority and replaced retained public labels.
     pub fn resulting_status(&self) -> Option<MemberLifecycleStatus> {
         match self {
             Self::Deactivated { .. } => Some(MemberLifecycleStatus::Deactivated),
             Self::ErasureRequested => Some(MemberLifecycleStatus::ErasureInProgress),
-            Self::CredentialsErased
-            | Self::AuthorshipPseudonymized
-            | Self::PersonalExportRecorded => None,
+            Self::CredentialsErased | Self::PersonalExportRecorded => None,
+            Self::AuthorshipPseudonymized => Some(MemberLifecycleStatus::Erased),
         }
     }
 }

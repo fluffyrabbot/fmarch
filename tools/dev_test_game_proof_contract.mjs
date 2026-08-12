@@ -411,7 +411,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.duplicateSlotCountAfterReject === 1 &&
         verification.hostSetup?.setupMutationCommand?.finalSlot?.slotId ===
           "slot_2" &&
-        verification.hostSetup?.setupMutationCommand?.finalSlot?.occupantUserId ===
+        verification.hostSetup?.setupMutationCommand?.finalSlot
+          ?.assignedPrincipalUserId ===
           "setup-extra-player" &&
         verification.hostSetup?.setupMutationCommand?.finalSlot?.roleKey ===
           "mafia_goon" &&
@@ -422,7 +423,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.hostSetup?.setupMutationCommand?.commands?.assignSlot?.status ===
           "ack" &&
         verification.hostSetup?.setupMutationCommand?.commands?.assignSlot?.command
-          ?.user === "setup-extra-player" &&
+          ?.principal_user_id === "setup-extra-player" &&
         verification.hostSetup?.setupMutationCommand?.commands?.assignRole?.status ===
           "ack" &&
         verification.hostSetup?.setupMutationCommand?.commands?.assignRole?.command
@@ -2042,10 +2043,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
       commandOutgoing:
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.invalidReplacement?.requestEnvelope?.body?.body?.command
-          ?.ProcessReplacement?.outgoing_user ?? null,
+          ?.ProcessReplacement?.outgoing_persona_id ?? null,
       currentOccupant:
         verification.replacementConsole?.staleReplacementAfterSuccess
-          ?.apiSlotAfterReject?.occupant_user_id ?? null,
+          ?.apiSlotAfterReject?.assigned_principal_user_id ?? null,
       passed:
         typeof session?.sessions?.host?.directUrl === "string" &&
         session.sessions.host.directUrl.includes(`/g/${session?.game ?? ""}/host`) &&
@@ -2065,22 +2066,24 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.actionId === "process_replacement_stale_success" &&
         verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
           ?.dispatchKind === "process_replacement" &&
+        isOpaquePersonaId(
+          verification.replacementConsole?.staleReplacementAfterSuccess
+            ?.invalidReplacement?.requestEnvelope?.body?.body?.command
+            ?.ProcessReplacement?.outgoing_persona_id,
+        ) &&
         verification.replacementConsole?.staleReplacementAfterSuccess
-          ?.invalidReplacement?.requestEnvelope?.body?.body?.command
-          ?.ProcessReplacement?.outgoing_user === "player-mira" &&
-        verification.replacementConsole?.staleReplacementAfterSuccess
-          ?.apiSlotAfterReject?.occupant_user_id === "player-rowan",
+          ?.apiSlotAfterReject?.assigned_principal_user_id === "player-rowan",
     }),
     lane("replacement-invalid-target-recovery", "Invalid replacement leaves URL pending", {
       rejectError:
         verification.replacementConsole?.invalidReplacementRecovery?.reject?.error ?? null,
       commandOutgoing:
         verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
-          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ??
+          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_persona_id ??
         null,
       apiOccupant:
         verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
-          ?.occupant_user_id ?? null,
+          ?.assigned_principal_user_id ?? null,
       hostActivityStatus:
         verification.replacementConsole?.invalidReplacementRecovery?.activityStatusText ??
         null,
@@ -2089,7 +2092,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.actionId ?? null,
       hostProjectionOccupant:
         verification.replacementConsole?.invalidReplacementRecovery
-          ?.hostProjectionAfterReject?.occupantLabel ?? null,
+          ?.hostProjectionAfterReject?.assignedPrincipalUserId ?? null,
       pendingActorStatus:
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
           ?.commandState?.actorStatus ?? null,
@@ -2107,9 +2110,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "InvalidTarget" &&
         verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
           ?.requestEnvelope?.body?.body?.principal_user_id === undefined &&
-        verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
-          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
-          "player-rowan" &&
+        isOpaquePersonaId(
+          verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
+            ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_persona_id,
+        ) &&
         verification.replacementConsole?.invalidReplacementRecovery
           ?.activityStatusText?.includes("Reject InvalidTarget") === true &&
         verification.replacementConsole?.invalidReplacementRecovery?.activityRow
@@ -2123,11 +2127,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.invalidReplacementRecovery?.dispatchPlan
           ?.projectionRefreshKeys?.length === 0 &&
         verification.replacementConsole?.invalidReplacementRecovery
-          ?.hostProjectionAfterReject?.occupantLabel === "player-mira" &&
+          ?.hostProjectionAfterReject?.assignedPrincipalUserId === "player-mira" &&
         verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
           ?.slot_id === "slot-7" &&
         verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
-          ?.occupant_user_id === "player-mira" &&
+          ?.assigned_principal_user_id === "player-mira" &&
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
           ?.principalUserId === "player-rowan" &&
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
@@ -2150,8 +2154,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
           ?.body?.body?.command?.ProcessReplacement?.slot ?? null,
       projectedOccupant:
-        verification.replacementConsole?.projectedReplacement?.occupantLabel ?? null,
-      apiOccupant: verification.replacementConsole?.apiSlot?.occupant_user_id ?? null,
+        verification.replacementConsole?.projectedReplacement?.assignedPrincipalUserId ?? null,
+      apiOccupant: verification.replacementConsole?.apiSlot?.assigned_principal_user_id ?? null,
       historyLabel: verification.replacementConsole?.projectedReplacement?.historyLabel ?? null,
       passed:
         verification.replacementConsole?.status === "passed" &&
@@ -2179,10 +2183,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
         null,
       hostProjectionOccupant:
         verification.replacementConsole?.replacementIdempotentRetry
-          ?.hostProjectionAfterRetry?.occupantLabel ?? null,
+          ?.hostProjectionAfterRetry?.assignedPrincipalUserId ?? null,
       apiOccupant:
         verification.replacementConsole?.replacementIdempotentRetry?.apiSlotAfterRetry
-          ?.occupant_user_id ?? null,
+          ?.assigned_principal_user_id ?? null,
       historyLabel:
         verification.replacementConsole?.replacementIdempotentRetry
           ?.hostProjectionAfterRetry?.historyLabel ?? null,
@@ -2222,17 +2226,17 @@ export function buildDevTestGameProofRun(session, options = {}) {
         null,
       commandOutgoing:
         verification.replacementConsole?.staleReplacementAfterSuccess?.invalidReplacement
-          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ??
+          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_persona_id ??
         null,
       hostActivityStatus:
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.activityStatusText ?? null,
       hostProjectionOccupant:
         verification.replacementConsole?.staleReplacementAfterSuccess
-          ?.hostProjectionAfterReject?.occupantLabel ?? null,
+          ?.hostProjectionAfterReject?.assignedPrincipalUserId ?? null,
       apiOccupant:
         verification.replacementConsole?.staleReplacementAfterSuccess
-          ?.apiSlotAfterReject?.occupant_user_id ?? null,
+          ?.apiSlotAfterReject?.assigned_principal_user_id ?? null,
       outgoingActorStatus:
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.staleOutgoingPlayer?.recoveredCommandState?.actorStatus ?? null,
@@ -2249,9 +2253,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.invalidReplacement?.requestEnvelope?.body?.body?.principal_user_id ===
           undefined &&
-        verification.replacementConsole?.staleReplacementAfterSuccess
-          ?.invalidReplacement?.requestEnvelope?.body?.body?.command
-          ?.ProcessReplacement?.outgoing_user === "player-mira" &&
+        isOpaquePersonaId(
+          verification.replacementConsole?.staleReplacementAfterSuccess
+            ?.invalidReplacement?.requestEnvelope?.body?.body?.command
+            ?.ProcessReplacement?.outgoing_persona_id,
+        ) &&
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.activityStatusText?.includes("Reject InvalidTarget") === true &&
         verification.replacementConsole?.staleReplacementAfterSuccess
@@ -2269,11 +2275,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.staleReplacementAfterSuccess?.dispatchPlan
           ?.projectionRefreshKeys?.length === 0 &&
         verification.replacementConsole?.staleReplacementAfterSuccess
-          ?.hostProjectionAfterReject?.occupantLabel === "player-rowan" &&
+          ?.hostProjectionAfterReject?.assignedPrincipalUserId === "player-rowan" &&
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.apiSlotAfterReject?.slot_id === "slot-7" &&
         verification.replacementConsole?.staleReplacementAfterSuccess
-          ?.apiSlotAfterReject?.occupant_user_id === "player-rowan" &&
+          ?.apiSlotAfterReject?.assigned_principal_user_id === "player-rowan" &&
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.staleOutgoingPlayer?.recoveredCommandState?.actorStatus === "replaced" &&
         verification.replacementConsole?.staleReplacementAfterSuccess
@@ -3591,7 +3597,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementPrivatePostRace?.replacementSeq ?? null,
         apiOccupant:
           hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
-            ?.occupant_user_id ?? null,
+            ?.assigned_principal_user_id ?? null,
         passed:
           hardening.concurrentReplacementPrivatePostRace?.status === "passed" &&
           hardening.concurrentReplacementPrivatePostRace?.hostEntry?.capabilityKinds?.includes(
@@ -3601,7 +3607,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             "SlotOccupant",
           ) === true &&
           hardening.concurrentReplacementPrivatePostRace?.setupHostReplacement
-            ?.occupantLabel === "player-mira" &&
+            ?.assignedPrincipalUserId === "player-mira" &&
           hardening.concurrentReplacementPrivatePostRace?.setupCommandState
             ?.actorSlot === "slot-7" &&
           hardening.concurrentReplacementPrivatePostRace?.setupCommandState
@@ -3681,10 +3687,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.error ?? null,
         hostOccupant:
           hardening.concurrentReplacementPrivatePostRace?.hostReplacementAfterRace
-            ?.occupantLabel ?? null,
+            ?.assignedPrincipalUserId ?? null,
         apiOccupant:
           hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
-            ?.occupant_user_id ?? null,
+            ?.assigned_principal_user_id ?? null,
         stalePostControlsEnabled:
           hardening.concurrentReplacementPrivatePostRace?.buttonsAfterRace?.filter(
             (button) =>
@@ -3737,7 +3743,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         replacementSeq: hardening.concurrentReplacementVoteRace?.replacementSeq ?? null,
         apiOccupant:
           hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
-            ?.occupant_user_id ?? null,
+            ?.assigned_principal_user_id ?? null,
         targetCount: hardening.concurrentReplacementVoteRace?.targetVotecount?.count ?? null,
         passed:
           hardening.concurrentReplacementVoteRace?.status === "passed" &&
@@ -3750,7 +3756,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             "SlotOccupant",
           ) === true &&
           hardening.concurrentReplacementVoteRace?.setupHostReplacement
-            ?.occupantLabel ===
+            ?.assignedPrincipalUserId ===
             replacementVoteRaceScenario.staleOutgoingPrincipalUserId &&
           hardening.concurrentReplacementVoteRace?.setupCommandState?.actorSlot ===
             replacementVoteRaceScenario.actorSlot &&
@@ -3770,11 +3776,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
             ?.body?.command?.ProcessReplacement?.slot ===
             replacementVoteRaceScenario.actorSlot &&
+          isOpaquePersonaId(
+            hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
+              ?.body?.command?.ProcessReplacement?.outgoing_persona_id,
+          ) &&
           hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
-            ?.body?.command?.ProcessReplacement?.outgoing_user ===
-            replacementVoteRaceScenario.staleOutgoingPrincipalUserId &&
-          hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
-            ?.body?.command?.ProcessReplacement?.incoming_user ===
+            ?.body?.command?.ProcessReplacement?.incoming_principal_user_id ===
             replacementVoteRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementVoteRace?.vote?.requestEnvelope?.body?.body
             ?.command?.SubmitVote?.actor_slot ===
@@ -3799,9 +3806,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.error ===
             replacementVoteRaceScenario.rejectionError &&
           hardening.concurrentReplacementVoteRace?.hostReplacementAfterRace
-            ?.occupantLabel === replacementVoteRaceScenario.replacementOccupantLabel &&
+            ?.assignedPrincipalUserId === replacementVoteRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
-            ?.occupant_user_id ===
+            ?.assigned_principal_user_id ===
             replacementVoteRaceScenario.replacementPrincipalUserId,
       },
     ),
@@ -3818,10 +3825,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           null,
         hostOccupant:
           hardening.concurrentReplacementVoteRace?.hostReplacementAfterRace
-            ?.occupantLabel ?? null,
+            ?.assignedPrincipalUserId ?? null,
         apiOccupant:
           hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
-            ?.occupant_user_id ?? null,
+            ?.assigned_principal_user_id ?? null,
         voteState: hardening.concurrentReplacementVoteRace?.vote?.state ?? null,
         targetCount:
           hardening.concurrentReplacementVoteRace?.targetVotecount?.count ?? null,
@@ -3832,9 +3839,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.error ===
             replacementVoteRaceScenario.rejectionError &&
           hardening.concurrentReplacementVoteRace?.hostReplacementAfterRace
-            ?.occupantLabel === replacementVoteRaceScenario.replacementOccupantLabel &&
+            ?.assignedPrincipalUserId === replacementVoteRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
-            ?.occupant_user_id ===
+            ?.assigned_principal_user_id ===
             replacementVoteRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementVoteRace?.targetVotecount?.count ===
             (hardening.concurrentReplacementVoteRace?.vote?.state === "ack"
@@ -3855,7 +3862,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementActionRace?.replacementSeq ?? null,
         apiOccupant:
           hardening.concurrentReplacementActionRace?.apiSlotAfterRace
-            ?.occupant_user_id ?? null,
+            ?.assigned_principal_user_id ?? null,
         staleRetryError:
           hardening.concurrentReplacementActionRace?.staleRetry?.error ?? null,
         currentActionCount:
@@ -3878,7 +3885,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             replacementActionRaceScenario.phaseId &&
           hardening.concurrentReplacementActionRace?.setupHostPhase?.locked ===
             false &&
-          hardening.concurrentReplacementActionRace?.setupSlot?.occupant_user_id ===
+          hardening.concurrentReplacementActionRace?.setupSlot?.assigned_principal_user_id ===
             replacementActionRaceScenario.staleOutgoingPrincipalUserId &&
           hardening.concurrentReplacementActionRace?.setupCommandState?.actorSlot ===
             replacementActionRaceScenario.actorSlot &&
@@ -3899,11 +3906,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementActionRace?.replacement?.requestEnvelope
             ?.body?.body?.command?.ProcessReplacement?.slot ===
             replacementActionRaceScenario.actorSlot &&
+          isOpaquePersonaId(
+            hardening.concurrentReplacementActionRace?.replacement?.requestEnvelope
+              ?.body?.body?.command?.ProcessReplacement?.outgoing_persona_id,
+          ) &&
           hardening.concurrentReplacementActionRace?.replacement?.requestEnvelope
-            ?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
-            replacementActionRaceScenario.staleOutgoingPrincipalUserId &&
-          hardening.concurrentReplacementActionRace?.replacement?.requestEnvelope
-            ?.body?.body?.command?.ProcessReplacement?.incoming_user ===
+            ?.body?.body?.command?.ProcessReplacement?.incoming_principal_user_id ===
             replacementActionRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementActionRace?.action?.requestEnvelope?.body
             ?.body?.command?.SubmitAction?.actor_slot ===
@@ -3956,7 +3964,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementActionRace?.hostPhaseAfterRace?.locked ===
             false &&
           hardening.concurrentReplacementActionRace?.apiSlotAfterRace
-            ?.occupant_user_id ===
+            ?.assigned_principal_user_id ===
             replacementActionRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
             ?.actor_slot === replacementActionRaceScenario.actorSlot &&
@@ -3983,7 +3991,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementActionRace?.staleRetry?.error ?? null,
         apiOccupant:
           hardening.concurrentReplacementActionRace?.apiSlotAfterRace
-            ?.occupant_user_id ?? null,
+            ?.assigned_principal_user_id ?? null,
         currentCommandStateStatus:
           hardening.concurrentReplacementActionRace?.apiCurrentCommandStateStatus
             ?.status ?? null,
@@ -4010,7 +4018,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementActionRace?.staleRetry?.error ===
             replacementActionRaceScenario.rejectionError &&
           hardening.concurrentReplacementActionRace?.apiSlotAfterRace
-            ?.occupant_user_id ===
+            ?.assigned_principal_user_id ===
             replacementActionRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementActionRace?.apiCurrentCommandStateStatus
             ?.status === 200 &&
@@ -4092,7 +4100,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementIncomingAction?.setupHostPhase?.id ===
           replacementIncomingActionCase.phaseId &&
         hardening.replacementIncomingAction?.setupHostPhase?.locked === false &&
-        hardening.replacementIncomingAction?.setupSlot?.occupant_user_id ===
+        hardening.replacementIncomingAction?.setupSlot?.assigned_principal_user_id ===
           replacementIncomingActionCase.staleOutgoingPrincipalUserId &&
         ackedReplacementCommandMatches(
           hardening.replacementIncomingAction?.replacement,
@@ -9080,6 +9088,13 @@ function sameArray(left, right) {
     left.length === right.length &&
     left.every((value, index) => value === right[index])
   );
+}
+
+// Persona ids are opaque game-scoped identities. The proof must establish that
+// replacement sends one, without coupling an epoch authority assertion to a
+// fixture's private principal spelling.
+function isOpaquePersonaId(value) {
+  return typeof value === "string" && value.trim() !== "";
 }
 
 function normalizedVotecountRows(apiVotecount) {

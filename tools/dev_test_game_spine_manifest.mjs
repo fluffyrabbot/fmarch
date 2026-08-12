@@ -2036,8 +2036,7 @@ function buildArtifactFreshnessReport(
   }
   const artifacts = applyProofRunContract(
     (proofFreshness.artifacts ?? []).map((artifact) => {
-      const recoveryCommand =
-        recoveryCommands.get(artifact.id) ?? recoveryCommands.get(artifact.path);
+      const recoveryCommand = recoveryCommands.get(artifact.path);
       const refreshCommand = recoveryCommand ?? refreshCommandForArtifact(artifact);
       return {
         id: artifact.id,
@@ -2127,9 +2126,9 @@ function recoveryCommandsFromAdminSpineProof(adminSpineProof) {
     if (typeof surface.rerunCommand !== "string" || surface.rerunCommand.trim() === "") {
       continue;
     }
-    if (typeof surface.id === "string" && surface.id.trim() !== "") {
-      commands.set(surface.id, surface.rerunCommand);
-    }
+    // Surface ids are presentation identifiers and may intentionally match an
+    // underlying readiness artifact. Only the emitted evidence path identifies
+    // the artifact that this admin rerun command actually refreshes.
     if (typeof surface.path === "string" && surface.path.trim() !== "") {
       commands.set(surface.path, surface.rerunCommand);
     }

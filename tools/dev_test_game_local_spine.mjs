@@ -44,34 +44,52 @@ export function parseArgs(argv = []) {
   return args;
 }
 
+export function localSpineDatabaseUrlFor(env = process.env) {
+  if (typeof env.DATABASE_URL === "string" && env.DATABASE_URL !== "") {
+    return env.DATABASE_URL;
+  }
+  const port = String(env.FMARCH_DEV_POSTGRES_PORT ?? "5544");
+  return `postgres://fmarch:fmarch@127.0.0.1:${port}/fmarch`;
+}
+
+export function localSpineProofEnvironment(env = process.env) {
+  return {
+    ...env,
+    // This wrapper is exclusively for local deterministic proof. Never rely on
+    // the caller's shell to opt into the debug-only local identity gateway.
+    FMARCH_DEV_AUTH: "1",
+  };
+}
+
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const args = parseArgs(argv);
   if (args.help) {
     printUsage();
     return 0;
   }
-  const databaseUrl = env.DATABASE_URL ?? localSpineDatabaseUrl;
+  const localEnv = localSpineProofEnvironment(env);
+  const databaseUrl = localSpineDatabaseUrlFor(localEnv);
   installSignalHandler("SIGINT", 130);
   installSignalHandler("SIGTERM", 143);
 
   try {
-    await run("npm", ["run", "dev:postgres", "--", "start"], { env });
+    await run("npm", ["run", "dev:postgres", "--", "start"], { env: localEnv });
     if (args.prebuild) {
-      await run("npm", ["run", "dev:test-game:prebuild"], { env });
+      await run("npm", ["run", "dev:test-game:prebuild"], { env: localEnv });
     }
     return await run(
       "npm",
       ["run", args.script, "--", ...args.passThrough],
       {
         env: {
-          ...env,
+          ...localEnv,
           DATABASE_URL: databaseUrl,
         },
         allowFailure: true,
       },
     );
   } finally {
-    await stopPostgres(env);
+    await stopPostgres(localEnv);
   }
 }
 

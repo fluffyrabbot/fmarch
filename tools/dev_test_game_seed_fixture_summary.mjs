@@ -258,9 +258,12 @@ function summarizeSeedSlots(plan) {
       const slotId = command.AddSlot.slot;
       slots.set(slotId, { slotId });
     }
-    if (command.AssignSlot !== undefined) {
-      const slotId = command.AssignSlot.slot;
-      slots.set(slotId, { ...(slots.get(slotId) ?? { slotId }), user: command.AssignSlot.user });
+    if (command.SeatPersona !== undefined) {
+      const slotId = command.SeatPersona.slot;
+      slots.set(slotId, {
+        ...(slots.get(slotId) ?? { slotId }),
+        user: command.SeatPersona.principal_user_id,
+      });
     }
     if (command.AssignRole !== undefined) {
       const slotId = command.AssignRole.slot;

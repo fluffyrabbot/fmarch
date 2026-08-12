@@ -59,14 +59,18 @@ enum EventKind {
     GameCreated,            // pack ref, host, config
     SignupsOpened,
     SlotAdded,              // { slot_id }
-    SlotAssigned,           // { slot_id, user_id }  ← occupancy begins (platform-only)
+    GamePersonaRegistered,  // { persona_id, principal_user_id, public_name } (private binding + public identity)
+    GamePersonaRenamed,     // { persona_id, public_name }
+    SlotOccupancyStarted,   // { occupancy_id, transition_id, slot_id, persona_id, reason }
+    SlotOccupancyEnded,     // { occupancy_id, transition_id, slot_id, persona_id, reason }
     GameStarted,            // freezes roster; engine state seeded
     GameCompleted,          // { winner_alignment, reason }
     GameArchived,
 
     // ── Membership / replacement (PLATFORM-ONLY; engine never sees these) ──
     ReplacementRequested,   // { slot_id, reason }
-    ReplacementCompleted,   // { slot_id, outgoing_user, incoming_user }  ← seat id unchanged
+    // Replacement is one `SlotOccupancyEnded` + `SlotOccupancyStarted` transition;
+    // no principal-to-slot event is canonical.
     SlotModkilled,          // host removes a seat from play (becomes an engine submission)
 
     // ── Roles ──

@@ -148,7 +148,7 @@ async function seedSearchCorpus(apiBaseUrl) {
   await sendCommand(apiBaseUrl, id++, member, { CreateGame: { game, pack: "mafiascum" } });
   devSessionTokens.set(member, memberToken);
   await sendCommand(apiBaseUrl, id++, member, { AddSlot: { game, slot: "slot_1" } });
-  await sendCommand(apiBaseUrl, id++, member, { AssignSlot: { game, slot: "slot_1", user: member } });
+  await sendCommand(apiBaseUrl, id++, member, { SeatPersona: { game, slot: "slot_1", principal_user_id: member, public_name: member } });
   await sendCommand(apiBaseUrl, id++, member, { StartGame: { game, phase: "D01" } });
   await sendCommand(apiBaseUrl, id++, member, {
     SubmitPost: {

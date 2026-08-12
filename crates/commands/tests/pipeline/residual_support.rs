@@ -79,26 +79,18 @@ async fn seed_open_night_game_with_pack(
                 ActorId::Host,
                 2,
             ),
-            EventInput::new(
-                "SlotAssigned",
-                1,
-                serde_json::json!({
-                    "slot_id": "slot_1",
-                    "user_id": "user_1"
-                }),
-                ActorId::Host,
-                3,
-            ),
-            EventInput::new(
-                "SlotAssigned",
-                1,
-                serde_json::json!({
-                    "slot_id": "slot_2",
-                    "user_id": "user_2"
-                }),
-                ActorId::Host,
-                4,
-            ),
+            EventInput::new("GamePersonaRegistered", 1, serde_json::json!({
+                "persona_id": "gp_user_1", "principal_user_id": "user_1", "public_name": "Player One"
+            }), ActorId::Host, 3),
+            EventInput::new("SlotOccupancyStarted", 1, serde_json::json!({
+                "transition_id": "ot_seed_1", "occupancy_id": "oe_seed_1", "slot_id": "slot_1", "persona_id": "gp_user_1", "reason": "initial"
+            }), ActorId::Host, 4),
+            EventInput::new("GamePersonaRegistered", 1, serde_json::json!({
+                "persona_id": "gp_user_2", "principal_user_id": "user_2", "public_name": "Player Two"
+            }), ActorId::Host, 5),
+            EventInput::new("SlotOccupancyStarted", 1, serde_json::json!({
+                "transition_id": "ot_seed_2", "occupancy_id": "oe_seed_2", "slot_id": "slot_2", "persona_id": "gp_user_2", "reason": "initial"
+            }), ActorId::Host, 6),
             EventInput::new(
                 "RoleAssigned",
                 1,
@@ -194,7 +186,7 @@ async fn setup_resolved_audit_drift_game(pool: &PgPool, user_prefix: &str, seed:
         handle(
             pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant,
@@ -6908,7 +6900,7 @@ async fn setup_chinese_wolf_faction_vote_game(
         handle(
             pool,
             host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: format!("{user_prefix}_user_{user_suffix}"),
@@ -7002,7 +6994,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -7241,7 +7233,7 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),

@@ -729,3 +729,171 @@ async fn provider_jwts_and_random_bearers_are_never_general_credentials(pool: sq
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained_authorship(
+    pool: sqlx::PgPool,
+) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let response = post_json(
+        &app,
+        "/auth/accounts/registrations",
+        None,
+        serde_json::json!({
+            "account_id": "erase-me@example.test",
+            "password": "correct horse battery staple"
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let registered = json_body(response).await;
+    let principal = registered["principal_user_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let token = registered["session_token"].as_str().unwrap().to_string();
+
+    let profile_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO profile_public (profile_id, handle, display_name, bio, visibility, created_seq, updated_seq) VALUES ($1, 'erase-me', 'Alicia', 'private bio', 'public', 1, 1)")
+        .bind(profile_id).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO profile_editor (profile_id, principal_user_id, last_edit_seq) VALUES ($1, $2, 1)")
+        .bind(profile_id).bind(principal.as_str()).execute(&pool).await.unwrap();
+    let game_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO game_persona_private (game_id, persona_id, principal_user_id, registered_seq) VALUES ($1, 'gp_test', $2, 1)")
+        .bind(game_id).bind(principal.as_str()).execute(&pool).await.unwrap();
+    sqlx::query("INSERT INTO game_persona_public (game_id, persona_id, current_public_name, registered_seq, renamed_seq) VALUES ($1, 'gp_test', 'Alicia', 1, NULL)")
+        .bind(game_id).execute(&pool).await.unwrap();
+
+    let response = post_json(
+        &app,
+        "/auth/account/personal-exports",
+        Some(&token),
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let export = json_body(response).await;
+    assert_eq!(export["status"], "ready");
+    assert_eq!(
+        export["artifact"]["accounts"][0]["account_id"],
+        "erase-me@example.test"
+    );
+    assert_eq!(export["artifact"]["profiles"][0]["display_name"], "Alicia");
+
+    let response = post_json(
+        &app,
+        "/auth/account/erasure",
+        Some(&token),
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let erased = json_body(response).await;
+    assert_eq!(erased["status"], "erased");
+    let pseudonym = erased["pseudonym"].as_str().unwrap().to_string();
+
+    let response = get_session(&app, token.as_str()).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let (principal_status, method_status, account_disabled): (String, String, Option<i64>) = sqlx::query_as(
+        "SELECT principal.status, method.status, account.disabled_at FROM platform_principal AS principal JOIN authentication_method AS method ON method.principal_user_id = principal.principal_user_id JOIN auth_account AS account ON account.principal_user_id = principal.principal_user_id WHERE principal.principal_user_id = $1",
+    )
+    .bind(principal.as_str())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(principal_status, "disabled");
+    assert_eq!(method_status, "disabled");
+    assert!(account_disabled.is_some());
+    let (handle, display_name, bio): (String, String, String) = sqlx::query_as(
+        "SELECT handle, display_name, bio FROM profile_public WHERE profile_id = $1",
+    )
+    .bind(profile_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(handle.starts_with("former-member-"));
+    assert_eq!(display_name, pseudonym);
+    assert!(bio.is_empty());
+    let redacted_name: String = sqlx::query_scalar(
+        "SELECT replacement_public_name FROM game_persona_redaction WHERE game_id = $1 AND persona_id = 'gp_test'",
+    )
+    .bind(game_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(redacted_name, pseudonym);
+    let kinds: Vec<String> = sqlx::query_scalar(
+        "SELECT kind FROM member_lifecycle_event WHERE principal_user_id = $1 ORDER BY seq",
+    )
+    .bind(principal.as_str())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        kinds,
+        [
+            "MemberPersonalExportRecorded",
+            "MemberDeactivated",
+            "MemberErasureRequested",
+            "MemberCredentialsErased",
+            "MemberAuthorshipPseudonymized",
+        ]
+    );
+    // Simulate a normal profile/game projection rebuild restoring source facts;
+    // lifecycle rebuild must reapply the retained-data overlay deterministically.
+    sqlx::query("UPDATE profile_public SET handle = 'erase-me', display_name = 'Alicia', bio = 'private bio' WHERE profile_id = $1")
+        .bind(profile_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE profile_editor SET principal_user_id = $2 WHERE profile_id = $1")
+        .bind(profile_id)
+        .bind(principal.as_str())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE game_persona_private SET principal_user_id = $2 WHERE game_id = $1 AND persona_id = 'gp_test'")
+        .bind(game_id)
+        .bind(principal.as_str())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE game_persona_public SET current_public_name = 'Alicia' WHERE game_id = $1 AND persona_id = 'gp_test'")
+        .bind(game_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM game_persona_redaction WHERE game_id = $1 AND persona_id = 'gp_test'")
+        .bind(game_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_user_id = $1")
+        .bind(principal.as_str())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let rebuilt = identity::rebuild_member_lifecycle(&pool, principal.as_str())
+        .await
+        .unwrap();
+    assert_eq!(rebuilt.status, identity::MemberLifecycleStatus::Erased);
+    assert_eq!(rebuilt.last_seq, 5);
+    assert_eq!(rebuilt.pseudonym.as_deref(), Some(pseudonym.as_str()));
+    let rebuilt_profile_name: String =
+        sqlx::query_scalar("SELECT display_name FROM profile_public WHERE profile_id = $1")
+            .bind(profile_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(rebuilt_profile_name, pseudonym);
+    let rebuilt_persona_name: String = sqlx::query_scalar(
+        "SELECT current_public_name FROM game_persona_public WHERE game_id = $1 AND persona_id = 'gp_test'",
+    )
+    .bind(game_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rebuilt_persona_name, pseudonym);
+}

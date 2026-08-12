@@ -44,7 +44,9 @@ test("host setup route data derives identity, roster, policy, invites, and readi
         slots: [
           {
             slot_id: "slot_1",
-            occupant_user_id: "player_mira",
+            persona_id: "gp_mira",
+            public_name: "Mira",
+            assigned_principal_user_id: "player_mira",
             alive: true,
             status: "alive",
             status_tags: [],
@@ -52,7 +54,9 @@ test("host setup route data derives identity, roster, policy, invites, and readi
           },
           {
             slot_id: "slot_2",
-            occupant_user_id: "player_goon",
+            persona_id: "gp_goon",
+            public_name: "Goon",
+            assigned_principal_user_id: "player_goon",
             alive: true,
             status: "alive",
             status_tags: [],
@@ -90,7 +94,7 @@ test("host setup route data derives identity, roster, policy, invites, and readi
   ]);
   assert.deepEqual(
     occupiedSetupInviteTargets(data.setupState).map((target) => target.targetLabel),
-    ["Slot 1 / mira@example.test", "Slot 2 / goon@example.test"],
+    ["Slot 1 / Mira", "Slot 2 / Goon"],
   );
   assert.deepEqual(
     occupiedSetupInviteTargets(data.setupState).map((target) => target.accountId),
@@ -114,7 +118,9 @@ test("host setup readiness blocks StartGame until slots have occupants and roles
       slots: [
         {
           slot_id: "slot_1",
-          occupant_user_id: "player_mira",
+          persona_id: "gp_mira",
+          public_name: "Mira",
+          assigned_principal_user_id: "player_mira",
           alive: true,
           status: "alive",
           status_tags: [],
@@ -122,7 +128,9 @@ test("host setup readiness blocks StartGame until slots have occupants and roles
         },
         {
           slot_id: "slot_2",
-          occupant_user_id: null,
+          persona_id: null,
+          public_name: null,
+          assigned_principal_user_id: null,
           alive: true,
           status: "alive",
           status_tags: [],

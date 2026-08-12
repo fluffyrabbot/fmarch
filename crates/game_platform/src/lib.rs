@@ -13,6 +13,12 @@ use thiserror::Error;
 pub mod day_auto_resolution;
 pub mod day_narrative;
 pub mod day_schedule;
+pub mod persona;
+
+pub use persona::{
+    GamePersonaId, GamePersonaName, OccupancyEndReason, OccupancyId, OccupancyStartReason,
+    OccupancyTransitionId,
+};
 
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum ModelError {

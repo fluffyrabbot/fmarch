@@ -18,9 +18,9 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 40,
+    complete: 41,
     partial: 0,
-    open: 3,
+    open: 2,
     blocked: 0,
     deferred: 0,
     total: 43,
@@ -53,7 +53,7 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   assert.equal(
     registry.items.find((item) => item.id === "product.game.persona-occupancy")
       ?.status,
-    "open",
+    "complete",
   );
   assert.equal(
     registry.items.find((item) => item.id === "optional.public-history-explorer")

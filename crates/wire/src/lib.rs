@@ -8,6 +8,23 @@ use std::collections::BTreeMap;
 use ts_rs::TS;
 use uuid::Uuid;
 
+/// Compact fixture construction for a wire-level named seating command.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! seat_persona {
+    ($game:ident, slot: $slot:expr, user: $user:expr $(,)?) => {{
+        let slot: String = $slot;
+        let principal_user_id: String = $user;
+        let public_name = format!("Player {slot}");
+        $crate::Command::SeatPersona {
+            game: $game,
+            public_name,
+            principal_user_id,
+            slot,
+        }
+    }};
+}
+
 pub const PROTOCOL_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -289,10 +306,16 @@ pub enum Command {
         game: Uuid,
         slot: String,
     },
-    AssignSlot {
+    SeatPersona {
         game: Uuid,
         slot: String,
-        user: String,
+        principal_user_id: String,
+        public_name: String,
+    },
+    RenameGamePersona {
+        game: Uuid,
+        persona_id: String,
+        public_name: String,
     },
     AssignRole {
         game: Uuid,
@@ -465,8 +488,8 @@ pub enum Command {
     ProcessReplacement {
         game: Uuid,
         slot: String,
-        outgoing_user: String,
-        incoming_user: String,
+        outgoing_persona_id: String,
+        incoming_principal_user_id: String,
     },
 }
 
@@ -498,9 +521,26 @@ impl Command {
                 cohost_denied: cohost_denied.into_iter().map(Into::into).collect(),
             },
             Command::AddSlot { game, slot } => commands::Command::AddSlot { game, slot },
-            Command::AssignSlot { game, slot, user } => {
-                commands::Command::AssignSlot { game, slot, user }
-            }
+            Command::SeatPersona {
+                game,
+                slot,
+                principal_user_id,
+                public_name,
+            } => commands::Command::SeatPersona {
+                game,
+                slot,
+                principal_user_id,
+                public_name,
+            },
+            Command::RenameGamePersona {
+                game,
+                persona_id,
+                public_name,
+            } => commands::Command::RenameGamePersona {
+                game,
+                persona_id,
+                public_name,
+            },
             Command::AssignRole {
                 game,
                 slot,
@@ -713,13 +753,13 @@ impl Command {
             Command::ProcessReplacement {
                 game,
                 slot,
-                outgoing_user,
-                incoming_user,
+                outgoing_persona_id,
+                incoming_principal_user_id,
             } => commands::Command::ProcessReplacement {
                 game,
                 slot,
-                outgoing_user,
-                incoming_user,
+                outgoing_persona_id,
+                incoming_principal_user_id,
             },
         };
         CommandDispatch::Direct(command)
@@ -1019,7 +1059,10 @@ pub struct HostConsolePhaseStateDelta {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct HostConsoleSlotOccupancyDelta {
     pub slot_id: String,
-    pub occupant_user_id: String,
+    pub occupancy_id: String,
+    pub persona_id: String,
+    pub public_name: String,
+    pub assigned_principal_user_id: String,
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,

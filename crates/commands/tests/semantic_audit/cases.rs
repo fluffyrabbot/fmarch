@@ -35,7 +35,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_strongman_pierce(pool: P
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -199,7 +199,7 @@ async fn host_resolve_phase_projects_huntsman_guard_retaliation(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -369,7 +369,7 @@ async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -546,7 +546,7 @@ async fn host_resolve_phase_carries_mafia_universe_reveal_town(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -726,7 +726,7 @@ async fn host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal(pool:
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -1000,7 +1000,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_oracle_reveal(pool: PgPo
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -1277,7 +1277,7 @@ async fn host_resolve_phase_carries_mafia_universe_janitor_concealment(pool: PgP
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -1459,7 +1459,7 @@ async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPo
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -1832,7 +1832,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -2047,7 +2047,7 @@ async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgP
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -2280,7 +2280,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel_no_ballots(pool: PgPool)
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -2459,7 +2459,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel_tied_ballots(pool: PgPoo
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -2659,7 +2659,7 @@ async fn host_resolve_phase_carries_mafiascum_day_self_destruct_trade(pool: PgPo
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -2864,7 +2864,7 @@ async fn host_resolve_phase_carries_twilight_self_destruct_window(pool: PgPool) 
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -3072,7 +3072,7 @@ async fn host_resolve_phase_carries_mafiascum_day_vigilante_kill(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -3258,7 +3258,7 @@ async fn host_resolve_phase_carries_mafiascum_serial_killer_win(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -3406,7 +3406,7 @@ async fn host_resolve_phase_serial_killer_blocks_mafia_parity(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -3554,7 +3554,7 @@ async fn host_resolve_phase_day_action_win_runs_after_announcement(pool: PgPool)
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -3804,7 +3804,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game: day_game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -3990,7 +3990,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game: night_game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4171,7 +4171,7 @@ async fn host_resolve_phase_carries_mafiascum_governor_veto(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4389,7 +4389,7 @@ async fn host_resolve_phase_conceals_janitor_and_flipless_death_reveals(pool: Pg
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4567,7 +4567,7 @@ async fn host_resolve_phase_projects_alignment_only_death_reveal(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4723,7 +4723,7 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
             handle(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: (*slot).into(),
                     user: user_id,
@@ -4934,7 +4934,7 @@ async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(p
             handle(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: (*slot).into(),
                     user: user_id,
@@ -5131,7 +5131,7 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
             handle(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: format!("trigger_seed_{seed}_user_{}", slot_number(slot)),
@@ -6128,7 +6128,7 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
             handle(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: format!("persistent_seed_{seed}_user_{}", slot_number(slot)),
@@ -6478,7 +6478,7 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
             handle(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: format!("day_trigger_seed_{seed}_user_{}", slot_number(slot)),
@@ -6777,7 +6777,7 @@ async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: 
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: format!("large_graph_user_{}", slot_number(slot)),
@@ -7192,9 +7192,15 @@ async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: 
             .fetch_one(&pool)
             .await
             .expect("large graph event count");
+    // Each named seating now persists an immutable GamePersona registration in
+    // addition to the occupancy epoch that replaced the former direct slot
+    // assignment. Keep the legacy stream ceiling, plus exactly that one
+    // durable authorship fact per seat; this remains a bounded linear setup
+    // cost rather than silently weakening the graph regression guard.
+    let max_event_count = 200 + roster.len() as i64;
     assert!(
-        event_count <= 200,
-        "large graph command/event stream should stay bounded: {event_count}"
+        event_count <= max_event_count,
+        "large graph command/event stream should stay bounded at {max_event_count}: {event_count}"
     );
     assert!(
         resolve_elapsed < Duration::from_secs(20),
@@ -7244,7 +7250,7 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
             generated_handle_or_shrink(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.clone(),
                     user: format!("generated_seed_{seed}_user_{}", slot_number(slot)),
@@ -8006,7 +8012,7 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
             generated_handle_or_shrink(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.clone(),
                     user: format!("chinese_generated_seed_{seed}_user_{}", slot_number(slot)),
@@ -8387,7 +8393,7 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
             generated_handle_or_shrink(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.clone(),
                     user: format!("chinese_day_seed_{seed}_user_{}", slot_number(slot)),
@@ -8924,7 +8930,7 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
             generated_handle_or_shrink(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.clone(),
                     user: format!("mafia_universe_ita_seed_{seed}_user_{}", slot_number(slot)),
@@ -9458,7 +9464,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             generated_handle_or_shrink(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.clone(),
                     user: format!("epicmafia_pk_seed_{seed}_user_{}", slot_number(slot)),
@@ -9952,7 +9958,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             generated_handle_or_shrink(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.clone(),
                     user: format!("epicmafia_night_seed_{seed}_user_{}", slot_number(slot)),
@@ -10569,7 +10575,7 @@ async fn host_resolve_phase_carries_default_open_guardian_seer(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -10843,7 +10849,7 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
             generated_handle_or_shrink(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.clone(),
                     user: format!("default_open_seed_{seed}_user_{}", slot_number(slot)),
@@ -11185,7 +11191,7 @@ async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -11419,7 +11425,7 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
             generated_handle_or_shrink(
                 &pool,
                 &host,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.clone(),
                     user: format!("default_open_day_seed_{seed}_user_{}", slot_number(slot)),
@@ -11962,7 +11968,7 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -12171,7 +12177,7 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -12495,7 +12501,7 @@ async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -12715,7 +12721,7 @@ async fn host_resolve_phase_uses_pack_declared_vote_weights(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -12846,7 +12852,7 @@ async fn host_resolve_phase_uses_pack_declared_role_tiebreaker(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -12974,7 +12980,7 @@ async fn host_resolve_phase_uses_pack_declared_triplevoter_weight(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -13116,7 +13122,7 @@ async fn host_resolve_phase_uses_pack_declared_x_voter_weight(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -13260,7 +13266,7 @@ async fn host_resolve_phase_uses_dynamic_effect_vote_weight(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -13469,7 +13475,7 @@ async fn host_resolve_phase_uses_vote_weight_action_grant(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -13696,7 +13702,7 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt(pool
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -13942,7 +13948,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game: loved_game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -14279,7 +14285,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game: hated_game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -14415,7 +14421,7 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -14804,7 +14810,7 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -15161,7 +15167,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -15460,7 +15466,7 @@ async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -15598,7 +15604,7 @@ async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -15787,7 +15793,7 @@ async fn host_resolve_phase_carries_wolf_self_destruct_trade(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -15964,7 +15970,7 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -16391,7 +16397,7 @@ async fn host_resolve_phase_carries_chinese_white_wolf_king_night_kill(pool: PgP
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -16553,7 +16559,7 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -16819,7 +16825,7 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -17083,7 +17089,7 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -17365,7 +17371,7 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -17587,7 +17593,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -17824,7 +17830,7 @@ async fn host_resolve_phase_carries_chinese_guard_self_save_night_one_policy(poo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -18021,7 +18027,7 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -18268,7 +18274,7 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -18533,7 +18539,7 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -18807,7 +18813,7 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -19154,7 +19160,7 @@ async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -19385,7 +19391,7 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -19642,7 +19648,7 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -19934,7 +19940,7 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -20241,7 +20247,7 @@ async fn host_resolve_phase_applies_ita_lifecycle_pause_control(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -20411,7 +20417,7 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -20719,7 +20725,7 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -21019,7 +21025,7 @@ async fn host_resolve_phase_carries_mafia_universe_basic_nar(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -21200,7 +21206,7 @@ async fn host_resolve_phase_carries_mafia_universe_joat_block_counter(pool: PgPo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -21401,7 +21407,7 @@ async fn host_resolve_phase_carries_mafiascum_joat_block_counter(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -21588,7 +21594,7 @@ async fn host_resolve_phase_carries_mafiascum_two_shot_counter(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -21832,7 +21838,7 @@ async fn host_resolve_phase_carries_mafiascum_roleblocker_aliases(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -22051,7 +22057,7 @@ async fn host_resolve_phase_carries_mafiascum_faith_healer_chance_protect(pool: 
             handle(
                 &pool,
                 &h,
-                Command::AssignSlot {
+                commands::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: occupant.clone(),
@@ -22253,7 +22259,7 @@ async fn host_resolve_phase_carries_mafia_universe_night_desperado_kills(pool: P
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -22492,7 +22498,7 @@ async fn host_resolve_phase_carries_mafia_universe_vigilante_kills(pool: PgPool)
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -22694,7 +22700,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgP
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -22943,7 +22949,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -23184,7 +23190,7 @@ async fn host_resolve_phase_carries_mafia_universe_power_role_killer_filter(pool
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -23413,7 +23419,7 @@ async fn host_resolve_phase_carries_mafia_universe_cpr_harm(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -23592,7 +23598,7 @@ async fn host_resolve_phase_carries_mafia_universe_framer_investigation(pool: Pg
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -23796,7 +23802,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_framer_investigation(poo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -24000,7 +24006,7 @@ async fn host_resolve_phase_carries_mafiascum_role_scan(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -24176,7 +24182,7 @@ async fn host_resolve_phase_carries_mafiascum_coroner_corpse_inspection(pool: Pg
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -24387,7 +24393,7 @@ async fn host_resolve_phase_carries_mafiascum_psychologist_killer_info(pool: PgP
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -24593,7 +24599,7 @@ async fn host_resolve_phase_carries_mafiascum_specialist_info(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -24808,7 +24814,7 @@ async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -25063,7 +25069,7 @@ async fn host_resolve_phase_carries_mafiascum_role_set_info(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -25344,7 +25350,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_set_info(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -25623,7 +25629,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_and_full_role_info(pool:
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -25881,7 +25887,7 @@ async fn host_resolve_phase_carries_mafia_universe_culture_aliases(pool: PgPool)
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -26122,7 +26128,7 @@ async fn host_resolve_phase_carries_mafia_universe_parity_scan_memory(pool: PgPo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -26424,7 +26430,7 @@ async fn host_resolve_phase_carries_mafia_universe_graph_info(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -26752,7 +26758,7 @@ async fn host_resolve_phase_carries_mafia_universe_voyeur_action_info(pool: PgPo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -27039,7 +27045,7 @@ async fn host_resolve_phase_carries_mafia_universe_ninja_hidden_visit_results(po
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -27382,7 +27388,7 @@ async fn host_resolve_phase_carries_mafia_universe_redirect_graph(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -27624,7 +27630,7 @@ async fn host_resolve_phase_carries_mafia_universe_commute(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -27899,7 +27905,7 @@ async fn host_resolve_phase_carries_mafia_universe_rolestop(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -28162,7 +28168,7 @@ async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -28539,7 +28545,7 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -28877,7 +28883,7 @@ async fn host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite(p
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -29262,7 +29268,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alia
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -29534,7 +29540,7 @@ async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(p
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -29909,7 +29915,7 @@ async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(po
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -30138,7 +30144,7 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -30753,7 +30759,7 @@ async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -30963,7 +30969,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -31294,7 +31300,7 @@ async fn host_resolve_phase_uses_pack_declared_night_parity(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -31442,7 +31448,7 @@ async fn host_resolve_phase_uses_pack_declared_cycle_parity(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -31589,7 +31595,7 @@ async fn host_resolve_phase_applies_godfather_investigation_override(pool: PgPoo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -31717,7 +31723,7 @@ async fn host_resolve_phase_applies_lawyer_result_mod_override(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -31876,7 +31882,7 @@ async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -32080,7 +32086,7 @@ async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: Pg
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -32254,7 +32260,7 @@ async fn host_resolve_phase_projects_mafiascum_action_investigation_guards(pool:
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -32487,7 +32493,7 @@ async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -33304,7 +33310,7 @@ async fn host_resolve_phase_records_missing_compulsive_action(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -33452,7 +33458,7 @@ async fn host_resolve_phase_weak_cop_dies_on_scum_result(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -33608,7 +33614,7 @@ async fn host_resolve_phase_macho_target_ignores_doctor_protection(pool: PgPool)
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -33760,7 +33766,7 @@ async fn host_resolve_phase_projects_loud_and_announcing_notifications(pool: PgP
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -35042,7 +35048,7 @@ async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -36360,7 +36366,7 @@ async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -36741,7 +36747,7 @@ async fn host_resolve_phase_targeted_backup_inherits_chosen_source(pool: PgPool)
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -36982,7 +36988,7 @@ async fn host_resolve_phase_carries_jester_self_lynch_win(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -37163,7 +37169,7 @@ async fn host_resolve_phase_carries_saulus_alignment_flip_on_lynch(pool: PgPool)
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -37362,7 +37368,7 @@ async fn host_resolve_phase_awards_survivor_alive_at_end(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -37550,7 +37556,7 @@ async fn host_resolve_phase_counts_traitor_for_mafia_parity(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -37750,7 +37756,7 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -39244,7 +39250,7 @@ async fn host_resolve_phase_persists_martyr_intercept_policy(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -39454,7 +39460,7 @@ async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -41826,7 +41832,7 @@ async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -41996,7 +42002,7 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -42193,7 +42199,7 @@ async fn host_resolve_phase_persists_jailkeeper_block_plus_protect_policy(pool: 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -43799,7 +43805,7 @@ async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -44014,7 +44020,7 @@ async fn host_resolve_phase_carries_mafiascum_ascetic_non_lethal_immunity(pool: 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -44262,7 +44268,7 @@ async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -44519,7 +44525,7 @@ async fn host_resolve_phase_projects_tracker_private_visit_result(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -44725,7 +44731,7 @@ async fn host_resolve_phase_projects_follower_action_type_result(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -44933,7 +44939,7 @@ async fn host_resolve_phase_persists_rolestop_and_shield_target_state(pool: PgPo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -47699,7 +47705,7 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -47994,7 +48000,7 @@ async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -48916,7 +48922,7 @@ async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -49124,7 +49130,7 @@ async fn host_resolve_phase_emits_hammer_vote_outcome(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),

@@ -181,7 +181,7 @@ async fn seed_and_resolve_fixture_game(
         handle(
             pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.slot.clone(),
                 user: format!("fixture_user_{}", slot_number(&slot.slot).unwrap_or(0)),

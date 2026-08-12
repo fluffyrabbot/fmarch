@@ -37,7 +37,7 @@ export function vanillizerSeedCommandPlan(game) {
       ["slot_4", "player-town", "vanilla_townie"],
     ].flatMap(([slot, user, roleKey]) => [
       ["host_h", { AddSlot: { game, slot } }],
-      ["host_h", { AssignSlot: { game, slot, user } }],
+      ["host_h", { SeatPersona: { game, slot, principal_user_id: user, public_name: user } }],
       ["host_h", { AssignRole: { game, slot, role_key: roleKey } }],
     ]),
     ["host_h", { StartGame: { game, phase: scenario.phaseId } }],

@@ -735,7 +735,7 @@ test("host action issues a replacement invite through the authenticated host ses
       });
       if (url === "/games/midsummer/host-console-state?slot_id=slot-7") {
         return jsonResponse({
-          slots: [{ slot_id: "slot-7", occupant_user_id: "player-mira" }],
+          slots: [{ slot_id: "slot-7", assigned_principal_user_id: "player-mira" }],
         });
       }
       return jsonResponse({
@@ -808,7 +808,7 @@ test("host action issues a player invite through the authenticated host session"
       });
       if (url === "/games/midsummer/host-console-state?slot_id=slot-7") {
         return jsonResponse({
-          slots: [{ slot_id: "slot-7", occupant_user_id: "player-mira" }],
+          slots: [{ slot_id: "slot-7", assigned_principal_user_id: "player-mira" }],
         });
       }
       return jsonResponse({
@@ -884,7 +884,7 @@ test("WorkOS host invite returns an account-addressed sign-in link through the v
       fetch: async (url, init) => {
         observed.push({ url, authorization: init.headers.authorization });
         return jsonResponse({
-          slots: [{ slot_id: "slot-7", occupant_user_id: "player-mira" }],
+          slots: [{ slot_id: "slot-7", assigned_principal_user_id: "player-mira" }],
         });
       },
       locals: {
@@ -934,7 +934,7 @@ test("host action rejects stale player invite targets before issuing an invite",
         accept: init.headers.accept,
       });
       return jsonResponse({
-        slots: [{ slot_id: "slot-7", occupant_user_id: "player-rowan" }],
+        slots: [{ slot_id: "slot-7", assigned_principal_user_id: "player-rowan" }],
       });
     },
     locals: {
@@ -983,7 +983,7 @@ test("host action retries stale player invites against the current occupant", as
       });
       if (url === "/games/midsummer/host-console-state?slot_id=slot-7") {
         return jsonResponse({
-          slots: [{ slot_id: "slot-7", occupant_user_id: "player-rowan" }],
+        slots: [{ slot_id: "slot-7", assigned_principal_user_id: "player-rowan" }],
         });
       }
       return jsonResponse({

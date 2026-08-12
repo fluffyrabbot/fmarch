@@ -146,11 +146,18 @@ pub enum Command {
     },
     /// Add an (empty) slot to the game. Host-team (Setup class).
     AddSlot { game: Uuid, slot: String },
-    /// Assign a user into a slot (occupancy begins). Host-team (Setup class).
-    AssignSlot {
+    /// Register a named game persona and open its first occupancy epoch.
+    SeatPersona {
         game: Uuid,
         slot: String,
-        user: String,
+        principal_user_id: String,
+        public_name: String,
+    },
+    /// Change a game persona's public game-local name. Host-team (Setup class).
+    RenameGamePersona {
+        game: Uuid,
+        persona_id: String,
+        public_name: String,
     },
     /// Assign a role to a slot. Host-team (Setup class).
     AssignRole {
@@ -327,12 +334,13 @@ pub enum Command {
     },
     /// Extend a phase deadline. Host-team (Deadline class).
     ExtendDeadline { game: Uuid, phase: String, at: i64 },
-    /// Replace the human behind a slot (seat id unchanged). Host-team (Replacement class).
+    /// End the named persona's current occupancy epoch and seat the incoming
+    /// principal in a new epoch. Host-team (Replacement class).
     ProcessReplacement {
         game: Uuid,
         slot: String,
-        outgoing_user: String,
-        incoming_user: String,
+        outgoing_persona_id: String,
+        incoming_principal_user_id: String,
     },
 }
 

@@ -36,7 +36,8 @@ fn core_command_wire_status(cmd: &commands::Command) -> CoreWireStatus {
     match cmd {
         commands::Command::CreateGame { .. } => CoreWireStatus::Mapped("CreateGame"),
         commands::Command::AddSlot { .. } => CoreWireStatus::Mapped("AddSlot"),
-        commands::Command::AssignSlot { .. } => CoreWireStatus::Mapped("AssignSlot"),
+        commands::Command::SeatPersona { .. } => CoreWireStatus::Mapped("SeatPersona"),
+        commands::Command::RenameGamePersona { .. } => CoreWireStatus::Mapped("RenameGamePersona"),
         commands::Command::AssignRole { .. } => CoreWireStatus::Mapped("AssignRole"),
         commands::Command::SetSlotStatus { .. } => CoreWireStatus::Mapped("SetSlotStatus"),
         commands::Command::AddSlotStatusTag { .. } => CoreWireStatus::Mapped("AddSlotStatusTag"),

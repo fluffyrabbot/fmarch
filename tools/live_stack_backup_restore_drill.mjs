@@ -363,9 +363,25 @@ async function databaseFingerprint(url) {
           SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY phase_id), '[]'::jsonb)
           FROM (SELECT phase_id, locked, deadline FROM phase_state WHERE game_id = ${sqlLiteral(game)}::uuid) rows
         ),
-        'slot_occupancy', (
-          SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY slot_id), '[]'::jsonb)
-          FROM (SELECT slot_id, occupant_user_id FROM slot_occupancy WHERE game_id = ${sqlLiteral(game)}::uuid) rows
+        'game_personas', (
+          SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY persona_id), '[]'::jsonb)
+          FROM (
+            SELECT public.persona_id, public.current_public_name, private.principal_user_id
+            FROM game_persona_public public
+            JOIN game_persona_private private
+              ON private.game_id = public.game_id
+             AND private.persona_id = public.persona_id
+            WHERE public.game_id = ${sqlLiteral(game)}::uuid
+          ) rows
+        ),
+        'slot_occupancy_epochs', (
+          SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY slot_id, began_seq), '[]'::jsonb)
+          FROM (
+            SELECT occupancy_id, transition_id, slot_id, persona_id, began_seq, ended_seq,
+                   start_reason, end_reason
+            FROM slot_occupancy_epoch
+            WHERE game_id = ${sqlLiteral(game)}::uuid
+          ) rows
         ),
         'slot_state', (
           SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY slot_id), '[]'::jsonb)
@@ -457,6 +473,10 @@ async function startApi(url, label) {
       FMARCH_AUTH_SOURCE_SIGNING_KEY:
         process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
         "backup-restore-proof-signing-key-at-least-32-bytes",
+      // This drill owns a local debug server and seeds classic credentials.
+      // Keep the deterministic identity gateway explicit here rather than
+      // depending on a caller to remember a dev-only auth switch.
+      FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],

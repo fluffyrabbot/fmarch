@@ -37,22 +37,27 @@ export function buildHostConsoleCriticalActions(
   const deadlineActions = buildExtendDeadlineActions(gameId, phase);
   const phaseActions = buildPhaseActions(gameId, phase);
   const lifecycleActions = buildSlotLifecycleActions(gameId, replacement);
+  const replacementSlotId = replacement?.slotId ?? "slot-7";
+  const outgoingPersonaId = replacement?.personaId ?? "";
+  const incomingPrincipalUserId =
+    replacement?.incomingPrincipalUserId ?? "player-rowan";
+  const outgoingPublicName = replacement?.occupantLabel ?? "current persona";
   const actions = [
     ...deadlineActions,
     freezeHostAction({
       id: "process_replacement",
       label: "Process replacement",
-      objectLabel: "Slot 7 / Mira",
-      outcomeLabel: "replace Mira with Rowan and preserve slot history",
+      objectLabel: `${replacementSlotId} / ${outgoingPublicName}`,
+      outcomeLabel: `replace ${outgoingPublicName} and preserve slot history`,
       confirmationText:
-        "Process replacement for Slot 7 / Mira: replace Mira with Rowan and preserve slot history.",
+        `Process replacement for ${replacementSlotId} / ${outgoingPublicName}: replace ${outgoingPublicName} and preserve slot history.`,
       irreversible: true,
       payload: {
         kind: "process_replacement",
         gameId,
-        slotId: "slot-7",
-        outgoingPlayerId: "player-mira",
-        incomingPlayerId: "player-rowan",
+        slotId: replacementSlotId,
+        outgoingPersonaId,
+        incomingPrincipalUserId,
       },
     }),
     ...phaseActions,

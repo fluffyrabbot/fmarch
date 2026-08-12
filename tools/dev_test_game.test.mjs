@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
 import {
@@ -348,6 +356,7 @@ import {
   handoffPhaseStep,
   handoffPhaseSteps,
   phaseLocalNextActionStep,
+  repoRoot,
   runSpinePlan,
   spineCheckpointPath,
   spinePlanStepEnv,
@@ -375,6 +384,8 @@ import {
 } from "./dev_test_game_handoff_phase_outputs.mjs";
 import {
   localSpineDatabaseUrl,
+  localSpineDatabaseUrlFor,
+  localSpineProofEnvironment,
   parseArgs as parseLocalSpineArgs,
 } from "./dev_test_game_local_spine.mjs";
 import {
@@ -545,6 +556,7 @@ import {
   devTestGameSeedFixturePath,
   devTestGameSeedFixtureRoleUrl,
   releaseReadinessFeatureTargetKindPriority,
+  writeDevTestGameNextAction,
 } from "./dev_test_game_next_action.mjs";
 import {
   hardeningAggregateCoverageFeatureTargetKind,
@@ -1362,6 +1374,15 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     localSpineDatabaseUrl,
     "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch",
   );
+  assert.equal(
+    localSpineDatabaseUrlFor({}),
+    "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch",
+  );
+  assert.equal(
+    localSpineDatabaseUrlFor({ FMARCH_DEV_POSTGRES_PORT: "5545" }),
+    "postgres://fmarch:fmarch@127.0.0.1:5545/fmarch",
+  );
+  assert.deepEqual(localSpineProofEnvironment({}), { FMARCH_DEV_AUTH: "1" });
   assert.throws(() => parseLocalSpineArgs(["--script"]), /requires/);
   assert.equal(
     packageJson.scripts[
@@ -6146,6 +6167,44 @@ test("dev test-game next-action derives one local recovery command from the mani
     gapCount: 0,
     laneIds: [...hostStaleControlLaneIds],
   });
+});
+
+test("dev test-game next-action writes ranked recovery guidance from a cold target", async () => {
+  const coldTarget = await mkdtemp(
+    path.join(repoRoot, "target", "next-action-cold-target-"),
+  );
+  try {
+    const missingSource = path.join(coldTarget, "missing.json");
+    const output = path.join(coldTarget, "next-action.json");
+    const action = await writeDevTestGameNextAction({
+      generatedAt: "2026-08-11T00:00:00.000Z",
+      manifestPath: missingSource,
+      nextActionOutputPath: output,
+      releaseReadinessChecklistPath: missingSource,
+      opsArtifactsPath: missingSource,
+      raceCoveragePath: missingSource,
+      hostedTargetPreflightPath: missingSource,
+      proofGraphPath: missingSource,
+      frontendReadinessSummaryPath: missingSource,
+    });
+    assertDevTestGameNextAction(action);
+    assert.deepEqual(action.nextAction, {
+      command: "npm run test:dev-test-game-proof-freshness-admin-proof",
+      reason: "artifact-not-fresh",
+      status: "blocked",
+      artifact: {
+        id: "proof-freshness-dashboard",
+        label: "Proof freshness dashboard",
+        path: "target/dev-test-game/proof-freshness-admin-proof.json",
+        status: "missing",
+        refreshSource: "manifest-default",
+        proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
+      },
+    });
+    assert.deepEqual(JSON.parse(await readFile(output, "utf8")), action);
+  } finally {
+    await rm(coldTarget, { recursive: true, force: true });
+  }
 });
 
 test("spine manifest blocks freshness when proof-run no longer matches session", () => {
@@ -11539,8 +11598,8 @@ test("setup bootstrap scenario owns the seeded setup command grammar", () => {
     setupBootstrapRoster.every((row) =>
       plan.some(
         ([, command]) =>
-          command.AssignSlot?.slot === row.slot &&
-          command.AssignSlot?.user === row.user,
+          command.SeatPersona?.slot === row.slot &&
+          command.SeatPersona?.principal_user_id === row.user,
       ),
     ),
   );
@@ -11616,8 +11675,13 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       {
         status: "ack",
-        commandKind: "AssignSlot",
-        command: { game: bootstrapGame, slot: "slot_1", user: "player-mira" },
+        commandKind: "SeatPersona",
+        command: {
+          game: bootstrapGame,
+          slot: "slot_1",
+          principal_user_id: "player-mira",
+          public_name: "player-mira",
+        },
         streamSeqs: [21],
         readinessSummary: "Setup still needs attention",
       },
@@ -11888,7 +11952,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         finalStartAvailable: true,
         finalSlot: {
           slotId: "slot_2",
-          occupantUserId: "setup-extra-player",
+          assignedPrincipalUserId: "setup-extra-player",
           alive: true,
           status: "alive",
           statusTags: [],
@@ -11907,11 +11971,12 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
           assignSlot: {
             status: "ack",
-            commandKind: "AssignSlot",
+            commandKind: "SeatPersona",
             command: {
               game: "77777777-7777-4777-8777-777777777777",
               slot: "slot_2",
-              user: "setup-extra-player",
+              principal_user_id: "setup-extra-player",
+              public_name: "setup-extra-player",
             },
             streamSeqs: [6],
             readinessSummary: "Setup still needs attention",
@@ -14123,8 +14188,8 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game,
                     slot: "slot-7",
-                    outgoing_user: "player-rowan",
-                    incoming_user: "player-rowan",
+                    outgoing_persona_id: "player-rowan",
+                    incoming_principal_user_id: "player-rowan",
                   },
                 },
               },
@@ -14160,11 +14225,11 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         hostProjectionAfterReject: {
           slotId: "slot-7",
-          occupantLabel: "player-mira",
+          assignedPrincipalUserId: "player-mira",
         },
         apiSlotAfterReject: {
           slot_id: "slot-7",
-          occupant_user_id: "player-mira",
+          assigned_principal_user_id: "player-mira",
         },
         pendingAfterReject: {
           principalUserId: "player-rowan",
@@ -14194,8 +14259,8 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game,
                     slot: "slot-7",
-                    outgoing_user: "player-mira",
-                    incoming_user: "player-rowan",
+                    outgoing_persona_id: "player-mira",
+                    incoming_principal_user_id: "player-rowan",
                   },
                 },
               },
@@ -14213,12 +14278,12 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       projectedReplacement: {
         slotId: "slot-7",
-        occupantLabel: "player-rowan",
+        assignedPrincipalUserId: "player-rowan",
         historyLabel: "Slot slot-7 history preserved",
       },
       apiSlot: {
         slot_id: "slot-7",
-        occupant_user_id: "player-rowan",
+        assigned_principal_user_id: "player-rowan",
       },
       replacementIdempotentRetry: {
         status: "passed",
@@ -14238,8 +14303,8 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game,
                     slot: "slot-7",
-                    outgoing_user: "player-mira",
-                    incoming_user: "player-rowan",
+                    outgoing_persona_id: "player-mira",
+                    incoming_principal_user_id: "player-rowan",
                   },
                 },
               },
@@ -14256,12 +14321,12 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         hostProjectionAfterRetry: {
           slotId: "slot-7",
-          occupantLabel: "player-rowan",
+          assignedPrincipalUserId: "player-rowan",
           historyLabel: "Slot slot-7 history preserved",
         },
         apiSlotAfterRetry: {
           slot_id: "slot-7",
-          occupant_user_id: "player-rowan",
+          assigned_principal_user_id: "player-rowan",
         },
       },
       staleHostInviteRecovery: {
@@ -14359,8 +14424,8 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game,
                     slot: "slot-7",
-                    outgoing_user: "player-mira",
-                    incoming_user: "player-rowan",
+                    outgoing_persona_id: "player-mira",
+                    incoming_principal_user_id: "player-rowan",
                   },
                 },
               },
@@ -14396,11 +14461,11 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         hostProjectionAfterReject: {
           slotId: "slot-7",
-          occupantLabel: "player-rowan",
+          assignedPrincipalUserId: "player-rowan",
         },
         apiSlotAfterReject: {
           slot_id: "slot-7",
-          occupant_user_id: "player-rowan",
+          assigned_principal_user_id: "player-rowan",
         },
         staleOutgoingPlayer: {
           recoveredCommandState: {
@@ -15625,7 +15690,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         game: "replacement-private-post-race-game-a",
         hostEntry: { capabilityKinds: ["HostOf"] },
         playerEntry: { capabilityKinds: ["SlotOccupant"] },
-        setupHostReplacement: { occupantLabel: "player-mira" },
+        setupHostReplacement: { assignedPrincipalUserId: "player-mira" },
         setupCommandState: { actorSlot: "slot-7", actorStatus: "alive" },
         setupChannelContext: {
           channelId: "private:mafia_day_chat",
@@ -15661,8 +15726,8 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game: "replacement-private-post-race-game-a",
                     slot: "slot-7",
-                    outgoing_user: "player-mira",
-                    incoming_user: "player-rowan",
+                    outgoing_persona_id: "player-mira",
+                    incoming_principal_user_id: "player-rowan",
                   },
                 },
               },
@@ -15674,8 +15739,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         outcomeSummary: "private post seq 53 before replacement seq 54",
         commandStateAfterRace: { status: 403, error: "NotYourSlot" },
         buttonsAfterRace: [{ action: "submit_post", disabled: true }],
-        hostReplacementAfterRace: { occupantLabel: "player-rowan" },
-        apiSlotAfterRace: { occupant_user_id: "player-rowan" },
+        hostReplacementAfterRace: { assignedPrincipalUserId: "player-rowan" },
+        apiSlotAfterRace: { assigned_principal_user_id: "player-rowan" },
         staleRoute: {
           status: 403,
           responseStatus: 403,
@@ -15690,7 +15755,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         targetSlot: "slot-2",
         hostEntry: { capabilityKinds: ["HostOf"] },
         playerEntry: { capabilityKinds: ["SlotOccupant"] },
-        setupHostReplacement: { occupantLabel: "player-mira" },
+        setupHostReplacement: { assignedPrincipalUserId: "player-mira" },
         setupCommandState: {
           actorSlot: "slot-7",
           actorStatus: "alive",
@@ -15726,8 +15791,8 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game: "replacement-vote-race-game-a",
                     slot: "slot-7",
-                    outgoing_user: "player-mira",
-                    incoming_user: "player-rowan",
+                    outgoing_persona_id: "player-mira",
+                    incoming_principal_user_id: "player-rowan",
                   },
                 },
               },
@@ -15738,8 +15803,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         replacementSeq: 54,
         outcomeSummary: "vote seq 53 before replacement seq 54",
         commandStateAfterRace: { status: 403, error: "NotYourSlot" },
-        hostReplacementAfterRace: { occupantLabel: "player-rowan" },
-        apiSlotAfterRace: { occupant_user_id: "player-rowan" },
+        hostReplacementAfterRace: { assignedPrincipalUserId: "player-rowan" },
+        apiSlotAfterRace: { assigned_principal_user_id: "player-rowan" },
         apiVotecountAfterRace: [
           {
             kind: "VoteCountChanged",
@@ -15756,7 +15821,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         playerEntry: { capabilityKinds: ["SlotOccupant"] },
         replacementEntry: { capabilityKinds: ["SlotOccupant"] },
         setupHostPhase: { id: "N01", locked: false },
-        setupSlot: { occupant_user_id: "player-goon-a" },
+        setupSlot: { assigned_principal_user_id: "player-goon-a" },
         setupCommandState: {
           actorSlot: "slot_4",
           actorStatus: "alive",
@@ -15795,8 +15860,8 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game: "replacement-action-race-game-a",
                     slot: "slot_4",
-                    outgoing_user: "player-goon-a",
-                    incoming_user: "player-rowan",
+                    outgoing_persona_id: "player-goon-a",
+                    incoming_principal_user_id: "player-rowan",
                   },
                 },
               },
@@ -15813,7 +15878,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           serverEnvelope: { body: { kind: "Reject" } },
         },
         hostPhaseAfterRace: { id: "N01", locked: false },
-        apiSlotAfterRace: { occupant_user_id: "player-rowan" },
+        apiSlotAfterRace: { assigned_principal_user_id: "player-rowan" },
         apiCurrentCommandStateStatus: { status: 200 },
         currentCommandStateAfterRace: {
           actor_slot: "slot_4",
@@ -15838,7 +15903,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         targetEntry: { capabilityKinds: ["SlotOccupant"] },
         setupHostPhase: { id: replacementIncomingActionCase.phaseId, locked: false },
         setupSlot: {
-          occupant_user_id:
+          assigned_principal_user_id:
             replacementIncomingActionCase.staleOutgoingPrincipalUserId,
         },
         replacement: {
@@ -15851,9 +15916,9 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game: replacementIncomingActionCase.gameFixtureId,
                     slot: replacementIncomingActionCase.actorSlot,
-                    outgoing_user:
+                    outgoing_persona_id:
                       replacementIncomingActionCase.staleOutgoingPrincipalUserId,
-                    incoming_user:
+                    incoming_principal_user_id:
                       replacementIncomingActionCase.replacementPrincipalUserId,
                   },
                 },
@@ -15936,9 +16001,9 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game: replacementActionReconnectCase.gameFixtureId,
                     slot: replacementActionReconnectCase.actorSlot,
-                    outgoing_user:
+                    outgoing_persona_id:
                       replacementActionReconnectCase.staleOutgoingPrincipalUserId,
-                    incoming_user:
+                    incoming_principal_user_id:
                       replacementActionReconnectCase.replacementPrincipalUserId,
                   },
                 },
@@ -16050,10 +16115,10 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game: replacementStaleActionAfterResolveCase.gameFixtureId,
                     slot: replacementStaleActionAfterResolveCase.actorSlot,
-                    outgoing_user:
+                    outgoing_persona_id:
                       replacementStaleActionAfterResolveCase
                         .staleOutgoingPrincipalUserId,
-                    incoming_user:
+                    incoming_principal_user_id:
                       replacementStaleActionAfterResolveCase
                         .replacementPrincipalUserId,
                   },
@@ -16188,9 +16253,9 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game: replacementResolvedPrivatePost.gameFixtureId,
                     slot: replacementResolvedPrivatePost.actorSlot,
-                    outgoing_user:
+                    outgoing_persona_id:
                       replacementResolvedPrivatePost.staleOutgoingPrincipalUserId,
-                    incoming_user:
+                    incoming_principal_user_id:
                       replacementResolvedPrivatePost.replacementPrincipalUserId,
                   },
                 },
@@ -16199,7 +16264,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         hostReplacementAfterProcess: {
-          occupantLabel: replacementResolvedPrivatePost.replacementOccupantLabel,
+          assignedPrincipalUserId: replacementResolvedPrivatePost.replacementPrincipalUserId,
         },
         commandStateBeforeClose: {
           actorSlot: replacementResolvedPrivatePost.actorSlot,
@@ -16350,7 +16415,8 @@ test("session card and markdown include role credential URLs and tokens", async 
                   ProcessReplacement: {
                     game: replacementCompletedPrivatePost.gameFixtureId,
                     slot: replacementCompletedPrivatePost.actorSlot,
-                    incoming_user:
+                    outgoing_persona_id: "persona-outgoing",
+                    incoming_principal_user_id:
                       replacementCompletedPrivatePost.replacementPrincipalUserId,
                   },
                 },
@@ -16359,7 +16425,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         hostReplacementAfterProcess: {
-          occupantLabel: replacementCompletedPrivatePost.replacementOccupantLabel,
+          assignedPrincipalUserId: replacementCompletedPrivatePost.replacementPrincipalUserId,
         },
         commandStateBeforeClose: {
           actorSlot: replacementCompletedPrivatePost.actorSlot,
@@ -18751,7 +18817,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert(markdown.includes("Invalid replacement recovery: InvalidTarget"));
   assert(markdown.includes("Process replacement: Ack: stream seqs 44"));
-  assert(markdown.includes("Projected occupant: player-rowan"));
+  assert(markdown.includes("Assigned principal: player-rowan"));
   assert(markdown.includes("Replacement duplicate retry: Ack: stream seqs 44"));
   assert(markdown.includes("Stale host invite recovery: Player invite issued"));
   assert(
@@ -21362,8 +21428,13 @@ function hostSetupProofFixture(game = "game-a") {
     },
     assignSlot: {
       status: "ack",
-      commandKind: "AssignSlot",
-      command: { game, slot: "slot-7", user: "player-mira" },
+      commandKind: "SeatPersona",
+      command: {
+        game,
+        slot: "slot-7",
+        principal_user_id: "player-mira",
+        public_name: "player-mira",
+      },
       streamSeqs: [21],
       readinessSummary: "Setup still needs attention",
     },
@@ -21438,7 +21509,7 @@ function hostSetupProofFixture(game = "game-a") {
         finalStartAvailable: true,
         finalSlot: {
           slotId: "slot_2",
-          occupantUserId: "setup-extra-player",
+          assignedPrincipalUserId: "setup-extra-player",
           roleKey: "mafia_goon",
         },
         commands: {

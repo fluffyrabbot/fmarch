@@ -56,6 +56,7 @@ export async function buildHostConsoleRouteData({
   const replacement = Object.freeze({
     slotId: "slot-7",
     occupantLabel: "player-mira",
+    assignedPrincipalUserId: "player-mira",
     lifecycleLabel: "Alive",
     historyLabel: "Waiting for replacement command proof",
   });
@@ -252,7 +253,12 @@ export function buildHostInviteTargets({
   replacementPrincipalUserId = "player-rowan",
 } = {}) {
   const slotId = normalizeSlotId(replacement.slotId ?? "slot-7");
-  const occupant = normalizePrincipal(replacement.occupantLabel ?? "player-mira");
+  const occupant = normalizePrincipal(firstNonEmptyText(
+    replacement.assignedPrincipalUserId,
+    replacement.occupantLabel,
+    "player-mira",
+  ));
+  const publicName = normalizePublicPersonaName(replacement.occupantLabel, occupant);
   const replacementPrincipal = normalizePrincipal(replacementPrincipalUserId);
   return Object.freeze({
     player: Object.freeze({
@@ -268,7 +274,7 @@ export function buildHostInviteTargets({
       slotId,
       principalUserId: occupant,
       expectedOccupantUserId: occupant,
-      targetLabel: `${slotDisplayLabel(slotId)} / ${occupant}`,
+      targetLabel: `${slotDisplayLabel(slotId)} / ${publicName}`,
       submitLabel: "Issue player invite",
     }),
     replacement: Object.freeze({
@@ -489,6 +495,17 @@ function normalizePrincipal(principalUserId) {
     throw new TypeError("host route principal must be a non-empty string");
   }
   return principalUserId;
+}
+
+function normalizePublicPersonaName(publicName, fallback) {
+  return typeof publicName === "string" && publicName.trim() !== ""
+    ? publicName.trim()
+    : fallback;
+}
+
+function firstNonEmptyText(...values) {
+  return values.find((value) => typeof value === "string" && value.trim() !== "")
+    ?? "";
 }
 
 function normalizeSlotId(slotId) {

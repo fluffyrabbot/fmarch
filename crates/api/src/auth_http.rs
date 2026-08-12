@@ -17,7 +17,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use caps::{Capability, Principal};
-use identity::{AccessTokenVerifier, IdentityError, VerifiedIdentity};
+use identity::{AccessTokenVerifier, IdentityError, MemberLifecycleCommand, VerifiedIdentity};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
@@ -122,6 +122,16 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .route("/auth/session", get(auth_session))
         .route("/auth/sessions", post(create_auth_session))
         .route("/auth/account/methods", get(list_account_methods))
+        .route(
+            "/auth/account/personal-exports",
+            post(create_member_personal_export),
+        )
+        .route(
+            "/auth/account/personal-exports/{export_id}",
+            get(download_member_personal_export),
+        )
+        .route("/auth/account/deactivate", post(deactivate_member_account))
+        .route("/auth/account/erasure", post(erase_member_account))
         .route("/auth/account/methods/classic", post(add_classic_method))
         .route("/auth/account/methods/workos", post(add_workos_method))
         .route(
@@ -1495,6 +1505,131 @@ struct AccountMethodEntry {
 struct AccountMethodsResponse {
     principal_user_id: String,
     methods: Vec<AccountMethodEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DeactivateMemberAccount {
+    #[serde(default)]
+    reason: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct MemberLifecycleResponse {
+    status: String,
+    principal_user_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pseudonym: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct MemberPersonalExportResponse {
+    status: String,
+    export_id: String,
+    principal_user_id: String,
+    requested_at: i64,
+    expires_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    artifact: Option<serde_json::Value>,
+}
+
+async fn create_member_personal_export(
+    State(state): State<AuthHttpState>,
+    headers: HeaderMap,
+) -> Result<Json<MemberPersonalExportResponse>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let identity = authenticate_token(&state, token).await?;
+    let now = unix_now_seconds();
+    require_recent_authentication(&identity, now)?;
+    let export =
+        identity::create_personal_export(&state.pool, identity.principal_user_id.as_str(), now)
+            .await?;
+    Ok(Json(MemberPersonalExportResponse {
+        status: "ready".to_string(),
+        export_id: export.export_id,
+        principal_user_id: export.principal_user_id,
+        requested_at: export.requested_at,
+        expires_at: export.expires_at,
+        artifact: Some(export.artifact),
+    }))
+}
+
+async fn download_member_personal_export(
+    State(state): State<AuthHttpState>,
+    Path(export_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Result<Json<MemberPersonalExportResponse>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let identity = authenticate_token(&state, token).await?;
+    let export = identity::load_personal_export(
+        &state.pool,
+        identity.principal_user_id.as_str(),
+        export_id,
+        unix_now_seconds(),
+    )
+    .await?
+    .ok_or_else(|| ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::NotAuthorized,
+        message: "personal export is unavailable or expired".to_string(),
+    })?;
+    Ok(Json(MemberPersonalExportResponse {
+        status: "ready".to_string(),
+        export_id: export.export_id,
+        principal_user_id: export.principal_user_id,
+        requested_at: export.requested_at,
+        expires_at: export.expires_at,
+        artifact: Some(export.artifact),
+    }))
+}
+
+async fn deactivate_member_account(
+    State(state): State<AuthHttpState>,
+    headers: HeaderMap,
+    Json(request): Json<DeactivateMemberAccount>,
+) -> Result<Json<MemberLifecycleResponse>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let identity = authenticate_token(&state, token).await?;
+    let now = unix_now_seconds();
+    require_recent_authentication(&identity, now)?;
+    let reason = request.reason.trim();
+    if reason.is_empty() || reason.len() > 280 {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "deactivation requires a reason no longer than 280 characters".to_string(),
+        });
+    }
+    let status = identity::apply_member_lifecycle(
+        &state.pool,
+        identity.principal_user_id.as_str(),
+        MemberLifecycleCommand::Deactivate {
+            reason: reason.to_string(),
+        },
+        now,
+    )
+    .await?;
+    Ok(Json(MemberLifecycleResponse {
+        status: status.as_str().to_string(),
+        principal_user_id: identity.principal_user_id,
+        pseudonym: None,
+    }))
+}
+
+async fn erase_member_account(
+    State(state): State<AuthHttpState>,
+    headers: HeaderMap,
+) -> Result<Json<MemberLifecycleResponse>, ApiError> {
+    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let identity = authenticate_token(&state, token).await?;
+    let now = unix_now_seconds();
+    require_recent_authentication(&identity, now)?;
+    let erased =
+        identity::erase_member(&state.pool, identity.principal_user_id.as_str(), now).await?;
+    Ok(Json(MemberLifecycleResponse {
+        status: erased.status.as_str().to_string(),
+        principal_user_id: erased.principal_user_id,
+        pseudonym: erased.pseudonym,
+    }))
 }
 
 async fn list_account_methods(

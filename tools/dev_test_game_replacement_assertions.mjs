@@ -4,8 +4,9 @@ export function replacementCommandEnvelopeMatches(commandStatus, scenario, game)
   return (
     command?.game === game &&
     command?.slot === scenario.actorSlot &&
-    command?.outgoing_user === scenario.staleOutgoingPrincipalUserId &&
-    command?.incoming_user === scenario.replacementPrincipalUserId &&
+    typeof command?.outgoing_persona_id === "string" &&
+    command.outgoing_persona_id.trim() !== "" &&
+    command?.incoming_principal_user_id === scenario.replacementPrincipalUserId &&
     body?.principal_user_id === undefined
   );
 }
@@ -22,18 +23,17 @@ export function replacementCurrentOwnerMatches(
   { hostProjection = null, apiSlot = null } = {},
   scenario,
 ) {
-  const expectedLabel =
-    scenario.replacementOccupantLabel ?? scenario.replacementPrincipalUserId;
   return (
     (hostProjection === null ||
       ((hostProjection?.slotId === undefined ||
         hostProjection.slotId === scenario.actorSlot) &&
-        hostProjection?.occupantLabel === expectedLabel &&
+        hostProjection?.assignedPrincipalUserId ===
+          scenario.replacementPrincipalUserId &&
         (hostProjection?.historyLabel === undefined ||
           hostProjection.historyLabel.includes(scenario.actorSlot)))) &&
     (apiSlot === null ||
       ((apiSlot?.slot_id === undefined || apiSlot.slot_id === scenario.actorSlot) &&
-        apiSlot?.occupant_user_id === scenario.replacementPrincipalUserId))
+        apiSlot?.assigned_principal_user_id === scenario.replacementPrincipalUserId))
   );
 }
 

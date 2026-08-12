@@ -28,8 +28,8 @@ const REPLACEMENT_EVENT = Object.freeze({
     kind: "process_replacement",
     gameId: "00000000-0000-0000-0000-000000000001",
     slotId: "slot-7",
-    outgoingPlayerId: "player-mira",
-    incomingPlayerId: "player-rowan",
+    outgoingPersonaId: "persona-mira",
+    incomingPrincipalUserId: "player-rowan",
   }),
 });
 
@@ -167,8 +167,8 @@ test("host actions map to generated wire command variants", () => {
     ProcessReplacement: {
       game: "00000000-0000-0000-0000-000000000001",
       slot: "slot-7",
-      outgoing_user: "player-mira",
-      incoming_user: "player-rowan",
+      outgoing_persona_id: "persona-mira",
+      incoming_principal_user_id: "player-rowan",
     },
   });
   assert.deepEqual(mapHostActionToWireCommand(LOCK_THREAD_EVENT), {
@@ -625,7 +625,10 @@ test("host command sender can refresh projected host console state after ack", a
         slots: [
           {
             slot_id: "slot-7",
-            occupant_user_id: "player-rowan",
+            occupancy_id: "oe-rowan",
+            persona_id: "gp-rowan",
+            public_name: "Rowan",
+            assigned_principal_user_id: "player-rowan",
             alive: false,
             status: "modkilled",
           },
@@ -639,7 +642,7 @@ test("host command sender can refresh projected host console state after ack", a
   assert.equal(sent[0].url, "/commands");
   assert.match(sent[1].url, /host-console-state/);
   assert.equal(ack.state, "ack");
-  assert.equal(ack.projectionState.slots[0].occupant_user_id, "player-rowan");
+  assert.equal(ack.projectionState.slots[0].public_name, "Rowan");
 });
 
 test("host console projection maps deadline and stable slot history to labels", () => {
@@ -692,7 +695,10 @@ test("host console projection maps deadline and stable slot history to labels", 
       slots: [
         {
           slot_id: "slot-7",
-          occupant_user_id: "player-rowan",
+          occupancy_id: "oe-rowan",
+          persona_id: "gp-rowan",
+          public_name: "Rowan",
+          assigned_principal_user_id: "player-rowan",
           alive: false,
           status: "modkilled",
           role_key: "encryptor",
@@ -775,7 +781,7 @@ test("host console projection maps deadline and stable slot history to labels", 
   assert.equal(projection.phase.deadlineLabel, "Jun 19, 2026, 9:00 PM");
   assert.equal(projection.phase.deadline, 1781928000);
   assert.equal(projection.phase.lockedLabel, "Thread locked");
-  assert.equal(projection.replacement.occupantLabel, "player-rowan");
+  assert.equal(projection.replacement.occupantLabel, "Rowan");
   assert.equal(projection.replacement.lifecycleLabel, "Modkilled");
   assert.equal(projection.slots[0].role_key, "encryptor");
   assert.equal(projection.slots[0].alignment, "mafia");

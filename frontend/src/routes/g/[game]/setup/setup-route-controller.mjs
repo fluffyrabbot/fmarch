@@ -104,6 +104,7 @@ export function setupCommandConfigForAction({
         game,
         slot: requiredFormValue(formData, "slotId"),
         user: requiredFormValue(formData, "principalUserId"),
+        publicName: requiredFormValue(formData, "publicName"),
       });
     case "assign-role":
       return Object.freeze({

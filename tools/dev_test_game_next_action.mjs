@@ -8,8 +8,10 @@ import {
 import {
   assertDevTestGameSpineManifest,
   assertProductionFeatureProvenanceSummary,
+  buildDevTestGameSpineManifest,
   proofFreshnessAdminProofCommand,
   spineManifestPath,
+  writeDevTestGameSpineManifest,
 } from "./dev_test_game_spine_manifest.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
@@ -257,19 +259,32 @@ export function buildDevTestGameNextAction(
     assertProductionFeatureProvenanceSummary(
       manifest.productionFeatureProvenanceSummary,
     );
+  // Artifact recovery comes before interpreting any downstream receipts. A
+  // stale proof run often leaves the dependent readiness/ops/graph artifacts
+  // mutually inconsistent; next-action must still name the first refresh
+  // command instead of failing while trying to interpret those old receipts.
+  const candidates = rankedArtifactsNeedingRefresh(manifest);
+  const recoveringArtifacts = candidates.length > 0;
   const readiness =
-    releaseReadinessChecklist === null
+    recoveringArtifacts || releaseReadinessChecklist === null
       ? null
       : assertDevTestGameReleaseReadiness(releaseReadinessChecklist);
   const ops =
-    opsArtifacts === null ? null : assertDevTestGameOpsArtifacts(opsArtifacts);
+    recoveringArtifacts || opsArtifacts === null
+      ? null
+      : assertDevTestGameOpsArtifacts(opsArtifacts);
   const races =
-    raceCoverage === null ? null : assertDevTestGameRaceCoverage(raceCoverage);
+    recoveringArtifacts || raceCoverage === null
+      ? null
+      : assertDevTestGameRaceCoverage(raceCoverage);
   const hostedPreflight =
-    hostedTargetPreflight === null
+    recoveringArtifacts || hostedTargetPreflight === null
       ? null
       : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
-  const graph = proofGraph === null ? null : assertProofGraphForNextAction(proofGraph);
+  const graph =
+    recoveringArtifacts || proofGraph === null
+      ? null
+      : assertProofGraphForNextAction(proofGraph);
   const frontendSetupWorkbenchReadiness =
     frontendSetupWorkbenchReadinessFromSummary(frontendReadinessSummary);
   const terminalBatchGraph = terminalBatchGraphFromProofGraph(graph);
@@ -286,7 +301,6 @@ export function buildDevTestGameNextAction(
       defaultRerunCommandBySourceCheckId:
         defaultProductionFeatureSpineRerunCommands,
     });
-  const candidates = rankedArtifactsNeedingRefresh(manifest);
   const artifact = candidates[0]?.artifact;
   const selectionTrace = buildSelectionTrace(candidates);
   const stabilityDrift = proofStabilityDriftFromOpsArtifacts(ops);
@@ -1123,43 +1137,59 @@ export async function writeDevTestGameNextAction({
   manifestPath = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST ?? spineManifestPath,
   nextActionOutputPath =
     process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ?? devTestGameNextActionPath,
+  releaseReadinessChecklistPath =
+    process.env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS_CHECKLIST ??
+    devTestGameReleaseReadinessPath,
+  opsArtifactsPath =
+    process.env.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS ?? devTestGameOpsArtifactsPath,
+  raceCoveragePath =
+    process.env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE ?? devTestGameRaceCoveragePath,
+  hostedTargetPreflightPath =
+    process.env.FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT ??
+    devTestGameHostedTargetPreflightPath,
+  proofGraphPath =
+    process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH ?? devTestGameProofGraphPath,
+  frontendReadinessSummaryPath: frontendReadinessSummaryInputPath =
+    process.env.FMARCH_FRONTEND_READINESS_SUMMARY ??
+    frontendReadinessSummaryPath,
 } = {}) {
   const nextActionJsonPath = path.resolve(repoRoot, nextActionOutputPath);
   const absoluteManifestPath = path.resolve(repoRoot, manifestPath);
+  const defaultManifestPath = path.resolve(repoRoot, spineManifestPath);
   const absoluteReleaseReadinessPath = path.resolve(
     repoRoot,
-    process.env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS_CHECKLIST ??
-      devTestGameReleaseReadinessPath,
+    releaseReadinessChecklistPath,
   );
-  const manifest = JSON.parse(await readFile(absoluteManifestPath, "utf8"));
-  const releaseReadinessChecklist = JSON.parse(
-    await readFile(absoluteReleaseReadinessPath, "utf8"),
+  const manifest = await recoverableSpineManifest({
+    absoluteManifestPath,
+    defaultManifestPath,
+  });
+  const releaseReadinessChecklist = await readOptionalJson(
+    absoluteReleaseReadinessPath,
   );
   const absoluteOpsArtifactsPath = path.resolve(
     repoRoot,
-    process.env.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS ?? devTestGameOpsArtifactsPath,
+    opsArtifactsPath,
   );
-  const opsArtifacts = JSON.parse(await readFile(absoluteOpsArtifactsPath, "utf8"));
+  const opsArtifacts = await readOptionalJson(absoluteOpsArtifactsPath);
   const absoluteRaceCoveragePath = path.resolve(
     repoRoot,
-    process.env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE ?? devTestGameRaceCoveragePath,
+    raceCoveragePath,
   );
-  const raceCoverage = JSON.parse(await readFile(absoluteRaceCoveragePath, "utf8"));
+  const raceCoverage = await readOptionalJson(absoluteRaceCoveragePath);
   const absoluteHostedTargetPreflightPath = path.resolve(
     repoRoot,
-    process.env.FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT ??
-      devTestGameHostedTargetPreflightPath,
+    hostedTargetPreflightPath,
   );
   const hostedTargetPreflight = await readOptionalJson(absoluteHostedTargetPreflightPath);
   const absoluteProofGraphPath = path.resolve(
     repoRoot,
-    process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH ?? devTestGameProofGraphPath,
+    proofGraphPath,
   );
   const proofGraph = await readOptionalJson(absoluteProofGraphPath);
   const absoluteFrontendReadinessSummaryPath = path.resolve(
     repoRoot,
-    process.env.FMARCH_FRONTEND_READINESS_SUMMARY ??
-      frontendReadinessSummaryPath,
+    frontendReadinessSummaryInputPath,
   );
   const frontendReadinessSummary =
     await readOptionalJson(absoluteFrontendReadinessSummaryPath);
@@ -1224,6 +1254,23 @@ function rankedArtifactsNeedingRefresh(manifest) {
   const artifacts = (manifest.artifactFreshness?.artifacts ?? []).filter(
     (artifact) => artifact.status !== "fresh",
   );
+  if (
+    artifacts.length === 0 &&
+    manifest.artifactFreshness?.status !== "passed"
+  ) {
+    artifacts.push({
+      id: "proof-freshness-dashboard",
+      label: "Proof freshness dashboard",
+      path: String(
+        manifest.artifactFreshness?.proofArtifact ?? proofFreshnessAdminProofPath,
+      ),
+      status: "missing",
+      refreshCommand: `npm run ${String(
+        manifest.artifactFreshness?.proofCommand ?? proofFreshnessAdminProofCommand,
+      )}`,
+      refreshSource: "manifest-default",
+    });
+  }
   return artifacts
     .map((artifact, index) => ({
       artifact,
@@ -1702,6 +1749,29 @@ async function readOptionalJson(filePath) {
     }
     throw error;
   }
+}
+
+async function recoverableSpineManifest({
+  absoluteManifestPath,
+  defaultManifestPath,
+}) {
+  // The canonical manifest contains a point-in-time mtime dashboard. Rebuild it
+  // before every canonical next-action selection so a just-refreshed source
+  // artifact cannot leave us recommending its already-fresh presentation child.
+  if (absoluteManifestPath === defaultManifestPath) {
+    return writeDevTestGameSpineManifest();
+  }
+  const candidate = await readOptionalJson(absoluteManifestPath);
+  if (candidate !== null) {
+    try {
+      return assertDevTestGameSpineManifest(candidate);
+    } catch {
+      // The manifest is derivable source state. Rebuild the canonical target on
+      // the ordinary path; a custom missing/corrupt input gets an in-memory
+      // manifest so callers still receive a ranked recovery command.
+    }
+  }
+  return buildDevTestGameSpineManifest();
 }
 
 async function readHostedIdentityProgressionProofs() {

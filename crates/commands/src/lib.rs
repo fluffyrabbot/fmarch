@@ -50,6 +50,37 @@ pub use model::{
     ThreadPostMediaVariant, VoteTarget,
 };
 
+/// Compact test/fixture construction for a named seating command.
+///
+/// Production call sites must provide a deliberate game-local public name.
+/// Fixtures use a stable slot-derived persona name, keeping the principal
+/// binding distinct while exercising the same `SeatPersona` command production
+/// receives.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! seat_persona {
+    ($game:ident, slot: $slot:expr, user: $user:expr $(,)?) => {
+        $crate::seat_persona! { game: $game, slot: $slot, user: $user }
+    };
+    ($game:ident, slot: $slot:expr, user $user:expr $(,)?) => {
+        $crate::seat_persona! { game: $game, slot: $slot, user: $user }
+    };
+    ($game:ident, slot: $slot:expr, $user:ident $(,)?) => {
+        $crate::seat_persona! { game: $game, slot: $slot, user: $user }
+    };
+    (game: $game:expr, slot: $slot:expr, user: $user:expr $(,)?) => {{
+        let slot: String = $slot;
+        let principal_user_id: String = $user;
+        let public_name = format!("Player {slot}");
+        $crate::Command::SeatPersona {
+            game: $game,
+            public_name,
+            principal_user_id,
+            slot,
+        }
+    }};
+}
+
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_SEED: u64 = 90_001;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS: u64 = 20_000;
 const MAX_THREAD_POST_MEDIA: usize = 4;
@@ -615,9 +646,17 @@ async fn handle_command(
             cohost_denied,
         } => create_game(tx, principal, game, pack, cohost_denied).await,
         Command::AddSlot { game, slot } => add_slot(tx, principal, game, slot).await,
-        Command::AssignSlot { game, slot, user } => {
-            assign_slot(tx, principal, game, slot, user).await
-        }
+        Command::SeatPersona {
+            game,
+            slot,
+            principal_user_id,
+            public_name,
+        } => seat_persona(tx, principal, game, slot, principal_user_id, public_name).await,
+        Command::RenameGamePersona {
+            game,
+            persona_id,
+            public_name,
+        } => rename_game_persona(tx, principal, game, persona_id, public_name).await,
         Command::AssignRole {
             game,
             slot,
@@ -814,9 +853,19 @@ async fn handle_command(
         Command::ProcessReplacement {
             game,
             slot,
-            outgoing_user,
-            incoming_user,
-        } => process_replacement(tx, principal, game, slot, outgoing_user, incoming_user).await,
+            outgoing_persona_id,
+            incoming_principal_user_id,
+        } => {
+            process_replacement(
+                tx,
+                principal,
+                game,
+                slot,
+                outgoing_persona_id,
+                incoming_principal_user_id,
+            )
+            .await
+        }
     }
 }
 
@@ -903,7 +952,8 @@ fn command_audit_shape(command: &Command) -> (&'static str, CommandAuditAuthorit
             CommandAuditAuthority::SlotOccupant(actor_slot),
         ),
         Command::AddSlot { .. } => ("AddSlot", CommandAuditAuthority::HostTeam),
-        Command::AssignSlot { .. } => ("AssignSlot", CommandAuditAuthority::HostTeam),
+        Command::SeatPersona { .. } => ("SeatPersona", CommandAuditAuthority::HostTeam),
+        Command::RenameGamePersona { .. } => ("RenameGamePersona", CommandAuditAuthority::HostTeam),
         Command::AssignRole { .. } => ("AssignRole", CommandAuditAuthority::HostTeam),
         Command::SetSlotStatus { .. } => ("SetSlotStatus", CommandAuditAuthority::HostTeam),
         Command::AddSlotStatusTag { .. } => ("AddSlotStatusTag", CommandAuditAuthority::HostTeam),
@@ -956,7 +1006,8 @@ fn command_game(command: &Command) -> Uuid {
     match command {
         Command::CreateGame { game, .. }
         | Command::AddSlot { game, .. }
-        | Command::AssignSlot { game, .. }
+        | Command::SeatPersona { game, .. }
+        | Command::RenameGamePersona { game, .. }
         | Command::AssignRole { game, .. }
         | Command::SetSlotStatus { game, .. }
         | Command::AddSlotStatusTag { game, .. }
@@ -1000,7 +1051,8 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
     match command {
         Command::CreateGame { .. } | Command::CompleteGame { .. } => None,
         Command::AddSlot { game, .. }
-        | Command::AssignSlot { game, .. }
+        | Command::SeatPersona { game, .. }
+        | Command::RenameGamePersona { game, .. }
         | Command::AssignRole { game, .. }
         | Command::SetSlotStatus { game, .. }
         | Command::AddSlotStatusTag { game, .. }
@@ -1124,10 +1176,7 @@ async fn grant_spectator(
     if user.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
-    if projections::slot_occupancy(&mut **tx, game)
-        .await?
-        .into_iter()
-        .any(|row| row.occupant_user_id == user)
+    if projections::principal_has_open_occupancy(&mut **tx, game, &user).await?
         || projections::spectator_membership(&mut **tx, game, &user).await?
     {
         return Err(Reject::InvalidTarget);
@@ -1862,12 +1911,87 @@ async fn current_slot_lifecycle_status(
     .map_err(|e| Reject::Internal(e.to_string()))
 }
 
-async fn assign_slot(
+async fn persona_id_for_principal(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    principal_user_id: &str,
+) -> Result<Option<String>, Reject> {
+    sqlx::query_scalar(
+        "SELECT persona_id FROM game_persona_private \
+         WHERE game_id = $1 AND principal_user_id = $2",
+    )
+    .bind(game)
+    .bind(principal_user_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|error| Reject::Internal(error.to_string()))
+}
+
+async fn game_persona_exists(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    persona_id: &str,
+) -> Result<bool, Reject> {
+    sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM game_persona_private WHERE game_id = $1 AND persona_id = $2)",
+    )
+    .bind(game)
+    .bind(persona_id)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|error| Reject::Internal(error.to_string()))
+}
+
+async fn persona_name_claim_owner(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    public_name: &str,
+) -> Result<Option<String>, Reject> {
+    sqlx::query_scalar(
+        "SELECT persona_id FROM game_persona_name_claim \
+         WHERE game_id = $1 AND normalized_name = $2",
+    )
+    .bind(game)
+    .bind(public_name.trim().to_lowercase())
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|error| Reject::Internal(error.to_string()))
+}
+
+async fn open_occupancy(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    slot: &str,
+) -> Result<Option<(String, String)>, Reject> {
+    sqlx::query_as::<_, (String, String)>(
+        "SELECT occupancy_id, persona_id FROM slot_occupancy_epoch \
+         WHERE game_id = $1 AND slot_id = $2 AND ended_seq IS NULL",
+    )
+    .bind(game)
+    .bind(slot)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(|error| Reject::Internal(error.to_string()))
+}
+
+fn generated_persona_name(slot: &str, persona_id: &str) -> String {
+    let suffix = persona_id
+        .rsplit('_')
+        .next()
+        .unwrap_or(persona_id)
+        .chars()
+        .take(8)
+        .collect::<String>();
+    format!("Player {slot} {suffix}")
+}
+
+async fn assign_slot_with_name(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     slot: String,
     user: String,
+    public_name: Option<String>,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
@@ -1878,22 +2002,130 @@ async fn assign_slot(
     if projections::spectator_membership(&mut **tx, game, &user).await? {
         return Err(Reject::InvalidTarget);
     }
+    if projections::slot_occupant(&mut **tx, game, &slot)
+        .await?
+        .is_some()
+    {
+        return Err(Reject::InvalidTarget);
+    }
+    let persona_id = persona_id_for_principal(tx, game, &user)
+        .await?
+        .unwrap_or_else(|| format!("gp_{}", Uuid::new_v4()));
+    let is_new_persona = !game_persona_exists(tx, game, &persona_id).await?;
+    let requested_public_name = public_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| generated_persona_name(&slot, &persona_id));
+    if is_new_persona
+        && persona_name_claim_owner(tx, game, &requested_public_name)
+            .await?
+            .is_some()
+    {
+        return Err(Reject::InvalidTarget);
+    }
+    let transition_id = format!("ot_{}", Uuid::new_v4());
+    let occupancy_id = format!("oe_{}", Uuid::new_v4());
+    let mut events = Vec::new();
+    if is_new_persona {
+        // Bootstrap commands identify the private principal, but the durable
+        // game stream deliberately never exposes it as slot authorship. Until
+        // setup grows an explicit name field, use a slot-derived safe name.
+        events.push(EventInput::new(
+            "GamePersonaRegistered",
+            1,
+            serde_json::json!({
+                "persona_id": &persona_id,
+                "principal_user_id": &user,
+                "public_name": requested_public_name,
+            }),
+            ActorId::Host,
+            0,
+        ));
+    }
+    events.push(EventInput::new(
+        "SlotOccupancyStarted",
+        1,
+        serde_json::json!({
+            "transition_id": transition_id,
+            "occupancy_id": occupancy_id,
+            "slot_id": &slot,
+            "persona_id": persona_id,
+            "reason": "initial",
+        }),
+        ActorId::Host,
+        0,
+    ));
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let mut events = vec![EventInput::new(
-        "SlotAssigned",
-        1,
-        serde_json::json!({ "slot_id": &slot, "user_id": user }),
-        ActorId::Host,
-        0,
-    )];
     if stream.iter().any(|event| event.kind == "GameStarted") {
         if let Some(role_key) = role_assignments_from_stream(&stream)?.get(&slot) {
             events.push(role_pm_declaration(&slot, role_key));
         }
     }
     persist(tx, game, &events).await
+}
+
+async fn seat_persona(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    slot: String,
+    principal_user_id: String,
+    public_name: String,
+) -> Result<Ack, Reject> {
+    if public_name.trim().is_empty() {
+        return Err(Reject::InvalidTarget);
+    }
+    assign_slot_with_name(
+        tx,
+        principal,
+        game,
+        slot,
+        principal_user_id,
+        Some(public_name),
+    )
+    .await
+}
+
+async fn rename_game_persona(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: Uuid,
+    persona_id: String,
+    public_name: String,
+) -> Result<Ack, Reject> {
+    require_game(tx, game).await?;
+    let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
+    require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
+    if persona_id.trim().is_empty() || public_name.trim().is_empty() {
+        return Err(Reject::InvalidTarget);
+    }
+    if !game_persona_exists(tx, game, &persona_id).await? {
+        return Err(Reject::InvalidTarget);
+    }
+    if let Some(owner) = persona_name_claim_owner(tx, game, &public_name).await? {
+        if owner != persona_id {
+            return Err(Reject::InvalidTarget);
+        }
+    }
+    persist(
+        tx,
+        game,
+        &[EventInput::new(
+            "GamePersonaRenamed",
+            1,
+            serde_json::json!({
+                "persona_id": persona_id,
+                "public_name": public_name.trim(),
+            }),
+            ActorId::Host,
+            0,
+        )],
+    )
+    .await
 }
 
 async fn assign_role(
@@ -2343,17 +2575,17 @@ async fn extend_deadline(
     persist(tx, game, &[ev]).await
 }
 
-/// The irreversible mechanic: swap the human behind a STABLE `SlotId`. The slot
-/// id is UNCHANGED — only the occupant mapping moves — so the slot's votes,
-/// posts, role, and lifecycle (all keyed by slot_id) are preserved. Host-team
-/// (Replacement class); primary host always allowed.
+/// The irreversible mechanic: end one named persona's immutable occupancy epoch
+/// and begin another on the same stable `SlotId`. Votes, posts, role, and
+/// lifecycle remain keyed by the slot; private principal authority is derived
+/// only by joining the current epoch to the private persona projection.
 async fn process_replacement(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
     slot: String,
-    outgoing_user: String,
-    incoming_user: String,
+    outgoing_persona_id: String,
+    incoming_principal_user_id: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
@@ -2362,29 +2594,64 @@ async fn process_replacement(
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
-    // Validate the outgoing user really is the CURRENT occupant (an honest,
-    // auditable replacement). If not, the request is targeting a stale mapping.
-    match projections::slot_occupant(&mut **tx, game, &slot).await? {
-        Some(current) if current == outgoing_user => {}
-        Some(_) => return Err(Reject::InvalidTarget),
-        None => return Err(Reject::InvalidTarget),
-    }
-    if projections::spectator_membership(&mut **tx, game, &incoming_user).await? {
+    // A replacement targets the immutable current occupancy epoch, never a
+    // mutable principal-to-slot projection. This makes stale replacement
+    // requests fail when their named persona no longer owns the open epoch.
+    let (outgoing_occupancy_id, current_persona_id) = open_occupancy(tx, game, &slot)
+        .await?
+        .ok_or(Reject::InvalidTarget)?;
+    if current_persona_id != outgoing_persona_id {
         return Err(Reject::InvalidTarget);
     }
-
-    let ev = EventInput::new(
-        "ReplacementCompleted",
+    if projections::spectator_membership(&mut **tx, game, &incoming_principal_user_id).await? {
+        return Err(Reject::InvalidTarget);
+    }
+    let incoming_persona_id = persona_id_for_principal(tx, game, &incoming_principal_user_id)
+        .await?
+        .unwrap_or_else(|| format!("gp_{}", Uuid::new_v4()));
+    let transition_id = format!("ot_{}", Uuid::new_v4());
+    let incoming_occupancy_id = format!("oe_{}", Uuid::new_v4());
+    let mut events = Vec::new();
+    if !game_persona_exists(tx, game, &incoming_persona_id).await? {
+        events.push(EventInput::new(
+            "GamePersonaRegistered",
+            1,
+            serde_json::json!({
+                "persona_id": &incoming_persona_id,
+                "principal_user_id": &incoming_principal_user_id,
+                "public_name": generated_persona_name(&slot, &incoming_persona_id),
+            }),
+            ActorId::Host,
+            0,
+        ));
+    }
+    events.push(EventInput::new(
+        "SlotOccupancyEnded",
         1,
         serde_json::json!({
-            "slot_id": slot,            // ← seat id UNCHANGED
-            "outgoing_user": outgoing_user,
-            "incoming_user": incoming_user,
+            "transition_id": &transition_id,
+            "occupancy_id": outgoing_occupancy_id,
+            "slot_id": &slot,
+            "persona_id": outgoing_persona_id,
+            "reason": "replaced",
         }),
         ActorId::Host,
         0,
-    );
-    persist(tx, game, &[ev]).await
+    ));
+    events.push(EventInput::new(
+        "SlotOccupancyStarted",
+        1,
+        serde_json::json!({
+            "transition_id": transition_id,
+            "occupancy_id": incoming_occupancy_id,
+            "slot_id": slot,
+            "persona_id": incoming_persona_id,
+            "reason": "replacement",
+        }),
+        ActorId::Host,
+        0,
+    ));
+    persist(tx, game, &events).await
 }
 
 /// Host command: close the current phase by reconstructing the engine input from
@@ -2996,7 +3263,7 @@ pub async fn run_large_action_graph_performance_proof(
         handle(
             pool,
             &host,
-            Command::AssignSlot {
+            crate::seat_persona! {
                 game,
                 slot: (*slot).into(),
                 user: format!("large_graph_user_{}", slot_number(slot)?),
@@ -3123,7 +3390,10 @@ pub async fn run_large_action_graph_performance_proof(
         && phase_trace_anchored
         && decision_trace_anchored
         && projection_audit.ok
-        && stream_event_count <= 200
+        // Persona registration plus immutable epoch facts are the canonical
+        // roster history. Their fixed per-seat cost replaces the former one
+        // mutable assignment fact; keep the performance ceiling explicit.
+        && stream_event_count <= 300
         && resolve_elapsed <= threshold;
 
     Ok(LargeActionGraphPerformanceProof {
@@ -3569,11 +3839,8 @@ fn occupied_slots_from_stream(
 ) -> Result<BTreeSet<String>, Reject> {
     let mut occupied = BTreeSet::new();
     for event in stream {
-        match event.kind.as_str() {
-            "SlotAssigned" | "ReplacementCompleted" => {
-                occupied.insert(str_payload(event, "slot_id")?);
-            }
-            _ => {}
+        if event.kind == "SlotOccupancyStarted" {
+            occupied.insert(str_payload(event, "slot_id")?);
         }
     }
     Ok(occupied)

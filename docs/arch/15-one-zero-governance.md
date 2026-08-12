@@ -103,6 +103,11 @@ Later waves own HTTP controls, migrations, projection rebuild/pseudonymization,
 personal-export assembly, and browser proof. This section does not mark
 `product.identity.data-lifecycle` complete.
 
+The implementation-aligned, deliberately unapproved policy draft lives in
+[`../policy-drafts/member-data-lifecycle.md`](../policy-drafts/member-data-lifecycle.md).
+It must not be published or used as approval evidence until the operator fills
+the named ownership and retention decisions.
+
 ## Accessibility release boundary
 
 Static semantics and synthetic browser checks are necessary but insufficient.

@@ -1492,6 +1492,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
   const page = entry.page;
   const stalePage = staleEntry.page;
   const assignedRoleKey = "mafia_goon";
+  const assignedPublicName = "Setup Extra Persona";
   try {
     await page.getByTestId("host-setup-surface").waitFor({
       state: "visible",
@@ -1571,21 +1572,23 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     await rosterRow
       .locator('select[name="principalUserId"]')
       .selectOption(assignedPrincipalUserId);
+    await rosterRow.locator('input[name="publicName"]').fill(assignedPublicName);
     await rosterRow
       .getByRole("button", { name: "Assign player", exact: true })
       .click();
     const assignSlot = await waitForHostSetupCommand({
       setupPage: page,
       statusTestId: "host-setup-assign-slot-status",
-      commandKind: "AssignSlot",
+      commandKind: "SeatPersona",
       commandPredicate: (command) =>
         command?.slot === addedSlotId &&
-        command?.user === assignedPrincipalUserId,
+        command?.principal_user_id === assignedPrincipalUserId &&
+        command?.public_name === assignedPublicName,
       statePredicate: (state) =>
         (state?.slots ?? []).some(
           (slot) =>
             slot.slotId === addedSlotId &&
-            slot.occupantUserId === assignedPrincipalUserId,
+            slot.assignedPrincipalUserId === assignedPrincipalUserId,
         ),
     });
 
@@ -1606,7 +1609,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
         (state?.slots ?? []).some(
           (slot) =>
             slot.slotId === addedSlotId &&
-            slot.occupantUserId === assignedPrincipalUserId &&
+            slot.assignedPrincipalUserId === assignedPrincipalUserId &&
             slot.roleKey === assignedRoleKey,
         ),
     });
@@ -1626,7 +1629,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       initialState?.phase !== null ||
       duplicateAddSlotRecovery.error !== "InvalidTarget" ||
       duplicateSlotCountAfterReject !== 1 ||
-      finalSlot?.occupantUserId !== assignedPrincipalUserId ||
+      finalSlot?.assignedPrincipalUserId !== assignedPrincipalUserId ||
       finalSlot?.roleKey !== assignedRoleKey ||
       finalReadiness?.summary !== "Ready to start" ||
       finalReadiness?.startAvailable !== true
@@ -1691,7 +1694,7 @@ async function seedHostSetupRosterRoleGame({ setupGame }) {
     ["host_h", { AddSlot: { game: setupGame, slot: "slot_1" } }],
     [
       "host_h",
-      { AssignSlot: { game: setupGame, slot: "slot_1", user: "setup-player-one" } },
+      { SeatPersona: { game: setupGame, slot: "slot_1", principal_user_id: "setup-player-one", public_name: "Persona " + String("slot_1") } },
     ],
     [
       "host_h",
@@ -3018,15 +3021,15 @@ async function seedDayVoteResolutionGame({
     ["host_h", { AddSlot: { game, slot: "slot-3" } }],
     ["host_h", { AddSlot: { game, slot: "slot_4" } }],
     ["host_h", { AddSlot: { game, slot: "slot_5" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot-7", user: "player-mira" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-7", principal_user_id: "player-mira", public_name: "Mira" } }],
     ["host_h", { AssignRole: { game, slot: "slot-7", role_key: slotSevenRoleKey } }],
-    ["host_h", { AssignSlot: { game, slot: "slot-2", user: "player-target" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-2", principal_user_id: "player-target", public_name: "Target" } }],
     ["host_h", { AssignRole: { game, slot: "slot-2", role_key: "vanilla_townie" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot-3", user: "player-seed" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-3", principal_user_id: "player-seed", public_name: "Seed" } }],
     ["host_h", { AssignRole: { game, slot: "slot-3", role_key: "vanilla_townie" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot_4", user: "player-goon-a" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot_4", principal_user_id: "player-goon-a", public_name: "Goon A" } }],
     ["host_h", { AssignRole: { game, slot: "slot_4", role_key: slotFourRoleKey } }],
-    ["host_h", { AssignSlot: { game, slot: "slot_5", user: "player-goon-b" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot_5", principal_user_id: "player-goon-b", public_name: "Goon B" } }],
     ["host_h", { AssignRole: { game, slot: "slot_5", role_key: "vanilla_townie" } }],
     ["host_h", { StartGame: { game, phase: "D01" } }],
     [
@@ -3481,7 +3484,7 @@ async function seedHostDecidesTieGame({ game }) {
     ["host_h", { CreateGame: { game, pack: "epicmafia" } }],
     ...roster.flatMap(([slot, user]) => [
       ["host_h", { AddSlot: { game, slot } }],
-      ["host_h", { AssignSlot: { game, slot, user } }],
+      ["host_h", { SeatPersona: { game, slot, principal_user_id: user, public_name: `Persona ${slot}` } }],
       ["host_h", { AssignRole: { game, slot, role_key: "villager" } }],
     ]),
     ["host_h", { StartGame: { game, phase: "D01" } }],
@@ -3504,7 +3507,7 @@ async function seedEarliestReachedTieGame({ game }) {
     ["host_h", { CreateGame: { game, pack: "dev_test_earliest_reached" } }],
     ...roster.flatMap(([slot, user]) => [
       ["host_h", { AddSlot: { game, slot } }],
-      ["host_h", { AssignSlot: { game, slot, user } }],
+      ["host_h", { SeatPersona: { game, slot, principal_user_id: user, public_name: `Persona ${slot}` } }],
       ["host_h", { AssignRole: { game, slot, role_key: "citizen" } }],
     ]),
     ["host_h", { StartGame: { game, phase: "D01" } }],
@@ -3830,11 +3833,11 @@ async function seedDayVoteNoLynchGame({ game }) {
     ["host_h", { AddSlot: { game, slot: "slot-7" } }],
     ["host_h", { AddSlot: { game, slot: "slot-2" } }],
     ["host_h", { AddSlot: { game, slot: "slot_3" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot-7", user: "player-mira" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-7", principal_user_id: "player-mira", public_name: "Mira" } }],
     ["host_h", { AssignRole: { game, slot: "slot-7", role_key: "vanilla_townie" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot-2", user: "player-seed" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-2", principal_user_id: "player-seed", public_name: "Seed" } }],
     ["host_h", { AssignRole: { game, slot: "slot-2", role_key: "vanilla_townie" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot_3", user: "player-target" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot_3", principal_user_id: "player-target", public_name: "Target" } }],
     ["host_h", { AssignRole: { game, slot: "slot_3", role_key: "mafia_goon" } }],
     ["host_h", { StartGame: { game, phase: "D01" } }],
   ];
@@ -10331,26 +10334,26 @@ async function seedHostPromptRecoveryGame({ promptGame, promptId }) {
     ["host_h", { AddSlot: { game: promptGame, slot: "slot_4" } }],
     ["host_h", { AddSlot: { game: promptGame, slot: "slot_5" } }],
     ["host_h", { AddSlot: { game: promptGame, slot: "slot_6" } }],
-    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_1", user: "prompt-user-1" } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_1", principal_user_id: "prompt-user-1", public_name: "Persona " + String("slot_1") } }],
     [
       "host_h",
       { AssignRole: { game: promptGame, slot: "slot_1", role_key: "beloved_princess" } },
     ],
-    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_2", user: "prompt-user-2" } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_2", principal_user_id: "prompt-user-2", public_name: "Persona " + String("slot_2") } }],
     [
       "host_h",
       { AssignRole: { game: promptGame, slot: "slot_2", role_key: "vanilla_townie" } },
     ],
-    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_3", user: "prompt-user-3" } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_3", principal_user_id: "prompt-user-3", public_name: "Persona " + String("slot_3") } }],
     [
       "host_h",
       { AssignRole: { game: promptGame, slot: "slot_3", role_key: "vanilla_townie" } },
     ],
-    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_4", user: "prompt-user-4" } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_4", principal_user_id: "prompt-user-4", public_name: "Persona " + String("slot_4") } }],
     ["host_h", { AssignRole: { game: promptGame, slot: "slot_4", role_key: "mafia_goon" } }],
-    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_5", user: "prompt-user-5" } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_5", principal_user_id: "prompt-user-5", public_name: "Persona " + String("slot_5") } }],
     ["host_h", { AssignRole: { game: promptGame, slot: "slot_5", role_key: "mafia_goon" } }],
-    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_6", user: "prompt-user-6" } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_6", principal_user_id: "prompt-user-6", public_name: "Persona " + String("slot_6") } }],
     [
       "host_h",
       { AssignRole: { game: promptGame, slot: "slot_6", role_key: "vanilla_townie" } },
@@ -11211,7 +11214,7 @@ async function seedHostCompleteRecoveryGame({ completeGame }) {
   const plan = [
     ["host_h", { CreateGame: { game: completeGame, pack: "mafiascum" } }],
     ["host_h", { AddSlot: { game: completeGame, slot: "slot-7" } }],
-    ["host_h", { AssignSlot: { game: completeGame, slot: "slot-7", user: "player-mira" } }],
+    ["host_h", { SeatPersona: { game: completeGame, slot: "slot-7", principal_user_id: "player-mira", public_name: "Persona " + String("slot-7") } }],
     ["host_h", { AssignRole: { game: completeGame, slot: "slot-7", role_key: "godfather" } }],
     ["host_h", { StartGame: { game: completeGame, phase: "D01" } }],
   ];
@@ -11232,10 +11235,11 @@ async function seedPlayerEndgameHistoryRecoveryGame({ completeGame }) {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game: completeGame,
           slot: "slot-7",
-          user: "player-mira",
+          principal_user_id: "player-mira",
+          public_name: "Mira",
         },
       },
     ],
@@ -11253,10 +11257,11 @@ async function seedPlayerEndgameHistoryRecoveryGame({ completeGame }) {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game: completeGame,
           slot: "slot-2",
-          user: "player-target",
+          principal_user_id: "player-target",
+          public_name: "Target",
         },
       },
     ],
@@ -11274,10 +11279,11 @@ async function seedPlayerEndgameHistoryRecoveryGame({ completeGame }) {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game: completeGame,
           slot: "slot-3",
-          user: "player-seed",
+          principal_user_id: "player-seed",
+          public_name: "Seed",
         },
       },
     ],
@@ -13683,7 +13689,8 @@ async function verifySeededReplacementConsole({
     await hostPage.waitForFunction(
       () =>
         window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
-        window.__fmarchHostProjection?.replacement?.occupantLabel === "player-rowan",
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+          "player-rowan",
     );
     const projectedReplacement = await hostPage.evaluate(
       () => window.__fmarchHostProjection?.replacement,
@@ -13714,6 +13721,7 @@ async function verifySeededReplacementConsole({
     const staleReplacementAfterSuccess = await verifyStaleReplacementAfterSuccess({
       hostPage,
       staleOutgoingPlayer,
+      staleOutgoingPersonaId: command?.ProcessReplacement?.outgoing_persona_id,
       game,
       apiBaseUrl,
     });
@@ -13782,7 +13790,7 @@ async function verifySeededReplacementConsole({
       redeemedInviteRecovery?.sessionCookiePresent !== false ||
       invalidReplacementRecovery?.status !== "passed" ||
       invalidReplacementRecovery?.reject?.error !== "InvalidTarget" ||
-      invalidReplacementRecovery?.apiSlotAfterReject?.occupant_user_id !==
+      invalidReplacementRecovery?.apiSlotAfterReject?.assigned_principal_user_id !==
         "player-mira" ||
       invalidReplacementRecovery?.pendingAfterReject?.commandState?.actorStatus !==
         "pending_replacement" ||
@@ -13790,17 +13798,17 @@ async function verifySeededReplacementConsole({
       processReplacement.commandStatus?.state !== "ack" ||
       command?.ProcessReplacement?.game !== game ||
       command?.ProcessReplacement?.slot !== "slot-7" ||
-      command?.ProcessReplacement?.outgoing_user !== "player-mira" ||
-      command?.ProcessReplacement?.incoming_user !== "player-rowan" ||
+      isOpaquePersonaId(command?.ProcessReplacement?.outgoing_persona_id) !== true ||
+      command?.ProcessReplacement?.incoming_principal_user_id !== "player-rowan" ||
       projectedReplacement?.slotId !== "slot-7" ||
-      projectedReplacement?.occupantLabel !== "player-rowan" ||
+      projectedReplacement?.assignedPrincipalUserId !== "player-rowan" ||
       !projectedReplacement?.historyLabel?.includes("slot-7") ||
       apiSlot?.slot_id !== "slot-7" ||
-      apiSlot?.occupant_user_id !== "player-rowan" ||
+      apiSlot?.assigned_principal_user_id !== "player-rowan" ||
       replacementIdempotentRetry?.status !== "passed" ||
       replacementIdempotentRetry?.retryReplacement?.state !== "ack" ||
       replacementIdempotentRetry?.sameStreamSeqs !== true ||
-      replacementIdempotentRetry?.apiSlotAfterRetry?.occupant_user_id !==
+      replacementIdempotentRetry?.apiSlotAfterRetry?.assigned_principal_user_id !==
         "player-rowan" ||
       staleHostInviteRecovery?.status !== "passed" ||
       staleHostInviteRecovery?.beforeSubmit?.principalUserId !== "player-mira" ||
@@ -13819,7 +13827,7 @@ async function verifySeededReplacementConsole({
       staleOutgoingPlayer?.buttonsDisabled !== true ||
       staleReplacementAfterSuccess?.status !== "passed" ||
       staleReplacementAfterSuccess?.reject?.error !== "InvalidTarget" ||
-      staleReplacementAfterSuccess?.apiSlotAfterReject?.occupant_user_id !==
+      staleReplacementAfterSuccess?.apiSlotAfterReject?.assigned_principal_user_id !==
         "player-rowan" ||
       staleReplacementAfterSuccess?.staleOutgoingPlayer?.recoveredCommandState
         ?.actorStatus !== "replaced" ||
@@ -14298,8 +14306,8 @@ async function verifyInvalidReplacementRecovery({
     label: "Invalid replacement",
     objectLabel: "Slot 7 / player-rowan",
     outcomeLabel: "Reject invalid replacement",
-    outgoingPlayerId: "player-rowan",
-    incomingPlayerId: "player-rowan",
+    outgoingPersonaId: `gp_${crypto.randomUUID()}`,
+    incomingPrincipalUserId: "player-rowan",
   });
   const apiStateAfterReject = await fetchHostConsoleState({
     apiBaseUrl,
@@ -14324,12 +14332,14 @@ async function verifyInvalidReplacementRecovery({
     attempt.invalidReplacement.actionId !== invalidActionId ||
     attempt.reject?.error !== "InvalidTarget" ||
     attempt.invalidReplacement.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
-    attempt.invalidReplacement.requestEnvelope?.body?.body?.command?.ProcessReplacement
-      ?.outgoing_user !== "player-rowan" ||
+    isOpaquePersonaId(
+      attempt.invalidReplacement.requestEnvelope?.body?.body?.command
+        ?.ProcessReplacement?.outgoing_persona_id,
+    ) !== true ||
     replacementAttemptVisibleReject(attempt, invalidActionId) !== true ||
-    attempt.hostProjectionAfterReject?.occupantLabel !== "player-mira" ||
+    attempt.hostProjectionAfterReject?.assignedPrincipalUserId !== "player-mira" ||
     apiSlotAfterReject?.slot_id !== "slot-7" ||
-    apiSlotAfterReject?.occupant_user_id !== "player-mira" ||
+    apiSlotAfterReject?.assigned_principal_user_id !== "player-mira" ||
     pendingAfterReject.principalUserId !== "player-rowan" ||
     pendingAfterReject.capabilityKinds.length !== 0 ||
     pendingAfterReject.capabilityLabel !== `PendingReplacement(${game})` ||
@@ -14360,6 +14370,7 @@ async function verifyInvalidReplacementRecovery({
 async function verifyStaleReplacementAfterSuccess({
   hostPage,
   staleOutgoingPlayer,
+  staleOutgoingPersonaId,
   game,
   apiBaseUrl,
 }) {
@@ -14371,8 +14382,8 @@ async function verifyStaleReplacementAfterSuccess({
     label: "Stale replacement",
     objectLabel: "Slot 7 / player-mira",
     outcomeLabel: "Reject stale replacement",
-    outgoingPlayerId: "player-mira",
-    incomingPlayerId: "player-rowan",
+    outgoingPersonaId: staleOutgoingPersonaId,
+    incomingPrincipalUserId: "player-rowan",
   });
   const apiStateAfterReject = await fetchHostConsoleState({
     apiBaseUrl,
@@ -14388,12 +14399,14 @@ async function verifyStaleReplacementAfterSuccess({
     attempt.reject?.error !== "InvalidTarget" ||
     attempt.invalidReplacement.requestEnvelope?.body?.body?.principal_user_id !==
       undefined ||
-    attempt.invalidReplacement.requestEnvelope?.body?.body?.command?.ProcessReplacement
-      ?.outgoing_user !== "player-mira" ||
+    isOpaquePersonaId(
+      attempt.invalidReplacement.requestEnvelope?.body?.body?.command
+        ?.ProcessReplacement?.outgoing_persona_id,
+    ) !== true ||
     replacementAttemptVisibleReject(attempt, staleActionId) !== true ||
-    attempt.hostProjectionAfterReject?.occupantLabel !== "player-rowan" ||
+    attempt.hostProjectionAfterReject?.assignedPrincipalUserId !== "player-rowan" ||
     apiSlotAfterReject?.slot_id !== "slot-7" ||
-    apiSlotAfterReject?.occupant_user_id !== "player-rowan" ||
+    apiSlotAfterReject?.assigned_principal_user_id !== "player-rowan" ||
     staleOutgoingPlayer?.recoveredCommandState?.actorStatus !== "replaced" ||
     staleOutgoingPlayer?.buttonsDisabled !== true
   ) {
@@ -14435,7 +14448,8 @@ async function verifyReplacementIdempotentRetry({
   await hostPage.waitForFunction(
     () =>
       window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
-      window.__fmarchHostProjection?.replacement?.occupantLabel === "player-rowan",
+      window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+        "player-rowan",
   );
   const hostProjectionAfterRetry = await hostPage.evaluate(
     () => window.__fmarchHostProjection?.replacement,
@@ -14456,14 +14470,14 @@ async function verifyReplacementIdempotentRetry({
     commandId === undefined ||
     command?.ProcessReplacement?.game !== game ||
     command?.ProcessReplacement?.slot !== "slot-7" ||
-    command?.ProcessReplacement?.outgoing_user !== "player-mira" ||
-    command?.ProcessReplacement?.incoming_user !== "player-rowan" ||
+    isOpaquePersonaId(command?.ProcessReplacement?.outgoing_persona_id) !== true ||
+    command?.ProcessReplacement?.incoming_principal_user_id !== "player-rowan" ||
     sameStreamSeqs !== true ||
-    apiSlot?.occupant_user_id !== "player-rowan" ||
+    apiSlot?.assigned_principal_user_id !== "player-rowan" ||
     apiSlotAfterRetry?.slot_id !== "slot-7" ||
-    apiSlotAfterRetry?.occupant_user_id !== "player-rowan" ||
+    apiSlotAfterRetry?.assigned_principal_user_id !== "player-rowan" ||
     hostProjectionAfterRetry?.slotId !== "slot-7" ||
-    hostProjectionAfterRetry?.occupantLabel !== "player-rowan" ||
+    hostProjectionAfterRetry?.assignedPrincipalUserId !== "player-rowan" ||
     !hostProjectionAfterRetry?.historyLabel?.includes("slot-7")
   ) {
     throw new Error(
@@ -14504,8 +14518,8 @@ async function dispatchHostReplacementAttempt({
   label,
   objectLabel,
   outcomeLabel,
-  outgoingPlayerId,
-  incomingPlayerId,
+  outgoingPersonaId,
+  incomingPrincipalUserId,
 }) {
   await hostPage.evaluate(
     async ({
@@ -14514,8 +14528,8 @@ async function dispatchHostReplacementAttempt({
       label: browserLabel,
       objectLabel: browserObjectLabel,
       outcomeLabel: browserOutcomeLabel,
-      outgoingPlayerId: browserOutgoingPlayerId,
-      incomingPlayerId: browserIncomingPlayerId,
+      outgoingPersonaId: browserOutgoingPersonaId,
+      incomingPrincipalUserId: browserIncomingPrincipalUserId,
     }) => {
       await window.__fmarchDispatchHostAction?.({
         type: "host-action/dispatch",
@@ -14527,8 +14541,8 @@ async function dispatchHostReplacementAttempt({
           kind: "process_replacement",
           gameId,
           slotId: "slot-7",
-          outgoingPlayerId: browserOutgoingPlayerId,
-          incomingPlayerId: browserIncomingPlayerId,
+          outgoingPersonaId: browserOutgoingPersonaId,
+          incomingPrincipalUserId: browserIncomingPrincipalUserId,
         },
         confirmationTrace: {
           kind: "confirmation-command-trace",
@@ -14546,8 +14560,8 @@ async function dispatchHostReplacementAttempt({
       label,
       objectLabel,
       outcomeLabel,
-      outgoingPlayerId,
-      incomingPlayerId,
+      outgoingPersonaId,
+      incomingPrincipalUserId,
     },
   );
   await hostPage.waitForFunction(
@@ -18568,10 +18582,9 @@ async function submitStaleHostDeadlineRecovery({
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.error === "PhaseLocked",
     actionId,
   );
-  await staleHostDeadlinePage.waitForFunction(
-    () =>
-      window.__fmarchHostProjection?.phase?.id === "D02" &&
-      window.__fmarchHostProjection?.phase?.locked === false,
+  const resyncAfterReject = await recoverHostProjection(
+    staleHostDeadlinePage,
+    { phaseId: "D02", locked: false },
   );
   const reject = await staleHostDeadlinePage.evaluate(
     (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
@@ -18613,6 +18626,7 @@ async function submitStaleHostDeadlineRecovery({
     receiptStatusText: activityStatusText,
     activityRow,
     dispatchRefreshKeys: dispatchPlan?.projectionRefreshKeys ?? null,
+    resyncAfterReject,
     phaseAfterReject,
     deadlineActionsAfterReject,
     phaseActionsAfterReject,
@@ -18688,6 +18702,10 @@ async function submitStaleHostDeadlineRecovery({
     activityRow.actionId !== actionId ||
     activityRow.dispatchKind !== actionId ||
     dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    resyncAfterReject?.event?.kind !== "resync-required" ||
+    resyncAfterReject?.event?.state !== "recovered" ||
+    resyncAfterReject?.phase?.id !== "D02" ||
+    resyncAfterReject?.phase?.locked !== false ||
     staleClickBrowserProof.roleUrl !== staleHostDeadlineSetup.roleUrl ||
     staleClickBrowserProof.clickedActionId !== actionId ||
     staleClickBrowserProof.receiptStatusText !== activityStatusText ||
@@ -18745,6 +18763,7 @@ async function submitStaleHostDeadlineRecovery({
         activityStatusText,
         activityRow,
         dispatchPlan,
+        resyncAfterReject,
         staleClickBrowserProof,
         apiPhase: hostStateAfterReject.phase,
         staleHostDeadlineReloadAfterReject,
@@ -18767,6 +18786,7 @@ async function submitStaleHostDeadlineRecovery({
     activityStatusText,
     activityRow,
     dispatchPlan,
+    resyncAfterReject,
     staleClickBrowserProof,
     apiPhaseAfterReject: hostStateAfterReject.phase,
     staleHostDeadlineReloadAfterReject,
@@ -18798,11 +18818,10 @@ async function submitStaleCohostDeadlineRecovery({
       window.__fmarchHostCommandStatuses?.extend_deadline?.state === "reject" &&
       window.__fmarchHostCommandStatuses?.extend_deadline?.error === "PhaseLocked",
   );
-  await staleCohostPage.waitForFunction(
-    () =>
-      window.__fmarchHostProjection?.phase?.id === "D02" &&
-      window.__fmarchHostProjection?.phase?.locked === false,
-  );
+  const resyncAfterReject = await recoverHostProjection(staleCohostPage, {
+    phaseId: "D02",
+    locked: false,
+  });
   const reject = await staleCohostPage.evaluate(
     () => window.__fmarchHostCommandStatuses?.extend_deadline,
   );
@@ -18840,6 +18859,7 @@ async function submitStaleCohostDeadlineRecovery({
     receiptStatusText: activityStatusText,
     activityRow,
     dispatchRefreshKeys: dispatchPlan?.projectionRefreshKeys ?? null,
+    resyncAfterReject,
     phaseAfterReject,
     deadlineActionsAfterReject,
     phaseActionsAfterReject,
@@ -18922,6 +18942,10 @@ async function submitStaleCohostDeadlineRecovery({
     activityRow.actionId !== "extend_deadline" ||
     activityRow.dispatchKind !== "extend_deadline" ||
     dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    resyncAfterReject?.event?.kind !== "resync-required" ||
+    resyncAfterReject?.event?.state !== "recovered" ||
+    resyncAfterReject?.phase?.id !== "D02" ||
+    resyncAfterReject?.phase?.locked !== false ||
     staleClickBrowserProof.roleUrl !== staleCohostDeadlineSetup.roleUrl ||
     staleClickBrowserProof.clickedActionId !== "extend_deadline" ||
     staleClickBrowserProof.receiptStatusText !== activityStatusText ||
@@ -18972,6 +18996,7 @@ async function submitStaleCohostDeadlineRecovery({
         activityStatusText,
         activityRow,
         dispatchPlan,
+        resyncAfterReject,
         staleClickBrowserProof,
         apiPhase: hostStateAfterReject.phase,
         staleCohostDeadlineReloadAfterReject,
@@ -18994,6 +19019,7 @@ async function submitStaleCohostDeadlineRecovery({
     activityStatusText,
     activityRow,
     dispatchPlan,
+    resyncAfterReject,
     staleClickBrowserProof,
     apiPhaseAfterReject: hostStateAfterReject.phase,
     staleCohostDeadlineReloadAfterReject,
@@ -22069,12 +22095,13 @@ async function verifyConcurrentReplacementPrivatePostRace({
     ]);
     await Promise.all([
       hostEntry.page.waitForFunction(
-        ({ actorSlot, occupantLabel }) =>
+        ({ actorSlot, principalUserId }) =>
           window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-          window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+          window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+            principalUserId,
         {
           actorSlot: scenario.actorSlot,
-          occupantLabel: scenario.staleOutgoingPrincipalUserId,
+          principalUserId: scenario.staleOutgoingPrincipalUserId,
         },
       ),
       playerEntry.page.waitForFunction(
@@ -22128,8 +22155,12 @@ async function verifyConcurrentReplacementPrivatePostRace({
           ProcessReplacement: {
             game: raceGame,
             slot: scenario.actorSlot,
-            outgoing_user: scenario.staleOutgoingPrincipalUserId,
-            incoming_user: scenario.replacementPrincipalUserId,
+            outgoing_persona_id: await fetchCurrentSlotPersonaId({
+              apiBaseUrl,
+              game: raceGame,
+              slot: scenario.actorSlot,
+            }),
+            incoming_principal_user_id: scenario.replacementPrincipalUserId,
           },
         },
       }),
@@ -22157,7 +22188,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
       Number.isInteger(replacementSeq) &&
       postSeq < replacementSeq;
     if (
-      setupHostReplacement?.occupantLabel !==
+      setupHostReplacement?.assignedPrincipalUserId !==
         scenario.staleOutgoingPrincipalUserId ||
       setupCommandState?.actorSlot !== scenario.actorSlot ||
       setupCommandState?.actorStatus !== "alive" ||
@@ -22174,10 +22205,12 @@ async function verifyConcurrentReplacementPrivatePostRace({
         raceGame ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
+      isOpaquePersonaId(
+        replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
+          ?.outgoing_persona_id,
+      ) !== true ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.outgoing_user !== scenario.staleOutgoingPrincipalUserId ||
-      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
       post?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
         scenario.channelId ||
       post?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
@@ -22203,12 +22236,13 @@ async function verifyConcurrentReplacementPrivatePostRace({
       waitUntil: "networkidle",
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, occupantLabel }) =>
+      ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+          principalUserId,
       {
         actorSlot: scenario.actorSlot,
-        occupantLabel: scenario.replacementOccupantLabel,
+        principalUserId: scenario.replacementPrincipalUserId,
       },
     );
     const hostReplacementAfterRace = await hostEntry.page.evaluate(
@@ -22260,9 +22294,9 @@ async function verifyConcurrentReplacementPrivatePostRace({
             button.action?.startsWith("submit_action")) &&
           button.disabled === false,
       ) ||
-      hostReplacementAfterRace?.occupantLabel !==
-        scenario.replacementOccupantLabel ||
-      apiSlotAfterRace?.occupant_user_id !== scenario.replacementPrincipalUserId ||
+      hostReplacementAfterRace?.assignedPrincipalUserId !==
+        scenario.replacementPrincipalUserId ||
+      apiSlotAfterRace?.assigned_principal_user_id !== scenario.replacementPrincipalUserId ||
       staleRoute.status !== 403 ||
       staleRoute.responseStatus !== 403 ||
       !staleRoute.message.includes("requires scoped channel capability") ||
@@ -22376,12 +22410,13 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       locked: false,
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, occupantLabel }) =>
+      ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+          principalUserId,
       {
         actorSlot: scenario.actorSlot,
-        occupantLabel: scenario.staleOutgoingPrincipalUserId,
+        principalUserId: scenario.staleOutgoingPrincipalUserId,
       },
     );
     const replacementCommandId = crypto.randomUUID();
@@ -22392,8 +22427,12 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
         ProcessReplacement: {
           game: privatePostGame,
           slot: scenario.actorSlot,
-          outgoing_user: scenario.staleOutgoingPrincipalUserId,
-          incoming_user: scenario.replacementPrincipalUserId,
+          outgoing_persona_id: await fetchCurrentSlotPersonaId({
+            apiBaseUrl,
+            game: privatePostGame,
+            slot: scenario.actorSlot,
+          }),
+          incoming_principal_user_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -22404,12 +22443,13 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       serverEnvelope: replacementRaw.serverEnvelope,
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, occupantLabel }) =>
+      ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+          principalUserId,
       {
         actorSlot: scenario.actorSlot,
-        occupantLabel: scenario.replacementOccupantLabel,
+        principalUserId: scenario.replacementPrincipalUserId,
       },
     );
     const hostReplacementAfterProcess = await hostEntry.page.evaluate(
@@ -22755,9 +22795,9 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== scenario.replacementPrincipalUserId ||
-      hostReplacementAfterProcess?.occupantLabel !==
-        scenario.replacementOccupantLabel ||
+        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
+      hostReplacementAfterProcess?.assignedPrincipalUserId !==
+        scenario.replacementPrincipalUserId ||
       commandStateBeforeClose?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeClose?.actorStatus !== "alive" ||
       commandStateBeforeClose?.phase?.phaseId !== "D01" ||
@@ -23007,12 +23047,13 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       locked: false,
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, occupantLabel }) =>
+      ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+          principalUserId,
       {
         actorSlot: scenario.actorSlot,
-        occupantLabel: scenario.staleOutgoingPrincipalUserId,
+        principalUserId: scenario.staleOutgoingPrincipalUserId,
       },
     );
     const replacementCommandId = crypto.randomUUID();
@@ -23023,8 +23064,12 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
         ProcessReplacement: {
           game: completeGame,
           slot: scenario.actorSlot,
-          outgoing_user: scenario.staleOutgoingPrincipalUserId,
-          incoming_user: scenario.replacementPrincipalUserId,
+          outgoing_persona_id: await fetchCurrentSlotPersonaId({
+            apiBaseUrl,
+            game: completeGame,
+            slot: scenario.actorSlot,
+          }),
+          incoming_principal_user_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -23035,12 +23080,13 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       serverEnvelope: replacementRaw.serverEnvelope,
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, occupantLabel }) =>
+      ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+          principalUserId,
       {
         actorSlot: scenario.actorSlot,
-        occupantLabel: scenario.replacementOccupantLabel,
+        principalUserId: scenario.replacementPrincipalUserId,
       },
     );
     const hostReplacementAfterProcess = await hostEntry.page.evaluate(
@@ -23301,9 +23347,9 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== scenario.replacementPrincipalUserId ||
-      hostReplacementAfterProcess?.occupantLabel !==
-        scenario.replacementOccupantLabel ||
+        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
+      hostReplacementAfterProcess?.assignedPrincipalUserId !==
+        scenario.replacementPrincipalUserId ||
       commandStateBeforeClose?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeClose?.gameCompleted !== false ||
       channelContextBeforeClose.channelId !== scenario.channelId ||
@@ -23525,12 +23571,13 @@ async function verifyConcurrentReplacementVoteRace({
     ]);
     await Promise.all([
       hostEntry.page.waitForFunction(
-        ({ actorSlot, occupantLabel }) =>
+        ({ actorSlot, principalUserId }) =>
           window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-          window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+          window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+            principalUserId,
         {
           actorSlot: scenario.actorSlot,
-          occupantLabel: scenario.staleOutgoingPrincipalUserId,
+          principalUserId: scenario.staleOutgoingPrincipalUserId,
         },
       ),
       playerEntry.page.waitForFunction(
@@ -23572,8 +23619,12 @@ async function verifyConcurrentReplacementVoteRace({
           ProcessReplacement: {
             game: raceGame,
             slot: scenario.actorSlot,
-            outgoing_user: scenario.staleOutgoingPrincipalUserId,
-            incoming_user: scenario.replacementPrincipalUserId,
+            outgoing_persona_id: await fetchCurrentSlotPersonaId({
+              apiBaseUrl,
+              game: raceGame,
+              slot: scenario.actorSlot,
+            }),
+            incoming_principal_user_id: scenario.replacementPrincipalUserId,
           },
         },
       }),
@@ -23601,7 +23652,7 @@ async function verifyConcurrentReplacementVoteRace({
       Number.isInteger(replacementSeq) &&
       voteSeq < replacementSeq;
     if (
-      setupHostReplacement?.occupantLabel !==
+      setupHostReplacement?.assignedPrincipalUserId !==
         scenario.staleOutgoingPrincipalUserId ||
       setupCommandState?.actorSlot !== scenario.actorSlot ||
       setupCommandState?.actorStatus !== "alive" ||
@@ -23619,10 +23670,12 @@ async function verifyConcurrentReplacementVoteRace({
         raceGame ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
+      isOpaquePersonaId(
+        replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
+          ?.outgoing_persona_id,
+      ) !== true ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.outgoing_user !== scenario.staleOutgoingPrincipalUserId ||
-      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
       vote?.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !==
         scenario.actorSlot ||
       vote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
@@ -23648,12 +23701,13 @@ async function verifyConcurrentReplacementVoteRace({
       waitUntil: "networkidle",
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, occupantLabel }) =>
+      ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+          principalUserId,
       {
         actorSlot: scenario.actorSlot,
-        occupantLabel: scenario.replacementOccupantLabel,
+        principalUserId: scenario.replacementPrincipalUserId,
       },
     );
     const hostReplacementAfterRace = await hostEntry.page.evaluate(
@@ -23684,9 +23738,9 @@ async function verifyConcurrentReplacementVoteRace({
     if (
       commandStateAfterRace?.status !== 403 ||
       commandStateAfterRace?.error !== scenario.rejectionError ||
-      hostReplacementAfterRace?.occupantLabel !==
-        scenario.replacementOccupantLabel ||
-      apiSlotAfterRace?.occupant_user_id !== scenario.replacementPrincipalUserId ||
+      hostReplacementAfterRace?.assignedPrincipalUserId !==
+        scenario.replacementPrincipalUserId ||
+      apiSlotAfterRace?.assigned_principal_user_id !== scenario.replacementPrincipalUserId ||
       (voteAcked === true && targetVotecount?.count !== 1) ||
       (voteAcked === false && targetVotecount !== undefined)
     ) {
@@ -23862,8 +23916,12 @@ async function verifyConcurrentReplacementActionRace({
           ProcessReplacement: {
             game: raceGame,
             slot: scenario.actorSlot,
-            outgoing_user: scenario.staleOutgoingPrincipalUserId,
-            incoming_user: scenario.replacementPrincipalUserId,
+            outgoing_persona_id: await fetchCurrentSlotPersonaId({
+              apiBaseUrl,
+              game: raceGame,
+              slot: scenario.actorSlot,
+            }),
+            incoming_principal_user_id: scenario.replacementPrincipalUserId,
           },
         },
       }),
@@ -23893,7 +23951,7 @@ async function verifyConcurrentReplacementActionRace({
     if (
       setupHostPhase?.id !== scenario.phaseId ||
       setupHostPhase?.locked !== false ||
-      setupSlot?.occupant_user_id !== scenario.staleOutgoingPrincipalUserId ||
+      setupSlot?.assigned_principal_user_id !== scenario.staleOutgoingPrincipalUserId ||
       setupCommandState?.actorSlot !== scenario.actorSlot ||
       setupCommandState?.actorStatus !== "alive" ||
       setupCommandState?.phase?.phaseId !== scenario.phaseId ||
@@ -23910,10 +23968,12 @@ async function verifyConcurrentReplacementActionRace({
         raceGame ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
+      isOpaquePersonaId(
+        replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
+          ?.outgoing_persona_id,
+      ) !== true ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.outgoing_user !== scenario.staleOutgoingPrincipalUserId ||
-      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
         scenario.actorSlot ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
@@ -24031,7 +24091,7 @@ async function verifyConcurrentReplacementActionRace({
       staleRetry?.state !== "reject" ||
       staleRetry?.error !== scenario.rejectionError ||
       staleRetry?.serverEnvelope?.body?.kind !== "Reject" ||
-      apiSlotAfterRace?.occupant_user_id !== scenario.replacementPrincipalUserId ||
+      apiSlotAfterRace?.assigned_principal_user_id !== scenario.replacementPrincipalUserId ||
       apiCurrentCommandStateStatus.status !== 200 ||
       currentCommandStateAfterRace?.actor_slot !== scenario.actorSlot ||
       currentCommandStateAfterRace?.actor_status !== "alive" ||
@@ -24183,8 +24243,12 @@ async function verifyIncomingReplacementActionSubmission({
         ProcessReplacement: {
           game: actionGame,
           slot: scenario.actorSlot,
-          outgoing_user: scenario.staleOutgoingPrincipalUserId,
-          incoming_user: scenario.replacementPrincipalUserId,
+          outgoing_persona_id: await fetchCurrentSlotPersonaId({
+            apiBaseUrl,
+            game: actionGame,
+            slot: scenario.actorSlot,
+          }),
+          incoming_principal_user_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -24342,12 +24406,12 @@ async function verifyIncomingReplacementActionSubmission({
     if (
       setupHostPhase?.id !== scenario.phaseId ||
       setupHostPhase?.locked !== false ||
-      setupSlot?.occupant_user_id !== scenario.staleOutgoingPrincipalUserId ||
+      setupSlot?.assigned_principal_user_id !== scenario.staleOutgoingPrincipalUserId ||
       replacement?.state !== "ack" ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
       outgoingCommandStateAfterReplacement.status !== 403 ||
       outgoingCommandStateAfterReplacement.body?.error !== scenario.staleOutgoingError ||
       currentCommandStateBeforeAction?.actorSlot !== scenario.actorSlot ||
@@ -24526,8 +24590,12 @@ async function verifyReplacementActionReconnectRecovery({
         ProcessReplacement: {
           game: actionGame,
           slot: scenario.actorSlot,
-          outgoing_user: scenario.staleOutgoingPrincipalUserId,
-          incoming_user: scenario.replacementPrincipalUserId,
+          outgoing_persona_id: await fetchCurrentSlotPersonaId({
+            apiBaseUrl,
+            game: actionGame,
+            slot: scenario.actorSlot,
+          }),
+          incoming_principal_user_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -24670,7 +24738,7 @@ async function verifyReplacementActionReconnectRecovery({
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
       commandStateBeforeAction?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeAction?.actions?.some(
         (candidate) => candidate.templateId === scenario.templateId,
@@ -24808,8 +24876,12 @@ async function verifyStaleReplacementActionAfterResolve({
         ProcessReplacement: {
           game: actionGame,
             slot: scenario.actorSlot,
-            outgoing_user: scenario.staleOutgoingPrincipalUserId,
-            incoming_user: scenario.replacementPrincipalUserId,
+            outgoing_persona_id: await fetchCurrentSlotPersonaId({
+              apiBaseUrl,
+              game: actionGame,
+              slot: scenario.actorSlot,
+            }),
+            incoming_principal_user_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -24987,7 +25059,7 @@ async function verifyStaleReplacementActionAfterResolve({
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
       commandStateBeforeClose?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeClose?.actorStatus !== "alive" ||
       commandStateBeforeClose?.phase?.phaseId !== scenario.phaseId ||
@@ -25931,6 +26003,22 @@ async function fetchHostConsoleState({
   );
 }
 
+const isOpaquePersonaId = (value) =>
+  typeof value === "string" && /^gp_[0-9a-f-]{36}$/i.test(value);
+
+async function fetchCurrentSlotPersonaId({ apiBaseUrl, game, slot }) {
+  const state = await fetchHostConsoleState({ apiBaseUrl, game, slot });
+  const occupancy = state?.slots?.find((entry) => entry?.slot_id === slot);
+  if (!isOpaquePersonaId(occupancy?.persona_id)) {
+    throw new Error(
+      `host console did not expose an opaque current persona for ${slot}: ${JSON.stringify(
+        occupancy ?? null,
+      )}`,
+    );
+  }
+  return occupancy.persona_id;
+}
+
 async function fetchHostPrompts({
   apiBaseUrl,
   game,
@@ -26449,6 +26537,22 @@ async function waitForHostProjectionPhase(page, { phaseId, locked }) {
       window.__fmarchHostProjection?.phase?.locked === expected.locked,
     { phaseId, locked },
   );
+}
+
+async function recoverHostProjection(page, expectedPhase) {
+  await page.waitForFunction(
+    () => typeof window.__fmarchTriggerHostResync === "function",
+  );
+  const recovery = await page.evaluate(async () => {
+    await window.__fmarchTriggerHostResync(0);
+    const events = window.__fmarchHostLiveProjectionEvents ?? [];
+    return {
+      event: events.at(-1) ?? null,
+      phase: window.__fmarchHostProjection?.phase ?? null,
+    };
+  });
+  await waitForHostProjectionPhase(page, expectedPhase);
+  return recovery;
 }
 
 async function confirmHostPhaseAction(

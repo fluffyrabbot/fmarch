@@ -30,7 +30,7 @@ async fn setup_game(pool: &PgPool) -> Uuid {
             game,
             slot: "slot_1".into(),
         },
-        Command::AssignSlot {
+        commands::seat_persona! {
             game,
             slot: "slot_1".into(),
             user: "user_a".into(),

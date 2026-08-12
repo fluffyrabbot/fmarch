@@ -35,7 +35,8 @@ const replacementResolvedPrivatePostProofFixture = () => ({
           command: {
             ProcessReplacement: {
               slot: resolveScenario.actorSlot,
-              incoming_user: resolveScenario.replacementPrincipalUserId,
+              outgoing_persona_id: "persona-outgoing",
+              incoming_principal_user_id: resolveScenario.replacementPrincipalUserId,
             },
           },
         },
@@ -43,7 +44,7 @@ const replacementResolvedPrivatePostProofFixture = () => ({
     },
   },
   hostReplacementAfterProcess: {
-    occupantLabel: resolveScenario.replacementOccupantLabel,
+    assignedPrincipalUserId: resolveScenario.replacementPrincipalUserId,
   },
   commandStateBeforeClose: {
     actorSlot: resolveScenario.actorSlot,
@@ -168,7 +169,8 @@ const replacementCompletedPrivatePostProofFixture = () => ({
           command: {
             ProcessReplacement: {
               slot: scenario.actorSlot,
-              incoming_user: scenario.replacementPrincipalUserId,
+              outgoing_persona_id: "persona-outgoing",
+              incoming_principal_user_id: scenario.replacementPrincipalUserId,
             },
           },
         },
@@ -176,7 +178,7 @@ const replacementCompletedPrivatePostProofFixture = () => ({
     },
   },
   hostReplacementAfterProcess: {
-    occupantLabel: scenario.replacementOccupantLabel,
+    assignedPrincipalUserId: scenario.replacementPrincipalUserId,
   },
   commandStateBeforeClose: {
     actorSlot: scenario.actorSlot,

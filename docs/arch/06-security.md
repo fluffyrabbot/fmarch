@@ -151,12 +151,13 @@ DeadViewer(game)            read dead-visible content; dead slot may post in dea
 SpectatorOf(game)            read fixed spectator room; never grants a player slot or append
 ```
 
-- `SlotOccupant` is bound to the **current** occupant of the slot — after a replacement, the
-  outgoing user's capability is gone and the incoming user's is granted, while the slot's
-  history is untouched ([01](01-domain-model.md)).
+- `SlotOccupant` is derived from the **current immutable occupancy epoch** joined to the
+  private `GamePersona` binding. After replacement, the outgoing persona's epoch is closed,
+  a new persona epoch is opened, and the old principal's capability is gone while slot history
+  remains untouched ([01](01-domain-model.md)).
 - `private:role_pm:<slot_id>` membership is keyed to the stable slot in
   `private_channel_member`. Replacement therefore transfers Role PM read/post authority by
-  changing `slot_occupancy`; it does not rewrite membership, authorship, or history.
+  changing the current `slot_occupancy_epoch`; it does not rewrite membership, authorship, or history.
 - Pack-declared `private:mason` and `private:neighbor` membership is likewise keyed to the
   matching role slots. The outgoing account loses both `SlotOccupant` and the derived
   `ChannelMember` after replacement; the incoming account receives the same room history
@@ -165,7 +166,7 @@ SpectatorOf(game)            read fixed spectator room; never grants a player sl
   Eligible-slot rooms capture members at open; participant rooms grant on submit
   and revoke on withdrawal. The same slot join transfers access on replacement,
   and event state closes posting without erasing authorized read history.
-- `DeadViewer(game)` is derived by joining current `slot_occupancy` with `slot_state`. A dead
+- `DeadViewer(game)` is derived by joining the current `slot_occupancy_epoch` with `slot_state`. A dead
   slot grants it to the current occupant, replacement transfers it, and an alive restoration
   revokes it. Posting additionally checks that the command's actor slot itself is dead, so a
   principal occupying multiple slots cannot use one dead slot to post as a living slot.
@@ -178,7 +179,7 @@ SpectatorOf(game)            read fixed spectator room; never grants a player sl
   the next capability resolution. It intentionally does not revoke the account session
   globally, because that credential may still have unrelated authority elsewhere.
 - Capabilities are derived from projections (`private_channel_member`, `spectator_membership`,
-  `slot_occupancy`, `slot_state`) so they always reflect committed game state, never stale
+  `slot_occupancy_epoch`, `game_persona_private`, `slot_state`) so they always reflect committed game state, never stale
   client claims.
 
 ## Visibility enforcement (defense in depth)

@@ -45,9 +45,9 @@
 //!   Backs `caps` HostOf / CohostOf resolution.
 //! - `spectator_membership` — explicit read-only game grants
 //!   (`SpectatorGranted` / `SpectatorRevoked`). Backs `caps` SpectatorOf.
-//! - `slot_occupancy` — the LIVE slot→user mapping (`SlotAssigned`,
-//!   `ReplacementCompleted`). The slot id is STABLE across replacement; only the
-//!   occupant moves. Backs `caps` SlotOccupant resolution.
+//! - persona and occupancy projections — private principal bindings, public
+//!   game-scoped names, and immutable occupancy epochs. Current authority is a
+//!   selector over the one open epoch, never a mutable slot→user mapping.
 //! - `phase_state`    — current phase, lock, deadline (`GameStarted`/
 //!   `PhaseAdvanced`, `DeadlineSet`/`DeadlineExtended`, `ThreadLocked`/
 //!   `ThreadUnlocked`). Backs command validation (phase open/unlocked).
@@ -419,12 +419,14 @@ pub struct SpectatorMembershipRow {
     pub user_id: String,
 }
 
-/// A row of the `slot_occupancy` projection: the slot's CURRENT occupant.
+/// A public selector row for the one open epoch in a slot.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SlotOccupancyRow {
     pub game_id: Uuid,
     pub slot_id: String,
-    pub occupant_user_id: String,
+    pub occupancy_id: String,
+    pub persona_id: String,
+    pub public_name: String,
 }
 
 /// The `phase_state` projection row: the game's current phase window.
@@ -905,22 +907,65 @@ async fn fold_event(
             let slot_id = str_field(&ev.payload, "slot_id", &ev.kind)?;
             ensure_slot(tx, game_id, &slot_id).await?;
         }
-        "SlotAssigned" => {
-            // Occupancy begins: slot → user (the LIVE mapping).
+        "GamePersonaRegistered" => {
             let p = &ev.payload;
-            let slot_id = str_field(p, "slot_id", &ev.kind)?;
-            let user_id = str_field(p, "user_id", &ev.kind)?;
-            ensure_slot(tx, game_id, &slot_id).await?;
-            upsert_occupancy(tx, game_id, &slot_id, &user_id).await?;
+            let persona_id = str_field(p, "persona_id", &ev.kind)?;
+            let principal_user_id = str_field(p, "principal_user_id", &ev.kind)?;
+            let public_name = str_field(p, "public_name", &ev.kind)?;
+            register_game_persona(
+                tx,
+                game_id,
+                &persona_id,
+                &principal_user_id,
+                &public_name,
+                ev.seq,
+            )
+            .await?;
         }
-        "ReplacementCompleted" => {
-            // The slot id is UNCHANGED; only the occupant mapping moves. The
-            // slot's history (votes/posts) is keyed by slot_id elsewhere and is
-            // therefore preserved — THIS is the User≠Slot payoff.
+        "GamePersonaRenamed" => {
             let p = &ev.payload;
+            let persona_id = str_field(p, "persona_id", &ev.kind)?;
+            let public_name = str_field(p, "public_name", &ev.kind)?;
+            rename_game_persona(tx, game_id, &persona_id, &public_name, ev.seq).await?;
+        }
+        "SlotOccupancyStarted" => {
+            let p = &ev.payload;
+            let transition_id = str_field(p, "transition_id", &ev.kind)?;
+            let occupancy_id = str_field(p, "occupancy_id", &ev.kind)?;
             let slot_id = str_field(p, "slot_id", &ev.kind)?;
-            let incoming = str_field(p, "incoming_user", &ev.kind)?;
-            upsert_occupancy(tx, game_id, &slot_id, &incoming).await?;
+            let persona_id = str_field(p, "persona_id", &ev.kind)?;
+            let reason = str_field(p, "reason", &ev.kind)?;
+            ensure_slot(tx, game_id, &slot_id).await?;
+            start_occupancy_epoch(
+                tx,
+                game_id,
+                OccupancyEpochStart {
+                    transition_id: &transition_id,
+                    occupancy_id: &occupancy_id,
+                    slot_id: &slot_id,
+                    persona_id: &persona_id,
+                    reason: &reason,
+                    seq: ev.seq,
+                },
+            )
+            .await?;
+        }
+        "SlotOccupancyEnded" => {
+            let p = &ev.payload;
+            let occupancy_id = str_field(p, "occupancy_id", &ev.kind)?;
+            let slot_id = str_field(p, "slot_id", &ev.kind)?;
+            let persona_id = str_field(p, "persona_id", &ev.kind)?;
+            let reason = str_field(p, "reason", &ev.kind)?;
+            end_occupancy_epoch(
+                tx,
+                game_id,
+                &occupancy_id,
+                &slot_id,
+                &persona_id,
+                &reason,
+                ev.seq,
+            )
+            .await?;
         }
         "SlotStatusChanged" => {
             let p = &ev.payload;
@@ -3665,7 +3710,11 @@ async fn rebuild_in_tx(
         "game_authority",
         "game_cohost_policy",
         "spectator_membership",
-        "slot_occupancy",
+        "slot_occupancy_epoch",
+        "game_persona_name_claim",
+        "game_persona_name_history",
+        "game_persona_public",
+        "game_persona_private",
         "phase_state",
         private_channel_projection::TABLE,
         "post_policy",
@@ -3826,8 +3875,24 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
         order_by: "user_id",
     },
     AuditProjection {
-        table: "slot_occupancy",
-        order_by: "slot_id",
+        table: "game_persona_private",
+        order_by: "persona_id",
+    },
+    AuditProjection {
+        table: "game_persona_public",
+        order_by: "persona_id",
+    },
+    AuditProjection {
+        table: "game_persona_name_history",
+        order_by: "persona_id, effective_seq",
+    },
+    AuditProjection {
+        table: "game_persona_name_claim",
+        order_by: "normalized_name",
+    },
+    AuditProjection {
+        table: "slot_occupancy_epoch",
+        order_by: "began_seq, occupancy_id",
     },
     AuditProjection {
         table: "phase_state",
@@ -5386,7 +5451,7 @@ pub async fn spectator_memberships(
         .collect())
 }
 
-/// The CURRENT occupant of a slot, if any (the live mapping for `caps`).
+/// The principal behind a slot's one open occupancy epoch, if any.
 pub async fn slot_occupant<'e, E>(
     executor: E,
     game_id: Uuid,
@@ -5396,16 +5461,21 @@ where
     E: sqlx::PgExecutor<'e>,
 {
     let row = sqlx::query(
-        "SELECT occupant_user_id FROM slot_occupancy WHERE game_id = $1 AND slot_id = $2",
+        "SELECT p.principal_user_id AS assigned_principal_user_id \
+         FROM slot_occupancy_epoch o \
+         JOIN game_persona_private p \
+           ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
+         WHERE o.game_id = $1 AND o.slot_id = $2 AND o.ended_seq IS NULL",
     )
     .bind(game_id)
     .bind(slot_id)
     .fetch_optional(executor)
     .await?;
-    Ok(row.map(|r| r.get("occupant_user_id")))
+    Ok(row.map(|r| r.get("assigned_principal_user_id")))
 }
 
-/// Read a game's slot_occupancy rows, ordered deterministically.
+/// Read a game's open occupancy epochs with only public persona presentation,
+/// ordered deterministically.
 pub async fn slot_occupancy<'e, E>(
     executor: E,
     game_id: Uuid,
@@ -5414,8 +5484,11 @@ where
     E: sqlx::PgExecutor<'e>,
 {
     let rows = sqlx::query(
-        "SELECT game_id, slot_id, occupant_user_id FROM slot_occupancy \
-         WHERE game_id = $1 ORDER BY slot_id",
+        "SELECT o.game_id, o.slot_id, o.occupancy_id, o.persona_id, p.current_public_name \
+         FROM slot_occupancy_epoch o \
+         JOIN game_persona_public p \
+           ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
+         WHERE o.game_id = $1 AND o.ended_seq IS NULL ORDER BY o.slot_id",
     )
     .bind(game_id)
     .fetch_all(executor)
@@ -5425,9 +5498,34 @@ where
         .map(|r| SlotOccupancyRow {
             game_id: r.get("game_id"),
             slot_id: r.get("slot_id"),
-            occupant_user_id: r.get("occupant_user_id"),
+            occupancy_id: r.get("occupancy_id"),
+            persona_id: r.get("persona_id"),
+            public_name: r.get("current_public_name"),
         })
         .collect())
+}
+
+/// Whether a principal has any open game occupancy. This stays private to
+/// command validation and prevents public roster selectors from becoming an
+/// authority backdoor.
+pub async fn principal_has_open_occupancy<'e, E>(
+    executor: E,
+    game_id: Uuid,
+    principal_user_id: &str,
+) -> Result<bool, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM slot_occupancy_epoch o \
+         JOIN game_persona_private p ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
+         WHERE o.game_id = $1 AND p.principal_user_id = $2 AND o.ended_seq IS NULL)",
+    )
+    .bind(game_id)
+    .bind(principal_user_id)
+    .fetch_one(executor)
+    .await
+    .map_err(Into::into)
 }
 
 /// The game's current phase window, if a phase has started.
@@ -7122,25 +7220,172 @@ async fn delete_spectator_membership(
     Ok(())
 }
 
-async fn upsert_occupancy(
+async fn register_game_persona(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    slot_id: &str,
-    user_id: &str,
+    persona_id: &str,
+    principal_user_id: &str,
+    public_name: &str,
+    seq: i64,
 ) -> Result<(), ProjectionError> {
+    let normalized_name = public_name.trim().to_lowercase();
+    if normalized_name.is_empty() {
+        return Err(ProjectionError::Payload {
+            kind: "GamePersonaRegistered".to_string(),
+            source: serde::de::Error::custom("public_name must not be blank"),
+        });
+    }
     sqlx::query(
         r#"
-        INSERT INTO slot_occupancy (game_id, slot_id, occupant_user_id)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (game_id, slot_id)
-        DO UPDATE SET occupant_user_id = EXCLUDED.occupant_user_id
+        INSERT INTO game_persona_private (game_id, persona_id, principal_user_id, registered_seq)
+        VALUES ($1, $2, $3, $4)
         "#,
     )
     .bind(game_id)
-    .bind(slot_id)
-    .bind(user_id)
+    .bind(persona_id)
+    .bind(principal_user_id)
+    .bind(seq)
     .execute(&mut **tx)
     .await?;
+    sqlx::query(
+        "INSERT INTO game_persona_public (game_id, persona_id, current_public_name, registered_seq) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(game_id)
+    .bind(persona_id)
+    .bind(public_name.trim())
+    .bind(seq)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO game_persona_name_history (game_id, persona_id, effective_seq, public_name) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(game_id)
+    .bind(persona_id)
+    .bind(seq)
+    .bind(public_name.trim())
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO game_persona_name_claim (game_id, normalized_name, persona_id, first_claimed_seq) \
+         VALUES ($1, $2, $3, $4) ON CONFLICT (game_id, normalized_name) DO NOTHING",
+    )
+    .bind(game_id)
+    .bind(normalized_name)
+    .bind(persona_id)
+    .bind(seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn rename_game_persona(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    persona_id: &str,
+    public_name: &str,
+    seq: i64,
+) -> Result<(), ProjectionError> {
+    let normalized_name = public_name.trim().to_lowercase();
+    if normalized_name.is_empty() {
+        return Err(ProjectionError::Payload {
+            kind: "GamePersonaRenamed".to_string(),
+            source: serde::de::Error::custom("public_name must not be blank"),
+        });
+    }
+    sqlx::query(
+        "UPDATE game_persona_public SET current_public_name = $3, renamed_seq = $4 \
+         WHERE game_id = $1 AND persona_id = $2",
+    )
+    .bind(game_id)
+    .bind(persona_id)
+    .bind(public_name.trim())
+    .bind(seq)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO game_persona_name_history (game_id, persona_id, effective_seq, public_name) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(game_id)
+    .bind(persona_id)
+    .bind(seq)
+    .bind(public_name.trim())
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO game_persona_name_claim (game_id, normalized_name, persona_id, first_claimed_seq) \
+         VALUES ($1, $2, $3, $4) ON CONFLICT (game_id, normalized_name) DO NOTHING",
+    )
+    .bind(game_id)
+    .bind(normalized_name)
+    .bind(persona_id)
+    .bind(seq)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+struct OccupancyEpochStart<'a> {
+    transition_id: &'a str,
+    occupancy_id: &'a str,
+    slot_id: &'a str,
+    persona_id: &'a str,
+    reason: &'a str,
+    seq: i64,
+}
+
+async fn start_occupancy_epoch(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    epoch: OccupancyEpochStart<'_>,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "INSERT INTO slot_occupancy_epoch \
+         (game_id, occupancy_id, transition_id, slot_id, persona_id, began_seq, start_reason) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    )
+    .bind(game_id)
+    .bind(epoch.occupancy_id)
+    .bind(epoch.transition_id)
+    .bind(epoch.slot_id)
+    .bind(epoch.persona_id)
+    .bind(epoch.seq)
+    .bind(epoch.reason)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn end_occupancy_epoch(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    occupancy_id: &str,
+    slot_id: &str,
+    persona_id: &str,
+    reason: &str,
+    seq: i64,
+) -> Result<(), ProjectionError> {
+    let result = sqlx::query(
+        "UPDATE slot_occupancy_epoch SET ended_seq = $6, end_reason = $5 \
+         WHERE game_id = $1 AND occupancy_id = $2 AND slot_id = $3 AND persona_id = $4 \
+           AND ended_seq IS NULL",
+    )
+    .bind(game_id)
+    .bind(occupancy_id)
+    .bind(slot_id)
+    .bind(persona_id)
+    .bind(reason)
+    .bind(seq)
+    .execute(&mut **tx)
+    .await?;
+    if result.rows_affected() != 1 {
+        return Err(ProjectionError::Payload {
+            kind: "SlotOccupancyEnded".to_string(),
+            source: serde::de::Error::custom("no matching open occupancy epoch"),
+        });
+    }
     Ok(())
 }
 

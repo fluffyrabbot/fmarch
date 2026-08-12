@@ -10244,7 +10244,7 @@ function hostLockedConsoleState({ deadline = null } = {}) {
     slots: [
       {
         slot_id: "slot-7",
-        occupant_user_id: "player-mira",
+        assigned_principal_user_id: "player-mira",
         alive: true,
         status: "alive",
         status_tags: ["alive"],
@@ -10271,7 +10271,7 @@ function hostOpenConsoleState({ boundary, deadline = null }) {
     slots: [
       {
         slot_id: "slot-7",
-        occupant_user_id: "player-mira",
+        assigned_principal_user_id: "player-mira",
         alive: true,
         status: "alive",
         status_tags: ["alive"],
@@ -10304,7 +10304,7 @@ function hostPhaseTransitionConsoleState({
     slots: [
       {
         slot_id: "slot-7",
-        occupant_user_id: "player-mira",
+        assigned_principal_user_id: "player-mira",
         alive: true,
         status: "alive",
         status_tags: ["alive"],
@@ -10338,7 +10338,7 @@ function hostCompletedConsoleState({
     slots: [
       {
         slot_id: "slot-7",
-        occupant_user_id: "player-mira",
+        assigned_principal_user_id: "player-mira",
         alive: true,
         status: "alive",
         status_tags: ["alive"],
@@ -10349,7 +10349,7 @@ function hostCompletedConsoleState({
       },
       {
         slot_id: "slot-5",
-        occupant_user_id: "player-sage",
+        assigned_principal_user_id: "player-sage",
         alive: false,
         status: "dead",
         status_tags: ["dead"],

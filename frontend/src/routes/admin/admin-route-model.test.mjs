@@ -7080,7 +7080,7 @@ test("admin local release readiness detail data carries checks and unproven rows
     ]),
     [
       ["addSlot", "ack", "AddSlot", "Setup still needs attention"],
-      ["assignSlot", "ack", "AssignSlot", "Setup still needs attention"],
+      ["assignSlot", "ack", "SeatPersona", "Setup still needs attention"],
       ["assignRole", "ack", "AssignRole", "Ready to start"],
       ["setPostPolicy", "ack", "SetPostPolicy", "Ready to start"],
       ["startGame", "ack", "StartGame", "Started at D01"],
@@ -7214,7 +7214,7 @@ test("admin local host setup proof detail data carries setup command evidence ro
     ]),
     [
       ["addSlot", "ack", "AddSlot", "Setup still needs attention"],
-      ["assignSlot", "ack", "AssignSlot", "Setup still needs attention"],
+      ["assignSlot", "ack", "SeatPersona", "Setup still needs attention"],
       ["assignRole", "ack", "AssignRole", "Ready to start"],
       ["setPostPolicy", "ack", "SetPostPolicy", "Ready to start"],
       ["startGame", "ack", "StartGame", "Started at D01"],
@@ -13054,9 +13054,14 @@ function setupCommandEvidenceFixture(game = "game-a") {
     },
     assignSlot: {
       status: "ack",
-      commandKind: "AssignSlot",
+      commandKind: "SeatPersona",
       readinessSummary: "Setup still needs attention",
-      command: { game, slot: "slot-7", user: "player-mira" },
+      command: {
+        game,
+        slot: "slot-7",
+        principal_user_id: "player-mira",
+        public_name: "player-mira",
+      },
     },
     assignRole: {
       status: "ack",

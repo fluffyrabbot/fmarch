@@ -351,7 +351,7 @@ async function proveModeratorLiveRuntime() {
         slots: [
           {
             slot_id: "slot-7",
-            occupant_user_id: "Mira",
+            assigned_principal_user_id: "Mira",
             status: "modkilled",
             alive: false,
           },

@@ -329,12 +329,14 @@ test("admin actions map to bootstrap wire command variants", () => {
       game: "00000000-0000-0000-0000-000000000123",
       slot: "slot_1",
       user: "player_mira",
+      publicName: "Mira",
     }),
     {
-      AssignSlot: {
+      SeatPersona: {
         game: "00000000-0000-0000-0000-000000000123",
         slot: "slot_1",
-        user: "player_mira",
+        principal_user_id: "player_mira",
+        public_name: "Mira",
       },
     },
   );
@@ -755,6 +757,7 @@ test("player and admin builders emit tags present in generated wire Command unio
       game,
       slot: "slot_1",
       user: "player_mira",
+      publicName: "Mira",
     }),
     buildAdminCommand({
       action: "assign_role",

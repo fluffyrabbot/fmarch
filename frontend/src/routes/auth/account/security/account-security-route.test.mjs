@@ -398,6 +398,67 @@ test("security action revokes a recovery credential", async () => {
   });
 });
 
+test("security action creates a download-ready personal export", async () => {
+  let observed;
+  const result = await actions.createPersonalExport({
+    cookies: { get: () => "fmss_active-session" },
+    fetch: async (url, init) => {
+      observed = { url, authorization: init.headers.authorization, body: JSON.parse(init.body) };
+      return jsonResponse({
+        status: "ready",
+        export_id: "00000000-0000-0000-0000-0000000000ee",
+        expires_at: 4_102_444_800,
+        artifact: { schema_version: 1, profiles: [] },
+      });
+    },
+  });
+  assert.deepEqual(observed, {
+    url: "/auth/account/personal-exports",
+    authorization: "Bearer fmss_active-session",
+    body: {},
+  });
+  assert.equal(result.id, "member-personal-export");
+  assert.equal(result.state, "ack");
+  assert.equal(result.exportId, "00000000-0000-0000-0000-0000000000ee");
+  assert.deepEqual(result.artifact, { schema_version: 1, profiles: [] });
+});
+
+test("security erasure requires explicit confirmation and clears the session on success", async () => {
+  const rejected = await actions.eraseMember({
+    cookies: { get: () => "fmss_active-session" },
+    fetch: async () => {
+      throw new Error("erasure must not be called without the explicit confirmation");
+    },
+    request: formRequest({ confirmation: "no" }),
+  });
+  assert.equal(rejected.status, 400);
+  assert.equal(rejected.data.id, "member-erasure");
+
+  const observed = { deleted: null, request: null };
+  await assert.rejects(
+    actions.eraseMember({
+      cookies: {
+        get: () => "fmss_active-session",
+        delete(name, options) {
+          observed.deleted = { name, options };
+        },
+      },
+      fetch: async (url, init) => {
+        observed.request = { url, authorization: init.headers.authorization, body: JSON.parse(init.body) };
+        return jsonResponse({ status: "erased", pseudonym: "Former member 1234" });
+      },
+      request: formRequest({ confirmation: "ERASE" }),
+    }),
+    (error) => error.status === 303 && error.location === "/?accountErased=1",
+  );
+  assert.deepEqual(observed.request, {
+    url: "/auth/account/erasure",
+    authorization: "Bearer fmss_active-session",
+    body: {},
+  });
+  assert.deepEqual(observed.deleted, { name: "fmarch_session", options: { path: "/" } });
+});
+
 function formRequest(fields) {
   const formData = new FormData();
   for (const [key, value] of Object.entries(fields)) {

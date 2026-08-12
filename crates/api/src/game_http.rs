@@ -14,7 +14,6 @@ use axum::{Json, Router};
 use caps::{Capability, Principal};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
-#[cfg(test)]
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::Path as FsPath;
@@ -1538,7 +1537,12 @@ pub struct HostConsolePhaseState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostConsoleSlotOccupancy {
     pub slot_id: String,
-    pub occupant_user_id: String,
+    pub occupancy_id: String,
+    pub persona_id: String,
+    pub public_name: String,
+    /// Host-only operational binding. Public game/read-model responses expose
+    /// the persona fields above, never this principal.
+    pub assigned_principal_user_id: String,
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
@@ -1648,7 +1652,9 @@ pub struct HostSetupAccountState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostSetupSlotState {
     pub slot_id: String,
-    pub occupant_user_id: Option<String>,
+    pub persona_id: Option<String>,
+    pub public_name: Option<String>,
+    pub assigned_principal_user_id: Option<String>,
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
@@ -1699,7 +1705,10 @@ impl From<HostConsoleSlotOccupancy> for HostConsoleSlotOccupancyDelta {
     fn from(slot: HostConsoleSlotOccupancy) -> Self {
         HostConsoleSlotOccupancyDelta {
             slot_id: slot.slot_id,
-            occupant_user_id: slot.occupant_user_id,
+            occupancy_id: slot.occupancy_id,
+            persona_id: slot.persona_id,
+            public_name: slot.public_name,
+            assigned_principal_user_id: slot.assigned_principal_user_id,
             alive: slot.alive,
             status: slot.status,
             status_tags: slot.status_tags,
@@ -1862,33 +1871,38 @@ pub(super) async fn load_host_console_state(
         });
 
     let slot_states = projections::slot_state(pool, game).await?;
-    let slots = projections::slot_occupancy(pool, game)
-        .await?
-        .into_iter()
-        .filter(|row| slot_id.is_none_or(|slot_id| row.slot_id == slot_id))
-        .map(|row| {
-            let slot_state = slot_states
-                .iter()
-                .find(|state| state.slot_id == row.slot_id);
-            HostConsoleSlotOccupancy {
-                slot_id: row.slot_id,
-                occupant_user_id: row.occupant_user_id,
-                alive: slot_state.map(|state| state.alive).unwrap_or(true),
-                status: slot_state
-                    .map(|state| state.status.clone())
-                    .unwrap_or_else(|| "alive".to_string()),
-                status_tags: slot_state
-                    .map(|state| state.status_tags.clone())
-                    .unwrap_or_default(),
-                role_key: slot_state.and_then(|state| state.role_key.clone()),
-                alignment: slot_state.and_then(|state| state.alignment.clone()),
-                role_revealed: slot_state.map(|state| state.role_revealed).unwrap_or(false),
-                alignment_revealed: slot_state
-                    .map(|state| state.alignment_revealed)
-                    .unwrap_or(false),
-            }
-        })
-        .collect();
+    let mut slots = Vec::new();
+    for row in projections::slot_occupancy(pool, game).await? {
+        if slot_id.is_some_and(|slot_id| row.slot_id != slot_id) {
+            continue;
+        }
+        let slot_state = slot_states
+            .iter()
+            .find(|state| state.slot_id == row.slot_id);
+        let assigned_principal_user_id = projections::slot_occupant(pool, game, &row.slot_id)
+            .await?
+            .unwrap_or_default();
+        slots.push(HostConsoleSlotOccupancy {
+            slot_id: row.slot_id,
+            occupancy_id: row.occupancy_id,
+            persona_id: row.persona_id,
+            public_name: row.public_name,
+            assigned_principal_user_id,
+            alive: slot_state.map(|state| state.alive).unwrap_or(true),
+            status: slot_state
+                .map(|state| state.status.clone())
+                .unwrap_or_else(|| "alive".to_string()),
+            status_tags: slot_state
+                .map(|state| state.status_tags.clone())
+                .unwrap_or_default(),
+            role_key: slot_state.and_then(|state| state.role_key.clone()),
+            alignment: slot_state.and_then(|state| state.alignment.clone()),
+            role_revealed: slot_state.map(|state| state.role_revealed).unwrap_or(false),
+            alignment_revealed: slot_state
+                .map(|state| state.alignment_revealed)
+                .unwrap_or(false),
+        });
+    }
 
     let thread_posts = projections::thread_view(pool, game, None, limit.unwrap_or(25))
         .await?
@@ -2205,17 +2219,27 @@ async fn load_host_setup_state(
             deadline: row.deadline,
         });
     let slot_occupancy = projections::slot_occupancy(&state.pool, game).await?;
+    let mut assigned_principals = BTreeMap::new();
+    for occupancy in &slot_occupancy {
+        if let Some(principal_user_id) =
+            projections::slot_occupant(&state.pool, game, &occupancy.slot_id).await?
+        {
+            assigned_principals.insert(occupancy.slot_id.clone(), principal_user_id);
+        }
+    }
     let slots = projections::slot_state(&state.pool, game)
         .await?
         .into_iter()
         .map(|slot| {
-            let occupant_user_id = slot_occupancy
+            let occupancy = slot_occupancy
                 .iter()
-                .find(|occupancy| occupancy.slot_id == slot.slot_id)
-                .map(|occupancy| occupancy.occupant_user_id.clone());
+                .find(|occupancy| occupancy.slot_id == slot.slot_id);
+            let assigned_principal_user_id = assigned_principals.get(&slot.slot_id).cloned();
             HostSetupSlotState {
                 slot_id: slot.slot_id,
-                occupant_user_id,
+                persona_id: occupancy.map(|occupancy| occupancy.persona_id.clone()),
+                public_name: occupancy.map(|occupancy| occupancy.public_name.clone()),
+                assigned_principal_user_id,
                 alive: slot.alive,
                 status: slot.status,
                 status_tags: slot.status_tags,

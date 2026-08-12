@@ -667,13 +667,64 @@ CREATE TABLE public.slot_effect (
 
 
 --
--- Name: slot_occupancy; Type: TABLE; Schema: public; Owner: -
+-- Name: game_persona_private; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.slot_occupancy (
+CREATE TABLE public.game_persona_private (
     game_id uuid NOT NULL,
+    persona_id text NOT NULL,
+    principal_user_id text NOT NULL,
+    registered_seq bigint NOT NULL
+);
+
+--
+-- Name: game_persona_public; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.game_persona_public (
+    game_id uuid NOT NULL,
+    persona_id text NOT NULL,
+    current_public_name text NOT NULL,
+    registered_seq bigint NOT NULL,
+    renamed_seq bigint
+);
+
+--
+-- Name: game_persona_name_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.game_persona_name_history (
+    game_id uuid NOT NULL,
+    persona_id text NOT NULL,
+    effective_seq bigint NOT NULL,
+    public_name text NOT NULL
+);
+
+--
+-- Name: game_persona_name_claim; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.game_persona_name_claim (
+    game_id uuid NOT NULL,
+    normalized_name text NOT NULL,
+    persona_id text NOT NULL,
+    first_claimed_seq bigint NOT NULL
+);
+
+--
+-- Name: slot_occupancy_epoch; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.slot_occupancy_epoch (
+    game_id uuid NOT NULL,
+    occupancy_id text NOT NULL,
+    transition_id text NOT NULL,
     slot_id text NOT NULL,
-    occupant_user_id text NOT NULL
+    persona_id text NOT NULL,
+    began_seq bigint NOT NULL,
+    ended_seq bigint,
+    start_reason text NOT NULL,
+    end_reason text
 );
 
 
@@ -1105,11 +1156,43 @@ ALTER TABLE ONLY public.slot_effect
 
 
 --
--- Name: slot_occupancy slot_occupancy_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: game_persona_private game_persona_private_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.slot_occupancy
-    ADD CONSTRAINT slot_occupancy_pkey PRIMARY KEY (game_id, slot_id);
+ALTER TABLE ONLY public.game_persona_private
+    ADD CONSTRAINT game_persona_private_pkey PRIMARY KEY (game_id, persona_id);
+
+
+--
+-- Name: game_persona_public game_persona_public_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.game_persona_public
+    ADD CONSTRAINT game_persona_public_pkey PRIMARY KEY (game_id, persona_id);
+
+
+--
+-- Name: game_persona_name_history game_persona_name_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.game_persona_name_history
+    ADD CONSTRAINT game_persona_name_history_pkey PRIMARY KEY (game_id, persona_id, effective_seq);
+
+
+--
+-- Name: game_persona_name_claim game_persona_name_claim_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.game_persona_name_claim
+    ADD CONSTRAINT game_persona_name_claim_pkey PRIMARY KEY (game_id, normalized_name);
+
+
+--
+-- Name: slot_occupancy_epoch slot_occupancy_epoch_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.slot_occupancy_epoch
+    ADD CONSTRAINT slot_occupancy_epoch_pkey PRIMARY KEY (game_id, occupancy_id);
 
 
 --
@@ -1469,10 +1552,24 @@ CREATE INDEX slot_effect_by_effect_idx ON public.slot_effect USING btree (game_i
 
 
 --
--- Name: slot_occupancy_user_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: game_persona_private_principal_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX slot_occupancy_user_idx ON public.slot_occupancy USING btree (game_id, occupant_user_id);
+CREATE UNIQUE INDEX game_persona_private_principal_idx ON public.game_persona_private USING btree (game_id, principal_user_id);
+
+
+--
+-- Name: slot_occupancy_epoch_open_slot_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX slot_occupancy_epoch_open_slot_idx ON public.slot_occupancy_epoch USING btree (game_id, slot_id) WHERE (ended_seq IS NULL);
+
+
+--
+-- Name: slot_occupancy_epoch_open_persona_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX slot_occupancy_epoch_open_persona_idx ON public.slot_occupancy_epoch USING btree (game_id, persona_id) WHERE (ended_seq IS NULL);
 
 
 --

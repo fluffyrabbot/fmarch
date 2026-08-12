@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 fn assert_ordered(section: &str, contracts: &[&str], boundary: &str) {
     let mut previous = 0;
     for (index, contract) in contracts.iter().enumerate() {
@@ -20,8 +18,10 @@ fn assert_ordered(section: &str, contracts: &[&str], boundary: &str) {
 
 #[test]
 fn attached_variant_reads_have_one_immutable_descriptor_owning_boundary() {
-    let source_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/variants.rs");
-    let source = std::fs::read_to_string(source_path).unwrap();
+    // Embed the audited production source. Runtime filesystem lookup via
+    // CARGO_MANIFEST_DIR makes this structural contract depend on where Cargo
+    // happened to compile the test, which is not stable across cache restores.
+    let source = include_str!("../src/variants.rs");
     let production = source
         .split("#[cfg(test)]")
         .next()

@@ -1,6 +1,95 @@
 // Ordinary Postgres command scenarios. Heavy semantic audits live in tests/semantic_audit/.
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn named_persona_seating_and_rename_preserve_epoch_authority_and_name_claims(pool: PgPool) {
+    let game = Uuid::new_v4();
+    let host = user("host_h");
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+            cohost_denied: vec![],
+        },
+    )
+    .await
+    .unwrap();
+    for slot in ["slot_1", "slot_2"] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &host,
+        Command::SeatPersona {
+            game,
+            slot: "slot_1".into(),
+            principal_user_id: "player_mira".into(),
+            public_name: "Mira".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let occupied = projections::slot_occupancy(&pool, game).await.unwrap();
+    assert_eq!(occupied.len(), 1);
+    assert_eq!(occupied[0].slot_id, "slot_1");
+    assert_eq!(occupied[0].public_name, "Mira");
+    assert_eq!(
+        projections::slot_occupant(&pool, game, "slot_1")
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("player_mira")
+    );
+
+    handle(
+        &pool,
+        &host,
+        Command::RenameGamePersona {
+            game,
+            persona_id: occupied[0].persona_id.clone(),
+            public_name: "Rowan".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        projections::slot_occupancy(&pool, game).await.unwrap()[0].public_name,
+        "Rowan"
+    );
+
+    let rejected = handle(
+        &pool,
+        &host,
+        Command::SeatPersona {
+            game,
+            slot: "slot_2".into(),
+            principal_user_id: "player_lark".into(),
+            public_name: "rowan".into(),
+        },
+    )
+    .await
+    .expect_err("a public game name is permanently claimed by its persona");
+    assert_eq!(rejected, Reject::InvalidTarget);
+
+    projections::rebuild(&pool, game).await.unwrap();
+    let rebuilt = projections::slot_occupancy(&pool, game).await.unwrap();
+    assert_eq!(rebuilt.len(), 1);
+    assert_eq!(rebuilt[0].persona_id, occupied[0].persona_id);
+    assert_eq!(rebuilt[0].public_name, "Rowan");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_phase_movement_respects_pack_cadence(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_h");
@@ -240,7 +329,7 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -1583,7 +1672,7 @@ async fn resolve_phase_folds_three_faction_elimination_win_and_rebuild(pool: PgP
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -1840,20 +1929,63 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
 
     // Pre-replacement: S's ballot tallies for T.
     assert_eq!(tally_for(&pool, game, "D01", target).await, 1, "S voted T");
+    let outgoing_persona_id = projections::slot_occupancy(&pool, game)
+        .await
+        .expect("read current occupancy epoch")
+        .into_iter()
+        .find(|row| row.slot_id == slot)
+        .expect("slot has an open occupancy epoch")
+        .persona_id;
 
-    // ── THE REPLACEMENT: A → B on the SAME slot id S ──
+    // ── THE REPLACEMENT: A's persona → B on the SAME slot id S ──
     handle(
         &pool,
         &user(host),
         Command::ProcessReplacement {
             game,
             slot: slot.into(),
-            outgoing_user: a.into(),
-            incoming_user: b.into(),
+            outgoing_persona_id,
+            incoming_principal_user_id: b.into(),
         },
     )
     .await
     .expect("host processes replacement");
+
+    let stream_events = eventstore::load_stream(&pool, game).await.unwrap();
+    assert!(
+        stream_events
+            .iter()
+            .all(|event| !matches!(event.kind.as_str(), "SlotAssigned" | "ReplacementCompleted")),
+        "the stream has one persona/epoch language only"
+    );
+    let occupancy_events = stream_events
+        .into_iter()
+        .filter(|event| {
+            matches!(
+                event.kind.as_str(),
+                "GamePersonaRegistered" | "SlotOccupancyStarted" | "SlotOccupancyEnded"
+            )
+        })
+        .collect::<Vec<_>>();
+    let replacement_end = occupancy_events
+        .iter()
+        .find(|event| event.kind == "SlotOccupancyEnded")
+        .expect("replacement closes the outgoing immutable epoch");
+    let replacement_start = occupancy_events
+        .iter()
+        .rev()
+        .find(|event| event.kind == "SlotOccupancyStarted")
+        .expect("replacement opens the incoming immutable epoch");
+    assert_eq!(
+        replacement_end.payload["transition_id"],
+        replacement_start.payload["transition_id"],
+        "replacement is one atomic occupancy transition"
+    );
+    assert!(
+        replacement_end.payload.get("outgoing_user").is_none()
+            && replacement_start.payload.get("incoming_user").is_none(),
+        "occupancy facts carry personas, not mutable user-to-slot payloads"
+    );
 
     // (a) S's vote STILL tallies for T — the ballot is keyed by slot, not user.
     assert_eq!(
@@ -1954,7 +2086,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
         handle(
             &pool,
             &user(host),
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -2082,8 +2214,8 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
         Command::ProcessReplacement {
             game,
             slot: dead_slot.into(),
-            outgoing_user: outgoing.into(),
-            incoming_user: incoming.into(),
+            outgoing_persona_id: current_slot_persona_id(&pool, game, dead_slot).await,
+            incoming_principal_user_id: incoming.into(),
         },
     )
     .await
@@ -2295,7 +2427,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
         handle(
             &pool,
             &user(host),
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: spectator.into(),
@@ -2309,7 +2441,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
     handle(
         &pool,
         &user(host),
-        Command::AssignSlot {
+        commands::seat_persona! {
             game,
             slot: slot.into(),
             user: player.into(),
@@ -2359,8 +2491,8 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
             Command::ProcessReplacement {
                 game,
                 slot: slot.into(),
-                outgoing_user: player.into(),
-                incoming_user: spectator.into(),
+                outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
+                incoming_principal_user_id: spectator.into(),
             },
         )
         .await
@@ -2494,8 +2626,8 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
         Command::ProcessReplacement {
             game,
             slot: slot.into(),
-            outgoing_user: outgoing.into(),
-            incoming_user: incoming.into(),
+            outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
+            incoming_principal_user_id: incoming.into(),
         },
     )
     .await
@@ -2836,7 +2968,7 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -2972,8 +3104,8 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
             Command::ProcessReplacement {
                 game,
                 slot: slot.into(),
-                outgoing_user: outgoing.into(),
-                incoming_user: incoming.into(),
+                outgoing_persona_id: current_slot_persona_id(&replacement_pool, game, slot).await,
+                incoming_principal_user_id: incoming.into(),
             },
         )
         .await
@@ -3007,7 +3139,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
         .unwrap()
         .expect("replacement proceeds after the in-flight post commits");
     assert_eq!(post_ack.stream_seqs.len(), 1);
-    assert_eq!(replacement_ack.stream_seqs.len(), 1);
+    assert_eq!(replacement_ack.stream_seqs.len(), 3);
     assert!(
         post_ack.stream_seqs[0] < replacement_ack.stream_seqs[0],
         "replacement must not commit between outgoing authority check and post append"
@@ -3037,7 +3169,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
         .expect("winning post event exists");
     let replacement_event = events
         .iter()
-        .find(|event| event.kind == "ReplacementCompleted")
+        .find(|event| event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement")
         .expect("replacement event exists");
     assert_eq!(post_event.payload["slot_or_user"]["slot"], slot);
     assert!(
@@ -3089,8 +3221,8 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) 
             Command::ProcessReplacement {
                 game,
                 slot: slot.into(),
-                outgoing_user: outgoing.into(),
-                incoming_user: incoming.into(),
+                outgoing_persona_id: current_slot_persona_id(&replacement_pool, game, slot).await,
+                incoming_principal_user_id: incoming.into(),
             },
         )
         .await
@@ -3124,7 +3256,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) 
         .unwrap()
         .expect("replacement proceeds after the in-flight vote commits");
     assert_eq!(vote_ack.stream_seqs.len(), 1);
-    assert_eq!(replacement_ack.stream_seqs.len(), 1);
+    assert_eq!(replacement_ack.stream_seqs.len(), 3);
     assert!(
         vote_ack.stream_seqs[0] < replacement_ack.stream_seqs[0],
         "replacement must not commit between outgoing authority check and vote append"
@@ -3155,7 +3287,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) 
         .expect("winning vote event exists");
     let replacement_event = events
         .iter()
-        .find(|event| event.kind == "ReplacementCompleted")
+        .find(|event| event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement")
         .expect("replacement event exists");
     assert_eq!(vote_event.payload["actor"], slot);
     assert_eq!(vote_event.payload["target"], target);
@@ -3204,7 +3336,7 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot_id.into(),
                 user: occupant.into(),
@@ -3260,8 +3392,8 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
             Command::ProcessReplacement {
                 game,
                 slot: slot.into(),
-                outgoing_user: outgoing.into(),
-                incoming_user: incoming.into(),
+                outgoing_persona_id: current_slot_persona_id(&replacement_pool, game, slot).await,
+                incoming_principal_user_id: incoming.into(),
             },
         )
         .await
@@ -3272,7 +3404,7 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
         .unwrap()
         .expect("replacement should converge successfully");
     let action_result = action_task.await.unwrap();
-    assert_eq!(replacement_ack.stream_seqs.len(), 1);
+    assert_eq!(replacement_ack.stream_seqs.len(), 3);
     match &action_result {
         Ok(action_ack) => {
             assert_eq!(action_ack.stream_seqs.len(), 1);
@@ -3313,7 +3445,7 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
     let events = eventstore::load_stream(&pool, game).await.unwrap();
     let replacement_event = events
         .iter()
-        .find(|event| event.kind == "ReplacementCompleted")
+        .find(|event| event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement")
         .expect("replacement event exists");
     let action_events: Vec<_> = events
         .iter()
@@ -3378,7 +3510,7 @@ async fn incoming_replacement_can_submit_and_resolve_action(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot_id.into(),
                 user: occupant.into(),
@@ -3415,8 +3547,8 @@ async fn incoming_replacement_can_submit_and_resolve_action(pool: PgPool) {
         Command::ProcessReplacement {
             game,
             slot: slot.into(),
-            outgoing_user: outgoing.into(),
-            incoming_user: incoming.into(),
+            outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
+            incoming_principal_user_id: incoming.into(),
         },
     )
     .await
@@ -4024,7 +4156,7 @@ async fn host_fiat_vote_weight_grant_hammers_from_folded_snapshot(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4215,7 +4347,7 @@ async fn cohost_denied_lifecycle_and_effect_spec_while_deadline_still_allowed(po
         handle(
             &pool,
             &user("host_h"),
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4470,7 +4602,7 @@ async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: 
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4518,8 +4650,8 @@ async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: 
         Command::ProcessReplacement {
             game,
             slot: "slot_a".into(),
-            outgoing_user: "user_a".into(),
-            incoming_user: "user_z".into(),
+            outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_a").await,
+            incoming_principal_user_id: "user_z".into(),
         },
     )
     .await
@@ -4613,7 +4745,7 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4650,8 +4782,8 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
         Command::ProcessReplacement {
             game,
             slot: "slot_red".into(),
-            outgoing_user: "user_player_red".into(),
-            incoming_user: "user_replacement_green".into(),
+            outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_red").await,
+            incoming_principal_user_id: "user_replacement_green".into(),
         },
     )
     .await
@@ -4733,7 +4865,7 @@ async fn stored_game_stream_loads_phase_metadata_deadline_and_pack_policy(pool: 
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4841,7 +4973,7 @@ async fn stored_game_stream_loads_slot_lifecycle_and_pack_visible_status_tags(po
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -4996,7 +5128,7 @@ async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: P
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -5184,7 +5316,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -5498,7 +5630,7 @@ async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -5741,7 +5873,7 @@ async fn host_resolve_phase_reveals_killed_slot_without_endgame(pool: PgPool) {
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -5901,7 +6033,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -6423,7 +6555,7 @@ async fn host_advance_phase_wraps_night_to_next_day_from_pack_cadence(pool: PgPo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -6531,7 +6663,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -6784,7 +6916,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -7238,7 +7370,7 @@ async fn action_submission_rejects_invalid_target_shape_state_and_window(pool: P
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -7459,7 +7591,7 @@ async fn action_submission_rejects_day_specific_action_in_night_window(pool: PgP
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -8127,7 +8259,7 @@ async fn audit_large_action_graph_performance_artifact_in_process_writes_pass_an
         "large graph inner events should remain bounded: {pass_file:#?}"
     );
     assert!(
-        pass_file["stream_event_count"].as_u64().unwrap_or(u64::MAX) <= 200,
+        pass_file["stream_event_count"].as_u64().unwrap_or(u64::MAX) <= 300,
         "large graph stream event count should remain bounded: {pass_file:#?}"
     );
     assert!(
@@ -8882,7 +9014,7 @@ async fn submit_vote_hammer_uses_folded_vote_weight_grant(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -9069,7 +9201,7 @@ async fn host_prompt_skip_next_day_rejects_unsupported_pack_cadence(pool: PgPool
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -9212,7 +9344,7 @@ async fn host_resolve_phase_loads_action_submissions_from_stream(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -9444,7 +9576,7 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -9645,7 +9777,7 @@ async fn action_submission_requires_open_matching_phase(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -9781,7 +9913,7 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -10246,7 +10378,7 @@ async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -10469,7 +10601,7 @@ async fn action_submission_rejects_disabled_endgame_threshold_before_append(pool
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -10562,7 +10694,7 @@ async fn action_submission_rejects_lost_team_kill_with_teammate_alive(pool: PgPo
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -10655,7 +10787,7 @@ async fn action_submission_rejects_recluse_team_kill_with_non_recluse_teammate_a
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -10752,7 +10884,7 @@ async fn action_submission_allows_simultaneous_duplicate_base_template(pool: PgP
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -10904,7 +11036,7 @@ async fn action_submission_rejects_inactive_novice_and_activated_actions(pool: P
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -11059,7 +11191,7 @@ async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -11339,7 +11471,7 @@ async fn action_submission_spends_inventor_item_grant(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -11603,7 +11735,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -12619,7 +12751,7 @@ async fn concurrent_player_action_and_host_advance_phase_rejects_late_action(poo
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -13117,7 +13249,7 @@ async fn slot_lifecycle_death_clears_current_ballots_by_and_for_slot(pool: PgPoo
     handle(
         &pool,
         &user("host_h"),
-        Command::AssignSlot {
+        commands::seat_persona! {
             game,
             slot: "slot_2".into(),
             user: "user_b".into(),
@@ -13209,7 +13341,7 @@ async fn submit_vote_hammer_locks_phase_when_threshold_is_reached(pool: PgPool) 
         handle(
             &pool,
             &h,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -13461,7 +13593,7 @@ async fn no_lynch_votes_resolve_to_official_engine_outcome(pool: PgPool) {
         handle(
             &pool,
             &user("host_h"),
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),
@@ -13596,7 +13728,7 @@ async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool)
         handle(
             &pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: occupant.into(),

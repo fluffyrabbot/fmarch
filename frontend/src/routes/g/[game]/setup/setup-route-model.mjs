@@ -239,7 +239,9 @@ export function normalizeHostSetupState(raw, { game }) {
       slots.map((slot) =>
         Object.freeze({
           slotId: normalizeId(slot.slot_id, "slot.slot_id"),
-          occupantUserId: normalizeOptionalText(slot.occupant_user_id),
+          personaId: normalizeOptionalText(slot.persona_id),
+          publicName: normalizeOptionalText(slot.public_name),
+          assignedPrincipalUserId: normalizeOptionalText(slot.assigned_principal_user_id),
           alive: slot.alive !== false,
           status: normalizeOptionalText(slot.status) ?? "alive",
           statusTags: Object.freeze(
@@ -297,7 +299,7 @@ export function buildHostSetupReadiness(setupState) {
     setupState.postPolicies.find((policy) => policy.channelId === "main") ??
     Object.freeze({ channelId: "main", allowMediaOnly: false });
   const slotsExist = setupState.slots.length > 0;
-  const occupied = slotsExist && setupState.slots.every((slot) => slot.occupantUserId !== null);
+  const occupied = slotsExist && setupState.slots.every((slot) => slot.personaId !== null);
   const rolesAssigned = slotsExist && setupState.slots.every((slot) => slot.roleKey !== null);
   const defaultStartPhase = setupState.pack.startPhaseOptions[0] ?? "D01";
   const checks = Object.freeze([
@@ -327,16 +329,16 @@ export function buildHostSetupReadiness(setupState) {
 export function occupiedSetupInviteTargets(setupState) {
   return Object.freeze(
     setupState.slots
-      .filter((slot) => slot.occupantUserId !== null)
+      .filter((slot) => slot.assignedPrincipalUserId !== null)
       .map((slot) =>
         Object.freeze({
           slotId: slot.slotId,
-          principalUserId: slot.occupantUserId,
-          expectedOccupantUserId: slot.occupantUserId,
+          principalUserId: slot.assignedPrincipalUserId,
+          expectedOccupantUserId: slot.assignedPrincipalUserId,
           accountId: setupState.accounts.find(
-            (account) => account.principalUserId === slot.occupantUserId,
+            (account) => account.principalUserId === slot.assignedPrincipalUserId,
           )?.accountId ?? "",
-          targetLabel: `${slotLabel(slot.slotId)} / ${accountLabel(setupState, slot.occupantUserId)}`,
+          targetLabel: `${slotLabel(slot.slotId)} / ${slot.publicName}`,
         }),
       ),
   );
@@ -372,7 +374,9 @@ function hostSetupFixtureState({ game }) {
     slots: Object.freeze([
       Object.freeze({
         slot_id: "slot_1",
-        occupant_user_id: "player_mira",
+        persona_id: "gp_mira",
+        public_name: "Mira",
+        assigned_principal_user_id: "player_mira",
         alive: true,
         status: "alive",
         status_tags: Object.freeze([]),
@@ -380,7 +384,9 @@ function hostSetupFixtureState({ game }) {
       }),
       Object.freeze({
         slot_id: "slot_2",
-        occupant_user_id: null,
+        persona_id: null,
+        public_name: null,
+        assigned_principal_user_id: null,
         alive: true,
         status: "alive",
         status_tags: Object.freeze([]),

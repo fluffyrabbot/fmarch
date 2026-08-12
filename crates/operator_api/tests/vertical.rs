@@ -36,6 +36,19 @@ use wire::{
     ResolutionTraceInspectionReport, ServerEnvelope, ServerMsg, VoteTarget,
 };
 
+macro_rules! seat_persona {
+    ($game:ident, slot: $slot:expr, user: $user:expr $(,)?) => {{
+        let slot: String = $slot;
+        let principal_user_id: String = $user;
+        Command::SeatPersona {
+            game: $game,
+            public_name: principal_user_id.clone(),
+            principal_user_id,
+            slot,
+        }
+    }};
+}
+
 #[derive(Clone)]
 struct CommandRouteState {
     pool: sqlx::PgPool,
@@ -1248,7 +1261,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             app.clone(),
             104,
             "host_h",
-            Command::AssignSlot {
+            seat_persona! {
                 game,
                 slot: "slot_1".into(),
                 user: "user_1".into(),
@@ -3509,7 +3522,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
                 app.clone(),
                 base + 1,
                 "host_h",
-                Command::AssignSlot {
+                seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),
@@ -3703,7 +3716,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
                 app.clone(),
                 id + 1,
                 "host_h",
-                Command::AssignSlot {
+                seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),
@@ -4086,7 +4099,7 @@ async fn vertical_resolution_audit_is_host_audit_only_and_reports_drift(pool: sq
                 app.clone(),
                 id + 1,
                 "host_h",
-                Command::AssignSlot {
+                seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),
@@ -4361,7 +4374,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 seed_app.clone(),
                 base + 1,
                 "host_h",
-                Command::AssignSlot {
+                seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),

@@ -114,6 +114,7 @@ export function buildAdminCommand({
   slot,
   roleKey,
   user,
+  publicName,
   channelId = "main",
   allowMediaOnly = false,
   phase = "D01",
@@ -136,10 +137,11 @@ export function buildAdminCommand({
       });
     case "assign_slot":
       return Object.freeze({
-        AssignSlot: Object.freeze({
+        SeatPersona: Object.freeze({
           game: requiredString(game, "game"),
           slot: requiredString(slot, "slot"),
-          user: requiredString(user, "user"),
+          principal_user_id: requiredString(user, "user"),
+          public_name: requiredString(publicName, "publicName"),
         }),
       });
     case "assign_role":

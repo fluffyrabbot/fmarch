@@ -26,10 +26,10 @@ export async function seedDayEventRoom({ fixture, sendCommand }) {
     { CreateGame: { game: fixture.game, pack: "mafiascum" } },
     { AddSlot: { game: fixture.game, slot: fixture.outgoing.slotId } },
     {
-      AssignSlot: {
+      SeatPersona: {
         game: fixture.game,
         slot: fixture.outgoing.slotId,
-        user: fixture.outgoing.principalUserId,
+        principal_user_id: fixture.outgoing.principalUserId, public_name: fixture.outgoing.principalUserId,
       },
     },
     {
@@ -272,12 +272,25 @@ export async function driveDayEventRoomBrowser({
   await outgoingPage.goto(roomUrl, { waitUntil: "networkidle" });
   await outgoingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
 
+  const replacementHostState = await fetchJson(
+    `${apiBaseUrl}/games/${fixture.game}/host-console-state?principal_user_id=host_h&slot_id=${fixture.outgoing.slotId}`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
+  );
+  const outgoingPersonaId = replacementHostState.slots?.find(
+    (slot) => slot.slot_id === fixture.outgoing.slotId,
+  )?.persona_id;
+  if (typeof outgoingPersonaId !== "string" || !outgoingPersonaId.startsWith("gp_")) {
+    throw new Error(
+      `DayEvent replacement lacked an opaque outgoing persona: ${JSON.stringify(replacementHostState.slots)}`,
+    );
+  }
+
   const replacement = await sendCommand("host_h", {
     ProcessReplacement: {
       game: fixture.game,
       slot: fixture.outgoing.slotId,
-      outgoing_user: fixture.outgoing.principalUserId,
-      incoming_user: fixture.incoming.principalUserId,
+      outgoing_persona_id: outgoingPersonaId,
+      incoming_principal_user_id: fixture.incoming.principalUserId,
     },
   });
   await outgoingPage.evaluate(async () => {

@@ -26,8 +26,8 @@ test("replacement command assertions match shared command envelope", () => {
             ProcessReplacement: {
               game: scenario.gameFixtureId,
               slot: scenario.actorSlot,
-              outgoing_user: scenario.staleOutgoingPrincipalUserId,
-              incoming_user: scenario.replacementPrincipalUserId,
+              outgoing_persona_id: "persona-outgoing",
+              incoming_principal_user_id: scenario.replacementPrincipalUserId,
             },
           },
         },
@@ -62,12 +62,12 @@ test("replacement owner assertion accepts current host and API owner", () => {
       {
         hostProjection: {
           slotId: scenario.actorSlot,
-          occupantLabel: scenario.replacementOccupantLabel,
+          assignedPrincipalUserId: scenario.replacementPrincipalUserId,
           historyLabel: `history for ${scenario.actorSlot}`,
         },
         apiSlot: {
           slot_id: scenario.actorSlot,
-          occupant_user_id: scenario.replacementPrincipalUserId,
+          assigned_principal_user_id: scenario.replacementPrincipalUserId,
         },
       },
       scenario,
@@ -79,7 +79,7 @@ test("replacement owner assertion accepts current host and API owner", () => {
       {
         apiSlot: {
           slot_id: scenario.actorSlot,
-          occupant_user_id: scenario.staleOutgoingPrincipalUserId,
+          assigned_principal_user_id: scenario.staleOutgoingPrincipalUserId,
         },
       },
       scenario,

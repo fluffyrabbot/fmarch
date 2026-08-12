@@ -951,8 +951,8 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
         Command::ProcessReplacement {
             game,
             slot: slot.into(),
-            outgoing_user: outgoing.into(),
-            incoming_user: incoming.into(),
+            outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
+            incoming_principal_user_id: incoming.into(),
         },
     )
     .await

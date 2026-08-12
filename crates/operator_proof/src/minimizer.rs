@@ -688,7 +688,7 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
         if let Err(err) = handle(
             pool,
             &host,
-            Command::AssignSlot {
+            commands::seat_persona! {
                 game,
                 slot: slot.slot.clone(),
                 user: format!("fixture_user_{}", slot_number(&slot.slot).unwrap_or(0)),

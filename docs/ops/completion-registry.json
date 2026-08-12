@@ -660,8 +660,8 @@
       "order": 60,
       "title": "Game persona and occupancy epochs",
       "execution_class": "code",
-      "status": "open",
-      "summary": "The current user-to-slot assignment model proves replacement continuity but does not yet give named game-scoped personas and time-bounded occupancy epochs one shared event-sourced identity model for live authority and historical authorship.",
+      "status": "complete",
+      "summary": "GamePersonaRegistered plus SlotOccupancyStarted/Ended are the sole event-sourced authorship and authority substrate. Setup, replacement, live authority, replay/export, projection rebuilds, wire, and browser recovery consume opaque game personas and immutable occupancy epochs without a user-to-slot compatibility path.",
       "complete_when": [
         "Named game-scoped personas and stable slots are joined by immutable occupancy epochs, and setup, live authority, replacement, replay, export, projection rebuilds, and browser recovery consume that single model without compatibility aliases."
       ],
@@ -674,11 +674,29 @@
         {
           "kind": "source",
           "value": "docs/rfcs/0001-first-class-replay-and-history-explorer.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/game_platform/src/persona.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/src/lib.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/commands/src/lib.rs"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:host-console-day-event-room-live-stack"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:dev-test-game-contract"
         }
       ],
-      "remaining": [
-        "Replace direct user-to-slot assignment history with named game personas and immutable occupancy epochs across setup, authority, replacement, projections, replay/export, and role-surface proof."
-      ]
+      "remaining": []
     },
     {
       "id": "product.mash.day-event-model",
@@ -1560,7 +1578,7 @@
       "title": "Member data lifecycle and export",
       "execution_class": "code",
       "status": "open",
-      "summary": "Authentication can be disabled and game data can be exported, but fmarch does not yet own a coherent member-level deactivation, erasure/pseudonymization, retention, and personal-data export contract.",
+      "summary": "A typed member lifecycle stream exports personal data, revokes sessions and credentials, removes nonessential identifiers, pseudonymizes retained authorship, and rebuilds affected projections deterministically. The account-security route exposes export and erasure controls, and the retention behavior is documented for policy approval; completion remains gated on the declared community-profile dependency.",
       "complete_when": [
         "A member can export their associated account data and request a typed lifecycle transition that revokes authority, erases credentials and nonessential identifiers, pseudonymizes retained authorship, and rebuilds every affected projection deterministically under a declared retention policy."
       ],
@@ -1574,10 +1592,34 @@
         {
           "kind": "source",
           "value": "docs/arch/15-one-zero-governance.md"
+        },
+        {
+          "kind": "source",
+          "value": "crates/identity/src/member_lifecycle.rs"
+        },
+        {
+          "kind": "source",
+          "value": "crates/projections/migrations/0016_member_lifecycle.sql"
+        },
+        {
+          "kind": "source",
+          "value": "frontend/src/routes/auth/account/security/+page.svelte"
+        },
+        {
+          "kind": "source",
+          "value": "docs/policy-drafts/member-data-lifecycle.md"
+        },
+        {
+          "kind": "command",
+          "value": "npm run test:auth-invite-role-proof"
+        },
+        {
+          "kind": "command",
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api --test auth_methods -- --test-threads=1"
         }
       ],
       "remaining": [
-        "Define and implement typed member deactivation/erasure facts, deterministic projection pseudonymization, personal-data export, retention boundaries, member controls, and rebuild/browser proof."
+        "Close product.community.profiles, then promote this fully implemented lifecycle capability through its declared dependency gate."
       ]
     },
     {

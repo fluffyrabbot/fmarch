@@ -726,7 +726,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
         (
             3,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
                 user: outgoing_principal.clone(),
@@ -834,8 +834,8 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
             Command::ProcessReplacement {
                 game,
                 slot: "slot_1".into(),
-                outgoing_user: outgoing_principal.clone(),
-                incoming_user: incoming_principal.clone(),
+                outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_1").await,
+                incoming_principal_user_id: incoming_principal.clone(),
             },
         )
         .await,
@@ -1130,7 +1130,7 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                 game,
                 slot: slot.into(),
             },
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: principal.into(),
@@ -1276,7 +1276,7 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
         assert_eq!(payload["media"][0]["content_id"], upload.content_id);
     }
 
-    for (slot, outgoing, incoming) in [
+    for (slot, _outgoing, incoming) in [
         ("mason_1", mason_outgoing.as_str(), mason_incoming.as_str()),
         (
             "neighbor_1",
@@ -1292,8 +1292,8 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                 Command::ProcessReplacement {
                     game,
                     slot: slot.into(),
-                    outgoing_user: outgoing.into(),
-                    incoming_user: incoming.into(),
+                    outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
+                    incoming_principal_user_id: incoming.into(),
                 },
             )
             .await,
@@ -1565,7 +1565,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                 game,
                 slot: slot.into(),
             },
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: slot.into(),
                 user: principal.into(),
@@ -1691,8 +1691,8 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
             Command::ProcessReplacement {
                 game,
                 slot: dead_slot.into(),
-                outgoing_user: outgoing.clone(),
-                incoming_user: incoming.clone(),
+                outgoing_persona_id: current_slot_persona_id(&pool, game, dead_slot).await,
+                incoming_principal_user_id: incoming.clone(),
             },
         )
         .await,
@@ -2446,6 +2446,18 @@ fn expect_reject(envelope: ServerEnvelope, expected: RejectCode) {
     }
 }
 
+async fn current_slot_persona_id(pool: &sqlx::PgPool, game: Uuid, slot: &str) -> String {
+    sqlx::query_scalar(
+        "SELECT persona_id FROM slot_occupancy_epoch \
+         WHERE game_id = $1 AND slot_id = $2 AND ended_seq IS NULL",
+    )
+    .bind(game)
+    .bind(slot)
+    .fetch_one(pool)
+    .await
+    .expect("slot has one open persona occupancy epoch")
+}
+
 async fn seed_single_vote_game(app: axum::Router, game: Uuid) {
     expect_ack(
         post_command(
@@ -2501,7 +2513,7 @@ async fn seed_single_vote_game(app: axum::Router, game: Uuid) {
             app.clone(),
             5,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
                 user: "user_a".into(),
@@ -2540,7 +2552,7 @@ async fn seed_single_vote_game(app: axum::Router, game: Uuid) {
             app.clone(),
             8,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_3".into(),
                 user: "user_b".into(),
@@ -2627,7 +2639,7 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
                 app.clone(),
                 base + 1,
                 "host_h",
-                Command::AssignSlot {
+                wire::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user_id.into(),
@@ -2782,7 +2794,7 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
                 app.clone(),
                 base + 1,
                 "host_h",
-                Command::AssignSlot {
+                wire::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user_id.into(),
@@ -3035,7 +3047,7 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         ),
         (
             3,
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
                 user: "player_mira".into(),
@@ -3139,10 +3151,14 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     assert_eq!(setup.accounts[0].principal_user_id, "player_mira");
     assert_eq!(setup.slots.len(), 1);
     assert_eq!(setup.slots[0].slot_id, "slot_1");
-    assert_eq!(
-        setup.slots[0].occupant_user_id.as_deref(),
-        Some("player_mira")
-    );
+    assert!(setup.slots[0]
+        .persona_id
+        .as_deref()
+        .is_some_and(|persona_id| persona_id.starts_with("gp_")));
+    assert!(setup.slots[0]
+        .public_name
+        .as_deref()
+        .is_some_and(|public_name| public_name == "Player slot_1"));
     assert_eq!(setup.slots[0].role_key.as_deref(), Some("vanilla_townie"));
     assert_eq!(setup.post_policies.len(), 1);
     assert_eq!(setup.post_policies[0].channel_id, "main");
@@ -3218,7 +3234,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         (
             5,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_4".into(),
                 user: "action-goon".into(),
@@ -3236,7 +3252,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         (
             7,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot-2".into(),
                 user: "action-target".into(),
@@ -3254,7 +3270,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         (
             9,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot-3".into(),
                 user: "action-town".into(),
@@ -3594,7 +3610,7 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
         (
             5,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_4".into(),
                 user: "action-goon".into(),
@@ -3612,7 +3628,7 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
         (
             7,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot-2".into(),
                 user: "action-target".into(),
@@ -3630,7 +3646,7 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
         (
             9,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot-3".into(),
                 user: "action-town".into(),
@@ -4320,7 +4336,7 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         ),
         (
             503,
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
                 user: "user_a".into(),
@@ -4631,7 +4647,7 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
                 app.clone(),
                 id + 1,
                 "host_h",
-                Command::AssignSlot {
+                wire::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),
@@ -4806,7 +4822,7 @@ async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::
                 app.clone(),
                 idx + 1,
                 "host_h",
-                Command::AssignSlot {
+                wire::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user_id.into(),
@@ -4926,7 +4942,7 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
             app.clone(),
             3,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
                 user: "user_a".into(),
@@ -6267,7 +6283,25 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     let game = Uuid::new_v4();
     let game_text = game.to_string();
     sqlx::query(
-        "INSERT INTO slot_occupancy (game_id, slot_id, occupant_user_id) VALUES ($1, 'slot_1', 'user_a')",
+        "INSERT INTO game_persona_private (game_id, persona_id, principal_user_id, registered_seq) \
+         VALUES ($1, 'persona_a', 'user_a', 1)",
+    )
+    .bind(game)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO game_persona_public (game_id, persona_id, current_public_name, registered_seq) \
+         VALUES ($1, 'persona_a', 'User A', 1)",
+    )
+    .bind(game)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO slot_occupancy_epoch \
+         (game_id, occupancy_id, transition_id, slot_id, persona_id, began_seq, start_reason) \
+         VALUES ($1, 'occupancy_a', 'transition_a', 'slot_1', 'persona_a', 2, 'initial_seating')",
     )
     .bind(game)
     .execute(&pool)
@@ -6415,7 +6449,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
             game,
             slot: "slot_1".into(),
         },
-        commands::Command::AssignSlot {
+        commands::seat_persona! {
             game,
             slot: "slot_1".into(),
             user: member_principal.clone(),
@@ -6658,8 +6692,8 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
         commands::Command::ProcessReplacement {
             game,
             slot: "slot_1".into(),
-            outgoing_user: member_principal.clone(),
-            incoming_user: replacement_principal,
+            outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_1").await,
+            incoming_principal_user_id: replacement_principal,
         },
     )
     .await
@@ -6759,7 +6793,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
         (
             3,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
                 user: "user_a".into(),
@@ -6902,7 +6936,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
                 app.clone(),
                 id + 1,
                 "host_h",
-                Command::AssignSlot {
+                wire::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),
@@ -7073,7 +7107,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
                 app.clone(),
                 id + 1,
                 "host_h",
-                Command::AssignSlot {
+                wire::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),
@@ -7171,8 +7205,8 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
             Command::ProcessReplacement {
                 game,
                 slot: "slot_7".into(),
-                outgoing_user: "player_mira".into(),
-                incoming_user: "player_rowan".into(),
+                outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_7").await,
+                incoming_principal_user_id: "player_rowan".into(),
             },
         )
         .await,
@@ -7210,7 +7244,13 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
     assert_eq!(state["phase"]["phase_id"], "D01");
     assert_eq!(state["phase"]["deadline"], 1_781_928_000);
     assert_eq!(state["slots"][0]["slot_id"], "slot_7");
-    assert_eq!(state["slots"][0]["occupant_user_id"], "player_rowan");
+    assert_eq!(
+        state["slots"][0]["assigned_principal_user_id"],
+        "player_rowan"
+    );
+    assert!(state["slots"][0]["persona_id"]
+        .as_str()
+        .is_some_and(|persona_id| persona_id.starts_with("gp_")));
     assert_eq!(state["slots"][0]["alive"], false);
     assert_eq!(state["slots"][0]["status"], "modkilled");
     assert_eq!(state["thread_posts"][0]["author_slot"], "slot_7");
@@ -9743,7 +9783,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
             app.clone(),
             3,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot-7".into(),
                 user: "player-rowan".into(),
@@ -10420,7 +10460,7 @@ async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: 
             app.clone(),
             3,
             "host_h",
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
                 user: "user_a".into(),
@@ -10508,7 +10548,7 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
                 app.clone(),
                 id + 1,
                 "host_h",
-                Command::AssignSlot {
+                wire::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),
@@ -10694,7 +10734,7 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
                 app.clone(),
                 id + 1,
                 "host_h",
-                Command::AssignSlot {
+                wire::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),

@@ -565,7 +565,7 @@ async function seedGame() {
     ["host_h", { AddSlot: { game, slot: "slot_6" } }],
     [
       "host_h",
-      { AssignSlot: { game, slot: "slot-7", user: "player-mira" } },
+      { SeatPersona: { game, slot: "slot-7", principal_user_id: "player-mira" , public_name: "player-mira" } },
     ],
     [
       "host_h",
@@ -580,10 +580,10 @@ async function seedGame() {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game,
           slot: "slot-2",
-          user: "player-target",
+          principal_user_id: "player-target", public_name: "player-target",
         },
       },
     ],
@@ -600,10 +600,10 @@ async function seedGame() {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game,
           slot: "slot-3",
-          user: "player-seed",
+          principal_user_id: "player-seed", public_name: "player-seed",
         },
       },
     ],
@@ -620,10 +620,10 @@ async function seedGame() {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game,
           slot: "slot_1",
-          user: "player-beloved",
+          principal_user_id: "player-beloved", public_name: "player-beloved",
         },
       },
     ],
@@ -640,10 +640,10 @@ async function seedGame() {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game,
           slot: "slot_4",
-          user: "player-goon-a",
+          principal_user_id: "player-goon-a", public_name: "player-goon-a",
         },
       },
     ],
@@ -660,10 +660,10 @@ async function seedGame() {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game,
           slot: "slot_5",
-          user: "player-goon-b",
+          principal_user_id: "player-goon-b", public_name: "player-goon-b",
         },
       },
     ],
@@ -680,10 +680,10 @@ async function seedGame() {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game,
           slot: "slot_6",
-          user: "player-town-extra",
+          principal_user_id: "player-town-extra", public_name: "player-town-extra",
         },
       },
     ],
@@ -734,7 +734,7 @@ async function seedActionGame() {
     ["host_h", { AddSlot: { game: actionGame, slot: "slot-3" } }],
     [
       "host_h",
-      { AssignSlot: { game: actionGame, slot: "slot_4", user: "action-goon" } },
+      { SeatPersona: { game: actionGame, slot: "slot_4", principal_user_id: "action-goon" , public_name: "action-goon" } },
     ],
     [
       "host_h",
@@ -749,10 +749,10 @@ async function seedActionGame() {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game: actionGame,
           slot: "slot-2",
-          user: "action-target",
+          principal_user_id: "action-target", public_name: "action-target",
         },
       },
     ],
@@ -769,10 +769,10 @@ async function seedActionGame() {
     [
       "host_h",
       {
-        AssignSlot: {
+        SeatPersona: {
           game: actionGame,
           slot: "slot-3",
-          user: "action-town",
+          principal_user_id: "action-town", public_name: "action-town",
         },
       },
     ],
@@ -825,10 +825,10 @@ async function seedAdditionalRoomsGame() {
         AddSlot: { game: additionalRoomsGame, slot: occupant.slotId },
       }),
       await sendCommand("host_h", {
-        AssignSlot: {
+        SeatPersona: {
           game: additionalRoomsGame,
           slot: occupant.slotId,
-          user: occupant.principalUserId,
+          principal_user_id: occupant.principalUserId, public_name: occupant.principalUserId,
         },
       }),
       await sendCommand("host_h", {
@@ -904,10 +904,10 @@ async function seedDeadChatGame() {
         AddSlot: { game: deadChatGame, slot: occupant.slotId },
       }),
       await sendCommand("host_h", {
-        AssignSlot: {
+        SeatPersona: {
           game: deadChatGame,
           slot: occupant.slotId,
-          user: occupant.principalUserId,
+          principal_user_id: occupant.principalUserId, public_name: occupant.principalUserId,
         },
       }),
       await sendCommand("host_h", {
@@ -1699,8 +1699,11 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     ProcessReplacement: {
       game: additionalRoomsGame,
       slot: room.outgoing.slotId,
-      outgoing_user: room.outgoing.principalUserId,
-      incoming_user: room.incoming.principalUserId,
+      outgoing_persona_id: await hostSlotPersonaId(
+        additionalRoomsGame,
+        room.outgoing.slotId,
+      ),
+      incoming_principal_user_id: room.incoming.principalUserId,
     },
   });
 
@@ -2172,8 +2175,11 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     ProcessReplacement: {
       game: deadChatGame,
       slot: deadChatDefinition.outgoing.slotId,
-      outgoing_user: deadChatDefinition.outgoing.principalUserId,
-      incoming_user: deadChatDefinition.incoming.principalUserId,
+      outgoing_persona_id: await hostSlotPersonaId(
+        deadChatGame,
+        deadChatDefinition.outgoing.slotId,
+      ),
+      incoming_principal_user_id: deadChatDefinition.incoming.principalUserId,
     },
   });
   const incomingContext = await browserContextWithSession(
@@ -3326,7 +3332,8 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   }
 
   const slotId = "slot_1";
-  const occupantUserId = "player-mira";
+  const principalUserId = "player-mira";
+  const publicName = "Mira";
   const roleKey = "vanilla_townie";
   const addSlotForm = page.getByTestId("host-setup-add-slot-form");
   await addSlotForm.waitFor({ state: "visible" });
@@ -3354,7 +3361,8 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   await rosterRow.waitFor({ state: "visible" });
   await rosterRow
     .locator('select[name="principalUserId"]')
-    .selectOption(occupantUserId);
+    .selectOption(principalUserId);
+  await rosterRow.locator('input[name="publicName"]').fill(publicName);
   const assignSlotButton = rosterRow.getByRole("button", {
     name: "Assign player",
     exact: true,
@@ -3365,14 +3373,17 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   const assignSlot = await waitForHostSetupCommand({
     setupPage: page,
     statusTestId: "host-setup-assign-slot-status",
-    commandKind: "AssignSlot",
+    commandKind: "SeatPersona",
     commandPredicate: (command) =>
       command?.game === adminCreatedGame &&
       command?.slot === slotId &&
-      command?.user === occupantUserId,
+      command?.principal_user_id === principalUserId &&
+      command?.public_name === publicName,
     statePredicate: (state) =>
       (state?.slots ?? []).some(
-        (slot) => slot.slotId === slotId && slot.occupantUserId === occupantUserId,
+        (slot) =>
+          slot.slotId === slotId &&
+          slot.assignedPrincipalUserId === principalUserId,
       ),
   });
 
@@ -3500,7 +3511,7 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
       openHostConsoleBox,
     },
     slotId,
-    occupantUserId,
+    principalUserId,
     roleKey,
     policyBefore,
     policyAfter,
@@ -4875,8 +4886,8 @@ async function driveModeratorBrowser(
   if (!deadlineLabel.includes("Jun 19, 2026") || !deadlineLabel.includes("9:00 PM")) {
     throw new Error(`deadline label did not update from real API: ${deadlineLabel}`);
   }
-  if (occupantLabel !== "player-rowan") {
-    throw new Error(`replacement occupant did not update from real API: ${occupantLabel}`);
+  if (!occupantLabel.includes("Slot 7")) {
+    throw new Error(`replacement persona label did not update from real API: ${occupantLabel}`);
   }
   if (!historyLabel.includes("slot-7")) {
     throw new Error(`slot history label did not preserve slot id: ${historyLabel}`);
@@ -4884,7 +4895,7 @@ async function driveModeratorBrowser(
   const livePlayerInvite = await readPlayerInviteTarget(page);
   if (
     !livePlayerInvite.targetLabel.includes("Slot 7") ||
-    !livePlayerInvite.targetLabel.includes("player-rowan") ||
+    livePlayerInvite.targetLabel.includes("player-rowan") ||
     livePlayerInvite.principalUserId !== "player-rowan" ||
     livePlayerInvite.expectedOccupantUserId !== "player-rowan"
   ) {
@@ -5480,7 +5491,7 @@ async function modkillSlotFromBrowser(page) {
     const replacement = window.__fmarchHostProjection?.replacement;
     return (
       replacement?.slotId === "slot-7" &&
-      replacement?.occupantLabel === "player-rowan" &&
+      replacement?.assignedPrincipalUserId === "player-rowan" &&
       replacement?.lifecycleLabel === "Modkilled"
     );
   });
@@ -5751,17 +5762,17 @@ async function waitForHostConsoleDeadlineDelta(page, deadline) {
   );
 }
 
-async function waitForHostConsoleReplacementDelta(page, occupantUserId) {
+async function waitForHostConsoleReplacementDelta(page, principalUserId) {
   await page.waitForFunction(
     (expectedOccupant) =>
       (window.__fmarchHostLiveProjectionEvents ?? []).some(
         (event) =>
           event?.delta?.kind === "HostConsoleStateChanged" &&
           event.delta.body?.slots?.some(
-            (slot) => slot.occupant_user_id === expectedOccupant,
+            (slot) => slot.assigned_principal_user_id === expectedOccupant,
           ),
       ),
-    occupantUserId,
+    principalUserId,
   );
 }
 
@@ -5780,6 +5791,20 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
     throw new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(body)}`);
   }
   return body;
+}
+
+async function hostSlotPersonaId(gameId, slotId) {
+  const state = await fetchJson(
+    `${apiBaseUrl}/games/${gameId}/host-console-state?principal_user_id=host_h&slot_id=${slotId}`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
+  );
+  const personaId = state.slots?.find((slot) => slot.slot_id === slotId)?.persona_id;
+  if (typeof personaId !== "string" || !personaId.startsWith("gp_")) {
+    throw new Error(
+      `host console did not project an opaque game persona for ${slotId}: ${JSON.stringify(state.slots)}`,
+    );
+  }
+  return personaId;
 }
 
 async function waitForHealth() {
@@ -5815,7 +5840,7 @@ function assertApiProjection(state) {
   if (state.phase?.deadline !== 1781928000) {
     throw new Error(`API deadline projection did not update: ${JSON.stringify(state.phase)}`);
   }
-  if (state.slots?.[0]?.occupant_user_id !== "player-rowan") {
+  if (state.slots?.[0]?.assigned_principal_user_id !== "player-rowan") {
     throw new Error(`API replacement projection did not update: ${JSON.stringify(state.slots)}`);
   }
   if (state.thread_posts?.[0]?.author_slot !== "slot-7") {
@@ -5831,7 +5856,7 @@ function assertSlotLifecycleApiProjection(state) {
   if (slot.status !== "modkilled" || slot.alive !== false) {
     throw new Error(`API slot lifecycle projection did not modkill slot-7: ${JSON.stringify(slot)}`);
   }
-  if (slot.occupant_user_id !== "player-rowan") {
+  if (slot.assigned_principal_user_id !== "player-rowan") {
     throw new Error(`API modkill projection lost replacement occupant: ${JSON.stringify(slot)}`);
   }
 }

@@ -13,8 +13,9 @@ pub fn user(id: &str) -> Principal {
     Principal::user(id)
 }
 
-/// Stand up a running game: host H creates it, adds slot S, assigns user A into
-/// S, assigns a role, starts the game, and opens a Day phase. Returns (game_id).
+/// Stand up a running game: host H creates it, adds slot S, seats a named
+/// persona for principal A, assigns a role, starts the game, and opens a Day
+/// phase. Returns (game_id).
 pub async fn setup_game(pool: &PgPool, host: &str, slot: &str, occupant: &str) -> Uuid {
     setup_game_with_pack(pool, host, slot, occupant, "mafiascum").await
 }
@@ -64,14 +65,15 @@ pub async fn setup_game_with_pack_and_denied(
     handle(
         pool,
         &h,
-        Command::AssignSlot {
+        Command::SeatPersona {
             game,
             slot: slot.into(),
-            user: occupant.into(),
+            principal_user_id: occupant.into(),
+            public_name: format!("Persona {slot}"),
         },
     )
     .await
-    .expect("assign slot");
+    .expect("seat persona");
     handle(
         pool,
         &h,
@@ -94,6 +96,18 @@ pub async fn setup_game_with_pack_and_denied(
     .await
     .expect("start game");
     game
+}
+
+/// Read the current immutable occupancy epoch's persona. Replacement commands
+/// use this value as their concurrency target; principals are not slot ids.
+pub async fn current_slot_persona_id(pool: &PgPool, game: Uuid, slot: &str) -> String {
+    projections::slot_occupancy(pool, game)
+        .await
+        .expect("read slot occupancy")
+        .into_iter()
+        .find(|row| row.slot_id == slot)
+        .expect("slot has an open occupancy epoch")
+        .persona_id
 }
 
 pub async fn add_vanilla_slot(pool: &PgPool, game: Uuid, host: &str, slot: &str) {

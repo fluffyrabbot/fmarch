@@ -278,10 +278,13 @@ async function currentInviteTargetOccupant({
   const slot = Array.isArray(state?.slots)
     ? state.slots.find((candidate) => candidate.slot_id === slotId)
     : null;
-  if (typeof slot?.occupant_user_id !== "string" || slot.occupant_user_id.trim() === "") {
+  if (
+    typeof slot?.assigned_principal_user_id !== "string"
+    || slot.assigned_principal_user_id.trim() === ""
+  ) {
     throw new Error(`host invite target projection missing ${slotId}`);
   }
-  return slot.occupant_user_id;
+  return slot.assigned_principal_user_id;
 }
 
 function authInvitesUrl(env) {

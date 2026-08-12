@@ -63,13 +63,18 @@ test("setup form actions map to typed bootstrap command configs", () => {
     setupCommandConfigForAction({
       actionId: "assign-slot",
       data,
-      formData: formData({ slotId: "slot_1", principalUserId: "player_mira" }),
+      formData: formData({
+        slotId: "slot_1",
+        principalUserId: "player_mira",
+        publicName: "Mira",
+      }),
     }),
     {
       action: "assign_slot",
       game: data.game.id,
       slot: "slot_1",
       user: "player_mira",
+      publicName: "Mira",
     },
   );
 
@@ -213,7 +218,9 @@ test("setup state refresh bypasses cached browser state after command ack", asyn
         slots: [
           {
             slot_id: "slot_1",
-            occupant_user_id: "player_mira",
+            persona_id: "gp_mira",
+            public_name: "Mira",
+            assigned_principal_user_id: "player_mira",
             alive: true,
             status: "alive",
             status_tags: [],

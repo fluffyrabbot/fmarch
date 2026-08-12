@@ -17,6 +17,8 @@
       : null;
   $: recoveryIssue = form?.id === "account-recovery-issue" ? form : null;
   $: recoveryRevocation = form?.id === "account-recovery-revoke" ? form : null;
+  $: personalExport = form?.id === "member-personal-export" ? form : null;
+  $: erasure = form?.id === "member-erasure" ? form : null;
 
   function methodTitle(method) {
     return method.kind === "classic_password" ? "Classic — direct sign-in" : "WorkOS — managed sign-in";
@@ -348,6 +350,54 @@
     {/if}
   </section>
   {/if}
+
+  <section class="account-security__panel fm-panel" aria-label="Your data and account erasure">
+    <h2>Your data</h2>
+    <p class="account-security__hint">
+      Create and download a personal export before account erasure. Erasure signs you out,
+      removes credentials and delivery data, and pseudonymizes retained public authorship.
+    </p>
+    <form method="POST" action="?/createPersonalExport" class="account-security__form">
+      <button type="submit" class="fm-touch-button" data-testid="member-personal-export-submit">
+        Create personal export
+      </button>
+    </form>
+    {#if personalExport?.state === "ack"}
+      <p class="account-security__status" data-testid="member-personal-export-ack">
+        {personalExport.message}
+        {#if personalExport.artifact !== null}
+          <a
+            download={`fmarch-personal-export-${personalExport.exportId}.json`}
+            href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(personalExport.artifact, null, 2))}`}
+            data-testid="member-personal-export-download"
+          >Download export</a>
+        {/if}
+      </p>
+    {:else if personalExport?.state === "reject"}
+      <p class="account-security__reject" role="alert" data-testid="member-personal-export-reject">
+        {personalExport.message}
+      </p>
+    {/if}
+
+    <form method="POST" action="?/eraseMember" class="account-security__form account-security__erasure-form">
+      <h3>Erase account</h3>
+      <p class="account-security__hint">
+        This is permanent. Type <strong>ERASE</strong> to remove sign-in access and identifiers.
+      </p>
+      <label class="fm-field">
+        <span>Confirmation</span>
+        <input name="confirmation" autocomplete="off" data-testid="member-erasure-confirmation" />
+      </label>
+      <button type="submit" class="fm-touch-button fm-touch-button--danger" data-testid="member-erasure-submit">
+        Permanently erase account
+      </button>
+    </form>
+    {#if erasure?.state === "reject"}
+      <p class="account-security__reject" role="alert" data-testid="member-erasure-reject">
+        {erasure.message}
+      </p>
+    {/if}
+  </section>
 </main>
 
 <style>

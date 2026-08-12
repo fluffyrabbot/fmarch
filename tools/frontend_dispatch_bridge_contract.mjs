@@ -447,7 +447,7 @@ async function proveModeratorDispatchBridge() {
 
   assert.equal(trace.dispatchKind, "resolve_host_prompt");
   assert.equal(plan.commandKind, "ResolveHostPrompt");
-  assert.deepEqual(projectionStore.refreshed, [["hostPrompts"]]);
+  assert.deepEqual(projectionStore.refreshed, [["host", "hostPrompts"]]);
   assert.equal(commandStatuses[event.actionId].state, "ack");
   assert.equal(rejectOutcome.state, "reject");
   assert.equal(windowRef.__fmarchHostCommandDispatchBridgePlan, plan);
@@ -633,7 +633,7 @@ function hostSetupData() {
       slots: [
         {
           slotId: "slot_1",
-          occupantUserId: "player_mira",
+          assignedPrincipalUserId: "player_mira",
           roleKey: "vanilla_townie",
         },
       ],

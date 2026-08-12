@@ -1,5 +1,6 @@
 pub mod data_lifecycle;
 pub mod error;
+pub mod member_lifecycle;
 pub mod methods;
 pub mod password;
 pub mod session;
@@ -15,6 +16,10 @@ pub use data_lifecycle::{
 };
 
 pub use error::IdentityFlowError;
+pub use member_lifecycle::{
+    apply_member_lifecycle, create_personal_export, erase_member, load_personal_export,
+    rebuild_member_lifecycle, MemberLifecycleSnapshot, PersonalExport,
+};
 pub use session::{IssuedSession, SessionPolicy, SessionSpec};
 pub use workos::{
     AccessTokenVerifier, IdentityError, StaticAccessTokenVerifier, VerifiedIdentity,

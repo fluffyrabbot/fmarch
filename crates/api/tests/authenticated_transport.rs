@@ -783,7 +783,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
             &app_a,
             3,
             Some("host-token"),
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
                 user: "player_a".into()
@@ -801,7 +801,10 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(ref delta))
-                    if delta.slots.iter().any(|slot| slot.occupant_user_id == "player_a")
+                    if delta
+                        .slots
+                        .iter()
+                        .any(|slot| slot.assigned_principal_user_id == "player_a")
             ) {
                 break envelope;
             }
@@ -828,7 +831,10 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
             if matches!(
                 envelope.body,
                 ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(ref delta))
-                    if delta.slots.iter().any(|slot| slot.occupant_user_id == "player_a")
+                    if delta
+                        .slots
+                        .iter()
+                        .any(|slot| slot.assigned_principal_user_id == "player_a")
             ) {
                 break;
             }
@@ -852,7 +858,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         ),
         (
             5,
-            Command::AssignSlot {
+            wire::seat_persona! {
                 game,
                 slot: "slot_2".into(),
                 user: "host".into(),

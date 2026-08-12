@@ -101,13 +101,13 @@ export function mapHostActionToWireCommand(actionEvent) {
         ProcessReplacement: Object.freeze({
           game: requiredString(payload.gameId, "payload.gameId"),
           slot: requiredString(payload.slotId, "payload.slotId"),
-          outgoing_user: requiredString(
-            payload.outgoingPlayerId,
-            "payload.outgoingPlayerId",
+          outgoing_persona_id: requiredString(
+            payload.outgoingPersonaId,
+            "payload.outgoingPersonaId",
           ),
-          incoming_user: requiredString(
-            payload.incomingPlayerId,
-            "payload.incomingPlayerId",
+          incoming_principal_user_id: requiredString(
+            payload.incomingPrincipalUserId,
+            "payload.incomingPrincipalUserId",
           ),
         }),
       });
@@ -366,7 +366,11 @@ export function projectHostConsoleState(state, fallback) {
     replacement: Object.freeze({
       ...fallback.replacement,
       slotId: slot?.slot_id ?? fallback.replacement.slotId,
-      occupantLabel: slot?.occupant_user_id ?? fallback.replacement.occupantLabel,
+      occupantLabel: slot?.public_name ?? fallback.replacement.occupantLabel,
+      personaId: slot?.persona_id ?? fallback.replacement.personaId,
+      assignedPrincipalUserId:
+        slot?.assigned_principal_user_id
+        ?? fallback.replacement.assignedPrincipalUserId,
       lifecycleLabel:
         typeof slot?.status === "string"
           ? lifecycleLabel(slot.status, slot.alive)
@@ -700,7 +704,10 @@ function normalizePermissionClasses(classes, fallback = []) {
 function normalizeHostConsoleSlot(slot) {
   return Object.freeze({
     slot_id: String(slot?.slot_id ?? ""),
-    occupant_user_id: String(slot?.occupant_user_id ?? ""),
+    occupancy_id: String(slot?.occupancy_id ?? ""),
+    persona_id: String(slot?.persona_id ?? ""),
+    public_name: String(slot?.public_name ?? ""),
+    assigned_principal_user_id: String(slot?.assigned_principal_user_id ?? ""),
     alive: slot?.alive === true,
     status: String(slot?.status ?? "alive"),
     status_tags: Object.freeze(

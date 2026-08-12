@@ -471,6 +471,84 @@ export const actions = {
       recoveryId,
     };
   },
+  createPersonalExport: async ({ cookies, fetch }) => {
+    const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+    if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
+      return fail(401, {
+        id: "member-personal-export",
+        state: "reject",
+        message: "Sign in again before creating a personal export",
+      });
+    }
+    const response = await fetch(personalExportUrl(process.env), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    const body = await response.json().catch(() => null);
+    if (
+      !response.ok ||
+      body?.status !== "ready" ||
+      typeof body?.export_id !== "string" ||
+      !Number.isSafeInteger(body?.expires_at)
+    ) {
+      return fail(response.status === 401 || response.status === 403 ? response.status : 502, {
+        id: "member-personal-export",
+        state: "reject",
+        message:
+          response.status === 403
+            ? "Sign in again before creating a personal export"
+            : "The personal export could not be created",
+      });
+    }
+    return {
+      id: "member-personal-export",
+      state: "ack",
+      message: "Your personal export is ready. Download it before requesting erasure.",
+      exportId: body.export_id,
+      expiresAt: body.expires_at,
+      artifact: body.artifact ?? null,
+    };
+  },
+  eraseMember: async ({ cookies, fetch, request }) => {
+    const formData = await request.formData();
+    const confirmed = optionalField(formData.get("confirmation"));
+    const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+    if (confirmed !== "ERASE" || typeof sessionToken !== "string" || sessionToken.trim() === "") {
+      return fail(400, {
+        id: "member-erasure",
+        state: "reject",
+        message: "Type ERASE to confirm permanent account erasure",
+      });
+    }
+    const response = await fetch(memberErasureUrl(process.env), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    const body = await response.json().catch(() => null);
+    if (response.ok && body?.status === "erased") {
+      evictSessionCacheForToken(sessionToken);
+      cookies.delete(SESSION_COOKIE_NAME, { path: "/" });
+      throw redirect(303, "/?accountErased=1");
+    }
+    return fail(response.status === 401 || response.status === 403 ? response.status : 502, {
+      id: "member-erasure",
+      state: "reject",
+      message:
+        response.status === 403
+          ? "Sign in again before requesting erasure"
+          : "Account erasure could not be completed",
+    });
+  },
 };
 
 async function isStepUpRejection(response) {
@@ -503,6 +581,14 @@ function accountRecoveryCredentialUrl(env) {
 
 function accountRecoveryCredentialRevocationUrl(env) {
   return `${authBaseUrl(env)}/auth/accounts/recovery-credential-revocations`;
+}
+
+function personalExportUrl(env) {
+  return `${authBaseUrl(env)}/auth/account/personal-exports`;
+}
+
+function memberErasureUrl(env) {
+  return `${authBaseUrl(env)}/auth/account/erasure`;
 }
 
 function authBaseUrl(env) {

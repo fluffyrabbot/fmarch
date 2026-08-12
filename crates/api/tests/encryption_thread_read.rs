@@ -205,7 +205,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
                 app.clone(),
                 id + 1,
                 "host_h",
-                Command::AssignSlot {
+                wire::seat_persona! {
                     game,
                     slot: slot.into(),
                     user: user.into(),

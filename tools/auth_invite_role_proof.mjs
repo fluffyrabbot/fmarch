@@ -68,6 +68,11 @@ const registrationCredentials = Object.freeze({
   accountId: `registered-${game}@example.test`,
   password: `registered-account-password-${game}`,
 });
+const memberLifecycleCredentials = Object.freeze({
+  accountId: `member-lifecycle-${game}@example.test`,
+  password: `member-lifecycle-account-password-${game}`,
+  principalUserId: `member-lifecycle-${game}`,
+});
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const deliveryIntentPollTimeoutMs = 5000;
 const deliveryIntentPollIntervalMs = 100;
@@ -460,7 +465,10 @@ async function driveInviteLogin({
     const capabilityKinds = (session.capabilities ?? []).map(
       (capability) => capability.kind,
     );
-    if (!capabilityKinds.includes(expectedCapability)) {
+    if (
+      expectedCapability !== undefined &&
+      !capabilityKinds.includes(expectedCapability)
+    ) {
       throw new Error(
         `${role} invite session missing ${expectedCapability}: ${JSON.stringify(session)}`,
       );
@@ -525,7 +533,10 @@ async function driveAccountLogin({
     const capabilityKinds = (session.capabilities ?? []).map(
       (capability) => capability.kind,
     );
-    if (!capabilityKinds.includes(expectedCapability)) {
+    if (
+      expectedCapability !== undefined &&
+      !capabilityKinds.includes(expectedCapability)
+    ) {
       throw new Error(
         `account session missing ${expectedCapability}: ${JSON.stringify(session)}`,
       );
@@ -1523,6 +1534,10 @@ async function proveIdentityLifecycle({
       password: recoveredHostPassword,
       returnTo: hostReturnTo,
     });
+    const memberLifecycle = await proveMemberLifecycleBrowser({
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
     return await finishIdentityLifecycleProof({
       apiBaseUrl,
       frontendBaseUrl,
@@ -1569,6 +1584,7 @@ async function proveIdentityLifecycle({
       accountRegistration,
       inviteDelivery,
       recoveryDelivery,
+      memberLifecycle,
     });
   } finally {
     await staleAccountLifecyclePage.page.close();
@@ -1621,6 +1637,7 @@ async function finishIdentityLifecycleProof({
   accountRegistration,
   inviteDelivery,
   recoveryDelivery,
+  memberLifecycle,
 }) {
   const auditTrail = await fetchIdentityLifecycleAudit({
     apiBaseUrl,
@@ -1779,6 +1796,7 @@ async function finishIdentityLifecycleProof({
       rawPasswordStored: false,
       auditEventKinds: registrationAuditEventKinds,
     },
+    memberLifecycle,
     sessionRotation: {
       status: "passed",
       principalUserId: rotation.principal_user_id,
@@ -1987,6 +2005,91 @@ async function finishIdentityLifecycleProof({
       "hosted audit retention or export policy",
     ],
   };
+}
+
+async function proveMemberLifecycleBrowser({ apiBaseUrl, frontendBaseUrl }) {
+  await createAccount(apiBaseUrl, {
+    accountId: memberLifecycleCredentials.accountId,
+    password: memberLifecycleCredentials.password,
+    principalUserId: memberLifecycleCredentials.principalUserId,
+  });
+  const returnTo = `/g/${game}`;
+  const login = await driveAccountLogin({
+    frontendBaseUrl,
+    apiBaseUrl,
+    accountId: memberLifecycleCredentials.accountId,
+    password: memberLifecycleCredentials.password,
+    returnTo,
+  });
+  if (login.capabilityKinds.length !== 0) {
+    throw new Error("member lifecycle fixture unexpectedly received game authority");
+  }
+
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const securityRoleUrl = `/auth/account/security?account=${encodeURIComponent(
+    memberLifecycleCredentials.accountId,
+  )}&returnTo=${encodeURIComponent(returnTo)}`;
+  try {
+    await page.context().addCookies([
+      {
+        name: "fmarch_session",
+        value: login.sessionToken,
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${securityRoleUrl}`, { waitUntil: "networkidle" });
+    await page.getByTestId("account-security-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page.getByTestId("member-personal-export-submit").click();
+    const exportAck = page.getByTestId("member-personal-export-ack");
+    await exportAck.waitFor({ state: "visible", timeout: 15000 });
+    const download = page.getByTestId("member-personal-export-download");
+    const downloadHref = await download.getAttribute("href");
+    const dataPrefix = "data:application/json;charset=utf-8,";
+    if (typeof downloadHref !== "string" || !downloadHref.startsWith(dataPrefix)) {
+      throw new Error("personal export browser surface did not expose a JSON download");
+    }
+    const artifact = JSON.parse(decodeURIComponent(downloadHref.slice(dataPrefix.length)));
+    if (
+      artifact?.schema_version !== 1 ||
+      artifact?.principal_user_id !== memberLifecycleCredentials.principalUserId ||
+      artifact?.accounts?.[0]?.account_id !== memberLifecycleCredentials.accountId ||
+      JSON.stringify(artifact).includes(memberLifecycleCredentials.password)
+    ) {
+      throw new Error("personal export browser download violated its subject-only boundary");
+    }
+
+    await page.getByTestId("member-erasure-confirmation").fill("ERASE");
+    await Promise.all([
+      page.waitForURL(`${frontendBaseUrl}/?accountErased=1`, { timeout: 15000 }),
+      page.getByTestId("member-erasure-submit").click(),
+    ]);
+    const remainingCookies = await page.context().cookies(frontendBaseUrl);
+    if (remainingCookies.some((cookie) => cookie.name === "fmarch_session")) {
+      throw new Error("member erasure did not clear the browser session cookie");
+    }
+    await assertUnauthorizedSession(apiBaseUrl, login.sessionToken);
+    return {
+      status: "passed",
+      securityRoleUrl,
+      securitySurfaceTestId: "account-security-surface",
+      exportSubmitTestId: "member-personal-export-submit",
+      exportDownloadTestId: "member-personal-export-download",
+      exportSchemaVersion: artifact.schema_version,
+      erasureConfirmationTestId: "member-erasure-confirmation",
+      erasedRedirect: "/?accountErased=1",
+      browserCookieCleared: true,
+      sessionRevoked: true,
+      rawPasswordExported: false,
+      capabilityKindsBeforeErasure: login.capabilityKinds,
+    };
+  } finally {
+    await page.close();
+  }
 }
 
 async function proveHostScopedInviteIssuance({
@@ -3123,6 +3226,22 @@ function assertInviteProof(evidence) {
       "auth-registration-classic-surface" ||
     evidence.identityLifecycle?.accountRegistration?.securitySurfaceTestId !==
       "account-security-surface" ||
+    evidence.identityLifecycle?.memberLifecycle?.status !== "passed" ||
+    evidence.identityLifecycle?.memberLifecycle?.securitySurfaceTestId !==
+      "account-security-surface" ||
+    evidence.identityLifecycle?.memberLifecycle?.exportSubmitTestId !==
+      "member-personal-export-submit" ||
+    evidence.identityLifecycle?.memberLifecycle?.exportDownloadTestId !==
+      "member-personal-export-download" ||
+    evidence.identityLifecycle?.memberLifecycle?.exportSchemaVersion !== 1 ||
+    evidence.identityLifecycle?.memberLifecycle?.erasureConfirmationTestId !==
+      "member-erasure-confirmation" ||
+    evidence.identityLifecycle?.memberLifecycle?.erasedRedirect !==
+      "/?accountErased=1" ||
+    evidence.identityLifecycle?.memberLifecycle?.browserCookieCleared !== true ||
+    evidence.identityLifecycle?.memberLifecycle?.sessionRevoked !== true ||
+    evidence.identityLifecycle?.memberLifecycle?.rawPasswordExported !== false ||
+    evidence.identityLifecycle?.memberLifecycle?.capabilityKindsBeforeErasure?.length !== 0 ||
     evidence.identityLifecycle?.accountRegistration?.sessionCookiePrefix !==
       "fmss_" ||
     evidence.identityLifecycle?.accountRegistration?.sessionHasNoGameCapabilities !== true ||
