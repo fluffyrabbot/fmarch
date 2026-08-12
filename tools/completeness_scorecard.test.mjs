@@ -18,9 +18,9 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
   await validateRegistry(registry);
   const summary = summarizeRegistry(registry);
   assert.deepEqual(summary.byExecutionClass.code, {
-    complete: 41,
+    complete: 42,
     partial: 0,
-    open: 2,
+    open: 1,
     blocked: 0,
     deferred: 0,
     total: 43,
@@ -41,7 +41,7 @@ test("real completion registry records the 1.0 substrate frontier", async () => 
     deferred: 0,
     total: 4,
   });
-  assert.equal(summary.productCapabilitiesComplete, false);
+  assert.equal(summary.productCapabilitiesComplete, true);
   assert.equal(summary.platformComplete, false);
   assert.equal(summary.releaseComplete, false);
   assert.equal(
@@ -146,6 +146,11 @@ test("registry validation rejects dependency cycles", async () => {
   );
   profiles.status = "open";
   profiles.remaining = ["cyclic test dependency"];
+  const lifecycle = cyclic.items.find(
+    (item) => item.id === "product.identity.data-lifecycle",
+  );
+  lifecycle.status = "open";
+  lifecycle.remaining = ["cyclic test dependency"];
   const search = cyclic.items.find((item) => item.id === "product.community.search");
   search.status = "open";
   search.remaining = ["cyclic test dependency"];

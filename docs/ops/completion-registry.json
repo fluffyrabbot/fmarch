@@ -1577,8 +1577,8 @@
       "order": 70,
       "title": "Member data lifecycle and export",
       "execution_class": "code",
-      "status": "open",
-      "summary": "A typed member lifecycle stream exports personal data, revokes sessions and credentials, removes nonessential identifiers, pseudonymizes retained authorship, and rebuilds affected projections deterministically. The account-security route exposes export and erasure controls, and the retention behavior is documented for policy approval; completion remains gated on the declared community-profile dependency.",
+      "status": "complete",
+      "summary": "A typed member lifecycle stream exports personal data, revokes sessions and credentials, removes nonessential identifiers, pseudonymizes retained authorship, and rebuilds affected projections deterministically. The account-security route exposes export and erasure controls, and the retention behavior is documented for policy approval.",
       "complete_when": [
         "A member can export their associated account data and request a typed lifecycle transition that revokes authority, erases credentials and nonessential identifiers, pseudonymizes retained authorship, and rebuilds every affected projection deterministically under a declared retention policy."
       ],
@@ -1618,9 +1618,7 @@
           "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api --test auth_methods -- --test-threads=1"
         }
       ],
-      "remaining": [
-        "Close product.community.profiles, then promote this fully implemented lifecycle capability through its declared dependency gate."
-      ]
+      "remaining": []
     },
     {
       "id": "product.community.discussions",
