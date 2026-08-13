@@ -10,7 +10,7 @@ import {
 
 const game = "00000000-0000-0000-0000-000000000123";
 
-test("host setup route data derives identity, roster, policy, invites, and readiness", async () => {
+test("host setup route data derives slot-bound principals, policy, invites, and readiness", async () => {
   const data = await buildHostSetupRouteData({
     game,
     principalUserId: "host_h",
@@ -37,8 +37,11 @@ test("host setup route data derives identity, roster, policy, invites, and readi
           start_phase_options: ["D01", "N01"],
         },
         accounts: [
-          { account_id: "mira@example.test", principal_user_id: "player_mira", label: "mira@example.test" },
-          { account_id: "goon@example.test", principal_user_id: "player_goon", label: "goon@example.test" },
+          {
+            account_id: "directory-secret@example.test",
+            principal_user_id: "directory-secret-principal",
+            label: "GLOBAL ACCOUNT DIRECTORY SENTINEL",
+          },
         ],
         phase: null,
         slots: [
@@ -83,6 +86,12 @@ test("host setup route data derives identity, roster, policy, invites, and readi
   assert.equal(data.readiness.startAvailable, true);
   assert.equal(data.readiness.summary, "Ready to start");
   assert.equal(data.readiness.mainPolicy.allowMediaOnly, true);
+  assert.equal("accounts" in data.setupState, false);
+  const renderedRoutePayload = JSON.stringify(data);
+  assert.equal(renderedRoutePayload.includes('"accounts"'), false);
+  assert.equal(renderedRoutePayload.includes("directory-secret@example.test"), false);
+  assert.equal(renderedRoutePayload.includes("directory-secret-principal"), false);
+  assert.equal(renderedRoutePayload.includes("GLOBAL ACCOUNT DIRECTORY SENTINEL"), false);
   assert.equal(data.workflow.selectedStageId, "review");
   assert.deepEqual(data.workflow.stages.map((stage) => stage.id), [
     "pack",
@@ -97,8 +106,8 @@ test("host setup route data derives identity, roster, policy, invites, and readi
     ["Slot 1 / Mira", "Slot 2 / Goon"],
   );
   assert.deepEqual(
-    occupiedSetupInviteTargets(data.setupState).map((target) => target.accountId),
-    ["mira@example.test", "goon@example.test"],
+    occupiedSetupInviteTargets(data.setupState).map((target) => target.principalUserId),
+    ["player_mira", "player_goon"],
   );
 });
 
@@ -260,7 +269,6 @@ test("host setup state URL uses the authenticated gameplay boundary", () => {
     hostSetupStateUrl({
       apiBaseUrl: "http://127.0.0.1:8787",
       game,
-      principalUserId: "host_h",
     }),
     `http://127.0.0.1:8787/games/${game}/setup-state`,
   );

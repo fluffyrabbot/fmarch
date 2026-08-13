@@ -5,6 +5,12 @@ use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{RejectCode, RejectMsg};
 
+const HOST_TOKEN: &str = "fmss_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const COHOST_TOKEN: &str = "fmss_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const OUTSIDER_TOKEN: &str =
+    "fmss_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const ADMIN_TOKEN: &str = "fmss_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+
 fn app(pool: sqlx::PgPool) -> axum::Router {
     operator_api::router_with_state(operator_api::OperatorApiState::new(pool))
 }
@@ -26,8 +32,8 @@ async fn create_session(pool: &sqlx::PgPool, token: &str, user: &str, globals: &
     .expect("insert operator principal");
     sqlx::query(
         "INSERT INTO auth_session \
-         (token_hash, principal_user_id, created_at, expires_at, global_capabilities, authenticated_at) \
-         VALUES ($1, $2, 0, 4102444800, $3, 0)",
+         (token_hash, principal_user_id, created_at, expires_at, global_capabilities, idle_expires_at, assurance, authenticated_at) \
+         VALUES ($1, $2, 0, 4102444800, $3, 4102444800, 'admin_grant', 0)",
     )
     .bind(token_hash(token))
     .bind(user)
@@ -53,9 +59,9 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     grant_game_authority(&pool, game, "host_h", "host").await;
     grant_game_authority(&pool, game, "cohost_c", "cohost").await;
-    create_session(&pool, "fmss_host-token", "host_h", &[]).await;
-    create_session(&pool, "fmss_cohost-token", "cohost_c", &[]).await;
-    create_session(&pool, "fmss_outsider-token", "outsider", &[]).await;
+    create_session(&pool, HOST_TOKEN, "host_h", &[]).await;
+    create_session(&pool, COHOST_TOKEN, "cohost_c", &[]).await;
+    create_session(&pool, OUTSIDER_TOKEN, "outsider", &[]).await;
 
     let response = app
         .clone()
@@ -63,7 +69,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!("/games/{game}/operator?principal_user_id=outsider"))
-                .header(AUTHORIZATION, "Bearer fmss_host-token")
+                .header(AUTHORIZATION, format!("Bearer {HOST_TOKEN}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -84,7 +90,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
                 .uri(format!(
                     "/games/{game}/operator/proof-runs/status?principal_user_id=host_h"
                 ))
-                .header(AUTHORIZATION, "Bearer fmss_cohost-token")
+                .header(AUTHORIZATION, format!("Bearer {COHOST_TOKEN}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -102,7 +108,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(path)
-                    .header(AUTHORIZATION, "Bearer fmss_outsider-token")
+                    .header(AUTHORIZATION, format!("Bearer {OUTSIDER_TOKEN}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -118,7 +124,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn active_global_operator_session_can_read_status_without_dev_auth(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
-    create_session(&pool, "fmss_admin-token", "admin_a", &["GlobalAdmin"]).await;
+    create_session(&pool, ADMIN_TOKEN, "admin_a", &["GlobalAdmin"]).await;
 
     let operator = app(pool);
     let response = operator
@@ -129,7 +135,7 @@ async fn active_global_operator_session_can_read_status_without_dev_auth(pool: s
                 .uri(format!(
                     "/games/{game}/operator/proof-runs/status?principal_user_id=outsider"
                 ))
-                .header(AUTHORIZATION, "Bearer fmss_admin-token")
+                .header(AUTHORIZATION, format!("Bearer {ADMIN_TOKEN}"))
                 .body(Body::empty())
                 .unwrap(),
         )

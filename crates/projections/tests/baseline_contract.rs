@@ -42,6 +42,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "game_persona_public",
     "game_persona_redaction",
     "game_result",
+    "game_thread_visibility_change",
     "host_phase_control",
     "host_prompt",
     "identity_lifecycle_audit",
@@ -175,6 +176,8 @@ const EXPECTED_INDEXES: &[&str] = &[
     "game_persona_public_pkey",
     "game_persona_redaction_pkey",
     "game_result_pkey",
+    "game_thread_visibility_change_game_idx",
+    "game_thread_visibility_change_pkey",
     "host_phase_control_phase_idx",
     "host_phase_control_pkey",
     "host_prompt_phase_idx",
@@ -281,6 +284,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "auth_session_idle_expiry_check:c",
     "auth_session_method_fkey:f",
     "auth_session_pkey:p",
+    "auth_session_principal_user_id_fkey:f",
     "auth_websocket_ticket_access_expiry_check:c",
     "auth_websocket_ticket_after_seq_check:c",
     "auth_websocket_ticket_audience_check:c",
@@ -377,6 +381,8 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "game_persona_public_pkey:p",
     "game_persona_redaction_pkey:p",
     "game_result_pkey:p",
+    "game_thread_visibility_change_pkey:p",
+    "game_thread_visibility_change_visibility_check:c",
     "host_phase_control_pkey:p",
     "host_prompt_pkey:p",
     "identity_lifecycle_audit_pkey:p",
@@ -491,4 +497,85 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     .await
     .expect("read baseline constraint inventory");
     assert_inventory("constraint", &constraints, EXPECTED_CONSTRAINTS);
+}
+
+fn assert_foreign_key_violation(error: sqlx::Error, constraint: &str) {
+    let database_error = error
+        .as_database_error()
+        .expect("foreign-key rejection must be a database error");
+    assert_eq!(database_error.code().as_deref(), Some("23503"));
+    assert_eq!(database_error.constraint(), Some(constraint));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
+    let orphan_insert = sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash,
+            principal_user_id,
+            created_at,
+            expires_at,
+            global_capabilities,
+            idle_expires_at,
+            assurance,
+            authenticated_at
+        )
+        VALUES (
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            'missing-principal',
+            1,
+            100,
+            '{}',
+            50,
+            'admin_grant',
+            1
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect_err("an orphan session must be rejected");
+    assert_foreign_key_violation(orphan_insert, "auth_session_principal_user_id_fkey");
+
+    sqlx::query(
+        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ('owned-principal', 'active', '{}', 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash,
+            principal_user_id,
+            created_at,
+            expires_at,
+            global_capabilities,
+            idle_expires_at,
+            assurance,
+            authenticated_at
+        )
+        VALUES (
+            'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+            'owned-principal',
+            1,
+            100,
+            '{}',
+            50,
+            'admin_grant',
+            1
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let owner_delete =
+        sqlx::query("DELETE FROM platform_principal WHERE principal_user_id = 'owned-principal'")
+            .execute(&pool)
+            .await
+            .expect_err("a referenced principal must not be deleted");
+    assert_foreign_key_violation(owner_delete, "auth_session_principal_user_id_fkey");
 }

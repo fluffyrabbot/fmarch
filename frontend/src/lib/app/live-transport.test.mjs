@@ -15,23 +15,19 @@ import {
 test("builds websocket URLs from API bases and relative app origins", () => {
   assert.equal(
     buildLiveProjectionUrl({
-      apiBaseUrl: "http://127.0.0.1:4100",
       game: "00000000-0000-0000-0000-000000000001",
-      principalUserId: "player-mira",
     }),
     "/live/tickets?game=00000000-0000-0000-0000-000000000001",
   );
   assert.equal(
     buildLiveProjectionUrl({
       game: "midsummer",
-      principalUserId: "player-mira",
     }),
     "/live/tickets?game=midsummer",
   );
   assert.equal(
     buildLiveProjectionUrl({
       game: "midsummer",
-      principalUserId: "host_h",
       slotId: "slot-7",
     }),
     "/live/tickets?game=midsummer&slot_id=slot-7",
@@ -39,7 +35,6 @@ test("builds websocket URLs from API bases and relative app origins", () => {
   assert.equal(
     buildLiveProjectionUrl({
       game: "midsummer",
-      principalUserId: "player-mira",
       channel: "private:role_pm:slot-7",
     }),
     "/live/tickets?game=midsummer&channel=private%3Arole_pm%3Aslot-7",
@@ -365,6 +360,34 @@ test("creates thread patches from live thread post delta envelopes", () => {
     patch.thread.posts[0].media[0].variants.tablet.avifUrl,
     "/media/thread/42/tablet.avif",
   );
+});
+
+test("purges a moderated post from an already hydrated live thread", () => {
+  const patch = projectionPatchForLiveEnvelope(
+    {
+      v: 1,
+      id: 4,
+      body: {
+        kind: "Delta",
+        body: {
+          kind: "ThreadPostRemoved",
+          body: { game: "midsummer", source_seq: 43 },
+        },
+      },
+    },
+    {
+      thread: {
+        nextBeforeSeq: 40,
+        posts: [
+          { seq: 42, body: "visible" },
+          { seq: 43, body: "now hidden" },
+        ],
+      },
+    },
+  );
+
+  assert.equal(patch.thread.nextBeforeSeq, 40);
+  assert.deepEqual(patch.thread.posts, [{ seq: 42, body: "visible" }]);
 });
 
 test("recovers live projections by refreshing registered cold-load keys", async () => {

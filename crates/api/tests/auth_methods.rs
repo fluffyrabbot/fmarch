@@ -4,6 +4,7 @@
 //! management invariants, and bearer dispatch.
 
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use api::ApiState;
 use axum::body::{to_bytes, Body};
@@ -55,6 +56,13 @@ async fn get_session(app: &axum::Router, token: &str) -> axum::response::Respons
         )
         .await
         .unwrap()
+}
+
+fn unix_now_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock must follow the Unix epoch")
+        .as_secs() as i64
 }
 
 async fn classic_identity_rows(
@@ -296,8 +304,26 @@ async fn get_json(app: &axum::Router, uri: &str, token: &str) -> (StatusCode, se
 async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let state = test_state(pool.clone(), &root)
-        .with_access_token_verifier(Arc::new(workos_verifier("workos-token", "user_convert")));
+        .with_access_token_verifier(Arc::new(workos_verifier("workos-token", "user_convert")))
+        .with_dev_auth(true);
     let app = api::router_with_state(state);
+
+    let response = post_json(
+        &app,
+        "/auth/dev-session",
+        None,
+        serde_json::json!({
+            "principal_user_id": "method-lifecycle-admin",
+            "expires_at": 4_102_444_800i64,
+            "global_capabilities": ["GlobalAdmin"]
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let admin_session = json_body(response).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Sign in with WorkOS: one exchange, one backend session.
     let response = post_json(
@@ -345,7 +371,7 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
         added["principal_user_id"].as_str().unwrap(),
         principal_user_id
     );
-    let mut recovery_codes: Vec<String> = added["recovery_codes"]
+    let recovery_codes: Vec<String> = added["recovery_codes"]
         .as_array()
         .unwrap()
         .iter()
@@ -405,21 +431,27 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
         Some(classic_method_id.clone())
     );
 
-    // Disabled methods are recoverable identities, not tombstones. Removing
-    // and re-adding the same Classic login reactivates the same method row,
-    // rotates its password/recovery material, and returns a fresh Classic
-    // session for the browser to adopt.
+    // A live sibling method cannot convert a durable disable into a
+    // self-service password reset. Only the administrator-owned enable
+    // operation may restore this classic method.
     let response = post_json(
         &app,
-        format!("/auth/account/methods/{classic_method_id}/disable").as_str(),
-        Some(&workos_session),
-        serde_json::json!({}),
+        "/auth/accounts/disable",
+        Some(admin_session.as_str()),
+        serde_json::json!({
+            "account_id": "converted@example.test",
+            "expected_disabled": false
+        }),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
         get_json(&app, "/auth/session", &classic_session).await.0,
         StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        get_json(&app, "/auth/session", &workos_session).await.0,
+        StatusCode::OK
     );
     let response = post_json(
         &app,
@@ -431,19 +463,67 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
         }),
     )
     .await;
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let (account_disabled_at, method_status): (Option<i64>, String) = sqlx::query_as(
+        r#"
+        SELECT account.disabled_at, method.status
+        FROM auth_account AS account
+        JOIN authentication_method AS method ON method.method_id = account.method_id
+        WHERE account.account_id = 'converted@example.test'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(account_disabled_at.is_some());
+    assert_eq!(method_status, "disabled");
+
+    let response = post_json(
+        &app,
+        "/auth/accounts/enable",
+        Some(admin_session.as_str()),
+        serde_json::json!({
+            "account_id": "converted@example.test",
+            "expected_disabled": true
+        }),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let reactivated = json_body(response).await;
-    assert_eq!(
-        reactivated["method_id"].as_str(),
-        Some(classic_method_id.as_str())
-    );
-    classic_session = reactivated["session_token"].as_str().unwrap().to_string();
-    recovery_codes = reactivated["recovery_codes"]
-        .as_array()
+
+    // The rejected self-reactivation did not replace the classic credential.
+    let response = post_json(
+        &app,
+        "/auth/accounts/login",
+        None,
+        serde_json::json!({
+            "account_id": "converted@example.test",
+            "password": "replacement correct horse battery"
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let response = post_json(
+        &app,
+        "/auth/accounts/login",
+        None,
+        serde_json::json!({
+            "account_id": "converted@example.test",
+            "password": "correct horse battery staple"
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    classic_session = json_body(response).await["session_token"]
+        .as_str()
         .unwrap()
-        .iter()
-        .map(|code| code.as_str().unwrap().to_string())
-        .collect();
+        .to_string();
+    assert_eq!(
+        session_row(&pool, classic_session.as_str())
+            .await
+            .0
+            .map(|method_id| method_id.to_string()),
+        Some(classic_method_id.clone())
+    );
 
     let response = post_json(
         &app,
@@ -500,7 +580,10 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
     .unwrap();
     assert!(audit_kinds.iter().any(|kind| kind == "method_added"));
     assert!(audit_kinds.iter().any(|kind| kind == "method_disabled"));
+    assert!(audit_kinds.iter().any(|kind| kind == "account_disabled"));
+    assert!(audit_kinds.iter().any(|kind| kind == "account_enabled"));
     assert!(audit_kinds.iter().any(|kind| kind == "session_created"));
+    assert!(!audit_kinds.iter().any(|kind| kind == "method_reactivated"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -563,6 +646,342 @@ async fn rotation_cannot_refresh_recent_authentication(pool: sqlx::PgPool) {
     .await
     .unwrap();
     assert!(created_at > authenticated_at);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn idle_expired_sessions_cannot_rotate_or_choose_legacy_bearers(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let password = "correct horse battery staple";
+
+    let response = post_json(
+        &app,
+        "/auth/accounts/registrations",
+        None,
+        serde_json::json!({
+            "account_id": "idle-expired@example.test",
+            "password": password
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let expired_token = json_body(response).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(identity::token::is_app_session_token(&expired_token));
+
+    sqlx::query(
+        r#"
+        UPDATE auth_session
+        SET created_at = 1,
+            authenticated_at = 1,
+            idle_expires_at = 2
+        WHERE token_hash = $1
+        "#,
+    )
+    .bind(identity::token::hash_token(&expired_token))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let sessions_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM auth_session")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let audits_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM identity_lifecycle_audit")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let expired_rotation = post_json(
+        &app,
+        "/auth/session-rotations",
+        Some(&expired_token),
+        serde_json::json!({}),
+    )
+    .await;
+    let expired_rotation_status = expired_rotation.status();
+    let sessions_after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM auth_session")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let audits_after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM identity_lifecycle_audit")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let response = post_json(
+        &app,
+        "/auth/accounts/login",
+        None,
+        serde_json::json!({
+            "account_id": "idle-expired@example.test",
+            "password": password
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let fresh_token = json_body(response).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(identity::token::is_app_session_token(&fresh_token));
+
+    let client_selected_token = "client-selected-legacy-bearer";
+    assert!(!identity::token::is_app_session_token(
+        client_selected_token
+    ));
+    let selected_rotation = post_json(
+        &app,
+        "/auth/session-rotations",
+        Some(&fresh_token),
+        serde_json::json!({ "session_token": client_selected_token }),
+    )
+    .await;
+    let selected_rotation_status = selected_rotation.status();
+    let selected_token_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM auth_session WHERE token_hash = $1)")
+            .bind(identity::token::hash_token(client_selected_token))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let selected_token_status = get_session(&app, client_selected_token).await.status();
+    let canonical_rotation = post_json(
+        &app,
+        "/auth/session-rotations",
+        Some(&fresh_token),
+        serde_json::json!({}),
+    )
+    .await;
+    let canonical_rotation_status = canonical_rotation.status();
+    let canonical_rotation_body = json_body(canonical_rotation).await;
+    let returned_token = canonical_rotation_body["session_token"].as_str();
+
+    assert_eq!(
+        (
+            expired_rotation_status,
+            sessions_after - sessions_before,
+            audits_after - audits_before,
+            selected_rotation_status,
+            selected_token_exists,
+            selected_token_status,
+            canonical_rotation_status,
+            returned_token.is_some_and(identity::token::is_app_session_token),
+            returned_token == Some(client_selected_token),
+        ),
+        (
+            StatusCode::UNAUTHORIZED,
+            0,
+            0,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            false,
+            StatusCode::UNAUTHORIZED,
+            StatusCode::OK,
+            true,
+            false,
+        )
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn idle_session_cannot_resurrect_after_expiring_while_rotation_waits_for_its_lock(
+    pool: sqlx::PgPool,
+) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root));
+
+    let response = post_json(
+        &app,
+        "/auth/accounts/registrations",
+        None,
+        serde_json::json!({
+            "account_id": "lock-expired@example.test",
+            "password": "correct horse battery staple"
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let token = json_body(response).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let token_hash = identity::token::hash_token(token.as_str());
+    let idle_deadline = unix_now_seconds() + 2;
+    sqlx::query("UPDATE auth_session SET idle_expires_at = $1 WHERE token_hash = $2")
+        .bind(idle_deadline)
+        .bind(token_hash.as_str())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let mut lock_holder = pool.begin().await.unwrap();
+    sqlx::query_scalar::<_, String>(
+        "SELECT token_hash FROM auth_session WHERE token_hash = $1 FOR UPDATE",
+    )
+    .bind(token_hash.as_str())
+    .fetch_one(&mut *lock_holder)
+    .await
+    .unwrap();
+
+    let rotation_pool = pool.clone();
+    let rotation_token = token.clone();
+    let rotation = tokio::spawn(async move {
+        identity::session::rotate_session(
+            &rotation_pool,
+            rotation_token.as_str(),
+            &identity::SessionPolicy::from_env(),
+        )
+        .await
+    });
+
+    let mut rotation_is_waiting = false;
+    for _ in 0..100 {
+        rotation_is_waiting = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND pid <> pg_backend_pid()
+                  AND wait_event_type = 'Lock'
+                  AND query LIKE '%auth_session%'
+                  AND query LIKE '%FOR UPDATE%'
+            )
+            "#,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if rotation_is_waiting {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(
+        rotation_is_waiting,
+        "rotation must be blocked on the row lock"
+    );
+
+    while unix_now_seconds() <= idle_deadline {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    lock_holder.commit().await.unwrap();
+
+    let rotation_result = tokio::time::timeout(Duration::from_secs(3), rotation)
+        .await
+        .expect("rotation should finish after the lock is released")
+        .expect("rotation task should not panic");
+    assert!(matches!(
+        rotation_result,
+        Err(identity::IdentityFlowError::Unauthorized)
+    ));
+
+    let session_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM auth_session")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let original_revoked_at: Option<i64> =
+        sqlx::query_scalar("SELECT revoked_at FROM auth_session WHERE token_hash = $1")
+            .bind(token_hash)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let rotation_audits: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM identity_lifecycle_audit WHERE event_kind = 'session_rotated'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (session_rows, original_revoked_at, rotation_audits),
+        (1, None, 0)
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn orphan_principal_sessions_fail_closed_for_read_and_rotation(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let principal_user_id = "missing-platform-principal";
+    let token = identity::token::generate_session_token();
+    assert!(identity::token::is_app_session_token(token.as_str()));
+
+    // Bypass the database guard in this isolated test to prove the canonical
+    // validator remains fail-closed against corrupted/restored data as well.
+    sqlx::query(
+        "ALTER TABLE auth_session DROP CONSTRAINT IF EXISTS auth_session_principal_user_id_fkey",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash,
+            principal_user_id,
+            created_at,
+            expires_at,
+            revoked_at,
+            global_capabilities,
+            authenticated_via_method_id,
+            idle_expires_at,
+            assurance,
+            authenticated_at
+        )
+        VALUES ($1, $2, 1, 4102444800, NULL, '{}', NULL, 4102444800, 'admin_grant', 1)
+        "#,
+    )
+    .bind(identity::token::hash_token(token.as_str()))
+    .bind(principal_user_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let read_status = get_session(&app, token.as_str()).await.status();
+    let sessions_before: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_user_id = $1")
+            .bind(principal_user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let audits_before: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM identity_lifecycle_audit WHERE principal_user_id = $1",
+    )
+    .bind(principal_user_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let rotation = post_json(
+        &app,
+        "/auth/session-rotations",
+        Some(token.as_str()),
+        serde_json::json!({}),
+    )
+    .await;
+    let sessions_after: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_user_id = $1")
+            .bind(principal_user_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let audits_after: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM identity_lifecycle_audit WHERE principal_user_id = $1",
+    )
+    .bind(principal_user_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        (
+            read_status,
+            rotation.status(),
+            sessions_after - sessions_before,
+            audits_after - audits_before,
+        ),
+        (StatusCode::UNAUTHORIZED, StatusCode::UNAUTHORIZED, 0, 0)
+    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

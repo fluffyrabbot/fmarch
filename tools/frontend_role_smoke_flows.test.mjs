@@ -112,7 +112,7 @@ test("command mock scenarios declare distinct commands with responses", () => {
 
 test("paginated thread fixture route stays registered last", () => {
   const last = fixtureApiRoutes.at(-1);
-  assert.equal(last.pattern, "**/games/*/thread?*before_seq=*");
+  assert.equal(last.pattern, "**/api/gameplay/games/*?*before_seq=*");
   const generic = fixtureApiRoutes.find(
     (route) => route.passthroughWhen?.urlIncludes === "before_seq=",
   );

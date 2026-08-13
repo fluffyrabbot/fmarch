@@ -298,8 +298,8 @@ export async function assignSetupSlot({
   await selectHostSetupStage(setupPage, "roster");
   const row = setupPage.getByTestId(`host-setup-slot-${slotId}`);
   await row
-    .locator('select[name="principalUserId"]')
-    .selectOption(principalUserId);
+    .locator('input[name="principalUserId"]')
+    .fill(principalUserId);
   await row
     .locator('input[name="publicName"]')
     .fill(`Persona ${slotId}`);

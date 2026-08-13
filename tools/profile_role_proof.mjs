@@ -56,18 +56,19 @@ try {
 }
 
 async function createAccountSessions(api) {
-  const admin = "profile-proof-admin";
-  await json(`${api}/auth/dev-session`, { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ token: admin, principal_user_id: "profile_admin", expires_at: 4102444800, global_capabilities: ["GlobalAdmin"] }) });
+  const admin = requiredSessionToken(await json(`${api}/auth/dev-session`, { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ principal_user_id: "profile_admin", expires_at: 4102444800, global_capabilities: ["GlobalAdmin"] }) }));
   const accounts = [
-    ["profile-owner@example.test", "profile_owner", "profile-owner-session"],
-    ["profile-other@example.test", "profile_other", "profile-other-session"],
+    ["profile-owner@example.test", "profile_owner"],
+    ["profile-other@example.test", "profile_other"],
   ];
-  for (const [account_id, principal_user_id, session_token] of accounts) {
+  const issuedSessions = [];
+  for (const [account_id, principal_user_id] of accounts) {
     await json(`${api}/auth/accounts`, { method: "POST", headers: { ...jsonHeaders(), authorization: `Bearer ${admin}` }, body: JSON.stringify({ account_id, principal_user_id, password: "correct horse battery" }) });
-    await json(`${api}/auth/accounts/login`, { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ account_id, password: "correct horse battery", session_token, expires_at: 4102444800 }) });
+    issuedSessions.push(requiredSessionToken(await json(`${api}/auth/accounts/login`, { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ account_id, password: "correct horse battery" }) })));
   }
-  return { owner: accounts[0][2], other: accounts[1][2] };
+  return { owner: issuedSessions[0], other: issuedSessions[1] };
 }
+function requiredSessionToken(session) { if (typeof session?.session_token !== "string" || session.session_token === "") throw new Error("auth response omitted its backend-issued session token"); return session.session_token; }
 async function cookie(context, url, value) { await context.addCookies([{ name: "fmarch_session", value, url, httpOnly: true }]); }
 async function createProfile(context, frontend) {
   const page = await context.newPage({ viewport: { width: 1024, height: 768 } });

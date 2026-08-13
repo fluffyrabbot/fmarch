@@ -183,24 +183,25 @@ async function proveMuteBoundary(watcher, author, base, seeded) {
 }
 
 async function seed(api) {
-  const authorToken = "subscription-proof-author-session";
-  const watcherToken = "subscription-proof-watcher-session";
-  const operatorToken = "subscription-proof-operator-session";
   const author = "subscription_author";
   const watcher = "subscription_watcher";
   const operator = "subscription_operator";
-  for (const [token, principal, globals] of [
-    [authorToken, author, []],
-    [watcherToken, watcher, []],
-    [operatorToken, operator, ["GlobalAdmin", "GlobalMod"]],
+  const issuedTokens = new Map();
+  for (const [principal, globals] of [
+    [author, []],
+    [watcher, []],
+    [operator, ["GlobalAdmin", "GlobalMod"]],
   ]) {
-    await json(`${api}/auth/dev-session`, post({
-      token,
+    const session = await json(`${api}/auth/dev-session`, post({
       principal_user_id: principal,
       expires_at: 4_102_444_800,
       global_capabilities: globals,
     }));
+    issuedTokens.set(principal, requiredSessionToken(session));
   }
+  const authorToken = issuedTokens.get(author);
+  const watcherToken = issuedTokens.get(watcher);
+  const operatorToken = issuedTokens.get(operator);
   for (const [account, principal, globals] of [
     ["subscription-author@example.test", author, []],
     ["subscription-watcher@example.test", watcher, []],
@@ -242,6 +243,13 @@ async function seed(api) {
     watcherToken,
     operatorToken,
   };
+}
+
+function requiredSessionToken(session) {
+  if (typeof session?.session_token !== "string" || session.session_token === "") {
+    throw new Error("dev session response omitted its backend-issued token");
+  }
+  return session.session_token;
 }
 
 async function watchTopic(context, base, seeded) {

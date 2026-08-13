@@ -31,7 +31,7 @@ export function createLiveStackAuth({
     });
   };
 
-  const createAccountSession = async ({ token, principalUserId, label, accountId: requestedAccountId }) => {
+  const createAccountSession = async ({ principalUserId, label, accountId: requestedAccountId }) => {
     const accountId = requestedAccountId ?? `live-stack-${label}-${uuid()}@example.test`;
     const password = `live-stack account password ${uuid()}`;
     await createAuthAccount({ accountId, password, principalUserId });
@@ -41,8 +41,6 @@ export function createLiveStackAuth({
       body: JSON.stringify({
         account_id: accountId,
         password,
-        session_token: token,
-        expires_at: 4102444800,
       }),
     });
     return {
@@ -57,7 +55,6 @@ export function createLiveStackAuth({
   };
 
   const createGrantedSession = async ({
-    token,
     principalUserId,
     globalCapabilities = [],
   }) => {
@@ -76,7 +73,6 @@ export function createLiveStackAuth({
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        token,
         principal_user_id: principalUserId,
         expires_at: 4102444800,
         global_capabilities: globalCapabilities,

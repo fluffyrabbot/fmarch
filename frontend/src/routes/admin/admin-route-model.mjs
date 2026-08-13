@@ -2104,7 +2104,6 @@ export async function buildAdminRouteData({
       }),
       sessionGrant: Object.freeze({
         action: "grant_session",
-        token: `session-grant-${game}`,
         principalUserId: "mod_a",
         expiresAt: 4_102_444_800,
         globalCapabilities: Object.freeze(["GlobalMod"]),

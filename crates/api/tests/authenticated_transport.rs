@@ -16,6 +16,14 @@ use wire::{
     ServerMsg, SubmitPostMedia,
 };
 
+const ACTIVE_TOKEN: &str = "fmss_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const EXPIRED_TOKEN: &str = "fmss_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const REVOKED_TOKEN: &str = "fmss_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const DISABLED_TOKEN: &str =
+    "fmss_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+const MEMBER_TOKEN: &str = "fmss_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+const HOST_TOKEN: &str = "fmss_ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
 fn decode_server_envelope(message: Message) -> ServerEnvelope {
     let Message::Binary(bytes) = message else {
         panic!("expected binary CBOR websocket frame");
@@ -46,9 +54,11 @@ async fn insert_account_session(
     disabled_at: Option<i64>,
 ) {
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ($1, 'active', ARRAY['GlobalAdmin'], 1, NULL) ON CONFLICT (principal_user_id) DO NOTHING",
+        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ($1, $2, ARRAY['GlobalAdmin'], 1, $3) ON CONFLICT (principal_user_id) DO NOTHING",
     )
     .bind(principal)
+    .bind(if disabled_at.is_some() { "disabled" } else { "active" })
+    .bind(disabled_at)
     .execute(pool)
     .await
     .unwrap();
@@ -62,7 +72,7 @@ async fn insert_account_session(
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities, authenticated_at) VALUES ($1, $2, 1, $3, $4, ARRAY['GlobalAdmin'], 1)",
+        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities, idle_expires_at, assurance, authenticated_at) VALUES ($1, $2, 1, $3, $4, ARRAY['GlobalAdmin'], $3, 'admin_grant', 1)",
     )
     .bind(token_hash(token))
     .bind(principal)
@@ -141,6 +151,79 @@ async fn upload_media(app: &axum::Router, token: &str) -> MediaUploadResponse {
     serde_json::from_slice(&body).unwrap()
 }
 
+async fn create_classic_account_session(
+    app: &axum::Router,
+    admin_token: &str,
+    account_id: &str,
+    password: &str,
+    principal_user_id: &str,
+    global_capabilities: &[&str],
+) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": account_id,
+                        "password": password,
+                        "principal_user_id": principal_user_id,
+                        "global_capabilities": global_capabilities,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "classic account creation failed: {}",
+        String::from_utf8_lossy(&body)
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": account_id,
+                        "password": password,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "classic account login failed: {}",
+        String::from_utf8_lossy(&body)
+    );
+    let response: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let session_token = response["session_token"]
+        .as_str()
+        .expect("classic login returns its backend-issued session token")
+        .to_string();
+    assert!(identity::token::is_app_session_token(&session_token));
+    session_token
+}
+
 async fn issue_ticket(
     app: &axum::Router,
     token: &str,
@@ -182,12 +265,12 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
 ) {
     let root = tempfile::tempdir().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
-    insert_account_session(&pool, "active", "active-token", 4_102_444_800, None, None).await;
-    insert_account_session(&pool, "expired", "expired-token", 1, None, None).await;
+    insert_account_session(&pool, "active", ACTIVE_TOKEN, 4_102_444_800, None, None).await;
+    insert_account_session(&pool, "expired", EXPIRED_TOKEN, 2, None, None).await;
     insert_account_session(
         &pool,
         "revoked",
-        "revoked-token",
+        REVOKED_TOKEN,
         4_102_444_800,
         Some(2),
         None,
@@ -196,12 +279,16 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
     insert_account_session(
         &pool,
         "disabled",
-        "disabled-token",
+        DISABLED_TOKEN,
         4_102_444_800,
         None,
         Some(2),
     )
     .await;
+    sqlx::query("INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ('member', 'active', ARRAY[]::TEXT[], 1, NULL)")
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query(
         "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ('member@example.test', 'member', 'test-only', 1, NULL, ARRAY[]::TEXT[])",
     )
@@ -209,9 +296,9 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities, authenticated_at) VALUES ($1, 'member', 1, 4102444800, NULL, ARRAY[]::TEXT[], 1)",
+        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities, idle_expires_at, assurance, authenticated_at) VALUES ($1, 'member', 1, 4102444800, NULL, ARRAY[]::TEXT[], 4102444800, 'admin_grant', 1)",
     )
-    .bind(token_hash("member-token"))
+    .bind(token_hash(MEMBER_TOKEN))
     .execute(&pool)
     .await
     .unwrap();
@@ -219,9 +306,9 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
     for (id, token) in [
         (1, None),
         (2, Some("forged-token")),
-        (3, Some("expired-token")),
-        (4, Some("revoked-token")),
-        (5, Some("disabled-token")),
+        (3, Some(EXPIRED_TOKEN)),
+        (4, Some(REVOKED_TOKEN)),
+        (5, Some(DISABLED_TOKEN)),
     ] {
         let response = post_command(
             &app,
@@ -254,7 +341,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
     let response = post_command(
         &app,
         6,
-        Some("member-token"),
+        Some(MEMBER_TOKEN),
         Command::CreateGame {
             game: Uuid::new_v4(),
             pack: "mafiascum".into(),
@@ -289,7 +376,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
             Request::builder()
                 .method("POST")
                 .uri("/commands")
-                .header("authorization", "Bearer active-token")
+                .header("authorization", format!("Bearer {ACTIVE_TOKEN}"))
                 .header("content-type", "application/json")
                 .body(Body::from(forged_identity.to_string()))
                 .unwrap(),
@@ -309,7 +396,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
     let response = post_command(
         &app,
         8,
-        Some("active-token"),
+        Some(ACTIVE_TOKEN),
         Command::CreateGame {
             game,
             pack: "mafiascum".into(),
@@ -345,11 +432,11 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
     let root = tempfile::tempdir().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
     let game = Uuid::new_v4();
-    insert_account_session(&pool, "host", "host-token", 4_102_444_800, None, None).await;
+    insert_account_session(&pool, "host", HOST_TOKEN, 4_102_444_800, None, None).await;
     let response = post_command(
         &app,
         1,
-        Some("host-token"),
+        Some(HOST_TOKEN),
         Command::CreateGame {
             game,
             pack: "mafiascum".into(),
@@ -383,7 +470,7 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
 
     let ticket: WebsocketTicketResponse = client
         .post(format!("http://{addr}/auth/websocket-tickets"))
-        .bearer_auth("host-token")
+        .bearer_auth(HOST_TOKEN)
         .json(&serde_json::json!({
             "audience": "transport-proof",
             "game": game,
@@ -428,7 +515,7 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
 
     let expired_ticket: WebsocketTicketResponse = client
         .post(format!("http://{addr}/auth/websocket-tickets"))
-        .bearer_auth("host-token")
+        .bearer_auth(HOST_TOKEN)
         .json(&serde_json::json!({
             "audience": "transport-proof",
             "game": game,
@@ -461,7 +548,7 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
 
     let disabled_ticket: WebsocketTicketResponse = client
         .post(format!("http://{addr}/auth/websocket-tickets"))
-        .bearer_auth("host-token")
+        .bearer_auth(HOST_TOKEN)
         .json(&serde_json::json!({
             "audience": "transport-proof",
             "game": game,
@@ -473,7 +560,9 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
         .json()
         .await
         .unwrap();
-    sqlx::query("UPDATE auth_account SET disabled_at = 2 WHERE principal_user_id = 'host'")
+    sqlx::query(
+        "UPDATE platform_principal SET status = 'disabled', disabled_at = 2 WHERE principal_user_id = 'host'",
+    )
         .execute(&pool)
         .await
         .unwrap();
@@ -488,14 +577,16 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
         tokio_tungstenite::tungstenite::Error::Http(response)
             if response.status() == StatusCode::UNAUTHORIZED
     ));
-    sqlx::query("UPDATE auth_account SET disabled_at = NULL WHERE principal_user_id = 'host'")
+    sqlx::query(
+        "UPDATE platform_principal SET status = 'active', disabled_at = NULL WHERE principal_user_id = 'host'",
+    )
         .execute(&pool)
         .await
         .unwrap();
 
     let ticket: WebsocketTicketResponse = client
         .post(format!("http://{addr}/auth/websocket-tickets"))
-        .bearer_auth("host-token")
+        .bearer_auth(HOST_TOKEN)
         .json(&serde_json::json!({
             "audience": "transport-proof",
             "game": game,
@@ -508,7 +599,7 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
         .await
         .unwrap();
     sqlx::query("UPDATE auth_session SET revoked_at = 2 WHERE token_hash = $1")
-        .bind(token_hash("host-token"))
+        .bind(token_hash(HOST_TOKEN))
         .execute(&pool)
         .await
         .unwrap();
@@ -535,12 +626,12 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
         .with_live_projection_delivery_delay(Duration::from_millis(300));
     let app = api::router_with_state(state);
     let game = Uuid::new_v4();
-    insert_account_session(&pool, "host", "host-token", 4_102_444_800, None, None).await;
+    insert_account_session(&pool, "host", HOST_TOKEN, 4_102_444_800, None, None).await;
     assert_eq!(
         post_command(
             &app,
             1,
-            Some("host-token"),
+            Some(HOST_TOKEN),
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
@@ -551,7 +642,7 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
         .status(),
         StatusCode::OK
     );
-    let (_, ticket) = issue_ticket(&app, "host-token", game, 0).await;
+    let (_, ticket) = issue_ticket(&app, HOST_TOKEN, game, 0).await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -573,7 +664,7 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
         post_command(
             &app,
             2,
-            Some("host-token"),
+            Some(HOST_TOKEN),
             Command::AddSlot {
                 game,
                 slot: "slot_after_revocation".into(),
@@ -584,7 +675,7 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
         StatusCode::OK
     );
     sqlx::query("UPDATE auth_session SET revoked_at = 2 WHERE token_hash = $1")
-        .bind(token_hash("host-token"))
+        .bind(token_hash(HOST_TOKEN))
         .execute(&pool)
         .await
         .unwrap();
@@ -726,12 +817,29 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
             .with_websocket_poll_interval(Duration::from_millis(20)),
     );
     let game = Uuid::new_v4();
-    insert_account_session(&pool, "host", "host-token", 4_102_444_800, None, None).await;
+    insert_account_session(
+        &pool,
+        "transport_setup_admin",
+        HOST_TOKEN,
+        4_102_444_800,
+        None,
+        None,
+    )
+    .await;
+    let host_token = create_classic_account_session(
+        &app_a,
+        HOST_TOKEN,
+        "transport-host@example.test",
+        "correct horse battery",
+        "host",
+        &["GlobalAdmin"],
+    )
+    .await;
     assert_eq!(
         post_command(
             &app_a,
             1,
-            Some("host-token"),
+            Some(host_token.as_str()),
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
@@ -746,7 +854,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         post_command(
             &app_a,
             2,
-            Some("host-token"),
+            Some(host_token.as_str()),
             Command::AddSlot {
                 game,
                 slot: "slot_1".into()
@@ -763,7 +871,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
     .fetch_one(&pool)
     .await
     .unwrap();
-    let (_, ticket) = issue_ticket(&app_b, "host-token", game, before_seq).await;
+    let (_, ticket) = issue_ticket(&app_b, host_token.as_str(), game, before_seq).await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -782,7 +890,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         post_command(
             &app_a,
             3,
-            Some("host-token"),
+            Some(host_token.as_str()),
             wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
@@ -817,7 +925,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
     );
     drop(socket);
 
-    let (_, reconnect_ticket) = issue_ticket(&app_a, "host-token", game, before_seq).await;
+    let (_, reconnect_ticket) = issue_ticket(&app_a, host_token.as_str(), game, before_seq).await;
     let (mut reconnected, _) = tokio_tungstenite::connect_async(format!(
         "ws://{addr}/ws?ticket={}&audience=transport-proof",
         reconnect_ticket.unwrap().ticket
@@ -847,7 +955,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
     );
     drop(reconnected);
 
-    let upload = upload_media(&app_a, "host-token").await;
+    let upload = upload_media(&app_a, host_token.as_str()).await;
     for (id, command) in [
         (
             4,
@@ -886,7 +994,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         ),
     ] {
         assert_eq!(
-            post_command(&app_a, id, Some("host-token"), command)
+            post_command(&app_a, id, Some(host_token.as_str()), command)
                 .await
                 .status(),
             StatusCode::OK
@@ -912,7 +1020,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         .oneshot(
             Request::builder()
                 .uri(&media.variants["tablet"].webp_url)
-                .header("authorization", "Bearer host-token")
+                .header("authorization", format!("Bearer {host_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )

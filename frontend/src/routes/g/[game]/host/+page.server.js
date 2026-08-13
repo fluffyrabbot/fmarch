@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { error, fail } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../../lib/app/app-route-state-model.mjs";
-import { publicApiBaseUrl, serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 import {
   authenticatedApiFetch,
   accessTokenForRequest,
@@ -38,7 +38,6 @@ export async function load({ params, locals, fetch, url, cookies }) {
         ? null
         : authenticatedApiFetch({ locals, cookies, fetchImpl: fetch }),
     apiBaseUrl,
-    publicApiBaseUrl: publicApiBaseUrl(),
   });
 
   if (!routeData.access.allowed) {
@@ -139,7 +138,6 @@ export async function _issueHostScopedInvite({
   const currentOccupant = await currentInviteTargetOccupant({
     fetch,
     game: params.game,
-    principalUserId: principalForProjection,
     slotId,
     sessionToken,
   });
@@ -258,12 +256,11 @@ function workosInviteLoginPath({ returnTo, loginHint }) {
 async function currentInviteTargetOccupant({
   fetch,
   game,
-  principalUserId,
   slotId,
   sessionToken,
 }) {
   const response = await fetch(
-    hostConsoleStateUrl(process.env, { game, principalUserId, slotId }),
+    hostConsoleStateUrl(process.env, { game, slotId }),
     {
       headers: {
         authorization: `Bearer ${sessionToken}`,

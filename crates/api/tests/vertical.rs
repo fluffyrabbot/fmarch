@@ -4,7 +4,8 @@ use api::{
         IdentityDeliveryFailureCode, IdentityDeliveryFuture, IdentityDeliveryGateway,
         IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway,
     },
-    ApiState, HostSetupStateResponse, MediaUploadResponse,
+    ApiState, HostConsoleStateResponse, HostSetupStateResponse, MediaUploadResponse,
+    WebsocketTicketResponse,
 };
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
@@ -21,9 +22,9 @@ use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, CommunityInboxPage, DiscussionThreadPage,
     DiscussionTopic, DiscussionTopicPage, GameIndexPage, MemberMutePage, MemberMuteState,
     ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
-    PlayerNotification, ProfileEditor, ProjectionDelta, PublicProfile, PublicSearchPage,
-    RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
-    SubscriptionTargetState, ThreadPage, VoteTarget, PROTOCOL_VERSION,
+    PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
+    PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle,
+    SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
 fn decode_server_envelope(message: tokio_tungstenite::tungstenite::Message) -> ServerEnvelope {
@@ -119,6 +120,86 @@ async fn issue_dev_session(
         .as_str()
         .expect("dev session response must return its backend-generated token")
         .to_string()
+}
+
+async fn get_as_dev_principal(
+    app: &axum::Router,
+    principal_user_id: &str,
+    uri: impl AsRef<str>,
+) -> axum::response::Response {
+    let session_token = issue_dev_session(app, principal_user_id, &[]).await;
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(uri.as_ref())
+                .header("authorization", format!("Bearer {session_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+async fn get_with_bearer(
+    app: &axum::Router,
+    session_token: &str,
+    uri: impl AsRef<str>,
+) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(uri.as_ref())
+                .header("authorization", format!("Bearer {session_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+async fn issue_websocket_ticket(
+    app: &axum::Router,
+    session_token: &str,
+    game: Uuid,
+    channel: &str,
+) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/websocket-tickets")
+                .header("authorization", format!("Bearer {session_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "audience": "fmarch-live",
+                        "game": game,
+                        "channel": channel,
+                        "after_seq": 0
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let response: WebsocketTicketResponse = serde_json::from_slice(&body).unwrap();
+    response.ticket
+}
+
+async fn issue_dev_websocket_ticket(
+    app: &axum::Router,
+    principal_user_id: &str,
+    game: Uuid,
+    channel: &str,
+) -> String {
+    let session_token = issue_dev_session(app, principal_user_id, &[]).await;
+    issue_websocket_ticket(app, &session_token, game, channel).await
 }
 
 #[derive(Debug)]
@@ -590,7 +671,7 @@ async fn media_upload_authorized_is_idempotent_and_restart_verified(pool: sqlx::
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn media_upload_rejects_nonaccount_expired_revoked_and_disabled_sessions_without_retention(
+async fn media_upload_rejects_missing_expired_revoked_and_disabled_sessions_without_retention(
     pool: sqlx::PgPool,
 ) {
     let root = tempfile::tempdir().unwrap();
@@ -607,7 +688,9 @@ async fn media_upload_rejects_nonaccount_expired_revoked_and_disabled_sessions_w
 
     let (expired_token, expired_principal) =
         create_media_upload_account_session(&app, "expired").await;
-    sqlx::query("UPDATE auth_session SET expires_at = 1 WHERE principal_user_id = $1")
+    sqlx::query(
+        "UPDATE auth_session SET authenticated_at = 1, created_at = 1, expires_at = 2, idle_expires_at = 2 WHERE principal_user_id = $1",
+    )
         .bind(&expired_principal)
         .execute(&pool)
         .await
@@ -627,11 +710,29 @@ async fn media_upload_rejects_nonaccount_expired_revoked_and_disabled_sessions_w
 
     let (disabled_token, disabled_principal) =
         create_media_upload_account_session(&app, "disabled").await;
-    sqlx::query("UPDATE auth_account SET disabled_at = 1 WHERE principal_user_id = $1")
+    let disable_admin_token =
+        issue_dev_session(&app, "media_disable_admin", &["GlobalAdmin"]).await;
+    let disabled = post_bearer_json(
+        &app,
+        "/auth/accounts/disable",
+        serde_json::json!({
+            "account_id": "media-upload-disabled@example.test",
+            "expected_disabled": false
+        }),
+        &disable_admin_token,
+    )
+    .await;
+    assert_eq!(disabled.status(), StatusCode::OK);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM auth_session WHERE principal_user_id = $1 AND revoked_at IS NOT NULL",
+        )
         .bind(&disabled_principal)
-        .execute(&pool)
+        .fetch_one(&pool)
         .await
-        .unwrap();
+        .unwrap(),
+        1,
+    );
     let rejected = post_media_upload(&app, Some(&disabled_token), "image/png", png).await;
     assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(media_blob_entry_count(root.path()), 0);
@@ -773,6 +874,8 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     let upload: MediaUploadResponse =
         serde_json::from_slice(&to_bytes(upload.into_body(), usize::MAX).await.unwrap()).unwrap();
 
+    let stale_outgoing_ticket =
+        issue_websocket_ticket(&app, &outgoing_token, game, &channel_id).await;
     expect_ack(
         post_command(
             app.clone(),
@@ -860,6 +963,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     drop(store);
     let restarted = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app = api::router_with_state(ApiState::new(pool.clone(), restarted).with_dev_auth(true));
+    let incoming_ticket = issue_websocket_ticket(&app, &incoming_token, game, &channel_id).await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server_app = app.clone();
@@ -867,7 +971,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
         axum::serve(listener, server_app).await.unwrap();
     });
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id={incoming_principal}&channel={channel_id}"
+        "ws://{addr}/ws?ticket={incoming_ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -926,7 +1030,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     assert!(live_role_pm.id > initial_role_pm.id);
 
     let (mut stale_socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id={outgoing_principal}&channel={channel_id}"
+        "ws://{addr}/ws?ticket={stale_outgoing_ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -954,19 +1058,12 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     drop(stale_socket);
     server.abort();
 
-    let thread = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/{channel_id}/thread?principal_user_id={incoming_principal}&limit=10"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let thread = get_as_dev_principal(
+        &app,
+        incoming_principal.as_str(),
+        format!("/games/{game}/channels/{channel_id}/thread?limit=10"),
+    )
+    .await;
     assert_eq!(thread.status(), StatusCode::OK);
     let thread: ThreadPage =
         serde_json::from_slice(&to_bytes(thread.into_body(), usize::MAX).await.unwrap()).unwrap();
@@ -1034,19 +1131,12 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
         .unwrap()
         .is_empty());
 
-    let stale_thread = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/{channel_id}/thread?principal_user_id={outgoing_principal}&limit=10"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let stale_thread = get_as_dev_principal(
+        &app,
+        outgoing_principal.as_str(),
+        format!("/games/{game}/channels/{channel_id}/thread?limit=10"),
+    )
+    .await;
     assert_eq!(stale_thread.status(), StatusCode::FORBIDDEN);
 
     let stale_media = app
@@ -1387,19 +1477,12 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
         incoming_body,
     ) in room_cases
     {
-        let thread = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri(format!(
-                        "/games/{game}/channels/{channel}/thread?principal_user_id={incoming}&limit=10"
-                    ))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let thread = get_as_dev_principal(
+            &app,
+            incoming,
+            format!("/games/{game}/channels/{channel}/thread?limit=10"),
+        )
+        .await;
         assert_eq!(thread.status(), StatusCode::OK);
         let thread: ThreadPage =
             serde_json::from_slice(&to_bytes(thread.into_body(), usize::MAX).await.unwrap())
@@ -1448,19 +1531,12 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
             (outgoing, outgoing_token),
             (outsider.as_str(), outsider_token.as_str()),
         ] {
-            let denied_thread = app
-                .clone()
-                .oneshot(
-                    Request::builder()
-                        .method("GET")
-                        .uri(format!(
-                            "/games/{game}/channels/{channel}/thread?principal_user_id={denied_principal}"
-                        ))
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
+            let denied_thread = get_as_dev_principal(
+                &app,
+                denied_principal,
+                format!("/games/{game}/channels/{channel}/thread"),
+            )
+            .await;
             assert_eq!(denied_thread.status(), StatusCode::FORBIDDEN);
 
             let denied_media = app
@@ -1502,19 +1578,12 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
 
     projections::rebuild(&pool, game).await.unwrap();
     for (channel, incoming, before) in rebuilt_bodies {
-        let rebuilt = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri(format!(
-                        "/games/{game}/channels/{channel}/thread?principal_user_id={incoming}&limit=10"
-                    ))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let rebuilt = get_as_dev_principal(
+            &app,
+            incoming.as_str(),
+            format!("/games/{game}/channels/{channel}/thread?limit=10"),
+        )
+        .await;
         assert_eq!(rebuilt.status(), StatusCode::OK);
         let rebuilt: ThreadPage =
             serde_json::from_slice(&to_bytes(rebuilt.into_body(), usize::MAX).await.unwrap())
@@ -1594,19 +1663,12 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     );
     command_id += 1;
 
-    let before_death = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/dead/thread?principal_user_id={outgoing}"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let before_death = get_as_dev_principal(
+        &app,
+        outgoing.as_str(),
+        format!("/games/{game}/channels/dead/thread"),
+    )
+    .await;
     assert_eq!(before_death.status(), StatusCode::FORBIDDEN);
     expect_reject(
         post_command(
@@ -1699,6 +1761,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     );
     command_id += 1;
 
+    let incoming_ticket = issue_websocket_ticket(&app, &incoming_token, game, "dead").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server_app = app.clone();
@@ -1706,7 +1769,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
         axum::serve(listener, server_app).await.unwrap();
     });
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id={incoming}&channel=dead"
+        "ws://{addr}/ws?ticket={incoming_ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -1767,19 +1830,12 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     .expect("dead-chat command publishes a channel-scoped live delta");
     assert!(live_dead_chat.id > initial_dead_chat.id);
 
-    let thread = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/dead/thread?principal_user_id={incoming}&limit=10"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let thread = get_as_dev_principal(
+        &app,
+        incoming.as_str(),
+        format!("/games/{game}/channels/dead/thread?limit=10"),
+    )
+    .await;
     assert_eq!(thread.status(), StatusCode::OK);
     let thread: ThreadPage =
         serde_json::from_slice(&to_bytes(thread.into_body(), usize::MAX).await.unwrap()).unwrap();
@@ -1834,19 +1890,12 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
             RejectCode::NotAuthorized,
         ),
     ] {
-        let denied_thread = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri(format!(
-                        "/games/{game}/channels/dead/thread?principal_user_id={principal}"
-                    ))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let denied_thread = get_as_dev_principal(
+            &app,
+            principal,
+            format!("/games/{game}/channels/dead/thread"),
+        )
+        .await;
         assert_eq!(denied_thread.status(), StatusCode::FORBIDDEN);
         let denied_media = app
             .clone()
@@ -1908,19 +1957,12 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
         .await,
     );
     command_id += 1;
-    let restored_thread = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/dead/thread?principal_user_id={incoming}"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let restored_thread = get_as_dev_principal(
+        &app,
+        incoming.as_str(),
+        format!("/games/{game}/channels/dead/thread"),
+    )
+    .await;
     assert_eq!(restored_thread.status(), StatusCode::FORBIDDEN);
     let restored_media = app
         .clone()
@@ -1979,19 +2021,12 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         )
         .await,
     );
-    let before_grant = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/spectator/thread?principal_user_id={spectator}"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let before_grant = get_as_dev_principal(
+        &app,
+        spectator.as_str(),
+        format!("/games/{game}/channels/spectator/thread"),
+    )
+    .await;
     assert_eq!(before_grant.status(), StatusCode::FORBIDDEN);
     expect_ack(
         post_command(
@@ -2062,6 +2097,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         .contains("Host notice for the spectator room"));
     assert_eq!(stored["media"][0]["content_id"], content_id);
 
+    let spectator_ticket = issue_websocket_ticket(&app, &spectator_token, game, "spectator").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server_app = app.clone();
@@ -2069,7 +2105,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         axum::serve(listener, server_app).await.unwrap();
     });
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id={spectator}&channel=spectator"
+        "ws://{addr}/ws?ticket={spectator_ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -2127,19 +2163,12 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     .expect("host publication produces a channel-scoped spectator live delta");
     assert!(live_spectator.id > initial_spectator.id);
 
-    let thread = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/spectator/thread?principal_user_id={spectator}&limit=10"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let thread = get_as_dev_principal(
+        &app,
+        spectator.as_str(),
+        format!("/games/{game}/channels/spectator/thread?limit=10"),
+    )
+    .await;
     assert_eq!(thread.status(), StatusCode::OK);
     let thread: ThreadPage =
         serde_json::from_slice(&to_bytes(thread.into_body(), usize::MAX).await.unwrap()).unwrap();
@@ -2180,28 +2209,14 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         .is_empty());
 
     for path in [
-        format!("/games/{game}/channels/dead/thread?principal_user_id={spectator}"),
-        format!(
-            "/games/{game}/channels/private:role_pm:slot_1/thread?principal_user_id={spectator}"
-        ),
-        format!(
-            "/games/{game}/channels/private:mafia_day_chat/thread?principal_user_id={spectator}"
-        ),
-        format!("/games/{game}/notifications?principal_user_id={spectator}"),
-        format!("/games/{game}/investigation-results?principal_user_id={spectator}"),
-        format!("/games/{game}/player-command-state?principal_user_id={spectator}"),
+        format!("/games/{game}/channels/dead/thread"),
+        format!("/games/{game}/channels/private:role_pm:slot_1/thread"),
+        format!("/games/{game}/channels/private:mafia_day_chat/thread"),
+        format!("/games/{game}/notifications"),
+        format!("/games/{game}/investigation-results"),
+        format!("/games/{game}/player-command-state"),
     ] {
-        let denied = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri(path)
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let denied = get_as_dev_principal(&app, spectator.as_str(), path).await;
         assert_eq!(denied.status(), StatusCode::FORBIDDEN);
     }
     expect_reject(
@@ -2256,19 +2271,12 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         )
         .await,
     );
-    let revoked_thread = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/spectator/thread?principal_user_id={spectator}"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let revoked_thread = get_as_dev_principal(
+        &app,
+        spectator.as_str(),
+        format!("/games/{game}/channels/spectator/thread"),
+    )
+    .await;
     assert_eq!(revoked_thread.status(), StatusCode::FORBIDDEN);
     let revoked_media = app
         .clone()
@@ -2389,28 +2397,7 @@ async fn post_command_with_command_id(
         command,
     ))
     .unwrap();
-    let token = format!("test-command-session:{principal_user_id}");
-    let session_response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": token,
-                        "principal_user_id": principal_user_id,
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": global_capabilities
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(session_response.status(), StatusCode::OK);
+    let token = issue_dev_session(&app, principal_user_id, &global_capabilities).await;
     let response = app
         .clone()
         .oneshot(
@@ -2996,7 +2983,7 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/games/{game}/thread"))
+                .uri(format!("/games/{game}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -3004,7 +2991,7 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let page: ThreadPage = serde_json::from_slice(&bytes).unwrap();
+    let page: PublicGameThreadPage = serde_json::from_slice(&bytes).unwrap();
     let official = page
         .posts
         .iter()
@@ -3119,6 +3106,9 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let serialized_setup = std::str::from_utf8(&bytes).unwrap();
+    assert!(!serialized_setup.contains("mira@example.test"));
+    assert!(!serialized_setup.contains("\"accounts\""));
     let setup: HostSetupStateResponse = serde_json::from_slice(&bytes).unwrap();
 
     assert_eq!(setup.game, game);
@@ -3146,9 +3136,6 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     assert_eq!(setup.attached_programs[0].program_id, "raffle");
     assert_eq!(setup.attached_programs[0].version, 1);
     assert_eq!(setup.attached_programs[0].event_count, 1);
-    assert_eq!(setup.accounts.len(), 1);
-    assert_eq!(setup.accounts[0].account_id, "mira@example.test");
-    assert_eq!(setup.accounts[0].principal_user_id, "player_mira");
     assert_eq!(setup.slots.len(), 1);
     assert_eq!(setup.slots[0].slot_id, "slot_1");
     assert!(setup.slots[0]
@@ -3168,18 +3155,8 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
         Some("D01")
     );
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/host-console-state?principal_user_id=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response =
+        get_as_dev_principal(&app, "host_h", format!("/games/{game}/host-console-state")).await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let host_state: api::HostConsoleStateResponse = serde_json::from_slice(&bytes).unwrap();
@@ -3297,19 +3274,12 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         expect_ack(post_command(app.clone(), id, principal, command).await);
     }
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-goon&slot_id=slot_4"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-goon",
+        format!("/games/{game}/player-command-state?slot_id=slot_4"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -3356,19 +3326,12 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         )
         .await,
     );
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-goon&slot_id=slot_4"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-goon",
+        format!("/games/{game}/player-command-state?slot_id=slot_4"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let submitted_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -3403,19 +3366,12 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         )
         .await,
     );
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-goon&slot_id=slot_4"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-goon",
+        format!("/games/{game}/player-command-state?slot_id=slot_4"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let withdrawn_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -3452,19 +3408,12 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         )
         .await,
     );
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/notifications?principal_user_id=action-target"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-target",
+        format!("/games/{game}/notifications"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let target_notifications: Vec<PlayerNotification> = serde_json::from_slice(&bytes).unwrap();
@@ -3473,19 +3422,12 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     assert_eq!(target_notifications[0].effect, "player_killed");
     assert_eq!(target_notifications[0].status, "factional_kill");
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-target&slot_id=slot-2"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-target",
+        format!("/games/{game}/player-command-state?slot_id=slot-2"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let dead_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -3494,19 +3436,8 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     assert_eq!(dead_state["actor_status"], "dead");
     assert_eq!(dead_state["actions"], serde_json::json!([]));
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/notifications?principal_user_id=action-goon"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response =
+        get_as_dev_principal(&app, "action-goon", format!("/games/{game}/notifications")).await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let actor_notifications: Vec<PlayerNotification> = serde_json::from_slice(&bytes).unwrap();
@@ -3529,19 +3460,12 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         )
         .await,
     );
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-goon&slot_id=slot_4"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-goon",
+        format!("/games/{game}/player-command-state?slot_id=slot_4"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let day_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -3550,19 +3474,12 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     assert_eq!(day_state["actor_status"], "alive");
     assert_eq!(day_state["actions"], serde_json::json!([]));
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-target&slot_id=slot_4"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-target",
+        format!("/games/{game}/player-command-state?slot_id=slot_4"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
@@ -3673,19 +3590,12 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
         expect_ack(post_command(app.clone(), id, principal, command).await);
     }
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-town&slot_id=slot-3"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-town",
+        format!("/games/{game}/player-command-state?slot_id=slot-3"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -3715,19 +3625,12 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
         .await,
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-town&slot_id=slot-3"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-town",
+        format!("/games/{game}/player-command-state?slot_id=slot-3"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -3750,19 +3653,12 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
         .await,
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-town&slot_id=slot-3"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-town",
+        format!("/games/{game}/player-command-state?slot_id=slot-3"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -3777,19 +3673,12 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
 
     expect_ack(post_command(app.clone(), 14, "host_h", Command::LockThread { game }).await);
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=action-town&slot_id=slot-3"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "action-town",
+        format!("/games/{game}/player-command-state?slot_id=slot-3"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -3803,6 +3692,7 @@ async fn websocket_game_connection_sends_initial_votecount_delta(pool: sqlx::PgP
     let app = router(pool);
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
+    let ticket = issue_dev_websocket_ticket(&app, "user_a", game, "main").await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -3811,7 +3701,7 @@ async fn websocket_game_connection_sends_initial_votecount_delta(pool: sqlx::PgP
     });
 
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id=user_a"
+        "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -3839,6 +3729,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
     let app = router(pool);
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
+    let ticket = issue_dev_websocket_ticket(&app, "user_b", game, "main").await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -3848,7 +3739,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
     });
 
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id=user_b"
+        "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -3926,6 +3817,7 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     let app = api::router_with_state(state);
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
+    let ticket = issue_dev_websocket_ticket(&app, "user_b", game, "main").await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -3935,7 +3827,7 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     });
 
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id=user_b"
+        "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -4018,6 +3910,7 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
     let app = router(pool);
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
+    let ticket = issue_dev_websocket_ticket(&app, "user_a", game, "main").await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -4027,7 +3920,7 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
     });
 
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id=user_a"
+        "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -4098,6 +3991,7 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
     let app = router(pool);
     let game = Uuid::new_v4();
     seed_single_vote_game(app.clone(), game).await;
+    let ticket = issue_dev_websocket_ticket(&app, "user_a", game, "main").await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -4107,7 +4001,7 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
     });
 
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id=user_a"
+        "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -4173,6 +4067,7 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
     let app = router(pool);
     let game = Uuid::new_v4();
     seed_beloved_princess_ready_to_resolve(app.clone(), game).await;
+    let ticket = issue_dev_websocket_ticket(&app, "host_h", game, "main").await;
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -4182,7 +4077,7 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
     });
 
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id=host_h"
+        "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -4276,19 +4171,12 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
         "task selector delta should follow the initial projection"
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/host-console-state?principal_user_id=cohost_c"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "cohost_c",
+        format!("/games/{game}/host-console-state"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: api::HostConsoleStateResponse = serde_json::from_slice(&bytes).unwrap();
@@ -4382,19 +4270,12 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         expect_ack(post_command(app.clone(), id, "host_h", command).await);
     }
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=user_a&slot_id=slot_1"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "user_a",
+        format!("/games/{game}/player-command-state?slot_id=slot_1"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: api::PlayerCommandStateResponse = serde_json::from_slice(&body).unwrap();
@@ -4436,19 +4317,12 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         .await,
         RejectCode::DuplicateParticipation,
     );
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=user_a&slot_id=slot_1"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "user_a",
+        format!("/games/{game}/player-command-state?slot_id=slot_1"),
+    )
+    .await;
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: api::PlayerCommandStateResponse = serde_json::from_slice(&body).unwrap();
     assert_eq!(state.day_events[0].participation_status, "submitted");
@@ -4477,19 +4351,9 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
             Some("cohost policy denies day_event_resolve"),
         ),
     ] {
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri(format!(
-                        "/games/{game}/host-console-state?principal_user_id={principal}"
-                    ))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response =
+            get_as_dev_principal(&app, principal, format!("/games/{game}/host-console-state"))
+                .await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let state: api::HostConsoleStateResponse = serde_json::from_slice(&body).unwrap();
@@ -4545,19 +4409,8 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         .await,
         RejectCode::DayEventStateConflict,
     );
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/host-console-state?principal_user_id=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response =
+        get_as_dev_principal(&app, "host_h", format!("/games/{game}/host-console-state")).await;
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: api::HostConsoleStateResponse = serde_json::from_slice(&body).unwrap();
     let resolved = state
@@ -4579,19 +4432,12 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         .iter()
         .all(|task| task.id != "day-event-resolve:event-cookie"));
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/player-command-state?principal_user_id=user_a&slot_id=slot_1"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "user_a",
+        format!("/games/{game}/player-command-state?slot_id=slot_1"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: api::PlayerCommandStateResponse = serde_json::from_slice(&body).unwrap();
@@ -4698,6 +4544,7 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
         .await,
     );
 
+    let ticket = issue_dev_websocket_ticket(&app, "user_2", game, "main").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server_app = app.clone();
@@ -4706,7 +4553,7 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
     });
 
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id=user_2"
+        "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();
@@ -4999,7 +4846,7 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/games/{game}/thread?limit=2"))
+                .uri(format!("/games/{game}?limit=2"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -5007,7 +4854,7 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let page: ThreadPage = serde_json::from_slice(&bytes).unwrap();
+    let page: PublicGameThreadPage = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(
         page.posts
             .iter()
@@ -5022,7 +4869,7 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/games/{game}/thread?before_seq={before}&limit=2"))
+                .uri(format!("/games/{game}?before_seq={before}&limit=2"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -5030,10 +4877,82 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let older: ThreadPage = serde_json::from_slice(&bytes).unwrap();
+    let older: PublicGameThreadPage = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(older.posts.len(), 1);
     assert_eq!(older.posts[0].body, "one");
     assert_eq!(older.next_before_seq, None);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let hidden_source_seq = 41_i64;
+    sqlx::query(
+        "INSERT INTO game_index \
+         (game_id, pack, status, phase_id, created_seq, started_seq, completed_seq, updated_seq) \
+         VALUES ($1, 'mafiascum', 'active', 'D01', 1, 2, NULL, $2)",
+    )
+    .bind(game)
+    .bind(hidden_source_seq)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO thread_view \
+         (game_id, source_seq, stream_seq, channel_id, author_slot, author_user, phase_id, body, body_private, occurred_at) \
+         VALUES ($1, $2, $2, 'main', NULL, 'hidden_author', 'D01', 'moderated secret', NULL, 1781928000)",
+    )
+    .bind(game)
+    .bind(hidden_source_seq)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO moderation_target_state \
+         (target_kind, scope_id, source_seq, visibility, reason, moderator_principal_id, updated_seq) \
+         VALUES ('game_post', $1, $2, 'hidden', 'confirmed abuse', 'global_mod', 42)",
+    )
+    .bind(game)
+    .bind(hidden_source_seq)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let app = router(pool);
+    let public = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/games/{game}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(public.status(), StatusCode::OK);
+    let public: wire::PublicGameThreadPage =
+        serde_json::from_slice(&to_bytes(public.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert!(
+        public.posts.is_empty(),
+        "the canonical public game boundary must omit globally hidden posts"
+    );
+
+    let raw = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/games/{game}/thread"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        raw.status(),
+        StatusCode::NOT_FOUND,
+        "the deprecated raw thread route must not bypass the canonical visibility boundary"
+    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -5126,28 +5045,7 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
         .await
         .unwrap();
     assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
-    let admin_token = "admin-game-index-token";
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": admin_token,
-                        "principal_user_id": "game_index_admin",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "game_index_admin", &["GlobalAdmin"]).await;
     let response = app
         .clone()
         .oneshot(
@@ -5246,19 +5144,7 @@ async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::Pg
         .body,
         ServerMsg::Ack(_)
     ));
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/export?principal_user_id=export_host"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(&app, "export_host", format!("/games/{game}/export")).await;
     assert_eq!(response.status(), StatusCode::OK);
     let export: eventstore::StreamExport =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
@@ -5269,16 +5155,9 @@ async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::Pg
         .iter()
         .any(|event| event.kind == "GameCompleted"));
     assert_eq!(
-        app.oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!("/games/{game}/export?principal_user_id=not_host"))
-                .body(Body::empty())
-                .unwrap()
-        )
-        .await
-        .unwrap()
-        .status(),
+        get_as_dev_principal(&app, "not_host", format!("/games/{game}/export"))
+            .await
+            .status(),
         StatusCode::FORBIDDEN,
     );
 }
@@ -5288,31 +5167,13 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     pool: sqlx::PgPool,
 ) {
     let app = router_with_dev_auth(pool.clone());
-    for (token, principal_user_id, globals) in [
-        (
-            "discussion-member",
-            "discussion_member",
-            serde_json::json!([]),
-        ),
-        (
-            "discussion-moderator",
-            "discussion_moderator",
-            serde_json::json!(["GlobalMod"]),
-        ),
+    let discussion_member_token = issue_dev_session(&app, "discussion_member", &[]).await;
+    let discussion_moderator_token =
+        issue_dev_session(&app, "discussion_moderator", &["GlobalMod"]).await;
+    for (principal_user_id, globals) in [
+        ("discussion_member", serde_json::json!([])),
+        ("discussion_moderator", serde_json::json!(["GlobalMod"])),
     ] {
-        let response = post_public_auth_json(
-            &app,
-            "/auth/dev-session",
-            serde_json::json!({
-                "token": token,
-                "principal_user_id": principal_user_id,
-                "expires_at": 4_102_444_800i64,
-                "global_capabilities": globals.clone(),
-            }),
-            None,
-        )
-        .await;
-        assert_eq!(response.status(), StatusCode::OK);
         sqlx::query(
             "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, 'test-only', 1, NULL, $3)",
         )
@@ -5333,12 +5194,12 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
 
     for (token, handle, display_name) in [
         (
-            "discussion-member",
+            discussion_member_token.as_str(),
             "discussion_member",
             "Discussion Member",
         ),
         (
-            "discussion-moderator",
+            discussion_moderator_token.as_str(),
             "discussion_moderator",
             "Discussion Moderator",
         ),
@@ -5373,7 +5234,10 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
             Request::builder()
                 .method("POST")
                 .uri("/discussions/areas")
-                .header("authorization", "Bearer discussion-moderator")
+                .header(
+                    "authorization",
+                    format!("Bearer {discussion_moderator_token}"),
+                )
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
@@ -5399,7 +5263,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
                 Request::builder()
                     .method("POST")
                     .uri("/discussions/areas/general/topics")
-                    .header("authorization", "Bearer discussion-member")
+                    .header("authorization", format!("Bearer {discussion_member_token}"))
                     .header("content-type", "application/json")
                     .body(Body::from(
                         serde_json::json!({ "title": title, "body": body }).to_string(),
@@ -5454,7 +5318,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
             Request::builder()
                 .method("POST")
                 .uri(format!("/discussions/topics/{topic}/moderation"))
-                .header("authorization", "Bearer discussion-member")
+                .header("authorization", format!("Bearer {discussion_member_token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(r#"{"posting_state":"locked"}"#))
                 .unwrap(),
@@ -5469,7 +5333,10 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
             Request::builder()
                 .method("POST")
                 .uri(format!("/discussions/topics/{topic}/moderation"))
-                .header("authorization", "Bearer discussion-moderator")
+                .header(
+                    "authorization",
+                    format!("Bearer {discussion_moderator_token}"),
+                )
                 .header("content-type", "application/json")
                 .body(Body::from(r#"{"posting_state":"locked"}"#))
                 .unwrap(),
@@ -5484,7 +5351,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
             Request::builder()
                 .method("POST")
                 .uri(format!("/discussions/topics/{topic}/posts"))
-                .header("authorization", "Bearer discussion-member")
+                .header("authorization", format!("Bearer {discussion_member_token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(r#"{"body":"late reply"}"#))
                 .unwrap(),
@@ -5494,7 +5361,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     assert_eq!(rejected_post.status(), StatusCode::CONFLICT);
 
     sqlx::query(
-        "UPDATE auth_account SET disabled_at = 2 WHERE principal_user_id = 'discussion_member'",
+        "UPDATE platform_principal SET status = 'disabled', disabled_at = 2 WHERE principal_user_id = 'discussion_member'",
     )
     .execute(&pool)
     .await
@@ -5505,7 +5372,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
             Request::builder()
                 .method("POST")
                 .uri(format!("/discussions/topics/{topic}/posts"))
-                .header("authorization", "Bearer discussion-member")
+                .header("authorization", format!("Bearer {discussion_member_token}"))
                 .header("content-type", "application/json")
                 .body(Body::from(r#"{"body":"disabled reply"}"#))
                 .unwrap(),
@@ -5567,7 +5434,10 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
             Request::builder()
                 .method("POST")
                 .uri(format!("/discussions/topics/{topic}/moderation"))
-                .header("authorization", "Bearer discussion-moderator")
+                .header(
+                    "authorization",
+                    format!("Bearer {discussion_moderator_token}"),
+                )
                 .header("content-type", "application/json")
                 .body(Body::from(r#"{"visibility":"hidden"}"#))
                 .unwrap(),
@@ -5932,23 +5802,11 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     pool: sqlx::PgPool,
 ) {
     let app = router_with_dev_auth(pool.clone());
+    let moderation_app = router_with_dev_auth(pool.clone());
     let (member_token, member_principal) =
         create_media_upload_account_session(&app, "moderation-member").await;
-    let moderator_token = "community-moderator-token";
     let moderator_principal = "community_moderator";
-    let response = post_public_auth_json(
-        &app,
-        "/auth/dev-session",
-        serde_json::json!({
-            "token": moderator_token,
-            "principal_user_id": moderator_principal,
-            "expires_at": 4_102_444_800i64,
-            "global_capabilities": ["GlobalMod"]
-        }),
-        None,
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
+    let moderator_token = issue_dev_session(&app, moderator_principal, &["GlobalMod"]).await;
     sqlx::query(
         "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, 'test-only', 1, NULL, ARRAY['GlobalMod'])",
     )
@@ -5957,6 +5815,28 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     .execute(&pool)
     .await
     .unwrap();
+
+    let upload = post_media_upload(
+        &app,
+        Some(member_token.as_str()),
+        "image/png",
+        media_upload_png(300, 225),
+    )
+    .await;
+    assert_eq!(upload.status(), StatusCode::CREATED);
+    let upload: MediaUploadResponse =
+        serde_json::from_slice(&to_bytes(upload.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let mut post_media_variants = serde_json::Map::new();
+    for variant in &upload.variants {
+        post_media_variants
+            .entry(variant.kind.clone())
+            .or_insert_with(|| {
+                serde_json::json!({
+                    "width": variant.width,
+                    "height": variant.height
+                })
+            });
+    }
 
     let game = Uuid::new_v4();
     projections::append_and_project(
@@ -5984,7 +5864,12 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                     "channel_id": "main",
                     "slot_or_user": { "slot": "slot_1" },
                     "body": "reportable cobalt content",
-                    "phase_id": "D01"
+                    "phase_id": "D01",
+                    "media": [{
+                        "content_id": upload.content_id,
+                        "alt": "Reportable cobalt evidence",
+                        "variants": post_media_variants
+                    }]
                 }),
                 eventstore::ActorId::Slot("slot_1".into()),
                 3,
@@ -6020,6 +5905,32 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
             .unwrap()
             .posts[0]
             .source_seq;
+    let public_before_hide = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/games/{game}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let public_before_hide: PublicGameThreadPage = serde_json::from_slice(
+        &to_bytes(public_before_hide.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let public_media_url = public_before_hide
+        .posts
+        .iter()
+        .find(|post| post.source_seq == public_source_seq)
+        .and_then(|post| post.media.first())
+        .and_then(|media| media.variants.values().next())
+        .map(|variant| variant.avif_url.clone())
+        .expect("the public moderation target must expose its canonical media URL");
+    let visible_media = get_with_bearer(&app, member_token.as_str(), &public_media_url).await;
+    assert_eq!(visible_media.status(), StatusCode::OK);
 
     let report_body = serde_json::json!({
         "target_kind": "game_post",
@@ -6105,14 +6016,125 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
         serde_json::from_slice(&to_bytes(detail.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(detail.reports[0].reporter_principal_id, member_principal);
 
+    let ticket = issue_websocket_ticket(&app, member_token.as_str(), game, "main").await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_app = app.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, server_app).await.unwrap();
+    });
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
+    ))
+    .await
+    .unwrap();
+    let hello = decode_server_envelope(socket.next().await.unwrap().unwrap());
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
+                    if delta.game == game
+                        && delta.posts.iter().any(|post| post.source_seq == public_source_seq)
+            ) {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("the live client should hydrate the visible post before moderation");
+
+    let moderator_ticket =
+        issue_websocket_ticket(&app, moderator_token.as_str(), game, "main").await;
+    let (mut moderator_socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?ticket={moderator_ticket}&audience=fmarch-live"
+    ))
+    .await
+    .unwrap();
+    let hello = decode_server_envelope(moderator_socket.next().await.unwrap().unwrap());
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope = decode_server_envelope(moderator_socket.next().await.unwrap().unwrap());
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(ref delta))
+                    if delta.game == game
+                        && delta.thread_posts.iter().any(|post| post.stream_seq == public_source_seq)
+            ) {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("the moderator socket should hydrate the initially visible host-console post");
+
     let hidden = post_bearer_json(
-        &app,
+        &moderation_app,
         format!("/moderation/cases/{case_id}/actions").as_str(),
         serde_json::json!({ "action": "hide", "reason": "confirmed harassment" }),
-        moderator_token,
+        moderator_token.as_str(),
     )
     .await;
     assert_eq!(hidden.status(), StatusCode::OK);
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostRemoved(ref delta))
+                    if delta.game == game && delta.source_seq == public_source_seq
+            ) {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("a connected public client must purge a post immediately after it is hidden");
+    let hidden_snapshot = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
+            if let ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(delta)) = envelope.body {
+                if delta.game == game {
+                    return delta;
+                }
+            }
+        }
+    })
+    .await
+    .expect("hide must follow the tombstone with a visibility-filtered thread snapshot");
+    assert!(
+        hidden_snapshot
+            .posts
+            .iter()
+            .all(|post| post.source_seq != public_source_seq),
+        "the visibility-filtered snapshot must not resurrect the hidden source sequence"
+    );
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope = decode_server_envelope(moderator_socket.next().await.unwrap().unwrap());
+            if let ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(delta)) = envelope.body
+            {
+                if delta.game == game {
+                    assert!(delta
+                        .thread_posts
+                        .iter()
+                        .all(|post| post.stream_seq != public_source_seq));
+                    return;
+                }
+            }
+        }
+    })
+    .await
+    .expect("a connected host/global-operator client must purge the hidden post");
+    let hidden_media = get_with_bearer(&app, member_token.as_str(), &public_media_url).await;
+    assert_eq!(
+        hidden_media.status(),
+        StatusCode::NOT_FOUND,
+        "hiding the post must close direct retrieval of its canonical media"
+    );
     let public = app
         .clone()
         .oneshot(
@@ -6139,6 +6161,82 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     let search: PublicSearchPage =
         serde_json::from_slice(&to_bytes(search.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert!(search.results.is_empty());
+
+    let host_console = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/games/{game}/host-console-state"))
+                .header("authorization", format!("Bearer {moderator_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(host_console.status(), StatusCode::OK);
+    let host_console: HostConsoleStateResponse = serde_json::from_slice(
+        &to_bytes(host_console.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        host_console
+            .thread_posts
+            .iter()
+            .all(|post| post.stream_seq != public_source_seq),
+        "host/global-operator reads must not bypass global post visibility"
+    );
+
+    // Model the cold-load/socket race directly: a browser may still have the
+    // formerly visible post when it reconnects after the hide. Initial live
+    // hydration must therefore send the durable tombstone as well as filtered
+    // player and host-console snapshots.
+    let hidden_ticket = issue_websocket_ticket(&app, moderator_token.as_str(), game, "main").await;
+    let (mut hidden_socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?ticket={hidden_ticket}&audience=fmarch-live"
+    ))
+    .await
+    .unwrap();
+    let hello = decode_server_envelope(hidden_socket.next().await.unwrap().unwrap());
+    assert!(matches!(hello.body, ServerMsg::Hello(_)));
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let mut saw_tombstone = false;
+        let mut saw_filtered_thread = false;
+        let mut saw_filtered_host_console = false;
+        while !(saw_tombstone && saw_filtered_thread && saw_filtered_host_console) {
+            let envelope = decode_server_envelope(hidden_socket.next().await.unwrap().unwrap());
+            match envelope.body {
+                ServerMsg::Delta(ProjectionDelta::ThreadPostRemoved(delta))
+                    if delta.game == game && delta.source_seq == public_source_seq =>
+                {
+                    saw_tombstone = true;
+                }
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(delta))
+                    if delta.game == game =>
+                {
+                    assert!(delta
+                        .posts
+                        .iter()
+                        .all(|post| post.source_seq != public_source_seq));
+                    saw_filtered_thread = true;
+                }
+                ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(delta))
+                    if delta.game == game =>
+                {
+                    assert!(delta
+                        .thread_posts
+                        .iter()
+                        .all(|post| post.stream_seq != public_source_seq));
+                    saw_filtered_host_console = true;
+                }
+                _ => {}
+            }
+        }
+    })
+    .await
+    .expect("post-hide hydration must purge stale public and host-console state");
+    drop(hidden_socket);
 
     let receipt_lookup = app
         .clone()
@@ -6172,14 +6270,30 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     assert_eq!(moderator_receipt.status(), StatusCode::NOT_FOUND);
 
     let restored = post_bearer_json(
-        &app,
+        &moderation_app,
         format!("/moderation/cases/{case_id}/actions").as_str(),
         serde_json::json!({ "action": "restore", "reason": "appeal accepted" }),
-        moderator_token,
+        moderator_token.as_str(),
     )
     .await;
     assert_eq!(restored.status(), StatusCode::OK);
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        loop {
+            let envelope = decode_server_envelope(socket.next().await.unwrap().unwrap());
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
+                    if delta.game == game
+                        && delta.posts.iter().any(|post| post.source_seq == public_source_seq)
+            ) {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("restoring the post should republish the visibility-filtered thread snapshot");
     let public = app
+        .clone()
         .oneshot(
             Request::builder()
                 .uri(format!("/games/{game}"))
@@ -6191,6 +6305,15 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     let public: wire::PublicGameThreadPage =
         serde_json::from_slice(&to_bytes(public.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(public.posts.len(), 1);
+    let restored_media = get_with_bearer(&app, member_token.as_str(), &public_media_url).await;
+    assert_eq!(
+        restored_media.status(),
+        StatusCode::OK,
+        "restoring the post must restore canonical media retrieval"
+    );
+    drop(socket);
+    drop(moderator_socket);
+    server.abort();
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -6374,31 +6497,14 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
         )
         .await
         .unwrap();
-    assert_eq!(main.status(), StatusCode::OK);
-    let bytes = to_bytes(main.into_body(), usize::MAX).await.unwrap();
-    let main_page: ThreadPage = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(
-        main_page
-            .posts
-            .iter()
-            .map(|post| post.body.as_str())
-            .collect::<Vec<_>>(),
-        vec!["main thread post"]
-    );
+    assert_eq!(main.status(), StatusCode::NOT_FOUND);
 
-    let private = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/private:role_pm:slot_1/thread?principal_user_id=user_a&limit=10"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let private = get_as_dev_principal(
+        &app,
+        "user_a",
+        format!("/games/{game}/channels/private:role_pm:slot_1/thread?limit=10"),
+    )
+    .await;
     assert_eq!(private.status(), StatusCode::OK);
     let bytes = to_bytes(private.into_body(), usize::MAX).await.unwrap();
     let private_page: ThreadPage = serde_json::from_slice(&bytes).unwrap();
@@ -6411,18 +6517,12 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
         vec![("private:role_pm:slot_1", "private role note")]
     );
 
-    let denied = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/private:role_pm:slot_1/thread?principal_user_id=user_b"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let denied = get_as_dev_principal(
+        &app,
+        "user_b",
+        format!("/games/{game}/channels/private:role_pm:slot_1/thread"),
+    )
+    .await;
     assert_eq!(denied.status(), StatusCode::FORBIDDEN);
 }
 
@@ -6859,19 +6959,12 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
     assert!(payload["body_private"]["ciphertext"].is_string());
     assert!(payload["body_private"]["kid"].is_string());
 
-    let private_thread = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/private:role_pm:slot_1/thread?principal_user_id=user_a&limit=10"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let private_thread = get_as_dev_principal(
+        &app,
+        "user_a",
+        format!("/games/{game}/channels/private:role_pm:slot_1/thread?limit=10"),
+    )
+    .await;
     assert_eq!(private_thread.status(), StatusCode::OK);
     let bytes = to_bytes(private_thread.into_body(), usize::MAX)
         .await
@@ -7011,19 +7104,12 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
         .await,
     );
 
-    let allowed = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/private:mafia_day_chat/thread?principal_user_id=goon_user&limit=10"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let allowed = get_as_dev_principal(
+        &app,
+        "goon_user",
+        format!("/games/{game}/channels/private:mafia_day_chat/thread?limit=10"),
+    )
+    .await;
     assert_eq!(allowed.status(), StatusCode::OK);
     let bytes = to_bytes(allowed.into_body(), usize::MAX).await.unwrap();
     let allowed_page: ThreadPage = serde_json::from_slice(&bytes).unwrap();
@@ -7037,19 +7123,12 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
     );
     assert!(allowed_page.posts[0].media.is_empty());
 
-    let denied_read = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/channels/private:mafia_day_chat/thread?principal_user_id=traitor_user&limit=10"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let denied_read = get_as_dev_principal(
+        &app,
+        "traitor_user",
+        format!("/games/{game}/channels/private:mafia_day_chat/thread?limit=10"),
+    )
+    .await;
     assert_eq!(denied_read.status(), StatusCode::FORBIDDEN);
 
     let denied_post = post_command(
@@ -7225,19 +7304,12 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
         .await,
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/host-console-state?principal_user_id=host_h&slot_id=slot_7"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "host_h",
+        format!("/games/{game}/host-console-state?slot_id=slot_7"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -7259,18 +7331,12 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
         "Slot 7 check-in before replacement"
     );
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/host-console-state?principal_user_id=player_mira&slot_id=slot_7"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "player_mira",
+        format!("/games/{game}/host-console-state?slot_id=slot_7"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
@@ -7305,7 +7371,6 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
-                        "token": "dev-token",
                         "principal_user_id": "host_h",
                         "expires_at": 4_102_444_800i64
                     })
@@ -7330,33 +7395,14 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
         .unwrap();
     assert_eq!(missing_response.status(), StatusCode::UNAUTHORIZED);
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": "opaque-host-session-token",
-                        "principal_user_id": "host_h",
-                        "expires_at": 4_102_444_800i64
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let host_session_token = issue_dev_session(&app, "host_h", &[]).await;
 
     let response = app
         .oneshot(
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer opaque-host-session-token")
+                .header("authorization", format!("Bearer {host_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -7374,31 +7420,7 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
 async fn dev_global_admin_session_round_trips_global_capability(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool);
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": "opaque-admin-session-token",
-                        "principal_user_id": "admin_a",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_user_id"], "admin_a");
-    assert_eq!(session["capabilities"][0]["kind"], "GlobalAdmin");
+    let admin_session_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
 
     let response = app
         .clone()
@@ -7406,7 +7428,7 @@ async fn dev_global_admin_session_round_trips_global_capability(pool: sqlx::PgPo
             Request::builder()
                 .method("GET")
                 .uri("/auth/session")
-                .header("authorization", "Bearer opaque-admin-session-token")
+                .header("authorization", format!("Bearer {admin_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -7419,30 +7441,121 @@ async fn dev_global_admin_session_round_trips_global_capability(pool: sqlx::PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_console_authority_is_scoped_to_the_presented_session(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool);
+    let game = Uuid::new_v4();
+    expect_ack(
+        post_command(
+            app.clone(),
+            1,
+            "game_host",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+                cohost_denied: vec![],
+            },
+        )
+        .await,
+    );
+
+    let elevated_token = issue_dev_session(&app, "session_scoped_mod", &["GlobalMod"]).await;
+    let plain_token = issue_dev_session(&app, "session_scoped_mod", &[]).await;
+
+    for surface in [
+        "host-console-state",
+        "host-prompts",
+        "host-phase-controls",
+        "setup-state",
+    ] {
+        let uri = format!("/games/{game}/{surface}");
+        let elevated = get_with_bearer(&app, &elevated_token, &uri).await;
+        assert_eq!(
+            elevated.status(),
+            StatusCode::OK,
+            "the explicitly elevated session must retain access to {surface}"
+        );
+
+        let plain = get_with_bearer(&app, &plain_token, &uri).await;
+        assert_eq!(
+            plain.status(),
+            StatusCode::FORBIDDEN,
+            "a plain session must not borrow GlobalMod from its live sibling on {surface}"
+        );
+    }
+
+    let elevated_ticket = issue_websocket_ticket(&app, &elevated_token, game, "main").await;
+    let plain_ticket = issue_websocket_ticket(&app, &plain_token, game, "main").await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_app = app.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, server_app).await.unwrap();
+    });
+    let (mut elevated_socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?ticket={elevated_ticket}&audience=fmarch-live"
+    ))
+    .await
+    .unwrap();
+    let (mut plain_socket, _) = tokio_tungstenite::connect_async(format!(
+        "ws://{addr}/ws?ticket={plain_ticket}&audience=fmarch-live"
+    ))
+    .await
+    .unwrap();
+    for socket in [&mut elevated_socket, &mut plain_socket] {
+        let hello = decode_server_envelope(socket.next().await.unwrap().unwrap());
+        assert!(matches!(hello.body, ServerMsg::Hello(_)));
+    }
+
+    let mut elevated_host_state = false;
+    let mut elevated_host_prompts = false;
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        while !elevated_host_state || !elevated_host_prompts {
+            let envelope = decode_server_envelope(elevated_socket.next().await.unwrap().unwrap());
+            match envelope.body {
+                ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(delta))
+                    if delta.game == game =>
+                {
+                    elevated_host_state = true;
+                }
+                ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(delta))
+                    if delta.game == game =>
+                {
+                    elevated_host_prompts = true;
+                }
+                _ => {}
+            }
+        }
+    })
+    .await
+    .expect("the elevated sibling should hydrate both private host projections");
+
+    let plain_host_hydration = tokio::time::timeout(std::time::Duration::from_millis(500), async {
+        loop {
+            let envelope = decode_server_envelope(plain_socket.next().await.unwrap().unwrap());
+            if matches!(
+                envelope.body,
+                ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(_))
+                    | ServerMsg::Delta(ProjectionDelta::HostPromptsChanged(_))
+            ) {
+                return;
+            }
+        }
+    })
+    .await;
+    assert!(
+        plain_host_hydration.is_err(),
+        "the plain sibling ticket must not hydrate host deltas while the elevated session exists"
+    );
+
+    drop(elevated_socket);
+    drop(plain_socket);
+    server.abort();
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": "grant-admin-token",
-                        "principal_user_id": "admin_a",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
 
     let response = app
         .clone()
@@ -7451,10 +7564,9 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
                 .method("POST")
                 .uri("/auth/session-grants")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer grant-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
-                        "token": "granted-global-mod-token",
                         "principal_user_id": "mod_a",
                         "expires_at": 4_102_444_800i64,
                         "global_capabilities": ["GlobalMod"]
@@ -7470,6 +7582,10 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(session["principal_user_id"], "mod_a");
     assert_eq!(session["capabilities"][0]["kind"], "GlobalMod");
+    let global_mod_token = session["session_token"]
+        .as_str()
+        .expect("session grant returns a backend-generated session token")
+        .to_string();
 
     let response = app
         .clone()
@@ -7477,7 +7593,7 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
             Request::builder()
                 .method("GET")
                 .uri("/auth/session")
-                .header("authorization", "Bearer granted-global-mod-token")
+                .header("authorization", format!("Bearer {global_mod_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -7495,10 +7611,9 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
                 .method("POST")
                 .uri("/auth/session-grants")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer granted-global-mod-token")
+                .header("authorization", format!("Bearer {global_mod_token}"))
                 .body(Body::from(
                     serde_json::json!({
-                        "token": "forbidden-admin-token",
                         "principal_user_id": "other_admin",
                         "expires_at": 4_102_444_800i64,
                         "global_capabilities": ["GlobalAdmin"]
@@ -7523,31 +7638,10 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
             .with_dev_auth(true)
             .with_identity_delivery_gateway(gateway.clone()),
     );
-    let admin_token = "delivery-admin-token";
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": admin_token,
-                        "principal_user_id": "admin_a",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
     create_test_auth_account(
         &app,
-        admin_token,
+        &admin_token,
         "delivery@example.test",
         "correct horse battery",
         "delivery_user",
@@ -7567,7 +7661,7 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
                         "invite_token": "delivery-invite-raw-token",
                         "account_id": "delivery@example.test",
                         "expected_principal_user_id": "delivery_user",
-                        "expires_at": 4_102_444_800i64
+                        "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
                 ))
@@ -7772,31 +7866,10 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
             .with_dev_auth(true)
             .with_identity_delivery_gateway(gateway.clone()),
     );
-    let admin_token = "permanent-delivery-admin-token";
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": admin_token,
-                        "principal_user_id": "permanent_admin",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "permanent_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
         &app,
-        admin_token,
+        &admin_token,
         "permanent-delivery@example.test",
         "correct horse battery",
         "permanent_delivery_user",
@@ -7816,7 +7889,7 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
                         "invite_token": "permanent-delivery-invite-token",
                         "account_id": "permanent-delivery@example.test",
                         "expected_principal_user_id": "permanent_delivery_user",
-                        "expires_at": 4_102_444_800i64
+                        "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
                 ))
@@ -7928,31 +8001,10 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
             .with_dev_auth(true)
             .with_identity_delivery_gateway(gateway.clone()),
     );
-    let admin_token = "cancel-delivery-admin-token";
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": admin_token,
-                        "principal_user_id": "cancel_delivery_admin",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "cancel_delivery_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
         &app,
-        admin_token,
+        &admin_token,
         "cancel-delivery@example.test",
         "correct horse battery",
         "cancel_delivery_user",
@@ -7971,7 +8023,7 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
                         "invite_token": "cancel-delivery-invite-token",
                         "account_id": "cancel-delivery@example.test",
                         "expected_principal_user_id": "cancel_delivery_user",
-                        "expires_at": 4_102_444_800i64
+                        "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
                 ))
@@ -8086,8 +8138,7 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "New.User+One@Example.Test",
-                        "password": "correct horse battery",
-                        "session_token": "registered-account-session"
+                        "password": "correct horse battery"
                     })
                     .to_string(),
                 ))
@@ -8104,6 +8155,10 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
         .expect("registration principal");
     assert!(principal_user_id.starts_with("registered-"));
     assert!(registered["expires_at"].as_i64().is_some());
+    let registered_session_token = registered["session_token"]
+        .as_str()
+        .expect("registration returns a backend-generated session token")
+        .to_string();
 
     let response = app
         .clone()
@@ -8111,7 +8166,10 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
             Request::builder()
                 .method("GET")
                 .uri("/auth/session")
-                .header("authorization", "Bearer registered-account-session")
+                .header(
+                    "authorization",
+                    format!("Bearer {registered_session_token}"),
+                )
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -8159,8 +8217,7 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "new.user+one@example.test",
-                        "password": "correct horse battery",
-                        "session_token": "registered-account-session-replay"
+                        "password": "correct horse battery"
                     })
                     .to_string(),
                 ))
@@ -8178,13 +8235,9 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
             .with_registration_source_limit(2)
             .with_trusted_auth_attempt_source_header(true),
     );
-    for (account_id, session_token, expected_status) in [
-        ("first@example.test", "registration-first", StatusCode::OK),
-        (
-            "second@example.test",
-            "registration-second",
-            StatusCode::TOO_MANY_REQUESTS,
-        ),
+    for (account_id, expected_status) in [
+        ("first@example.test", StatusCode::OK),
+        ("second@example.test", StatusCode::TOO_MANY_REQUESTS),
     ] {
         let response = app
             .clone()
@@ -8197,8 +8250,7 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
                     .body(Body::from(
                         serde_json::json!({
                             "account_id": account_id,
-                            "password": "correct horse battery",
-                            "session_token": session_token
+                            "password": "correct horse battery"
                         })
                         .to_string(),
                     ))
@@ -8219,8 +8271,7 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "other-source@example.test",
-                        "password": "correct horse battery",
-                        "session_token": "registration-other-source"
+                        "password": "correct horse battery"
                     })
                     .to_string(),
                 ))
@@ -8262,27 +8313,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
         .await,
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": "account-admin-token",
-                        "principal_user_id": "admin_a",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
 
     let response = app
         .clone()
@@ -8291,7 +8322,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .method("POST")
                 .uri("/auth/accounts")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer account-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "host@example.test",
@@ -8320,9 +8351,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "host@example.test",
-                        "password": "wrong password",
-                        "session_token": "host-account-session-wrong",
-                        "expires_at": 4_102_444_800i64
+                        "password": "wrong password"
                     })
                     .to_string(),
                 ))
@@ -8345,9 +8374,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "host@example.test",
-                        "password": "correct horse battery",
-                        "session_token": "host-account-session",
-                        "expires_at": 4_102_444_800i64
+                        "password": "correct horse battery"
                     })
                     .to_string(),
                 ))
@@ -8359,6 +8386,10 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let login: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(login["principal_user_id"], "host_h");
+    let host_session_token = login["session_token"]
+        .as_str()
+        .expect("account login returns a backend-generated session token")
+        .to_string();
 
     let response = app
         .clone()
@@ -8366,7 +8397,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer host-account-session")
+                .header("authorization", format!("Bearer {host_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -8386,7 +8417,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .method("POST")
                 .uri("/auth/accounts/disable")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer account-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "host@example.test"
@@ -8411,7 +8442,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer host-account-session")
+                .header("authorization", format!("Bearer {host_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -8426,7 +8457,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .method("POST")
                 .uri("/auth/accounts/enable")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer account-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "host@example.test",
@@ -8457,9 +8488,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "host@example.test",
-                        "password": "correct horse battery",
-                        "session_token": "disabled-host-account-session",
-                        "expires_at": 4_102_444_800i64
+                        "password": "correct horse battery"
                     })
                     .to_string(),
                 ))
@@ -8476,7 +8505,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .method("POST")
                 .uri("/auth/accounts/enable")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer account-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "host@example.test",
@@ -8504,9 +8533,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "host@example.test",
-                        "password": "correct horse battery",
-                        "session_token": "reenabled-host-account-session",
-                        "expires_at": 4_102_444_800i64
+                        "password": "correct horse battery"
                     })
                     .to_string(),
                 ))
@@ -8515,6 +8542,12 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let login: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let reenabled_session_token = login["session_token"]
+        .as_str()
+        .expect("account login returns a backend-generated session token")
+        .to_string();
 
     let response = app
         .clone()
@@ -8522,7 +8555,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer reenabled-host-account-session")
+                .header("authorization", format!("Bearer {reenabled_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -8551,7 +8584,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .method("POST")
                 .uri("/auth/accounts/password-rotations")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer reenabled-host-account-session")
+                .header("authorization", format!("Bearer {reenabled_session_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": "host@example.test",
@@ -8578,7 +8611,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer reenabled-host-account-session")
+                .header("authorization", format!("Bearer {reenabled_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -8586,17 +8619,10 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
-    for (password, session_token, expected_status) in [
-        (
-            "correct horse battery",
-            "old-password-host-account-session",
-            StatusCode::UNAUTHORIZED,
-        ),
-        (
-            "rotated correct horse battery",
-            "rotated-password-host-account-session",
-            StatusCode::OK,
-        ),
+    let mut rotated_password_session_token = None;
+    for (password, expected_status) in [
+        ("correct horse battery", StatusCode::UNAUTHORIZED),
+        ("rotated correct horse battery", StatusCode::OK),
     ] {
         let response = app
             .clone()
@@ -8608,9 +8634,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                     .body(Body::from(
                         serde_json::json!({
                             "account_id": "host@example.test",
-                            "password": password,
-                            "session_token": session_token,
-                            "expires_at": 4_102_444_800i64
+                            "password": password
                         })
                         .to_string(),
                     ))
@@ -8619,7 +8643,18 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
             .await
             .unwrap();
         assert_eq!(response.status(), expected_status);
+        if expected_status == StatusCode::OK {
+            let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let login: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            rotated_password_session_token = Some(
+                login["session_token"]
+                    .as_str()
+                    .expect("login returns a backend-generated session token")
+                    .to_string(),
+            );
+        }
     }
+    let rotated_password_session_token = rotated_password_session_token.unwrap();
 
     let recovery_expires_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -8637,7 +8672,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                     .header("content-type", "application/json")
                     .header(
                         "authorization",
-                        "Bearer rotated-password-host-account-session",
+                        format!("Bearer {rotated_password_session_token}"),
                     )
                     .body(Body::from(
                         serde_json::json!({
@@ -8680,7 +8715,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .header("content-type", "application/json")
                 .header(
                     "authorization",
-                    "Bearer rotated-password-host-account-session",
+                    format!("Bearer {rotated_password_session_token}"),
                 )
                 .body(Body::from(
                     serde_json::json!({
@@ -8790,7 +8825,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .uri(format!("/auth/session?game={game}"))
                 .header(
                     "authorization",
-                    "Bearer rotated-password-host-account-session",
+                    format!("Bearer {rotated_password_session_token}"),
                 )
                 .body(Body::empty())
                 .unwrap(),
@@ -8799,17 +8834,9 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
-    for (password, session_token, expected_status) in [
-        (
-            "rotated correct horse battery",
-            "pre-recovery-password-session",
-            StatusCode::UNAUTHORIZED,
-        ),
-        (
-            "recovered correct horse battery",
-            "recovered-password-session",
-            StatusCode::OK,
-        ),
+    for (password, expected_status) in [
+        ("rotated correct horse battery", StatusCode::UNAUTHORIZED),
+        ("recovered correct horse battery", StatusCode::OK),
     ] {
         let response = app
             .clone()
@@ -8821,9 +8848,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                     .body(Body::from(
                         serde_json::json!({
                             "account_id": "host@example.test",
-                            "password": password,
-                            "session_token": session_token,
-                            "expires_at": 4_102_444_800i64
+                            "password": password
                         })
                         .to_string(),
                     ))
@@ -8850,7 +8875,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
             Request::builder()
                 .method("GET")
                 .uri("/auth/identity-lifecycle-audit?principal_user_id=host_h")
-                .header("authorization", "Bearer account-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -8875,13 +8900,13 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     assert!(!audit_text.contains("recovered correct horse battery"));
     assert!(!audit_text.contains(&active_recovery_token));
     assert!(!audit_text.contains(&revoked_recovery_token));
-    assert!(!audit_text.contains("host-account-session"));
-    assert!(!audit_text.contains("disabled-host-account-session"));
-    assert!(!audit_text.contains("reenabled-host-account-session"));
-    assert!(!audit_text.contains("old-password-host-account-session"));
-    assert!(!audit_text.contains("rotated-password-host-account-session"));
-    assert!(!audit_text.contains("pre-recovery-password-session"));
-    assert!(!audit_text.contains("recovered-password-session"));
+    for raw_session_token in [
+        host_session_token.as_str(),
+        reenabled_session_token.as_str(),
+        rotated_password_session_token.as_str(),
+    ] {
+        assert!(!audit_text.contains(raw_session_token));
+    }
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -8892,32 +8917,11 @@ async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool
             .with_dev_auth(true)
             .with_identity_delivery_gateway(gateway.clone()),
     );
-    let admin_token = "recovery-request-admin";
     let account_id = "recovery-request@example.test";
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": admin_token,
-                        "principal_user_id": "recovery_request_admin",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "recovery_request_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
         &app,
-        admin_token,
+        &admin_token,
         account_id,
         "correct horse battery",
         "recovery_request_user",
@@ -9015,32 +9019,11 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
             .with_dev_auth(true)
             .with_identity_delivery_gateway(gateway.clone()),
     );
-    let admin_token = "recovery-delivery-admin";
     let account_id = "recovery-delivery@example.test";
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": admin_token,
-                        "principal_user_id": "recovery_delivery_admin",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "recovery_delivery_admin", &["GlobalAdmin"]).await;
     create_test_auth_account(
         &app,
-        admin_token,
+        &admin_token,
         account_id,
         "correct horse battery",
         "recovery_delivery_user",
@@ -9210,41 +9193,17 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
-    let admin_token = "credential-throttle-admin";
     let account_id = "throttled-host@example.test";
     let password = "correct horse battery";
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": admin_token,
-                        "principal_user_id": "admin_a",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    create_test_auth_account(&app, admin_token, account_id, password, "host_h").await;
+    let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
+    create_test_auth_account(&app, &admin_token, account_id, password, "host_h").await;
 
     let failed_requests = [
         (
             "/auth/accounts/login",
             serde_json::json!({
                 "account_id": account_id,
-                "password": "wrong password",
-                "session_token": "failed-login-session",
-                "expires_at": 4_102_444_800i64
+                "password": "wrong password"
             }),
         ),
         (
@@ -9252,8 +9211,7 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
             serde_json::json!({
                 "invite_token": "invalid-invite",
                 "account_id": account_id,
-                "password": "wrong password",
-                "session_token": "failed-invite-session"
+                "password": "wrong password"
             }),
         ),
         (
@@ -9364,9 +9322,7 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
                 .body(Body::from(
                     serde_json::json!({
                         "account_id": account_id,
-                        "password": password,
-                        "session_token": "post-lockout-session",
-                        "expires_at": 4_102_444_800i64
+                        "password": password
                     })
                     .to_string(),
                 ))
@@ -9407,9 +9363,7 @@ async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sql
             "/auth/accounts/login",
             serde_json::json!({
                 "account_id": "missing-login@example.test",
-                "password": "wrong password",
-                "session_token": "missing-login-session",
-                "expires_at": 4_102_444_800i64
+                "password": "wrong password"
             }),
             "spoofed-source-a",
         ),
@@ -9418,8 +9372,7 @@ async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sql
             serde_json::json!({
                 "invite_token": "missing-invite",
                 "account_id": "missing-invite@example.test",
-                "password": "wrong password",
-                "session_token": "missing-invite-session"
+                "password": "wrong password"
             }),
             "spoofed-source-b",
         ),
@@ -9468,9 +9421,7 @@ async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sql
         "/auth/accounts/login",
         serde_json::json!({
             "account_id": "another-random-account@example.test",
-            "password": "wrong password",
-            "session_token": "another-missing-session",
-            "expires_at": 4_102_444_800i64
+            "password": "wrong password"
         }),
         Some("another-spoofed-source"),
     )
@@ -9491,23 +9442,10 @@ async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx
             .with_auth_attempt_limits(3, 20, 900, 900, 900)
             .with_trusted_auth_attempt_source_header(true),
     );
-    let admin_token = "trusted-source-admin";
     let account_id = "partitioned-host@example.test";
     let password = "correct horse battery";
-    let response = post_public_auth_json(
-        &app,
-        "/auth/dev-session",
-        serde_json::json!({
-            "token": admin_token,
-            "principal_user_id": "admin_a",
-            "expires_at": 4_102_444_800i64,
-            "global_capabilities": ["GlobalAdmin"]
-        }),
-        None,
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    create_test_auth_account(&app, admin_token, account_id, password, "host_h").await;
+    let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
+    create_test_auth_account(&app, &admin_token, account_id, password, "host_h").await;
 
     for (source, expected_status) in [
         ("source-a", StatusCode::UNAUTHORIZED),
@@ -9519,9 +9457,7 @@ async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx
             "/auth/accounts/login",
             serde_json::json!({
                 "account_id": account_id,
-                "password": "wrong password",
-                "session_token": format!("wrong-{source}-session"),
-                "expires_at": 4_102_444_800i64
+                "password": "wrong password"
             }),
             Some(source),
         )
@@ -9540,9 +9476,7 @@ async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx
         "/auth/accounts/login",
         serde_json::json!({
             "account_id": account_id,
-            "password": password,
-            "session_token": "trusted-source-b-session",
-            "expires_at": 4_102_444_800i64
+            "password": password
         }),
         Some("source-b"),
     )
@@ -9560,9 +9494,7 @@ async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx
         "/auth/accounts/login",
         serde_json::json!({
             "account_id": account_id,
-            "password": password,
-            "session_token": "blocked-source-a-session",
-            "expires_at": 4_102_444_800i64
+            "password": password
         }),
         Some("source-a"),
     )
@@ -9598,31 +9530,11 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
         .await,
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": "invite-admin-token",
-                        "principal_user_id": "admin_a",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
 
     create_test_auth_account(
         &app,
-        "invite-admin-token",
+        &admin_token,
         "host@example.test",
         "host invite password",
         "host_h",
@@ -9636,13 +9548,13 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
                 .method("POST")
                 .uri("/auth/invites")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer invite-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "host-invite-token",
                         "account_id": "host@example.test",
                         "expected_principal_user_id": "host_h",
-                        "expires_at": 4_102_444_800i64
+                        "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
                 ))
@@ -9667,8 +9579,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
                     serde_json::json!({
                         "invite_token": "host-invite-token",
                         "account_id": "host@example.test",
-                        "password": "wrong invite password",
-                        "session_token": "wrong-host-invite-session"
+                        "password": "wrong invite password"
                     })
                     .to_string(),
                 ))
@@ -9689,8 +9600,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
                     serde_json::json!({
                         "invite_token": "host-invite-token",
                         "account_id": "host@example.test",
-                        "password": "host invite password",
-                        "session_token": "host-invite-session"
+                        "password": "host invite password"
                     })
                     .to_string(),
                 ))
@@ -9703,6 +9613,10 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
     let redeemed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(redeemed["principal_user_id"], "host_h");
     assert_eq!(redeemed["capabilities"].as_array().unwrap().len(), 0);
+    let host_session_token = redeemed["session_token"]
+        .as_str()
+        .expect("invite redemption returns a backend-generated session token")
+        .to_string();
 
     let response = app
         .clone()
@@ -9710,7 +9624,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer host-invite-session")
+                .header("authorization", format!("Bearer {host_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -9733,8 +9647,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
                     serde_json::json!({
                         "invite_token": "host-invite-token",
                         "account_id": "host@example.test",
-                        "password": "host invite password",
-                        "session_token": "second-host-session"
+                        "password": "host invite password"
                     })
                     .to_string(),
                 ))
@@ -9792,51 +9705,11 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         .await,
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": "host-issuer-session",
-                        "principal_user_id": "host_h",
-                        "expires_at": 4_102_444_800i64
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": "invite-account-admin",
-                        "principal_user_id": "admin_a",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let host_issuer_token = issue_dev_session(&app, "host_h", &[]).await;
+    let account_admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
     create_test_auth_account(
         &app,
-        "invite-account-admin",
+        &account_admin_token,
         "rowan@example.test",
         "rowan invite password",
         "player-rowan",
@@ -9850,13 +9723,13 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
                 .method("POST")
                 .uri("/auth/invites")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer host-issuer-session")
+                .header("authorization", format!("Bearer {host_issuer_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "rowan-replacement-invite",
                         "account_id": "rowan@example.test",
                         "expected_principal_user_id": "player-rowan",
-                        "expires_at": 4_102_444_800i64,
+                        "expires_at": unix_now_seconds() + 3_600,
                         "game": game
                     })
                     .to_string(),
@@ -9884,8 +9757,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
                     serde_json::json!({
                         "invite_token": "rowan-replacement-invite",
                         "account_id": "rowan@example.test",
-                        "password": "rowan invite password",
-                        "session_token": "rowan-replacement-session"
+                        "password": "rowan invite password"
                     })
                     .to_string(),
                 ))
@@ -9894,6 +9766,12 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let redeemed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let replacement_session_token = redeemed["session_token"]
+        .as_str()
+        .expect("invite redemption returns a backend-generated session token")
+        .to_string();
 
     let response = app
         .clone()
@@ -9901,7 +9779,10 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer rowan-replacement-session")
+                .header(
+                    "authorization",
+                    format!("Bearer {replacement_session_token}"),
+                )
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -9920,13 +9801,16 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
                 .method("POST")
                 .uri("/auth/invites")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer rowan-replacement-session")
+                .header(
+                    "authorization",
+                    format!("Bearer {replacement_session_token}"),
+                )
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "forbidden-global",
                         "account_id": "missing@example.test",
                         "expected_principal_user_id": "other",
-                        "expires_at": 4_102_444_800i64,
+                        "expires_at": unix_now_seconds() + 3_600,
                         "game": game,
                         "global_capabilities": ["GlobalAdmin"]
                     })
@@ -9951,7 +9835,6 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
-                        "token": "lifecycle-browser-session-v1",
                         "principal_user_id": "host_h",
                         "expires_at": 4_102_444_800i64
                     })
@@ -9962,6 +9845,12 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let initial: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let initial_session_token = initial["session_token"]
+        .as_str()
+        .expect("dev session returns a backend-generated session token")
+        .to_string();
 
     sqlx::query(
         "UPDATE auth_session SET created_at = 0, authenticated_at = 0 WHERE principal_user_id = 'host_h'",
@@ -9975,7 +9864,7 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
             Request::builder()
                 .method("GET")
                 .uri("/auth/session")
-                .header("authorization", "Bearer lifecycle-browser-session-v1")
+                .header("authorization", format!("Bearer {initial_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -9994,16 +9883,20 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
                 .method("POST")
                 .uri("/auth/session-rotations")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer lifecycle-browser-session-v1")
-                .body(Body::from(
-                    serde_json::json!({ "session_token": "lifecycle-browser-session-v2" })
-                        .to_string(),
-                ))
+                .header("authorization", format!("Bearer {initial_session_token}"))
+                .body(Body::from(serde_json::json!({}).to_string()))
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let rotated: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let rotated_session_token = rotated["session_token"]
+        .as_str()
+        .expect("rotation returns a backend-generated session token")
+        .to_string();
+    assert!(rotated_session_token.starts_with("fmss_"));
 
     let response = app
         .clone()
@@ -10012,11 +9905,8 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
                 .method("POST")
                 .uri("/auth/session-rotations")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer lifecycle-browser-session-v1")
-                .body(Body::from(
-                    serde_json::json!({ "session_token": "lifecycle-browser-session-v3" })
-                        .to_string(),
-                ))
+                .header("authorization", format!("Bearer {initial_session_token}"))
+                .body(Body::from(serde_json::json!({}).to_string()))
                 .unwrap(),
         )
         .await
@@ -10029,7 +9919,7 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
             Request::builder()
                 .method("POST")
                 .uri("/auth/session-logout")
-                .header("authorization", "Bearer lifecycle-browser-session-v2")
+                .header("authorization", format!("Bearer {rotated_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -10047,7 +9937,7 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
             Request::builder()
                 .method("GET")
                 .uri("/auth/session")
-                .header("authorization", "Bearer lifecycle-browser-session-v2")
+                .header("authorization", format!("Bearer {rotated_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -10090,31 +9980,11 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .await,
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/auth/dev-session")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "token": "lifecycle-admin-token",
-                        "principal_user_id": "admin_a",
-                        "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
 
     create_test_auth_account(
         &app,
-        "lifecycle-admin-token",
+        &admin_token,
         "lifecycle-host@example.test",
         "lifecycle invite password",
         "host_h",
@@ -10128,10 +9998,9 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .method("POST")
                 .uri("/auth/session-grants")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer lifecycle-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
-                        "token": "host-session-v1",
                         "principal_user_id": "host_h",
                         "expires_at": 4_102_444_800i64
                     })
@@ -10142,6 +10011,12 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let granted: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let initial_host_session_token = granted["session_token"]
+        .as_str()
+        .expect("session grant returns a backend-generated session token")
+        .to_string();
 
     let response = app
         .clone()
@@ -10150,13 +10025,11 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .method("POST")
                 .uri("/auth/session-rotations")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer host-session-v1")
-                .body(Body::from(
-                    serde_json::json!({
-                        "session_token": "host-session-v2"
-                    })
-                    .to_string(),
-                ))
+                .header(
+                    "authorization",
+                    format!("Bearer {initial_host_session_token}"),
+                )
+                .body(Body::from(serde_json::json!({}).to_string()))
                 .unwrap(),
         )
         .await
@@ -10165,6 +10038,11 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let rotated: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(rotated["principal_user_id"], "host_h");
+    let rotated_session_token = rotated["session_token"]
+        .as_str()
+        .expect("rotation returns a backend-generated session token")
+        .to_string();
+    assert!(rotated_session_token.starts_with("fmss_"));
 
     let response = app
         .clone()
@@ -10172,7 +10050,10 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer host-session-v1")
+                .header(
+                    "authorization",
+                    format!("Bearer {initial_host_session_token}"),
+                )
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -10186,7 +10067,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer host-session-v2")
+                .header("authorization", format!("Bearer {rotated_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -10204,10 +10085,10 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .method("POST")
                 .uri("/auth/session-revocations")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer lifecycle-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
-                        "token": "host-session-v2"
+                        "token": rotated_session_token.as_str()
                     })
                     .to_string(),
                 ))
@@ -10223,7 +10104,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
             Request::builder()
                 .method("GET")
                 .uri(format!("/auth/session?game={game}"))
-                .header("authorization", "Bearer host-session-v2")
+                .header("authorization", format!("Bearer {rotated_session_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -10238,13 +10119,13 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .method("POST")
                 .uri("/auth/invites")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer lifecycle-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "revoked-host-invite",
                         "account_id": "lifecycle-host@example.test",
                         "expected_principal_user_id": "host_h",
-                        "expires_at": 4_102_444_800i64
+                        "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
                 ))
@@ -10265,7 +10146,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .method("POST")
                 .uri("/auth/invite-revocations")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer lifecycle-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "revoked-host-invite"
@@ -10289,8 +10170,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                     serde_json::json!({
                         "invite_token": "revoked-host-invite",
                         "account_id": "lifecycle-host@example.test",
-                        "password": "lifecycle invite password",
-                        "session_token": "should-not-exist"
+                        "password": "lifecycle invite password"
                     })
                     .to_string(),
                 ))
@@ -10307,13 +10187,13 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .method("POST")
                 .uri("/auth/invites")
                 .header("content-type", "application/json")
-                .header("authorization", "Bearer lifecycle-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
                         "invite_token": "replacement-host-invite",
                         "account_id": "lifecycle-host@example.test",
                         "expected_principal_user_id": "host_h",
-                        "expires_at": 4_102_444_800i64
+                        "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
                 ))
@@ -10338,8 +10218,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                     serde_json::json!({
                         "invite_token": "replacement-host-invite",
                         "account_id": "lifecycle-host@example.test",
-                        "password": "lifecycle invite password",
-                        "session_token": "replacement-host-session"
+                        "password": "lifecycle invite password"
                     })
                     .to_string(),
                 ))
@@ -10348,6 +10227,12 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let redemption: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let replacement_host_session_token = redemption["session_token"]
+        .as_str()
+        .expect("invite redemption returns a backend-generated session token")
+        .to_string();
     for (delivery_id, expected_code) in [
         (revoked_delivery_id, "invite_revoked"),
         (replacement_delivery_id, "invite_redeemed"),
@@ -10370,7 +10255,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
             Request::builder()
                 .method("GET")
                 .uri("/auth/identity-lifecycle-audit?principal_user_id=host_h")
-                .header("authorization", "Bearer lifecycle-admin-token")
+                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -10413,8 +10298,9 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
     }));
     let audit_text = audit.to_string();
     for raw_token in [
-        "host-session-v1",
-        "host-session-v2",
+        initial_host_session_token.as_str(),
+        rotated_session_token.as_str(),
+        replacement_host_session_token.as_str(),
         "revoked-host-invite",
         "replacement-host-invite",
     ] {
@@ -10609,19 +10495,8 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
         .await,
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/notifications?principal_user_id=user_2"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response =
+        get_as_dev_principal(&app, "user_2", format!("/games/{game}/notifications")).await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let user_two: Vec<PlayerNotification> = serde_json::from_slice(&bytes).unwrap();
@@ -10630,19 +10505,8 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
     assert_eq!(user_two[0].effect, "lovers_link");
     assert_eq!(user_two[0].status, "link_lovers_n01");
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/notifications?principal_user_id=user_4"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response =
+        get_as_dev_principal(&app, "user_4", format!("/games/{game}/notifications")).await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let user_four: Vec<PlayerNotification> = serde_json::from_slice(&bytes).unwrap();
@@ -10651,19 +10515,8 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
         "unaddressed occupants see no private notice"
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/notifications?principal_user_id=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response =
+        get_as_dev_principal(&app, "host_h", format!("/games/{game}/notifications")).await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let host: Vec<PlayerNotification> = serde_json::from_slice(&bytes).unwrap();
@@ -10671,18 +10524,8 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
     assert!(host.iter().any(|notice| notice.audience_slot == "slot_2"));
     assert!(host.iter().any(|notice| notice.audience_slot == "slot_3"));
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/notifications?principal_user_id=outsider"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response =
+        get_as_dev_principal(&app, "outsider", format!("/games/{game}/notifications")).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
@@ -10826,19 +10669,12 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
         .await
         .expect("investigation-result projection rebuild");
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/investigation-results?principal_user_id=user_1"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "user_1",
+        format!("/games/{game}/investigation-results"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let user_one: Vec<PlayerInvestigationResult> = serde_json::from_slice(&bytes).unwrap();
@@ -10848,19 +10684,12 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
     assert_eq!(user_one[0].target_slot, "slot_4");
     assert_eq!(user_one[0].result, serde_json::json!("town"));
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/investigation-results?principal_user_id=user_6"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "user_6",
+        format!("/games/{game}/investigation-results"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let user_six: Vec<PlayerInvestigationResult> = serde_json::from_slice(&bytes).unwrap();
@@ -10869,19 +10698,12 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
     assert_eq!(user_six[0].target_slot, "slot_5");
     assert_eq!(user_six[0].result, serde_json::json!("scum"));
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/investigation-results?principal_user_id=user_7"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "user_7",
+        format!("/games/{game}/investigation-results"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let user_seven: Vec<PlayerInvestigationResult> = serde_json::from_slice(&bytes).unwrap();
@@ -10890,19 +10712,12 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
     assert_eq!(user_seven[0].target_slot, "slot_3");
     assert_eq!(user_seven[0].result, serde_json::json!("scum"));
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/investigation-results?principal_user_id=user_8"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "user_8",
+        format!("/games/{game}/investigation-results"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let user_eight: Vec<PlayerInvestigationResult> = serde_json::from_slice(&bytes).unwrap();
@@ -10911,19 +10726,12 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
         "unaddressed occupants see no private investigation results"
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/investigation-results?principal_user_id=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "host_h",
+        format!("/games/{game}/investigation-results"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let host: Vec<PlayerInvestigationResult> = serde_json::from_slice(&bytes).unwrap();
@@ -10938,18 +10746,12 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
         && result.target_slot == "slot_3"
         && result.result == serde_json::json!("scum")));
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/investigation-results?principal_user_id=outsider"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let response = get_as_dev_principal(
+        &app,
+        "outsider",
+        format!("/games/{game}/investigation-results"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
@@ -10959,14 +10761,16 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn websocket_hello_announces_protocol(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
+    let app = router(pool);
+    let ticket = issue_dev_websocket_ticket(&app, "hello-user", game, "main").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let server = tokio::spawn(async move {
-        axum::serve(listener, router(pool)).await.unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
 
     let (mut socket, _) = tokio_tungstenite::connect_async(format!(
-        "ws://{addr}/ws?game={game}&principal_user_id=hello-user"
+        "ws://{addr}/ws?ticket={ticket}&audience=fmarch-live"
     ))
     .await
     .unwrap();

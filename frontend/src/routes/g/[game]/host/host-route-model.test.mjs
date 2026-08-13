@@ -1064,14 +1064,13 @@ async function unreachableFetch() {
   throw new Error("fetch must not be called");
 }
 
-test("host live projection endpoint uses the public API base when a private base handles SSR", async () => {
+test("host live projection endpoint uses the same-origin authenticated ticket broker", async () => {
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
     capabilities: [{ kind: "HostOf", game: "midsummer", source: "fixture" }],
     principalUserId: "host_h",
     fetchImpl: null,
     apiBaseUrl: "http://fmarch.railway.internal:8080",
-    publicApiBaseUrl: "https://api.example.test",
   });
   assert.equal(
     data.liveProjection.endpoint,

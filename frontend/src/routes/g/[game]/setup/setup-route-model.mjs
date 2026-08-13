@@ -24,11 +24,9 @@ export async function buildHostSetupRouteData({
   const serverSetupStateEndpoint = hostSetupStateUrl({
     apiBaseUrl,
     game: gameId,
-    principalUserId: principal,
   });
   const browserSetupStateEndpoint = hostSetupStateUrl({
     game: gameId,
-    principalUserId: principal,
   });
   const setupState = normalizeHostSetupState(
     await fetchJson({
@@ -77,8 +75,7 @@ export async function buildHostSetupRouteData({
   });
 }
 
-export function hostSetupStateUrl({ apiBaseUrl = "", game, principalUserId }) {
-  normalizeId(principalUserId, "principalUserId");
+export function hostSetupStateUrl({ apiBaseUrl = "", game }) {
   const base = apiBaseUrl === "" ? "/api/gameplay" : apiBaseUrl;
   return `${base}/games/${encodeURIComponent(
     normalizeId(game, "game"),
@@ -216,18 +213,6 @@ export function normalizeHostSetupState(raw, { game }) {
         }),
       ),
     ),
-    accounts: Object.freeze(
-      (Array.isArray(raw?.accounts) ? raw.accounts : []).map((account) =>
-        Object.freeze({
-          accountId: normalizeId(account.account_id, "accounts.account_id"),
-          principalUserId: normalizeId(
-            account.principal_user_id,
-            "accounts.principal_user_id",
-          ),
-          label: normalizeOptionalText(account.label) ?? String(account.account_id),
-        }),
-      ),
-    ),
     phase: raw?.phase
       ? Object.freeze({
           phaseId: String(raw.phase.phase_id),
@@ -335,9 +320,6 @@ export function occupiedSetupInviteTargets(setupState) {
           slotId: slot.slotId,
           principalUserId: slot.assignedPrincipalUserId,
           expectedOccupantUserId: slot.assignedPrincipalUserId,
-          accountId: setupState.accounts.find(
-            (account) => account.principalUserId === slot.assignedPrincipalUserId,
-          )?.accountId ?? "",
           targetLabel: `${slotLabel(slot.slotId)} / ${slot.publicName}`,
         }),
       ),
@@ -367,9 +349,6 @@ function hostSetupFixtureState({ game }) {
       ]),
       start_phase_options: Object.freeze(["D01", "N01"]),
     }),
-    accounts: Object.freeze([
-      Object.freeze({ account_id: "mira@example.test", principal_user_id: "player_mira", label: "mira@example.test" }),
-    ]),
     phase: null,
     slots: Object.freeze([
       Object.freeze({
@@ -441,11 +420,6 @@ function hostSetupFixtureState({ game }) {
 
 function slotLabel(slotId) {
   return String(slotId).replace(/^slot[-_]?/i, "Slot ");
-}
-
-function accountLabel(setupState, principalUserId) {
-  return setupState.accounts.find((account) => account.principalUserId === principalUserId)?.label
-    ?? "Assigned account";
 }
 
 function authenticatedReadHeaders(sessionToken) {

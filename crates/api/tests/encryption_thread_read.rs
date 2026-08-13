@@ -98,6 +98,29 @@ async fn post_command(
         }),
     ))
     .unwrap();
+    let token = dev_session_token(&app, principal_user_id, global_capabilities).await;
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/commands")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+async fn dev_session_token(
+    app: &axum::Router,
+    principal_user_id: &str,
+    global_capabilities: Vec<&str>,
+) -> String {
     let session = app
         .clone()
         .oneshot(
@@ -120,24 +143,10 @@ async fn post_command(
     assert_eq!(session.status(), StatusCode::OK);
     let session_bytes = to_bytes(session.into_body(), usize::MAX).await.unwrap();
     let session: serde_json::Value = serde_json::from_slice(&session_bytes).unwrap();
-    let token = session["session_token"]
+    session["session_token"]
         .as_str()
-        .expect("dev session response must return its backend-generated token");
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/commands")
-                .header("authorization", format!("Bearer {token}"))
-                .header("content-type", "application/json")
-                .body(Body::from(body))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    serde_json::from_slice(&bytes).unwrap()
+        .expect("dev session response must return its backend-generated token")
+        .to_string()
 }
 
 fn expect_ack(envelope: ServerEnvelope) {
@@ -301,14 +310,16 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
         .await
         .expect("destructive rebuild should decrypt both envelope kids");
 
+    let goon_token = dev_session_token(&app, "goon_user", vec![]).await;
     let allowed = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/channels/private:mafia_day_chat/thread?principal_user_id=goon_user&limit=10"
+                    "/games/{game}/channels/private:mafia_day_chat/thread?limit=10"
                 ))
+                .header("authorization", format!("Bearer {goon_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -321,14 +332,16 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     assert_eq!(page.posts[0].channel_id, "private:mafia_day_chat");
     assert_eq!(page.posts[0].body, "mixed-key day chat survives replay");
 
+    let traitor_token = dev_session_token(&app, "traitor_user", vec![]).await;
     let denied_read = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/channels/private:mafia_day_chat/thread?principal_user_id=traitor_user&limit=10"
+                    "/games/{game}/channels/private:mafia_day_chat/thread?limit=10"
                 ))
+                .header("authorization", format!("Bearer {traitor_token}"))
                 .body(Body::empty())
                 .unwrap(),
         )

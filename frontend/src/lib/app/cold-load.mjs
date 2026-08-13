@@ -60,7 +60,6 @@ export async function loadPlayerColdData({
         apiBaseUrl,
         game,
         channel: activeChannel,
-        principalUserId,
         limit: 50,
       }),
     }),
@@ -87,11 +86,10 @@ export async function loadPlayerColdData({
           fetchImpl,
           timeoutMs,
           fallback: fallback.notifications ?? [],
-          url: principalScopedGameUrl({
+          url: authenticatedGameReadUrl({
             apiBaseUrl,
             game,
             path: "notifications",
-            principalUserId,
           }),
         })
       : [],
@@ -100,11 +98,10 @@ export async function loadPlayerColdData({
           fetchImpl,
           timeoutMs,
           fallback: fallback.investigationResults ?? [],
-          url: principalScopedGameUrl({
+          url: authenticatedGameReadUrl({
             apiBaseUrl,
             game,
             path: "investigation-results",
-            principalUserId,
           }),
         })
       : [],
@@ -116,7 +113,6 @@ export async function loadPlayerColdData({
           url: playerCommandStateUrl({
             apiBaseUrl,
             game,
-            principalUserId,
             slotId: actorSlot,
           }),
         })
@@ -204,7 +200,6 @@ export async function loadAdminColdData({
 
 export async function loadHostColdData({
   game,
-  principalUserId,
   fetchImpl,
   apiBaseUrl = "",
   hostConsoleStateEndpoint = null,
@@ -219,7 +214,6 @@ export async function loadHostColdData({
       url: hostPromptsUrl({
         apiBaseUrl,
         game,
-        principalUserId,
       }),
     }),
     fetchJson({
@@ -1087,7 +1081,6 @@ export function playerThreadUrl({
   apiBaseUrl = "",
   game,
   channel = "main",
-  principalUserId = null,
   limit = 50,
   beforeSeq = null,
 }) {
@@ -1098,7 +1091,8 @@ export function playerThreadUrl({
   if (channel !== "main") {
     return `${privateGameplayBase(apiBaseUrl)}/games/${encodeURIComponent(game)}/channels/${encodeURIComponent(channel)}/thread?${params.toString()}`;
   }
-  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/thread?${params.toString()}`;
+  const base = apiBaseUrl === "" ? "/api/gameplay" : apiBaseUrl;
+  return `${base}/games/${encodeURIComponent(game)}?${params.toString()}`;
 }
 
 export function playerVotecountUrl({ apiBaseUrl = "", game }) {
@@ -1126,7 +1120,7 @@ export function hostVotecountUrl({ apiBaseUrl = "", game }) {
   return playerVotecountUrl({ apiBaseUrl, game });
 }
 
-export function principalScopedGameUrl({
+export function authenticatedGameReadUrl({
   apiBaseUrl = "",
   game,
   path,
@@ -1138,12 +1132,11 @@ function privateGameplayBase(apiBaseUrl) {
   return apiBaseUrl === "" ? "/api/gameplay" : apiBaseUrl;
 }
 
-export function hostPromptsUrl({ apiBaseUrl = "", game, principalUserId }) {
-  return principalScopedGameUrl({
+export function hostPromptsUrl({ apiBaseUrl = "", game }) {
+  return authenticatedGameReadUrl({
     apiBaseUrl,
     game,
     path: "host-prompts",
-    principalUserId,
   });
 }
 

@@ -109,13 +109,19 @@ export function projectionPatchForLiveEnvelope(envelope, previousSnapshot) {
   if (
     message.delta.kind !== "VoteCountChanged" &&
     message.delta.kind !== "VoteCountCleared" &&
-    message.delta.kind !== "ThreadPostsChanged"
+    message.delta.kind !== "ThreadPostsChanged" &&
+    message.delta.kind !== "ThreadPostRemoved"
   ) {
     return null;
   }
   if (message.delta.kind === "ThreadPostsChanged") {
     return Object.freeze({
       thread: upsertThreadPosts(previousSnapshot?.thread, message.delta.body?.posts),
+    });
+  }
+  if (message.delta.kind === "ThreadPostRemoved") {
+    return Object.freeze({
+      thread: removeThreadPost(previousSnapshot?.thread, message.delta.body?.source_seq),
     });
   }
   return Object.freeze({
@@ -522,6 +528,12 @@ function normalizeProjectionDelta(delta) {
       body: delta.body ?? {},
     });
   }
+  if (delta?.kind === "ThreadPostRemoved") {
+    return Object.freeze({
+      kind: "ThreadPostRemoved",
+      body: delta.body ?? {},
+    });
+  }
   if (delta?.kind === "HostConsoleStateChanged") {
     return Object.freeze({
       kind: "HostConsoleStateChanged",
@@ -656,6 +668,17 @@ function upsertThreadPosts(previousThread, posts) {
     ...previous,
     posts: Object.freeze(
       [...nextBySeq.values()].sort((left, right) => Number(left.seq) - Number(right.seq)),
+    ),
+  });
+}
+
+function removeThreadPost(previousThread, sourceSeq) {
+  const previous = previousThread ?? {};
+  const previousPosts = Array.isArray(previous.posts) ? previous.posts : [];
+  return Object.freeze({
+    ...previous,
+    posts: Object.freeze(
+      previousPosts.filter((post) => String(post?.seq) !== String(sourceSeq)),
     ),
   });
 }

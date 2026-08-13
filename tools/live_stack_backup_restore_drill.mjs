@@ -19,7 +19,7 @@ const dumpPath = path.join(artifactDir, "local-live-stack.dump");
 const databaseUrl = process.env.DATABASE_URL;
 const host = "127.0.0.1";
 const game = randomUUID();
-const rootAdminSessionToken = `backup-restore-root-admin-${game}`;
+const rootAdminSessionToken = canonicalSessionToken(`backup-restore-root-admin-${game}`);
 let hostSessionToken;
 let playerSessionToken;
 let adminSessionToken;
@@ -101,6 +101,12 @@ async function seedSourceGame(apiBaseUrl) {
   // The root GlobalAdmin session must exist before the seed loop: every seed
   // command now authenticates through a session granted by this root token.
   await runSql(sourceDatabase.url, `
+    INSERT INTO platform_principal (
+      principal_user_id, status, global_capabilities, created_at, disabled_at
+    ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
+    ON CONFLICT (principal_user_id) DO NOTHING;
+  `);
+  await runSql(sourceDatabase.url, `
     INSERT INTO auth_account (
       account_id,
       principal_user_id,
@@ -127,6 +133,8 @@ async function seedSourceGame(apiBaseUrl) {
       expires_at,
       revoked_at,
       global_capabilities,
+      idle_expires_at,
+      assurance,
       authenticated_at
     )
     VALUES (
@@ -136,6 +144,8 @@ async function seedSourceGame(apiBaseUrl) {
       4102444800,
       NULL,
       ARRAY['GlobalAdmin']::TEXT[],
+      4102444800,
+      'admin_grant',
       0
     )
     ON CONFLICT (token_hash) DO UPDATE SET
@@ -227,7 +237,7 @@ async function assertRestoredApi(apiBaseUrl) {
   assertCapability(adminSession, "GlobalAdmin");
 
   const hostConsoleState = await fetchJson(
-    `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+    `${apiBaseUrl}/games/${game}/host-console-state?slot_id=slot-7`,
     { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   if (hostConsoleState.phase?.phase_id !== "D01" || hostConsoleState.phase?.locked !== false) {
@@ -249,7 +259,7 @@ async function assertRestoredApi(apiBaseUrl) {
   }
 
   const thread = await fetchJson(
-    `${apiBaseUrl}/games/${game}/thread?principal_user_id=player-mira&limit=25`,
+    `${apiBaseUrl}/games/${game}?limit=25`,
     { headers: { authorization: `Bearer ${playerSessionToken}` } },
   );
   if (
@@ -263,7 +273,7 @@ async function assertRestoredApi(apiBaseUrl) {
   const privateThread = await fetchJson(
     `${apiBaseUrl}/games/${game}/channels/${encodeURIComponent(
       privateChannelId,
-    )}/thread?principal_user_id=player-mira&limit=25`,
+    )}/thread?limit=25`,
     { headers: { authorization: `Bearer ${playerSessionToken}` } },
   );
   if (!privateThread.posts?.some((post) => post.body === privatePostBody)) {
@@ -735,6 +745,10 @@ function assertDeepEqual(actual, expected, label) {
 
 function hashSessionToken(token) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function canonicalSessionToken(seed) {
+  return `fmss_${hashSessionToken(seed)}`;
 }
 
 function sqlLiteral(value) {

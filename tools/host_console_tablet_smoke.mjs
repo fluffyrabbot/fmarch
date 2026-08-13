@@ -24,13 +24,9 @@ const evidencePath = path.join(artifactDir, "tablet-host-actions.json");
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const smokeGame = randomUUID();
 const hostPrincipal = "host_h";
-const sessionToken = `host-tablet-smoke-${randomUUID()}`;
-const bootstrapSessionToken = `host-tablet-smoke-bootstrap-${randomUUID()}`;
-const playerSessionToken = `host-tablet-smoke-player-${randomUUID()}`;
-const commandSessionTokens = Object.freeze({
-  [hostPrincipal]: sessionToken,
-  "player-mira": playerSessionToken,
-});
+let sessionToken;
+let bootstrapSessionToken;
+const commandSessionTokens = {};
 const databaseUrl =
   process.env.DATABASE_URL ?? "postgres://fmarch:fmarch@localhost:5544/fmarch";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
@@ -518,19 +514,19 @@ function sanitizeDatabaseName(name) {
 }
 
 async function seedLiveHostGame() {
-  for (const [principalUserId, token] of Object.entries(commandSessionTokens)) {
-    await postJson(`${apiBaseUrl}/auth/dev-session`, {
-      token,
+  for (const principalUserId of [hostPrincipal, "player-mira"]) {
+    const session = await postJson(`${apiBaseUrl}/auth/dev-session`, {
       principal_user_id: principalUserId,
       expires_at: 4_102_444_800,
     });
+    commandSessionTokens[principalUserId] = requiredSessionToken(session);
   }
-  await postJson(`${apiBaseUrl}/auth/dev-session`, {
-    token: bootstrapSessionToken,
+  sessionToken = commandSessionTokens[hostPrincipal];
+  bootstrapSessionToken = requiredSessionToken(await postJson(`${apiBaseUrl}/auth/dev-session`, {
     principal_user_id: hostPrincipal,
     expires_at: 4_102_444_800,
     global_capabilities: ["GlobalAdmin"],
-  });
+  }));
   await postCommand(
     1,
     hostPrincipal,
@@ -631,6 +627,13 @@ async function postJson(url, body, headers = {}) {
     throw new Error(`${url} returned ${response.status}: ${JSON.stringify(payload)}`);
   }
   return payload;
+}
+
+function requiredSessionToken(session) {
+  if (typeof session?.session_token !== "string" || session.session_token === "") {
+    throw new Error("dev session response omitted its backend-issued token");
+  }
+  return session.session_token;
 }
 
 async function waitForHealth(url) {

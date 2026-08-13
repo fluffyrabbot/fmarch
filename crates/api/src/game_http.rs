@@ -1,8 +1,8 @@
 //! Public, player, operator, and host game-read HTTP boundary.
 
 use super::auth_http::{
-    authenticate_token, bearer_token, require_global_admin, require_global_operator,
-    unauthorized_session, unix_now_seconds, AuthHttpState,
+    authorization_context, bearer_token, require_global_admin, require_global_operator,
+    unauthorized_session, unix_now_seconds, AuthHttpState, AuthorizationContext,
 };
 use super::command_http::command_reject_api_error;
 use super::{ApiError, ApiState};
@@ -50,7 +50,6 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
         .route("/games/{game}/endgame-summary", get(endgame_summary))
         .route("/games/{game}/export", get(completed_game_export))
-        .route("/games/{game}/thread", get(thread_view))
         .route(
             "/games/{game}/channels/{channel}/thread",
             get(channel_thread_view),
@@ -74,31 +73,45 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .with_state(GameHttpState::new(state.pool.clone(), state.auth.clone()))
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-struct LegacyPrincipalQuery {
-    #[serde(default)]
-    principal_user_id: Option<String>,
+#[derive(Debug, Clone)]
+pub(super) struct GameAuthorization {
+    principal_user_id: String,
+    global_capabilities: Vec<String>,
 }
 
-async fn authenticated_or_dev_query_principal(
-    state: &GameHttpState,
-    headers: &HeaderMap,
-    legacy_principal_user_id: Option<&str>,
-) -> Result<String, ApiError> {
-    if let Some(token) = bearer_token(headers) {
-        return Ok(authenticate_token(&state.auth, token)
-            .await?
-            .principal_user_id);
-    }
-    if state.auth.dev_auth_enabled {
-        if let Some(principal_user_id) = legacy_principal_user_id
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            return Ok(principal_user_id.to_string());
+impl GameAuthorization {
+    pub(super) fn from_context(context: &AuthorizationContext) -> Self {
+        Self {
+            principal_user_id: context.principal_user_id.clone(),
+            global_capabilities: context.global_capabilities.clone(),
         }
     }
-    Err(unauthorized_session())
+
+    fn fixture_principal(principal_user_id: &str) -> Self {
+        Self {
+            principal_user_id: principal_user_id.to_string(),
+            global_capabilities: Vec::new(),
+        }
+    }
+
+    pub(super) fn principal_user_id(&self) -> &str {
+        self.principal_user_id.as_str()
+    }
+
+    fn is_global_operator(&self) -> bool {
+        self.global_capabilities
+            .iter()
+            .any(|capability| matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod"))
+    }
+}
+
+async fn required_game_authorization(
+    state: &GameHttpState,
+    headers: &HeaderMap,
+) -> Result<GameAuthorization, ApiError> {
+    let token = bearer_token(headers).ok_or_else(unauthorized_session)?;
+    let context = authorization_context(&state.auth, token).await?;
+    Ok(GameAuthorization::from_context(&context))
 }
 
 async fn votecount(
@@ -223,14 +236,15 @@ async fn endgame_summary(
 async fn completed_game_export(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<LegacyPrincipalQuery>,
     headers: HeaderMap,
 ) -> Result<Json<eventstore::StreamExport>, ApiError> {
-    let principal_user_id =
-        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
-            .await?;
-    let capabilities =
-        caps::resolve(&state.pool, &Principal::user(principal_user_id), game).await?;
+    let authorization = required_game_authorization(&state, &headers).await?;
+    let capabilities = caps::resolve(
+        &state.pool,
+        &Principal::user(authorization.principal_user_id()),
+        game,
+    )
+    .await?;
     if !capabilities.grants(&Capability::CohostOf(game)) {
         return Err(ApiError::Reject {
             status: StatusCode::FORBIDDEN,
@@ -387,23 +401,6 @@ fn parse_game_index_cursor(value: &str) -> Result<projections::GameIndexCursor, 
 struct ChannelThreadQuery {
     before_seq: Option<i64>,
     limit: Option<i64>,
-    #[serde(default)]
-    principal_user_id: Option<String>,
-}
-
-async fn thread_view(
-    State(state): State<GameHttpState>,
-    Path(game): Path<Uuid>,
-    Query(query): Query<ThreadQuery>,
-) -> Result<Json<ThreadPage>, ApiError> {
-    let page = projections::thread_view(
-        &state.pool,
-        game,
-        query.before_seq,
-        query.limit.unwrap_or(50),
-    )
-    .await?;
-    Ok(Json(ThreadPage::from(page)))
 }
 
 async fn channel_thread_view(
@@ -412,21 +409,21 @@ async fn channel_thread_view(
     Query(query): Query<ChannelThreadQuery>,
     headers: HeaderMap,
 ) -> Result<Json<ThreadPage>, ApiError> {
-    if channel != "main" {
-        let principal_user_id = authenticated_or_dev_query_principal(
-            &state,
-            &headers,
-            query.principal_user_id.as_deref(),
-        )
-        .await?;
-        require_channel_thread_access(
-            &state.pool,
-            game,
-            channel.as_str(),
-            Some(principal_user_id.as_str()),
-        )
-        .await?;
+    if channel == "main" {
+        return Err(ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::NotAuthorized,
+            message: "the public main thread is available only at /games/{game}".to_string(),
+        });
     }
+    let authorization = required_game_authorization(&state, &headers).await?;
+    require_channel_thread_access(
+        &state.pool,
+        game,
+        channel.as_str(),
+        Some(authorization.principal_user_id()),
+    )
+    .await?;
 
     let page = projections::thread_view_for_channel(
         &state.pool,
@@ -443,8 +440,13 @@ pub(super) async fn current_thread_posts_delta(
     pool: &PgPool,
     game: Uuid,
     channel: &str,
+    viewer_principal_user_id: Option<&str>,
 ) -> Result<ProjectionDelta, projections::ProjectionError> {
-    let page = projections::thread_view_for_channel(pool, game, channel, None, 50).await?;
+    let page = if channel == "main" {
+        projections::public_thread_view(pool, game, None, 50, viewer_principal_user_id).await?
+    } else {
+        projections::thread_view_for_channel(pool, game, channel, None, 50).await?
+    };
     Ok(ProjectionDelta::ThreadPostsChanged(ThreadPostsDelta {
         game,
         posts: page.posts.into_iter().map(ThreadPost::from).collect(),
@@ -488,29 +490,28 @@ pub(super) async fn require_channel_thread_access(
 async fn player_notifications(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<LegacyPrincipalQuery>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<PlayerNotification>>, ApiError> {
-    let principal_user_id =
-        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
-            .await?;
+    let authorization = required_game_authorization(&state, &headers).await?;
     Ok(Json(
-        player_notifications_for_principal(&state.pool, game, principal_user_id.as_str()).await?,
+        player_notifications_for_principal(&state.pool, game, authorization.principal_user_id())
+            .await?,
     ))
 }
 
 async fn player_investigation_results(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<LegacyPrincipalQuery>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<PlayerInvestigationResult>>, ApiError> {
-    let principal_user_id =
-        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
-            .await?;
+    let authorization = required_game_authorization(&state, &headers).await?;
     Ok(Json(
-        player_investigation_results_for_principal(&state.pool, game, principal_user_id.as_str())
-            .await?,
+        player_investigation_results_for_principal(
+            &state.pool,
+            game,
+            authorization.principal_user_id(),
+        )
+        .await?,
     ))
 }
 
@@ -583,8 +584,6 @@ pub(super) async fn player_investigation_results_for_principal(
 
 #[derive(Debug, Clone, Deserialize)]
 struct PlayerCommandStateQuery {
-    #[serde(default)]
-    principal_user_id: Option<String>,
     #[serde(default)]
     slot_id: Option<String>,
 }
@@ -679,12 +678,10 @@ async fn player_command_state(
     Query(query): Query<PlayerCommandStateQuery>,
     headers: HeaderMap,
 ) -> Result<Json<PlayerCommandStateResponse>, ApiError> {
-    let principal_user_id =
-        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
-            .await?;
+    let authorization = required_game_authorization(&state, &headers).await?;
     let caps = caps::resolve(
         &state.pool,
-        &Principal::user(principal_user_id.as_str()),
+        &Principal::user(authorization.principal_user_id()),
         game,
     )
     .await?;
@@ -1507,8 +1504,6 @@ impl From<projections::HostPromptRow> for HostPrompt {
 #[derive(Debug, Clone, Deserialize)]
 struct HostConsoleStateQuery {
     #[serde(default)]
-    principal_user_id: Option<String>,
-    #[serde(default)]
     slot_id: Option<String>,
     #[serde(default)]
     limit: Option<i64>,
@@ -1568,7 +1563,6 @@ pub struct HostSetupStateResponse {
     pub pack: HostSetupPackState,
     pub program_catalog: Vec<HostSetupProgramOption>,
     pub attached_programs: Vec<HostSetupAttachedProgram>,
-    pub accounts: Vec<HostSetupAccountState>,
     pub phase: Option<HostConsolePhaseState>,
     pub slots: Vec<HostSetupSlotState>,
     pub post_policies: Vec<HostSetupPostPolicyState>,
@@ -1640,13 +1634,6 @@ pub struct HostSetupRoleOption {
     pub key: String,
     pub label: String,
     pub description: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HostSetupAccountState {
-    pub account_id: String,
-    pub principal_user_id: String,
-    pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1735,16 +1722,13 @@ impl From<HostConsoleThreadPost> for HostConsoleThreadPostDelta {
 async fn host_phase_controls(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<LegacyPrincipalQuery>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<HostPhaseControl>>, ApiError> {
-    let principal_user_id =
-        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
-            .await?;
+    let authorization = required_game_authorization(&state, &headers).await?;
     require_host_audit_access(
         &state.pool,
         game,
-        principal_user_id.as_str(),
+        &authorization,
         "principal cannot read host phase-control audit for this game",
     )
     .await?;
@@ -1761,16 +1745,13 @@ async fn host_phase_controls(
 async fn host_prompts(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<LegacyPrincipalQuery>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<HostPrompt>>, ApiError> {
-    let principal_user_id =
-        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
-            .await?;
+    let authorization = required_game_authorization(&state, &headers).await?;
     require_host_audit_access(
         &state.pool,
         game,
-        principal_user_id.as_str(),
+        &authorization,
         "principal cannot read host prompts for this game",
     )
     .await?;
@@ -1790,10 +1771,8 @@ async fn host_console_state(
     Query(query): Query<HostConsoleStateQuery>,
     headers: HeaderMap,
 ) -> Result<Json<HostConsoleStateResponse>, ApiError> {
-    let principal_user_id =
-        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
-            .await?;
-    let authority = resolve_host_console_authority(&state.pool, game, principal_user_id.as_str())
+    let authorization = required_game_authorization(&state, &headers).await?;
+    let authority = resolve_host_console_authority(&state.pool, game, &authorization)
         .await?
         .ok_or_else(|| ApiError::Reject {
             status: StatusCode::FORBIDDEN,
@@ -1822,7 +1801,8 @@ pub async fn load_host_console_state_for_principal(
     principal_user_id: &str,
     limit: Option<i64>,
 ) -> Result<HostConsoleStateResponse, ApiError> {
-    let authority = resolve_host_console_authority(pool, game, principal_user_id)
+    let authorization = GameAuthorization::fixture_principal(principal_user_id);
+    let authority = resolve_host_console_authority(pool, game, &authorization)
         .await?
         .ok_or_else(|| ApiError::Reject {
             status: StatusCode::FORBIDDEN,
@@ -1835,16 +1815,13 @@ pub async fn load_host_console_state_for_principal(
 async fn host_setup_state(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    Query(query): Query<LegacyPrincipalQuery>,
     headers: HeaderMap,
 ) -> Result<Json<HostSetupStateResponse>, ApiError> {
-    let principal_user_id =
-        authenticated_or_dev_query_principal(&state, &headers, query.principal_user_id.as_deref())
-            .await?;
+    let authorization = required_game_authorization(&state, &headers).await?;
     require_host_audit_access(
         &state.pool,
         game,
-        principal_user_id.as_str(),
+        &authorization,
         "principal cannot read host setup state for this game",
     )
     .await?;
@@ -1904,7 +1881,10 @@ pub(super) async fn load_host_console_state(
         });
     }
 
-    let thread_posts = projections::thread_view(pool, game, None, limit.unwrap_or(25))
+    // The host console is operational authority, not a moderation bypass.
+    // Globally hidden public posts must disappear from every presentation of
+    // the main thread, including host/global-operator HTTP and live snapshots.
+    let thread_posts = projections::public_thread_view(pool, game, None, limit.unwrap_or(25), None)
         .await?
         .posts
         .into_iter()
@@ -2122,8 +2102,9 @@ fn select_host_tasks(
 pub(super) async fn resolve_host_console_authority(
     pool: &PgPool,
     game: Uuid,
-    principal_user_id: &str,
+    authorization: &GameAuthorization,
 ) -> Result<Option<HostConsoleAuthorityDelta>, ApiError> {
+    let principal_user_id = authorization.principal_user_id();
     let capabilities = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
     let is_host = capabilities
         .iter()
@@ -2132,7 +2113,7 @@ pub(super) async fn resolve_host_console_authority(
         .iter()
         .any(|cap| cap == &Capability::CohostOf(game));
     if !is_host && !is_cohost {
-        return if active_global_operator(pool, principal_user_id).await? {
+        return if authorization.is_global_operator() {
             Ok(Some(build_host_console_operator_authority(
                 principal_user_id,
             )))
@@ -2248,35 +2229,6 @@ async fn load_host_setup_state(
         })
         .collect();
     let main_policy = projections::post_policy(&state.pool, game, "main").await?;
-    let accounts = sqlx::query_as::<_, (String, String)>(
-        r#"
-        SELECT label, principal_user_id
-        FROM (
-            SELECT COALESCE(identity.display_label, identity.subject) AS label,
-                   identity.principal_user_id
-            FROM external_identity AS identity
-            JOIN platform_principal AS principal
-              ON principal.principal_user_id = identity.principal_user_id
-            WHERE identity.provider = 'workos'
-              AND principal.status = 'active'
-              AND principal.disabled_at IS NULL
-            UNION ALL
-            SELECT account_id AS label, principal_user_id
-            FROM auth_account
-            WHERE disabled_at IS NULL
-        ) AS available_account
-        ORDER BY lower(label), label
-        "#,
-    )
-    .fetch_all(&state.pool)
-    .await?
-    .into_iter()
-    .map(|(account_id, principal_user_id)| HostSetupAccountState {
-        label: account_id.clone(),
-        account_id,
-        principal_user_id,
-    })
-    .collect();
     let roles = pack
         .roles
         .iter()
@@ -2300,7 +2252,6 @@ async fn load_host_setup_state(
         },
         program_catalog,
         attached_programs,
-        accounts,
         phase,
         slots,
         post_policies: vec![HostSetupPostPolicyState {
@@ -2623,14 +2574,15 @@ fn start_phase_options(phases: &domain::pack::PhasePolicy) -> Vec<String> {
 pub(super) async fn require_host_audit_access(
     pool: &PgPool,
     game: Uuid,
-    principal_user_id: &str,
+    authorization: &GameAuthorization,
     message: &'static str,
 ) -> Result<(), ApiError> {
+    let principal_user_id = authorization.principal_user_id();
     let caps = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
     if caps.grants(&Capability::HostOf(game)) || caps.grants(&Capability::CohostOf(game)) {
         return Ok(());
     }
-    if active_global_operator(pool, principal_user_id).await? {
+    if authorization.is_global_operator() {
         return Ok(());
     }
 
@@ -2639,32 +2591,4 @@ pub(super) async fn require_host_audit_access(
         error: RejectCode::NotAuthorized,
         message: message.to_string(),
     })
-}
-
-async fn active_global_operator(pool: &PgPool, principal_user_id: &str) -> Result<bool, ApiError> {
-    let now = unix_now_seconds();
-    let has_global = sqlx::query_scalar::<_, bool>(
-        r#"
-        SELECT EXISTS (
-            SELECT 1
-            FROM auth_session
-            WHERE principal_user_id = $1
-              AND revoked_at IS NULL
-              AND expires_at > $2
-              AND global_capabilities && ARRAY['GlobalAdmin', 'GlobalMod']::TEXT[]
-            UNION ALL
-            SELECT 1
-            FROM platform_principal
-            WHERE principal_user_id = $1
-              AND status = 'active'
-              AND disabled_at IS NULL
-              AND global_capabilities && ARRAY['GlobalAdmin', 'GlobalMod']::TEXT[]
-        )
-        "#,
-    )
-    .bind(principal_user_id)
-    .bind(now)
-    .fetch_one(pool)
-    .await?;
-    Ok(has_global)
 }

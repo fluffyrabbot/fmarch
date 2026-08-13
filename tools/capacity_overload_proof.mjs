@@ -362,12 +362,17 @@ async function proveSlowWebsocketConsumers({ baseUrl }) {
   const states = Array.from({ length: budgets.websocketConnections }, () => ({
     resyncs: 0,
   }));
+  const tickets = await Promise.all(
+    states.map(async () =>
+      await issueWebsocketTicket(baseUrl, "player-mira", postBurstGame, "main"),
+    ),
+  );
   websocketClients = await Promise.all(
     states.map(
-      (state) =>
+      (state, index) =>
         new Promise((resolve, reject) => {
           const socket = new WebSocket(
-            `${wsUrl}/ws?game=${postBurstGame}&principal_user_id=player-mira&channel=main`,
+            `${wsUrl}/ws?ticket=${encodeURIComponent(tickets[index])}&audience=fmarch-live`,
           );
           socket.binaryType = "arraybuffer";
           socket.addEventListener("open", () => resolve(socket), { once: true });
@@ -455,8 +460,6 @@ async function proveCallerRateLimit({ baseUrl }) {
     body: JSON.stringify({
       account_id: `missing-${runId}`,
       password: "not-the-correct-password-123!",
-      session_token: `capacity-session-${runId}`,
-      expires_at: Math.floor(Date.now() / 1000) + 3600,
     }),
   };
   const first = await timedFetch(url, options);
@@ -537,6 +540,29 @@ async function seedSessionToken(baseUrl, principalUserId) {
   );
   seedSessionTokens.set(principalUserId, body.session_token);
   return body.session_token;
+}
+
+async function issueWebsocketTicket(baseUrl, principalUserId, game, channel) {
+  const sessionToken = await seedSessionToken(baseUrl, principalUserId);
+  const response = await fetch(`${baseUrl}/auth/websocket-tickets`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      audience: "fmarch-live",
+      game,
+      channel,
+      after_seq: 0,
+    }),
+  });
+  const body = await response.json();
+  assert(
+    response.status === 200 && typeof body.ticket === "string",
+    `websocket ticket mint for ${principalUserId} returned ${response.status}`,
+  );
+  return body.ticket;
 }
 
 async function sendCommand(
@@ -636,7 +662,7 @@ async function rawWebsocketHandshake(baseUrl) {
     socket.once("connect", () => {
       socket.write(
         [
-          `GET /ws?game=${postBurstGame}&principal_user_id=player-mira&channel=main HTTP/1.1`,
+          "GET /ws?ticket=capacity-admission-sentinel&audience=fmarch-live HTTP/1.1",
           `Host: ${baseUrl.host}`,
           "Connection: Upgrade",
           "Upgrade: websocket",

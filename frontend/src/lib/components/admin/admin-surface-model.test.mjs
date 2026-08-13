@@ -218,7 +218,6 @@ test("admin command activity has a stable empty state", () => {
 
 test("admin setup grid view model binds command status and confirmation metadata", () => {
   const sessionGrant = {
-    token: "session-grant-midsummer",
     principalUserId: "mod_a",
     expiresAt: 4102444800,
     globalCapabilities: ["GlobalMod"],

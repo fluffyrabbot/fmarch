@@ -81,7 +81,8 @@ async fn authenticate_operator_fixture(
         return next.run(request).await;
     };
 
-    let token = format!("fmss_vertical-operator-session:{principal_user_id}");
+    let token_seed = format!("vertical-operator-session:{principal_user_id}");
+    let token = format!("fmss_{}", session_token_hash(token_seed.as_str()));
     sqlx::query(
         "INSERT INTO platform_principal \
          (principal_user_id, status, global_capabilities, created_at) \
@@ -94,11 +95,12 @@ async fn authenticate_operator_fixture(
     .expect("insert vertical operator fixture principal");
     sqlx::query(
         "INSERT INTO auth_session \
-         (token_hash, principal_user_id, created_at, expires_at, global_capabilities, authenticated_at) \
-         VALUES ($1, $2, 0, 4102444800, ARRAY[]::TEXT[], 0) \
+         (token_hash, principal_user_id, created_at, expires_at, global_capabilities, idle_expires_at, assurance, authenticated_at) \
+         VALUES ($1, $2, 0, 4102444800, ARRAY[]::TEXT[], 4102444800, 'admin_grant', 0) \
          ON CONFLICT (token_hash) DO UPDATE SET \
            principal_user_id = EXCLUDED.principal_user_id, \
            expires_at = EXCLUDED.expires_at, \
+           idle_expires_at = EXCLUDED.idle_expires_at, \
            revoked_at = NULL",
     )
     .bind(session_token_hash(&token))

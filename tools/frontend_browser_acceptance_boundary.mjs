@@ -506,7 +506,6 @@ function adminBrowserOperationalEvidenceComplete(roleSmoke) {
     includesAll(
       entry.commandResult?.sessionGrant?.form?.fieldTestIds,
       [
-        "admin-session-grant-token",
         "admin-session-grant-principal",
         "admin-session-grant-expires-at",
         "admin-session-grant-global-mod",

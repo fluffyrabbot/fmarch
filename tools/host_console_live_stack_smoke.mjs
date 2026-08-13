@@ -93,7 +93,9 @@ const spectatorGame = crypto.randomUUID();
 const dayEventRoomFixture = createDayEventRoomFixture();
 const dayEventRoomGame = dayEventRoomFixture.game;
 const adminCreatedGame = crypto.randomUUID();
-const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.randomUUID()}`;
+const rootAdminSessionToken = canonicalSessionToken(
+  `host-console-live-stack-root-admin-${crypto.randomUUID()}`,
+);
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
 const playerSessionToken = `host-console-live-stack-player-${crypto.randomUUID()}`;
 const rolePmIncomingSessionToken = `host-console-live-stack-role-pm-incoming-${crypto.randomUUID()}`;
@@ -238,10 +240,10 @@ const liveStackAuth = createLiveStackAuth({
   rootAdminSessionToken,
 });
 const { createAuthAccount } = liveStackAuth;
-const createAccountSession = async (options) =>
-  registerIssuedSession(options.token, await liveStackAuth.createAccountSession(options));
-const createGrantedSession = async (options) =>
-  registerIssuedSession(options.token, await liveStackAuth.createGrantedSession(options));
+const createAccountSession = async ({ sessionAlias, ...options }) =>
+  registerIssuedSession(sessionAlias, await liveStackAuth.createAccountSession(options));
+const createGrantedSession = async ({ sessionAlias, ...options }) =>
+  registerIssuedSession(sessionAlias, await liveStackAuth.createGrantedSession(options));
 const sendCommand = createLiveStackCommandSender({
   apiBaseUrl,
   fetchJson,
@@ -332,7 +334,7 @@ try {
     await writeProgress({ stage: "create-day-event-room-host-session", dayEventRoomGame });
     grantedSessions = {
       host: await createGrantedSession({
-        token: hostSessionToken,
+        sessionAlias: hostSessionToken,
         principalUserId: "host_h",
         globalCapabilities: ["GlobalAdmin"],
       }),
@@ -422,7 +424,7 @@ try {
     ? null
     : browserEvidence.moderator?.apiStateBeforePrompt ??
       (await fetchJson(
-        `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+        `${apiBaseUrl}/games/${game}/host-console-state?slot_id=slot-7`,
         { headers: { authorization: `Bearer ${hostSessionToken}` } },
       ));
   if (!dayEventRoomOnly) assertApiProjection(apiState);
@@ -430,7 +432,7 @@ try {
     ? null
     : browserEvidence.moderator?.slotLifecycle?.apiStateAfter ??
       (await fetchJson(
-        `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+        `${apiBaseUrl}/games/${game}/host-console-state?slot_id=slot-7`,
         { headers: { authorization: `Bearer ${hostSessionToken}` } },
       ));
   if (!dayEventRoomOnly) assertSlotLifecycleApiProjection(slotLifecycleApiState);
@@ -978,6 +980,12 @@ async function seedFactionDayChatFixture() {
 
 async function seedRootAdminSession() {
   await runSql(smokeDatabase.url, `
+    INSERT INTO platform_principal (
+      principal_user_id, status, global_capabilities, created_at, disabled_at
+    ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
+    ON CONFLICT (principal_user_id) DO NOTHING;
+  `);
+  await runSql(smokeDatabase.url, `
     INSERT INTO auth_account (
       account_id,
       principal_user_id,
@@ -1004,6 +1012,8 @@ async function seedRootAdminSession() {
       expires_at,
       revoked_at,
       global_capabilities,
+      idle_expires_at,
+      assurance,
       authenticated_at
     )
     VALUES (
@@ -1013,13 +1023,16 @@ async function seedRootAdminSession() {
       4102444800,
       NULL,
       ARRAY['GlobalAdmin']::TEXT[],
+      4102444800,
+      'admin_grant',
       0
     )
     ON CONFLICT (token_hash) DO UPDATE SET
       principal_user_id = EXCLUDED.principal_user_id,
       expires_at = EXCLUDED.expires_at,
       revoked_at = NULL,
-      global_capabilities = EXCLUDED.global_capabilities;
+      global_capabilities = EXCLUDED.global_capabilities,
+      idle_expires_at = EXCLUDED.idle_expires_at;
   `);
   const session = await fetchJson(`${apiBaseUrl}/auth/session`, {
     headers: {
@@ -1055,48 +1068,48 @@ function resolveSessionToken(token) {
 async function createGrantedSessions() {
   return {
     admin: await createGrantedSession({
-      token: adminSessionToken,
+      sessionAlias: adminSessionToken,
       principalUserId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
     host: await createGrantedSession({
-      token: hostSessionToken,
+      sessionAlias: hostSessionToken,
       principalUserId: "host_h",
       globalCapabilities: ["GlobalAdmin"],
     }),
     player: await createAccountSession({
-      token: playerSessionToken,
+      sessionAlias: playerSessionToken,
       principalUserId: "player-mira",
       label: "player-mira",
     }),
     rolePmIncoming: await createAccountSession({
-      token: rolePmIncomingSessionToken,
+      sessionAlias: rolePmIncomingSessionToken,
       principalUserId: "player-rowan",
       label: "role-pm-incoming",
       accountId: rolePmIncomingAccountId,
     }),
     actionPlayer: await createGrantedSession({
-      token: actionPlayerSessionToken,
+      sessionAlias: actionPlayerSessionToken,
       principalUserId: "action-goon",
     }),
     racePlayer: await createGrantedSession({
-      token: racePlayerSessionToken,
+      sessionAlias: racePlayerSessionToken,
       principalUserId: "player-goon-a",
     }),
     seedPlayer: await createGrantedSession({
-      token: seedPlayerSessionToken,
+      sessionAlias: seedPlayerSessionToken,
       principalUserId: "player-seed",
     }),
     targetPlayer: await createGrantedSession({
-      token: targetPlayerSessionToken,
+      sessionAlias: targetPlayerSessionToken,
       principalUserId: "player-target",
     }),
     goonB: await createGrantedSession({
-      token: goonBSessionToken,
+      sessionAlias: goonBSessionToken,
       principalUserId: "player-goon-b",
     }),
     cohost: await createGrantedSession({
-      token: cohostSessionToken,
+      sessionAlias: cohostSessionToken,
       principalUserId: "cohost_c",
     }),
   };
@@ -1107,12 +1120,12 @@ async function createAdditionalRoomSessions() {
   for (const room of additionalRoomDefinitions) {
     rooms[room.id] = {
       outgoing: await createAccountSession({
-        token: room.outgoing.sessionToken,
+        sessionAlias: room.outgoing.sessionToken,
         principalUserId: room.outgoing.principalUserId,
         label: `${room.id}-outgoing`,
       }),
       incoming: await createAccountSession({
-        token: room.incoming.sessionToken,
+        sessionAlias: room.incoming.sessionToken,
         principalUserId: room.incoming.principalUserId,
         label: `${room.id}-incoming`,
       }),
@@ -1121,7 +1134,7 @@ async function createAdditionalRoomSessions() {
   return {
     rooms,
     outsider: await createAccountSession({
-      token: additionalRoomOutsider.sessionToken,
+      sessionAlias: additionalRoomOutsider.sessionToken,
       principalUserId: additionalRoomOutsider.principalUserId,
       label: "additional-rooms-outsider",
     }),
@@ -1133,17 +1146,17 @@ async function createAdditionalRoomSessions() {
 async function createDeadChatSessions() {
   return {
     outgoing: await createAccountSession({
-      token: deadChatDefinition.outgoing.sessionToken,
+      sessionAlias: deadChatDefinition.outgoing.sessionToken,
       principalUserId: deadChatDefinition.outgoing.principalUserId,
       label: "dead-chat-outgoing",
     }),
     incoming: await createAccountSession({
-      token: deadChatDefinition.incoming.sessionToken,
+      sessionAlias: deadChatDefinition.incoming.sessionToken,
       principalUserId: deadChatDefinition.incoming.principalUserId,
       label: "dead-chat-incoming",
     }),
     living: await createAccountSession({
-      token: deadChatDefinition.living.sessionToken,
+      sessionAlias: deadChatDefinition.living.sessionToken,
       principalUserId: deadChatDefinition.living.principalUserId,
       label: "dead-chat-living",
     }),
@@ -1154,7 +1167,7 @@ async function createDeadChatSessions() {
 
 async function createSpectatorSession() {
   return await createAccountSession({
-    token: spectatorDefinition.sessionToken,
+    sessionAlias: spectatorDefinition.sessionToken,
     principalUserId: spectatorDefinition.principalUserId,
     label: "spectator-room",
   });
@@ -1381,7 +1394,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelF
     submitPostOutcome,
   );
   const privateThreadPage = await fetchJson(
-    `${apiBaseUrl}/games/${game}/channels/${factionDayChatRoute}/thread?principal_user_id=player-mira&limit=50`,
+    `${apiBaseUrl}/games/${game}/channels/${factionDayChatRoute}/thread?limit=50`,
     { headers: { authorization: `Bearer ${playerSessionToken}` } },
   );
   const mediaPost = privateThreadPage.posts?.find(
@@ -1648,7 +1661,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     room.historyBody,
   );
   const initialThread = await fetchJson(
-    `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?principal_user_id=${room.outgoing.principalUserId}&limit=50`,
+    `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?limit=50`,
     { headers: { authorization: `Bearer ${room.outgoing.sessionToken}` } },
   );
   const historyPost = initialThread.posts?.find(
@@ -1798,7 +1811,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     throw new Error(`${room.kind} incoming reload lost durable room history`);
   }
   const finalThread = await fetchJson(
-    `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?principal_user_id=${room.incoming.principalUserId}&limit=50`,
+    `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?limit=50`,
     { headers: { authorization: `Bearer ${room.incoming.sessionToken}` } },
   );
   if (
@@ -1911,7 +1924,7 @@ async function proveAdditionalRoomDenial({
   }
   await page.getByTestId("route-error-surface").waitFor({ state: "visible" });
   const threadResponse = await fetchWithTimeout(
-    `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?principal_user_id=${principalUserId}&limit=50`,
+    `${apiBaseUrl}/games/${additionalRoomsGame}/channels/${room.route}/thread?limit=50`,
     { headers: { authorization: `Bearer ${resolveSessionToken(token)}` } },
     15_000,
   );
@@ -2124,7 +2137,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     deadChatDefinition.historyBody,
   );
   const initialThread = await fetchJson(
-    `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?principal_user_id=${deadChatDefinition.outgoing.principalUserId}&limit=50`,
+    `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?limit=50`,
     { headers: { authorization: `Bearer ${deadChatDefinition.outgoing.sessionToken}` } },
   );
   const historyPost = initialThread.posts?.find(
@@ -2262,7 +2275,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   }
   await incomingPage.getByTestId("player-surface").waitFor({ state: "visible" });
   const finalThread = await fetchJson(
-    `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?principal_user_id=${deadChatDefinition.incoming.principalUserId}&limit=50`,
+    `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?limit=50`,
     { headers: { authorization: `Bearer ${deadChatDefinition.incoming.sessionToken}` } },
   );
   if (
@@ -2410,7 +2423,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     );
   }
   const preGrantThread = await preGrantContext.request.get(
-    `${frontendBaseUrl}/api/gameplay/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
+    `${frontendBaseUrl}/api/gameplay/games/${spectatorGame}/channels/spectator/thread?limit=50`,
   );
   if (preGrantThread.status() !== 403) {
     throw new Error(`pre-grant spectator received thread rows (${preGrantThread.status()})`);
@@ -2494,7 +2507,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
   }
 
   const thread = await fetchJson(
-    `${apiBaseUrl}/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
+    `${apiBaseUrl}/games/${spectatorGame}/channels/spectator/thread?limit=50`,
     { headers: { authorization: `Bearer ${spectatorDefinition.sessionToken}` } },
   );
   const historyPost = thread.posts?.find(
@@ -2613,9 +2626,9 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     deniedEndpoints[id] = denied.status();
   }
   for (const [id, path] of Object.entries({
-    notifications: `/api/gameplay/games/${spectatorGame}/notifications?principal_user_id=${spectatorDefinition.principalUserId}`,
-    investigations: `/api/gameplay/games/${spectatorGame}/investigation-results?principal_user_id=${spectatorDefinition.principalUserId}`,
-    commandState: `/api/gameplay/games/${spectatorGame}/player-command-state?principal_user_id=${spectatorDefinition.principalUserId}`,
+    notifications: `/api/gameplay/games/${spectatorGame}/notifications`,
+    investigations: `/api/gameplay/games/${spectatorGame}/investigation-results`,
+    commandState: `/api/gameplay/games/${spectatorGame}/player-command-state`,
   })) {
     const denied = await context.request.get(`${frontendBaseUrl}${path}`);
     if (denied.status() !== 403) {
@@ -2635,7 +2648,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     throw new Error(`revoked spectator route expected 403, got ${revokedRoute?.status() ?? "none"}`);
   }
   const revokedThread = await context.request.get(
-    `${frontendBaseUrl}/api/gameplay/games/${spectatorGame}/channels/spectator/thread?principal_user_id=${spectatorDefinition.principalUserId}&limit=50`,
+    `${frontendBaseUrl}/api/gameplay/games/${spectatorGame}/channels/spectator/thread?limit=50`,
   );
   if (revokedThread.status() !== 403) {
     throw new Error(`revoked spectator received thread rows (${revokedThread.status()})`);
@@ -2750,7 +2763,7 @@ async function proveDeadChatDenial({
   }
   await page.getByTestId("route-error-surface").waitFor({ state: "visible" });
   const threadResponse = await fetchWithTimeout(
-    `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?principal_user_id=${principalUserId}&limit=50`,
+    `${apiBaseUrl}/games/${deadChatGame}/channels/dead/thread?limit=50`,
     { headers: { authorization: `Bearer ${resolveSessionToken(token)}` } },
     15_000,
   );
@@ -2882,7 +2895,7 @@ async function seedRolePmHistory(contentId) {
     },
   });
   const thread = await fetchJson(
-    `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?principal_user_id=player-mira&limit=50`,
+    `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?limit=50`,
     { headers: { authorization: `Bearer ${playerSessionToken}` } },
   );
   const post = thread.posts?.find((candidate) => candidate.body === rolePmHistoryBody);
@@ -3136,7 +3149,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
     throw new Error(`Role PM reload lost durable posts: ${JSON.stringify(reloadedPosts)}`);
   }
   const apiThread = await fetchJson(
-    `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?principal_user_id=player-rowan&limit=50`,
+    `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?limit=50`,
     { headers: { authorization: `Bearer ${resolveSessionToken(rolePmIncomingSessionToken)}` } },
   );
   if (
@@ -3167,7 +3180,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
   }
   await outgoingPage.getByTestId("route-error-surface").waitFor({ state: "visible" });
   const staleThreadResponse = await fetchWithTimeout(
-    `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?principal_user_id=player-mira&limit=50`,
+    `${apiBaseUrl}/games/${game}/channels/${rolePmRoute}/thread?limit=50`,
     { headers: { authorization: `Bearer ${resolveSessionToken(playerSessionToken)}` } },
     15_000,
   );
@@ -3360,8 +3373,8 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   const rosterRow = page.getByTestId(`host-setup-slot-${slotId}`);
   await rosterRow.waitFor({ state: "visible" });
   await rosterRow
-    .locator('select[name="principalUserId"]')
-    .selectOption(principalUserId);
+    .locator('input[name="principalUserId"]')
+    .fill(principalUserId);
   await rosterRow.locator('input[name="publicName"]').fill(publicName);
   const assignSlotButton = rosterRow.getByRole("button", {
     name: "Assign player",
@@ -3484,7 +3497,7 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   await page.getByTestId("host-console-surface").waitFor({ state: "visible" });
   const hostConsoleUrl = page.url();
   const hostConsoleState = await fetchJson(
-    `${apiBaseUrl}/games/${adminCreatedGame}/host-console-state?principal_user_id=admin_a&slot_id=${slotId}`,
+    `${apiBaseUrl}/games/${adminCreatedGame}/host-console-state?slot_id=${slotId}`,
     {
       headers: { authorization: `Bearer ${adminSessionToken}` },
     },
@@ -4260,7 +4273,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   const actionCommands = page.getByTestId("player-action-commands");
   await actionCommands.waitFor({ state: "visible" });
   if (commandStateResponses.length === 0) {
-    const commandStateUrl = `${frontendBaseUrl}/api/gameplay/games/${actionGame}/player-command-state?principal_user_id=action-goon&slot_id=slot_4`;
+    const commandStateUrl = `${frontendBaseUrl}/api/gameplay/games/${actionGame}/player-command-state?slot_id=slot_4`;
     const response = await context.request.get(commandStateUrl, {
       headers: { accept: "application/json" },
     });
@@ -4421,7 +4434,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     throw new Error(`player phase heading did not update: ${postAdvancePhaseText}`);
   }
   const actionGameHostState = await fetchJson(
-    `${apiBaseUrl}/games/${actionGame}/host-console-state?principal_user_id=host_h&slot_id=slot-2`,
+    `${apiBaseUrl}/games/${actionGame}/host-console-state?slot_id=slot-2`,
     { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   const targetSlot = actionGameHostState.slots?.find(
@@ -4911,7 +4924,7 @@ async function driveModeratorBrowser(
       : await rejectStalePlayerInviteFromBrowser(stalePlayerInviteSession.page);
   await stalePlayerInviteSession?.context.close();
   const apiStateBeforePrompt = await fetchJson(
-    `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+    `${apiBaseUrl}/games/${game}/host-console-state?slot_id=slot-7`,
     { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   const rolePmReplacement = await driveRolePmReplacementBrowser(
@@ -5498,7 +5511,7 @@ async function modkillSlotFromBrowser(page) {
 
   assertModkillCommandStatus(commandStatus);
   const apiStateAfter = await fetchJson(
-    `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+    `${apiBaseUrl}/games/${game}/host-console-state?slot_id=slot-7`,
     { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   assertSlotLifecycleApiProjection(apiStateAfter);
@@ -5598,7 +5611,7 @@ async function waitForMainThreadPost(expectedBody) {
   const deadline = Date.now() + 10_000;
   let lastPage = null;
   while (Date.now() < deadline) {
-    lastPage = await fetchJson(`${apiBaseUrl}/games/${game}/thread?limit=50`);
+    lastPage = await fetchJson(`${apiBaseUrl}/games/${game}?limit=50`);
     const post = lastPage.posts?.find((item) => item.body === expectedBody);
     if (post !== undefined) {
       return post;
@@ -5795,7 +5808,7 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
 
 async function hostSlotPersonaId(gameId, slotId) {
   const state = await fetchJson(
-    `${apiBaseUrl}/games/${gameId}/host-console-state?principal_user_id=host_h&slot_id=${slotId}`,
+    `${apiBaseUrl}/games/${gameId}/host-console-state?slot_id=${slotId}`,
     { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   const personaId = state.slots?.find((slot) => slot.slot_id === slotId)?.persona_id;
@@ -6399,6 +6412,10 @@ function assertVisibleBox(box, label) {
   if (box.width <= 0 || box.height <= 0) {
     throw new Error(`${label} is ${box.width}x${box.height}, expected visible pixels`);
   }
+}
+
+function canonicalSessionToken(seed) {
+  return `fmss_${hashSessionToken(seed)}`;
 }
 
 process.on("uncaughtException", (error) => {

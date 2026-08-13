@@ -3127,6 +3127,22 @@ async fn set_moderation_target_visibility(
     .bind(updated_seq)
     .execute(&mut **tx)
     .await?;
+    if target_kind == "game_post" {
+        sqlx::query(
+            r#"
+            INSERT INTO game_thread_visibility_change (
+                game_id, source_seq, visibility, moderation_seq
+            )
+            VALUES ($1, $2, $3, $4)
+            "#,
+        )
+        .bind(scope_id)
+        .bind(source_seq)
+        .bind(visibility)
+        .bind(updated_seq)
+        .execute(&mut **tx)
+        .await?;
+    }
     sync_moderated_target_search_document(tx, &target_kind, scope_id, source_seq).await?;
     Ok(())
 }

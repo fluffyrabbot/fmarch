@@ -557,6 +557,12 @@ async function createSessions() {
 
 async function seedRootAdminSession() {
   await runSql(databaseUrl, `
+    INSERT INTO platform_principal (
+      principal_user_id, status, global_capabilities, created_at, disabled_at
+    ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
+    ON CONFLICT (principal_user_id) DO NOTHING;
+  `);
+  await runSql(databaseUrl, `
     INSERT INTO auth_account (
       account_id,
       principal_user_id,
@@ -583,6 +589,8 @@ async function seedRootAdminSession() {
       expires_at,
       revoked_at,
       global_capabilities,
+      idle_expires_at,
+      assurance,
       authenticated_at
     )
     VALUES (
@@ -592,13 +600,16 @@ async function seedRootAdminSession() {
       ${Number(expiresAt)},
       NULL,
       ARRAY['GlobalAdmin']::TEXT[],
+      ${Number(expiresAt)},
+      'admin_grant',
       0
     )
     ON CONFLICT (token_hash) DO UPDATE SET
       principal_user_id = EXCLUDED.principal_user_id,
       expires_at = EXCLUDED.expires_at,
       revoked_at = NULL,
-      global_capabilities = EXCLUDED.global_capabilities;
+      global_capabilities = EXCLUDED.global_capabilities,
+      idle_expires_at = EXCLUDED.idle_expires_at;
   `);
   const session = await fetchJson(`${apiBaseUrl}/auth/session`, {
     headers: { authorization: `Bearer ${tokens.rootAdmin}` },
@@ -631,7 +642,7 @@ async function seedRootAdminSession() {
 
 export function createTokenSet(prefix) {
   return Object.freeze({
-    rootAdmin: `${prefix}-root-admin`,
+    rootAdmin: canonicalSessionToken(`${prefix}-root-admin`),
     admin: `${prefix}-admin`,
     host: `${prefix}-host`,
     hostSetup: `${prefix}-host-setup`,
@@ -786,7 +797,14 @@ async function seedSessionToken(principalUserId) {
   if (cached !== undefined) {
     return cached;
   }
-  const token = `${tokenPrefix}-seed-${principalUserId}`;
+  const token = canonicalSessionToken(`${tokenPrefix}-seed-${principalUserId}`);
+  await runSql(databaseUrl, `
+    INSERT INTO platform_principal (
+      principal_user_id, status, global_capabilities, created_at, disabled_at
+    ) VALUES (
+      ${sqlLiteral(principalUserId)}, 'active', ARRAY[]::TEXT[], 0, NULL
+    ) ON CONFLICT (principal_user_id) DO NOTHING;
+  `);
   await runSql(databaseUrl, `
     INSERT INTO auth_account (
       account_id,
@@ -814,6 +832,8 @@ async function seedSessionToken(principalUserId) {
       expires_at,
       revoked_at,
       global_capabilities,
+      idle_expires_at,
+      assurance,
       authenticated_at
     )
     VALUES (
@@ -823,6 +843,8 @@ async function seedSessionToken(principalUserId) {
       ${Number(expiresAt)},
       NULL,
       ARRAY['GlobalAdmin']::TEXT[],
+      ${Number(expiresAt)},
+      'admin_grant',
       0
     )
     ON CONFLICT (token_hash) DO NOTHING;
@@ -1462,8 +1484,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
   const setupGame = crypto.randomUUID();
   const seed = await seedHostSetupRosterRoleGame({ setupGame });
   const assignedPrincipalUserId = "setup-extra-player";
-  // The occupant picker is a select over registered accounts, so the assigned
-  // principal needs an account before the setup pages load their state.
+  // The setup form accepts an exact principal identifier; seed that identity
+  // so the authoritative assignment command can bind it to the slot.
   await ensureLocalAccount({ principalUserId: assignedPrincipalUserId });
   const setupSession = await createAccountLoginCredential({
     principalUserId: "host_h",
@@ -1570,8 +1592,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
 
     const rosterRow = page.getByTestId(`host-setup-slot-${addedSlotId}`);
     await rosterRow
-      .locator('select[name="principalUserId"]')
-      .selectOption(assignedPrincipalUserId);
+      .locator('input[name="principalUserId"]')
+      .fill(assignedPrincipalUserId);
     await rosterRow.locator('input[name="publicName"]').fill(assignedPublicName);
     await rosterRow
       .getByRole("button", { name: "Assign player", exact: true })
@@ -7511,7 +7533,7 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
   );
   const receiptStatusText = await page.getByTestId("player-command-status").innerText();
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
   );
   const actionVisibleAfterRefresh = await page
@@ -7779,7 +7801,7 @@ async function submitConcurrentActionRace({
     concurrentActionPage.getByTestId("player-command-status").innerText(),
   ]);
   const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
   );
   if (
@@ -7876,7 +7898,7 @@ async function verifyConcurrentActionRaceReload({
     ),
   ]);
   const apiCommandStateAfterReload = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
   );
   const apiTargetSlotAfterReload = (
@@ -7970,7 +7992,7 @@ async function submitActionIdempotentRetry({
     .getByTestId("player-command-status")
     .innerText();
   const apiCommandStateAfterRetry = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
   );
   const retrySubmittedCommand =
@@ -8085,7 +8107,7 @@ async function submitStaleSameActionRecovery({
     .getByTestId("player-command-status")
     .innerText();
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
   );
   const submittedCommand =
@@ -8202,7 +8224,7 @@ async function submitStaleActionConflict({
     .getByTestId("player-command-status")
     .innerText();
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot_4`,
     "player-goon-a",
   );
   const submittedCommand =
@@ -8547,19 +8569,17 @@ function privateChannelRoleUrl({ frontendBaseUrl, game }) {
 function privateChannelThreadEndpoint({
   apiBaseUrl,
   game,
-  principalUserId,
   limit = 100,
 }) {
-  return `${apiBaseUrl}/games/${game}/channels/${privateChannelRoute()}/thread?principal_user_id=${principalUserId}&limit=${limit}`;
+  return `${apiBaseUrl}/games/${game}/channels/${privateChannelRoute()}/thread?limit=${limit}`;
 }
 
 function playerCommandStateEndpoint({
   apiBaseUrl,
   game,
-  principalUserId,
   slotId,
 }) {
-  return `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=${principalUserId}&slot_id=${slotId}`;
+  return `${apiBaseUrl}/games/${game}/player-command-state?slot_id=${slotId}`;
 }
 
 async function openPrivateChannelRoleSurface({
@@ -8644,7 +8664,6 @@ async function fetchPrivateChannelThread({
     privateChannelThreadEndpoint({
       apiBaseUrl,
       game,
-      principalUserId,
       limit,
     }),
     principalUserId,
@@ -8679,7 +8698,6 @@ async function fetchPlayerSlotCommandState({
     playerCommandStateEndpoint({
       apiBaseUrl,
       game,
-      principalUserId,
       slotId,
     }),
     principalUserId,
@@ -9335,7 +9353,7 @@ async function verifySeededMultiplayerHardening({
     );
   }
   const mainThread = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/channels/${hardeningRetryChannel}/thread?principal_user_id=player-mira&limit=100`,
+    `${apiBaseUrl}/games/${game}?limit=100`,
     "player-mira",
   );
   const retryPostCount = mainThread.posts.filter((post) => post.body === retryPostBody).length;
@@ -11503,11 +11521,11 @@ async function verifyConcurrentPlayerCompleteRace({
       () => window.__fmarchHostProjection?.slots ?? [],
     );
     const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${completeGame}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const apiThreadAfterRace = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/channels/${hardeningRetryChannel}/thread?principal_user_id=player-mira&limit=100`,
+      `${apiBaseUrl}/games/${completeGame}?limit=100`,
       "player-mira",
     );
     const apiStateAfterRace = await fetchHostConsoleState({
@@ -11993,7 +12011,7 @@ async function verifyStalePlayerCompleteRecovery({
         text: node.textContent?.trim() ?? "",
       }));
     const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${completeGame}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const apiEndgameSummaryAfterReject = await fetchJson(
@@ -12076,11 +12094,11 @@ async function verifyStalePlayerCompleteRecovery({
         text: node.textContent?.trim() ?? "",
       }));
     const apiCommandStateAfterReload = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${completeGame}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const apiThreadAfterReload = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/channels/${hardeningRetryChannel}/thread?principal_user_id=player-mira&limit=100`,
+      `${apiBaseUrl}/games/${completeGame}?limit=100`,
       "player-mira",
     );
     const apiThreadPostBodiesAfterReload = (
@@ -12474,7 +12492,7 @@ async function verifyConcurrentHostPublishRace({
       expectedBody,
     );
     const apiThread = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${publishRaceGame}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+      `${apiBaseUrl}/games/${publishRaceGame}?limit=100`,
       "player-mira",
     );
     const apiOfficialPosts = (apiThread.posts ?? []).filter(
@@ -12605,7 +12623,7 @@ async function reloadConcurrentHostPublishRace({
     ),
   ]);
   const apiThread = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    `${apiBaseUrl}/games/${game}?limit=100`,
     "player-mira",
   );
   const apiOfficialPostCount = (apiThread.posts ?? []).filter(
@@ -12719,7 +12737,7 @@ async function verifyHostVotecountPublication({
     expectedBody,
   );
   const apiThread = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    `${apiBaseUrl}/games/${game}?limit=100`,
     "player-mira",
   );
   const apiThreadPost = apiThread.posts?.find(
@@ -12840,7 +12858,7 @@ async function verifyStaleHostPublishAfterVotecountChange({
       expectedBody,
     );
     const apiThread = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+      `${apiBaseUrl}/games/${game}?limit=100`,
       "player-mira",
     );
     const apiExpectedPosts = (apiThread.posts ?? []).filter(
@@ -13026,7 +13044,7 @@ async function submitStaleHostPublishRecovery({
     () => window.__fmarchHostCommandDispatchBridgePlan,
   );
   const apiThread = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    `${apiBaseUrl}/games/${game}?limit=100`,
     "player-mira",
   );
   const apiOfficialPosts = (apiThread.posts ?? []).filter(
@@ -13147,7 +13165,7 @@ async function submitStaleHostPublishAfterClearRecovery({
     () => window.__fmarchHostCommandDispatchBridgePlan,
   );
   const apiThread = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    `${apiBaseUrl}/games/${game}?limit=100`,
     "player-mira",
   );
   const apiExpectedPosts = (apiThread.posts ?? []).filter(
@@ -14989,7 +15007,7 @@ async function verifyReplacementStalePrivateChannel({
   );
   const rowanPost = await rowanPage.evaluate(() => window.__fmarchPlayerCommandStatus);
   const apiThread = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/channels/${channelRoute}/thread?principal_user_id=player-rowan&limit=100`,
+    `${apiBaseUrl}/games/${game}/channels/${channelRoute}/thread?limit=100`,
     "player-rowan",
   );
   const apiThreadPostBodies = (apiThread.posts ?? []).map((post) => post.body);
@@ -15064,10 +15082,10 @@ async function verifyReplacementStalePrivateReceipts({
   apiBaseUrl,
 }) {
   const endpoints = {
-    staleNotifications: `${apiBaseUrl}/games/${game}/notifications?principal_user_id=player-mira`,
-    staleInvestigationResults: `${apiBaseUrl}/games/${game}/investigation-results?principal_user_id=player-mira`,
-    rowanNotifications: `${apiBaseUrl}/games/${game}/notifications?principal_user_id=player-rowan`,
-    rowanInvestigationResults: `${apiBaseUrl}/games/${game}/investigation-results?principal_user_id=player-rowan`,
+    staleNotifications: `${apiBaseUrl}/games/${game}/notifications`,
+    staleInvestigationResults: `${apiBaseUrl}/games/${game}/investigation-results`,
+    rowanNotifications: `${apiBaseUrl}/games/${game}/notifications`,
+    rowanInvestigationResults: `${apiBaseUrl}/games/${game}/investigation-results`,
   };
   const [
     staleNotifications,
@@ -19094,7 +19112,7 @@ async function verifyPlayerLagResyncRecovery({ playerPage, game, apiBaseUrl }) {
     browserState.clientMetricsAfter,
   );
   const apiThread = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    `${apiBaseUrl}/games/${game}?limit=100`,
     "player-mira",
   );
   const apiContinuationPostCounts = episodes.map(
@@ -19804,7 +19822,7 @@ async function verifyStalePlayerVoteAfterVotecountChange({
       }));
     const apiVotecountAfterAck = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
     const apiCommandStateAfterAck = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const withdrawPlayerCommandId = crypto.randomUUID();
@@ -19843,7 +19861,7 @@ async function verifyStalePlayerVoteAfterVotecountChange({
     });
     const apiVotecountAfterCleanup = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
     const apiCommandStateAfterCleanup = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     if (
@@ -20016,7 +20034,7 @@ async function verifyStalePlayerWithdrawAfterVoteChange({
       serverEnvelope: liveChangeRaw.serverEnvelope,
     });
     const apiCommandStateAfterLiveChange = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const apiVotecountAfterLiveChange = await fetchJson(
@@ -20090,7 +20108,7 @@ async function verifyStalePlayerWithdrawAfterVoteChange({
       "withdraw_vote",
     );
     const apiCommandStateAfterWithdraw = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const apiVotecountAfterWithdraw = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
@@ -20289,7 +20307,7 @@ async function openResolvedDayStalePlayerProof({
         .innerText(),
     };
     const apiCommandStateAfterResolve = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const apiDayVoteOutcomesAfterResolve = await fetchJson(
@@ -20458,7 +20476,7 @@ async function verifyStalePlayerWithdrawAfterPhaseClosure({
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
     const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const apiVotecountAfterReject = await fetchJson(
@@ -20686,7 +20704,7 @@ async function verifyStalePlayerVoteAfterPhaseClosure({
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
     const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const apiVotecountAfterReject = await fetchJson(
@@ -20899,11 +20917,11 @@ async function verifyStalePlayerPostAfterPhaseClosure({
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
     const apiCommandStateAfterAck = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?slot_id=slot-7`,
       "player-mira",
     );
     const apiThreadAfterAck = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${phaseClosureGame}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+      `${apiBaseUrl}/games/${phaseClosureGame}?limit=100`,
       "player-mira",
     );
     const apiVotecountAfterAck = await fetchJson(
@@ -21235,7 +21253,7 @@ async function verifyConcurrentPlayerVoteResolveRace({
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
     const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?slot_id=slot_4`,
       "player-goon-a",
     );
     const apiDayVoteOutcomesAfterRace = await fetchJson(
@@ -21558,7 +21576,7 @@ async function verifyConcurrentPlayerActionAdvanceRace({
     );
     const hostPhaseActionsAfterRace = await visibleHostPhaseActions(hostEntry.page);
     const apiCommandStateAfterRace = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?slot_id=slot_4`,
       "player-goon-a",
     );
     const apiHostStateAfterRace = await fetchHostConsoleState({
@@ -22249,7 +22267,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
       () => window.__fmarchHostProjection?.replacement,
     );
     const apiCommandStateAfterRace = await fetchJsonStatusAsPrincipal(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.staleOutgoingPrincipalUserId,
     );
     const commandStateAfterRace = {
@@ -22281,7 +22299,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
     };
     const buttonsAfterRace = await playerCommandButtons(playerEntry.page);
     const apiThread = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${raceGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      `${apiBaseUrl}/games/${raceGame}/channels/${channelRoute}/thread?limit=100`,
       scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodies = (apiThread.posts ?? []).map((item) => item.body);
@@ -22525,7 +22543,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
     );
     const hostPhaseActionsAfterResolve = await visibleHostPhaseActions(hostEntry.page);
     const apiCommandStateAfterResolve = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${privatePostGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${privatePostGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
     );
 
@@ -22611,11 +22629,11 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       };
     });
     const apiCommandStateAfterAck = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${privatePostGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${privatePostGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
     );
     const apiThreadAfterAck = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?limit=100`,
       scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodies = (apiThreadAfterAck.posts ?? []).map(
@@ -22639,7 +22657,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
         .innerText(),
     };
     const staleOutgoingThreadAfterAck = await fetchJsonStatusAsPrincipal(
-      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&limit=100`,
+      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?limit=100`,
       scenario.staleOutgoingPrincipalUserId,
     );
     await replacementEntry.page.goto(privateUrl, { waitUntil: "networkidle" });
@@ -22751,18 +22769,18 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       replacementEntry.page,
     );
     const apiThreadAfterReconnect = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?limit=100`,
       scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodiesAfterReconnect = (
       apiThreadAfterReconnect.posts ?? []
     ).map((post) => post.body);
     const apiCommandStateAfterReconnect = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${privatePostGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${privatePostGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
     );
     const staleOutgoingThreadAfterReconnect = await fetchJsonStatusAsPrincipal(
-      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&limit=100`,
+      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?limit=100`,
       scenario.staleOutgoingPrincipalUserId,
     );
     const privateReconnectAfterAck = {
@@ -23221,11 +23239,11 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       .getByTestId("player-command-status")
       .innerText();
     const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${completeGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
     );
     const apiThreadAfterReject = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?limit=100`,
       scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodies = (apiThreadAfterReject.posts ?? []).map(
@@ -23296,11 +23314,11 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
     const reloadRejectedPostVisible =
       (await replacementEntry.page.getByText(postBody, { exact: true }).count()) > 0;
     const apiCommandStateAfterReload = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${completeGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
     );
     const apiThreadAfterReload = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
+      `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?limit=100`,
       scenario.replacementPrincipalUserId,
     );
     const apiThreadPostBodiesAfterReload = (
@@ -23324,7 +23342,7 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
         .innerText(),
     };
     const staleOutgoingThreadAfterReject = await fetchJsonStatusAsPrincipal(
-      `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&limit=100`,
+      `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?limit=100`,
       scenario.staleOutgoingPrincipalUserId,
     );
     const privateReloadAfterReject = {
@@ -23714,7 +23732,7 @@ async function verifyConcurrentReplacementVoteRace({
       () => window.__fmarchHostProjection?.replacement,
     );
     const apiCommandStateAfterRace = await fetchJsonStatusAsPrincipal(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.staleOutgoingPrincipalUserId,
     );
     const commandStateAfterRace = {
@@ -24011,7 +24029,7 @@ async function verifyConcurrentReplacementActionRace({
       () => window.__fmarchHostProjection?.phase,
     );
     const apiCommandStateAfterRace = await fetchJsonStatusAsPrincipal(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.staleOutgoingPrincipalUserId,
     );
     const commandStateAfterRace = {
@@ -24047,7 +24065,7 @@ async function verifyConcurrentReplacementActionRace({
       })
     ).slots?.find?.((slot) => slot.slot_id === scenario.actorSlot);
     const apiCurrentCommandStateStatus = await fetchJsonStatusAsPrincipal(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
     );
     const currentCommandStateAfterRace = apiCurrentCommandStateStatus.body;
@@ -24259,7 +24277,7 @@ async function verifyIncomingReplacementActionSubmission({
       serverEnvelope: replacementRaw.serverEnvelope,
     });
     const outgoingCommandStateAfterReplacement = await fetchJsonStatusAsPrincipal(
-      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${actionGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.staleOutgoingPrincipalUserId,
     );
     const replacementSession = await createAccountLoginCredential({
@@ -24327,7 +24345,7 @@ async function verifyIncomingReplacementActionSubmission({
     );
     const currentButtonsAfterAction = await playerCommandButtons(replacementEntry.page);
     const apiCommandStateAfterAction = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${actionGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
     );
 
@@ -24993,7 +25011,7 @@ async function verifyStaleReplacementActionAfterResolve({
       .getByTestId("player-command-status")
       .innerText();
     const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
-      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
+      `${apiBaseUrl}/games/${actionGame}/player-command-state?slot_id=${scenario.actorSlot}`,
       scenario.replacementPrincipalUserId,
     );
     const targetSlotAfterReject = await fetchResolvedSlotState({
@@ -25289,7 +25307,7 @@ async function verifyStaleDeadTargetVoteRecovery({
       text: node.textContent?.trim() ?? "",
     }));
   const apiCommandStateAfterReject = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot-7`,
     "player-mira",
   );
   if (
@@ -25494,7 +25512,7 @@ async function verifyDeadCurrentVoteRecovery({
     () => window.__fmarchHostVotecountProjection ?? [],
   );
   const apiCommandStateAfterDead = await fetchJsonAsPrincipal(
-    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    `${apiBaseUrl}/games/${game}/player-command-state?slot_id=slot-7`,
     "player-mira",
   );
   const apiVotecountAfterDead = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
@@ -26814,6 +26832,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 
 function hashSessionToken(token) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function canonicalSessionToken(seed) {
+  return `fmss_${hashSessionToken(seed)}`;
 }
 
 function sqlLiteral(value) {

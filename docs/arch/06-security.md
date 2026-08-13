@@ -67,9 +67,10 @@ removing a sign-in method never rewrites a principal.
   `recent_authentication_required`). Recent authentication is the immutable time of the
   credential ceremony and is preserved by session rotation; rotating an old session cannot
   manufacture step-up authority. An active principal must retain at least one active method,
-  at most one classic method exists per principal, removal revokes the sessions authenticated
-  through that method, and re-adding the same disabled identity reactivates its stable method
-  row with fresh credentials. Every transition writes `identity_lifecycle_audit`.
+  at most one classic method exists per principal, and removal revokes the sessions authenticated
+  through that method. A disabled classic identity cannot reactivate itself through a live sibling
+  method; only the GlobalAdmin account-enable lifecycle may restore it. Every transition writes
+  `identity_lifecycle_audit`.
 - **WorkOS adapter policy (recorded tradeoff):** there is no AuthKit refresh loop and no
   provider webhook; provider-side revocation takes effect when the local session expires,
   which is why WorkOS-exchanged sessions default to a shorter absolute TTL
@@ -87,9 +88,11 @@ removing a sign-in method never rewrites a principal.
   primary/direct option and WorkOS appears only when its complete configuration is present
   (`workosAuthKitConfigured` is the single availability predicate). Every route is always
   mounted; classic availability is a runtime policy check, not a compile-or-mount fork.
-- **Dev shortcuts:** `FMARCH_DEV_AUTH=1` gates only the dev-session endpoint and the
-  query-param WebSocket form used by hermetic proof lanes. It is orthogonal to classic
-  availability, which is production identity.
+- **Dev shortcuts:** `FMARCH_DEV_AUTH=1` gates the dev-session endpoint in debug builds.
+  That endpoint still issues a server-generated canonical app-session credential; callers
+  cannot select or replace bearer material. WebSockets use the same one-time ticket boundary
+  in every environment. Dev auth is orthogonal to classic availability, which is production
+  identity.
 - **CSRF:** AuthKit's OAuth callback uses PKCE and state validation. Authenticated API
   calls carry explicit bearer authority from server-side SvelteKit code rather than ambient
   API cookies. The WebSocket uses a one-time, audience-bound ticket rather than a bearer
@@ -112,12 +115,15 @@ removing a sign-in method never rewrites a principal.
   disabled-principal/disabled-method tickets are rejected before upgrade, so no Hello frame
   or private byte is emitted. Session, method, and principal liveness are checked again while
   the socket remains open.
-- In-process broadcast remains the low-latency path, while every API instance polls the durable
-  game event sequence. A commit on instance A therefore wakes a socket on B. Sequence movement or
-  broadcast lag produces `ResyncRequired` followed by capability-filtered snapshots, and a fresh
-  reconnect ticket hydrates projections from durable state even if the client cursor is stale.
-- Query-supplied principals and the direct WebSocket form exist only behind explicit
-  dev-auth mode for old fixtures. Production routes have no such fallback.
+- In-process broadcast remains the low-latency path for game events, while every API instance
+  polls the durable game event sequence and the durable main-thread visibility log. A commit or
+  moderation action on instance A therefore reaches a socket on B; hides emit a removal tombstone
+  before a visibility-filtered snapshot. Sequence movement or broadcast lag produces
+  `ResyncRequired` followed by capability-filtered snapshots, and a fresh reconnect ticket
+  hydrates projections from durable state even if the client cursor is stale.
+- Private game reads and WebSockets have no query-supplied-principal fallback. The sole request
+  authority is the exact presented app session, resolved into `AuthorizationContext`; game-scoped
+  capabilities are then resolved for that context's principal.
 
 ## Authorization: capabilities, not ambient roles
 

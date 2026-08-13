@@ -77,14 +77,11 @@ try {
 }
 
 async function seed(api) {
-  const memberToken = "moderation-proof-member-session";
-  const memberBootstrapToken = "moderation-proof-member-bootstrap";
-  const moderatorToken = "moderation-proof-moderator-session";
   const member = "moderation_member";
   const moderator = "moderation_operator";
-  await json(`${api}/auth/dev-session`, post({ token: memberToken, principal_user_id: member, expires_at: 4_102_444_800, global_capabilities: [] }));
-  await json(`${api}/auth/dev-session`, post({ token: memberBootstrapToken, principal_user_id: member, expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin"] }));
-  await json(`${api}/auth/dev-session`, post({ token: moderatorToken, principal_user_id: moderator, expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin", "GlobalMod"] }));
+  const memberToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_user_id: member, expires_at: 4_102_444_800, global_capabilities: [] })));
+  const memberBootstrapToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_user_id: member, expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin"] })));
+  const moderatorToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_user_id: moderator, expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin", "GlobalMod"] })));
   await json(`${api}/auth/accounts`, post({ account_id: "moderation-member@example.test", password: "correct horse battery staple", principal_user_id: member, global_capabilities: [] }, moderatorToken));
   await json(`${api}/auth/accounts`, post({ account_id: "moderation-operator@example.test", password: "correct horse battery staple", principal_user_id: moderator, global_capabilities: ["GlobalAdmin", "GlobalMod"] }, moderatorToken));
   const game = randomUUID();
@@ -96,6 +93,13 @@ async function seed(api) {
   await command(api, id++, memberToken, { SubmitPost: { game, channel_id: "main", actor_slot: "slot_1", body: "Cobalt moderation proof message", media: [] } });
   const page = await json(`${api}/games/${game}`);
   return { game, member, memberToken, moderatorToken, sourceSeq: page.posts[0].source_seq };
+}
+
+function requiredSessionToken(session) {
+  if (typeof session?.session_token !== "string" || session.session_token === "") {
+    throw new Error("dev session response omitted its backend-issued token");
+  }
+  return session.session_token;
 }
 
 async function memberReport(context, base, seeded) {

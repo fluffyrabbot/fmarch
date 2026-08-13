@@ -265,7 +265,6 @@ test("admin audit account lifecycle action disables an account through admin ses
     body: {
       account_id: "host@example.test",
       expected_disabled: false,
-      revoke_sessions: true,
     },
   });
   assert.equal(result.id, "account-disable");

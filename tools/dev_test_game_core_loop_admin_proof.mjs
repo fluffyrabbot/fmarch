@@ -5153,7 +5153,7 @@ async function installPlayerPhaseTransitionObservationRoutes(
       409,
     );
   });
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [],
@@ -5633,7 +5633,7 @@ async function proveTargetResolutionReceiptSurface({
 }
 
 async function installTargetResolutionReceiptBrowserRoutes(page) {
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -5794,7 +5794,7 @@ async function proveNormalResolutionPrivacySurface({
 }
 
 async function installNormalResolutionPrivacyBrowserRoutes(page) {
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -6622,7 +6622,7 @@ async function installDayVoteResolvedCommonRoutes(
   page,
   { notifications, commandState },
 ) {
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -6675,7 +6675,7 @@ async function installNightActionResolutionCommonRoutes(
   page,
   { notifications, commandState },
 ) {
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -6728,7 +6728,7 @@ async function installDayThreePlayerObservationRoutes(
   page,
   { notifications, commandState },
 ) {
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -6818,7 +6818,7 @@ async function installDayThreeVoteSubmissionBrowserRoutes(
       409,
     );
   });
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -6907,7 +6907,7 @@ async function installDayFourNoLynchVoteSubmissionBrowserRoutes(
       409,
     );
   });
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -7166,7 +7166,7 @@ async function installDayFiveNoLynchVoteSubmissionBrowserRoutes(
       409,
     );
   });
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -7346,7 +7346,7 @@ async function installNightFourNoActionBrowserRoutes(
       409,
     );
   });
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -7581,7 +7581,7 @@ async function installStaleNightFourActionRecoveryBrowserRoutes(
       409,
     );
   });
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -7684,7 +7684,7 @@ async function installStaleDayFiveVoteRecoveryBrowserRoutes(
       409,
     );
   });
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -7989,7 +7989,7 @@ async function installStaleCompletedGamePlayerCommandRecoveryBrowserRoutes(
       409,
     );
   });
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -8060,7 +8060,7 @@ async function installPostDayThreePlayerBrowserRoutes(
     endgameSummary = null,
   },
 ) {
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -8296,7 +8296,7 @@ async function installPostDayVoteAdvanceCommonRoutes(
   page,
   { notifications, commandState },
 ) {
-  await page.route("**/games/*/thread?**", async (route) => {
+  await page.route("**/api/gameplay/games/*?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [

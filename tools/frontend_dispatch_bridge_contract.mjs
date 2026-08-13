@@ -618,7 +618,7 @@ function hostSetupData() {
     game: { id: "midsummer" },
     session: { principalUserId: "host_h" },
     commandEndpoint: "/commands",
-    setupStateEndpoint: "/games/midsummer/setup-state?principal_user_id=host_h",
+    setupStateEndpoint: "/games/midsummer/setup-state",
     start: { defaultPhase: "D01" },
     setupState: {
       game: "midsummer",

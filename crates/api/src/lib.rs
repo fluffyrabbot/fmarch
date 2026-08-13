@@ -21,12 +21,12 @@ pub use game_http::{
     load_host_console_state_for_principal, load_player_day_event_attention_for_principal,
     EndgameDayVote, EndgameSlotReveal, EndgameSummaryResponse, EndgameWinner,
     HostConsolePhaseState, HostConsoleSlotOccupancy, HostConsoleStateResponse,
-    HostConsoleThreadPost, HostPrompt, HostSetupAccountState, HostSetupAttachedProgram,
-    HostSetupPackState, HostSetupPostPolicyState, HostSetupProgramCompatibility,
-    HostSetupProgramCompatibilityIssue, HostSetupProgramOption, HostSetupProgramSchedulePreview,
-    HostSetupRoleOption, HostSetupSlotState, HostSetupStateResponse, PlayerCommandAction,
-    PlayerCommandCurrentAction, PlayerCommandPhaseState, PlayerCommandRoleView,
-    PlayerCommandStateResponse, PlayerDayEventAttention, PlayerVoteTarget,
+    HostConsoleThreadPost, HostPrompt, HostSetupAttachedProgram, HostSetupPackState,
+    HostSetupPostPolicyState, HostSetupProgramCompatibility, HostSetupProgramCompatibilityIssue,
+    HostSetupProgramOption, HostSetupProgramSchedulePreview, HostSetupRoleOption,
+    HostSetupSlotState, HostSetupStateResponse, PlayerCommandAction, PlayerCommandCurrentAction,
+    PlayerCommandPhaseState, PlayerCommandRoleView, PlayerCommandStateResponse,
+    PlayerDayEventAttention, PlayerVoteTarget,
 };
 pub use live_delivery::WebsocketTicketResponse;
 pub use media_http::{MediaUploadResponse, MediaUploadVariant};
@@ -122,21 +122,13 @@ impl ApiState {
         self
     }
 
-    /// Transitional: accept provider JWTs as general request bearers while
-    /// clients migrate to the one-time session exchange. Removed once the
-    /// frontend exchanges WorkOS tokens for app sessions.
-    pub fn with_jwt_bearer_transition(mut self, enabled: bool) -> Self {
-        self.auth.allow_jwt_bearer = enabled;
-        self
-    }
-
     pub fn with_server_name(mut self, name: impl Into<String>) -> Self {
         self.server_name = name.into();
         self
     }
 
     pub fn with_dev_auth(mut self, enabled: bool) -> Self {
-        self.auth.dev_auth_enabled = enabled;
+        self.auth.dev_auth_enabled = enabled && cfg!(debug_assertions);
         self
     }
 

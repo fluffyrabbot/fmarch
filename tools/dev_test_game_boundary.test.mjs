@@ -10,6 +10,17 @@ const sourcePaths = Object.freeze({
   artifacts: "tools/dev_test_game_session_artifacts.mjs",
 });
 
+const authenticatedPrivateReadSources = Object.freeze([
+  "tools/dev_test_game.mjs",
+  "tools/host_console_live_stack_smoke.mjs",
+  "tools/live_stack_backup_restore_drill.mjs",
+  "tools/live_stack/day_event_room_scenario.mjs",
+  "tools/completed_game_export_role_proof.mjs",
+  "tools/frontend_dispatch_bridge_contract.mjs",
+  "tools/frontend_component_interaction_contract.mjs",
+  "tools/frontend_role_smoke_artifact_contract.test.mjs",
+]);
+
 test("composition root preserves help return and verification validation before I/O", async () => {
   const calls = [];
   const originalLog = console.log;
@@ -139,5 +150,22 @@ test("matching contracts import the extracted owners directly without a facade",
     "buildDevTestGameHostSetupProof",
   ]) {
     assert.doesNotMatch(rootImport, new RegExp(`\\b${extractedExport}\\b`));
+  }
+});
+
+test("private game reads derive principals only from authenticated sessions", async () => {
+  const sources = await Promise.all(
+    authenticatedPrivateReadSources.map(async (file) => ({
+      file,
+      source: await readFile(file, "utf8"),
+    })),
+  );
+
+  for (const { file, source } of sources) {
+    assert.doesNotMatch(
+      source,
+      /[?&]principal_user_id=/,
+      `${file} must not select a private-read principal through the URL`,
+    );
   }
 });

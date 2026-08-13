@@ -251,12 +251,21 @@ export const actions = {
     const grantedKinds = (body.capabilities ?? [])
       .map((capability) => capability.kind)
       .join(", ");
+    const issuedSessionToken = body?.session_token;
+    if (typeof issuedSessionToken !== "string" || issuedSessionToken.trim() === "") {
+      return fail(502, {
+        id: "session-grants",
+        state: "reject",
+        message: "Auth service returned a malformed session grant",
+      });
+    }
     return {
       id: "session-grants",
       state: "ack",
       message: `Granted ${grantedKinds} to ${body.principal_user_id}`,
       principalUserId: body.principal_user_id,
       capabilityKinds: grantedKinds,
+      sessionToken: issuedSessionToken,
     };
   },
 };
@@ -308,7 +317,6 @@ function parseSessionGrantPayload(formData) {
   return Object.freeze({
     status: "ok",
     payload: Object.freeze({
-      token: requiredFormString(formData, "token"),
       principal_user_id: requiredFormString(formData, "principalUserId"),
       expires_at: expiresAt,
       global_capabilities: Object.freeze(globalCapabilities),

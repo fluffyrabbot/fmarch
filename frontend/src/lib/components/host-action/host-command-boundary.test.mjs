@@ -906,7 +906,6 @@ test("host console state endpoint is session-authenticated and scoped by slot", 
   assert.equal(
     buildHostConsoleStateEndpoint({
       gameId: "00000000-0000-0000-0000-000000000001",
-      principalUserId: "host_h",
       slotId: "slot-7",
     }),
     "/api/gameplay/games/00000000-0000-0000-0000-000000000001/host-console-state?slot_id=slot-7",

@@ -156,15 +156,6 @@
                 {item.confirmation.message}
               </p>
               <label class="admin-surface__field fm-field">
-                <span>Session token</span>
-                <input
-                  name="token"
-                  value={item.sessionGrant.token}
-                  autocomplete="off"
-                  data-testid="admin-session-grant-token"
-                />
-              </label>
-              <label class="admin-surface__field fm-field">
                 <span>Principal</span>
                 <input
                   name="principalUserId"

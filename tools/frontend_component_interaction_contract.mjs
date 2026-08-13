@@ -93,7 +93,6 @@ async function proveSourceContracts() {
         "on:click={() => confirmSetupAction(item)}",
         "onConfirmSetupAction(item)",
         'action="?/grantSession"',
-        'data-testid="admin-session-grant-token"',
         "<CommandRecovery",
       ],
     }),
@@ -169,10 +168,10 @@ async function proveAdminInteraction(bundle) {
     'action="?/grantSession"',
     "admin session grant form action",
   );
-  assertIncludes(
-    sessionGrantConfirm.html,
-    'data-testid="admin-session-grant-token"',
-    "admin session grant token field",
+  assert.equal(
+    sessionGrantConfirm.html.includes('data-testid="admin-session-grant-token"'),
+    false,
+    "admin session grant must not accept a caller-selected bearer",
   );
   assertIncludes(
     sessionGrantConfirm.html,
@@ -218,7 +217,6 @@ async function proveAdminInteraction(bundle) {
         confirmTestId: "admin-command-confirm-session-grants",
         formAction: "?/grantSession",
         formFieldTestIds: [
-          "admin-session-grant-token",
           "admin-session-grant-principal",
           "admin-session-grant-expires-at",
           "admin-session-grant-global-mod",
@@ -424,7 +422,7 @@ function adminRecoveryGateItem() {
     boundaryDetail: "/operator/proof-runs/go-no-go",
     buttonLabel: "Check recovery gate",
     action: "check_recovery_gate",
-    endpoint: "/games/midsummer/operator/proof-runs/go-no-go?principal_user_id=admin_a",
+    endpoint: "/games/midsummer/operator/proof-runs/go-no-go",
     confirmLabel: "Check gate",
     confirmMessage: "Check recovery go/no-go for midsummer.",
   };
@@ -517,7 +515,7 @@ function adminRecoveryGateItem() {
     boundaryDetail: "/operator/proof-runs/go-no-go",
     buttonLabel: "Check recovery gate",
     action: "check_recovery_gate",
-    endpoint: "/games/midsummer/operator/proof-runs/go-no-go?principal_user_id=admin_a",
+    endpoint: "/games/midsummer/operator/proof-runs/go-no-go",
     confirmLabel: "Check gate",
     confirmMessage: "Check recovery go/no-go for midsummer.",
   };
@@ -585,7 +583,6 @@ export function renderAdminSessionGrantConfirm() {
         "session-grants": adminConfirmStatus(item),
       },
       sessionGrant: {
-        token: "session-grant-midsummer",
         principalUserId: "mod_a",
         expiresAt: 4102444800,
         globalCapabilities: ["GlobalMod"],

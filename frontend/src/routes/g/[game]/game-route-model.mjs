@@ -12,7 +12,7 @@ import {
   playerCommandStateUrl,
   playerThreadUrl,
   playerVotecountUrl,
-  principalScopedGameUrl,
+  authenticatedGameReadUrl,
 } from "../../../lib/app/cold-load.mjs";
 import {
   buildLiveProjectionUrl,
@@ -55,7 +55,6 @@ export async function buildGameRouteData({
   capabilities = [],
   fetchImpl = null,
   apiBaseUrl = "",
-  publicApiBaseUrl = null,
   activeChannel = "main",
   privateItem = null,
 }) {
@@ -209,7 +208,6 @@ export async function buildGameRouteData({
           : playerThreadUrl({
               game: gameId,
               channel: channelId,
-              principalUserId,
               limit: 50,
               beforeSeq: coldLoad.thread.nextBeforeSeq,
             }),
@@ -218,31 +216,27 @@ export async function buildGameRouteData({
       threadEndpoint: playerThreadUrl({
         game: gameId,
         channel: channelId,
-        principalUserId,
         limit: 50,
       }),
       votecountEndpoint: playerVotecountUrl({ game: gameId }),
       dayVoteOutcomesEndpoint: dayVoteOutcomesUrl({ game: gameId }),
       endgameSummaryEndpoint: endgameSummaryUrl({ game: gameId }),
       notificationsEndpoint: hasPrincipal && playerCommandStateSlot !== null
-        ? principalScopedGameUrl({
+        ? authenticatedGameReadUrl({
             game: gameId,
             path: "notifications",
-            principalUserId,
           })
         : null,
       investigationResultsEndpoint: hasPrincipal && playerCommandStateSlot !== null
-        ? principalScopedGameUrl({
+        ? authenticatedGameReadUrl({
             game: gameId,
             path: "investigation-results",
-            principalUserId,
           })
         : null,
       commandStateEndpoint:
         hasPrincipal && playerCommandStateSlot !== null
           ? playerCommandStateUrl({
               game: gameId,
-              principalUserId,
               slotId: playerCommandStateSlot,
             })
           : null,
@@ -250,11 +244,7 @@ export async function buildGameRouteData({
     liveProjection: Object.freeze({
       endpoint: hasPrincipal
         ? buildLiveProjectionUrl({
-            // The browser opens this socket; it must use the public base even
-            // when SSR fetches ride the private network.
-            apiBaseUrl: publicApiBaseUrl ?? apiBaseUrl,
             game: gameId,
-            principalUserId,
             channel: channelId,
           })
         : null,

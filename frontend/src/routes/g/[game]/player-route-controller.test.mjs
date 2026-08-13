@@ -644,7 +644,7 @@ test("player route controller loads and merges older thread pages", async () => 
     },
   });
 
-  assert.deepEqual(seenUrls, ["/games/midsummer/thread?limit=50&before_seq=41"]);
+  assert.deepEqual(seenUrls, ["/api/gameplay/games/midsummer?limit=50&before_seq=41"]);
   assert.deepEqual(result.threadPageStatus, {
     state: "ack",
     message: "Loaded 2 older posts",
@@ -882,7 +882,7 @@ function fixtureData(overrides = {}) {
       actions: [],
     },
     coldLoad: {
-      threadEndpoint: "/games/midsummer/thread?limit=50",
+      threadEndpoint: "/api/gameplay/games/midsummer?limit=50",
       votecountEndpoint: "/games/midsummer/votecount",
       dayVoteOutcomesEndpoint: "/games/midsummer/day-vote-outcomes",
       endgameSummaryEndpoint: "/games/midsummer/endgame-summary",

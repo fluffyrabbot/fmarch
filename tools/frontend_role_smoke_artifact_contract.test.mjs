@@ -1597,7 +1597,6 @@ test("route-state render artifact covers every forced board and role page state"
       "admin-command-confirmation-message-cohost",
     ],
     formFieldTestIds: [
-      "admin-session-grant-token",
       "admin-session-grant-principal",
       "admin-session-grant-expires-at",
       "admin-session-grant-global-mod",
@@ -2049,7 +2048,7 @@ test("hydrated surface artifact records route-backed surface adapters without lo
   assert.deepEqual(hydratedSurfaces.admin.auditNavigation, {
     listHref: "/admin/audit/proof-runs?game=midsummer",
     detailTitle: "Proof runs",
-    evidenceHref: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+    evidenceHref: "/games/midsummer/operator/proof-runs",
     overviewHref: "/admin?game=midsummer",
   });
   assert.deepEqual(hydratedSurfaces.admin.forms, {
@@ -2234,7 +2233,6 @@ test("component interaction artifact records no-bind command component wiring", 
         confirmTestId: "admin-command-confirm-session-grants",
         formAction: "?/grantSession",
         formFieldTestIds: [
-          "admin-session-grant-token",
           "admin-session-grant-principal",
           "admin-session-grant-expires-at",
           "admin-session-grant-global-mod",
@@ -2379,7 +2377,6 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
     form: {
       action: "?/grantSession",
       fieldTestIds: [
-        "admin-session-grant-token",
         "admin-session-grant-principal",
         "admin-session-grant-expires-at",
         "admin-session-grant-global-mod",
@@ -3120,7 +3117,7 @@ test("in-app browser interaction page fixture records role command targets", asy
   assert.deepEqual(adminHydratedScenario.auditNavigation, {
     listHref: "/admin/audit/proof-runs?game=midsummer",
     detailTitle: "Proof runs",
-    evidenceHref: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+    evidenceHref: "/games/midsummer/operator/proof-runs",
     overviewHref: "/admin?game=midsummer",
   });
   assert.equal(adminHydratedScenario.command.commandKind, "AddCohost");
@@ -6053,7 +6050,6 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
       entry.commandResult.sessionGrant.focus.tabSequence.map((focus) => focus.testId),
       [
         "admin-command-cancel-session-grants",
-        "admin-session-grant-token",
         "admin-session-grant-principal",
         "admin-session-grant-expires-at",
         "admin-session-grant-global-mod",
@@ -6072,7 +6068,6 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
       formTestId: "admin-session-grant-form",
       action: "?/grantSession",
       fieldTestIds: [
-        "admin-session-grant-token",
         "admin-session-grant-principal",
         "admin-session-grant-expires-at",
         "admin-session-grant-global-mod",

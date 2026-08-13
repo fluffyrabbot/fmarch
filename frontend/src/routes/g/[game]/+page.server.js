@@ -1,6 +1,6 @@
 import { error } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../lib/app/app-route-state-model.mjs";
-import { publicApiBaseUrl, serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
+import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { authenticatedApiFetch } from "../../../lib/server/session-capabilities.mjs";
 import {
   buildGameRouteData,
@@ -20,7 +20,6 @@ export async function load({ params, locals, fetch, url, cookies }) {
         ? null
         : authenticatedApiFetch({ locals, cookies, fetchImpl: fetch }),
     apiBaseUrl,
-    publicApiBaseUrl: publicApiBaseUrl(),
     privateItem: url?.searchParams.get("private") ?? null,
   });
 

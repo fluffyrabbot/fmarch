@@ -124,11 +124,9 @@ try {
 }
 
 async function createSessions(apiBaseUrl) {
-  const memberToken = "discussion-proof-member-session";
-  const moderatorToken = "discussion-proof-moderator-session";
   const memberUserId = "discussion_member";
-  await createDevSession(apiBaseUrl, memberToken, memberUserId, []);
-  await createDevSession(apiBaseUrl, moderatorToken, "discussion_moderator", ["GlobalAdmin", "GlobalMod"]);
+  const memberToken = await createDevSession(apiBaseUrl, memberUserId, []);
+  const moderatorToken = await createDevSession(apiBaseUrl, "discussion_moderator", ["GlobalAdmin", "GlobalMod"]);
   await createAccount(apiBaseUrl, moderatorToken, "member@example.test", memberUserId, []);
   await createAccount(apiBaseUrl, moderatorToken, "moderator@example.test", "discussion_moderator", ["GlobalAdmin", "GlobalMod"]);
   await createProfile(apiBaseUrl, memberToken, "member_profile", "Discussion Member");
@@ -162,12 +160,11 @@ async function createProfile(apiBaseUrl, token, handle, displayName) {
   });
 }
 
-async function createDevSession(apiBaseUrl, token, principalUserId, globalCapabilities) {
+async function createDevSession(apiBaseUrl, principalUserId, globalCapabilities) {
   const response = await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      token,
       principal_user_id: principalUserId,
       expires_at: 4_102_444_800,
       global_capabilities: globalCapabilities,
@@ -176,6 +173,10 @@ async function createDevSession(apiBaseUrl, token, principalUserId, globalCapabi
   if (response.principal_user_id !== principalUserId) {
     throw new Error(`local discussion session did not resolve ${principalUserId}`);
   }
+  if (typeof response.session_token !== "string" || response.session_token === "") {
+    throw new Error(`local discussion session omitted token for ${principalUserId}`);
+  }
+  return response.session_token;
 }
 
 async function createArea(apiBaseUrl, moderatorToken) {

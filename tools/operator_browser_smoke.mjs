@@ -1959,7 +1959,7 @@ async function sendCommand(principalUserId, command) {
 }
 
 async function createOperatorSession(
-  token,
+  sessionAlias,
   principalUserId,
   { globalCapabilities = [] } = {},
 ) {
@@ -1971,7 +1971,6 @@ async function createOperatorSession(
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          token,
           principal_user_id: principalUserId,
           expires_at: 4_102_444_800,
           global_capabilities: globalCapabilities,
@@ -1984,7 +1983,7 @@ async function createOperatorSession(
       if (typeof body.session_token !== "string" || body.session_token.length === 0) {
         throw new Error("operator fixture session response omitted its issued token");
       }
-      issuedSessionTokens.set(token, body.session_token);
+      issuedSessionTokens.set(sessionAlias, body.session_token);
       return body.session_token;
     }
     const body = await response.text();

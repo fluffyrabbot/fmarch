@@ -1,8 +1,8 @@
 //! Public community discovery, discussion, moderation, subscription, and profile HTTP boundary.
 
 use super::auth_http::{
-    active_session_principal_and_globals, bearer_token, require_active_enabled_account,
-    unauthorized_account, unauthorized_session, unix_now_seconds, AuthHttpState,
+    authorization_context, bearer_token, require_authorized_principal, unauthorized_account,
+    unauthorized_session, unix_now_seconds, AuthHttpState,
 };
 use super::{ApiError, ApiState};
 use axum::extract::{Path, Query, State};
@@ -298,7 +298,7 @@ async fn authenticated_community_member(
     headers: &HeaderMap,
 ) -> Result<String, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    require_active_enabled_account(auth, token).await
+    require_authorized_principal(auth, token).await
 }
 
 pub(super) async fn optional_authenticated_community_member(
@@ -309,7 +309,7 @@ pub(super) async fn optional_authenticated_community_member(
         return Ok(None);
     }
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    require_active_enabled_account(auth, token).await.map(Some)
+    require_authorized_principal(auth, token).await.map(Some)
 }
 
 fn parse_member_mute_cursor(value: &str) -> Result<projections::MemberMuteCursor, ApiError> {
@@ -818,7 +818,7 @@ async fn submit_moderation_report(
     Json(request): Json<SubmitModerationReportRequest>,
 ) -> Result<(StatusCode, Json<ModerationReportReceipt>), ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_account)?;
-    let principal_user_id = require_active_enabled_account(&state.auth, token).await?;
+    let principal_user_id = require_authorized_principal(&state.auth, token).await?;
     if request.source_seq <= 0 {
         return Err(moderation_bad_request("report source_seq must be positive"));
     }
@@ -856,7 +856,7 @@ async fn moderation_report_receipt(
     headers: HeaderMap,
 ) -> Result<Json<ModerationReportReceipt>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_account)?;
-    let principal_user_id = require_active_enabled_account(&state.auth, token).await?;
+    let principal_user_id = require_authorized_principal(&state.auth, token).await?;
     let receipt =
         projections::moderation_report_receipt(&state.pool, report, principal_user_id.as_str())
             .await?
@@ -1027,7 +1027,7 @@ async fn authenticated_discussion_profile(
     headers: &HeaderMap,
 ) -> Result<projections::ProfileEditorRow, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    let principal_user_id = require_active_enabled_account(&state.auth, token).await?;
+    let principal_user_id = require_authorized_principal(&state.auth, token).await?;
     let profile = projections::profile_editor_by_principal(&state.pool, principal_user_id.as_str())
         .await?
         .ok_or_else(|| discussion_conflict("create a community profile before posting"))?;
@@ -1044,13 +1044,13 @@ async fn require_global_mod(
     token: &str,
     action: &str,
 ) -> Result<String, ApiError> {
-    let principal_user_id = require_active_enabled_account(&state.auth, token).await?;
-    let (_, globals) = active_session_principal_and_globals(&state.auth, token).await?;
-    if globals
+    let authorization = authorization_context(&state.auth, token).await?;
+    if authorization
+        .global_capabilities
         .iter()
         .any(|capability| matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod"))
     {
-        return Ok(principal_user_id);
+        return Ok(authorization.principal_user_id);
     }
     Err(ApiError::Reject {
         status: StatusCode::FORBIDDEN,
@@ -1337,7 +1337,7 @@ async fn authenticated_profile_principal(
     headers: &HeaderMap,
 ) -> Result<String, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    require_active_enabled_account(&state.auth, token).await
+    require_authorized_principal(&state.auth, token).await
 }
 
 fn require_profile_owner(

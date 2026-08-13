@@ -26,12 +26,12 @@ try {
   await runFmarchMigrations({ cwd: root, databaseUrl: database.url });
   const api = await startApi(database.url);
   const frontend = await startFrontend(api);
-  const game = randomUUID(); const hostUser = "export_role_host"; const token = "export-role-host-session"; const bootstrapToken = "export-role-host-bootstrap";
-  await request(`${api}/auth/dev-session`, { method: "POST", headers: headers(), body: JSON.stringify({ token, principal_user_id: hostUser, expires_at: 4102444800, global_capabilities: [] }) });
-  await request(`${api}/auth/dev-session`, { method: "POST", headers: headers(), body: JSON.stringify({ token: bootstrapToken, principal_user_id: hostUser, expires_at: 4102444800, global_capabilities: ["GlobalAdmin"] }) });
+  const game = randomUUID(); const hostUser = "export_role_host";
+  const token = requiredSessionToken(await request(`${api}/auth/dev-session`, { method: "POST", headers: headers(), body: JSON.stringify({ principal_user_id: hostUser, expires_at: 4102444800, global_capabilities: [] }) }));
+  const bootstrapToken = requiredSessionToken(await request(`${api}/auth/dev-session`, { method: "POST", headers: headers(), body: JSON.stringify({ principal_user_id: hostUser, expires_at: 4102444800, global_capabilities: ["GlobalAdmin"] }) }));
   await command(api, 1, bootstrapToken, { CreateGame: { game, pack: "mafiascum" } });
   await command(api, 2, token, { CompleteGame: { game } });
-  const manifest = await request(`${api}/games/${game}/export?principal_user_id=${hostUser}`);
+  const manifest = await request(`${api}/games/${game}/export`, { headers: headers(token) });
   browser = await chromium.launch(); const context = await browser.newContext();
   await context.addCookies([{ name: "fmarch_session", value: token, url: frontend, httpOnly: true }]);
   const page = await context.newPage({ viewport: { width: 1024, height: 768 } });
@@ -47,6 +47,7 @@ try {
 finally { if (browser) await browser.close(); if (vite) await vite.close(); if (server) await stop(server); if (database) await drop(database); if (priorApi === undefined) delete process.env.FMARCH_API_BASE_URL; else process.env.FMARCH_API_BASE_URL = priorApi; }
 
 async function command(api, id, sessionToken, commandValue) { const result = await request(`${api}/commands`, { method: "POST", headers: headers(sessionToken), body: JSON.stringify({ v: 1, id, body: { kind: "Command", body: { command_id: randomUUID(), command: commandValue } } }) }); if (result.body?.kind !== "Ack") throw new Error(`seed command rejected ${JSON.stringify(result)}`); }
+function requiredSessionToken(session) { if (typeof session?.session_token !== "string" || session.session_token === "") throw new Error("dev session response omitted its backend-issued token"); return session.session_token; }
 function headers(sessionToken) { return { ...(sessionToken ? { authorization: `Bearer ${sessionToken}` } : {}), "content-type": "application/json", accept: "application/json" }; }
 async function request(url, options) { const response = await fetch(url, options); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(`${url} ${response.status}: ${JSON.stringify(body)}`); return body; }
 async function scratch(url) { const admin = new URL(url); admin.pathname = "/postgres"; const target = new URL(url); const name = `fmarch_export_proof_${process.pid}_${Date.now()}`; target.pathname = `/${name}`; await run("psql", [admin.toString(), "-v", "ON_ERROR_STOP=1", "-c", `CREATE DATABASE "${name}"`]); return { name, adminUrl: admin.toString(), url: target.toString() }; }

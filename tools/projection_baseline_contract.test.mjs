@@ -52,8 +52,9 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     "0014_private_day_event_channels.sql",
     "0015_community_member_mutes.sql",
     "0016_member_lifecycle.sql",
+    "0017_auth_session_integrity.sql",
   ]);
-  assert.equal(report.migration_file_count, 16);
+  assert.equal(report.migration_file_count, 17);
   assert.ok(report.statement_count > 100);
 });
 

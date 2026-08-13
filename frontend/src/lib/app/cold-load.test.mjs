@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  authenticatedGameReadUrl,
   dayVoteOutcomesUrl,
   hostVotecountUrl,
   hostPromptsUrl,
@@ -17,7 +18,6 @@ import {
   operatorProofRunUrl,
   playerCommandStateUrl,
   playerThreadUrl,
-  principalScopedGameUrl,
 } from "./cold-load.mjs";
 
 test("endgame summary normalizes reveal-gated per-day vote history", () => {
@@ -78,45 +78,43 @@ const FALLBACK = Object.freeze({
   }),
 });
 
-test("cold-load URLs match existing API route contracts", () => {
+test("cold-load URLs keep the public main thread and private channel boundaries distinct", () => {
   assert.equal(
     playerThreadUrl({ game: "game a", limit: 25 }),
-    "/games/game%20a/thread?limit=25",
+    "/api/gameplay/games/game%20a?limit=25",
   );
   assert.equal(
     playerThreadUrl({ game: "game a", limit: 25, beforeSeq: 441 }),
-    "/games/game%20a/thread?limit=25&before_seq=441",
+    "/api/gameplay/games/game%20a?limit=25&before_seq=441",
+  );
+  assert.equal(
+    playerThreadUrl({
+      apiBaseUrl: "http://api.test",
+      game: "game a",
+      limit: 25,
+      beforeSeq: 441,
+    }),
+    "http://api.test/games/game%20a?limit=25&before_seq=441",
   );
   assert.equal(
     playerThreadUrl({
       game: "game a",
       channel: "private:role_pm:slot-7",
-      principalUserId: "player_a",
       limit: 25,
       beforeSeq: 441,
     }),
     "/api/gameplay/games/game%20a/channels/private%3Arole_pm%3Aslot-7/thread?limit=25&before_seq=441",
   );
   assert.equal(
-    principalScopedGameUrl({
+    authenticatedGameReadUrl({
       game: "game-a",
       path: "notifications",
-      principalUserId: "player_a",
-    }),
-    "/api/gameplay/games/game-a/notifications",
-  );
-  assert.equal(
-    principalScopedGameUrl({
-      game: "game-a",
-      path: "notifications",
-      principalUserId: "forged-user",
     }),
     "/api/gameplay/games/game-a/notifications",
   );
   assert.equal(
     hostPromptsUrl({
       game: "game-a",
-      principalUserId: "host_h",
     }),
     "/api/gameplay/games/game-a/host-prompts",
   );
@@ -128,7 +126,6 @@ test("cold-load URLs match existing API route contracts", () => {
   assert.equal(
     playerCommandStateUrl({
       game: "game-a",
-      principalUserId: "player_a",
       slotId: "slot_4",
     }),
     "/api/gameplay/games/game-a/player-command-state?slot_id=slot_4",
@@ -141,6 +138,25 @@ test("cold-load URLs match existing API route contracts", () => {
     }),
     "http://api.test/games/game-a/operator/proof-runs/go-no-go/view",
   );
+
+  const authenticatedReads = [
+    playerThreadUrl({
+      game: "game-a",
+      channel: "private:role_pm:slot-7",
+      limit: 25,
+    }),
+    authenticatedGameReadUrl({ game: "game-a", path: "notifications" }),
+    authenticatedGameReadUrl({ game: "game-a", path: "investigation-results" }),
+    hostPromptsUrl({ game: "game-a" }),
+    playerCommandStateUrl({ game: "game-a", slotId: "slot_4" }),
+  ];
+  for (const url of authenticatedReads) {
+    assert.equal(
+      new URL(url, "https://app.example").searchParams.has("principal_user_id"),
+      false,
+      `${url} must derive its principal exclusively from the authenticated session`,
+    );
+  }
 });
 
 test("player cold-load uses channel-scoped thread endpoint for private channel routes", async () => {
@@ -395,7 +411,7 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
     fallback: FALLBACK,
     fetchImpl: async (url) => {
       seen.push(url);
-      if (url.includes("/thread?")) {
+      if (url === "/api/gameplay/games/midsummer?limit=50") {
         return jsonResponse({
           next_before_seq: null,
           posts: [{ source_seq: 1, body: "hello", occurred_at: 1781928000 }],
@@ -437,7 +453,7 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
   });
 
   assert.deepEqual(seen, [
-    "/games/midsummer/thread?limit=50",
+    "/api/gameplay/games/midsummer?limit=50",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
     "/games/midsummer/endgame-summary",
@@ -607,7 +623,7 @@ test("player cold-load skips private scoped endpoints without a principal", asyn
   });
 
   assert.deepEqual(seen, [
-    "/games/midsummer/thread?limit=50",
+    "/api/gameplay/games/midsummer?limit=50",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
     "/games/midsummer/endgame-summary",
@@ -724,7 +740,6 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
   const seen = [];
   const data = await loadHostColdData({
     game: "midsummer",
-    principalUserId: "host_h",
     hostConsoleStateEndpoint:
       "/api/gameplay/games/midsummer/host-console-state?slot_id=slot-7",
     fallback: FALLBACK,

@@ -6,7 +6,7 @@
 //! `commands`; live update assembly and publication remain in `live_projection`.
 
 use super::auth_http::{
-    authenticate_token, bearer_token, require_global_admin, unauthorized_session, AuthHttpState,
+    authorization_context, bearer_token, require_global_admin, unauthorized_session, AuthHttpState,
 };
 use super::live_projection::{self, LiveProjectionChangeSet, LiveProjectionPublisher};
 use super::{program_library, ApiError, ApiState};
@@ -289,7 +289,7 @@ async fn authenticated_transport_principal(
     headers: &HeaderMap,
 ) -> Result<String, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_session)?;
-    Ok(authenticate_token(&state.auth, token)
+    Ok(authorization_context(&state.auth, token)
         .await?
         .principal_user_id)
 }

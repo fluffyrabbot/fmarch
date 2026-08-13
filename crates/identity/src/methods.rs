@@ -239,57 +239,6 @@ pub async fn touch_method(
     Ok(())
 }
 
-/// Reactivate the caller's existing classic method with a newly established
-/// password. The login name remains stable so recovery and invite history keep
-/// an unambiguous account key. Returns None when the principal has no disabled
-/// classic method with this login name.
-pub async fn reactivate_classic_method(
-    conn: &mut PgConnection,
-    principal_user_id: &str,
-    account_id: &str,
-    password_hash: &str,
-    now: i64,
-) -> Result<Option<Uuid>, IdentityFlowError> {
-    let method = sqlx::query_as::<_, (Uuid, String)>(
-        r#"
-        SELECT method.method_id, method.status
-        FROM authentication_method AS method
-        JOIN auth_account AS account ON account.method_id = method.method_id
-        WHERE method.principal_user_id = $1
-          AND method.kind = 'classic_password'
-          AND account.account_id = $2
-        FOR UPDATE OF method, account
-        "#,
-    )
-    .bind(principal_user_id)
-    .bind(account_id)
-    .fetch_optional(&mut *conn)
-    .await?;
-    let Some((method_id, status)) = method else {
-        return Ok(None);
-    };
-    if status == "active" {
-        return Err(IdentityFlowError::AlreadyExists(
-            "a classic authentication method for this principal",
-        ));
-    }
-    sqlx::query(
-        "UPDATE authentication_method SET status = 'active', disabled_at = NULL, last_authenticated_at = $2 WHERE method_id = $1",
-    )
-    .bind(method_id)
-    .bind(now)
-    .execute(&mut *conn)
-    .await?;
-    sqlx::query(
-        "UPDATE auth_account SET password_hash = $2, disabled_at = NULL WHERE method_id = $1",
-    )
-    .bind(method_id)
-    .bind(password_hash)
-    .execute(&mut *conn)
-    .await?;
-    Ok(Some(method_id))
-}
-
 /// Resolve the workos method for an external identity, lazily upgrading rows
 /// that predate the authentication_method umbrella. Returns the method id
 /// backing this (provider, subject) identity.

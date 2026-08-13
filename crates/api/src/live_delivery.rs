@@ -6,8 +6,8 @@
 //! game-read adapters.
 
 use super::auth_http::{
-    authenticate_token, bearer_token, hash_session_token, unauthorized_session, unix_now_seconds,
-    AuthHttpState,
+    authorization_context, bearer_token, hash_session_token, unauthorized_session,
+    unix_now_seconds, AuthHttpState, AuthorizationContext,
 };
 use super::authentication::enforce_public_request_limit;
 use super::live_projection::{self, LiveProjectionPublisher, LiveProjectionReceive};
@@ -121,19 +121,10 @@ struct WsParams {
     ticket: Option<String>,
     #[serde(default)]
     audience: Option<String>,
-    #[serde(default)]
-    principal_user_id: Option<String>,
-    #[serde(default)]
-    game: Option<Uuid>,
-    #[serde(default)]
-    slot_id: Option<String>,
-    #[serde(default)]
-    channel: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 struct WebsocketTicketClaim {
-    auth_kind: String,
     session_reference: String,
     access_expires_at: i64,
     principal_user_id: String,
@@ -147,14 +138,23 @@ fn default_live_channel() -> String {
     "main".to_string()
 }
 
+fn authorization_kind(authorization: &AuthorizationContext) -> &'static str {
+    match authorization.assurance {
+        identity::Assurance::Password => "classic",
+        identity::Assurance::ExternalSso => "workos",
+        identity::Assurance::Dev => "dev",
+        identity::Assurance::AdminGrant => "admin_grant",
+    }
+}
+
 async fn create_websocket_ticket(
     State(state): State<LiveDeliveryState>,
     headers: HeaderMap,
     Json(request): Json<CreateWebsocketTicket>,
 ) -> Result<Json<WebsocketTicketResponse>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let identity = authenticate_token(&state.auth, token).await?;
-    let principal_user_id = identity.principal_user_id.clone();
+    let authorization = authorization_context(&state.auth, token).await?;
+    let principal_user_id = authorization.principal_user_id.clone();
     let ticket_scope =
         hash_session_token(format!("websocket-ticket-principal:{principal_user_id}").as_str());
     enforce_public_request_limit(
@@ -212,12 +212,12 @@ async fn create_websocket_ticket(
     }
 
     let issued_at = unix_now_seconds();
-    if identity.expires_at <= issued_at {
+    if authorization.expires_at <= issued_at {
         return Err(unauthorized_session());
     }
     let expires_at = issued_at
         .saturating_add(state.auth.websocket_ticket_ttl.as_secs() as i64)
-        .min(identity.expires_at);
+        .min(authorization.expires_at);
     let ticket = format!("ws-ticket-{}-{}", Uuid::new_v4(), Uuid::new_v4());
     sqlx::query(
         r#"
@@ -230,13 +230,9 @@ async fn create_websocket_ticket(
         "#,
     )
     .bind(hash_session_token(ticket.as_str()))
-    .bind(identity.auth_kind)
-    .bind(identity.session_reference)
-    .bind(
-        identity
-            .idle_expires_at
-            .map_or(identity.expires_at, |idle| idle.min(identity.expires_at)),
-    )
+    .bind(authorization_kind(&authorization))
+    .bind(authorization.session_reference)
+    .bind(authorization.idle_expires_at.min(authorization.expires_at))
     .bind(principal_user_id)
     .bind(audience)
     .bind(request.game)
@@ -268,19 +264,7 @@ async fn redeem_websocket_ticket(
         return Err(unauthorized_session());
     }
     let now = unix_now_seconds();
-    let row = sqlx::query_as::<
-        _,
-        (
-            String,
-            String,
-            i64,
-            String,
-            Uuid,
-            String,
-            Option<String>,
-            i64,
-        ),
-    >(
+    let row = sqlx::query_as::<_, (String, i64, String, Uuid, String, Option<String>, i64)>(
         r#"
         UPDATE auth_websocket_ticket AS ticket
         SET consumed_at = $3
@@ -289,7 +273,7 @@ async fn redeem_websocket_ticket(
           AND ticket.consumed_at IS NULL
           AND ticket.expires_at > $3
           AND ticket.access_expires_at > $3
-        RETURNING ticket.auth_kind, ticket.session_reference, ticket.access_expires_at,
+        RETURNING ticket.session_reference, ticket.access_expires_at,
                   ticket.principal_user_id,
                   ticket.game_id, ticket.channel_id, ticket.slot_id, ticket.after_seq
         "#,
@@ -301,14 +285,13 @@ async fn redeem_websocket_ticket(
     .await?
     .ok_or_else(unauthorized_session)?;
     let claim = WebsocketTicketClaim {
-        auth_kind: row.0,
-        session_reference: row.1,
-        access_expires_at: row.2,
-        principal_user_id: row.3,
-        game: row.4,
-        channel: row.5,
-        slot_id: row.6,
-        after_seq: row.7,
+        session_reference: row.0,
+        access_expires_at: row.1,
+        principal_user_id: row.2,
+        game: row.3,
+        channel: row.4,
+        slot_id: row.5,
+        after_seq: row.6,
     };
     if !websocket_session_active(state, &claim).await {
         return Err(unauthorized_session());
@@ -317,91 +300,28 @@ async fn redeem_websocket_ticket(
 }
 
 async fn websocket_session_active(state: &LiveDeliveryState, claim: &WebsocketTicketClaim) -> bool {
-    if state.auth.dev_auth_enabled && claim.session_reference == "dev-legacy" {
-        return true;
-    }
-    let now = unix_now_seconds();
-    if claim.access_expires_at <= now {
-        return false;
-    }
-    match claim.auth_kind.as_str() {
-        "classic" | "dev" => app_session_live(state, claim, now).await == Some(true),
-        "workos" => match app_session_live(state, claim, now).await {
-            Some(live) => live,
-            // Transitional: JWT-bearer tickets reference the provider session
-            // id rather than an app session; the principal's status is the
-            // only revocation signal available for them.
-            None => sqlx::query_scalar::<_, bool>(
-                "SELECT EXISTS (SELECT 1 FROM platform_principal WHERE principal_user_id = $1 AND status = 'active' AND disabled_at IS NULL)",
-            )
-            .bind(claim.principal_user_id.as_str())
-            .fetch_one(&state.pool)
-            .await
-            .unwrap_or(false),
-        },
-        _ => {
-            sqlx::query_scalar::<_, bool>(
-                r#"
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM auth_session
-                    WHERE token_hash = $1
-                      AND principal_user_id = $2
-                      AND revoked_at IS NULL
-                      AND expires_at > $3
-                      AND (
-                          $4::boolean
-                          OR EXISTS (
-                              SELECT 1
-                              FROM auth_account
-                              WHERE auth_account.principal_user_id = auth_session.principal_user_id
-                                AND auth_account.disabled_at IS NULL
-                          )
-                      )
-                )
-                "#,
-            )
-                .bind(claim.session_reference.as_str())
-                .bind(claim.principal_user_id.as_str())
-                .bind(now)
-                .bind(state.auth.dev_auth_enabled)
-                .fetch_one(&state.pool)
-                .await
-                .unwrap_or(false)
-        }
-    }
+    websocket_authorization_context(state, claim)
+        .await
+        .is_some()
 }
 
-/// Liveness of the app session a ticket references: Some(live) when a session
-/// row matches the reference, None when the reference is not an app session.
-async fn app_session_live(
+async fn websocket_authorization_context(
     state: &LiveDeliveryState,
     claim: &WebsocketTicketClaim,
-    now: i64,
-) -> Option<bool> {
-    sqlx::query_scalar::<_, bool>(
-        r#"
-        SELECT (session.revoked_at IS NULL
-            AND session.expires_at > $3
-            AND (session.idle_expires_at IS NULL OR session.idle_expires_at > $3)
-            AND (method.method_id IS NULL OR method.status = 'active')
-            AND (principal.principal_user_id IS NULL OR principal.status = 'active'))
-        FROM auth_session AS session
-        LEFT JOIN authentication_method AS method
-          ON method.method_id = session.authenticated_via_method_id
-        LEFT JOIN platform_principal AS principal
-          ON principal.principal_user_id = session.principal_user_id
-        WHERE session.token_hash = $1
-          AND session.principal_user_id = $2
-        "#,
+) -> Option<AuthorizationContext> {
+    let now = unix_now_seconds();
+    if claim.access_expires_at <= now {
+        return None;
+    }
+    let authorization = identity::session::validate_session_reference(
+        &state.pool,
+        claim.session_reference.as_str(),
+        &state.auth.session_policy,
+        now,
     )
-    .bind(claim.session_reference.as_str())
-    .bind(claim.principal_user_id.as_str())
-    .bind(now)
-    .fetch_optional(&state.pool)
     .await
-    .ok()
-    .flatten()
+    .ok()?;
+    (authorization.principal_user_id == claim.principal_user_id).then_some(authorization)
 }
 
 async fn ws(
@@ -413,21 +333,6 @@ async fn ws(
         match redeem_websocket_ticket(&state, &params).await {
             Ok(claim) => claim,
             Err(error) => return error.into_response(),
-        }
-    } else if state.auth.dev_auth_enabled {
-        let (Some(principal_user_id), Some(game)) = (params.principal_user_id.clone(), params.game)
-        else {
-            return unauthorized_session().into_response();
-        };
-        WebsocketTicketClaim {
-            auth_kind: "legacy-dev".to_string(),
-            session_reference: "dev-legacy".to_string(),
-            access_expires_at: i64::MAX,
-            principal_user_id,
-            game,
-            channel: params.channel.clone().unwrap_or_else(default_live_channel),
-            slot_id: params.slot_id.clone(),
-            after_seq: 0,
         }
     } else {
         return unauthorized_session().into_response();
@@ -510,7 +415,29 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
     let mut observed_seq = current_game_event_seq(&state, game)
         .await
         .unwrap_or(claim.after_seq);
+    let mut observed_visibility_change_id = if claim.channel == "main" {
+        current_thread_visibility_change_id(&state, game)
+            .await
+            .unwrap_or_default()
+    } else {
+        0
+    };
     let mut next_envelope_id = 1;
+    if claim.channel == "main" {
+        let hidden_posts = current_hidden_thread_post_deltas(&state, game)
+            .await
+            .unwrap_or_default();
+        if !hidden_posts.is_empty() {
+            if !websocket_session_active(&state, &claim).await {
+                return;
+            }
+            let sent_to = send_projection_deltas(&mut socket, next_envelope_id, hidden_posts).await;
+            if sent_to == next_envelope_id {
+                return;
+            }
+            next_envelope_id = sent_to;
+        }
+    }
     if let Ok(deltas) = game_http::current_votecount_deltas(&state.pool, game).await {
         if !websocket_session_active(&state, &claim).await {
             return;
@@ -530,22 +457,15 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
         }
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
     }
-    if let Some(delta) = host_console_state_delta_for_ws(
-        &state,
-        game,
-        Some(claim.principal_user_id.as_str()),
-        claim.slot_id.as_deref(),
-    )
-    .await
+    if let Some(delta) =
+        host_console_state_delta_for_ws(&state, &claim, claim.slot_id.as_deref()).await
     {
         if !websocket_session_active(&state, &claim).await {
             return;
         }
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
     }
-    if let Some(delta) =
-        host_prompts_delta_for_ws(&state, game, Some(claim.principal_user_id.as_str())).await
-    {
+    if let Some(delta) = host_prompts_delta_for_ws(&state, &claim).await {
         if !websocket_session_active(&state, &claim).await {
             return;
         }
@@ -573,8 +493,74 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
             let latest_seq = current_game_event_seq(&state, game)
                 .await
                 .unwrap_or(observed_seq);
-            if latest_seq <= observed_seq {
+            let visibility_changes = if claim.channel == "main" {
+                thread_visibility_changes_after(&state, game, observed_visibility_change_id)
+                    .await
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            if latest_seq <= observed_seq && visibility_changes.is_empty() {
                 continue;
+            }
+            if !visibility_changes.is_empty() {
+                let delivered_visibility_change_id = visibility_changes
+                    .last()
+                    .map_or(observed_visibility_change_id, |change| change.id);
+                let tombstones = visibility_changes
+                    .into_iter()
+                    .filter(|change| change.visibility == "hidden")
+                    .map(|change| {
+                        ProjectionDelta::ThreadPostRemoved(wire::ThreadPostRemovedDelta {
+                            game,
+                            source_seq: change.source_seq,
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                if !tombstones.is_empty() {
+                    let sent_to =
+                        send_projection_deltas(&mut socket, next_envelope_id, tombstones).await;
+                    if sent_to == next_envelope_id {
+                        break;
+                    }
+                    next_envelope_id = sent_to;
+                }
+                let Some(delta) = thread_posts_delta_for_ws(
+                    &state,
+                    game,
+                    Some(claim.principal_user_id.as_str()),
+                    claim.channel.as_str(),
+                )
+                .await
+                else {
+                    continue;
+                };
+                if !websocket_session_active(&state, &claim).await {
+                    break;
+                }
+                let sent_to =
+                    send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
+                if sent_to == next_envelope_id {
+                    break;
+                }
+                next_envelope_id = sent_to;
+                if let Some(delta) =
+                    host_console_state_delta_for_ws(&state, &claim, claim.slot_id.as_deref()).await
+                {
+                    if !websocket_session_active(&state, &claim).await {
+                        break;
+                    }
+                    let sent_to =
+                        send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
+                    if sent_to == next_envelope_id {
+                        break;
+                    }
+                    next_envelope_id = sent_to;
+                }
+                observed_visibility_change_id = delivered_visibility_change_id;
+                if latest_seq <= observed_seq {
+                    continue;
+                }
             }
             observed_seq = latest_seq;
             let sent_to = send_projection_deltas(
@@ -663,13 +649,8 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
             next_envelope_id = sent_to;
         }
         if update.host_console_dirty {
-            if let Some(delta) = host_console_state_delta_for_ws(
-                &state,
-                game,
-                Some(claim.principal_user_id.as_str()),
-                claim.slot_id.as_deref(),
-            )
-            .await
+            if let Some(delta) =
+                host_console_state_delta_for_ws(&state, &claim, claim.slot_id.as_deref()).await
             {
                 if !websocket_session_active(&state, &claim).await {
                     break;
@@ -683,10 +664,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
             }
         }
         if update.host_prompts_dirty {
-            if let Some(delta) =
-                host_prompts_delta_for_ws(&state, game, Some(claim.principal_user_id.as_str()))
-                    .await
-            {
+            if let Some(delta) = host_prompts_delta_for_ws(&state, &claim).await {
                 if !websocket_session_active(&state, &claim).await {
                     break;
                 }
@@ -736,6 +714,77 @@ async fn current_game_event_seq(state: &LiveDeliveryState, game: Uuid) -> Result
         .await
 }
 
+#[derive(Debug)]
+struct ThreadVisibilityChange {
+    id: i64,
+    source_seq: i64,
+    visibility: String,
+}
+
+async fn current_thread_visibility_change_id(
+    state: &LiveDeliveryState,
+    game: Uuid,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar::<_, i64>(
+        "SELECT COALESCE(MAX(id), 0) FROM game_thread_visibility_change WHERE game_id = $1",
+    )
+    .bind(game)
+    .fetch_one(&state.pool)
+    .await
+}
+
+async fn current_hidden_thread_post_deltas(
+    state: &LiveDeliveryState,
+    game: Uuid,
+) -> Result<Vec<ProjectionDelta>, sqlx::Error> {
+    let source_seqs = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT source_seq
+        FROM moderation_target_state
+        WHERE target_kind = 'game_post'
+          AND scope_id = $1
+          AND visibility = 'hidden'
+        ORDER BY source_seq
+        "#,
+    )
+    .bind(game)
+    .fetch_all(&state.pool)
+    .await?;
+    Ok(source_seqs
+        .into_iter()
+        .map(|source_seq| {
+            ProjectionDelta::ThreadPostRemoved(wire::ThreadPostRemovedDelta { game, source_seq })
+        })
+        .collect())
+}
+
+async fn thread_visibility_changes_after(
+    state: &LiveDeliveryState,
+    game: Uuid,
+    after_id: i64,
+) -> Result<Vec<ThreadVisibilityChange>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, (i64, i64, String)>(
+        r#"
+        SELECT id, source_seq, visibility
+        FROM game_thread_visibility_change
+        WHERE game_id = $1 AND id > $2
+        ORDER BY id
+        "#,
+    )
+    .bind(game)
+    .bind(after_id)
+    .fetch_all(&state.pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, source_seq, visibility)| ThreadVisibilityChange {
+            id,
+            source_seq,
+            visibility,
+        })
+        .collect())
+}
+
 async fn send_current_projection_snapshot(
     socket: &mut WebSocket,
     state: &LiveDeliveryState,
@@ -761,22 +810,15 @@ async fn send_current_projection_snapshot(
         }
         next_envelope_id = send_projection_deltas(socket, next_envelope_id, vec![delta]).await;
     }
-    if let Some(delta) = host_console_state_delta_for_ws(
-        state,
-        claim.game,
-        Some(claim.principal_user_id.as_str()),
-        claim.slot_id.as_deref(),
-    )
-    .await
+    if let Some(delta) =
+        host_console_state_delta_for_ws(state, claim, claim.slot_id.as_deref()).await
     {
         if !websocket_session_active(state, claim).await {
             return next_envelope_id;
         }
         next_envelope_id = send_projection_deltas(socket, next_envelope_id, vec![delta]).await;
     }
-    if let Some(delta) =
-        host_prompts_delta_for_ws(state, claim.game, Some(claim.principal_user_id.as_str())).await
-    {
+    if let Some(delta) = host_prompts_delta_for_ws(state, claim).await {
         if !websocket_session_active(state, claim).await {
             return next_envelope_id;
         }
@@ -808,22 +850,23 @@ async fn thread_posts_delta_for_ws(
         .await
         .ok()?;
     }
-    game_http::current_thread_posts_delta(&state.pool, game, channel)
+    game_http::current_thread_posts_delta(&state.pool, game, channel, principal_user_id)
         .await
         .ok()
 }
 
 async fn host_console_state_delta_for_ws(
     state: &LiveDeliveryState,
-    game: Uuid,
-    principal_user_id: Option<&str>,
+    claim: &WebsocketTicketClaim,
     slot_id: Option<&str>,
 ) -> Option<ProjectionDelta> {
-    let principal_user_id = principal_user_id?;
-    let authority = game_http::resolve_host_console_authority(&state.pool, game, principal_user_id)
-        .await
-        .ok()??;
-    game_http::load_host_console_state(&state.pool, game, authority, slot_id, Some(25))
+    let authorization = websocket_authorization_context(state, claim).await?;
+    let game_authorization = game_http::GameAuthorization::from_context(&authorization);
+    let authority =
+        game_http::resolve_host_console_authority(&state.pool, claim.game, &game_authorization)
+            .await
+            .ok()??;
+    game_http::load_host_console_state(&state.pool, claim.game, authority, slot_id, Some(25))
         .await
         .ok()
         .map(HostConsoleStateDelta::from)
@@ -832,24 +875,24 @@ async fn host_console_state_delta_for_ws(
 
 async fn host_prompts_delta_for_ws(
     state: &LiveDeliveryState,
-    game: Uuid,
-    principal_user_id: Option<&str>,
+    claim: &WebsocketTicketClaim,
 ) -> Option<ProjectionDelta> {
-    let principal_user_id = principal_user_id?;
+    let authorization = websocket_authorization_context(state, claim).await?;
+    let game_authorization = game_http::GameAuthorization::from_context(&authorization);
     game_http::require_host_audit_access(
         &state.pool,
-        game,
-        principal_user_id,
+        claim.game,
+        &game_authorization,
         "principal cannot read host prompts for this game",
     )
     .await
     .ok()?;
 
-    projections::host_prompts(&state.pool, game)
+    projections::host_prompts(&state.pool, claim.game)
         .await
         .ok()
         .map(|rows| HostPromptsDelta {
-            game,
+            game: claim.game,
             prompts: rows.into_iter().map(HostPromptDelta::from).collect(),
         })
         .map(ProjectionDelta::HostPromptsChanged)

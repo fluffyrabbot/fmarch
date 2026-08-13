@@ -4,7 +4,7 @@
 //! validation, projection-reference authorization, and immutable response
 //! metadata. Command-side media normalization remains with command preparation.
 
-use super::auth_http::{bearer_token, require_active_enabled_account};
+use super::auth_http::{bearer_token, require_method_authorization};
 use super::game_http::require_channel_thread_access;
 use super::{acquire_workload_slot, unauthorized_session, unix_now_seconds, ApiError, ApiState};
 use axum::body::Bytes;
@@ -68,7 +68,8 @@ async fn media_upload(
     body: Bytes,
 ) -> Result<impl IntoResponse, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_user_id = require_active_enabled_account(&state.auth, token).await?;
+    let authorization = require_method_authorization(&state.auth, token).await?;
+    let principal_user_id = authorization.principal_user_id;
     let _media_permit = acquire_workload_slot(
         &state.media_slots,
         "media processing capacity is exhausted; retry shortly",
@@ -267,7 +268,8 @@ async fn media_thread_variant(
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_user_id = require_active_enabled_account(&state.auth, token).await?;
+    let authorization = require_method_authorization(&state.auth, token).await?;
+    let principal_user_id = authorization.principal_user_id;
     if channel != "main" {
         require_channel_thread_access(
             &state.pool,
@@ -285,11 +287,22 @@ async fn media_thread_variant(
         .ok_or_else(|| media_not_found("media variant unavailable"))?;
     let projected_media = sqlx::query_scalar::<_, serde_json::Value>(
         r#"
-        SELECT media
-        FROM thread_view
-        WHERE game_id = $1
-          AND channel_id = $2
-          AND source_seq = $3
+        SELECT post.media
+        FROM thread_view AS post
+        WHERE post.game_id = $1
+          AND post.channel_id = $2
+          AND post.source_seq = $3
+          AND (
+            post.channel_id <> 'main'
+            OR NOT EXISTS (
+              SELECT 1
+              FROM moderation_target_state AS moderation
+              WHERE moderation.target_kind = 'game_post'
+                AND moderation.scope_id = post.game_id
+                AND moderation.source_seq = post.source_seq
+                AND moderation.visibility = 'hidden'
+            )
+          )
         "#,
     )
     .bind(game)

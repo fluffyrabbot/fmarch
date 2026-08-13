@@ -20,7 +20,9 @@ pub use member_lifecycle::{
     apply_member_lifecycle, create_personal_export, erase_member, load_personal_export,
     rebuild_member_lifecycle, MemberLifecycleSnapshot, PersonalExport,
 };
-pub use session::{IssuedSession, SessionPolicy, SessionSpec};
+pub use session::{
+    AuthorizationContext, IssuedSession, RotatedSession, SessionPolicy, SessionSpec,
+};
 pub use workos::{
     AccessTokenVerifier, IdentityError, StaticAccessTokenVerifier, VerifiedIdentity,
     WorkosAccessTokenVerifier,

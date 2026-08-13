@@ -43,7 +43,7 @@ const authSourceSigningKey =
   "fmarch-auth-invite-role-proof-auth-source-signing-key-v1";
 const host = "127.0.0.1";
 const game = randomUUID();
-const rootAdminSessionToken = `invite-proof-root-admin-${game}`;
+const rootAdminSessionToken = canonicalSessionToken(`invite-proof-root-admin-${game}`);
 const seedSessionTokens = new Map();
 const inviteTokens = Object.freeze({
   admin: `invite-proof-admin-${game}`,
@@ -268,6 +268,12 @@ async function seedGame(apiBaseUrl) {
 
 async function seedRootAdminSession(url) {
   await runSql(url, `
+    INSERT INTO platform_principal (
+      principal_user_id, status, global_capabilities, created_at, disabled_at
+    ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
+    ON CONFLICT (principal_user_id) DO NOTHING;
+  `);
+  await runSql(url, `
     INSERT INTO auth_account (
       account_id,
       principal_user_id,
@@ -294,6 +300,8 @@ async function seedRootAdminSession(url) {
       expires_at,
       revoked_at,
       global_capabilities,
+      idle_expires_at,
+      assurance,
       authenticated_at
     )
     VALUES (
@@ -303,6 +311,8 @@ async function seedRootAdminSession(url) {
       4102444800,
       NULL,
       ARRAY['GlobalAdmin']::TEXT[],
+      4102444800,
+      'admin_grant',
       0
     );
   `);
@@ -401,7 +411,7 @@ async function createInvite(
       invite_token: inviteToken,
       account_id: accountId,
       expected_principal_user_id: principalUserId,
-      expires_at: 4102444800,
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
       ...(gameScope === null ? {} : { game: gameScope }),
       global_capabilities: globalCapabilities,
     }),
@@ -844,8 +854,6 @@ async function proveUnknownCredentialAttemptBounding({
         body: {
           account_id: unknownAccountId,
           password: `unknown-password-${game}`,
-          session_token: `unknown-session-${index}-${game}`,
-          expires_at: 4102444800,
         },
       };
     }
@@ -857,7 +865,6 @@ async function proveUnknownCredentialAttemptBounding({
           invite_token: `unknown-invite-${index}-${game}`,
           account_id: unknownAccountId,
           password: `unknown-password-${game}`,
-          session_token: `unknown-invite-session-${index}-${game}`,
         },
       };
     }
@@ -1241,14 +1248,19 @@ async function proveIdentityLifecycle({
     accountCredential: registrationCredentials,
     returnTo: `/g/${game}`,
   });
-  const rotatedSessionToken = `rotated-host-session-${game}`;
   const rotatedHostPassword = `rotated-host-password-${game}`;
   const recoveredHostPassword = `recovered-host-password-${game}`;
   const rotation = await rotateSession({
     apiBaseUrl,
     oldSessionToken: hostSessionToken,
-    newSessionToken: rotatedSessionToken,
   });
+  const rotatedSessionToken = rotation.session_token;
+  if (
+    typeof rotatedSessionToken !== "string" ||
+    !rotatedSessionToken.startsWith("fmss_")
+  ) {
+    throw new Error("session rotation did not return a backend-generated token");
+  }
   await assertUnauthorizedSession(apiBaseUrl, hostSessionToken);
   const rotatedSession = await assertSessionCapability({
     apiBaseUrl,
@@ -2238,16 +2250,14 @@ async function driveHostPlayerInviteSurface({
   }
 }
 
-async function rotateSession({ apiBaseUrl, oldSessionToken, newSessionToken }) {
+async function rotateSession({ apiBaseUrl, oldSessionToken }) {
   return await fetchJson(`${apiBaseUrl}/auth/session-rotations`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${oldSessionToken}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      session_token: newSessionToken,
-    }),
+    body: JSON.stringify({}),
   });
 }
 
@@ -3848,6 +3858,10 @@ async function freePort() {
 
 function hashSessionToken(token) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function canonicalSessionToken(seed) {
+  return `fmss_${hashSessionToken(seed)}`;
 }
 
 function sqlLiteral(value) {

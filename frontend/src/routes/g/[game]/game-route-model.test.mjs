@@ -141,7 +141,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
   assert.equal(data.composer.canWithdrawVote, false);
   assert.equal(data.composer.withdrawDisabledReason, "No current vote");
   assert.deepEqual(data.composer.actionCommands, []);
-  assert.equal(data.coldLoad.threadEndpoint, "/games/midsummer/thread?limit=50");
+  assert.equal(data.coldLoad.threadEndpoint, "/api/gameplay/games/midsummer?limit=50");
   assert.equal(
     data.coldLoad.notificationsEndpoint,
     "/api/gameplay/games/midsummer/notifications",
@@ -159,7 +159,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
     hasOlder: true,
     nextBeforeSeq: 441,
     channel: "main",
-    olderEndpoint: "/games/midsummer/thread?limit=50&before_seq=441",
+    olderEndpoint: "/api/gameplay/games/midsummer?limit=50&before_seq=441",
   });
   assert.equal(data.coldLoad.votecountEndpoint, "/games/midsummer/votecount");
   assert.equal(
@@ -519,7 +519,7 @@ test("player route data uses REST projection cold-loads when available", async (
     principalUserId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
     fetchImpl: async (url) => {
-      if (url.includes("/thread?")) {
+      if (url === "/api/gameplay/games/midsummer?limit=50") {
         return jsonResponse({
           next_before_seq: null,
           posts: [
@@ -765,7 +765,7 @@ test("player route data exposes no older pager when the server returns the oldes
     principalUserId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
     fetchImpl: async (url) => {
-      if (url.includes("/thread?")) {
+      if (url === "/api/gameplay/games/midsummer?limit=50") {
         return jsonResponse({
           next_before_seq: null,
           posts: [],
@@ -923,7 +923,7 @@ test("player load rejects signed-out sessions without private scoped requests", 
       err.body.message === playerForbiddenMessage("midsummer"),
   );
   assert.deepEqual(seen, [
-    "/games/midsummer/thread?limit=50",
+    "/api/gameplay/games/midsummer?limit=50",
     "/games/midsummer/votecount",
     "/games/midsummer/day-vote-outcomes",
     "/games/midsummer/endgame-summary",
@@ -1016,7 +1016,7 @@ function jsonResponse(body) {
   };
 }
 
-test("live projection endpoint always uses the same-origin ticket broker", async () => {
+test("live projection endpoint always uses the same-origin authenticated ticket broker", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
     principalUserId: "player_mira",
@@ -1025,7 +1025,6 @@ test("live projection endpoint always uses the same-origin ticket broker", async
     ],
     fetchImpl: null,
     apiBaseUrl: "http://fmarch.railway.internal:8080",
-    publicApiBaseUrl: "https://api.example.test",
   });
   assert.equal(
     data.liveProjection.endpoint,

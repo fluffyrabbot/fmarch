@@ -43,7 +43,6 @@ export const COMMAND_SCENARIOS = Object.freeze([
       action: "?/grantSession",
       noBind: "testIds",
       fields: [
-        { name: "token", value: "session-grant-midsummer", testId: "admin-session-grant-token" },
         { name: "principalUserId", value: "mod_a", testId: "admin-session-grant-principal" },
         { name: "expiresAt", value: "4102444800", testId: "admin-session-grant-expires-at" },
         { name: "globalCapability", value: "GlobalMod", testId: "admin-session-grant-global-mod" },

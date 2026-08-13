@@ -104,14 +104,11 @@ try {
 }
 
 async function seedSearchCorpus(apiBaseUrl) {
-  const memberToken = "search-proof-member-session";
-  const memberBootstrapToken = "search-proof-member-bootstrap";
-  const moderatorToken = "search-proof-moderator-session";
   const member = "search_member";
   const moderator = "search_moderator";
-  await createDevSession(apiBaseUrl, memberToken, member, []);
-  await createDevSession(apiBaseUrl, memberBootstrapToken, member, ["GlobalAdmin"]);
-  await createDevSession(apiBaseUrl, moderatorToken, moderator, ["GlobalAdmin", "GlobalMod"]);
+  const memberToken = await createDevSession(apiBaseUrl, member, []);
+  const memberBootstrapToken = await createDevSession(apiBaseUrl, member, ["GlobalAdmin"]);
+  const moderatorToken = await createDevSession(apiBaseUrl, moderator, ["GlobalAdmin", "GlobalMod"]);
   await createAccount(apiBaseUrl, moderatorToken, "search-member@example.test", member, []);
   await createAccount(apiBaseUrl, moderatorToken, "search-moderator@example.test", moderator, ["GlobalAdmin", "GlobalMod"]);
   await fetchJson(`${apiBaseUrl}/profiles`, {
@@ -272,18 +269,21 @@ function assertEvidence(evidence) {
   }
 }
 
-async function createDevSession(apiBaseUrl, token, principalUserId, globalCapabilities) {
-  await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
+async function createDevSession(apiBaseUrl, principalUserId, globalCapabilities) {
+  const session = await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      token,
       principal_user_id: principalUserId,
       expires_at: 4_102_444_800,
       global_capabilities: globalCapabilities,
     }),
   });
-  devSessionTokens.set(principalUserId, token);
+  if (typeof session.session_token !== "string" || session.session_token === "") {
+    throw new Error(`dev session for ${principalUserId} returned no session_token`);
+  }
+  devSessionTokens.set(principalUserId, session.session_token);
+  return session.session_token;
 }
 
 async function createAccount(apiBaseUrl, adminToken, accountId, principalUserId, globalCapabilities) {

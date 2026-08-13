@@ -178,7 +178,7 @@ export const fixtureApiRoutes = Object.freeze([
     }),
   }),
   Object.freeze({
-    pattern: "**/games/*/thread?*",
+    pattern: "**/api/gameplay/games/*?*",
     passthroughWhen: Object.freeze({ urlIncludes: "before_seq=" }),
     body: Object.freeze({
       next_before_seq: 440,
@@ -266,7 +266,7 @@ export const fixtureApiRoutes = Object.freeze([
     bodyFrom: "hostPrompts",
   }),
   Object.freeze({
-    pattern: "**/games/*/thread?*before_seq=*",
+    pattern: "**/api/gameplay/games/*?*before_seq=*",
     body: Object.freeze({
       next_before_seq: null,
       posts: [
@@ -682,7 +682,6 @@ export const commandFlows = Object.freeze({
           formTestId: "admin-session-grant-form",
           action: "?/grantSession",
           fieldTestIds: [
-            "admin-session-grant-token",
             "admin-session-grant-principal",
             "admin-session-grant-expires-at",
             "admin-session-grant-global-mod",
@@ -715,13 +714,12 @@ export const commandFlows = Object.freeze({
           escapeCancels: true,
           tabSequenceTestIds: [
             "admin-command-cancel-session-grants",
-            "admin-session-grant-token",
             "admin-session-grant-principal",
             "admin-session-grant-expires-at",
             "admin-session-grant-global-mod",
             "admin-command-confirm-session-grants",
           ],
-          shiftTabFromFirstTestId: "admin-session-grant-token",
+          shiftTabFromFirstTestId: "admin-session-grant-principal",
           shiftTabReturnTestId: "admin-command-cancel-session-grants",
         },
       },

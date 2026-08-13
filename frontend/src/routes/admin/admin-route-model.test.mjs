@@ -426,7 +426,6 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
   });
   assert.deepEqual(data.command.sessionGrant, {
     action: "grant_session",
-    token: "session-grant-midsummer",
     principalUserId: "mod_a",
     expiresAt: 4102444800,
     globalCapabilities: ["GlobalMod"],
@@ -674,7 +673,6 @@ test("admin session grant action requires GlobalAdmin", async () => {
       resolvedCapabilities: [{ kind: "GlobalMod" }],
     },
     request: formRequest({
-      token: "session-grant-midsummer",
       principalUserId: "mod_a",
       expiresAt: "4102444800",
       globalCapability: "GlobalMod",
@@ -702,13 +700,13 @@ test("admin session grant action posts the authenticated API request", async () 
       return jsonResponse({
         principal_user_id: "mod_a",
         capabilities: [{ kind: "GlobalMod" }],
+        session_token: "fmss_backend-issued-session",
       });
     },
     locals: {
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     request: formRequest({
-      token: "session-grant-midsummer",
       principalUserId: "mod_a",
       expiresAt: "4102444800",
       globalCapability: "GlobalMod",
@@ -721,7 +719,6 @@ test("admin session grant action posts the authenticated API request", async () 
     authorization: "Bearer admin-session",
     contentType: "application/json",
     body: {
-      token: "session-grant-midsummer",
       principal_user_id: "mod_a",
       expires_at: 4102444800,
       global_capabilities: ["GlobalMod"],
@@ -730,6 +727,7 @@ test("admin session grant action posts the authenticated API request", async () 
   assert.equal(result.id, "session-grants");
   assert.equal(result.state, "ack");
   assert.equal(result.message, "Granted GlobalMod to mod_a");
+  assert.equal(result.sessionToken, "fmss_backend-issued-session");
 });
 
 test("admin session grant action rejects malformed grant payloads before the API", async () => {
@@ -742,7 +740,6 @@ test("admin session grant action rejects malformed grant payloads before the API
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     request: formRequest({
-      token: "session-grant-midsummer",
       principalUserId: "mod_a",
       expiresAt: "later",
       globalCapability: "GlobalMod",
@@ -766,7 +763,6 @@ test("admin session grant action rejects malformed grant payloads before the API
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     request: formRequest({
-      token: "session-grant-midsummer",
       principalUserId: "mod_a",
       expiresAt: "4102444800",
       globalCapability: ["GlobalMod", "GlobalAdmin"],
@@ -794,7 +790,6 @@ test("admin session grant action surfaces API rejection", async () => {
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     request: formRequest({
-      token: "session-grant-midsummer",
       principalUserId: "mod_a",
       expiresAt: "4102444800",
       globalCapability: "GlobalMod",

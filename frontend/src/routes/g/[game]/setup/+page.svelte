@@ -143,16 +143,6 @@
     preferredStageId = stageId;
   }
 
-  function accountLabel(principalUserId) {
-    return setupState.accounts.find((account) => account.principalUserId === principalUserId)?.label
-      ?? "No account selected";
-  }
-
-  function accountIdForPrincipal(principalUserId) {
-    return setupState.accounts.find((account) => account.principalUserId === principalUserId)?.accountId
-      ?? "";
-  }
-
   function roleLabel(roleKey) {
     return roleOptions.find((role) => role.key === roleKey)?.label ?? "No role assigned";
   }
@@ -301,7 +291,7 @@
                 <div><p class="fm-eyebrow">Stage 2</p><h2>Seat the roster</h2></div>
                 <span data-state={stage.state}>{stage.statusLabel}</span>
               </header>
-              <p>Add the required slots and bind each seat to one player account.</p>
+              <p>Add the required slots and bind each seat to one exact player principal.</p>
               <form
                 class="host-setup__inline-form"
                 data-testid="host-setup-add-slot-form"
@@ -327,15 +317,14 @@
                     <form class="host-setup__slot-form" on:submit={(event) => handleSetupSubmit(event, "assign-slot")}>
                       <input type="hidden" name="slotId" value={slot.slotId} />
                       <label class="fm-field">
-                        <span>Player account</span>
-                        <select name="principalUserId" required>
-                          <option value="" selected={slot.assignedPrincipalUserId === null} disabled>Choose an account</option>
-                          {#each setupState.accounts as account}
-                            <option value={account.principalUserId} selected={slot.assignedPrincipalUserId === account.principalUserId}>
-                              {account.label}
-                            </option>
-                          {/each}
-                        </select>
+                        <span>Principal user ID</span>
+                        <input
+                          name="principalUserId"
+                          type="text"
+                          required
+                          spellcheck="false"
+                          value={slot.assignedPrincipalUserId ?? ""}
+                        />
                       </label>
                       <label class="fm-field">
                         <span>Public game name</span>
@@ -353,10 +342,13 @@
                 {#each inviteTargets as target}
                   <form class="host-setup__invite" method="POST" action="?/issuePlayerInvite" data-testid={`host-setup-invite-${target.slotId}`}>
                     <input type="hidden" name="principalUserId" value={target.principalUserId} />
-                    <input type="hidden" name="accountId" value={target.accountId} />
                     <input type="hidden" name="slotId" value={target.slotId} />
                     <input type="hidden" name="expectedOccupantUserId" value={target.expectedOccupantUserId} />
                     <span>{target.targetLabel}</span>
+                    <label class="fm-field">
+                      <span>Account ID</span>
+                      <input name="accountId" type="text" autocomplete="username" required />
+                    </label>
                     <button class="fm-touch-button fm-touch-button--secondary" type="submit">Issue invite</button>
                   </form>
                 {/each}
@@ -370,9 +362,12 @@
                   {:else if form.playerInvite.currentOccupantUserId}
                     <form method="POST" action="?/issuePlayerInvite">
                       <input type="hidden" name="principalUserId" value={form.playerInvite.currentOccupantUserId} />
-                      <input type="hidden" name="accountId" value={accountIdForPrincipal(form.playerInvite.currentOccupantUserId)} />
                       <input type="hidden" name="slotId" value={form.playerInvite.slotId} />
                       <input type="hidden" name="expectedOccupantUserId" value={form.playerInvite.currentOccupantUserId} />
+                      <label class="fm-field">
+                        <span>Account ID</span>
+                        <input name="accountId" type="text" autocomplete="username" required />
+                      </label>
                       <button class="fm-touch-button" type="submit">Issue current player invite</button>
                     </form>
                   {/if}

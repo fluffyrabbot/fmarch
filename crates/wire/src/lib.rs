@@ -873,6 +873,7 @@ pub enum ProjectionDelta {
     VoteCountChanged(VoteCountDelta),
     VoteCountCleared(VoteCountClearedDelta),
     ThreadPostsChanged(ThreadPostsDelta),
+    ThreadPostRemoved(ThreadPostRemovedDelta),
     HostConsoleStateChanged(HostConsoleStateDelta),
     HostPromptsChanged(HostPromptsDelta),
     PlayerNotificationsChanged(PlayerNotificationsDelta),
@@ -921,6 +922,12 @@ impl From<VoteCountDelta> for VoteCountClearedDelta {
 pub struct ThreadPostsDelta {
     pub game: Uuid,
     pub posts: Vec<ThreadPost>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ThreadPostRemovedDelta {
+    pub game: Uuid,
+    pub source_seq: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

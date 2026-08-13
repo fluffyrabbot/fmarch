@@ -45,7 +45,6 @@ export const actions = {
       defaultMessage: "Account disable rejected",
       buildPayload: (accountId) => ({
         account_id: accountId,
-        revoke_sessions: true,
       }),
     }),
 

@@ -103,12 +103,12 @@ export async function createDayEventRoomSessions({
 }) {
   return {
     outgoing: await createAccountSession({
-      token: fixture.outgoing.sessionToken,
+      sessionAlias: fixture.outgoing.sessionToken,
       principalUserId: fixture.outgoing.principalUserId,
       label: "day-event-room-outgoing",
     }),
     incoming: await createAccountSession({
-      token: fixture.incoming.sessionToken,
+      sessionAlias: fixture.incoming.sessionToken,
       principalUserId: fixture.incoming.principalUserId,
       label: "day-event-room-incoming",
     }),
@@ -273,7 +273,7 @@ export async function driveDayEventRoomBrowser({
   await outgoingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
 
   const replacementHostState = await fetchJson(
-    `${apiBaseUrl}/games/${fixture.game}/host-console-state?principal_user_id=host_h&slot_id=${fixture.outgoing.slotId}`,
+    `${apiBaseUrl}/games/${fixture.game}/host-console-state?slot_id=${fixture.outgoing.slotId}`,
     { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   const outgoingPersonaId = replacementHostState.slots?.find(
@@ -344,7 +344,7 @@ export async function driveDayEventRoomBrowser({
   await incomingPage.getByText(secret, { exact: false }).waitFor({ state: "visible" });
 
   const hostState = await fetchJson(
-    `${apiBaseUrl}/games/${fixture.game}/host-console-state?principal_user_id=host_h&slot_id=${fixture.outgoing.slotId}`,
+    `${apiBaseUrl}/games/${fixture.game}/host-console-state?slot_id=${fixture.outgoing.slotId}`,
     { headers: { authorization: `Bearer ${hostSessionToken}` } },
   );
   const hostRoom = hostState.day_events?.find(

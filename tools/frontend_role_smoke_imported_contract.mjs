@@ -267,7 +267,6 @@ function adminBrowserOperationalEvidenceComplete(smoke) {
       "admin-command-confirm-session-grants" &&
     entry.commandResult?.sessionGrant?.form?.action === "?/grantSession" &&
     includesAll(entry.commandResult?.sessionGrant?.form?.fieldTestIds, [
-      "admin-session-grant-token",
       "admin-session-grant-principal",
       "admin-session-grant-expires-at",
       "admin-session-grant-global-mod",

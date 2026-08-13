@@ -25,7 +25,6 @@ test("enabled-account sessions are created and logged in through public auth", a
   });
 
   const session = await auth.createAccountSession({
-    token: "player-token",
     principalUserId: "player-a",
     label: "player-a",
   });
@@ -36,7 +35,7 @@ test("enabled-account sessions are created and logged in through public auth", a
     "Bearer root-token",
   );
   assert.equal(requests[1].url, "http://127.0.0.1:4000/auth/accounts/login");
-  assert.equal(requests[1].body.session_token, "player-token");
+  assert.equal(Object.hasOwn(requests[1].body, "session_token"), false);
   assert.equal(session.authentication, "enabled-account-login");
   assert.equal(session.sessionToken, "issued-player-token");
   assert.deepEqual(session.capabilityKinds, ["SlotOccupant"]);
@@ -59,7 +58,6 @@ test("granted sessions resolve their authoritative capability projection", async
   });
 
   const session = await auth.createGrantedSession({
-    token: "host-token",
     principalUserId: "host-h",
     globalCapabilities: ["GlobalAdmin"],
   });
@@ -67,7 +65,7 @@ test("granted sessions resolve their authoritative capability projection", async
   assert.equal(requests[0].url, "http://127.0.0.1:4000/auth/accounts");
   assert.deepEqual(requests[0].body.global_capabilities, ["GlobalAdmin"]);
   assert.equal(requests[1].url, "http://127.0.0.1:4000/auth/session-grants");
-  assert.equal(requests[1].body.token, "host-token");
+  assert.equal(Object.hasOwn(requests[1].body, "token"), false);
   assert.equal(requests.length, 2);
   assert.equal(session.sessionToken, "issued-host-token");
   assert.deepEqual(session.capabilityKinds, ["GlobalAdmin"]);
