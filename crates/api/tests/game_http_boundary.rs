@@ -20,8 +20,10 @@ fn game_http_has_one_typed_owner_with_narrow_live_and_media_adapters() {
     for owned_symbol in [
         "async fn game_index(",
         "async fn public_game_thread(",
+        "async fn public_game_post_citations(",
         "async fn completed_game_export(",
         "async fn channel_thread_view(",
+        "async fn channel_post_citations(",
         "async fn player_notifications(",
         "async fn player_command_state(",
         "async fn host_phase_controls(",

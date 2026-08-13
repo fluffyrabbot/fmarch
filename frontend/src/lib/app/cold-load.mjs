@@ -336,6 +336,8 @@ export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
       post?.authorSlot ??
       "Unknown",
     body: typeof post?.body === "string" ? post.body : "",
+    quotations: normalizeQuotations(post?.quotations),
+    citationCount: Number(post?.citation_count ?? post?.citationCount ?? 0),
     meta:
       post?.meta ??
       formatOccurredAt(post?.occurred_at ?? post?.occurredAt, {
@@ -343,6 +345,32 @@ export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
       }),
     ...(media.length === 0 ? {} : { media }),
   });
+}
+
+function normalizeQuotations(value) {
+  if (!Array.isArray(value)) {
+    return Object.freeze([]);
+  }
+  return Object.freeze(
+    value
+      .map((item) => {
+        const target = item?.target ?? {};
+        const sourceSeq = Number(target.source_seq ?? target.sourceSeq);
+        const excerpt = typeof item?.excerpt === "string" ? item.excerpt : "";
+        if (!Number.isFinite(sourceSeq) || excerpt === "") {
+          return null;
+        }
+        return Object.freeze({
+          target: Object.freeze({
+            kind: String(target.kind ?? ""),
+            scopeId: String(target.scope_id ?? target.scopeId ?? ""),
+            sourceSeq,
+          }),
+          excerpt,
+        });
+      })
+      .filter(Boolean),
+  );
 }
 
 export function normalizeThreadPostMedia(value) {

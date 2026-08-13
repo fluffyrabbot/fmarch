@@ -22,6 +22,7 @@ fn community_http_has_one_typed_owner_without_transport_or_persistence_drift() {
         "async fn member_mutes(",
         "async fn subscription_target_state(",
         "async fn discussion_areas(",
+        "async fn discussion_post_citations(",
         "async fn submit_moderation_report(",
         "async fn moderation_cases(",
         "async fn public_profile(",

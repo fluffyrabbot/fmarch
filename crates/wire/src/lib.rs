@@ -1230,6 +1230,10 @@ pub struct ThreadPost {
     pub phase_id: String,
     pub body: String,
     pub media: Vec<ThreadPostMedia>,
+    #[serde(default)]
+    pub quotations: Vec<Quotation>,
+    #[serde(default)]
+    pub citation_count: i64,
     pub occurred_at: i64,
 }
 
@@ -1288,6 +1292,66 @@ impl From<Quotation> for community::Quotation {
     }
 }
 
+impl From<community::PostKind> for PostKind {
+    fn from(kind: community::PostKind) -> Self {
+        match kind {
+            community::PostKind::DiscussionPost => PostKind::DiscussionPost,
+            community::PostKind::GamePost => PostKind::GamePost,
+        }
+    }
+}
+
+impl From<community::PostRef> for PostRef {
+    fn from(value: community::PostRef) -> Self {
+        PostRef {
+            kind: value.kind.into(),
+            scope_id: value.scope_id,
+            source_seq: value.source_seq,
+        }
+    }
+}
+
+impl From<community::Quotation> for Quotation {
+    fn from(value: community::Quotation) -> Self {
+        Quotation {
+            target: value.target.into(),
+            excerpt: value.excerpt,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PostCitation {
+    pub quoting: PostRef,
+    pub occurred_at: i64,
+}
+
+impl From<projections::PostCitationRow> for PostCitation {
+    fn from(row: projections::PostCitationRow) -> Self {
+        PostCitation {
+            quoting: row.quoting.into(),
+            occurred_at: row.occurred_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PostCitationPage {
+    pub quoted: PostRef,
+    pub citations: Vec<PostCitation>,
+    pub citation_count: i64,
+}
+
+impl From<projections::PostCitationPage> for PostCitationPage {
+    fn from(page: projections::PostCitationPage) -> Self {
+        PostCitationPage {
+            quoted: page.quoted.into(),
+            citations: page.citations.into_iter().map(PostCitation::from).collect(),
+            citation_count: page.citation_count,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ThreadPostMedia {
     pub content_id: String,
@@ -1321,6 +1385,8 @@ impl From<projections::ThreadPostRow> for ThreadPost {
             phase_id: row.phase_id,
             body: row.body,
             media,
+            quotations: row.quotations.into_iter().map(Quotation::from).collect(),
+            citation_count: row.citation_count,
             occurred_at: row.occurred_at,
         }
     }
@@ -1573,6 +1639,10 @@ pub struct DiscussionPost {
     pub source_seq: i64,
     pub author: Option<DiscussionAuthor>,
     pub body: String,
+    #[serde(default)]
+    pub quotations: Vec<Quotation>,
+    #[serde(default)]
+    pub citation_count: i64,
     pub created_at: i64,
 }
 
@@ -1721,6 +1791,8 @@ impl From<projections::DiscussionPostRow> for DiscussionPost {
             source_seq: post.source_seq,
             author: post.author.map(DiscussionAuthor::from),
             body: post.body,
+            quotations: post.quotations.into_iter().map(Quotation::from).collect(),
+            citation_count: post.citation_count,
             created_at: post.created_at,
         }
     }
@@ -2220,14 +2292,15 @@ pub mod typescript {
         HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
         ItaSessionControlKind, MemberMutePage, MemberMuteState, ModerationCase,
         ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
-        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, PostKind, PostRef,
-        ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage,
-        PublicSearchResult, Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
-        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
-        ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
-        ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
-        SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
-        ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, VoteTarget,
+        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, PostCitation,
+        PostCitationPage, PostKind, PostRef, ProfileEditor, ProjectionDelta, PublicGameThreadPage,
+        PublicProfile, PublicSearchPage, PublicSearchResult, Quotation, RejectCode, RejectMsg,
+        ResolutionTraceDecisionRow, ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow,
+        ResolutionTraceGeneratedRow, ResolutionTraceInspectionReport, ResolutionTraceInspectionRun,
+        ResolutionTraceNoteRow, ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg,
+        SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, ThreadPost,
+        ThreadPostMedia, ThreadPostMediaVariant, ThreadPostsDelta, VoteCountClearedDelta,
+        VoteCountDelta, VoteTarget,
     };
 
     const HEADER: &str = "// This file is @generated by wire::typescript::render.\n// Run `cargo run -p wire --bin export_types -- --write` to regenerate.\n\n";
@@ -2290,6 +2363,8 @@ pub mod typescript {
         push::<PostKind>(&mut out, &config);
         push::<PostRef>(&mut out, &config);
         push::<Quotation>(&mut out, &config);
+        push::<PostCitation>(&mut out, &config);
+        push::<PostCitationPage>(&mut out, &config);
         push::<CohostPermissionClass>(&mut out, &config);
         push::<Command>(&mut out, &config);
         push::<CommandMsg>(&mut out, &config);

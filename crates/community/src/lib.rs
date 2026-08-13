@@ -312,6 +312,8 @@ pub struct QuotationThreadState {
 pub const MAX_QUOTATIONS_PER_POST: usize = 8;
 pub const MAX_QUOTATION_CHAIN_DEPTH: usize = 8;
 pub const MAX_QUOTATION_EXCERPT_BYTES: usize = 1_000;
+pub const DEFAULT_POST_CITATION_LIMIT: i64 = 5;
+pub const MAX_POST_CITATION_LIMIT: i64 = 20;
 
 /// Decide the quotations a new post may carry. Missing, hidden, muted, and
 /// foreign-thread targets all collapse to [`CommunityReject::QuotationNotFound`]

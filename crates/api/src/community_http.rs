@@ -18,8 +18,8 @@ use wire::{
     AdvanceSubscriptionReadRequest, CommunityInboxPage, DiscussionArea, DiscussionPost,
     DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, MemberMutePage, MemberMuteState,
     ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
-    ProfileEditor, PublicProfile, PublicSearchPage, PublicSearchResult, RejectCode,
-    SubscriptionTargetState,
+    PostCitationPage, ProfileEditor, PublicProfile, PublicSearchPage, PublicSearchResult,
+    RejectCode, SubscriptionTargetState,
 };
 
 #[derive(Clone)]
@@ -79,6 +79,10 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .route(
             "/discussions/topics/{topic}/posts",
             post(create_discussion_post),
+        )
+        .route(
+            "/discussions/topics/{topic}/posts/{source_seq}/citations",
+            get(discussion_post_citations),
         )
         .route(
             "/discussions/topics/{topic}/moderation",
@@ -530,6 +534,11 @@ struct DiscussionPostQuery {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct PostCitationQuery {
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct CreateDiscussionAreaRequest {
     slug: String,
     title: String,
@@ -772,6 +781,33 @@ async fn create_discussion_post(
         .await?
         .expect("projected discussion topic is readable");
     Ok((StatusCode::CREATED, Json(DiscussionTopic::from(topic))))
+}
+
+async fn discussion_post_citations(
+    State(state): State<CommunityHttpState>,
+    Path((topic, source_seq)): Path<(Uuid, i64)>,
+    Query(query): Query<PostCitationQuery>,
+    headers: HeaderMap,
+) -> Result<Json<PostCitationPage>, ApiError> {
+    let _topic = visible_discussion_topic(&state, topic).await?;
+    let viewer_principal_user_id =
+        optional_authenticated_community_member(&state.auth, &headers).await?;
+    let page = projections::visible_incoming_citations(
+        &state.pool,
+        community::PostRef {
+            kind: community::PostKind::DiscussionPost,
+            scope_id: topic,
+            source_seq,
+        },
+        None,
+        viewer_principal_user_id.as_deref(),
+        query
+            .limit
+            .unwrap_or(community::DEFAULT_POST_CITATION_LIMIT),
+    )
+    .await?
+    .ok_or_else(|| discussion_not_found("discussion post"))?;
+    Ok(Json(PostCitationPage::from(page)))
 }
 
 async fn moderate_discussion_topic(

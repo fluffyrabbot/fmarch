@@ -225,6 +225,8 @@ test("normalizes thread and votecount projection payloads for the player view", 
           authorSlot: "slot-7",
           authorLabel: "player-mira",
           body: "##vote slot-2",
+          quotations: [],
+          citationCount: 0,
           meta: "Jun 19, 2026, 9:00 PM",
           media: [
             {
@@ -381,6 +383,8 @@ test("normalizes live and cold thread posts through the same media contract", ()
       authorSlot: null,
       authorLabel: "host",
       body: "visual receipt",
+      quotations: [],
+      citationCount: 0,
       meta: "live update",
       media: [
         {

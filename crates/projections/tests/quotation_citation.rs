@@ -1,9 +1,11 @@
 //! First-class quotations fold into post_citation and rebuild identically.
 
+use community::{PostKind, PostRef};
 use eventstore::{ActorId, EventInput};
 use projections::{
-    append_and_project, append_discussion_and_project, append_profile_and_project, rebuild,
-    rebuild_discussion_stream,
+    append_and_project, append_discussion_and_project, append_profile_and_project,
+    discussion_posts, public_thread_view, rebuild, rebuild_discussion_stream,
+    visible_incoming_citations,
 };
 use sqlx::Row;
 use uuid::Uuid;
@@ -205,6 +207,196 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
 
     rebuild(&pool, game).await.unwrap();
     assert_eq!(before, citation_rows(&pool, "game_post", game).await);
+
+    let page = public_thread_view(&pool, game, None, 10, None)
+        .await
+        .unwrap();
+    assert_eq!(page.posts.len(), 2);
+    assert_eq!(page.posts[0].citation_count, 1);
+    assert!(page.posts[0].quotations.is_empty());
+    assert_eq!(page.posts[1].quotations[0].excerpt, "Alpha signal");
+    assert_eq!(page.posts[1].citation_count, 0);
+    let citations = visible_incoming_citations(
+        &pool,
+        PostRef {
+            kind: PostKind::GamePost,
+            scope_id: game,
+            source_seq: quoted_seq,
+        },
+        Some("main"),
+        None,
+        5,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(citations.citation_count, 1);
+    assert_eq!(
+        citations.citations[0].quoting.source_seq,
+        page.posts[1].source_seq
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quoters(
+    pool: sqlx::PgPool,
+) {
+    let area = Uuid::from_u128(101);
+    let topic = Uuid::from_u128(102);
+    let profile = Uuid::from_u128(103);
+    append_profile_and_project(
+        &pool,
+        profile,
+        &[EventInput::new(
+            "ProfileCreated",
+            1,
+            serde_json::json!({
+                "principal_user_id": "reader",
+                "handle": "reader",
+                "display_name": "Reader",
+                "bio": "",
+                "visibility": "public"
+            }),
+            ActorId::User("reader".into()),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    append_discussion_and_project(
+        &pool,
+        area,
+        &[EventInput::new(
+            "DiscussionAreaCreated",
+            1,
+            serde_json::json!({ "slug": "read", "title": "Read", "description": "" }),
+            ActorId::User("moderator".into()),
+            2,
+        )],
+    )
+    .await
+    .unwrap();
+    let stored = append_discussion_and_project(
+        &pool,
+        topic,
+        &[
+            EventInput::new(
+                "DiscussionTopicCreated",
+                1,
+                serde_json::json!({ "area_id": area, "title": "Claims", "author_profile_id": profile }),
+                ActorId::User("reader".into()),
+                3,
+            ),
+            EventInput::new(
+                "DiscussionPostSubmitted",
+                1,
+                serde_json::json!({ "body": "Root claim", "author_profile_id": profile }),
+                ActorId::User("reader".into()),
+                4,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    let quoted_seq = stored[1].seq;
+    let quoting = append_discussion_and_project(
+        &pool,
+        topic,
+        &[
+            EventInput::new(
+                "DiscussionPostSubmitted",
+                1,
+                serde_json::json!({
+                    "body": "Visible quote",
+                    "author_profile_id": profile,
+                    "quotations": [{
+                        "target": {
+                            "kind": "discussion_post",
+                            "scope_id": topic,
+                            "source_seq": quoted_seq
+                        },
+                        "excerpt": "Root"
+                    }]
+                }),
+                ActorId::User("reader".into()),
+                5,
+            ),
+            EventInput::new(
+                "DiscussionPostSubmitted",
+                1,
+                serde_json::json!({
+                    "body": "Hidden quote",
+                    "author_profile_id": profile,
+                    "quotations": [{
+                        "target": {
+                            "kind": "discussion_post",
+                            "scope_id": topic,
+                            "source_seq": quoted_seq
+                        },
+                        "excerpt": "Root"
+                    }]
+                }),
+                ActorId::User("reader".into()),
+                6,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO moderation_target_state (
+            target_kind, scope_id, source_seq, visibility, reason,
+            moderator_principal_id, updated_seq
+        ) VALUES ('discussion_post', $1, $2, 'hidden', 'spam', 'moderator', $2)
+        "#,
+    )
+    .bind(topic)
+    .bind(quoting[1].seq)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let page = discussion_posts(&pool, topic, None, 10, None)
+        .await
+        .unwrap();
+    assert_eq!(page.posts.len(), 2);
+    assert_eq!(page.posts[0].source_seq, quoted_seq);
+    assert_eq!(page.posts[0].citation_count, 1);
+    assert_eq!(page.posts[1].quotations[0].excerpt, "Root");
+    assert_eq!(page.posts[1].citation_count, 0);
+
+    let citations = visible_incoming_citations(
+        &pool,
+        PostRef {
+            kind: PostKind::DiscussionPost,
+            scope_id: topic,
+            source_seq: quoted_seq,
+        },
+        None,
+        None,
+        5,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(citations.citation_count, 1);
+    assert_eq!(citations.citations.len(), 1);
+    assert_eq!(citations.citations[0].quoting.source_seq, quoting[0].seq);
+    assert!(visible_incoming_citations(
+        &pool,
+        PostRef {
+            kind: PostKind::DiscussionPost,
+            scope_id: topic,
+            source_seq: quoting[1].seq,
+        },
+        None,
+        None,
+        5,
+    )
+    .await
+    .unwrap()
+    .is_none());
 }
 
 async fn citation_rows(pool: &sqlx::PgPool, kind: &str, scope_id: Uuid) -> Vec<(i64, i64)> {

@@ -24,8 +24,8 @@ use wire::{
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostTaskAllowedCommand,
     HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
-    PlayerInvestigationResult, PlayerNotification, ProjectionDelta, PublicGameThreadPage,
-    RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
+    PlayerInvestigationResult, PlayerNotification, PostCitationPage, ProjectionDelta,
+    PublicGameThreadPage, RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -46,6 +46,10 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .route("/admin/game-bootstrap", get(admin_game_bootstrap))
         .route("/games", get(game_index))
         .route("/games/{game}", get(public_game_thread))
+        .route(
+            "/games/{game}/posts/{source_seq}/citations",
+            get(public_game_post_citations),
+        )
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
         .route("/games/{game}/endgame-summary", get(endgame_summary))
@@ -53,6 +57,10 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .route(
             "/games/{game}/channels/{channel}/thread",
             get(channel_thread_view),
+        )
+        .route(
+            "/games/{game}/channels/{channel}/posts/{source_seq}/citations",
+            get(channel_post_citations),
         )
         .route("/games/{game}/notifications", get(player_notifications))
         .route(
@@ -425,15 +433,110 @@ async fn channel_thread_view(
     )
     .await?;
 
-    let page = projections::thread_view_for_channel(
+    let page = projections::thread_view_for_viewer(
         &state.pool,
         game,
         channel.as_str(),
         query.before_seq,
         query.limit.unwrap_or(50),
+        Some(authorization.principal_user_id()),
     )
     .await?;
     Ok(Json(ThreadPage::from(page)))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct PostCitationQuery {
+    limit: Option<i64>,
+}
+
+async fn public_game_post_citations(
+    State(state): State<GameHttpState>,
+    Path((game, source_seq)): Path<(Uuid, i64)>,
+    Query(query): Query<PostCitationQuery>,
+    headers: HeaderMap,
+) -> Result<Json<PostCitationPage>, ApiError> {
+    let viewer_principal_user_id =
+        community_http::optional_authenticated_community_member(&state.auth, &headers).await?;
+    if projections::public_game_by_id(&state.pool, game)
+        .await?
+        .is_none()
+    {
+        return Err(ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::UnknownGame,
+            message: "public game was not found".to_string(),
+        });
+    }
+    game_post_citations(
+        &state.pool,
+        game,
+        "main",
+        source_seq,
+        viewer_principal_user_id.as_deref(),
+        query.limit,
+    )
+    .await
+}
+
+async fn channel_post_citations(
+    State(state): State<GameHttpState>,
+    Path((game, channel, source_seq)): Path<(Uuid, String, i64)>,
+    Query(query): Query<PostCitationQuery>,
+    headers: HeaderMap,
+) -> Result<Json<PostCitationPage>, ApiError> {
+    if channel == "main" {
+        return Err(ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::NotAuthorized,
+            message: "the public main thread is available only at /games/{game}".to_string(),
+        });
+    }
+    let authorization = required_game_authorization(&state, &headers).await?;
+    require_channel_thread_access(
+        &state.pool,
+        game,
+        channel.as_str(),
+        Some(authorization.principal_user_id()),
+    )
+    .await?;
+    game_post_citations(
+        &state.pool,
+        game,
+        channel.as_str(),
+        source_seq,
+        Some(authorization.principal_user_id()),
+        query.limit,
+    )
+    .await
+}
+
+async fn game_post_citations(
+    pool: &PgPool,
+    game: Uuid,
+    channel_id: &str,
+    source_seq: i64,
+    viewer_principal_user_id: Option<&str>,
+    limit: Option<i64>,
+) -> Result<Json<PostCitationPage>, ApiError> {
+    let page = projections::visible_incoming_citations(
+        pool,
+        community::PostRef {
+            kind: community::PostKind::GamePost,
+            scope_id: game,
+            source_seq,
+        },
+        Some(channel_id),
+        viewer_principal_user_id,
+        limit.unwrap_or(community::DEFAULT_POST_CITATION_LIMIT),
+    )
+    .await?
+    .ok_or_else(|| ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::NotAuthorized,
+        message: "game post was not found".to_string(),
+    })?;
+    Ok(Json(PostCitationPage::from(page)))
 }
 
 pub(super) async fn current_thread_posts_delta(
@@ -445,7 +548,8 @@ pub(super) async fn current_thread_posts_delta(
     let page = if channel == "main" {
         projections::public_thread_view(pool, game, None, 50, viewer_principal_user_id).await?
     } else {
-        projections::thread_view_for_channel(pool, game, channel, None, 50).await?
+        projections::thread_view_for_viewer(pool, game, channel, None, 50, viewer_principal_user_id)
+            .await?
     };
     Ok(ProjectionDelta::ThreadPostsChanged(ThreadPostsDelta {
         game,

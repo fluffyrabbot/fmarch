@@ -476,6 +476,8 @@ pub struct ThreadPostRow {
     pub phase_id: String,
     pub body: String,
     pub media: serde_json::Value,
+    pub quotations: Vec<community::Quotation>,
+    pub citation_count: i64,
     pub occurred_at: i64,
 }
 
@@ -604,7 +606,24 @@ pub struct DiscussionPostRow {
     pub source_seq: i64,
     pub author: Option<DiscussionAuthorRow>,
     pub body: String,
+    pub quotations: Vec<community::Quotation>,
+    pub citation_count: i64,
     pub created_at: i64,
+}
+
+/// One visible incoming citation of a public post.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PostCitationRow {
+    pub quoting: community::PostRef,
+    pub occurred_at: i64,
+}
+
+/// Bounded incoming-citation page for one quoted post.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PostCitationPage {
+    pub quoted: community::PostRef,
+    pub citations: Vec<PostCitationRow>,
+    pub citation_count: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -6240,9 +6259,34 @@ pub async fn discussion_posts(
         Some(before_seq) => {
             sqlx::query(
                 r#"
-                SELECT post.source_seq, post.body, post.created_at,
+                SELECT post.source_seq, post.body, post.quotations, post.created_at,
                        author.profile_id AS author_profile_id,
-                       author.handle AS author_handle, author.display_name AS author_display_name
+                       author.handle AS author_handle, author.display_name AS author_display_name,
+                       (
+                           SELECT COUNT(*)::bigint
+                           FROM post_citation AS citation
+                           JOIN discussion_post AS quoting
+                             ON quoting.topic_id = citation.quoting_scope_id
+                            AND quoting.source_seq = citation.quoting_source_seq
+                           WHERE citation.quoted_kind = 'discussion_post'
+                             AND citation.quoted_scope_id = post.topic_id
+                             AND citation.quoted_source_seq = post.source_seq
+                             AND citation.quoting_kind = 'discussion_post'
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM community_member_mute AS mute
+                                 WHERE $3::text IS NOT NULL
+                                   AND mute.principal_user_id = $3
+                                   AND mute.target_profile_id = quoting.author_profile_id
+                                   AND mute.active
+                             )
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM moderation_target_state AS moderation
+                                 WHERE moderation.target_kind = 'discussion_post'
+                                   AND moderation.scope_id = quoting.topic_id
+                                   AND moderation.source_seq = quoting.source_seq
+                                   AND moderation.visibility = 'hidden'
+                             )
+                       ) AS citation_count
                 FROM discussion_post AS post
                 LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
                 WHERE post.topic_id = $1 AND post.source_seq < $2
@@ -6274,9 +6318,34 @@ pub async fn discussion_posts(
         None => {
             sqlx::query(
                 r#"
-                SELECT post.source_seq, post.body, post.created_at,
+                SELECT post.source_seq, post.body, post.quotations, post.created_at,
                        author.profile_id AS author_profile_id,
-                       author.handle AS author_handle, author.display_name AS author_display_name
+                       author.handle AS author_handle, author.display_name AS author_display_name,
+                       (
+                           SELECT COUNT(*)::bigint
+                           FROM post_citation AS citation
+                           JOIN discussion_post AS quoting
+                             ON quoting.topic_id = citation.quoting_scope_id
+                            AND quoting.source_seq = citation.quoting_source_seq
+                           WHERE citation.quoted_kind = 'discussion_post'
+                             AND citation.quoted_scope_id = post.topic_id
+                             AND citation.quoted_source_seq = post.source_seq
+                             AND citation.quoting_kind = 'discussion_post'
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM community_member_mute AS mute
+                                 WHERE $2::text IS NOT NULL
+                                   AND mute.principal_user_id = $2
+                                   AND mute.target_profile_id = quoting.author_profile_id
+                                   AND mute.active
+                             )
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM moderation_target_state AS moderation
+                                 WHERE moderation.target_kind = 'discussion_post'
+                                   AND moderation.scope_id = quoting.topic_id
+                                   AND moderation.source_seq = quoting.source_seq
+                                   AND moderation.visibility = 'hidden'
+                             )
+                       ) AS citation_count
                 FROM discussion_post AS post
                 LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
                 WHERE post.topic_id = $1
@@ -6309,13 +6378,17 @@ pub async fn discussion_posts(
     let mut posts: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
-        .map(|row| DiscussionPostRow {
-            source_seq: row.get("source_seq"),
-            author: discussion_author_row(&row),
-            body: row.get("body"),
-            created_at: row.get("created_at"),
+        .map(|row| {
+            Ok(DiscussionPostRow {
+                source_seq: row.get("source_seq"),
+                author: discussion_author_row(&row),
+                body: row.get("body"),
+                quotations: quotations_from_json(row.get("quotations"), "DiscussionPostSubmitted")?,
+                citation_count: row.get("citation_count"),
+                created_at: row.get("created_at"),
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, ProjectionError>>()?;
     let next_before_seq =
         has_more.then(|| posts.last().expect("full page has final post").source_seq);
     posts.reverse();
@@ -6451,6 +6524,391 @@ pub async fn quotation_thread_for_game_channel_in_tx(
     Ok(community::QuotationThreadState {
         thread: community::PostRef::thread(community::PostKind::GamePost, game_id),
         posts,
+    })
+}
+
+/// Bounded newest-first incoming citations visible to this reader.
+/// Returns `None` when the quoted post is missing or hidden from the viewer.
+pub async fn visible_incoming_citations(
+    pool: &PgPool,
+    quoted: community::PostRef,
+    channel_id: Option<&str>,
+    viewer_principal_user_id: Option<&str>,
+    limit: i64,
+) -> Result<Option<PostCitationPage>, ProjectionError> {
+    let limit = limit.clamp(1, community::MAX_POST_CITATION_LIMIT);
+    let (citation_count, citations) = match quoted.kind {
+        community::PostKind::DiscussionPost => {
+            if !discussion_post_is_visible(
+                pool,
+                quoted.scope_id,
+                quoted.source_seq,
+                viewer_principal_user_id,
+            )
+            .await?
+            {
+                return Ok(None);
+            }
+            (
+                discussion_citation_count(
+                    pool,
+                    quoted.scope_id,
+                    quoted.source_seq,
+                    viewer_principal_user_id,
+                )
+                .await?,
+                discussion_citation_rows(
+                    pool,
+                    quoted.scope_id,
+                    quoted.source_seq,
+                    viewer_principal_user_id,
+                    limit,
+                )
+                .await?,
+            )
+        }
+        community::PostKind::GamePost => {
+            let channel_id = channel_id.ok_or_else(|| ProjectionError::Payload {
+                kind: "PostCitation".into(),
+                source: serde::de::Error::custom("game_post citations require a channel"),
+            })?;
+            if !game_post_is_visible(
+                pool,
+                quoted.scope_id,
+                channel_id,
+                quoted.source_seq,
+                viewer_principal_user_id,
+            )
+            .await?
+            {
+                return Ok(None);
+            }
+            (
+                game_citation_count(
+                    pool,
+                    quoted.scope_id,
+                    channel_id,
+                    quoted.source_seq,
+                    viewer_principal_user_id,
+                )
+                .await?,
+                game_citation_rows(
+                    pool,
+                    quoted.scope_id,
+                    channel_id,
+                    quoted.source_seq,
+                    viewer_principal_user_id,
+                    limit,
+                )
+                .await?,
+            )
+        }
+    };
+    Ok(Some(PostCitationPage {
+        quoted,
+        citations,
+        citation_count,
+    }))
+}
+
+async fn discussion_post_is_visible(
+    pool: &PgPool,
+    topic_id: Uuid,
+    source_seq: i64,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<bool, ProjectionError> {
+    Ok(sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM discussion_post AS post
+            WHERE post.topic_id = $1 AND post.source_seq = $2
+              AND NOT EXISTS (
+                  SELECT 1 FROM community_member_mute AS mute
+                  WHERE $3::text IS NOT NULL
+                    AND mute.principal_user_id = $3
+                    AND mute.target_profile_id = post.author_profile_id
+                    AND mute.active
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM moderation_target_state AS moderation
+                  WHERE moderation.target_kind = 'discussion_post'
+                    AND moderation.scope_id = post.topic_id
+                    AND moderation.source_seq = post.source_seq
+                    AND moderation.visibility = 'hidden'
+              )
+        )
+        "#,
+    )
+    .bind(topic_id)
+    .bind(source_seq)
+    .bind(viewer_principal_user_id)
+    .fetch_one(pool)
+    .await?)
+}
+
+async fn game_post_is_visible(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+    source_seq: i64,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<bool, ProjectionError> {
+    let public_only = channel_id == "main";
+    Ok(sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM thread_view
+            WHERE game_id = $1 AND channel_id = $2 AND source_seq = $3
+              AND (
+                  NOT $4::BOOLEAN OR NOT EXISTS (
+                      SELECT 1 FROM moderation_target_state AS moderation
+                      WHERE moderation.target_kind = 'game_post'
+                        AND moderation.scope_id = thread_view.game_id
+                        AND moderation.source_seq = thread_view.source_seq
+                        AND moderation.visibility = 'hidden'
+                  )
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM community_member_mute AS mute
+                  JOIN profile_editor AS author
+                    ON author.profile_id = mute.target_profile_id
+                  WHERE $5::text IS NOT NULL
+                    AND mute.principal_user_id = $5
+                    AND mute.active
+                    AND author.principal_user_id = thread_view.author_user
+              )
+        )
+        "#,
+    )
+    .bind(game_id)
+    .bind(channel_id)
+    .bind(source_seq)
+    .bind(public_only)
+    .bind(viewer_principal_user_id)
+    .fetch_one(pool)
+    .await?)
+}
+
+async fn discussion_citation_count(
+    pool: &PgPool,
+    topic_id: Uuid,
+    source_seq: i64,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<i64, ProjectionError> {
+    Ok(sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)::bigint
+        FROM post_citation AS citation
+        JOIN discussion_post AS quoting
+          ON quoting.topic_id = citation.quoting_scope_id
+         AND quoting.source_seq = citation.quoting_source_seq
+        WHERE citation.quoted_kind = 'discussion_post'
+          AND citation.quoted_scope_id = $1
+          AND citation.quoted_source_seq = $2
+          AND citation.quoting_kind = 'discussion_post'
+          AND NOT EXISTS (
+              SELECT 1 FROM community_member_mute AS mute
+              WHERE $3::text IS NOT NULL
+                AND mute.principal_user_id = $3
+                AND mute.target_profile_id = quoting.author_profile_id
+                AND mute.active
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM moderation_target_state AS moderation
+              WHERE moderation.target_kind = 'discussion_post'
+                AND moderation.scope_id = quoting.topic_id
+                AND moderation.source_seq = quoting.source_seq
+                AND moderation.visibility = 'hidden'
+          )
+        "#,
+    )
+    .bind(topic_id)
+    .bind(source_seq)
+    .bind(viewer_principal_user_id)
+    .fetch_one(pool)
+    .await?)
+}
+
+async fn game_citation_count(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+    source_seq: i64,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<i64, ProjectionError> {
+    let public_only = channel_id == "main";
+    Ok(sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)::bigint
+        FROM post_citation AS citation
+        JOIN thread_view AS quoting
+          ON quoting.game_id = citation.quoting_scope_id
+         AND quoting.source_seq = citation.quoting_source_seq
+         AND quoting.channel_id = $2
+        WHERE citation.quoted_kind = 'game_post'
+          AND citation.quoted_scope_id = $1
+          AND citation.quoted_source_seq = $3
+          AND citation.quoting_kind = 'game_post'
+          AND (
+              NOT $4::BOOLEAN OR NOT EXISTS (
+                  SELECT 1 FROM moderation_target_state AS moderation
+                  WHERE moderation.target_kind = 'game_post'
+                    AND moderation.scope_id = quoting.game_id
+                    AND moderation.source_seq = quoting.source_seq
+                    AND moderation.visibility = 'hidden'
+              )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM community_member_mute AS mute
+              JOIN profile_editor AS author
+                ON author.profile_id = mute.target_profile_id
+              WHERE $5::text IS NOT NULL
+                AND mute.principal_user_id = $5
+                AND mute.active
+                AND author.principal_user_id = quoting.author_user
+          )
+        "#,
+    )
+    .bind(game_id)
+    .bind(channel_id)
+    .bind(source_seq)
+    .bind(public_only)
+    .bind(viewer_principal_user_id)
+    .fetch_one(pool)
+    .await?)
+}
+
+async fn discussion_citation_rows(
+    pool: &PgPool,
+    topic_id: Uuid,
+    source_seq: i64,
+    viewer_principal_user_id: Option<&str>,
+    limit: i64,
+) -> Result<Vec<PostCitationRow>, ProjectionError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT citation.quoting_kind, citation.quoting_scope_id,
+               citation.quoting_source_seq, citation.occurred_at
+        FROM post_citation AS citation
+        JOIN discussion_post AS quoting
+          ON quoting.topic_id = citation.quoting_scope_id
+         AND quoting.source_seq = citation.quoting_source_seq
+        WHERE citation.quoted_kind = 'discussion_post'
+          AND citation.quoted_scope_id = $1
+          AND citation.quoted_source_seq = $2
+          AND citation.quoting_kind = 'discussion_post'
+          AND NOT EXISTS (
+              SELECT 1 FROM community_member_mute AS mute
+              WHERE $3::text IS NOT NULL
+                AND mute.principal_user_id = $3
+                AND mute.target_profile_id = quoting.author_profile_id
+                AND mute.active
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM moderation_target_state AS moderation
+              WHERE moderation.target_kind = 'discussion_post'
+                AND moderation.scope_id = quoting.topic_id
+                AND moderation.source_seq = quoting.source_seq
+                AND moderation.visibility = 'hidden'
+          )
+        ORDER BY citation.quoting_source_seq DESC
+        LIMIT $4
+        "#,
+    )
+    .bind(topic_id)
+    .bind(source_seq)
+    .bind(viewer_principal_user_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            Ok(PostCitationRow {
+                quoting: citation_post_ref(&row)?,
+                occurred_at: row.get("occurred_at"),
+            })
+        })
+        .collect()
+}
+
+async fn game_citation_rows(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+    source_seq: i64,
+    viewer_principal_user_id: Option<&str>,
+    limit: i64,
+) -> Result<Vec<PostCitationRow>, ProjectionError> {
+    let public_only = channel_id == "main";
+    let rows = sqlx::query(
+        r#"
+        SELECT citation.quoting_kind, citation.quoting_scope_id,
+               citation.quoting_source_seq, citation.occurred_at
+        FROM post_citation AS citation
+        JOIN thread_view AS quoting
+          ON quoting.game_id = citation.quoting_scope_id
+         AND quoting.source_seq = citation.quoting_source_seq
+         AND quoting.channel_id = $2
+        WHERE citation.quoted_kind = 'game_post'
+          AND citation.quoted_scope_id = $1
+          AND citation.quoted_source_seq = $3
+          AND citation.quoting_kind = 'game_post'
+          AND (
+              NOT $4::BOOLEAN OR NOT EXISTS (
+                  SELECT 1 FROM moderation_target_state AS moderation
+                  WHERE moderation.target_kind = 'game_post'
+                    AND moderation.scope_id = quoting.game_id
+                    AND moderation.source_seq = quoting.source_seq
+                    AND moderation.visibility = 'hidden'
+              )
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM community_member_mute AS mute
+              JOIN profile_editor AS author
+                ON author.profile_id = mute.target_profile_id
+              WHERE $5::text IS NOT NULL
+                AND mute.principal_user_id = $5
+                AND mute.active
+                AND author.principal_user_id = quoting.author_user
+          )
+        ORDER BY citation.quoting_source_seq DESC
+        LIMIT $6
+        "#,
+    )
+    .bind(game_id)
+    .bind(channel_id)
+    .bind(source_seq)
+    .bind(public_only)
+    .bind(viewer_principal_user_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            Ok(PostCitationRow {
+                quoting: citation_post_ref(&row)?,
+                occurred_at: row.get("occurred_at"),
+            })
+        })
+        .collect()
+}
+
+fn citation_post_ref(row: &sqlx::postgres::PgRow) -> Result<community::PostRef, ProjectionError> {
+    let kind = row.get::<String, _>("quoting_kind");
+    Ok(community::PostRef {
+        kind: community::PostKind::parse(kind.as_str()).map_err(|error| {
+            ProjectionError::Payload {
+                kind: "PostCitation".into(),
+                source: serde::de::Error::custom(error.to_string()),
+            }
+        })?,
+        scope_id: row.get("quoting_scope_id"),
+        source_seq: row.get("quoting_source_seq"),
     })
 }
 
@@ -7030,8 +7488,26 @@ pub async fn thread_view_for_channel(
     before_seq: Option<i64>,
     limit: i64,
 ) -> Result<ThreadViewPage, ProjectionError> {
+    thread_view_for_viewer(pool, game_id, channel_id, before_seq, limit, None).await
+}
+
+/// Channel thread read with the viewer's mute overlay applied to citation counts.
+pub async fn thread_view_for_viewer(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+    before_seq: Option<i64>,
+    limit: i64,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<ThreadViewPage, ProjectionError> {
     thread_view_for_channel_with_visibility(
-        pool, game_id, channel_id, before_seq, limit, false, None,
+        pool,
+        game_id,
+        channel_id,
+        before_seq,
+        limit,
+        false,
+        viewer_principal_user_id,
     )
     .await
 }
@@ -7050,7 +7526,38 @@ async fn thread_view_for_channel_with_visibility(
     let rows = sqlx::query(
         r#"
         SELECT game_id, source_seq, stream_seq, channel_id, author_slot,
-               author_user, phase_id, body, body_private, media, occurred_at
+               author_user, phase_id, body, body_private, media, quotations, occurred_at,
+               (
+                   SELECT COUNT(*)::bigint
+                   FROM post_citation AS citation
+                   JOIN thread_view AS quoting
+                     ON quoting.game_id = citation.quoting_scope_id
+                    AND quoting.source_seq = citation.quoting_source_seq
+                    AND quoting.channel_id = thread_view.channel_id
+                   WHERE citation.quoted_kind = 'game_post'
+                     AND citation.quoted_scope_id = thread_view.game_id
+                     AND citation.quoted_source_seq = thread_view.source_seq
+                     AND citation.quoting_kind = 'game_post'
+                     AND (
+                         NOT $5::BOOLEAN OR NOT EXISTS (
+                             SELECT 1 FROM moderation_target_state AS moderation
+                             WHERE moderation.target_kind = 'game_post'
+                               AND moderation.scope_id = quoting.game_id
+                               AND moderation.source_seq = quoting.source_seq
+                               AND moderation.visibility = 'hidden'
+                         )
+                     )
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM community_member_mute AS mute
+                         JOIN profile_editor AS author
+                           ON author.profile_id = mute.target_profile_id
+                         WHERE $6::text IS NOT NULL
+                           AND mute.principal_user_id = $6
+                           AND mute.active
+                           AND author.principal_user_id = quoting.author_user
+                     )
+               ) AS citation_count
         FROM thread_view
         WHERE game_id = $1
           AND channel_id = $2
@@ -7095,8 +7602,11 @@ async fn thread_view_for_channel_with_visibility(
             let row_game_id: Uuid = r.get("game_id");
             let source_seq: i64 = r.get("source_seq");
             let channel_id: String = r.get("channel_id");
-            let body = match r.get::<Option<String>, _>("body") {
-                Some(body) => body,
+            let (body, quotations) = match r.get::<Option<String>, _>("body") {
+                Some(body) => (
+                    body,
+                    quotations_from_json(r.get("quotations"), "PostSubmitted")?,
+                ),
                 None => {
                     let envelope: serde_json::Value = r.get("body_private");
                     let game = row_game_id.to_string();
@@ -7106,7 +7616,11 @@ async fn thread_view_for_channel_with_visibility(
                         &[game.as_str(), source.as_str(), channel_id.as_str()],
                         &envelope,
                     )?;
-                    required_private_string(&private, "body")?
+                    let quotations = match private.get("quotations") {
+                        None | Some(serde_json::Value::Null) => Vec::new(),
+                        Some(value) => quotations_from_json(value.clone(), "PostSubmitted")?,
+                    };
+                    (required_private_string(&private, "body")?, quotations)
                 }
             };
             Ok(ThreadPostRow {
@@ -7119,6 +7633,8 @@ async fn thread_view_for_channel_with_visibility(
                 phase_id: r.get("phase_id"),
                 body,
                 media: r.get("media"),
+                quotations,
+                citation_count: r.get("citation_count"),
                 occurred_at: r.get("occurred_at"),
             })
         })
