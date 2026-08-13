@@ -44,30 +44,75 @@
           </a>
         </div>
       {/if}
-      {#each thread.posts as post}
-        <article id={`post-${post.source_seq}`} class="discussion-post" data-testid={`discussion-post-${post.source_seq}`}>
+      {#each discussion.posts as post}
+        <article id={`post-${post.sourceSeq}`} class="discussion-post" data-testid={`discussion-post-${post.sourceSeq}`}>
           <header>
             {#if post.author}
               <a href={`/u/${encodeURIComponent(post.author.handle)}`}><strong>{post.author.display_name}</strong></a>
             {:else}
               <strong>Archived member</strong>
             {/if}
-            <a class="discussion-post__permalink" href={`#post-${post.source_seq}`} aria-label={`Permalink to post ${post.source_seq}`}>
-              #{post.source_seq} · {occurredAt(post.created_at)}
+            <a class="discussion-post__permalink" href={`#post-${post.sourceSeq}`} aria-label={`Permalink to post ${post.sourceSeq}`}>
+              #{post.sourceSeq} · {occurredAt(post.createdAt)}
             </a>
           </header>
+          {#each post.quotations as quotation}
+            <blockquote class="discussion-quote" data-testid={`discussion-quote-block-${post.sourceSeq}-${quotation.sourceSeq}`}>
+              <p>{quotation.excerpt}</p>
+              <cite>
+                {#if quotation.originalUnavailable}
+                  Original unavailable
+                {:else}
+                  {quotation.authorLabel}
+                {/if}
+                <a href={quotation.href}>#{quotation.sourceSeq}</a>
+              </cite>
+            </blockquote>
+          {/each}
           <p>{post.body}</p>
-          {#if discussion.hasSession}
-            <details class="discussion-report" data-testid={`discussion-report-${post.source_seq}`}>
-              <summary>Report this post</summary>
-              <form method="POST" action="?/report" class="discussion-form">
-                <input type="hidden" name="source_seq" value={post.source_seq} />
-                <label class="fm-field"><span>Reason</span><select name="reason_family" required><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="hate">Hate</option><option value="sexual_content">Sexual content</option><option value="self_harm">Self-harm</option><option value="other">Other</option></select></label>
-                <label class="fm-field"><span>Context (optional)</span><textarea name="details" maxlength="1000"></textarea></label>
-                <button class="fm-touch-button fm-touch-button--secondary" type="submit">Submit report</button>
-              </form>
+          {#if post.citationCount > 0}
+            <details class="discussion-citations" data-testid={`discussion-citations-${post.sourceSeq}`}>
+              <summary>
+                Quoted {post.citationCount}
+                {post.citationCount === 1 ? "time" : "times"}
+              </summary>
+              <ul>
+                {#each post.incomingCitations as citation}
+                  <li>
+                    <a href={citation.href} data-testid={`discussion-citation-${post.sourceSeq}-${citation.sourceSeq}`}>
+                      #{citation.sourceSeq}
+                    </a>
+                  </li>
+                {/each}
+              </ul>
+              {#if post.moreCitationCount > 0}
+                <p class="discussion-citations__more">and {post.moreCitationCount} more</p>
+              {/if}
             </details>
           {/if}
+          <div class="discussion-post__actions">
+            {#if post.quoteHref !== null}
+              <a
+                class="fm-touch-button fm-touch-button--secondary"
+                href={post.quoteHref}
+                data-min-touch-target-px="44"
+                data-testid={`discussion-quote-${post.sourceSeq}`}
+              >
+                Quote
+              </a>
+            {/if}
+            {#if discussion.hasSession}
+              <details class="discussion-report" data-testid={`discussion-report-${post.sourceSeq}`}>
+                <summary>Report this post</summary>
+                <form method="POST" action="?/report" class="discussion-form">
+                  <input type="hidden" name="source_seq" value={post.sourceSeq} />
+                  <label class="fm-field"><span>Reason</span><select name="reason_family" required><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="hate">Hate</option><option value="sexual_content">Sexual content</option><option value="self_harm">Self-harm</option><option value="other">Other</option></select></label>
+                  <label class="fm-field"><span>Context (optional)</span><textarea name="details" maxlength="1000"></textarea></label>
+                  <button class="fm-touch-button fm-touch-button--secondary" type="submit">Submit report</button>
+                </form>
+              </details>
+            {/if}
+          </div>
         </article>
       {/each}
 
@@ -79,8 +124,41 @@
       </nav>
 
       {#if discussion.canPost && thread.topic.posting_state === "open"}
-        <form method="POST" action="?/createPost" class="discussion-form" data-testid="discussion-create-post-form">
-          <label class="fm-field"><span>Reply</span><textarea name="body" required maxlength="10000" data-testid="discussion-post-body"></textarea></label>
+        <form
+          id="discussion-composer"
+          method="POST"
+          action="?/createPost"
+          class="discussion-form"
+          data-testid="discussion-create-post-form"
+        >
+          {#if discussion.attachedQuotations.length > 0}
+            <ul class="discussion-quote-chips" data-testid="discussion-quote-chips">
+              {#each discussion.attachedQuotations as quotation}
+                <li data-testid={`discussion-quote-chip-${quotation.sourceSeq}`}>
+                  <strong>{quotation.authorLabel}</strong>
+                  <span>#{quotation.sourceSeq}</span>
+                  <p>{quotation.excerpt}</p>
+                  <a
+                    class="fm-touch-button fm-touch-button--secondary"
+                    href={quotation.removeHref}
+                    data-min-touch-target-px="44"
+                  >
+                    Remove
+                  </a>
+                </li>
+              {/each}
+            </ul>
+            <input type="hidden" name="quotations" value={discussion.quotationsJson} />
+          {/if}
+          <label class="fm-field">
+            <span>Reply</span>
+            <textarea
+              name="body"
+              required={discussion.attachedQuotations.length === 0}
+              maxlength="10000"
+              data-testid="discussion-post-body"
+            ></textarea>
+          </label>
           <button type="submit" class="fm-touch-button" data-testid="discussion-create-post-submit">Post reply</button>
         </form>
       {:else if thread.topic.posting_state === "locked"}
@@ -124,7 +202,34 @@
   .discussion-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .discussion-post p { margin-block-end: 0; white-space: pre-wrap; }
   .discussion-post__permalink { color: var(--fm-ink-muted); font-size: 13px; }
-  .discussion-report { margin-block-start: 10px; }
+  .discussion-post__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 10px; }
+  .discussion-quote {
+    border-inline-start: 4px solid var(--fm-line-strong, var(--fm-border));
+    display: grid;
+    gap: 6px;
+    margin: 12px 0;
+    padding-inline-start: 12px;
+  }
+  .discussion-quote p { margin: 0; white-space: pre-wrap; }
+  .discussion-quote cite {
+    color: var(--fm-ink-muted);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 13px;
+    gap: 8px;
+  }
+  .discussion-citations { margin-block-start: 10px; }
+  .discussion-citations ul { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; }
+  .discussion-citations__more { color: var(--fm-ink-muted); font-size: 13px; }
+  .discussion-quote-chips { display: grid; gap: 10px; list-style: none; margin: 0; padding: 0; }
+  .discussion-quote-chips li {
+    border: 1px solid var(--fm-line-strong, var(--fm-border));
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+  }
+  .discussion-quote-chips p { margin: 0; white-space: pre-wrap; }
+  .discussion-report { margin-block-start: 0; }
   .discussion-pagination { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 16px; }
   textarea { min-block-size: 112px; resize: vertical; }
 </style>

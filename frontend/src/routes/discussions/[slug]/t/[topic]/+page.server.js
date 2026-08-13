@@ -3,6 +3,12 @@ import { buildAppShell } from "../../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../../../../lib/app/capabilities.mjs";
 import { accessTokenForRequest } from "../../../../../lib/server/session-capabilities.mjs";
+import {
+  DISCUSSION_CITATION_PREVIEW_LIMIT,
+  buildDiscussionThreadView,
+  parseQuoteSeqs,
+  parseSubmittedQuotations,
+} from "./discussion-thread-model.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
@@ -26,6 +32,27 @@ export async function load({ params, locals, cookies, fetch, url }) {
         targetKind: "discussion_topic",
         scopeId: params.topic,
       });
+  const canPost = profile !== null;
+  const citationPages = thread === null
+    ? {}
+    : await loadCitationPages({
+        fetch,
+        token,
+        apiBaseUrl,
+        topic: params.topic,
+        posts: thread.posts,
+      });
+  const view = thread === null
+    ? { posts: [], attachedQuotations: [], quotationsJson: "[]", quoteEnabled: false }
+    : buildDiscussionThreadView({
+        thread,
+        quoteSeqs: parseQuoteSeqs(url.searchParams),
+        citationPages,
+        canPost,
+        slug: params.slug,
+        topicId: params.topic,
+        beforeSeq,
+      });
   return {
     shellOwner: "layout",
     shell: buildAppShell({
@@ -43,13 +70,35 @@ export async function load({ params, locals, cookies, fetch, url }) {
       status: thread === null ? "unavailable" : "ready",
       area: thread?.area ?? { slug: params.slug, title: "Discussion area", description: "" },
       thread,
-      canPost: profile !== null,
+      posts: view.posts,
+      attachedQuotations: view.attachedQuotations,
+      quotationsJson: view.quotationsJson,
+      quoteEnabled: view.quoteEnabled,
+      canPost,
       hasSession: typeof locals.principalUserId === "string",
       subscription,
       canModerate: hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalMod" })
         || hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalAdmin" }),
     },
   };
+}
+
+async function loadCitationPages({ fetch, token, apiBaseUrl, topic, posts }) {
+  const cited = (Array.isArray(posts) ? posts : []).filter(
+    (post) => Number(post?.citation_count ?? 0) > 0,
+  );
+  const entries = await Promise.all(
+    cited.map(async (post) => {
+      const seq = Number(post.source_seq);
+      const response = await fetch(
+        `${apiBaseUrl}/discussions/topics/${encodeURIComponent(topic)}/posts/${seq}/citations?limit=${DISCUSSION_CITATION_PREVIEW_LIMIT}`,
+        { headers: readHeaders(token) },
+      );
+      const page = response.ok ? await response.json().catch(() => null) : null;
+      return [seq, page];
+    }),
+  );
+  return Object.fromEntries(entries.filter(([, page]) => page !== null));
 }
 
 function readHeaders(token) {
@@ -124,12 +173,13 @@ export const actions = {
   },
   createPost: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();
+    const quotations = parseSubmittedQuotations(form, params.topic);
     const response = await mutation({
       cookies,
       locals,
       fetch,
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/posts`,
-      body: { body: text(form.get("body")) },
+      body: { body: text(form.get("body")), quotations },
     });
     if (!response.ok) return mutationFailure(response, "Unable to post discussion reply");
     const topic = await response.json();

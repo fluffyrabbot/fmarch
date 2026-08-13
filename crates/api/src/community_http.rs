@@ -750,7 +750,6 @@ async fn create_discussion_post(
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let body = validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
     let topic_state = community_topic_state(&current)?;
     let thread = projections::quotation_thread_for_discussion(
         &state.pool,
@@ -760,6 +759,14 @@ async fn create_discussion_post(
     .await?;
     let quotations = community::decide_quotations(&thread, &request.quotations)
         .map_err(community_reject_api_error)?;
+    let body = if request.body.trim().is_empty() {
+        if quotations.is_empty() {
+            validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
+        }
+        String::new()
+    } else {
+        validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?
+    };
     let events = community::decide_topic(
         Some(&topic_state),
         community::TopicCommand::SubmitPost {

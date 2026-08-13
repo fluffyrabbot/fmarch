@@ -65,6 +65,7 @@ try {
       sessions.memberUserId,
       browserTopic.topic,
     );
+    const quotations = await proveQuotations(member, frontendBaseUrl, browserTopic.topic);
     const moderation = await proveModeration({
       member,
       moderator,
@@ -85,13 +86,14 @@ try {
         areaEndpoint: `${apiBaseUrl}/discussions/areas/${area.slug}`,
         pageSize,
         publicTopicFieldNames: ["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"],
-        publicPostFieldNames: ["source_seq", "author", "body", "created_at"],
+        publicPostFieldNames: ["source_seq", "author", "body", "quotations", "citation_count", "created_at"],
       },
       directory,
       empty,
       browserTopic,
       seeded,
       pagination,
+      quotations,
       moderation,
     };
     assertProof(evidence);
@@ -304,7 +306,7 @@ function assertPublicDiscussionThread(thread, memberUserId) {
   const allowedArea = new Set(["slug", "title", "description"]);
   const allowedAuthor = new Set(["handle", "display_name"]);
   const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"]);
-  const allowedPost = new Set(["source_seq", "author", "body", "created_at"]);
+  const allowedPost = new Set(["source_seq", "author", "body", "quotations", "citation_count", "created_at"]);
   if (
     thread?.area === null ||
     Object.keys(thread.area).some((key) => !allowedArea.has(key)) ||
@@ -344,6 +346,68 @@ function assertPublicDiscussionPage(page, memberUserId) {
   }
 }
 
+async function proveQuotations(context, frontendBaseUrl, topic) {
+  const page = await context.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    const topicUrl = `${frontendBaseUrl}/discussions/general/t/${encodeURIComponent(topic)}`;
+    await page.goto(topicUrl, { waitUntil: "networkidle" });
+    const firstSeq = discussionPostSeq(await page.locator('article[data-testid^="discussion-post-"]').first().getAttribute("data-testid"));
+    await Promise.all([
+      page.waitForURL(new RegExp(`[?&]quote=${firstSeq}`), { timeout: 15000 }),
+      page.getByTestId(`discussion-quote-${firstSeq}`).click(),
+    ]);
+    await page.getByTestId(`discussion-quote-chip-${firstSeq}`).waitFor({ state: "visible" });
+    await page.getByTestId("discussion-post-body").fill("Quoting the opening.");
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      page.getByTestId("discussion-create-post-submit").click(),
+    ]);
+    const quoteBlocks = page.locator('[data-testid^="discussion-quote-block-"]');
+    if (await quoteBlocks.count() < 1) {
+      throw new Error("quoted reply did not render a structured quote block");
+    }
+    await page.getByTestId(`discussion-citations-${firstSeq}`).waitFor({ state: "visible" });
+    const secondSeq = discussionPostSeq(await page.locator('article[data-testid^="discussion-post-"]').nth(1).getAttribute("data-testid"));
+    await Promise.all([
+      page.waitForURL(new RegExp(`[?&]quote=${firstSeq}`), { timeout: 15000 }),
+      page.getByTestId(`discussion-quote-${firstSeq}`).click(),
+    ]);
+    await Promise.all([
+      page.waitForURL(new RegExp(`[?&]quote=${secondSeq}`), { timeout: 15000 }),
+      page.getByTestId(`discussion-quote-${secondSeq}`).click(),
+    ]);
+    await page.getByTestId(`discussion-quote-chip-${firstSeq}`).waitFor({ state: "visible" });
+    await page.getByTestId(`discussion-quote-chip-${secondSeq}`).waitFor({ state: "visible" });
+    await page.getByTestId("discussion-post-body").fill("Quoting two posts.");
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      page.getByTestId("discussion-create-post-submit").click(),
+    ]);
+    const newest = page.locator('article[data-testid^="discussion-post-"]').last();
+    const multiQuoteCount = await newest.locator('[data-testid^="discussion-quote-block-"]').count();
+    if (multiQuoteCount !== 2) {
+      throw new Error(`expected two structured quotes on the multi-quote reply, got ${multiQuoteCount}`);
+    }
+    return {
+      status: "passed",
+      quotedCount: 1,
+      multiQuoteCount,
+      quoteControlTestId: `discussion-quote-${firstSeq}`,
+      citationsTestId: `discussion-citations-${firstSeq}`,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+function discussionPostSeq(testId) {
+  const seq = String(testId ?? "").replace(/^discussion-post-/, "");
+  if (!/^[1-9][0-9]*$/u.test(seq)) {
+    throw new Error(`discussion post test id was not canonical: ${testId}`);
+  }
+  return seq;
+}
+
 async function proveModeration({ member, moderator, frontendBaseUrl, topic }) {
   const memberPage = await member.newPage({ viewport: { width: 1024, height: 768 } });
   const moderatorPage = await moderator.newPage({ viewport: { width: 1024, height: 768 } });
@@ -363,6 +427,9 @@ async function proveModeration({ member, moderator, frontendBaseUrl, topic }) {
     await memberPage.getByTestId("discussion-topic-locked").waitFor({ state: "visible" });
     if (await memberPage.getByTestId("discussion-create-post-submit").count() !== 0) {
       throw new Error("locked discussion topic retained a member posting control");
+    }
+    if (await memberPage.locator('a[data-testid^="discussion-quote-"]').count() !== 0) {
+      throw new Error("locked discussion topic retained quote controls");
     }
     return {
       status: "passed",
@@ -390,6 +457,9 @@ function assertProof(evidence) {
     evidence.pagination?.reloadCardCount !== 1 ||
     evidence.pagination?.publicThreadPostCount !== 2 ||
     evidence.pagination?.rawAccountDataVisible !== false ||
+    evidence.quotations?.status !== "passed" ||
+    evidence.quotations?.quotedCount !== 1 ||
+    evidence.quotations?.multiQuoteCount !== 2 ||
     evidence.moderation?.status !== "passed"
   ) {
     throw new Error("discussion role proof must remain local, paginated, session-backed, and capability-safe");
