@@ -1921,6 +1921,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
             actor_slot: slot.into(),
             body: "I am slot 7".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2129,6 +2130,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 actor_slot: dead_slot.into(),
                 body: "alive principals cannot enter dead chat".into(),
                 media: Vec::new(),
+                quotations: Vec::new(),
             },
         )
         .await
@@ -2159,6 +2161,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
             actor_slot: dead_slot.into(),
             body: "dead history before replacement".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2173,6 +2176,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 actor_slot: dead_slot.into(),
                 body: "dead main post".into(),
                 media: Vec::new(),
+                quotations: Vec::new(),
             },
         )
         .await
@@ -2190,6 +2194,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 actor_slot: living_slot.into(),
                 body: "living outsider".into(),
                 media: Vec::new(),
+                quotations: Vec::new(),
             },
         )
         .await
@@ -2234,6 +2239,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 actor_slot: dead_slot.into(),
                 body: "stale outgoing post".into(),
                 media: Vec::new(),
+                quotations: Vec::new(),
             },
         )
         .await
@@ -2249,6 +2255,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
             actor_slot: dead_slot.into(),
             body: "incoming continues dead history".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2300,6 +2307,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 actor_slot: dead_slot.into(),
                 body: "restored-alive dead post".into(),
                 media: Vec::new(),
+                quotations: Vec::new(),
             },
         )
         .await
@@ -2315,6 +2323,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
             actor_slot: dead_slot.into(),
             body: "restored-alive main post".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2392,6 +2401,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
                 actor_slot: "invented-slot".into(),
                 body: "spectator append".into(),
                 media: Vec::new(),
+                quotations: Vec::new(),
             },
         )
         .await
@@ -2615,6 +2625,7 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
             actor_slot: slot.into(),
             body: "Role PM history before replacement".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2649,6 +2660,7 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
             actor_slot: slot.into(),
             body: "stale outgoing Role PM post".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2664,6 +2676,7 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
             actor_slot: slot.into(),
             body: "Incoming occupant continues the same Role PM".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2728,6 +2741,7 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
             actor_slot: "slot_1".into(),
             body: "".into(),
             media: first_media.clone(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2741,6 +2755,7 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
             actor_slot: "slot_1".into(),
             body: "second post".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2823,6 +2838,7 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
             actor_slot: "slot_1".into(),
             body: "".into(),
             media: canvas_media.clone(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2838,6 +2854,7 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
             actor_slot: "slot_1".into(),
             body: "".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2871,6 +2888,7 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
             actor_slot: "slot_1".into(),
             body: "".into(),
             media: canvas_media.clone(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -2905,6 +2923,7 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
             actor_slot: "slot_1".into(),
             body: "".into(),
             media: canvas_media,
+            quotations: Vec::new(),
         },
     )
     .await
@@ -3012,6 +3031,7 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
             actor_slot: "slot_1".into(),
             body: "private media body".into(),
             media,
+            quotations: Vec::new(),
         },
     )
     .await
@@ -3090,6 +3110,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
                 actor_slot: slot.into(),
                 body: post_body.into(),
                 media: Vec::new(),
+                quotations: Vec::new(),
             },
         )
         .await
@@ -3154,6 +3175,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
             actor_slot: slot.into(),
             body: "stale post after replacement".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -5247,6 +5269,7 @@ async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: P
             actor_slot: "slot_1".into(),
             body: "still here, no vote".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -5457,6 +5480,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
                 actor_slot: "slot_1".into(),
                 body: "post-completion stale post".into(),
                 media: Vec::new(),
+                quotations: Vec::new(),
             },
         ),
     ] {
@@ -5552,6 +5576,7 @@ async fn concurrent_player_post_and_complete_game_serialize_terminal_boundary(po
                 actor_slot: "slot_1".into(),
                 body: "racing post against completion".into(),
                 media: Vec::new(),
+                quotations: Vec::new(),
             },
         ),
     );
@@ -13851,6 +13876,7 @@ async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
         actor_slot: "slot_1".into(),
         body: "stable idempotent body".into(),
         media: Vec::new(),
+        quotations: Vec::new(),
     };
 
     let first = handle_idempotent(&pool, &user("user_a"), command_id, command.clone())
@@ -13871,6 +13897,7 @@ async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
             actor_slot: "slot_1".into(),
             body: "different body under the same id".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -13911,6 +13938,7 @@ async fn cancellation_while_waiting_for_command_lock_rolls_back_receipt_and_tran
         actor_slot: "slot_1".into(),
         body: "cancelled at command lock".into(),
         media: Vec::new(),
+        quotations: Vec::new(),
     };
 
     let mut blocker = pool.begin().await.unwrap();
@@ -13951,6 +13979,7 @@ async fn cancellation_during_projection_rolls_back_event_projection_receipt_and_
         actor_slot: "slot_1".into(),
         body: body.into(),
         media: Vec::new(),
+        quotations: Vec::new(),
     };
     let lock_key = 41_009_i64;
     install_thread_view_insert_blocker(&pool, game, lock_key).await;

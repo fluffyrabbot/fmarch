@@ -262,6 +262,164 @@ pub struct ModerationTarget {
     pub source_seq: i64,
 }
 
+/// Public post identity. Same triple as [`ModerationTarget`].
+pub type PostKind = ModerationTargetKind;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PostRef {
+    pub kind: PostKind,
+    pub scope_id: Uuid,
+    pub source_seq: i64,
+}
+
+impl PostRef {
+    pub fn thread(kind: PostKind, scope_id: Uuid) -> Self {
+        Self {
+            kind,
+            scope_id,
+            source_seq: 0,
+        }
+    }
+
+    pub fn same_thread_as(&self, thread: &PostRef) -> bool {
+        self.kind == thread.kind && self.scope_id == thread.scope_id
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Quotation {
+    pub target: PostRef,
+    pub excerpt: String,
+}
+
+/// One already-committed post in the thread being posted to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuotationPostState {
+    pub source_seq: i64,
+    pub body: String,
+    pub visible: bool,
+    pub outgoing: Vec<PostRef>,
+}
+
+/// Loaded same-thread posts used to decide quotations. Adapters populate this
+/// from the projection; [`decide_quotations`] stays pure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuotationThreadState {
+    pub thread: PostRef,
+    pub posts: Vec<QuotationPostState>,
+}
+
+pub const MAX_QUOTATIONS_PER_POST: usize = 8;
+pub const MAX_QUOTATION_CHAIN_DEPTH: usize = 8;
+pub const MAX_QUOTATION_EXCERPT_BYTES: usize = 1_000;
+
+/// Decide the quotations a new post may carry. Missing, hidden, muted, and
+/// foreign-thread targets all collapse to [`CommunityReject::QuotationNotFound`]
+/// so the write model does not leak existence.
+pub fn decide_quotations(
+    thread: &QuotationThreadState,
+    quotations: &[Quotation],
+) -> Result<Vec<Quotation>, CommunityReject> {
+    if quotations.is_empty() {
+        return Ok(Vec::new());
+    }
+    if quotations.len() > MAX_QUOTATIONS_PER_POST {
+        return Err(CommunityReject::TooManyQuotations);
+    }
+    let mut seen = Vec::with_capacity(quotations.len());
+    let mut decided = Vec::with_capacity(quotations.len());
+    for quotation in quotations {
+        if !quotation.target.same_thread_as(&thread.thread) {
+            return Err(CommunityReject::InvalidQuotationTarget);
+        }
+        if seen
+            .iter()
+            .any(|target: &PostRef| target == &quotation.target)
+        {
+            return Err(CommunityReject::DuplicateQuotation);
+        }
+        seen.push(quotation.target.clone());
+        let post = thread
+            .posts
+            .iter()
+            .find(|post| post.source_seq == quotation.target.source_seq && post.visible)
+            .ok_or(CommunityReject::QuotationNotFound)?;
+        validate_quotation_excerpt(quotation.excerpt.as_str(), post.body.as_str())?;
+        if quotation_chain_depth(quotation.target.source_seq, thread) + 1
+            > MAX_QUOTATION_CHAIN_DEPTH
+        {
+            return Err(CommunityReject::QuotationChainTooDeep);
+        }
+        decided.push(Quotation {
+            target: quotation.target.clone(),
+            excerpt: quotation.excerpt.clone(),
+        });
+    }
+    Ok(decided)
+}
+
+fn validate_quotation_excerpt(excerpt: &str, body: &str) -> Result<(), CommunityReject> {
+    if excerpt.is_empty()
+        || excerpt.len() > MAX_QUOTATION_EXCERPT_BYTES
+        || excerpt.chars().all(char::is_whitespace)
+        || !body.contains(excerpt)
+    {
+        return Err(CommunityReject::InvalidQuotationExcerpt);
+    }
+    Ok(())
+}
+
+fn quotation_chain_depth(source_seq: i64, thread: &QuotationThreadState) -> usize {
+    fn depth_from(
+        source_seq: i64,
+        thread: &QuotationThreadState,
+        visiting: &mut Vec<i64>,
+    ) -> usize {
+        if visiting.contains(&source_seq) {
+            return 0;
+        }
+        let Some(post) = thread
+            .posts
+            .iter()
+            .find(|post| post.source_seq == source_seq)
+        else {
+            return 0;
+        };
+        if post.outgoing.is_empty() {
+            return 0;
+        }
+        visiting.push(source_seq);
+        let child = post
+            .outgoing
+            .iter()
+            .filter(|target| target.same_thread_as(&thread.thread))
+            .map(|target| depth_from(target.source_seq, thread, visiting))
+            .max()
+            .unwrap_or(0);
+        visiting.pop();
+        1 + child
+    }
+    depth_from(source_seq, thread, &mut Vec::new())
+}
+
+/// Parse the additive `quotations` field. Absent, null, or `[]` is none.
+pub fn quotations_from_payload(
+    payload: &serde_json::Value,
+) -> Result<Vec<Quotation>, serde_json::Error> {
+    match payload.get("quotations") {
+        None | Some(serde_json::Value::Null) => Ok(Vec::new()),
+        Some(value) => serde_json::from_value(value.clone()),
+    }
+}
+
+pub fn quotations_payload(quotations: &[Quotation]) -> Option<serde_json::Value> {
+    if quotations.is_empty() {
+        None
+    } else {
+        Some(serde_json::to_value(quotations).expect("quotations serialize"))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReportReasonFamily {
@@ -564,6 +722,7 @@ pub enum TopicCommand {
     SubmitPost {
         body: String,
         author_profile_id: Uuid,
+        quotations: Vec<Quotation>,
     },
     SetPostingState {
         posting_state: PostingState,
@@ -583,6 +742,7 @@ pub enum TopicEvent {
     PostSubmitted {
         body: String,
         author_profile_id: Uuid,
+        quotations: Vec<Quotation>,
     },
     PostingStateChanged {
         posting_state: PostingState,
@@ -616,10 +776,17 @@ impl TopicEvent {
             Self::PostSubmitted {
                 body,
                 author_profile_id,
-            } => serde_json::json!({
-                "body": body,
-                "author_profile_id": author_profile_id,
-            }),
+                quotations,
+            } => {
+                let mut payload = serde_json::json!({
+                    "body": body,
+                    "author_profile_id": author_profile_id,
+                });
+                if let Some(quotations) = quotations_payload(quotations) {
+                    payload["quotations"] = quotations;
+                }
+                payload
+            }
             Self::PostingStateChanged { posting_state } => {
                 serde_json::json!({ "posting_state": posting_state.as_str() })
             }
@@ -653,6 +820,7 @@ pub fn decide_topic(
             TopicEvent::PostSubmitted {
                 body: opening_body,
                 author_profile_id,
+                quotations: Vec::new(),
             },
         ]),
         (Some(_), TopicCommand::Create { .. }) => Err(CommunityReject::TopicAlreadyExists),
@@ -662,6 +830,7 @@ pub fn decide_topic(
             TopicCommand::SubmitPost {
                 body,
                 author_profile_id,
+                quotations,
             },
         ) => {
             if state.visibility != TopicVisibility::Visible {
@@ -673,6 +842,7 @@ pub fn decide_topic(
             Ok(vec![TopicEvent::PostSubmitted {
                 body,
                 author_profile_id,
+                quotations,
             }])
         }
         (Some(state), TopicCommand::SetPostingState { posting_state }) => {
@@ -738,6 +908,18 @@ pub enum CommunityReject {
     MuteNotFound,
     #[error("member is not muted")]
     NotMuted,
+    #[error("quotation target is not in this thread")]
+    InvalidQuotationTarget,
+    #[error("quoted post was not found")]
+    QuotationNotFound,
+    #[error("quotation excerpt is invalid")]
+    InvalidQuotationExcerpt,
+    #[error("post carries too many quotations")]
+    TooManyQuotations,
+    #[error("quotation chain exceeds the depth cap")]
+    QuotationChainTooDeep,
+    #[error("post quotes the same target more than once")]
+    DuplicateQuotation,
 }
 
 #[cfg(test)]
@@ -765,6 +947,7 @@ mod tests {
                 TopicCommand::SubmitPost {
                     body: "late".into(),
                     author_profile_id: profile,
+                    quotations: Vec::new(),
                 }
             ),
             Err(CommunityReject::TopicLocked)
@@ -777,6 +960,7 @@ mod tests {
                 TopicCommand::SubmitPost {
                     body: "late".into(),
                     author_profile_id: profile,
+                    quotations: Vec::new(),
                 }
             ),
             Err(CommunityReject::TopicHidden)
@@ -954,6 +1138,136 @@ mod tests {
         assert_eq!(
             decide_member_mute(Some(&state), MemberMuteCommand::Mute { target_profile_id }),
             Ok(vec![MemberMuteEvent::Muted { target_profile_id }])
+        );
+    }
+
+    fn topic_id() -> Uuid {
+        Uuid::from_u128(40)
+    }
+
+    fn thread_state(posts: Vec<QuotationPostState>) -> QuotationThreadState {
+        QuotationThreadState {
+            thread: PostRef::thread(PostKind::DiscussionPost, topic_id()),
+            posts,
+        }
+    }
+
+    fn visible_post(source_seq: i64, body: &str, outgoing: Vec<i64>) -> QuotationPostState {
+        QuotationPostState {
+            source_seq,
+            body: body.into(),
+            visible: true,
+            outgoing: outgoing
+                .into_iter()
+                .map(|source_seq| PostRef {
+                    kind: PostKind::DiscussionPost,
+                    scope_id: topic_id(),
+                    source_seq,
+                })
+                .collect(),
+        }
+    }
+
+    fn quote(source_seq: i64, excerpt: &str) -> Quotation {
+        Quotation {
+            target: PostRef {
+                kind: PostKind::DiscussionPost,
+                scope_id: topic_id(),
+                source_seq,
+            },
+            excerpt: excerpt.into(),
+        }
+    }
+
+    #[test]
+    fn quotations_are_optional_and_same_thread_excerpts_are_accepted() {
+        let thread = thread_state(vec![visible_post(4, "Alpha signal analysis", vec![])]);
+        assert_eq!(decide_quotations(&thread, &[]), Ok(Vec::new()));
+        assert_eq!(
+            decide_quotations(&thread, &[quote(4, "Alpha signal")]),
+            Ok(vec![quote(4, "Alpha signal")])
+        );
+    }
+
+    #[test]
+    fn quotation_reject_matrix_does_not_leak_hidden_or_foreign_posts() {
+        let mut hidden = visible_post(5, "secret claim", vec![]);
+        hidden.visible = false;
+        let thread = thread_state(vec![
+            visible_post(4, "Alpha signal analysis", vec![]),
+            hidden,
+        ]);
+
+        assert_eq!(
+            decide_quotations(
+                &thread,
+                &[Quotation {
+                    target: PostRef {
+                        kind: PostKind::GamePost,
+                        scope_id: topic_id(),
+                        source_seq: 4,
+                    },
+                    excerpt: "Alpha".into(),
+                }]
+            ),
+            Err(CommunityReject::InvalidQuotationTarget)
+        );
+        assert_eq!(
+            decide_quotations(&thread, &[quote(99, "missing")]),
+            Err(CommunityReject::QuotationNotFound)
+        );
+        assert_eq!(
+            decide_quotations(&thread, &[quote(5, "secret")]),
+            Err(CommunityReject::QuotationNotFound)
+        );
+        assert_eq!(
+            decide_quotations(&thread, &[quote(4, ""), quote(4, "Alpha")]),
+            Err(CommunityReject::InvalidQuotationExcerpt)
+        );
+        assert_eq!(
+            decide_quotations(&thread, &[quote(4, "not in the body")]),
+            Err(CommunityReject::InvalidQuotationExcerpt)
+        );
+        assert_eq!(
+            decide_quotations(&thread, &[quote(4, "Alpha"), quote(4, "signal")]),
+            Err(CommunityReject::DuplicateQuotation)
+        );
+        let too_many: Vec<_> = (0..MAX_QUOTATIONS_PER_POST + 1)
+            .map(|_| quote(4, "Alpha"))
+            .collect();
+        assert_eq!(
+            decide_quotations(&thread, &too_many),
+            Err(CommunityReject::TooManyQuotations)
+        );
+    }
+
+    #[test]
+    fn quotation_chain_depth_counts_the_new_edge() {
+        let mut posts = vec![visible_post(1, "root claim", vec![])];
+        for seq in 2..=8 {
+            posts.push(visible_post(seq, "link", vec![seq - 1]));
+        }
+        posts.push(visible_post(9, "too deep", vec![8]));
+        let thread = thread_state(posts);
+        assert_eq!(
+            decide_quotations(&thread, &[quote(8, "link")]),
+            Ok(vec![quote(8, "link")])
+        );
+        assert_eq!(
+            decide_quotations(&thread, &[quote(9, "too")]),
+            Err(CommunityReject::QuotationChainTooDeep)
+        );
+    }
+
+    #[test]
+    fn missing_quotations_payload_upcasts_to_empty() {
+        assert_eq!(
+            quotations_from_payload(&serde_json::json!({ "body": "hello" })).unwrap(),
+            Vec::<Quotation>::new()
+        );
+        assert_eq!(
+            quotations_from_payload(&serde_json::json!({ "quotations": null })).unwrap(),
+            Vec::<Quotation>::new()
         );
     }
 }

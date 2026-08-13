@@ -50,6 +50,7 @@ The action dock remains reachable while reading:
 
 - legal vote shortcuts dispatch directly;
 - Reply moves to the channel composer;
+- Quote seeds that same composer with a structured citation; it does not fork the thread;
 - Count moves to the current vote and complete votecount;
 - Act moves to phase-specific actions when they exist;
 - More moves to private notices, role identity, activity, and game history.

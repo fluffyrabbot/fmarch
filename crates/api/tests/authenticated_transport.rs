@@ -990,6 +990,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
                     content_id: upload.content_id.clone(),
                     alt: "Cross-replica proof".into(),
                 }]),
+                quotations: None,
             },
         ),
     ] {

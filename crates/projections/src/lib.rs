@@ -55,6 +55,8 @@
 //!   whether media-only posts are accepted.
 //! - `thread_view`    — stable, paginated channel-thread posts folded from
 //!   `PostSubmitted` plus public engine announcements in `ResolutionApplied`.
+//! - `post_citation`  — rebuildable reverse index of who quoted which post,
+//!   folded from quoting `PostSubmitted` / `DiscussionPostSubmitted` events.
 //!
 //! The centerpiece is [`append_and_project`]: it appends events AND folds them
 //! into the projection tables **in one transaction** (doc 02 synchronous
@@ -1058,6 +1060,7 @@ async fn fold_event(
             let phase_id = str_field(p, "phase_id", &ev.kind)?;
             let body = str_field(p, "body", &ev.kind)?;
             let media = thread_media_payload(p);
+            let quotations = quotations_from_event(p, &ev.kind)?;
             let public_main = channel_id == "main";
             let notification_author = author_user.clone();
             insert_thread_post(
@@ -1072,8 +1075,20 @@ async fn fold_event(
                     phase_id,
                     body,
                     media,
+                    quotations: quotations.clone(),
                     occurred_at: ev.occurred_at,
                 },
+            )
+            .await?;
+            fold_post_citations(
+                tx,
+                community::PostRef {
+                    kind: community::PostKind::GamePost,
+                    scope_id: game_id,
+                    source_seq: ev.seq,
+                },
+                &quotations,
+                ev.occurred_at,
             )
             .await?;
             if public_main {
@@ -1127,6 +1142,7 @@ async fn fold_event(
                         phase_id: applied.phase_id.clone(),
                         body,
                         media: serde_json::json!([]),
+                        quotations: Vec::new(),
                         occurred_at: ev.occurred_at,
                     },
                 )
@@ -3190,6 +3206,12 @@ pub async fn rebuild_discussion_stream(
     let mut tx = pool.begin().await?;
     if is_topic_stream {
         sqlx::query(
+            "DELETE FROM post_citation WHERE quoting_kind = 'discussion_post' AND quoting_scope_id = $1",
+        )
+        .bind(stream_id)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
             "DELETE FROM community_inbox_item WHERE target_kind = 'discussion_topic' AND scope_id = $1",
         )
         .bind(stream_id)
@@ -3432,16 +3454,34 @@ async fn fold_discussion_event(
         }
         community::POST_SUBMITTED => {
             let body = str_field(&event.payload, "body", &event.kind)?;
+            let quotations = quotations_from_event(&event.payload, &event.kind)?;
             let author_profile_id = discussion_author_profile_id(tx, event).await?;
             sqlx::query(
-                "INSERT INTO discussion_post (source_seq, topic_id, author_profile_id, body, created_seq, created_at) VALUES ($1, $2, $3, $4, $1, $5)",
+                "INSERT INTO discussion_post (source_seq, topic_id, author_profile_id, body, quotations, created_seq, created_at) VALUES ($1, $2, $3, $4, $5, $1, $6)",
             )
             .bind(event.seq)
             .bind(stream_id)
             .bind(author_profile_id)
             .bind(body)
+            .bind(serde_json::to_value(&quotations).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: event.kind.clone(),
+                    source,
+                }
+            })?)
             .bind(event.occurred_at)
             .execute(&mut **tx)
+            .await?;
+            fold_post_citations(
+                tx,
+                community::PostRef {
+                    kind: community::PostKind::DiscussionPost,
+                    scope_id: stream_id,
+                    source_seq: event.seq,
+                },
+                &quotations,
+                event.occurred_at,
+            )
             .await?;
             sqlx::query(
                 "UPDATE discussion_topic SET post_count = post_count + 1, updated_seq = $2, updated_at = $3, last_post_seq = $2, last_post_at = $3, version = $4 WHERE topic_id = $1",
@@ -3694,6 +3734,12 @@ async fn rebuild_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
 ) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "DELETE FROM post_citation WHERE quoting_kind = 'game_post' AND quoting_scope_id = $1",
+    )
+    .bind(game_id)
+    .execute(&mut **tx)
+    .await?;
     sqlx::query(
         "DELETE FROM community_inbox_item WHERE target_kind = 'game_thread' AND scope_id = $1",
     )
@@ -6279,6 +6325,135 @@ pub async fn discussion_posts(
     })
 }
 
+/// Load every discussion post in a topic so the write model can decide quotations.
+pub async fn quotation_thread_for_discussion(
+    pool: &PgPool,
+    topic_id: Uuid,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<community::QuotationThreadState, ProjectionError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT post.source_seq, post.body, post.quotations,
+               NOT EXISTS (
+                   SELECT 1 FROM community_member_mute AS mute
+                   WHERE $2::text IS NOT NULL
+                     AND mute.principal_user_id = $2
+                     AND mute.target_profile_id = post.author_profile_id
+                     AND mute.active
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM moderation_target_state AS moderation
+                   WHERE moderation.target_kind = 'discussion_post'
+                     AND moderation.scope_id = post.topic_id
+                     AND moderation.source_seq = post.source_seq
+                     AND moderation.visibility = 'hidden'
+               ) AS visible
+        FROM discussion_post AS post
+        WHERE post.topic_id = $1
+        ORDER BY post.source_seq ASC
+        "#,
+    )
+    .bind(topic_id)
+    .bind(viewer_principal_user_id)
+    .fetch_all(pool)
+    .await?;
+    let mut posts = Vec::with_capacity(rows.len());
+    for row in rows {
+        let quotations = quotations_from_json(row.get("quotations"), "DiscussionPostSubmitted")?;
+        posts.push(community::QuotationPostState {
+            source_seq: row.get("source_seq"),
+            body: row.get("body"),
+            visible: row.get("visible"),
+            outgoing: quotations
+                .into_iter()
+                .map(|quotation| quotation.target)
+                .collect(),
+        });
+    }
+    Ok(community::QuotationThreadState {
+        thread: community::PostRef::thread(community::PostKind::DiscussionPost, topic_id),
+        posts,
+    })
+}
+
+/// Load every post in one game channel so the write model can decide quotations.
+pub async fn quotation_thread_for_game_channel_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    channel_id: &str,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<community::QuotationThreadState, ProjectionError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT source_seq, body, body_private, quotations,
+               NOT EXISTS (
+                   SELECT 1 FROM moderation_target_state AS moderation
+                   WHERE moderation.target_kind = 'game_post'
+                     AND moderation.scope_id = thread_view.game_id
+                     AND moderation.source_seq = thread_view.source_seq
+                     AND moderation.visibility = 'hidden'
+               )
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM community_member_mute AS mute
+                   JOIN profile_editor AS author
+                     ON author.profile_id = mute.target_profile_id
+                   WHERE $3::text IS NOT NULL
+                     AND mute.principal_user_id = $3
+                     AND mute.active
+                     AND author.principal_user_id = thread_view.author_user
+               ) AS visible
+        FROM thread_view
+        WHERE game_id = $1 AND channel_id = $2
+        ORDER BY source_seq ASC
+        "#,
+    )
+    .bind(game_id)
+    .bind(channel_id)
+    .bind(viewer_principal_user_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    let mut posts = Vec::with_capacity(rows.len());
+    for row in rows {
+        let source_seq: i64 = row.get("source_seq");
+        let (body, quotations) = match row.get::<Option<String>, _>("body") {
+            Some(body) => (
+                body,
+                quotations_from_json(row.get("quotations"), "PostSubmitted")?,
+            ),
+            None => {
+                let envelope: serde_json::Value = row.get("body_private");
+                let game = game_id.to_string();
+                let source = source_seq.to_string();
+                let private = open_private_projection(
+                    "thread_view",
+                    &[game.as_str(), source.as_str(), channel_id],
+                    &envelope,
+                )?;
+                let body = required_private_string(&private, "body")?;
+                let quotations = match private.get("quotations") {
+                    None | Some(serde_json::Value::Null) => Vec::new(),
+                    Some(value) => quotations_from_json(value.clone(), "PostSubmitted")?,
+                };
+                (body, quotations)
+            }
+        };
+        posts.push(community::QuotationPostState {
+            source_seq,
+            body,
+            visible: row.get("visible"),
+            outgoing: quotations
+                .into_iter()
+                .map(|quotation| quotation.target)
+                .collect(),
+        });
+    }
+    Ok(community::QuotationThreadState {
+        thread: community::PostRef::thread(community::PostKind::GamePost, game_id),
+        posts,
+    })
+}
+
 pub async fn subscription_target_state(
     pool: &PgPool,
     principal_user_id: &str,
@@ -7945,6 +8120,62 @@ async fn set_locked(
     Ok(())
 }
 
+fn quotations_from_event(
+    payload: &serde_json::Value,
+    kind: &str,
+) -> Result<Vec<community::Quotation>, ProjectionError> {
+    community::quotations_from_payload(payload).map_err(|source| ProjectionError::Payload {
+        kind: kind.to_string(),
+        source,
+    })
+}
+
+fn quotations_from_json(
+    value: serde_json::Value,
+    kind: &str,
+) -> Result<Vec<community::Quotation>, ProjectionError> {
+    if value.is_null() {
+        return Ok(Vec::new());
+    }
+    serde_json::from_value(value).map_err(|source| ProjectionError::Payload {
+        kind: kind.to_string(),
+        source,
+    })
+}
+
+async fn fold_post_citations(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    quoting: community::PostRef,
+    quotations: &[community::Quotation],
+    occurred_at: i64,
+) -> Result<(), ProjectionError> {
+    for quotation in quotations {
+        sqlx::query(
+            r#"
+            INSERT INTO post_citation (
+                quoted_kind, quoted_scope_id, quoted_source_seq,
+                quoting_kind, quoting_scope_id, quoting_source_seq,
+                occurred_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (
+                quoting_kind, quoting_scope_id, quoting_source_seq,
+                quoted_kind, quoted_scope_id, quoted_source_seq
+            ) DO NOTHING
+            "#,
+        )
+        .bind(quotation.target.kind.as_str())
+        .bind(quotation.target.scope_id)
+        .bind(quotation.target.source_seq)
+        .bind(quoting.kind.as_str())
+        .bind(quoting.scope_id)
+        .bind(quoting.source_seq)
+        .bind(occurred_at)
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
+}
+
 struct ThreadPostInsert {
     game_id: Uuid,
     source_seq: i64,
@@ -7955,6 +8186,7 @@ struct ThreadPostInsert {
     phase_id: String,
     body: String,
     media: serde_json::Value,
+    quotations: Vec<community::Quotation>,
     occurred_at: i64,
 }
 
@@ -7964,25 +8196,31 @@ async fn insert_thread_post(
 ) -> Result<(), ProjectionError> {
     let source = post.source_seq.to_string();
     let game = post.game_id.to_string();
-    let (body, body_private) = if post.channel_id == "main" {
-        (Some(post.body.as_str()), None)
+    let quotations =
+        serde_json::to_value(&post.quotations).map_err(|source| ProjectionError::Payload {
+            kind: "PostSubmitted".into(),
+            source,
+        })?;
+    let (body, body_private, stored_quotations) = if post.channel_id == "main" {
+        (Some(post.body.as_str()), None, quotations)
     } else {
         (
             None,
             Some(seal_private_projection(
                 "thread_view",
                 &[game.as_str(), source.as_str(), post.channel_id.as_str()],
-                serde_json::json!({ "body": post.body }),
+                serde_json::json!({ "body": post.body, "quotations": quotations }),
             )?),
+            serde_json::json!([]),
         )
     };
     sqlx::query(
         r#"
         INSERT INTO thread_view (
             game_id, source_seq, stream_seq, channel_id, author_slot,
-            author_user, phase_id, body, body_private, media, occurred_at
+            author_user, phase_id, body, body_private, media, quotations, occurred_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (game_id, source_seq) DO NOTHING
         "#,
     )
@@ -7996,6 +8234,7 @@ async fn insert_thread_post(
     .bind(body)
     .bind(body_private)
     .bind(&post.media)
+    .bind(&stored_quotations)
     .bind(post.occurred_at)
     .execute(&mut **tx)
     .await?;

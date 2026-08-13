@@ -891,6 +891,7 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
             actor_slot: slot.into(),
             body: "participant-only draft".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await
@@ -985,6 +986,7 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
             actor_slot: slot.into(),
             body: "late private post".into(),
             media: Vec::new(),
+            quotations: Vec::new(),
         },
     )
     .await

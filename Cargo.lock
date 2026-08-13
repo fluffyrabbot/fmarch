@@ -623,6 +623,7 @@ name = "commands"
 version = "0.1.0"
 dependencies = [
  "caps",
+ "community",
  "domain",
  "eventstore",
  "game_platform",
@@ -4244,6 +4245,7 @@ version = "0.1.0"
 dependencies = [
  "caps",
  "commands",
+ "community",
  "domain",
  "game_platform",
  "projections",

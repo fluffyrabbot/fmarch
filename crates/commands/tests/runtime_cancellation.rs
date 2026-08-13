@@ -59,6 +59,7 @@ fn post(game: Uuid, body: &str) -> Command {
         actor_slot: "slot_1".into(),
         body: body.into(),
         media: Vec::new(),
+        quotations: Vec::new(),
     }
 }
 

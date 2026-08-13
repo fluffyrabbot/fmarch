@@ -172,6 +172,56 @@ async fn private_event_payloads_are_encrypted_at_rest_and_decrypted_on_load(pool
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn private_post_quotations_are_sealed_with_the_body(pool: sqlx::PgPool) {
+    let _env = EncryptionEnvGuard::new();
+    let g = Uuid::new_v4();
+    append(
+        &pool,
+        g,
+        &[EventInput::new(
+            "PostSubmitted",
+            1,
+            serde_json::json!({
+                "channel_id": "private:mafia_day_chat",
+                "slot_or_user": { "slot": "slot_1" },
+                "body": "quoting last night",
+                "phase_id": "D01",
+                "quotations": [{
+                    "target": {
+                        "kind": "game_post",
+                        "scope_id": g,
+                        "source_seq": 3
+                    },
+                    "excerpt": "shoot slot_2"
+                }]
+            }),
+            ActorId::Slot("slot_1".into()),
+            1,
+        )],
+    )
+    .await
+    .expect("append private quoting post");
+
+    let raw: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
+    )
+    .bind(g)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(raw.get("body").is_none());
+    assert!(raw.get("quotations").is_none());
+    assert!(raw["body_private"]["ciphertext"].is_string());
+
+    let loaded = load_stream(&pool, g).await.unwrap();
+    assert_eq!(loaded[0].payload["body"], "quoting last night");
+    assert_eq!(
+        loaded[0].payload["quotations"][0]["excerpt"],
+        "shoot slot_2"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn encrypted_payloads_resolve_by_stored_kid_after_key_rotation(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     let g = Uuid::new_v4();

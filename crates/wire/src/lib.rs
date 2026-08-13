@@ -479,6 +479,9 @@ pub enum Command {
         #[serde(default)]
         #[ts(optional)]
         media: Option<Vec<SubmitPostMedia>>,
+        #[serde(default)]
+        #[ts(optional)]
+        quotations: Option<Vec<Quotation>>,
     },
     ExtendDeadline {
         game: Uuid,
@@ -732,6 +735,7 @@ impl Command {
                 actor_slot,
                 body,
                 media,
+                quotations,
             } => commands::Command::SubmitPost {
                 game,
                 channel_id,
@@ -745,6 +749,11 @@ impl Command {
                         alt: media.alt,
                         variants: BTreeMap::new(),
                     })
+                    .collect(),
+                quotations: quotations
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(Quotation::into)
                     .collect(),
             },
             Command::ExtendDeadline { game, phase, at } => {
@@ -1229,6 +1238,54 @@ pub struct ThreadPost {
 pub struct SubmitPostMedia {
     pub content_id: String,
     pub alt: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum PostKind {
+    DiscussionPost,
+    GamePost,
+}
+
+impl From<PostKind> for community::PostKind {
+    fn from(kind: PostKind) -> Self {
+        match kind {
+            PostKind::DiscussionPost => community::PostKind::DiscussionPost,
+            PostKind::GamePost => community::PostKind::GamePost,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PostRef {
+    pub kind: PostKind,
+    pub scope_id: Uuid,
+    pub source_seq: i64,
+}
+
+impl From<PostRef> for community::PostRef {
+    fn from(value: PostRef) -> Self {
+        community::PostRef {
+            kind: value.kind.into(),
+            scope_id: value.scope_id,
+            source_seq: value.source_seq,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct Quotation {
+    pub target: PostRef,
+    pub excerpt: String,
+}
+
+impl From<Quotation> for community::Quotation {
+    fn from(value: Quotation) -> Self {
+        community::Quotation {
+            target: value.target.into(),
+            excerpt: value.excerpt,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2163,10 +2220,10 @@ pub mod typescript {
         HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
         ItaSessionControlKind, MemberMutePage, MemberMuteState, ModerationCase,
         ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
-        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
-        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
-        RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
-        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, PostKind, PostRef,
+        ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage,
+        PublicSearchResult, Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
+        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
@@ -2230,6 +2287,9 @@ pub mod typescript {
         push::<SlotLifecycle>(&mut out, &config);
         push::<ItaSessionControlKind>(&mut out, &config);
         push::<SubmitPostMedia>(&mut out, &config);
+        push::<PostKind>(&mut out, &config);
+        push::<PostRef>(&mut out, &config);
+        push::<Quotation>(&mut out, &config);
         push::<CohostPermissionClass>(&mut out, &config);
         push::<Command>(&mut out, &config);
         push::<CommandMsg>(&mut out, &config);

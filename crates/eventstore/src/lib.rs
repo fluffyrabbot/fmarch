@@ -528,6 +528,7 @@ fn encode_private_post_payload(
             "PostSubmitted body must be a string".to_string(),
         ));
     }
+    let quotations = public.remove("quotations").unwrap_or(serde_json::json!([]));
     let aad = aad(
         stream_id,
         stream_seq,
@@ -537,7 +538,10 @@ fn encode_private_post_payload(
     );
     public.insert(
         POST_BODY_PRIVATE_FIELD.to_string(),
-        encrypt_json(serde_json::json!({ "body": body }), aad.as_bytes())?,
+        encrypt_json(
+            serde_json::json!({ "body": body, "quotations": quotations }),
+            aad.as_bytes(),
+        )?,
     );
     Ok(serde_json::Value::Object(public))
 }
@@ -608,6 +612,9 @@ fn decode_private_post_payload(ev: &StoredEvent) -> Result<serde_json::Value, St
         .cloned()
         .ok_or_else(|| StoreError::Crypto("private PostSubmitted missing body".to_string()))?;
     payload.insert("body".to_string(), body);
+    if let Some(quotations) = private.get("quotations") {
+        payload.insert("quotations".to_string(), quotations.clone());
+    }
     Ok(serde_json::Value::Object(payload))
 }
 

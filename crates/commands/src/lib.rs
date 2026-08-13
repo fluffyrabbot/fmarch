@@ -833,6 +833,7 @@ async fn handle_command(
             actor_slot,
             body,
             media,
+            quotations,
         } => {
             submit_post(
                 tx,
@@ -843,6 +844,7 @@ async fn handle_command(
                     actor_slot,
                     body,
                     media,
+                    quotations,
                 },
             )
             .await
@@ -2310,6 +2312,7 @@ struct SubmitPostRequest {
     actor_slot: String,
     body: String,
     media: Vec<model::ThreadPostMedia>,
+    quotations: Vec<community::Quotation>,
 }
 
 const MAX_GAME_POST_BODY_BYTES: usize = game_platform::MAX_RENDERED_NARRATIVE_BYTES;
@@ -2365,6 +2368,39 @@ pub(crate) fn validate_game_post_body(body: &str) -> Result<(), Reject> {
     Ok(())
 }
 
+async fn decide_game_quotations(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    channel_id: &str,
+    principal: &Principal,
+    quotations: Vec<community::Quotation>,
+) -> Result<Vec<community::Quotation>, Reject> {
+    if quotations.is_empty() {
+        return Ok(Vec::new());
+    }
+    let thread = projections::quotation_thread_for_game_channel_in_tx(
+        tx,
+        game,
+        channel_id,
+        Some(principal.user_id()),
+    )
+    .await
+    .map_err(|error| Reject::Internal(error.to_string()))?;
+    community::decide_quotations(&thread, &quotations).map_err(quotation_reject)
+}
+
+fn quotation_reject(reject: community::CommunityReject) -> Reject {
+    match reject {
+        community::CommunityReject::QuotationNotFound
+        | community::CommunityReject::InvalidQuotationTarget
+        | community::CommunityReject::InvalidQuotationExcerpt
+        | community::CommunityReject::TooManyQuotations
+        | community::CommunityReject::QuotationChainTooDeep
+        | community::CommunityReject::DuplicateQuotation => Reject::InvalidTarget,
+        other => Reject::Internal(other.to_string()),
+    }
+}
+
 async fn submit_post(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
@@ -2376,6 +2412,7 @@ async fn submit_post(
         actor_slot,
         body,
         media,
+        quotations,
     } = request;
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
@@ -2396,6 +2433,7 @@ async fn submit_post(
             return Err(Reject::InvalidTarget);
         }
     }
+    let quotations = decide_game_quotations(tx, game, &channel_id, principal, quotations).await?;
     // A post is attributed to the SLOT (doc 01: post authorship attaches to the
     // slot, not the user). `slot_or_user` carries the slot id so authorship
     // survives a replacement. Phase id is recorded for partitioning.
@@ -2412,6 +2450,9 @@ async fn submit_post(
     });
     if !media.is_empty() {
         payload["media"] = serde_json::to_value(media).expect("thread post media serializes");
+    }
+    if let Some(quotations) = community::quotations_payload(&quotations) {
+        payload["quotations"] = quotations;
     }
     let ev = EventInput::new(
         "PostSubmitted",

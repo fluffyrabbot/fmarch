@@ -77,7 +77,7 @@ enum EventKind {
     RoleAssigned,           // storage: { slot_id, private }; load_stream: { slot_id, role_key, alignment, role_effects } (06)
 
     // ── Posting ──
-    PostSubmitted,          // public storage: { channel_id, slot_or_user, body, media, phase_id }; private storage encrypts body as { body_private } (06)
+    PostSubmitted,          // public storage: { channel_id, slot_or_user, body, media, phase_id, quotations? }; private storage encrypts body and quotations as { body_private } (06, RFC 0002)
     PostEdited,             // { post_id, new_body_ref }   original recoverable
     PostRetracted,          // { post_id }
 

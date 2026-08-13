@@ -261,6 +261,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
                 actor_slot: "slot_1".into(),
                 body: "mixed-key day chat survives replay".into(),
                 media: None,
+                quotations: None,
             },
         )
         .await,
@@ -359,6 +360,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
             actor_slot: "slot_3".into(),
             body: "traitor should not enter".into(),
             media: None,
+            quotations: None,
         },
     )
     .await;

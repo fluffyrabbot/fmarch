@@ -112,7 +112,17 @@ without disabling the account session.
 Authored by a **slot** (in a game context) or a **user** (in non-game forum areas).
 Belongs to exactly one channel and one phase. Content is **immutable**; edits are recorded
 as events so the original is recoverable and "edited" is honest. May carry image
-attachments (see [07-images](07-images.md)).
+attachments (see [07-images](07-images.md)). A post may also carry **quotations**:
+typed citations of earlier posts, not markup parsed from `body`.
+
+### Quotation
+A directed citation from one post to another. Identity is the same public triple
+already used by moderation: `(kind, scope_id, source_seq)`. The quoting post
+records the target plus an excerpt snapshot of what was cited. The quoted post
+does not change; “quoted by” is a rebuildable projection over quoting events
+([RFC 0002](../rfcs/0002-first-class-quotations.md)). The thread remains a
+linear log. Quotations are not parent pointers and are not parsed from post
+text.
 
 ### Vote
 A directed action: a slot votes *for* a slot or for `no-lynch`; a separate typed command
@@ -138,7 +148,8 @@ User ──occupies (history)──▶ Slot ──belongs to──▶ Game
                               │                     ├──▶ Phase (ordered, typed, deadlined)
                               │                     │
                               ├──authors──▶ Post ──in──▶ Channel ──scoped to──▶ Game
-                              │                  └──during──▶ Phase
+                              │              ├──quotes──▶ Post
+                              │              └──during──▶ Phase
                               │
                               └──casts──▶ Vote ──targets──▶ Slot
                                           └──during──▶ Phase

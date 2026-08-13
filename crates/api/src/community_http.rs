@@ -545,6 +545,8 @@ struct CreateDiscussionTopicRequest {
 #[derive(Debug, Clone, Deserialize)]
 struct CreateDiscussionPostRequest {
     body: String,
+    #[serde(default)]
+    quotations: Vec<community::Quotation>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -741,11 +743,20 @@ async fn create_discussion_post(
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
     let body = validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
     let topic_state = community_topic_state(&current)?;
+    let thread = projections::quotation_thread_for_discussion(
+        &state.pool,
+        topic,
+        Some(profile.principal_user_id.as_str()),
+    )
+    .await?;
+    let quotations = community::decide_quotations(&thread, &request.quotations)
+        .map_err(community_reject_api_error)?;
     let events = community::decide_topic(
         Some(&topic_state),
         community::TopicCommand::SubmitPost {
             body,
             author_profile_id: profile.profile_id,
+            quotations,
         },
     )
     .map_err(community_reject_api_error)?;
@@ -1161,8 +1172,14 @@ async fn append_community_events(
 fn community_reject_api_error(reject: community::CommunityReject) -> ApiError {
     let status = match reject {
         community::CommunityReject::InvalidPostingState
-        | community::CommunityReject::InvalidVisibility => StatusCode::BAD_REQUEST,
-        community::CommunityReject::TopicNotFound => StatusCode::NOT_FOUND,
+        | community::CommunityReject::InvalidVisibility
+        | community::CommunityReject::InvalidQuotationTarget
+        | community::CommunityReject::InvalidQuotationExcerpt
+        | community::CommunityReject::TooManyQuotations
+        | community::CommunityReject::QuotationChainTooDeep
+        | community::CommunityReject::DuplicateQuotation => StatusCode::BAD_REQUEST,
+        community::CommunityReject::TopicNotFound
+        | community::CommunityReject::QuotationNotFound => StatusCode::NOT_FOUND,
         _ => StatusCode::CONFLICT,
     };
     ApiError::Reject {

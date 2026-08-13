@@ -163,6 +163,7 @@ Examples:
 | `community_subscription` / `community_subscription_period` | one member/target watch stream, current membership, monotonic read cursor, and historical active intervals |
 | `community_inbox_item` | privacy-safe per-member references to public posts published during active watch intervals |
 | `community_member_mute` | one private member/profile relationship stream, current active state, replay version, and bounded member-owned list cursor |
+| `post_citation` | rebuildable reverse index of who quoted which public post; folded from quoting `PostSubmitted` / `DiscussionPostSubmitted` events, never written onto the quoted post's stream |
 
 `game_index` folds `GameCreated`, `GameStarted`, `PhaseAdvanced`, and `GameCompleted`
 synchronously with the game stream. Setup rows remain rebuildable but are excluded from the
