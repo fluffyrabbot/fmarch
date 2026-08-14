@@ -8,9 +8,11 @@
   export let thread;
   export let liveOfficialPost = null;
   export let threadPageStatus = null;
+  export let quoteEnabled = false;
   export let onLoadOlder = () => {};
+  export let onQuote = () => {};
 
-  $: threadView = buildPlayerThreadViewModel(thread, { threadPageStatus });
+  $: threadView = buildPlayerThreadViewModel(thread, { threadPageStatus, quoteEnabled });
 </script>
 
 <section class="player-surface__thread" aria-label="Thread">
@@ -75,7 +77,60 @@
         <strong>{post.authorLabel}</strong>
         <span>{post.meta}</span>
       </header>
+      {#if post.quoteEnabled}
+        <button
+          type="button"
+          class="player-surface__quote-button"
+          data-min-touch-target-px="44"
+          data-testid={`player-quote-${post.seq}`}
+          on:click={() => onQuote(post)}
+        >
+          Quote
+        </button>
+      {/if}
+      {#each post.quotations as quotation}
+        <blockquote
+          class="player-surface__quote"
+          data-testid={`player-quote-block-${post.seq}-${quotation.sourceSeq}`}
+        >
+          <p>{quotation.excerpt}</p>
+          <cite>
+            {#if quotation.originalUnavailable}
+              Original unavailable
+            {:else}
+              {quotation.authorLabel}
+            {/if}
+            <a href={quotation.href}>#{quotation.sourceSeq}</a>
+          </cite>
+        </blockquote>
+      {/each}
       <p>{post.body}</p>
+      {#if post.citationCount > 0}
+        <details
+          class="player-surface__citations"
+          data-testid={`player-citations-${post.seq}`}
+        >
+          <summary>
+            Quoted {post.citationCount}
+            {post.citationCount === 1 ? "time" : "times"}
+          </summary>
+          <ul>
+            {#each post.incomingCitations as citation}
+              <li>
+                <a
+                  href={citation.href}
+                  data-testid={`player-citation-${post.seq}-${citation.sourceSeq}`}
+                >
+                  #{citation.sourceSeq}
+                </a>
+              </li>
+            {/each}
+          </ul>
+          {#if post.moreCitationCount > 0}
+            <p class="player-surface__citations-more">and {post.moreCitationCount} more</p>
+          {/if}
+        </details>
+      {/if}
       {#if post.media.items.length > 0 || post.media.withheld.length > 0}
         <div
           class="player-surface__post-media"
@@ -184,11 +239,29 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .player-surface__quote-button {
+    background: color-mix(in srgb, var(--fm-surface, var(--fm-ground)) 88%, transparent);
+    border: 1px solid var(--fm-line-strong, var(--fm-line));
+    border-radius: 8px;
+    color: var(--fm-ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    padding: 8px 10px;
+    position: absolute;
+    z-index: 1;
+  }
+
   .player-surface__post {
     border-block-end: 1px solid var(--fm-line-soft);
     display: grid;
     gap: 12px;
     padding-block: 6px 22px;
+    position: relative;
   }
 
   .player-surface__post span {
@@ -200,6 +273,45 @@
     line-height: 1.45;
     margin: 0;
     overflow-wrap: anywhere;
+  }
+
+  .player-surface__quote {
+    border-inline-start: 4px solid var(--fm-line-strong, var(--fm-line));
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    min-inline-size: 0;
+    padding-inline-start: 12px;
+  }
+
+  .player-surface__quote p {
+    font-size: 15px;
+    white-space: pre-wrap;
+  }
+
+  .player-surface__quote cite {
+    color: var(--fm-ink-subtle);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 13px;
+    gap: 8px;
+  }
+
+  .player-surface__citations {
+    min-inline-size: 0;
+  }
+
+  .player-surface__citations ul {
+    display: grid;
+    gap: 4px;
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+  }
+
+  .player-surface__citations-more {
+    color: var(--fm-ink-subtle);
+    font-size: 13px;
   }
 
   .player-surface__post-media {

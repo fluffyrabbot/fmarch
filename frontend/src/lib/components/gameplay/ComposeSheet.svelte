@@ -4,7 +4,9 @@
   export let body = "";
   export let mediaFiles = undefined;
   export let mediaAlt = "";
+  export let attachedQuotations = [];
   export let onCommand = () => {};
+  export let onRemoveQuote = () => {};
 </script>
 
 {#if view?.readOnly !== true}
@@ -24,6 +26,26 @@
       </div>
       <span>{view.channelContext.audienceLabel}</span>
     </header>
+    {#if attachedQuotations.length > 0}
+      <ul class="compose-sheet__quotes" data-testid="player-quote-chips">
+        {#each attachedQuotations as quotation}
+          <li data-testid={`player-quote-chip-${quotation.sourceSeq}`}>
+            <strong>{quotation.authorLabel}</strong>
+            <span>#{quotation.sourceSeq}</span>
+            <p>{quotation.excerpt}</p>
+            <button
+              type="button"
+              class="fm-touch-button fm-touch-button--secondary"
+              data-min-touch-target-px="44"
+              data-testid={`player-quote-remove-${quotation.sourceSeq}`}
+              on:click={() => onRemoveQuote(quotation.sourceSeq)}
+            >
+              Remove
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
     <label class="fm-field">
       <span>{view.label}</span>
       <textarea bind:value={body} rows="5"></textarea>
@@ -117,6 +139,29 @@
     color: var(--fm-ink-muted);
     font-size: 12px;
     text-align: end;
+  }
+
+  .compose-sheet__quotes {
+    display: grid;
+    gap: 10px;
+    list-style: none;
+    margin: 0;
+    min-inline-size: 0;
+    padding: 0;
+  }
+
+  .compose-sheet__quotes li {
+    border: 1px solid var(--fm-line-strong, var(--fm-line));
+    display: grid;
+    gap: 6px;
+    min-inline-size: 0;
+    padding: 10px;
+  }
+
+  .compose-sheet__quotes p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   }
 
   .compose-sheet__actions {

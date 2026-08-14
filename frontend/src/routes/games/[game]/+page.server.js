@@ -1,7 +1,11 @@
 import { fail } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
-import { buildPublicGamePublication } from "./public-game-publication.mjs";
+import {
+  GAME_CITATION_PREVIEW_LIMIT,
+  buildPublicGamePosts,
+  buildPublicGamePublication,
+} from "./public-game-publication.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
@@ -19,6 +23,17 @@ export async function load({ params, locals, cookies, fetch, url }) {
     ? fixturePublicGame(params.game)
     : response.ok ? await response.json().catch(() => null) : null;
   const available = page !== null && typeof page === "object";
+  const sourcePosts = available && Array.isArray(page.posts) ? page.posts : [];
+  const citationPages = available
+    ? await loadCitationPages({
+        fetch,
+        token,
+        apiBaseUrl,
+        game: params.game,
+        posts: sourcePosts,
+      })
+    : {};
+  const posts = available ? buildPublicGamePosts(sourcePosts, citationPages) : [];
   const subscription = available
     ? await loadSubscription({ locals, cookies, fetch, apiBaseUrl, game: params.game })
     : null;
@@ -31,17 +46,35 @@ export async function load({ params, locals, cookies, fetch, url }) {
     }),
     publication: buildPublicGamePublication({
       game: available ? page.game : null,
-      posts: page?.posts,
+      posts,
     }),
     publicGame: {
       status: available ? "ready" : "unavailable",
       game: available ? page.game : null,
-      posts: Array.isArray(page?.posts) ? page.posts : [],
+      posts,
       nextBeforeSeq: optionalSequence(page?.next_before_seq),
       hasSession: typeof locals.principalUserId === "string",
       subscription,
     },
   };
+}
+
+async function loadCitationPages({ fetch, token, apiBaseUrl, game, posts }) {
+  const cited = (Array.isArray(posts) ? posts : []).filter(
+    (post) => Number(post?.citation_count ?? post?.citationCount ?? 0) > 0,
+  );
+  const entries = await Promise.all(
+    cited.map(async (post) => {
+      const seq = Number(post.source_seq ?? post.sourceSeq);
+      const response = await fetch(
+        `${apiBaseUrl}/games/${encodeURIComponent(game)}/posts/${seq}/citations?limit=${GAME_CITATION_PREVIEW_LIMIT}`,
+        { headers: readHeaders(token) },
+      );
+      const page = response.ok ? await response.json().catch(() => null) : null;
+      return [seq, page];
+    }),
+  );
+  return Object.fromEntries(entries.filter(([, page]) => page !== null));
 }
 
 function readHeaders(token) {

@@ -77,7 +77,46 @@
                 <strong id={`public-game-post-author-${post.source_seq}`}>{post.author_slot ?? post.author_user ?? "System"}</strong>
                 <a id={`public-game-post-meta-${post.source_seq}`} href={`#thread-post-${post.source_seq}`}>#{post.source_seq} · {occurredAt(post.occurred_at)}</a>
               </header>
+              {#each post.quotations as quotation}
+                <blockquote
+                  class="public-game-quote"
+                  data-testid={`public-game-quote-block-${post.source_seq}-${quotation.sourceSeq}`}
+                >
+                  <p>{quotation.excerpt}</p>
+                  <cite>
+                    {#if quotation.originalUnavailable}
+                      Original unavailable
+                    {:else}
+                      {quotation.authorLabel}
+                    {/if}
+                    <a href={quotation.href}>#{quotation.sourceSeq}</a>
+                  </cite>
+                </blockquote>
+              {/each}
               <p>{post.body}</p>
+              {#if post.citationCount > 0}
+                <details class="public-game-citations" data-testid={`public-game-citations-${post.source_seq}`}>
+                  <summary>
+                    Quoted {post.citationCount}
+                    {post.citationCount === 1 ? "time" : "times"}
+                  </summary>
+                  <ul>
+                    {#each post.incomingCitations as citation}
+                      <li>
+                        <a
+                          href={citation.href}
+                          data-testid={`public-game-citation-${post.source_seq}-${citation.sourceSeq}`}
+                        >
+                          #{citation.sourceSeq}
+                        </a>
+                      </li>
+                    {/each}
+                  </ul>
+                  {#if post.moreCitationCount > 0}
+                    <p class="public-game-citations__more">and {post.moreCitationCount} more</p>
+                  {/if}
+                </details>
+              {/if}
               {#if data.publicGame.hasSession}
                 <details class="report-control" data-testid={`public-game-report-${post.source_seq}`}>
                   <summary>Report this post</summary>
@@ -129,6 +168,19 @@
   .public-game-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .public-game-post header a { color: var(--fm-ink-muted); font-size: 13px; }
   .public-game-post p { font-size: 17px; line-height: 1.65; margin-block-end: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .public-game-quote {
+    border-inline-start: 4px solid var(--fm-line-strong, var(--fm-line));
+    display: grid;
+    gap: 6px;
+    margin: 12px 0;
+    min-inline-size: 0;
+    padding-inline-start: 12px;
+  }
+  .public-game-quote p { font-size: 16px; margin: 0; }
+  .public-game-quote cite { color: var(--fm-ink-muted); display: flex; flex-wrap: wrap; font-size: 13px; gap: 8px; }
+  .public-game-citations { margin-block-start: 10px; }
+  .public-game-citations ul { display: grid; gap: 4px; list-style: none; margin: 8px 0 0; padding: 0; }
+  .public-game-citations__more { color: var(--fm-ink-muted); font-size: 13px; }
   .report-control { margin-block-start: 10px; }
   .report-control summary { min-block-size: 44px; }
   .report-control form { display: grid; gap: 10px; margin-block-start: 10px; }

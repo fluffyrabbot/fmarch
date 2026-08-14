@@ -25,6 +25,7 @@ export function buildPlayerCommand({
   actorSlot,
   body,
   media = [],
+  quotations = [],
   target,
   actionConfig = null,
 }) {
@@ -32,6 +33,7 @@ export function buildPlayerCommand({
   switch (commandKind) {
     case "submit_post": {
       const normalizedMedia = submitPostMedia(media);
+      const normalizedQuotations = submitPostQuotations(quotations);
       return Object.freeze({
         SubmitPost: Object.freeze({
           game: requiredString(game, "game"),
@@ -39,6 +41,7 @@ export function buildPlayerCommand({
           actor_slot: requiredString(actorSlot, "actorSlot"),
           body: postBody(body, normalizedMedia, actionConfig),
           ...(normalizedMedia.length > 0 ? { media: normalizedMedia } : {}),
+          ...(normalizedQuotations.length > 0 ? { quotations: normalizedQuotations } : {}),
         }),
       });
     }
@@ -353,6 +356,36 @@ function postBody(value, media, actionConfig) {
     return value;
   }
   throw new TypeError("body must be a non-empty string unless media-only posts are enabled");
+}
+
+function submitPostQuotations(value) {
+  if (value === undefined || value === null) {
+    return Object.freeze([]);
+  }
+  if (!Array.isArray(value)) {
+    throw new TypeError("quotations must be an array");
+  }
+  return Object.freeze(
+    value
+      .map((item) => {
+        const sourceSeq = Number(item?.target?.source_seq ?? item?.target?.sourceSeq ?? item?.sourceSeq);
+        const excerpt = typeof item?.excerpt === "string" ? item.excerpt : "";
+        const scopeId = String(item?.target?.scope_id ?? item?.target?.scopeId ?? "");
+        if (!Number.isInteger(sourceSeq) || sourceSeq < 1 || excerpt === "" || scopeId.trim() === "") {
+          return null;
+        }
+        return Object.freeze({
+          target: Object.freeze({
+            kind: "game_post",
+            scope_id: scopeId,
+            source_seq: sourceSeq,
+          }),
+          excerpt,
+        });
+      })
+      .filter(Boolean)
+      .slice(0, 8),
+  );
 }
 
 function submitPostMedia(value) {

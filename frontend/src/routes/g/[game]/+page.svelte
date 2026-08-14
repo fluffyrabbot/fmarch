@@ -72,12 +72,19 @@
     commandAttemptTimeoutMs,
     executeCommandAttempt,
   } from "$lib/app/command-interruption.mjs";
+  import {
+    attachQuotation,
+    removeAttachedQuotation,
+    submittedQuotationsPayload,
+  } from "$lib/app/game-quotation-model.mjs";
 
   export let data;
 
   let composerBody = data.composer.defaultBody;
   let composerMediaFiles = undefined;
   let composerMediaAlt = "";
+  let attachedQuotations = [];
+  let quoteChannel = data.threadPager.channel;
   let commandStatus = null;
   $: commandPending = commandStatus?.state === "pending";
   $: commandInterrupted = commandStatus?.state === "interrupted";
@@ -146,6 +153,10 @@
     channels,
     surfaceHeader,
   });
+  $: if (data.threadPager.channel !== quoteChannel) {
+    quoteChannel = data.threadPager.channel;
+    attachedQuotations = [];
+  }
   $: playerActionView = buildPlayerCommandPanelViewModel({
     composer,
     phase,
@@ -155,6 +166,10 @@
     commandPending,
     commandInterrupted,
   });
+  $: quoteEnabled =
+    player.readOnly !== true &&
+    player.gameCompleted !== true &&
+    playerActionView.composer?.readOnly !== true;
   $: playerActionSubmissionCheckpoint = buildPlayerActionSubmissionCheckpoint({
     commandState,
     composer,
@@ -335,6 +350,7 @@
         action,
         composerBody,
         media: dispatchedMedia,
+        quotations: submittedQuotationsPayload(attachedQuotations),
         data: dispatchData,
         commandId: commandAttemptId(
           typeof window !== "undefined" &&
@@ -351,6 +367,7 @@
           action,
           composerBody: attempt.composerBody,
           media: attempt.media,
+          quotations: attempt.quotations ?? [],
           commandIdFactory: () => attempt.commandId,
           signal,
           data: dispatchData,
@@ -367,6 +384,7 @@
         action,
         composerBody: attempt.composerBody,
         media: dispatchedMedia,
+        quotations: attempt.quotations ?? [],
         optimisticStatus,
         finalStatus: commandStatus,
       });
@@ -376,6 +394,9 @@
         commandStatus,
         bridgePlan.projectionRefreshKeys,
       );
+      if (action === "submit_post" && commandStatus?.state === "ack") {
+        attachedQuotations = [];
+      }
       if (typeof window !== "undefined") {
         exposePlayerCommandDispatchBridgePlan({
           windowRef: window,
@@ -408,6 +429,7 @@
         action,
         composerBody: attempt?.composerBody ?? composerBody,
         media: dispatchedMedia,
+        quotations: attempt?.quotations ?? submittedQuotationsPayload(attachedQuotations),
         optimisticStatus,
         finalStatus: commandStatus,
       });
@@ -468,6 +490,20 @@
   function togglePrivateItem(item) {
     expandedPrivateItems = togglePrivateItemExpansion(expandedPrivateItems, item);
   }
+
+  function quotePlayerPost(post) {
+    attachedQuotations = attachQuotation(attachedQuotations, post, data.game.id);
+    if (typeof document === "undefined") {
+      return;
+    }
+    window.setTimeout(() => {
+      document.getElementById("player-composer")?.querySelector("textarea")?.focus();
+    });
+  }
+
+  function removeQuotedPost(sourceSeq) {
+    attachedQuotations = removeAttachedQuotation(attachedQuotations, sourceSeq);
+  }
 </script>
 
 <svelte:head>
@@ -512,7 +548,9 @@
       {thread}
       {liveOfficialPost}
       {threadPageStatus}
+      {quoteEnabled}
       onLoadOlder={loadOlderThread}
+      onQuote={quotePlayerPost}
     />
 
     <ComposeSheet
@@ -521,7 +559,9 @@
       bind:body={composerBody}
       bind:mediaFiles={composerMediaFiles}
       bind:mediaAlt={composerMediaAlt}
+      {attachedQuotations}
       onCommand={submitPlayerCommand}
+      onRemoveQuote={removeQuotedPost}
     />
 
     <VoteSheet

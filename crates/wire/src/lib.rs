@@ -1097,6 +1097,8 @@ pub struct HostConsoleThreadPostDelta {
     pub author_user: Option<String>,
     pub phase_id: String,
     pub body: String,
+    #[serde(default)]
+    pub quotations: Vec<Quotation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]

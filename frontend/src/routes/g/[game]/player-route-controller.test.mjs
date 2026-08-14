@@ -218,6 +218,37 @@ test("player route controller builds typed player command requests", () => {
   assert.deepEqual(
     buildPlayerCommandRequest({
       data: fixtureData(),
+      action: "submit_post",
+      composerBody: "Answering that claim",
+      quotations: [
+        {
+          target: { kind: "game_post", scope_id: "midsummer", source_seq: 12 },
+          excerpt: "Alpha signal",
+        },
+      ],
+    }),
+    {
+      endpoint: "/commands",
+      command: {
+        SubmitPost: {
+          game: "midsummer",
+          channel_id: "main",
+          actor_slot: "slot-7",
+          body: "Answering that claim",
+          quotations: [
+            {
+              target: { kind: "game_post", scope_id: "midsummer", source_seq: 12 },
+              excerpt: "Alpha signal",
+            },
+          ],
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildPlayerCommandRequest({
+      data: fixtureData(),
       action: "submit_action:factional_kill",
       composerBody: "ignored for action",
     }),

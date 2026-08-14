@@ -147,7 +147,7 @@ export type HostConsolePhaseStateDelta = { phase_id: string, locked: boolean, de
 
 export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupancy_id: string, persona_id: string, public_name: string, assigned_principal_user_id: string, alive: boolean, status: string, status_tags: Array<string>, role_key: string | null, alignment: string | null, role_revealed: boolean, alignment_revealed: boolean, };
 
-export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, };
+export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, quotations: Array<Quotation>, };
 
 export type DayEventSchedulerDelta = { pending: boolean, next_due_at: bigint | null, auto_resolve_pending: boolean, narrative_pending: boolean, wake_seq: bigint, last_observed_wake_seq: bigint, lease_until: bigint | null, retry_not_before: bigint | null, last_attempt_at: bigint | null, last_success_at: bigint | null, last_failure_at: bigint | null, consecutive_failures: number, total_attempts: bigint, total_successes: bigint, last_error: string | null, };
 

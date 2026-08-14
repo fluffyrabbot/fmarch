@@ -25,7 +25,7 @@ use wire::{
     HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostTaskAllowedCommand,
     HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
     PlayerInvestigationResult, PlayerNotification, PostCitationPage, ProjectionDelta,
-    PublicGameThreadPage, RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
+    PublicGameThreadPage, Quotation, RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -1650,6 +1650,8 @@ pub struct HostConsoleThreadPost {
     pub author_user: Option<String>,
     pub phase_id: String,
     pub body: String,
+    #[serde(default)]
+    pub quotations: Vec<Quotation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1811,6 +1813,7 @@ impl From<HostConsoleThreadPost> for HostConsoleThreadPostDelta {
             author_user: post.author_user,
             phase_id: post.phase_id,
             body: post.body,
+            quotations: post.quotations,
         }
     }
 }
@@ -1991,6 +1994,7 @@ pub(super) async fn load_host_console_state(
             author_user: post.author_user,
             phase_id: post.phase_id,
             body: post.body,
+            quotations: post.quotations.into_iter().map(Quotation::from).collect(),
         })
         .collect();
     let host_prompts = projections::host_prompts(pool, game).await?;

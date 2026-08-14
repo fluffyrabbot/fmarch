@@ -68,6 +68,43 @@ test("player actions map to Rust wire command variants", () => {
     buildPlayerCommand({
       action: "submit_post",
       game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      body: "Answering that claim",
+      quotations: [
+        {
+          target: {
+            kind: "game_post",
+            scope_id: "00000000-0000-0000-0000-000000000001",
+            source_seq: 12,
+          },
+          excerpt: "Alpha signal",
+        },
+      ],
+    }),
+    {
+      SubmitPost: {
+        game: "00000000-0000-0000-0000-000000000001",
+        channel_id: "main",
+        actor_slot: "slot-7",
+        body: "Answering that claim",
+        quotations: [
+          {
+            target: {
+              kind: "game_post",
+              scope_id: "00000000-0000-0000-0000-000000000001",
+              source_seq: 12,
+            },
+            excerpt: "Alpha signal",
+          },
+        ],
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildPlayerCommand({
+      action: "submit_post",
+      game: "00000000-0000-0000-0000-000000000001",
       channelId: "private:role_pm:slot-7",
       actorSlot: "slot-7",
       body: "private note",
@@ -237,6 +274,26 @@ test("player post builder requires policy affordance for media-only posts", () =
         actionConfig: {
           allowMediaOnlyPost: true,
         },
+      }),
+    /media-only posts are enabled/,
+  );
+  assert.throws(
+    () =>
+      buildPlayerCommand({
+        action: "submit_post",
+        game: "00000000-0000-0000-0000-000000000001",
+        actorSlot: "slot-7",
+        body: "",
+        quotations: [
+          {
+            target: {
+              kind: "game_post",
+              scope_id: "00000000-0000-0000-0000-000000000001",
+              source_seq: 12,
+            },
+            excerpt: "Alpha signal",
+          },
+        ],
       }),
     /media-only posts are enabled/,
   );

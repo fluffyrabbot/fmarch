@@ -1,3 +1,10 @@
+import {
+  GAME_CITATION_PREVIEW_LIMIT,
+  buildGamePostQuoteView,
+} from "../../../lib/app/game-quotation-model.mjs";
+
+export { GAME_CITATION_PREVIEW_LIMIT };
+
 export const PUBLIC_GAME_PUBLICATION_CONTRACT = Object.freeze({
   componentName: "public-game-publication",
   mode: "reading-publication",
@@ -53,6 +60,25 @@ export function buildPublicGamePublication({ game = null, posts = [] } = {}) {
 function humanize(value) {
   const text = String(value).replaceAll(/[_-]+/gu, " ").trim();
   return text === "" ? "Game" : `${text[0].toUpperCase()}${text.slice(1)}`;
+}
+
+export function buildPublicGamePosts(posts = [], citationPages = {}) {
+  const source = Array.isArray(posts) ? posts : [];
+  return Object.freeze(
+    source.map((post) => {
+      const quote = buildGamePostQuoteView(post, {
+        posts: source,
+        citations: citationPages[Number(post?.source_seq ?? post?.sourceSeq)] ?? null,
+      });
+      return Object.freeze({
+        ...post,
+        quotations: quote.quotations,
+        citationCount: quote.citationCount,
+        incomingCitations: quote.incomingCitations,
+        moreCitationCount: quote.moreCitationCount,
+      });
+    }),
+  );
 }
 
 function countLabel(count, singular, plural) {

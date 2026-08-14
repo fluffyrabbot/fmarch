@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PUBLIC_GAME_PUBLICATION_CONTRACT,
+  buildPublicGamePosts,
   buildPublicGamePublication,
 } from "./public-game-publication.mjs";
 
@@ -18,6 +19,24 @@ test("public game publication creates a reading-first live record", () => {
   assert.equal(view.readingLane.maxMeasurePx, 760);
   assert.equal(view.readingLane.skipPostsTestId, "public-game-skip-posts");
   assert.equal(view.readingLane.headingId, "public-game-thread-title");
+});
+
+test("public game posts keep stored excerpts when the original is off-page", () => {
+  const posts = buildPublicGamePosts(
+    [
+      {
+        source_seq: 8,
+        author_slot: "slot-2",
+        body: "Reply",
+        quotations: [{ target: { source_seq: 3 }, excerpt: "gone" }],
+        citation_count: 0,
+      },
+    ],
+    {},
+  );
+  assert.equal(posts[0].quotations[0].excerpt, "gone");
+  assert.equal(posts[0].quotations[0].originalUnavailable, true);
+  assert.equal(posts[0].quotations[0].href, "#thread-post-3");
 });
 
 test("completed publications and unavailable games remain explicit", () => {

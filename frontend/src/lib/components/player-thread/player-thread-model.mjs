@@ -1,3 +1,8 @@
+import {
+  buildGamePostQuoteView,
+  excerptFromBody,
+} from "../../app/game-quotation-model.mjs";
+
 export const PLAYER_THREAD_MEDIA_CONTRACT = Object.freeze({
   component: "player-thread-media",
   preferredVariants: Object.freeze(["tablet", "thumb", "full-bounded"]),
@@ -36,12 +41,18 @@ export function threadPageStatusForResult(olderPostCount) {
   });
 }
 
-export function buildPlayerThreadViewModel(thread = {}, { threadPageStatus = null } = {}) {
+export function buildPlayerThreadViewModel(
+  thread = {},
+  { threadPageStatus = null, quoteEnabled = false } = {},
+) {
   const posts = Array.isArray(thread.posts) ? thread.posts : [];
   return Object.freeze({
     nextBeforeSeq: thread.nextBeforeSeq ?? null,
     pager: buildPlayerThreadPagerViewModel({ thread, threadPageStatus }),
-    posts: Object.freeze(posts.map((post) => buildPlayerThreadPostViewModel(post))),
+    quoteEnabled: quoteEnabled === true,
+    posts: Object.freeze(
+      posts.map((post) => buildPlayerThreadPostViewModel(post, { posts, quoteEnabled })),
+    ),
   });
 }
 
@@ -94,10 +105,20 @@ function pagerDisabledReason({ pending, hasOlder, threadPageStatus }) {
   return null;
 }
 
-export function buildPlayerThreadPostViewModel(post = {}) {
+export function buildPlayerThreadPostViewModel(
+  post = {},
+  { posts = [], quoteEnabled = false } = {},
+) {
   const media = buildPlayerThreadMedia(post.media);
+  const quote = buildGamePostQuoteView(post, { posts });
+  const excerpt = excerptFromBody(post.body);
   return Object.freeze({
     ...post,
+    quotations: quote.quotations,
+    citationCount: quote.citationCount,
+    incomingCitations: quote.incomingCitations,
+    moreCitationCount: quote.moreCitationCount,
+    quoteEnabled: quoteEnabled === true && excerpt !== "",
     media,
     mediaBoundary: Object.freeze({
       status:

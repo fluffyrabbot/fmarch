@@ -273,7 +273,13 @@ export function playerRefreshKeysForAction(action) {
   }
 }
 
-export function buildPlayerCommandRequest({ data, action, composerBody, media = [] }) {
+export function buildPlayerCommandRequest({
+  data,
+  action,
+  composerBody,
+  media = [],
+  quotations = [],
+}) {
   const actionConfig = playerActionConfig(data, action);
   return Object.freeze({
     endpoint: data.composer.commandEndpoint,
@@ -284,6 +290,7 @@ export function buildPlayerCommandRequest({ data, action, composerBody, media = 
       actorSlot: data.player.slotId,
       body: composerBody,
       media,
+      quotations,
       target: data.composer.voteTargetSlot,
       actionConfig,
     }),
@@ -295,6 +302,7 @@ export function buildPlayerCommandDispatchBridgePlan({
   action,
   composerBody,
   media = [],
+  quotations = [],
   optimisticStatus,
   finalStatus,
 }) {
@@ -308,6 +316,7 @@ export function buildPlayerCommandDispatchBridgePlan({
     action: trace.dispatchKind,
     composerBody,
     media,
+    quotations,
   });
   return buildDispatchBridgePlanFromRequest({
     role: "player",
@@ -327,6 +336,7 @@ export async function submitPlayerRouteCommand({
   action,
   composerBody,
   media = [],
+  quotations = [],
   commandIdFactory,
   signal,
   data,
@@ -335,7 +345,7 @@ export async function submitPlayerRouteCommand({
   sendCommandImpl = sendCommand,
 }) {
   const commandStatus = await sendCommandImpl({
-    ...buildPlayerCommandRequest({ data, action, composerBody, media }),
+    ...buildPlayerCommandRequest({ data, action, composerBody, media, quotations }),
     commandIdFactory,
     fetchImpl,
     signal,

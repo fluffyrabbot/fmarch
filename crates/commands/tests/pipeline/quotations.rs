@@ -1,6 +1,7 @@
 use commands::{handle, Command};
 use community::{PostKind, PostRef, Quotation};
 use sqlx::{PgPool, Row};
+use uuid::Uuid;
 
 use crate::common::*;
 
@@ -106,4 +107,114 @@ async fn submit_post_records_same_thread_quotations_without_writing_the_quoted_s
     )
     .await;
     assert!(matches!(missing, Err(commands::Reject::InvalidTarget)));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn submit_post_rejects_quoting_a_private_channel_seq_from_main(pool: PgPool) {
+    let host = "host_q_priv";
+    let mason = "mason_q";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    crate::common::handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+            cohost_denied: vec![],
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [("slot_1", mason, "mason"), ("slot_2", "mason_q2", "mason")] {
+        crate::common::handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        crate::common::handle(
+            &pool,
+            &h,
+            Command::SeatPersona {
+                game,
+                slot: slot.into(),
+                principal_user_id: occupant.into(),
+                public_name: format!("Persona {slot}"),
+            },
+        )
+        .await
+        .unwrap();
+        crate::common::handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    crate::common::handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .expect("start declares mason private channel");
+
+    crate::common::handle(
+        &pool,
+        &user(mason),
+        Command::SubmitPost {
+            game,
+            channel_id: "private:mason".into(),
+            actor_slot: "slot_1".into(),
+            body: "secret mason claim".into(),
+            media: Vec::new(),
+            quotations: Vec::new(),
+        },
+    )
+    .await
+    .expect("private mason post");
+
+    let private_seq: i64 = sqlx::query_scalar(
+        "SELECT source_seq FROM thread_view WHERE game_id = $1 AND channel_id = 'private:mason' ORDER BY source_seq ASC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let rejected = crate::common::handle(
+        &pool,
+        &user(mason),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: "slot_1".into(),
+            body: "leaking that claim".into(),
+            media: Vec::new(),
+            quotations: vec![Quotation {
+                target: PostRef {
+                    kind: PostKind::GamePost,
+                    scope_id: game,
+                    source_seq: private_seq,
+                },
+                excerpt: "secret mason claim".into(),
+            }],
+        },
+    )
+    .await;
+    assert!(matches!(rejected, Err(commands::Reject::InvalidTarget)));
 }

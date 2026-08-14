@@ -242,6 +242,44 @@ test("player thread media prefers tablet variants and excludes originals", () =>
   assert.equal(media.items[0].sources.some((source) => source.srcset.includes("original")), false);
 });
 
+test("player thread model renders quote blocks and incoming citation disclosure", () => {
+  const thread = buildPlayerThreadViewModel(
+    {
+      nextBeforeSeq: null,
+      posts: [
+        {
+          seq: 12,
+          authorLabel: "Mira",
+          body: "Alpha signal analysis",
+          quotations: [],
+          citationCount: 1,
+        },
+        {
+          seq: 18,
+          authorLabel: "Rowan",
+          body: "Answering that claim",
+          quotations: [
+            {
+              target: { kind: "game_post", scopeId: "midsummer", sourceSeq: 12 },
+              excerpt: "Alpha signal",
+            },
+          ],
+          citationCount: 0,
+        },
+      ],
+    },
+    { quoteEnabled: true },
+  );
+
+  assert.equal(thread.posts[0].quoteEnabled, true);
+  assert.equal(thread.posts[0].citationCount, 1);
+  assert.equal(thread.posts[0].incomingCitations[0].sourceSeq, 18);
+  assert.equal(thread.posts[1].quotations[0].excerpt, "Alpha signal");
+  assert.equal(thread.posts[1].quotations[0].authorLabel, "Mira");
+  assert.equal(thread.posts[1].quotations[0].href, "#thread-post-12");
+  assert.equal(thread.quoteEnabled, true);
+});
+
 test("player thread media withholds original-only images", () => {
   assert.equal(
     selectTabletThreadMediaVariant({
