@@ -22,6 +22,7 @@ RUN apt-get update \
 
 COPY --from=builder /app/target/release/server /usr/local/bin/fmarch-server
 COPY --from=builder /app/target/release/fmarch-migrate /usr/local/bin/fmarch-migrate
+COPY --from=builder /app/target/release/fmarch-event-key-admin /usr/local/bin/fmarch-event-key-admin
 
 USER fmarch
 

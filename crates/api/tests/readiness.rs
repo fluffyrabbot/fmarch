@@ -20,6 +20,7 @@ async fn readiness(app: axum::Router) -> (StatusCode, Readiness) {
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn readyz_proves_schema_and_object_storage(pool: sqlx::PgPool) {
+    eventstore::attest_active_runtime_kek(&pool).await.unwrap();
     let media = MediaRepository::in_memory(MediaLimits::default()).unwrap();
     let (status, body) = readiness(api::router(pool, media)).await;
 
@@ -56,6 +57,7 @@ async fn readyz_rejects_a_database_without_the_required_schema(pool: sqlx::PgPoo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn readyz_revalidates_subject_authority_after_startup(pool: sqlx::PgPool) {
+    eventstore::attest_active_runtime_kek(&pool).await.unwrap();
     let media = MediaRepository::in_memory(MediaLimits::default()).unwrap();
     let backing: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
     let authority = identity::ObjectSubjectKeyStore::new(
@@ -90,6 +92,7 @@ async fn readyz_revalidates_subject_authority_after_startup(pool: sqlx::PgPool) 
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn readyz_rejects_a_direct_envelope_kid_missing_from_the_configured_ring(pool: sqlx::PgPool) {
+    eventstore::attest_active_runtime_kek(&pool).await.unwrap();
     sqlx::query(
         r#"
         INSERT INTO event_direct_key_sentinel (

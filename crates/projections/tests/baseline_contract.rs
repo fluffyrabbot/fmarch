@@ -1,6 +1,8 @@
 //! Exact catalog contract after applying the append-only projection migrations.
 
 use sqlx::PgPool;
+use std::time::Duration;
+use uuid::Uuid;
 
 const EXPECTED_TABLES: &[&str] = &[
     "action_counter",
@@ -144,6 +146,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "auth_credential_attempt_updated_idx",
     "auth_delivery_intent_account_idx",
     "auth_delivery_intent_claim_idx",
+    "auth_delivery_intent_credential_envelope_kid_idx",
     "auth_delivery_intent_credential_hash_key",
     "auth_delivery_intent_pkey",
     "auth_delivery_intent_principal_idx",
@@ -187,6 +190,8 @@ const EXPECTED_INDEXES: &[&str] = &[
     "completed_game_detached_alias_pkey",
     "day_event_narrative_pending_idx",
     "day_event_narrative_pkey",
+    "day_event_narrative_rendered_private_kid_idx",
+    "day_event_narrative_template_private_kid_idx",
     "day_event_participation_page_idx",
     "day_event_participation_pkey",
     "day_event_pkey",
@@ -210,7 +215,9 @@ const EXPECTED_INDEXES: &[&str] = &[
     "discussion_post_topic_order_idx",
     "discussion_topic_area_page_idx",
     "discussion_topic_pkey",
+    "event_direct_key_sentinel_lifecycle_idx",
     "event_direct_key_sentinel_pkey",
+    "event_direct_key_sentinel_single_retiring_idx",
     "event_stream_key_state_pkey",
     "event_stream_keys_pkey",
     "event_stream_keys_wrap_kid_idx",
@@ -245,6 +252,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "identity_lifecycle_audit_principal_idx",
     "investigation_memory_investigator_idx",
     "investigation_memory_pkey",
+    "investigation_memory_result_private_kid_idx",
     "media_upload_ledger_pkey",
     "media_upload_ledger_principal_idx",
     "member_lifecycle_event_pkey",
@@ -270,8 +278,10 @@ const EXPECTED_INDEXES: &[&str] = &[
     "platform_principal_pkey",
     "player_info_result_audience_idx",
     "player_info_result_pkey",
+    "player_info_result_private_kid_idx",
     "player_investigation_result_audience_idx",
     "player_investigation_result_pkey",
+    "player_investigation_result_private_kid_idx",
     "player_notification_audience_idx",
     "player_notification_pkey",
     "post_citation_pkey",
@@ -281,6 +291,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "privacy_subject_pkey",
     "privacy_subject_principal_user_id_key",
     "private_channel_member_pkey",
+    "private_channel_member_private_kid_idx",
     "private_channel_member_slot_idx",
     "profile_editor_pkey",
     "profile_editor_principal_user_id_key",
@@ -300,6 +311,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "slot_occupancy_epoch_open_slot_idx",
     "slot_occupancy_epoch_pkey",
     "slot_state_pkey",
+    "slot_state_private_kid_idx",
     "slot_status_tag_by_tag_idx",
     "slot_status_tag_pkey",
     "spectator_membership_pkey",
@@ -320,6 +332,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "subject_tombstone_pkey",
     "subject_tombstone_replacement_alias_key",
     "thread_view_author_user_idx",
+    "thread_view_body_private_kid_idx",
     "thread_view_page_idx",
     "thread_view_pkey",
     "visit_history_actor_idx",
@@ -362,6 +375,8 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "auth_delivery_intent_account_id_fkey:f",
     "auth_delivery_intent_attempt_count_check:c",
     "auth_delivery_intent_credential_envelope_check:c",
+    "auth_delivery_intent_credential_envelope_kid_fkey:f",
+    "auth_delivery_intent_credential_envelope_kid_shape:c",
     "auth_delivery_intent_credential_expiry_check:c",
     "auth_delivery_intent_credential_hash_key:u",
     "auth_delivery_intent_delivery_kind_check:c",
@@ -424,9 +439,13 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "day_event_narrative_event_fkey:f",
     "day_event_narrative_lifecycle_check:c",
     "day_event_narrative_pkey:p",
+    "day_event_narrative_rendered_private_kid_fkey:f",
+    "day_event_narrative_rendered_private_kid_shape:c",
     "day_event_narrative_rendered_storage_check:c",
     "day_event_narrative_status_check:c",
     "day_event_narrative_template_hash_check:c",
+    "day_event_narrative_template_private_kid_fkey:f",
+    "day_event_narrative_template_private_kid_shape:c",
     "day_event_narrative_template_storage_check:c",
     "day_event_open_observation_check:c",
     "day_event_participation_event_fkey:f",
@@ -464,8 +483,11 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "discussion_topic_visibility_check:c",
     "event_direct_key_sentinel_ciphertext_check:c",
     "event_direct_key_sentinel_kid_check:c",
+    "event_direct_key_sentinel_lifecycle_check:c",
     "event_direct_key_sentinel_nonce_check:c",
     "event_direct_key_sentinel_pkey:p",
+    "event_direct_key_sentinel_retirement_target_fk:f",
+    "event_direct_key_sentinel_retirement_target_kid_check:c",
     "event_direct_key_sentinel_version_check:c",
     "event_stream_key_state_active_epoch_check:c",
     "event_stream_key_state_pkey:p",
@@ -473,6 +495,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "event_stream_keys_key_epoch_check:c",
     "event_stream_keys_pkey:p",
     "event_stream_keys_wrap_kid_check:c",
+    "event_stream_keys_wrap_kid_fkey:f",
     "event_stream_keys_wrap_nonce_check:c",
     "event_stream_keys_wrap_version_check:c",
     "event_stream_keys_wrapped_dek_check:c",
@@ -510,6 +533,8 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "host_prompt_pkey:p",
     "identity_lifecycle_audit_pkey:p",
     "investigation_memory_pkey:p",
+    "investigation_memory_result_private_kid_fkey:f",
+    "investigation_memory_result_private_kid_present:c",
     "media_upload_ledger_encoded_bytes_check:c",
     "media_upload_ledger_pkey:p",
     "media_upload_ledger_principal_user_id_fkey:f",
@@ -555,7 +580,11 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "platform_principal_pkey:p",
     "platform_principal_status_check:c",
     "player_info_result_pkey:p",
+    "player_info_result_private_kid_fkey:f",
+    "player_info_result_private_kid_present:c",
     "player_investigation_result_pkey:p",
+    "player_investigation_result_private_kid_fkey:f",
+    "player_investigation_result_private_kid_present:c",
     "player_notification_pkey:p",
     "post_citation_pkey:p",
     "post_citation_quoted_kind_check:c",
@@ -567,6 +596,8 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "privacy_subject_principal_user_id_fkey:f",
     "privacy_subject_principal_user_id_key:u",
     "private_channel_member_pkey:p",
+    "private_channel_member_private_kid_fkey:f",
+    "private_channel_member_private_kid_present:c",
     "profile_editor_current_claim_id_fkey:f",
     "profile_editor_pkey:p",
     "profile_editor_principal_user_id_key:u",
@@ -582,6 +613,8 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "slot_effect_pkey:p",
     "slot_occupancy_epoch_pkey:p",
     "slot_state_pkey:p",
+    "slot_state_private_kid_fkey:f",
+    "slot_state_private_kid_shape:c",
     "slot_status_tag_pkey:p",
     "spectator_membership_pkey:p",
     "subject_authority_binding_manifest_check:c",
@@ -619,6 +652,8 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "subject_tombstone_replacement_alias_key:u",
     "subject_tombstone_subject_id_fkey:f",
     "thread_view_author_present:c",
+    "thread_view_body_private_kid_fkey:f",
+    "thread_view_body_private_kid_shape:c",
     "thread_view_body_storage:c",
     "thread_view_pkey:p",
     "visit_history_pkey:p",
@@ -777,6 +812,292 @@ fn assert_foreign_key_violation(error: sqlx::Error, constraint: &str) {
         .expect("foreign-key rejection must be a database error");
     assert_eq!(database_error.code().as_deref(), Some("23503"));
     assert_eq!(database_error.constraint(), Some(constraint));
+}
+
+async fn insert_runtime_kek_sentinel(pool: &PgPool, kid: &str) {
+    sqlx::query(
+        "INSERT INTO event_direct_key_sentinel \
+         (kid, sentinel_version, sentinel_nonce, sentinel_ciphertext) \
+         VALUES ($1, 1, decode(repeat('01', 24), 'hex'), decode(repeat('02', 56), 'hex'))",
+    )
+    .bind(kid)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn runtime_kek_catalog_fences_raw_stream_wraps_and_direct_envelopes(pool: PgPool) {
+    insert_runtime_kek_sentinel(&pool, "old-v1").await;
+    insert_runtime_kek_sentinel(&pool, "new-v2").await;
+    insert_runtime_kek_sentinel(&pool, "other-v3").await;
+
+    let malformed = sqlx::query(
+        "INSERT INTO event_direct_key_sentinel \
+         (kid, sentinel_version, sentinel_nonce, sentinel_ciphertext) \
+         VALUES ('-bad-kid', 1, decode(repeat('01', 24), 'hex'), decode(repeat('02', 56), 'hex'))",
+    )
+    .execute(&pool)
+    .await
+    .expect_err("KIDs outside the restricted alphabet must be rejected");
+    let malformed = malformed.as_database_error().unwrap();
+    assert_eq!(malformed.code().as_deref(), Some("23514"));
+    let stream_wrap_fk_validated: bool = sqlx::query_scalar(
+        "SELECT convalidated FROM pg_constraint \
+         WHERE conname = 'event_stream_keys_wrap_kid_fkey'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        !stream_wrap_fk_validated,
+        "the mirrored legacy stream-wrap FK must remain NOT VALID"
+    );
+
+    let stream = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO event_stream_keys \
+         (stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek) \
+         VALUES ($1, 1, 1, 'old-v1', decode(repeat('03', 24), 'hex'), decode(repeat('04', 48), 'hex'))",
+    )
+    .bind(stream)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO slot_state (game_id, slot_id, private) \
+         VALUES ($1, 'slot_1', '{\"kid\":\"old-v1\"}'::jsonb)",
+    )
+    .bind(stream)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "UPDATE event_direct_key_sentinel \
+         SET lifecycle = 'retiring', retirement_target_kid = 'new-v2', \
+             retirement_started_at = clock_timestamp() \
+         WHERE kid = 'old-v1'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let stale_wrap = sqlx::query(
+        "UPDATE event_stream_keys SET wrapped_dek = decode(repeat('05', 48), 'hex') \
+         WHERE stream_id = $1 AND key_epoch = 1",
+    )
+    .bind(stream)
+    .execute(&pool)
+    .await
+    .expect_err("a retiring KID must reject raw stream-wrap replacement");
+    assert!(stale_wrap
+        .to_string()
+        .contains("not writable for an event stream-key wrap"));
+
+    let stale_direct = sqlx::query(
+        "INSERT INTO slot_state (game_id, slot_id, private) \
+         VALUES ($1, 'slot_2', '{\"kid\":\"old-v1\"}'::jsonb)",
+    )
+    .bind(stream)
+    .execute(&pool)
+    .await
+    .expect_err("a retiring KID must reject raw direct-envelope insertion");
+    assert!(stale_direct
+        .to_string()
+        .contains("not writable for direct envelope"));
+
+    let parallel_rotation = sqlx::query(
+        "UPDATE event_direct_key_sentinel \
+         SET lifecycle = 'retiring', retirement_target_kid = 'new-v2', \
+             retirement_started_at = clock_timestamp() \
+         WHERE kid = 'other-v3'",
+    )
+    .execute(&pool)
+    .await
+    .expect_err("only one runtime KEK rotation may be in flight");
+    assert!(parallel_rotation
+        .to_string()
+        .contains("another runtime KEK rotation is already in flight"));
+
+    let references: Vec<(String, String)> =
+        sqlx::query_as("SELECT surface, kid FROM event_direct_key_reference ORDER BY surface, kid")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        references,
+        vec![("slot_state.private".to_string(), "old-v1".to_string())]
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn stream_wrap_share_lock_closes_the_retirement_race(pool: PgPool) {
+    insert_runtime_kek_sentinel(&pool, "old-v1").await;
+    insert_runtime_kek_sentinel(&pool, "new-v2").await;
+    let stream = Uuid::new_v4();
+    let mut writer = pool.begin().await.unwrap();
+    sqlx::query(
+        "INSERT INTO event_stream_keys \
+         (stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek) \
+         VALUES ($1, 1, 1, 'old-v1', decode(repeat('03', 24), 'hex'), decode(repeat('04', 48), 'hex'))",
+    )
+    .bind(stream)
+    .execute(&mut *writer)
+    .await
+    .unwrap();
+
+    let rotation_pool = pool.clone();
+    let mut rotation = tokio::spawn(async move {
+        sqlx::query(
+            "UPDATE event_direct_key_sentinel \
+             SET lifecycle = 'retiring', retirement_target_kid = 'new-v2', \
+                 retirement_started_at = clock_timestamp() \
+             WHERE kid = 'old-v1'",
+        )
+        .execute(&rotation_pool)
+        .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), &mut rotation)
+            .await
+            .is_err(),
+        "retirement must wait for the in-flight writable-KID share lock"
+    );
+    writer.commit().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(2), rotation)
+        .await
+        .expect("retirement should resume after the wrap commits")
+        .unwrap()
+        .unwrap();
+
+    let stale = sqlx::query(
+        "INSERT INTO event_stream_keys \
+         (stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek) \
+         VALUES ($1, 2, 1, 'old-v1', decode(repeat('03', 24), 'hex'), decode(repeat('04', 48), 'hex'))",
+    )
+    .bind(stream)
+    .execute(&pool)
+    .await
+    .expect_err("the stale writer must lose after the transition commits");
+    assert!(stale
+        .to_string()
+        .contains("not writable for an event stream-key wrap"));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn lifecycle_advisory_lock_serializes_raw_rotation_starts(pool: PgPool) {
+    insert_runtime_kek_sentinel(&pool, "source-a").await;
+    insert_runtime_kek_sentinel(&pool, "source-b").await;
+    insert_runtime_kek_sentinel(&pool, "target-v2").await;
+
+    let mut first = pool.begin().await.unwrap();
+    sqlx::query(
+        "UPDATE event_direct_key_sentinel \
+         SET lifecycle = 'retiring', retirement_target_kid = 'target-v2', \
+             retirement_started_at = clock_timestamp() \
+         WHERE kid = 'source-a'",
+    )
+    .execute(&mut *first)
+    .await
+    .unwrap();
+
+    let second_pool = pool.clone();
+    let mut second = tokio::spawn(async move {
+        sqlx::query(
+            "UPDATE event_direct_key_sentinel \
+             SET lifecycle = 'retiring', retirement_target_kid = 'target-v2', \
+                 retirement_started_at = clock_timestamp() \
+             WHERE kid = 'source-b'",
+        )
+        .execute(&second_pool)
+        .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), &mut second)
+            .await
+            .is_err(),
+        "a second raw rotation must wait on the database-wide transition lock"
+    );
+    first.commit().await.unwrap();
+    let error = tokio::time::timeout(Duration::from_secs(2), second)
+        .await
+        .expect("the second rotation should resume after the first commits")
+        .unwrap()
+        .expect_err("one in-flight rotation must reject the second transition");
+    assert!(error
+        .to_string()
+        .contains("another runtime KEK rotation is already in flight"));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn reseal_claim_indexes_match_each_skip_locked_order(pool: PgPool) {
+    let definitions: Vec<(String, String)> = sqlx::query_as(
+        "SELECT indexname, indexdef FROM pg_indexes \
+         WHERE schemaname = 'public' AND indexname = ANY($1) ORDER BY indexname",
+    )
+    .bind(vec![
+        "auth_delivery_intent_credential_envelope_kid_idx",
+        "day_event_narrative_rendered_private_kid_idx",
+        "day_event_narrative_template_private_kid_idx",
+        "investigation_memory_result_private_kid_idx",
+        "player_info_result_private_kid_idx",
+        "player_investigation_result_private_kid_idx",
+        "private_channel_member_private_kid_idx",
+        "slot_state_private_kid_idx",
+        "thread_view_body_private_kid_idx",
+    ])
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let expected = [
+        (
+            "auth_delivery_intent_credential_envelope_kid_idx",
+            "(credential_envelope_kid, delivery_id)",
+        ),
+        (
+            "day_event_narrative_rendered_private_kid_idx",
+            "(rendered_body_private_kid, game_id, event_id, lifecycle)",
+        ),
+        (
+            "day_event_narrative_template_private_kid_idx",
+            "(body_template_private_kid, game_id, event_id, lifecycle)",
+        ),
+        (
+            "investigation_memory_result_private_kid_idx",
+            "(result_private_kid, game_id, investigator_slot, target_slot, mode)",
+        ),
+        (
+            "player_info_result_private_kid_idx",
+            "(result_private_kid, game_id, phase_id, event_index, audience_slot)",
+        ),
+        (
+            "player_investigation_result_private_kid_idx",
+            "(result_private_kid, game_id, phase_id, event_index, audience_slot)",
+        ),
+        (
+            "private_channel_member_private_kid_idx",
+            "(private_kid, game_id, channel_id, slot_id)",
+        ),
+        (
+            "slot_state_private_kid_idx",
+            "(private_kid, game_id, slot_id)",
+        ),
+        (
+            "thread_view_body_private_kid_idx",
+            "(body_private_kid, game_id, source_seq)",
+        ),
+    ];
+    assert_eq!(definitions.len(), expected.len());
+    for ((actual_name, definition), (expected_name, ordered_columns)) in
+        definitions.iter().zip(expected)
+    {
+        assert_eq!(actual_name, expected_name);
+        assert!(
+            definition.contains(ordered_columns),
+            "{actual_name} does not cover its lock order: {definition}"
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

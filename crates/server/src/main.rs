@@ -465,6 +465,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     server::ensure_schema_ready(&pool).await?;
+    eventstore::attest_active_runtime_kek(&pool).await?;
     eventstore::audit_event_encryption_key_coverage(&pool).await?;
     identity::prepare_subject_authority_for_service(&pool, &subject_authority).await?;
     let _subject_erasure_worker = spawn_subject_erasure_worker(pool.clone());

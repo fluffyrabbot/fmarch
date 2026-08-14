@@ -263,11 +263,18 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   Private-projection and delivery-credential sealing creates/authenticates that KID sentinel in
   the same transaction as the envelope, so omitting or misconfiguring any direct-envelope key
   fails readiness closed without making probe cost proportional to tenant data.
-- Runtime KEK retirement has two separate proofs. Rewrapping every stream DEK is sufficient to
-  remove a stream-only historical KEK. A KEK named by `event_direct_key_sentinel` must remain in
-  `FMARCH_EVENT_WRAP_KEYS`; this greenfield cut deliberately retains it until a future direct-
-  envelope re-encryption and sentinel-retirement tool exists. An unused active KEK does not need a
-  sentinel, and an empty direct-sentinel catalog is a valid readiness state.
+- Runtime KEK retirement is a forward-only, fenced lifecycle. `fmarch-event-key-admin` first moves
+  the source KID from `writable` to `retiring`, which waits for in-flight writers and makes every
+  later old-KID write fail. It then rewraps stream DEKs and reseals all nine registered direct
+  envelope columns in bounded, resumable `SKIP LOCKED` batches. Generated KID columns, foreign
+  keys, indexed exact-reference counts, and database write guards make zero old-KID references a
+  monotonic fact after the fence. A separate key-removal rehearsal runs with the old KID absent
+  from the admin process, records write-once evidence, and is required before the source becomes
+  an immutable `retired` tombstone. The hosted historical key must be removed and every replica
+  successfully redeployed between rehearsal and finalization; configured retired KIDs fail
+  startup/readiness. Retired KIDs cannot be recreated or reused. The full operator
+  sequence and backup-custody requirement are in
+  [`runtime-kek-rotation.md`](../ops/runtime-kek-rotation.md).
 - Event envelope rotation is application-managed rather than KMS-backed or automatically retired. The external
   subject-key authority has an immutable genesis/revision manifest bound to the database, and normal
   startup refuses an unbootstrapped, wrong, unreachable, or incomplete authority. Its wrapping and

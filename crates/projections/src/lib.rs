@@ -816,6 +816,47 @@ pub enum ProjectionError {
     },
 }
 
+/// One persisted projection envelope whose key custody can be rotated in place.
+///
+/// Variants identify columns, rather than merely tables, because
+/// `day_event_narrative` owns two independently sealed values with distinct
+/// authenticated-data contexts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivateProjectionEnvelopeSurface {
+    PrivateChannelMember,
+    SlotState,
+    ThreadViewBody,
+    PlayerInvestigationResult,
+    PlayerInfoResult,
+    InvestigationMemory,
+    DayEventNarrativeTemplate,
+    DayEventNarrativeRendered,
+}
+
+/// Result of one bounded, independently committed surface batch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrivateProjectionResealSurfaceReport {
+    pub surface: PrivateProjectionEnvelopeSurface,
+    pub examined: u64,
+    pub resealed: u64,
+    /// `true` means this surface filled the requested batch and may have more
+    /// immediately claimable rows. Exact exhaustion is intentionally proven by
+    /// [`count_private_projection_envelopes_by_kid`] after bounded work stops.
+    pub batch_full: bool,
+}
+
+/// Result of a resumable pass over every direct-key projection envelope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrivateProjectionResealReport {
+    pub retiring_kid: String,
+    pub batch_size: u32,
+    pub surfaces: Vec<PrivateProjectionResealSurfaceReport>,
+    pub examined: u64,
+    pub resealed: u64,
+    pub batch_full: bool,
+}
+
 /// Non-destructive replay audit for one projection table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectionAuditTable {
@@ -5074,6 +5115,7 @@ fn normalize_private_snapshot(
                 "projection audit row must be an object".to_string(),
             ))
         })?;
+        remove_private_custody_metadata(table, object);
         if table == "day_event_narrative" {
             normalize_private_day_event_narrative(object)?;
             continue;
@@ -5133,6 +5175,17 @@ fn normalize_private_snapshot(
         }
     }
     Ok(rows)
+}
+
+fn remove_private_custody_metadata(
+    table: &str,
+    object: &mut serde_json::Map<String, serde_json::Value>,
+) {
+    for surface in PrivateProjectionEnvelopeSurface::ALL {
+        if surface.table() == table {
+            object.remove(surface.kid_field());
+        }
+    }
 }
 
 fn normalize_private_day_event_narrative(
@@ -5260,6 +5313,259 @@ fn json_array_len(value: &serde_json::Value) -> usize {
 
 fn private_projection_context(table: &str, identity: &[&str]) -> String {
     format!("fmarch-projection-v1:{table}:{}", identity.join(":"))
+}
+
+impl PrivateProjectionEnvelopeSurface {
+    const ALL: [Self; 8] = [
+        Self::PrivateChannelMember,
+        Self::SlotState,
+        Self::ThreadViewBody,
+        Self::PlayerInvestigationResult,
+        Self::PlayerInfoResult,
+        Self::InvestigationMemory,
+        Self::DayEventNarrativeTemplate,
+        Self::DayEventNarrativeRendered,
+    ];
+
+    fn batch_sql(self) -> &'static str {
+        match self {
+            Self::PrivateChannelMember => {
+                "SELECT ctid::text AS row_locator, \
+                        ARRAY[game_id::text, channel_id, slot_id]::text[] AS identity, \
+                        private AS envelope \
+                 FROM private_channel_member WHERE private_kid = $1 \
+                 ORDER BY game_id, channel_id, slot_id \
+                 FOR UPDATE SKIP LOCKED LIMIT $2"
+            }
+            Self::SlotState => {
+                "SELECT ctid::text AS row_locator, \
+                        ARRAY[game_id::text, slot_id]::text[] AS identity, \
+                        private AS envelope \
+                 FROM slot_state WHERE private_kid = $1 \
+                 ORDER BY game_id, slot_id \
+                 FOR UPDATE SKIP LOCKED LIMIT $2"
+            }
+            Self::ThreadViewBody => {
+                "SELECT ctid::text AS row_locator, \
+                        ARRAY[game_id::text, source_seq::text, channel_id]::text[] AS identity, \
+                        body_private AS envelope \
+                 FROM thread_view WHERE body_private_kid = $1 \
+                 ORDER BY game_id, source_seq \
+                 FOR UPDATE SKIP LOCKED LIMIT $2"
+            }
+            Self::PlayerInvestigationResult => {
+                "SELECT ctid::text AS row_locator, \
+                        ARRAY[game_id::text, phase_id, event_index::text, audience_slot]::text[] AS identity, \
+                        result_private AS envelope \
+                 FROM player_investigation_result WHERE result_private_kid = $1 \
+                 ORDER BY game_id, phase_id, event_index, audience_slot \
+                 FOR UPDATE SKIP LOCKED LIMIT $2"
+            }
+            Self::PlayerInfoResult => {
+                "SELECT ctid::text AS row_locator, \
+                        ARRAY[game_id::text, phase_id, event_index::text, audience_slot]::text[] AS identity, \
+                        result_private AS envelope \
+                 FROM player_info_result WHERE result_private_kid = $1 \
+                 ORDER BY game_id, phase_id, event_index, audience_slot \
+                 FOR UPDATE SKIP LOCKED LIMIT $2"
+            }
+            Self::InvestigationMemory => {
+                "SELECT ctid::text AS row_locator, \
+                        ARRAY[game_id::text, investigator_slot, target_slot, mode]::text[] AS identity, \
+                        result_private AS envelope \
+                 FROM investigation_memory WHERE result_private_kid = $1 \
+                 ORDER BY game_id, investigator_slot, target_slot, mode \
+                 FOR UPDATE SKIP LOCKED LIMIT $2"
+            }
+            Self::DayEventNarrativeTemplate => {
+                "SELECT ctid::text AS row_locator, \
+                        ARRAY[game_id::text, event_id, lifecycle, 'template']::text[] AS identity, \
+                        body_template_private AS envelope \
+                 FROM day_event_narrative WHERE body_template_private_kid = $1 \
+                 ORDER BY game_id, event_id, lifecycle \
+                 FOR UPDATE SKIP LOCKED LIMIT $2"
+            }
+            Self::DayEventNarrativeRendered => {
+                "SELECT ctid::text AS row_locator, \
+                        ARRAY[game_id::text, event_id, lifecycle, 'rendered']::text[] AS identity, \
+                        rendered_body_private AS envelope \
+                 FROM day_event_narrative WHERE rendered_body_private_kid = $1 \
+                 ORDER BY game_id, event_id, lifecycle \
+                 FOR UPDATE SKIP LOCKED LIMIT $2"
+            }
+        }
+    }
+
+    fn update_sql(self) -> &'static str {
+        match self {
+            Self::PrivateChannelMember => {
+                "UPDATE private_channel_member SET private = $1 \
+                 WHERE ctid = $2::tid AND private_kid = $3"
+            }
+            Self::SlotState => {
+                "UPDATE slot_state SET private = $1 \
+                 WHERE ctid = $2::tid AND private_kid = $3"
+            }
+            Self::ThreadViewBody => {
+                "UPDATE thread_view SET body_private = $1 \
+                 WHERE ctid = $2::tid AND body_private_kid = $3"
+            }
+            Self::PlayerInvestigationResult => {
+                "UPDATE player_investigation_result SET result_private = $1 \
+                 WHERE ctid = $2::tid AND result_private_kid = $3"
+            }
+            Self::PlayerInfoResult => {
+                "UPDATE player_info_result SET result_private = $1 \
+                 WHERE ctid = $2::tid AND result_private_kid = $3"
+            }
+            Self::InvestigationMemory => {
+                "UPDATE investigation_memory SET result_private = $1 \
+                 WHERE ctid = $2::tid AND result_private_kid = $3"
+            }
+            Self::DayEventNarrativeTemplate => {
+                "UPDATE day_event_narrative SET body_template_private = $1 \
+                 WHERE ctid = $2::tid AND body_template_private_kid = $3"
+            }
+            Self::DayEventNarrativeRendered => {
+                "UPDATE day_event_narrative SET rendered_body_private = $1 \
+                 WHERE ctid = $2::tid AND rendered_body_private_kid = $3"
+            }
+        }
+    }
+
+    fn table(self) -> &'static str {
+        match self {
+            Self::PrivateChannelMember => private_channel_projection::TABLE,
+            Self::SlotState => "slot_state",
+            Self::ThreadViewBody => "thread_view",
+            Self::PlayerInvestigationResult => "player_investigation_result",
+            Self::PlayerInfoResult => "player_info_result",
+            Self::InvestigationMemory => "investigation_memory",
+            Self::DayEventNarrativeTemplate | Self::DayEventNarrativeRendered => {
+                "day_event_narrative"
+            }
+        }
+    }
+
+    fn kid_field(self) -> &'static str {
+        match self {
+            Self::PrivateChannelMember | Self::SlotState => "private_kid",
+            Self::ThreadViewBody => "body_private_kid",
+            Self::PlayerInvestigationResult
+            | Self::PlayerInfoResult
+            | Self::InvestigationMemory => "result_private_kid",
+            Self::DayEventNarrativeTemplate => "body_template_private_kid",
+            Self::DayEventNarrativeRendered => "rendered_body_private_kid",
+        }
+    }
+}
+
+/// Reseal one bounded batch from every direct-key projection surface.
+///
+/// Each surface is processed in its own transaction. Rows are claimed with
+/// `FOR UPDATE SKIP LOCKED`, so multiple workers may safely run this function
+/// and a cancelled process can resume without external cursor state. A row is
+/// always wholly old-key or wholly active-key after transaction recovery.
+pub async fn reseal_private_projection_batch(
+    pool: &PgPool,
+    retiring_kid: &str,
+    batch_size: u32,
+) -> Result<PrivateProjectionResealReport, ProjectionError> {
+    if retiring_kid.is_empty() {
+        return Err(ProjectionError::Store(StoreError::Crypto(
+            "retiring event key id must not be empty".to_string(),
+        )));
+    }
+    if batch_size == 0 || batch_size > 10_000 {
+        return Err(ProjectionError::Store(StoreError::Crypto(
+            "private projection reseal batch size must be 1..=10000".to_string(),
+        )));
+    }
+
+    let mut surfaces = Vec::with_capacity(PrivateProjectionEnvelopeSurface::ALL.len());
+    for surface in PrivateProjectionEnvelopeSurface::ALL {
+        let mut tx = pool.begin().await?;
+        let rows = sqlx::query(surface.batch_sql())
+            .bind(retiring_kid)
+            .bind(i64::from(batch_size))
+            .fetch_all(&mut *tx)
+            .await?;
+        let examined = rows.len() as u64;
+        let mut resealed = 0_u64;
+        let mut transformed = Vec::with_capacity(rows.len());
+        if !rows.is_empty() {
+            let reseal_context =
+                eventstore::DirectEnvelopeResealContext::begin(&mut tx, retiring_kid).await?;
+            for row in rows {
+                let row_locator: String = row.get("row_locator");
+                let identity: Vec<String> = row.get("identity");
+                let envelope: serde_json::Value = row.get("envelope");
+                let identity_refs: Vec<&str> = identity.iter().map(String::as_str).collect();
+                let authenticated_context =
+                    private_projection_context(surface.table(), &identity_refs);
+                let active_envelope =
+                    reseal_context.reseal_private_projection(&envelope, &authenticated_context)?;
+                transformed.push((row_locator, active_envelope));
+            }
+        }
+
+        // The crypto context intentionally retains the transaction borrow while
+        // it amortizes source/target registry authentication. Only after it is
+        // dropped do we issue the claimed row updates in this same transaction.
+        for (row_locator, active_envelope) in transformed {
+            let updated = sqlx::query(surface.update_sql())
+                .bind(active_envelope)
+                .bind(row_locator)
+                .bind(retiring_kid)
+                .execute(&mut *tx)
+                .await?;
+            if updated.rows_affected() != 1 {
+                return Err(ProjectionError::Store(StoreError::Crypto(format!(
+                    "claimed {:?} projection envelope was not updated exactly once",
+                    surface
+                ))));
+            }
+            resealed += 1;
+        }
+        tx.commit().await?;
+        surfaces.push(PrivateProjectionResealSurfaceReport {
+            surface,
+            examined,
+            resealed,
+            batch_full: examined == u64::from(batch_size),
+        });
+    }
+
+    Ok(PrivateProjectionResealReport {
+        retiring_kid: retiring_kid.to_string(),
+        batch_size,
+        examined: surfaces.iter().map(|report| report.examined).sum(),
+        resealed: surfaces.iter().map(|report| report.resealed).sum(),
+        batch_full: surfaces.iter().any(|report| report.batch_full),
+        surfaces,
+    })
+}
+
+/// Count every projection envelope that still directly references `kid`.
+///
+/// The generated kid columns are indexed and database-maintained, making this
+/// an exact bounded-key lookup rather than a JSON envelope scan.
+pub async fn count_private_projection_envelopes_by_kid(
+    pool: &PgPool,
+    kid: &str,
+) -> Result<u64, ProjectionError> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM event_direct_key_reference \
+         WHERE kid = $1 AND surface <> 'auth_delivery_intent.credential_envelope'",
+    )
+    .bind(kid)
+    .fetch_one(pool)
+    .await?;
+    u64::try_from(count).map_err(|_| {
+        ProjectionError::Store(StoreError::Crypto(
+            "private projection envelope count was negative".to_string(),
+        ))
+    })
 }
 
 async fn seal_private_projection(

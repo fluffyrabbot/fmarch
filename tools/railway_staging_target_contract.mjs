@@ -27,6 +27,7 @@ async function contract() {
         "package.json",
         "crates/server/src/main.rs",
         "crates/server/src/bin/fmarch-migrate.rs",
+        "crates/server/src/bin/fmarch-event-key-admin.rs",
         "crates/api/src/lib.rs",
         "crates/media/src/repository.rs",
         "crates/projections/src/schema.rs",
@@ -42,6 +43,7 @@ async function contract() {
   assert.doesNotMatch(source.Dockerfile, /\/var\/lib\/fmarch\/media/);
   assert.match(source.Dockerfile, /apt-get install --yes --no-install-recommends ca-certificates/);
   assert.match(source.Dockerfile, /COPY --from=builder \/app\/target\/release\/fmarch-migrate \/usr\/local\/bin\/fmarch-migrate/);
+  assert.match(source.Dockerfile, /COPY --from=builder \/app\/target\/release\/fmarch-event-key-admin \/usr\/local\/bin\/fmarch-event-key-admin/);
   assert.match(source.Dockerfile, /USER fmarch/);
   assert.match(source.Dockerfile, /CMD \["fmarch-server"\]/);
   assert.match(source[".dockerignore"], /^target$/m);

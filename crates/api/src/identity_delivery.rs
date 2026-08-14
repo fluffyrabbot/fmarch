@@ -411,6 +411,15 @@ pub enum IdentityDeliveryError {
     Credential(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct IdentityDeliveryCredentialResealBatchReport {
+    pub examined: u64,
+    pub resealed: u64,
+    pub batch_full: bool,
+}
+
+const MAX_IDENTITY_DELIVERY_RESEAL_BATCH: i64 = 1_000;
+
 #[derive(Debug)]
 struct ClaimedIdentityDelivery {
     attempt: IdentityDeliveryAttempt,
@@ -490,6 +499,130 @@ pub fn spawn_identity_delivery_worker(
             }
         }
     })
+}
+
+/// Reseals one independently committed batch of persisted delivery credentials.
+///
+/// The row lock is the authority boundary with delivery claim, cancellation,
+/// and subject erasure. A caller may safely repeat this operation after an
+/// interruption; rows already resealed no longer match `retiring_kid`, while a
+/// concurrently locked row is left for a later batch.
+pub async fn reseal_identity_delivery_credentials_batch(
+    pool: &PgPool,
+    retiring_kid: &str,
+    limit: i64,
+) -> Result<IdentityDeliveryCredentialResealBatchReport, IdentityDeliveryError> {
+    validate_delivery_reseal_kid(retiring_kid)?;
+    if !(1..=MAX_IDENTITY_DELIVERY_RESEAL_BATCH).contains(&limit) {
+        return Err(IdentityDeliveryError::Credential(format!(
+            "delivery credential reseal batch limit must be between 1 and {MAX_IDENTITY_DELIVERY_RESEAL_BATCH}"
+        )));
+    }
+
+    let mut tx = pool.begin().await?;
+    let rows = sqlx::query_as::<_, (Uuid, String, Option<Value>)>(
+        r#"
+        SELECT delivery_id, delivery_kind, credential_envelope
+        FROM auth_delivery_intent
+        WHERE credential_envelope_kid = $1
+        ORDER BY delivery_id
+        FOR UPDATE SKIP LOCKED
+        LIMIT $2
+        "#,
+    )
+    .bind(retiring_kid)
+    .bind(limit)
+    .fetch_all(&mut *tx)
+    .await?;
+    let examined = rows.len() as u64;
+    let transformed = if rows.is_empty() {
+        Vec::new()
+    } else {
+        let context = eventstore::DirectEnvelopeResealContext::begin(&mut tx, retiring_kid)
+            .await
+            .map_err(|error| IdentityDeliveryError::Credential(error.to_string()))?;
+        let mut transformed = Vec::with_capacity(rows.len());
+        for (delivery_id, delivery_kind, credential_envelope) in rows {
+            // A generated KID normally excludes NULL envelopes. Keep the
+            // explicit check so cancellation/erasure can never resurrect one.
+            let Some(credential_envelope) = credential_envelope else {
+                continue;
+            };
+            let kind = IdentityDeliveryKind::parse(&delivery_kind).ok_or_else(|| {
+                IdentityDeliveryError::Credential(format!(
+                    "delivery `{delivery_id}` has unsupported kind `{delivery_kind}`"
+                ))
+            })?;
+            let aad = delivery_aad(delivery_id, kind);
+            let new_envelope = context
+                .reseal_delivery_credential(&credential_envelope, &aad)
+                .map_err(|error| IdentityDeliveryError::Credential(error.to_string()))?;
+            transformed.push((delivery_id, new_envelope));
+        }
+        transformed
+    };
+
+    let resealed = transformed.len() as u64;
+    if !transformed.is_empty() {
+        let mut update = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+            "UPDATE auth_delivery_intent AS target \
+             SET credential_envelope = input.envelope \
+             FROM (",
+        );
+        update.push_values(transformed.iter(), |mut row, (delivery_id, envelope)| {
+            row.push_bind(delivery_id).push_bind(envelope);
+        });
+        update.push(
+            ") AS input(delivery_id, envelope) \
+             WHERE target.delivery_id = input.delivery_id \
+               AND target.credential_envelope IS NOT NULL \
+               AND target.credential_envelope_kid = ",
+        );
+        update.push_bind(retiring_kid);
+        let result = update.build().execute(&mut *tx).await?;
+        if result.rows_affected() != resealed {
+            return Err(IdentityDeliveryError::Credential(
+                "claimed delivery credential batch was not updated exactly once per row"
+                    .to_string(),
+            ));
+        }
+    }
+
+    tx.commit().await?;
+
+    Ok(IdentityDeliveryCredentialResealBatchReport {
+        examined,
+        resealed,
+        batch_full: examined == limit as u64,
+    })
+}
+
+/// Counts persisted delivery credentials that still require `kid`.
+pub async fn count_delivery_credential_envelopes_by_kid(
+    pool: &PgPool,
+    kid: &str,
+) -> Result<u64, IdentityDeliveryError> {
+    validate_delivery_reseal_kid(kid)?;
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT count(*)
+        FROM auth_delivery_intent
+        WHERE credential_envelope_kid = $1
+        "#,
+    )
+    .bind(kid)
+    .fetch_one(pool)
+    .await?;
+    Ok(count as u64)
+}
+
+fn validate_delivery_reseal_kid(kid: &str) -> Result<(), IdentityDeliveryError> {
+    if kid.is_empty() || kid.trim() != kid || kid.len() > 128 {
+        return Err(IdentityDeliveryError::Credential(
+            "delivery credential key id must be 1..=128 unpadded bytes".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 async fn claim_delivery(

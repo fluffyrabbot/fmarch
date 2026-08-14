@@ -15,6 +15,26 @@ const checkedBaseline = await readFile(
   path.join(repoRoot, migrationDirectory, baselineFilename),
   "utf8",
 );
+const runtimeKekRetirement = await readFile(
+  path.join(repoRoot, migrationDirectory, "0026_runtime_kek_retirement.sql"),
+  "utf8",
+);
+const eventstoreRuntimeKekRetirement = await readFile(
+  path.join(repoRoot, "crates/eventstore/migrations/0004_runtime_kek_retirement.sql"),
+  "utf8",
+);
+
+function runtimeKekCustodyCore(sql) {
+  const startMarker = "DROP TRIGGER event_direct_key_sentinel_no_mutation";
+  const endMarker = "event_stream_key_wrap_write_guard();";
+  const start = sql.indexOf(startMarker);
+  const end = sql.indexOf(endMarker, start);
+  assert.notEqual(start, -1, "runtime KEK custody core start marker");
+  assert.notEqual(end, -1, "runtime KEK custody core end marker");
+  return sql
+    .slice(start, end + endMarker.length)
+    .replaceAll("public.", "");
+}
 
 async function withMigrationDirectory(files, run) {
   const root = await mkdtemp(path.join(os.tmpdir(), "fmarch-projection-baseline-"));
@@ -61,9 +81,89 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     "0023_erasure_outbox.sql",
     "0024_event_stream_keys.sql",
     "0025_pack_artifact_custody.sql",
+    "0026_runtime_kek_retirement.sql",
   ]);
-  assert.equal(report.migration_file_count, 25);
+  assert.equal(report.migration_file_count, 26);
   assert.ok(report.statement_count > 100);
+});
+
+test("runtime KEK retirement catalogs and fences every direct envelope column", () => {
+  const envelopeColumns = [
+    ["investigation_memory", "result_private", "result_private_kid"],
+    ["player_info_result", "result_private", "result_private_kid"],
+    ["player_investigation_result", "result_private", "result_private_kid"],
+    ["private_channel_member", "private", "private_kid"],
+    ["slot_state", "private", "private_kid"],
+    ["thread_view", "body_private", "body_private_kid"],
+    ["day_event_narrative", "body_template_private", "body_template_private_kid"],
+    ["day_event_narrative", "rendered_body_private", "rendered_body_private_kid"],
+    ["auth_delivery_intent", "credential_envelope", "credential_envelope_kid"],
+  ];
+
+  assert.match(
+    runtimeKekRetirement,
+    /lifecycle\s*=\s*'writable'[\s\S]+lifecycle\s*=\s*'retiring'[\s\S]+lifecycle\s*=\s*'retired'/u,
+  );
+  assert.match(runtimeKekRetirement, /retired event direct-key registry row is an immutable tombstone/u);
+  assert.match(runtimeKekRetirement, /pg_advisory_xact_lock\(5065787916851041841\)/u);
+  assert.match(runtimeKekRetirement, /another runtime KEK rotation is already in flight/u);
+  assert.match(runtimeKekRetirement, /event_direct_key_sentinel_single_retiring_idx/u);
+  assert.match(
+    runtimeKekRetirement,
+    /\^\[A-Za-z0-9\]\[A-Za-z0-9\._:-\]\*\$/u,
+  );
+  assert.match(
+    runtimeKekRetirement,
+    /\^\[A-Za-z0-9\]\[A-Za-z0-9\._:-\]\{0,127\}\$/u,
+  );
+  assert.match(
+    runtimeKekRetirement,
+    /event_stream_keys_wrap_kid_fkey[\s\S]+FOREIGN KEY \(wrap_kid\)[\s\S]+event_direct_key_sentinel \(kid\)[\s\S]+NOT VALID/u,
+  );
+  assert.match(
+    runtimeKekRetirement,
+    /CREATE TRIGGER event_stream_key_wrap_guard[\s\S]+BEFORE INSERT OR UPDATE OF wrap_version, wrap_kid, wrap_nonce, wrapped_dek/u,
+  );
+  assert.match(runtimeKekRetirement, /FOR SHARE/u);
+  assert.match(runtimeKekRetirement, /CREATE VIEW public\.event_direct_key_reference/u);
+
+  const orderedIndexes = [
+    /investigation_memory \([\s\n]*result_private_kid, game_id, investigator_slot, target_slot, mode/u,
+    /player_info_result \([\s\n]*result_private_kid, game_id, phase_id, event_index, audience_slot/u,
+    /player_investigation_result \([\s\n]*result_private_kid, game_id, phase_id, event_index, audience_slot/u,
+    /private_channel_member \([\s\n]*private_kid, game_id, channel_id, slot_id/u,
+    /slot_state \(private_kid, game_id, slot_id\)/u,
+    /thread_view \(body_private_kid, game_id, source_seq\)/u,
+    /body_template_private_kid, game_id, event_id, lifecycle/u,
+    /rendered_body_private_kid, game_id, event_id, lifecycle/u,
+    /auth_delivery_intent \(credential_envelope_kid, delivery_id\)/u,
+  ];
+  for (const index of orderedIndexes) assert.match(runtimeKekRetirement, index);
+
+  for (const [table, envelope, kid] of envelopeColumns) {
+    assert.match(
+      runtimeKekRetirement,
+      new RegExp(`ALTER TABLE public\\.${table}[\\s\\S]+${kid} TEXT`, "u"),
+      `${table}.${envelope} must expose a generated KID`,
+    );
+    assert.match(
+      runtimeKekRetirement,
+      new RegExp(`UPDATE OF ${envelope} ON public\\.${table}`, "u"),
+      `${table}.${envelope} must be fenced by the lifecycle guard`,
+    );
+    assert.match(
+      runtimeKekRetirement,
+      new RegExp(`${table}\\.${envelope}`, "u"),
+      `${table}.${envelope} must appear in the exact reference view`,
+    );
+  }
+});
+
+test("projection migration exactly mirrors the eventstore runtime KEK custody core", () => {
+  assert.equal(
+    runtimeKekCustodyCore(runtimeKekRetirement),
+    runtimeKekCustodyCore(eventstoreRuntimeKekRetirement),
+  );
 });
 
 test("projection migrations reject sequence gaps", async () => {

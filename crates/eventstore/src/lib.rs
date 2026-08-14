@@ -205,6 +205,80 @@ struct ValidatedStreamExport {
     events: Vec<ValidatedExportEvent>,
 }
 
+/// Forward-only online custody state for one runtime event-wrapping KID.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeKekLifecycle {
+    Writable,
+    Retiring,
+    Retired,
+}
+
+impl RuntimeKekLifecycle {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Writable => "writable",
+            Self::Retiring => "retiring",
+            Self::Retired => "retired",
+        }
+    }
+
+    fn from_storage(value: &str) -> Result<Self, StoreError> {
+        match value {
+            "writable" => Ok(Self::Writable),
+            "retiring" => Ok(Self::Retiring),
+            "retired" => Ok(Self::Retired),
+            other => Err(StoreError::Crypto(format!(
+                "unknown runtime KEK lifecycle `{other}`"
+            ))),
+        }
+    }
+}
+
+/// Durable registry status for one runtime event-wrapping KID.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeKekStatus {
+    pub kid: String,
+    pub lifecycle: RuntimeKekLifecycle,
+    pub retirement_target_kid: Option<String>,
+    pub rehearsal_token: Option<Uuid>,
+}
+
+/// Combined eventstore-owned and orchestration-verified live-reference count.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeKekReferenceReport {
+    pub kid: String,
+    pub status: Option<RuntimeKekStatus>,
+    pub stream_key_references: u64,
+    pub direct_reference_count: u64,
+}
+
+/// Result of one bounded, resumable stream-DEK rewrap batch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeKekStreamRewrapBatch {
+    pub retiring_kid: String,
+    pub target_kid: String,
+    pub rewrapped: u64,
+    pub batch_full: bool,
+}
+
+/// Opaque durable evidence required to finalize one runtime KEK retirement.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeKekRetirementEvidence {
+    pub retiring_kid: String,
+    pub target_kid: String,
+    pub token: Uuid,
+}
+
+/// Transaction-scoped, amortized direct-envelope resealer. Construction takes
+/// and retains the transaction borrow after authenticating and locking both
+/// source and target registry rows; each envelope transformation is then pure.
+pub struct DirectEnvelopeResealContext<'tx, 'conn> {
+    _transaction: &'tx mut sqlx::Transaction<'conn, sqlx::Postgres>,
+    retiring_key: EventEncryptionKey,
+    target_key: EventEncryptionKey,
+}
+
 /// Typed errors from the store.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -229,6 +303,9 @@ impl StoreError {
 
 /// The unique-violation SQLSTATE for the `(stream_id, stream_seq)` constraint.
 const PG_UNIQUE_VIOLATION: &str = "23505";
+/// One database-wide transaction lock serializes the deliberately singular
+/// runtime KEK lifecycle. Its stable value is the ASCII tag `FMKEK_V1`.
+const RUNTIME_KEK_LIFECYCLE_ADVISORY_LOCK: i64 = 0x464d_4b45_4b5f_5631;
 
 /// Read the current max `stream_seq` for a stream within the given executor.
 /// Returns 0 for an empty stream (so the first event lands at `stream_seq = 1`).
@@ -460,6 +537,7 @@ pub async fn rewrap_stream_data_keys(pool: &PgPool, stream_id: Uuid) -> Result<u
     .fetch_all(&mut *tx)
     .await?;
     let active_key = event_encryption_keyring()?.active.clone();
+    require_runtime_kek_writable_in_tx(&mut tx, &active_key).await?;
     let mut updated = 0_u64;
     for row in rows {
         let data_key =
@@ -498,6 +576,14 @@ async fn insert_stream_data_key_envelope_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     wrapped: &WrappedStreamDataKey,
 ) -> Result<(), StoreError> {
+    let keyring = event_encryption_keyring()?;
+    let key = keyring.by_kid.get(&wrapped.wrap_kid).ok_or_else(|| {
+        StoreError::Crypto(format!(
+            "event encryption key `{}` is unavailable for stream-key persistence",
+            wrapped.wrap_kid
+        ))
+    })?;
+    ensure_runtime_kek_writable_in_tx(tx, key).await?;
     sqlx::query(
         r#"
         INSERT INTO event_stream_keys
@@ -888,6 +974,614 @@ pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::Error> {
         .map_err(|e| sqlx::Error::Migrate(Box::new(e)))
 }
 
+/// Install and authenticate the process-active runtime KEK sentinel before
+/// readiness, audits, or administrative rotation work begins.
+pub async fn attest_active_runtime_kek(pool: &PgPool) -> Result<RuntimeKekStatus, StoreError> {
+    let active = event_encryption_keyring()?.active.clone();
+    let mut tx = pool.begin().await?;
+    let status = ensure_runtime_kek_writable_in_tx(&mut tx, &active).await?;
+    tx.commit().await?;
+    Ok(status)
+}
+
+/// Read the durable lifecycle status for `kid`, if it has ever entered the
+/// runtime KEK registry.
+pub async fn runtime_kek_status(
+    pool: &PgPool,
+    kid: &str,
+) -> Result<Option<RuntimeKekStatus>, StoreError> {
+    validate_key_id(kid, "runtime KEK kid")?;
+    let row = sqlx::query(
+        r#"
+        SELECT kid, lifecycle, retirement_target_kid, rehearsal_token
+        FROM event_direct_key_sentinel
+        WHERE kid = $1
+        "#,
+    )
+    .bind(kid)
+    .fetch_optional(pool)
+    .await?;
+    row.as_ref().map(runtime_kek_status_from_row).transpose()
+}
+
+/// Report every authoritative eventstore and direct-envelope reference.
+pub async fn runtime_kek_reference_report(
+    pool: &PgPool,
+    kid: &str,
+) -> Result<RuntimeKekReferenceReport, StoreError> {
+    validate_key_id(kid, "runtime KEK kid")?;
+    let stream_key_references = stream_key_reference_count(pool, kid).await?;
+    let direct_reference_count = direct_reference_count(pool, kid).await?;
+    Ok(RuntimeKekReferenceReport {
+        kid: kid.to_string(),
+        status: runtime_kek_status(pool, kid).await?,
+        stream_key_references,
+        direct_reference_count,
+    })
+}
+
+/// Fence a source KID against new writes and bind its forward-only retirement
+/// to the process-active target KID. The source key must still be configured so
+/// its sentinel can be authenticated before migration begins.
+pub async fn begin_runtime_kek_retirement(
+    pool: &PgPool,
+    retiring_kid: &str,
+    target_kid: &str,
+) -> Result<RuntimeKekStatus, StoreError> {
+    validate_retirement_pair(retiring_kid, target_kid)?;
+    let keyring = event_encryption_keyring()?;
+    if keyring.active.kid != target_kid {
+        return Err(StoreError::Crypto(format!(
+            "runtime KEK retirement target `{target_kid}` is not the active KID `{}`",
+            keyring.active.kid
+        )));
+    }
+    let retiring_key = keyring.by_kid.get(retiring_kid).ok_or_else(|| {
+        StoreError::Crypto(format!(
+            "retiring runtime KEK `{retiring_kid}` must remain configured while retirement begins"
+        ))
+    })?;
+
+    let mut tx = pool.begin().await?;
+    lock_runtime_kek_lifecycle_in_tx(&mut tx).await?;
+    reject_other_runtime_kek_retirement_in_tx(&mut tx, retiring_kid).await?;
+    authenticate_representative_stream_wrap_for_kid_in_tx(&mut tx, retiring_kid, retiring_key)
+        .await?;
+    require_runtime_kek_writable_in_tx(&mut tx, &keyring.active).await?;
+    insert_runtime_kek_registry_row_if_missing_in_tx(&mut tx, retiring_key).await?;
+    let row = select_runtime_kek_for_update_in_tx(&mut tx, retiring_kid).await?;
+    authenticate_direct_key_sentinel_row(&row, retiring_key)?;
+    let status = runtime_kek_status_from_row(&row)?;
+    let status = match status.lifecycle {
+        RuntimeKekLifecycle::Writable => {
+            let row = sqlx::query(
+                r#"
+                UPDATE event_direct_key_sentinel
+                SET lifecycle = 'retiring',
+                    retirement_target_kid = $2,
+                    retirement_started_at = clock_timestamp()
+                WHERE kid = $1
+                RETURNING kid, lifecycle, retirement_target_kid, rehearsal_token
+                "#,
+            )
+            .bind(retiring_kid)
+            .bind(target_kid)
+            .fetch_one(&mut *tx)
+            .await?;
+            runtime_kek_status_from_row(&row)?
+        }
+        RuntimeKekLifecycle::Retiring
+            if status.retirement_target_kid.as_deref() == Some(target_kid) =>
+        {
+            status
+        }
+        RuntimeKekLifecycle::Retiring => {
+            return Err(StoreError::Crypto(format!(
+                "runtime KEK `{retiring_kid}` is already retiring to `{}`",
+                status.retirement_target_kid.as_deref().unwrap_or("unknown")
+            )));
+        }
+        RuntimeKekLifecycle::Retired => {
+            return Err(StoreError::Crypto(format!(
+                "runtime KEK `{retiring_kid}` is retired and cannot be reused"
+            )));
+        }
+    };
+    tx.commit().await?;
+    Ok(status)
+}
+
+/// Rewrap a bounded batch of stream DEKs from a retiring KID to the active
+/// target. Rows are locked with `SKIP LOCKED`, making parallel workers and
+/// interruption/retry safe without rewriting event history.
+pub async fn rewrap_stream_data_keys_by_kid_batch(
+    pool: &PgPool,
+    retiring_kid: &str,
+    batch_size: u32,
+) -> Result<RuntimeKekStreamRewrapBatch, StoreError> {
+    validate_key_id(retiring_kid, "retiring runtime KEK kid")?;
+    if batch_size == 0 || batch_size > 10_000 {
+        return Err(StoreError::Crypto(
+            "runtime KEK stream rewrap batch size must be 1..=10000".to_string(),
+        ));
+    }
+    let keyring = event_encryption_keyring()?;
+    if keyring.active.kid == retiring_kid {
+        return Err(StoreError::Crypto(
+            "active runtime KEK cannot be its own rewrap source".to_string(),
+        ));
+    }
+    let retiring_key = keyring.by_kid.get(retiring_kid).ok_or_else(|| {
+        StoreError::Crypto(format!(
+            "retiring runtime KEK `{retiring_kid}` is unavailable for stream rewrap"
+        ))
+    })?;
+
+    let mut tx = pool.begin().await?;
+    let retiring_row = select_runtime_kek_for_share_in_tx(&mut tx, retiring_kid).await?;
+    authenticate_direct_key_sentinel_row(&retiring_row, retiring_key)?;
+    let retiring_status = runtime_kek_status_from_row(&retiring_row)?;
+    require_unrehearsed_retiring_status(&retiring_status, retiring_kid, &keyring.active.kid)?;
+    require_runtime_kek_writable_in_tx(&mut tx, &keyring.active).await?;
+
+    let rows = sqlx::query(
+        r#"
+        SELECT stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek
+        FROM event_stream_keys
+        WHERE wrap_kid = $1
+        ORDER BY stream_id, key_epoch
+        LIMIT $2
+        FOR UPDATE SKIP LOCKED
+        "#,
+    )
+    .bind(retiring_kid)
+    .bind(i64::from(batch_size))
+    .fetch_all(&mut *tx)
+    .await?;
+    let batch_full = rows.len() == batch_size as usize;
+    let mut rewrapped = 0_u64;
+    for row in rows {
+        let stream_id: Uuid = row.try_get("stream_id")?;
+        let data_key =
+            unwrap_stream_data_key(WrappedStreamDataKey::from_storage_row(stream_id, &row)?)?;
+        let wrapped = wrap_stream_data_key(&data_key, &keyring.active)?;
+        let result = sqlx::query(
+            r#"
+            UPDATE event_stream_keys
+            SET wrap_version = $3, wrap_kid = $4, wrap_nonce = $5, wrapped_dek = $6
+            WHERE stream_id = $1 AND key_epoch = $2 AND wrap_kid = $7
+            "#,
+        )
+        .bind(stream_id)
+        .bind(data_key.key_epoch)
+        .bind(wrapped.wrap_version)
+        .bind(&wrapped.wrap_kid)
+        .bind(wrapped.wrap_nonce.as_slice())
+        .bind(&wrapped.wrapped_dek)
+        .bind(retiring_kid)
+        .execute(&mut *tx)
+        .await?;
+        rewrapped = rewrapped
+            .checked_add(result.rows_affected())
+            .ok_or_else(|| StoreError::Crypto("stream rewrap count overflow".to_string()))?;
+    }
+    tx.commit().await?;
+    Ok(RuntimeKekStreamRewrapBatch {
+        retiring_kid: retiring_kid.to_string(),
+        target_kid: keyring.active.kid.clone(),
+        rewrapped,
+        batch_full,
+    })
+}
+
+/// Prove that a retiring KID has left the online keyring and every live custody
+/// edge. The returned token is persisted before commit and is required for the
+/// final destructive nulling of online sentinel material.
+/// Both stream-wrap and direct-envelope censuses are queried authoritatively
+/// under the source registry row's exclusive lock.
+pub async fn rehearse_runtime_kek_retirement(
+    pool: &PgPool,
+    retiring_kid: &str,
+    target_kid: &str,
+) -> Result<RuntimeKekRetirementEvidence, StoreError> {
+    validate_retirement_pair(retiring_kid, target_kid)?;
+    let keyring = event_encryption_keyring()?;
+    require_retirement_keyring_shape(&keyring, retiring_kid, target_kid)?;
+
+    let mut tx = pool.begin().await?;
+    lock_runtime_kek_lifecycle_in_tx(&mut tx).await?;
+    reject_other_runtime_kek_retirement_in_tx(&mut tx, retiring_kid).await?;
+    let retiring_row = select_runtime_kek_for_update_in_tx(&mut tx, retiring_kid).await?;
+    let retiring_status = runtime_kek_status_from_row(&retiring_row)?;
+    require_retiring_target(&retiring_status, retiring_kid, target_kid)?;
+    require_runtime_kek_writable_in_tx(&mut tx, &keyring.active).await?;
+    require_zero_stream_references_in_tx(&mut tx, retiring_kid).await?;
+    require_zero_direct_references_in_tx(&mut tx, retiring_kid).await?;
+    authenticate_remaining_runtime_kek_coverage_in_tx(&mut tx, retiring_kid).await?;
+
+    let token = match retiring_status.rehearsal_token {
+        Some(token) => token,
+        None => {
+            let token = Uuid::new_v4();
+            sqlx::query(
+                r#"
+                UPDATE event_direct_key_sentinel
+                SET rehearsal_token = $2, rehearsed_at = clock_timestamp()
+                WHERE kid = $1 AND lifecycle = 'retiring' AND retirement_target_kid = $3
+                "#,
+            )
+            .bind(retiring_kid)
+            .bind(token)
+            .bind(target_kid)
+            .execute(&mut *tx)
+            .await?;
+            token
+        }
+    };
+    tx.commit().await?;
+    Ok(RuntimeKekRetirementEvidence {
+        retiring_kid: retiring_kid.to_string(),
+        target_kid: target_kid.to_string(),
+        token,
+    })
+}
+
+/// Finalize a rehearsed retirement. This repeats the zero-reference and online
+/// keyring proofs under the source row's exclusive lock, then leaves an
+/// immutable tombstone while nulling only the obsolete online sentinel bytes.
+pub async fn finalize_runtime_kek_retirement(
+    pool: &PgPool,
+    evidence: &RuntimeKekRetirementEvidence,
+) -> Result<RuntimeKekStatus, StoreError> {
+    validate_retirement_pair(&evidence.retiring_kid, &evidence.target_kid)?;
+    let keyring = event_encryption_keyring()?;
+    require_retirement_keyring_shape(&keyring, &evidence.retiring_kid, &evidence.target_kid)?;
+
+    let mut tx = pool.begin().await?;
+    lock_runtime_kek_lifecycle_in_tx(&mut tx).await?;
+    reject_other_runtime_kek_retirement_in_tx(&mut tx, &evidence.retiring_kid).await?;
+    let retiring_row = select_runtime_kek_for_update_in_tx(&mut tx, &evidence.retiring_kid).await?;
+    let retiring_status = runtime_kek_status_from_row(&retiring_row)?;
+    require_retiring_target(
+        &retiring_status,
+        &evidence.retiring_kid,
+        &evidence.target_kid,
+    )?;
+    if retiring_status.rehearsal_token != Some(evidence.token) {
+        return Err(StoreError::Crypto(format!(
+            "runtime KEK `{}` retirement evidence token does not match the durable rehearsal",
+            evidence.retiring_kid
+        )));
+    }
+    require_runtime_kek_writable_in_tx(&mut tx, &keyring.active).await?;
+    require_zero_stream_references_in_tx(&mut tx, &evidence.retiring_kid).await?;
+    require_zero_direct_references_in_tx(&mut tx, &evidence.retiring_kid).await?;
+    authenticate_remaining_runtime_kek_coverage_in_tx(&mut tx, &evidence.retiring_kid).await?;
+
+    let row = sqlx::query(
+        r#"
+        UPDATE event_direct_key_sentinel
+        SET lifecycle = 'retired',
+            retired_at = clock_timestamp(),
+            sentinel_version = NULL,
+            sentinel_nonce = NULL,
+            sentinel_ciphertext = NULL
+        WHERE kid = $1
+          AND lifecycle = 'retiring'
+          AND retirement_target_kid = $2
+          AND rehearsal_token = $3
+        RETURNING kid, lifecycle, retirement_target_kid, rehearsal_token
+        "#,
+    )
+    .bind(&evidence.retiring_kid)
+    .bind(&evidence.target_kid)
+    .bind(evidence.token)
+    .fetch_one(&mut *tx)
+    .await?;
+    let status = runtime_kek_status_from_row(&row)?;
+    tx.commit().await?;
+    Ok(status)
+}
+
+fn runtime_kek_status_from_row(
+    row: &sqlx::postgres::PgRow,
+) -> Result<RuntimeKekStatus, StoreError> {
+    Ok(RuntimeKekStatus {
+        kid: row.try_get("kid")?,
+        lifecycle: RuntimeKekLifecycle::from_storage(row.try_get("lifecycle")?)?,
+        retirement_target_kid: row.try_get("retirement_target_kid")?,
+        rehearsal_token: row.try_get("rehearsal_token")?,
+    })
+}
+
+fn validate_retirement_pair(retiring_kid: &str, target_kid: &str) -> Result<(), StoreError> {
+    validate_key_id(retiring_kid, "retiring runtime KEK kid")?;
+    validate_key_id(target_kid, "target runtime KEK kid")?;
+    if retiring_kid == target_kid {
+        return Err(StoreError::Crypto(
+            "retiring and target runtime KEK KIDs must differ".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn require_retirement_keyring_shape(
+    keyring: &EventEncryptionKeyring,
+    retiring_kid: &str,
+    target_kid: &str,
+) -> Result<(), StoreError> {
+    if keyring.active.kid != target_kid {
+        return Err(StoreError::Crypto(format!(
+            "runtime KEK retirement target `{target_kid}` is not the active KID `{}`",
+            keyring.active.kid
+        )));
+    }
+    if keyring.by_kid.contains_key(retiring_kid) {
+        return Err(StoreError::Crypto(format!(
+            "retiring runtime KEK `{retiring_kid}` must be absent from the configured keyring"
+        )));
+    }
+    Ok(())
+}
+
+fn require_retiring_target(
+    status: &RuntimeKekStatus,
+    retiring_kid: &str,
+    target_kid: &str,
+) -> Result<(), StoreError> {
+    if status.lifecycle != RuntimeKekLifecycle::Retiring {
+        return Err(StoreError::Crypto(format!(
+            "runtime KEK `{retiring_kid}` is not retiring"
+        )));
+    }
+    if status.retirement_target_kid.as_deref() != Some(target_kid) {
+        return Err(StoreError::Crypto(format!(
+            "runtime KEK `{retiring_kid}` is not bound to retirement target `{target_kid}`"
+        )));
+    }
+    Ok(())
+}
+
+fn require_unrehearsed_retiring_status(
+    status: &RuntimeKekStatus,
+    retiring_kid: &str,
+    target_kid: &str,
+) -> Result<(), StoreError> {
+    require_retiring_target(status, retiring_kid, target_kid)?;
+    if status.rehearsal_token.is_some() {
+        return Err(StoreError::Crypto(format!(
+            "runtime KEK `{retiring_kid}` has already rehearsed retirement"
+        )));
+    }
+    Ok(())
+}
+
+async fn stream_key_reference_count(pool: &PgPool, kid: &str) -> Result<u64, StoreError> {
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM event_stream_keys WHERE wrap_kid = $1")
+            .bind(kid)
+            .fetch_one(pool)
+            .await?;
+    u64::try_from(count)
+        .map_err(|_| StoreError::Crypto("stream key reference count is negative".to_string()))
+}
+
+async fn direct_reference_count(pool: &PgPool, kid: &str) -> Result<u64, StoreError> {
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM event_direct_key_reference WHERE kid = $1")
+            .bind(kid)
+            .fetch_one(pool)
+            .await?;
+    u64::try_from(count)
+        .map_err(|_| StoreError::Crypto("direct reference count is negative".to_string()))
+}
+
+async fn stream_key_reference_count_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    kid: &str,
+) -> Result<u64, StoreError> {
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM event_stream_keys WHERE wrap_kid = $1")
+            .bind(kid)
+            .fetch_one(&mut **tx)
+            .await?;
+    u64::try_from(count)
+        .map_err(|_| StoreError::Crypto("stream key reference count is negative".to_string()))
+}
+
+async fn direct_reference_count_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    kid: &str,
+) -> Result<u64, StoreError> {
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM event_direct_key_reference WHERE kid = $1")
+            .bind(kid)
+            .fetch_one(&mut **tx)
+            .await?;
+    u64::try_from(count)
+        .map_err(|_| StoreError::Crypto("direct reference count is negative".to_string()))
+}
+
+async fn require_zero_stream_references_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    kid: &str,
+) -> Result<(), StoreError> {
+    let count = stream_key_reference_count_in_tx(tx, kid).await?;
+    if count != 0 {
+        return Err(StoreError::Crypto(format!(
+            "runtime KEK `{kid}` still has {count} stream-key references"
+        )));
+    }
+    Ok(())
+}
+
+async fn require_zero_direct_references_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    kid: &str,
+) -> Result<(), StoreError> {
+    let count = direct_reference_count_in_tx(tx, kid).await?;
+    if count != 0 {
+        return Err(StoreError::Crypto(format!(
+            "runtime KEK `{kid}` still has {count} direct-envelope references"
+        )));
+    }
+    Ok(())
+}
+
+async fn lock_runtime_kek_lifecycle_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> Result<(), StoreError> {
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(RUNTIME_KEK_LIFECYCLE_ADVISORY_LOCK)
+        .fetch_one(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn reject_other_runtime_kek_retirement_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    requested_kid: &str,
+) -> Result<(), StoreError> {
+    let other = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT kid
+        FROM event_direct_key_sentinel
+        WHERE lifecycle = 'retiring' AND kid <> $1
+        ORDER BY kid
+        LIMIT 1
+        "#,
+    )
+    .bind(requested_kid)
+    .fetch_optional(&mut **tx)
+    .await?;
+    if let Some(other) = other {
+        return Err(StoreError::Crypto(format!(
+            "another runtime KEK rotation is already in flight (`{other}`)"
+        )));
+    }
+    Ok(())
+}
+
+async fn authenticate_representative_stream_wrap_for_kid_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    kid: &str,
+    key: &EventEncryptionKey,
+) -> Result<(), StoreError> {
+    let row = sqlx::query(
+        r#"
+        SELECT stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek
+        FROM event_stream_keys
+        WHERE wrap_kid = $1
+        ORDER BY stream_id, key_epoch
+        LIMIT 1
+        "#,
+    )
+    .bind(kid)
+    .fetch_optional(&mut **tx)
+    .await?;
+    if let Some(row) = row {
+        let stream_id: Uuid = row.try_get("stream_id")?;
+        unwrap_stream_data_key_with_key(
+            WrappedStreamDataKey::from_storage_row(stream_id, &row)?,
+            key,
+        )?;
+    }
+    Ok(())
+}
+
+async fn select_runtime_kek_for_share_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    kid: &str,
+) -> Result<sqlx::postgres::PgRow, StoreError> {
+    sqlx::query(
+        r#"
+        SELECT kid, sentinel_version, sentinel_nonce, sentinel_ciphertext,
+               lifecycle, retirement_target_kid, rehearsal_token
+        FROM event_direct_key_sentinel
+        WHERE kid = $1
+        FOR SHARE
+        "#,
+    )
+    .bind(kid)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| StoreError::Crypto(format!("runtime KEK `{kid}` is not registered")))
+}
+
+async fn select_runtime_kek_for_update_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    kid: &str,
+) -> Result<sqlx::postgres::PgRow, StoreError> {
+    sqlx::query(
+        r#"
+        SELECT kid, sentinel_version, sentinel_nonce, sentinel_ciphertext,
+               lifecycle, retirement_target_kid, rehearsal_token
+        FROM event_direct_key_sentinel
+        WHERE kid = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(kid)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| StoreError::Crypto(format!("runtime KEK `{kid}` is not registered")))
+}
+
+async fn authenticate_remaining_runtime_kek_coverage_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    excluded_kid: &str,
+) -> Result<(), StoreError> {
+    let keyring = event_encryption_keyring()?;
+    let sentinels = sqlx::query(
+        r#"
+        SELECT kid, sentinel_version, sentinel_nonce, sentinel_ciphertext
+        FROM event_direct_key_sentinel
+        WHERE lifecycle <> 'retired' AND kid <> $1
+        ORDER BY kid
+        FOR SHARE
+        "#,
+    )
+    .bind(excluded_kid)
+    .fetch_all(&mut **tx)
+    .await?;
+    for row in sentinels {
+        let kid: String = row.try_get("kid")?;
+        let key = keyring.by_kid.get(&kid).ok_or_else(|| {
+            StoreError::Crypto(format!(
+                "event encryption key `{kid}` required by an active runtime KEK sentinel is unavailable"
+            ))
+        })?;
+        authenticate_direct_key_sentinel_row(&row, key)?;
+    }
+
+    let representative_keys = sqlx::query(
+        r#"
+        SELECT DISTINCT ON (wrap_kid)
+               stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek
+        FROM event_stream_keys
+        ORDER BY wrap_kid, stream_id, key_epoch
+        "#,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+    for row in representative_keys {
+        let kid: String = row.try_get("wrap_kid")?;
+        if kid == excluded_kid {
+            return Err(StoreError::Crypto(format!(
+                "runtime KEK `{excluded_kid}` still has a representative stream-key reference"
+            )));
+        }
+        if !keyring.by_kid.contains_key(&kid) {
+            return Err(StoreError::Crypto(format!(
+                "event encryption key `{kid}` is unavailable"
+            )));
+        }
+        let stream_id = row.try_get("stream_id")?;
+        unwrap_stream_data_key(WrappedStreamDataKey::from_storage_row(stream_id, &row)?)?;
+    }
+    Ok(())
+}
+
 /// Exhaustive startup/operator audit of the event-encryption custody graph.
 ///
 /// This intentionally scans the stream-key catalog. Internet-facing readiness
@@ -949,16 +1643,56 @@ pub async fn ensure_event_encryption_key_readiness(pool: &PgPool) -> Result<(), 
 }
 
 async fn authenticate_direct_key_sentinels(pool: &PgPool) -> Result<(), StoreError> {
+    let keyring = event_encryption_keyring()?;
+    let active_row = sqlx::query(
+        r#"
+        SELECT kid, lifecycle, retirement_target_kid, rehearsal_token
+        FROM event_direct_key_sentinel
+        WHERE kid = $1
+        "#,
+    )
+    .bind(&keyring.active.kid)
+    .fetch_optional(pool)
+    .await?;
+    let active_row = active_row.ok_or_else(|| {
+        StoreError::Crypto(format!(
+            "active runtime KEK `{}` has not been attested",
+            keyring.active.kid
+        ))
+    })?;
+    let status = runtime_kek_status_from_row(&active_row)?;
+    if status.lifecycle != RuntimeKekLifecycle::Writable {
+        return Err(StoreError::Crypto(format!(
+            "active runtime KEK `{}` is {} and cannot satisfy readiness",
+            keyring.active.kid,
+            status.lifecycle.as_str()
+        )));
+    }
+
+    let retired_kids = sqlx::query_scalar::<_, String>(
+        "SELECT kid FROM event_direct_key_sentinel WHERE lifecycle = 'retired' ORDER BY kid",
+    )
+    .fetch_all(pool)
+    .await?;
+    for retired_kid in retired_kids {
+        if keyring.by_kid.contains_key(&retired_kid) {
+            return Err(StoreError::Crypto(format!(
+                "configured runtime KEK `{retired_kid}` is retired"
+            )));
+        }
+    }
+
     let rows = sqlx::query(
         r#"
         SELECT kid, sentinel_version, sentinel_nonce, sentinel_ciphertext
         FROM event_direct_key_sentinel
+        WHERE lifecycle = 'writable'
+           OR (lifecycle = 'retiring' AND rehearsal_token IS NULL)
         ORDER BY kid
         "#,
     )
     .fetch_all(pool)
     .await?;
-    let keyring = event_encryption_keyring()?;
     for row in rows {
         let kid: String = row.try_get("kid")?;
         let key = keyring.by_kid.get(&kid).ok_or_else(|| {
@@ -1133,9 +1867,16 @@ impl WrappedStreamDataKey {
 }
 
 fn validate_key_id(kid: &str, label: &str) -> Result<(), StoreError> {
-    if kid.is_empty() || kid.trim() != kid || kid.len() > 128 {
+    let mut bytes = kid.bytes();
+    if kid.len() > 128
+        || !bytes
+            .next()
+            .is_some_and(|byte| byte.is_ascii_alphanumeric())
+        || !bytes
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-'))
+    {
         return Err(StoreError::Crypto(format!(
-            "{label} must be 1..=128 unpadded bytes"
+            "{label} must be 1..=128 ASCII characters matching [A-Za-z0-9][A-Za-z0-9._:-]*"
         )));
     }
     Ok(())
@@ -1204,7 +1945,7 @@ fn authenticate_direct_key_sentinel_row(
     Ok(())
 }
 
-async fn ensure_direct_key_sentinel_in_tx(
+async fn insert_runtime_kek_registry_row_if_missing_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     key: &EventEncryptionKey,
 ) -> Result<(), StoreError> {
@@ -1226,17 +1967,44 @@ async fn ensure_direct_key_sentinel_in_tx(
     .execute(&mut **tx)
     .await?;
 
-    let row = sqlx::query(
-        r#"
-        SELECT kid, sentinel_version, sentinel_nonce, sentinel_ciphertext
-        FROM event_direct_key_sentinel
-        WHERE kid = $1
-        "#,
-    )
-    .bind(&key.kid)
-    .fetch_one(&mut **tx)
-    .await?;
-    authenticate_direct_key_sentinel_row(&row, key)
+    Ok(())
+}
+
+/// Fence an active runtime KEK against a concurrent retirement transition.
+/// The shared row lock lasts for the caller's transaction, and the durable
+/// lifecycle check makes a retired KID impossible to recreate through the
+/// insert-on-conflict path.
+async fn ensure_runtime_kek_writable_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    key: &EventEncryptionKey,
+) -> Result<RuntimeKekStatus, StoreError> {
+    insert_runtime_kek_registry_row_if_missing_in_tx(tx, key).await?;
+    require_runtime_kek_writable_in_tx(tx, key).await
+}
+
+async fn require_runtime_kek_writable_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    key: &EventEncryptionKey,
+) -> Result<RuntimeKekStatus, StoreError> {
+    let row = select_runtime_kek_for_share_in_tx(tx, &key.kid)
+        .await
+        .map_err(|error| match error {
+            StoreError::Crypto(_) => StoreError::Crypto(format!(
+                "active runtime KEK `{}` has not been attested",
+                key.kid
+            )),
+            other => other,
+        })?;
+    let status = runtime_kek_status_from_row(&row)?;
+    if status.lifecycle != RuntimeKekLifecycle::Writable {
+        return Err(StoreError::Crypto(format!(
+            "runtime KEK `{}` is {} and cannot seal new data",
+            key.kid,
+            status.lifecycle.as_str()
+        )));
+    }
+    authenticate_direct_key_sentinel_row(&row, key)?;
+    Ok(status)
 }
 
 fn new_stream_data_key(stream_id: Uuid, key_epoch: i64) -> StreamDataKey {
@@ -1305,6 +2073,19 @@ fn unwrap_stream_data_key(wrapped: WrappedStreamDataKey) -> Result<StreamDataKey
             wrapped.wrap_kid
         ))
     })?;
+    unwrap_stream_data_key_with_key(wrapped, wrapping_key)
+}
+
+fn unwrap_stream_data_key_with_key(
+    wrapped: WrappedStreamDataKey,
+    wrapping_key: &EventEncryptionKey,
+) -> Result<StreamDataKey, StoreError> {
+    if wrapping_key.kid != wrapped.wrap_kid {
+        return Err(StoreError::Crypto(format!(
+            "stream data key wrap KID `{}` does not match supplied key `{}`",
+            wrapped.wrap_kid, wrapping_key.kid
+        )));
+    }
     let aad = stream_key_wrap_aad(
         wrapped.stream_id,
         wrapped.key_epoch,
@@ -1571,12 +2352,21 @@ async fn encrypt_json_in_tx(
     scheme: &str,
 ) -> Result<serde_json::Value, StoreError> {
     let key = event_encryption_keyring()?.active.clone();
-    ensure_direct_key_sentinel_in_tx(tx, &key).await?;
+    ensure_runtime_kek_writable_in_tx(tx, &key).await?;
+    encrypt_json_with_key(plaintext, aad, scheme, &key)
+}
+
+fn encrypt_json_with_key(
+    plaintext: serde_json::Value,
+    aad: &[u8],
+    scheme: &str,
+    key: &EventEncryptionKey,
+) -> Result<serde_json::Value, StoreError> {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
     let plaintext = serde_json::to_vec(&plaintext)
         .map_err(|err| StoreError::Crypto(format!("serialize private payload: {err}")))?;
-    let (nonce, ciphertext) = encrypt_bytes_with_key(&key, &plaintext, aad)?;
+    let (nonce, ciphertext) = encrypt_bytes_with_key(key, &plaintext, aad)?;
 
     Ok(serde_json::json!({
         "scheme": scheme,
@@ -1631,6 +2421,95 @@ pub async fn encrypt_private_projection(
         PRIVATE_SCHEME,
     )
     .await
+}
+
+impl<'tx, 'conn> DirectEnvelopeResealContext<'tx, 'conn> {
+    /// Authenticate and lock one retiring source and the active target once for
+    /// a caller-owned batch transaction.
+    pub async fn begin(
+        transaction: &'tx mut sqlx::Transaction<'conn, sqlx::Postgres>,
+        retiring_kid: &str,
+    ) -> Result<Self, StoreError> {
+        validate_key_id(retiring_kid, "retiring runtime KEK kid")?;
+        let keyring = event_encryption_keyring()?;
+        if keyring.active.kid == retiring_kid {
+            return Err(StoreError::Crypto(
+                "active runtime KEK cannot be resealed as retiring".to_string(),
+            ));
+        }
+        let retiring_key = keyring.by_kid.get(retiring_kid).ok_or_else(|| {
+            StoreError::Crypto(format!(
+                "retiring runtime KEK `{retiring_kid}` is unavailable for direct-envelope reseal"
+            ))
+        })?;
+        let row = select_runtime_kek_for_share_in_tx(transaction, retiring_kid).await?;
+        authenticate_direct_key_sentinel_row(&row, retiring_key)?;
+        let status = runtime_kek_status_from_row(&row)?;
+        require_unrehearsed_retiring_status(&status, retiring_kid, &keyring.active.kid)?;
+        require_runtime_kek_writable_in_tx(transaction, &keyring.active).await?;
+        Ok(Self {
+            _transaction: transaction,
+            retiring_key: retiring_key.clone(),
+            target_key: keyring.active.clone(),
+        })
+    }
+
+    /// Reseal one private projection without further database round trips.
+    pub fn reseal_private_projection(
+        &self,
+        envelope: &serde_json::Value,
+        authenticated_context: &str,
+    ) -> Result<serde_json::Value, StoreError> {
+        let plaintext = self.open(envelope, authenticated_context.as_bytes())?;
+        encrypt_json_with_key(
+            plaintext,
+            authenticated_context.as_bytes(),
+            PRIVATE_SCHEME,
+            &self.target_key,
+        )
+    }
+
+    /// Reseal one typed delivery credential without further database round trips.
+    pub fn reseal_delivery_credential(
+        &self,
+        envelope: &serde_json::Value,
+        aad: &str,
+    ) -> Result<serde_json::Value, StoreError> {
+        let plaintext = self.open(envelope, aad.as_bytes())?;
+        if plaintext
+            .get("credential")
+            .and_then(serde_json::Value::as_str)
+            .is_none()
+        {
+            return Err(StoreError::Crypto(
+                "delivery envelope missing credential".to_string(),
+            ));
+        }
+        encrypt_json_with_key(plaintext, aad.as_bytes(), PRIVATE_SCHEME, &self.target_key)
+    }
+
+    fn open(
+        &self,
+        envelope: &serde_json::Value,
+        aad: &[u8],
+    ) -> Result<serde_json::Value, StoreError> {
+        require_direct_envelope_kid(envelope, &self.retiring_key.kid)?;
+        decrypt_json_with_key_and_scheme(envelope, aad, PRIVATE_SCHEME, &self.retiring_key)
+    }
+}
+
+/// Authenticate and reseal one private-projection envelope from an explicitly
+/// retiring KID to the active writable KID. The caller owns the surrounding
+/// row lock and transaction; this function never commits.
+pub async fn reseal_private_projection_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    retiring_kid: &str,
+    envelope: &serde_json::Value,
+    authenticated_context: &str,
+) -> Result<serde_json::Value, StoreError> {
+    require_direct_envelope_kid(envelope, retiring_kid)?;
+    let context = DirectEnvelopeResealContext::begin(tx, retiring_kid).await?;
+    context.reseal_private_projection(envelope, authenticated_context)
 }
 
 /// Open projection state sealed by [`encrypt_private_projection`]. The caller
@@ -1712,6 +2591,20 @@ pub async fn encrypt_delivery_credential(
     .await
 }
 
+/// Authenticate, type-check, and reseal one delivery credential from an
+/// explicitly retiring KID to the active writable KID. The caller owns the
+/// delivery row lock and transaction; this function never commits.
+pub async fn reseal_delivery_credential_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    retiring_kid: &str,
+    envelope: &serde_json::Value,
+    aad: &str,
+) -> Result<serde_json::Value, StoreError> {
+    require_direct_envelope_kid(envelope, retiring_kid)?;
+    let context = DirectEnvelopeResealContext::begin(tx, retiring_kid).await?;
+    context.reseal_delivery_credential(envelope, aad)
+}
+
 /// Decrypts a delivery credential only at the provider boundary.
 pub fn decrypt_delivery_credential(
     envelope: &serde_json::Value,
@@ -1728,10 +2621,39 @@ fn decrypt_json(envelope: &serde_json::Value, aad: &[u8]) -> Result<serde_json::
     decrypt_json_with_scheme(envelope, aad, PRIVATE_SCHEME)
 }
 
+fn require_direct_envelope_kid(
+    envelope: &serde_json::Value,
+    retiring_kid: &str,
+) -> Result<(), StoreError> {
+    validate_key_id(retiring_kid, "retiring runtime KEK kid")?;
+    let envelope_kid = json_string(envelope, "kid")?;
+    if envelope_kid != retiring_kid {
+        return Err(StoreError::Crypto(format!(
+            "direct envelope KID `{envelope_kid}` does not match retiring KID `{retiring_kid}`"
+        )));
+    }
+    Ok(())
+}
+
 fn decrypt_json_with_scheme(
     envelope: &serde_json::Value,
     aad: &[u8],
     expected_scheme: &str,
+) -> Result<serde_json::Value, StoreError> {
+    let kid = json_string(envelope, "kid")?;
+    let keyring = event_encryption_keyring()?;
+    let key = keyring
+        .by_kid
+        .get(&kid)
+        .ok_or_else(|| StoreError::Crypto(format!("missing event wrapping key for kid `{kid}`")))?;
+    decrypt_json_with_key_and_scheme(envelope, aad, expected_scheme, key)
+}
+
+fn decrypt_json_with_key_and_scheme(
+    envelope: &serde_json::Value,
+    aad: &[u8],
+    expected_scheme: &str,
+    key: &EventEncryptionKey,
 ) -> Result<serde_json::Value, StoreError> {
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
@@ -1756,23 +2678,16 @@ fn decrypt_json_with_scheme(
         .decode(json_string(envelope, "ciphertext")?)
         .map_err(|err| StoreError::Crypto(format!("decode ciphertext: {err}")))?;
     let kid = json_string(envelope, "kid")?;
-    let plaintext = decrypt_bytes(&kid, &nonce, &ciphertext, aad)?;
+    if kid != key.kid {
+        return Err(StoreError::Crypto(format!(
+            "direct envelope KID `{kid}` does not match supplied key `{}`",
+            key.kid
+        )));
+    }
+    let plaintext =
+        decrypt_bytes_with_key(key, &nonce, &ciphertext, aad, "decrypt private payload")?;
     serde_json::from_slice(&plaintext)
         .map_err(|err| StoreError::Crypto(format!("decode private payload JSON: {err}")))
-}
-
-fn decrypt_bytes(
-    kid: &str,
-    nonce: &[u8; 24],
-    ciphertext: &[u8],
-    aad: &[u8],
-) -> Result<Vec<u8>, StoreError> {
-    let keyring = event_encryption_keyring()?;
-    let key = keyring
-        .by_kid
-        .get(kid)
-        .ok_or_else(|| StoreError::Crypto(format!("missing event wrapping key for kid `{kid}`")))?;
-    decrypt_bytes_with_key(key, nonce, ciphertext, aad, "decrypt private payload")
 }
 
 fn decrypt_bytes_with_key(
@@ -2254,6 +3169,14 @@ mod secure_event_encryption_config_tests {
             require_secure_event_encryption_configuration(),
             "runtime wrapping kid must be 1..=128",
         );
+
+        for invalid in [".leading", "_leading", ":leading", "-leading"] {
+            env.set_active(invalid, "unit-test-event-key-material");
+            assert_crypto_err(
+                require_secure_event_encryption_configuration(),
+                "matching [A-Za-z0-9][A-Za-z0-9._:-]*",
+            );
+        }
     }
 
     #[test]

@@ -72,6 +72,7 @@
     },
     "test:auth-invite-role-proof": { "kind": "npm" },
     "test:projection-baseline:static": { "kind": "npm" },
+    "test:event-key-rotation-rehearsal": { "kind": "npm" },
     "test:dev-test-game-contract": { "kind": "npm" },
     "test:dev-postgres-contract": { "kind": "npm" },
     "test:host-console-live-stack-contract": { "kind": "npm" },
@@ -118,7 +119,7 @@
       "tier": "frozen",
       "paths": ["crates/eventstore/"],
       "crate": "eventstore",
-      "lanes": ["cargo:eventstore", "cargo:clippy-workspace"],
+      "lanes": ["cargo:eventstore", "cargo:clippy-workspace", "test:event-key-rotation-rehearsal"],
       "capabilities": ["foundation.event-store-projections"]
     },
     {
@@ -126,7 +127,7 @@
       "tier": "frozen",
       "paths": ["crates/projections/"],
       "crate": "projections",
-      "lanes": ["cargo:projections", "cargo:clippy-workspace", "test:projection-baseline:static"],
+      "lanes": ["cargo:projections", "cargo:clippy-workspace", "test:projection-baseline:static", "test:event-key-rotation-rehearsal"],
       "capabilities": [
         "foundation.event-store-projections",
         "product.mash.day-event-runtime",
@@ -260,7 +261,7 @@
       "tier": "active",
       "paths": ["crates/api/"],
       "crate": "api",
-      "lanes": ["cargo:api", "cargo:clippy-workspace", "test:mash-scale-acceptance", "test:security-release-baseline"],
+      "lanes": ["cargo:api", "cargo:clippy-workspace", "test:mash-scale-acceptance", "test:security-release-baseline", "test:event-key-rotation-rehearsal"],
       "also_triggers": ["frontend:identity"],
       "capabilities": [
         "product.mash.day-program-library",
@@ -282,7 +283,7 @@
       "tier": "active",
       "paths": ["crates/server/"],
       "crate": "server",
-      "lanes": ["cargo:server", "cargo:clippy-workspace", "test:release-topology", "test:security-release-baseline", "test:exact-image-content"]
+      "lanes": ["cargo:server", "cargo:clippy-workspace", "test:release-topology", "test:security-release-baseline", "test:exact-image-content", "test:event-key-rotation-rehearsal"]
     },
     {
       "id": "packs",
@@ -486,7 +487,8 @@
         "check:build-posture",
         "test:railway-staging-target",
         "test:security-release-baseline",
-        "test:exact-image-content"
+        "test:exact-image-content",
+        "test:event-key-rotation-rehearsal"
       ]
     },
     {
