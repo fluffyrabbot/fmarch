@@ -835,6 +835,15 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         &["GlobalAdmin"],
     )
     .await;
+    let _player_token = create_classic_account_session(
+        &app_a,
+        host_token.as_str(),
+        "transport-player@example.test",
+        "correct horse battery player",
+        "player_a",
+        &[],
+    )
+    .await;
     assert_eq!(
         post_command(
             &app_a,
@@ -886,21 +895,23 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
     .unwrap();
     let _ = socket.next().await;
 
-    assert_eq!(
-        post_command(
-            &app_a,
-            3,
-            Some(host_token.as_str()),
-            wire::seat_persona! {
-                game,
-                slot: "slot_1".into(),
-                user: "player_a".into()
-            }
-        )
+    let seat_response = post_command(
+        &app_a,
+        3,
+        Some(host_token.as_str()),
+        wire::seat_persona! {
+            game,
+            slot: "slot_1".into(),
+            user: "player_a".into()
+        },
+    )
+    .await;
+    assert_eq!(seat_response.status(), StatusCode::OK);
+    let seat_body = to_bytes(seat_response.into_body(), usize::MAX)
         .await
-        .status(),
-        StatusCode::OK
-    );
+        .unwrap();
+    let seat_envelope: ServerEnvelope = serde_json::from_slice(&seat_body).unwrap();
+    assert!(matches!(seat_envelope.body, ServerMsg::Ack(_)));
 
     let received = tokio::time::timeout(Duration::from_secs(2), async {
         loop {

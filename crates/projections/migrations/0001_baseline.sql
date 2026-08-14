@@ -1426,13 +1426,6 @@ CREATE INDEX discussion_topic_area_page_idx ON public.discussion_topic USING btr
 
 
 --
--- Name: events_stream_order_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX events_stream_order_idx ON public.events USING btree (stream_id, stream_seq);
-
-
---
 -- Name: game_index_public_page_idx; Type: INDEX; Schema: public; Owner: -
 --
 

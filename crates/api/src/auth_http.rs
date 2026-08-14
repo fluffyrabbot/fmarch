@@ -757,9 +757,10 @@ async fn create_dev_auth_session(
     let expires_at = request
         .expires_at
         .min(state.session_policy.classic_expiry(now));
-    let mut conn = state.pool.acquire().await?;
-    identity::methods::ensure_principal(&mut conn, request.principal_user_id.as_str(), &[], now)
+    let mut tx = state.pool.begin().await?;
+    identity::methods::ensure_principal(&mut tx, request.principal_user_id.as_str(), &[], now)
         .await?;
+    lock_active_authentication_owner(&mut tx, request.principal_user_id.as_str()).await?;
     let spec = identity::SessionSpec {
         principal_user_id: request.principal_user_id.as_str(),
         session_capabilities: &global_capabilities,
@@ -769,8 +770,8 @@ async fn create_dev_auth_session(
         expires_at,
         idle_expires_at: state.session_policy.idle_expiry(now, expires_at),
     };
-    let issued = identity::session::issue_session(&mut conn, spec, now).await?;
-    drop(conn);
+    let issued = identity::session::issue_session(&mut tx, spec, now).await?;
+    tx.commit().await?;
 
     let mut response =
         auth_session_response(&state, request.principal_user_id, None, global_capabilities).await?;
@@ -808,14 +809,15 @@ async fn create_auth_session_grant(
     let global_capabilities = normalize_global_capabilities(&request.global_capabilities)?;
 
     let now = unix_now_seconds();
-    let mut conn = state.pool.acquire().await?;
-    identity::methods::ensure_principal(&mut conn, request.principal_user_id.as_str(), &[], now)
+    let mut tx = state.pool.begin().await?;
+    identity::methods::ensure_principal(&mut tx, request.principal_user_id.as_str(), &[], now)
         .await?;
+    lock_active_authentication_owner(&mut tx, request.principal_user_id.as_str()).await?;
     let expires_at = request
         .expires_at
         .min(state.session_policy.classic_expiry(now));
     let issued = identity::session::issue_session(
-        &mut conn,
+        &mut tx,
         identity::SessionSpec {
             principal_user_id: request.principal_user_id.as_str(),
             session_capabilities: &global_capabilities,
@@ -828,7 +830,7 @@ async fn create_auth_session_grant(
         now,
     )
     .await?;
-    drop(conn);
+    tx.commit().await?;
 
     let mut response =
         auth_session_response(&state, request.principal_user_id, None, global_capabilities).await?;
@@ -1124,21 +1126,33 @@ async fn classic_password_session(
     }
 
     let mut tx = state.pool.begin().await?;
-    let method_id = identity::methods::link_classic_method(
-        &mut tx,
-        account_id,
-        account.0.as_str(),
-        &account.2,
-        now,
+    let owner = lock_active_authentication_owner(&mut tx, account.0.as_str()).await?;
+    let revalidated_account = sqlx::query_as::<_, (String, Vec<String>)>(
+        r#"
+        SELECT password_hash, global_capabilities
+        FROM auth_account
+        WHERE account_id = $1
+          AND principal_user_id = $2
+          AND disabled_at IS NULL
+        "#,
     )
-    .await?;
-    let principal_global_capabilities = sqlx::query_scalar::<_, Vec<String>>(
-        "SELECT global_capabilities FROM platform_principal WHERE principal_user_id = $1 AND status = 'active'",
-    )
+    .bind(account_id)
     .bind(account.0.as_str())
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_account)?;
+    if revalidated_account.0 != account.1 {
+        return Err(unauthorized_account());
+    }
+    let method_id = identity::methods::link_classic_method(
+        &mut tx,
+        account_id,
+        account.0.as_str(),
+        &revalidated_account.1,
+        now,
+    )
+    .await?;
+    let principal_global_capabilities = owner.global_capabilities;
     let issued = identity::session::issue_session(
         &mut tx,
         identity::SessionSpec {
@@ -1538,6 +1552,14 @@ async fn add_classic_method(
     let password_hash = hash_account_password(request.password.as_str()).await?;
 
     let mut tx = state.pool.begin().await?;
+    let locked_identity =
+        identity::session::validate_session_for_update(&mut tx, token, &state.session_policy)
+            .await?;
+    require_recent_authentication(&locked_identity, now)?;
+    if locked_identity.principal_user_id != identity.principal_user_id {
+        return Err(unauthorized_session());
+    }
+    let identity = locked_identity;
     let inserted = sqlx::query(
         r#"
         INSERT INTO auth_account (
@@ -1744,11 +1766,12 @@ async fn disable_account_method(
     headers: HeaderMap,
 ) -> Result<Json<DisableMethodResponse>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let identity = authorization_context(&state, token).await?;
     let now = unix_now_seconds();
-    require_recent_authentication(&identity, now)?;
-
     let mut tx = state.pool.begin().await?;
+    let identity =
+        identity::session::validate_session_for_update(&mut tx, token, &state.session_policy)
+            .await?;
+    require_recent_authentication(&identity, now)?;
     let disabled = identity::methods::disable_method(
         &mut tx,
         identity.principal_user_id.as_str(),
@@ -2031,19 +2054,9 @@ async fn request_auth_account_recovery(
     let account_id = normalize_registration_account_id(request.account_id.as_str())?;
     enforce_recovery_request_limit(&state, &headers, account_id.as_str()).await?;
 
-    let account = sqlx::query_as::<_, (String, String)>(
-        r#"
-        SELECT account_id, principal_user_id
-        FROM auth_account
-        WHERE account_id = $1
-          AND disabled_at IS NULL
-        "#,
-    )
-    .bind(account_id.as_str())
-    .fetch_optional(&state.pool)
-    .await?;
-
-    let Some((account_id, principal_user_id)) = account else {
+    let Some(discovered_principal_user_id) =
+        discover_account_principal(&state.pool, account_id.as_str()).await?
+    else {
         return Ok(Json(AuthAccountRecoveryRequestResponse {
             status: "accepted".to_string(),
         }));
@@ -2055,6 +2068,42 @@ async fn request_auth_account_recovery(
     let recovery_token = format!("account-recovery-{}-{}", Uuid::new_v4(), Uuid::new_v4());
     let recovery_hash = hash_session_token(recovery_token.as_str());
     let mut tx = state.pool.begin().await?;
+    if let Err(error) =
+        lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await
+    {
+        if matches!(
+            &error,
+            ApiError::Reject {
+                status: StatusCode::UNAUTHORIZED,
+                ..
+            }
+        ) {
+            tx.rollback().await?;
+            return Ok(Json(AuthAccountRecoveryRequestResponse {
+                status: "accepted".to_string(),
+            }));
+        }
+        return Err(error);
+    }
+    let account = sqlx::query_as::<_, (String, String)>(
+        r#"
+        SELECT account_id, principal_user_id
+        FROM auth_account
+        WHERE account_id = $1
+          AND principal_user_id = $2
+          AND disabled_at IS NULL
+        "#,
+    )
+    .bind(account_id.as_str())
+    .bind(discovered_principal_user_id.as_str())
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some((account_id, principal_user_id)) = account else {
+        tx.rollback().await?;
+        return Ok(Json(AuthAccountRecoveryRequestResponse {
+            status: "accepted".to_string(),
+        }));
+    };
     let rotated_recovery_hashes = sqlx::query_scalar::<_, String>(
         r#"
         UPDATE auth_account_recovery_credential
@@ -2278,6 +2327,46 @@ async fn recover_auth_account(
     let now = unix_now_seconds();
     let recovery_hash = hash_session_token(recovery_token);
     let mut tx = state.pool.begin().await?;
+    let discovered_principal_user_id = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT account.principal_user_id
+        FROM auth_account_recovery_credential AS recovery
+        JOIN auth_account AS account USING (account_id)
+        WHERE recovery.account_id = $1
+          AND recovery.token_hash = $2
+        "#,
+    )
+    .bind(account_id)
+    .bind(&recovery_hash)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(discovered_principal_user_id) = discovered_principal_user_id else {
+        tx.rollback().await?;
+        consume_dummy_password_verification(new_password).await?;
+        record_account_recovery_rejection(&state.pool, account_id, recovery_hash.as_str(), now)
+            .await?;
+        record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-recovery").await?;
+        return Err(unauthorized_account_recovery());
+    };
+    if let Err(error) =
+        lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await
+    {
+        if !matches!(
+            &error,
+            ApiError::Reject {
+                status: StatusCode::UNAUTHORIZED,
+                ..
+            }
+        ) {
+            return Err(error);
+        }
+        tx.rollback().await?;
+        consume_dummy_password_verification(new_password).await?;
+        record_account_recovery_rejection(&state.pool, account_id, recovery_hash.as_str(), now)
+            .await?;
+        record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-recovery").await?;
+        return Err(unauthorized_account_recovery());
+    }
     let credential = sqlx::query_as::<_, (Uuid, String, Vec<String>)>(
         r#"
         SELECT recovery.recovery_id,
@@ -2292,12 +2381,13 @@ async fn recover_auth_account(
           AND recovery.revoked_at IS NULL
           AND recovery.expires_at > $3
           AND account.disabled_at IS NULL
-        FOR UPDATE OF recovery, account
+          AND account.principal_user_id = $4
         "#,
     )
     .bind(account_id)
     .bind(&recovery_hash)
     .bind(now)
+    .bind(discovered_principal_user_id.as_str())
     .fetch_optional(&mut *tx)
     .await?;
     let Some((recovery_id, principal_user_id, account_global_capabilities)) = credential else {
@@ -2434,16 +2524,21 @@ async fn disable_auth_account(
     }
 
     let now = unix_now_seconds();
+    let discovered_principal_user_id = discover_account_principal(&state.pool, account_id)
+        .await?
+        .ok_or_else(account_not_found)?;
     let mut tx = state.pool.begin().await?;
+    lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await?;
     let account = sqlx::query_as::<_, (String, Option<i64>, Option<Uuid>)>(
         r#"
         SELECT principal_user_id, disabled_at, method_id
         FROM auth_account
         WHERE account_id = $1
-        FOR UPDATE
+          AND principal_user_id = $2
         "#,
     )
     .bind(account_id)
+    .bind(discovered_principal_user_id.as_str())
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(account_not_found)?;
@@ -2567,16 +2662,21 @@ async fn enable_auth_account(
     }
 
     let now = unix_now_seconds();
+    let discovered_principal_user_id = discover_account_principal(&state.pool, account_id)
+        .await?
+        .ok_or_else(account_not_found)?;
     let mut tx = state.pool.begin().await?;
+    lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await?;
     let account = sqlx::query_as::<_, (String, Option<i64>, Option<Uuid>)>(
         r#"
         SELECT principal_user_id, disabled_at, method_id
         FROM auth_account
         WHERE account_id = $1
-        FOR UPDATE
+          AND principal_user_id = $2
         "#,
     )
     .bind(account_id)
+    .bind(discovered_principal_user_id.as_str())
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(account_not_found)?;
@@ -2753,12 +2853,21 @@ async fn revoke_auth_session(
     }
     let now = unix_now_seconds();
     let token_hash = hash_session_token(token);
+    let discovered_principal_user_id = sqlx::query_scalar::<_, String>(
+        "SELECT principal_user_id FROM auth_session WHERE token_hash = $1",
+    )
+    .bind(&token_hash)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(unauthorized_session)?;
     let mut tx = state.pool.begin().await?;
+    lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await?;
     let principal_user_id = sqlx::query_scalar::<_, String>(
         r#"
         UPDATE auth_session
         SET revoked_at = $1
         WHERE token_hash = $2
+          AND principal_user_id = $3
           AND revoked_at IS NULL
           AND expires_at > $1
         RETURNING principal_user_id
@@ -2766,6 +2875,7 @@ async fn revoke_auth_session(
     )
     .bind(now)
     .bind(&token_hash)
+    .bind(discovered_principal_user_id.as_str())
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_session)?;
@@ -2981,6 +3091,44 @@ async fn redeem_auth_invite(
     let now = unix_now_seconds();
     let invite_hash = hash_session_token(invite_token);
     let mut tx = state.pool.begin().await?;
+    let discovered_principal_user_id = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT invite.principal_user_id
+        FROM auth_invite AS invite
+        JOIN auth_account AS account
+          ON account.account_id = invite.account_id
+        WHERE invite.token_hash = $1
+          AND invite.account_id = $2
+          AND account.principal_user_id = invite.principal_user_id
+        "#,
+    )
+    .bind(&invite_hash)
+    .bind(account_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(discovered_principal_user_id) = discovered_principal_user_id else {
+        tx.rollback().await?;
+        consume_dummy_password_verification(password).await?;
+        record_failed_auth_attempt(&state, &attempt_scope, account_id, "invite-redemption").await?;
+        return Err(unauthorized_invite());
+    };
+    if let Err(error) =
+        lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await
+    {
+        if !matches!(
+            &error,
+            ApiError::Reject {
+                status: StatusCode::UNAUTHORIZED,
+                ..
+            }
+        ) {
+            return Err(error);
+        }
+        tx.rollback().await?;
+        consume_dummy_password_verification(password).await?;
+        record_failed_auth_attempt(&state, &attempt_scope, account_id, "invite-redemption").await?;
+        return Err(unauthorized_invite());
+    }
     let invite = sqlx::query_as::<_, (String, i64, Vec<String>, String)>(
         r#"
         SELECT invite.principal_user_id,
@@ -2997,12 +3145,13 @@ async fn redeem_auth_invite(
           AND invite.expires_at > $3
           AND account.disabled_at IS NULL
           AND account.principal_user_id = invite.principal_user_id
-        FOR UPDATE OF invite
+          AND invite.principal_user_id = $4
         "#,
     )
     .bind(&invite_hash)
     .bind(account_id)
     .bind(now)
+    .bind(discovered_principal_user_id.as_str())
     .fetch_optional(&mut *tx)
     .await?;
     let Some(invite) = invite else {
@@ -3428,6 +3577,35 @@ async fn authenticated_account_principal_for_update(
         return Err(unauthorized_account());
     }
     Ok(authorization.principal_user_id.clone())
+}
+
+/// Resolve an account owner without taking a subordinate row lock. The result
+/// is untrusted until `lock_active_authentication_owner` serializes on the
+/// canonical principal/subject boundary and the account binding is re-read.
+async fn discover_account_principal(
+    pool: &PgPool,
+    account_id: &str,
+) -> Result<Option<String>, ApiError> {
+    Ok(
+        sqlx::query_scalar("SELECT principal_user_id FROM auth_account WHERE account_id = $1")
+            .bind(account_id)
+            .fetch_optional(pool)
+            .await?,
+    )
+}
+
+async fn lock_active_authentication_owner(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_user_id: &str,
+) -> Result<identity::methods::IdentityMutationOwner, ApiError> {
+    let owner = identity::methods::lock_identity_mutation(
+        tx,
+        principal_user_id,
+        identity::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
+    Ok(owner)
 }
 
 async fn record_account_recovery_rejection(

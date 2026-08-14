@@ -5,17 +5,15 @@
 
 use caps::Principal;
 use commands::{
-    audit_engine_snapshot_identity_boundary,
-    audit_resolution_envelopes, handle, handle_idempotent, inspect_resolution_traces,
+    audit_engine_snapshot_identity_boundary, audit_resolution_envelopes, inspect_resolution_traces,
     load_engine_phase_input, load_engine_snapshot, run_large_action_graph_performance_proof, Ack,
-    CohostPermissionClass, Command, HostPromptDecision, Reject, ResolutionEnvelopeAuditEnvelope,
-    ResolutionEnvelopeAuditStatus, VoteTarget,
+    CohostPermissionClass, Command, EngineInputBuilder, EngineRunKind, HostPromptDecision, Reject,
+    ResolutionEnvelopeAuditEnvelope, ResolutionEnvelopeAuditStatus, VoteTarget,
     LARGE_ACTION_GRAPH_PERFORMANCE_SEED, LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
 };
 use eventstore::{ActorId, EventInput};
 use projections::{
-    action_counters, action_grants, action_history, append_and_project, audit_rebuild,
-    day_vote_outcomes,
+    action_counters, action_grants, action_history, audit_rebuild, day_vote_outcomes,
     delayed_death_queues, game_result, host_prompts, investigation_memory, phase_state,
     player_info_results, player_notifications, player_notifications_for_slot, rebuild,
     sheriff_badges, slot_effects, slot_state, visit_history, votecount,
@@ -51,6 +49,21 @@ async fn seed_open_night_game_with_pack(
     slot_1_role: (&str, &str),
     slot_2_role: (&str, &str),
 ) -> Result<Vec<eventstore::StoredEvent>, projections::ProjectionError> {
+    let pack_ref = content_registry::pack_ref(pack)
+        .unwrap_or_else(|error| panic!("embedded test pack {pack} has no identity: {error}"))
+        .clone();
+    seed_open_night_game_with_pack_ref(pool, game, host_id, &pack_ref, slot_1_role, slot_2_role)
+        .await
+}
+
+async fn seed_open_night_game_with_pack_ref(
+    pool: &PgPool,
+    game: Uuid,
+    host_id: &str,
+    pack_ref: &content_registry::PackRef,
+    slot_1_role: (&str, &str),
+    slot_2_role: (&str, &str),
+) -> Result<Vec<eventstore::StoredEvent>, projections::ProjectionError> {
     append_and_project(
         pool,
         game,
@@ -60,7 +73,7 @@ async fn seed_open_night_game_with_pack(
                 1,
                 serde_json::json!({
                     "host": host_id,
-                    "pack": pack
+                    "pack_ref": pack_ref
                 }),
                 ActorId::User(host_id.to_string()),
                 0,
@@ -153,6 +166,18 @@ impl DeterministicRng {
 // ───────────────────────── capability enforcement ─────────────────────────
 
 async fn setup_resolved_audit_drift_game(pool: &PgPool, user_prefix: &str, seed: u64) -> Uuid {
+    let game = setup_audit_resolution_inputs(pool, user_prefix).await;
+    handle(
+        pool,
+        &user(&format!("{user_prefix}_host")),
+        Command::ResolvePhase { game, seed },
+    )
+    .await
+    .expect("host resolves audit drift setup phase");
+    game
+}
+
+async fn setup_audit_resolution_inputs(pool: &PgPool, user_prefix: &str) -> Uuid {
     let host = format!("{user_prefix}_host");
     let game = Uuid::new_v4();
     let h = user(&host);
@@ -232,84 +257,107 @@ async fn setup_resolved_audit_drift_game(pool: &PgPool, user_prefix: &str, seed:
         .await
         .unwrap();
     }
-    handle(pool, &h, Command::ResolvePhase { game, seed })
-        .await
-        .expect("host resolves audit drift setup phase");
     game
 }
 
-async fn perturb_stored_resolution_winner(
-    pool: &PgPool,
+#[derive(Clone, Copy)]
+enum AuditResolutionMutation<'a> {
+    AppliedWinner(&'a str),
+    TraceOutcome(&'a str),
+    MissingTrace,
+}
+
+struct AuditResolutionFixture {
     game: Uuid,
-    winner: &str,
-) -> (usize, String) {
-    let (winner_event_index, expected_winner) = stored_win_reached_event_index(pool, game).await;
-    let jsonb_path = format!("{{events,{winner_event_index},payload,winner}}");
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query("ALTER TABLE events DISABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("temporarily disable append-only guard for synthetic applied drift");
-    let update = sqlx::query(
-        "UPDATE events \
-         SET payload = jsonb_set(payload, $2::text[], to_jsonb($3::text), false) \
-         WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .bind(&jsonb_path)
-    .bind(winner)
-    .execute(&mut *tx)
-    .await
-    .expect("perturb stored ResolutionApplied winner");
-    assert_eq!(update.rows_affected(), 1, "one applied envelope perturbed");
-    sqlx::query("ALTER TABLE events ENABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("restore append-only guard after synthetic applied drift");
-    tx.commit()
-        .await
-        .expect("commit applied drift perturbation");
-    (winner_event_index, expected_winner)
+    winner_event: Option<(usize, String)>,
+    first_trace_outcome: Option<String>,
 }
 
-async fn stored_win_reached_event_index(pool: &PgPool, game: Uuid) -> (usize, String) {
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(pool)
-    .await
-    .expect("stored ResolutionApplied payload");
-    let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
-        .expect("stored ResolutionApplied validates");
-    applied
-        .events
-        .iter()
-        .enumerate()
-        .find_map(|(index, indexed)| match &indexed.event {
-            domain::InnerEvent::WinReached { winner, .. } => Some((index, winner.clone())),
-            _ => None,
-        })
-        .unwrap_or_else(|| {
-            panic!("stored ResolutionApplied should contain WinReached: {applied:#?}")
-        })
-}
+async fn setup_mutated_audit_resolution(
+    pool: &PgPool,
+    user_prefix: &str,
+    seed: u64,
+    mutation: AuditResolutionMutation<'_>,
+) -> AuditResolutionFixture {
+    let game = setup_audit_resolution_inputs(pool, user_prefix).await;
+    let stream = stored_events(pool, game).await;
+    let phase_input = EngineInputBuilder::new(game, &stream, "D01")
+        .build()
+        .expect("build audit fixture resolver input");
+    let output = domain::resolve(phase_input.resolve_input(EngineRunKind::ResolvePhase { seed }));
+    let mut applied_payload = serde_json::to_value(&output.applied).unwrap();
+    let mut trace_payload = serde_json::to_value(&output.trace).unwrap();
 
-async fn stored_first_trace_decision_outcome(pool: &PgPool, game: Uuid) -> String {
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(pool)
-    .await
-    .expect("stored ResolutionTrace payload");
-    let trace = domain::validate_trace_json(&payload, domain::TRACE_VERSION)
-        .expect("stored ResolutionTrace validates");
-    trace
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("generated ResolutionApplied validates");
+    let winner_event =
+        applied
+            .events
+            .iter()
+            .enumerate()
+            .find_map(|(index, indexed)| match &indexed.event {
+                domain::InnerEvent::WinReached { winner, .. } => Some((index, winner.clone())),
+                _ => None,
+            });
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("generated ResolutionTrace validates");
+    let first_trace_outcome = trace
         .decisions
         .first()
-        .map(|decision| decision.outcome.clone())
-        .unwrap_or_else(|| panic!("stored ResolutionTrace should contain decisions: {trace:#?}"))
+        .map(|decision| decision.outcome.clone());
+
+    match mutation {
+        AuditResolutionMutation::AppliedWinner(winner) => {
+            let (index, _) = winner_event
+                .as_ref()
+                .expect("fixture ResolutionApplied contains WinReached");
+            applied_payload["events"][*index]["payload"]["winner"] =
+                serde_json::Value::String(winner.to_owned());
+        }
+        AuditResolutionMutation::TraceOutcome(outcome) => {
+            trace_payload["decisions"][0]["outcome"] =
+                serde_json::Value::String(outcome.to_owned());
+        }
+        AuditResolutionMutation::MissingTrace => {}
+    }
+
+    let mut events = vec![EventInput::new(
+        "ResolutionApplied",
+        1,
+        applied_payload,
+        ActorId::System,
+        phase_input.next_stream_seq,
+    )];
+    if !matches!(mutation, AuditResolutionMutation::MissingTrace) {
+        events.push(EventInput::new(
+            "ResolutionTrace",
+            1,
+            trace_payload,
+            ActorId::System,
+            phase_input.next_stream_seq,
+        ));
+    }
+    events.push(EventInput::new(
+        "ThreadLocked",
+        1,
+        serde_json::json!({
+            "channel_id": "main",
+            "phase_id": "D01",
+            "reason": "phase_resolved",
+            "source": "audit_fixture",
+        }),
+        ActorId::System,
+        phase_input.next_stream_seq,
+    ));
+    append_and_project(pool, game, &events)
+        .await
+        .expect("append sealed audit fixture envelopes");
+
+    AuditResolutionFixture {
+        game,
+        winner_event,
+        first_trace_outcome,
+    }
 }
 
 async fn run_audit_resolution_in_process(pool: &PgPool, game: Uuid) -> InProcessCommandOutput {
@@ -328,10 +376,8 @@ async fn run_audit_resolution_diff_artifact_in_process(
     let audit = audit_resolution_envelopes(pool, game)
         .await
         .expect("run resolution diff audit in process");
-    let report = operator_proof::build_operator_resolution_diff_report(
-        output_path.to_string_lossy(),
-        audit,
-    );
+    let report =
+        operator_proof::build_operator_resolution_diff_report(output_path.to_string_lossy(), audit);
     let ok = report.ok;
     in_process_command_output(
         report,
@@ -389,6 +435,14 @@ async fn run_audit_large_action_graph_performance_artifact_in_process(
     output_path: &Path,
     threshold_ms: Option<u64>,
 ) -> InProcessCommandOutput {
+    let generated_users: Vec<_> = (1..=40)
+        .map(|slot| format!("large_graph_user_{slot}"))
+        .collect();
+    ensure_test_principals(
+        pool,
+        std::iter::once("host_h").chain(generated_users.iter().map(String::as_str)),
+    )
+    .await;
     let proof = run_large_action_graph_performance_proof(
         pool,
         Uuid::new_v4(),
@@ -547,7 +601,9 @@ async fn run_generated_shrink_matrix_case(
         GeneratedShrinkArtifacts::new(&format!("generated-shrink-matrix-{family}-{seed}-ok"));
     success_artifacts.remove_existing();
     success_artifacts.write_fixture(&success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(pool).await;
+    let success_report = success_artifacts
+        .run_minimizer_with_preprovisioned_principals(pool)
+        .await;
     assert_eq!(
         success_report["original"]["ok"], true,
         "{family} seed {seed} success original"
@@ -572,14 +628,15 @@ async fn run_generated_shrink_matrix_case(
         GeneratedShrinkArtifacts::new(&format!("generated-shrink-matrix-{family}-{seed}-bad"));
     bad_artifacts.remove_existing();
     bad_artifacts.write_fixture(&bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(pool).await;
+    let bad_report = bad_artifacts
+        .run_minimizer_with_preprovisioned_principals(pool)
+        .await;
     assert_eq!(
         bad_report["original"]["ok"], false,
         "{family} seed {seed} bad original"
     );
     assert_eq!(
-        bad_report["original"]["failure_class"],
-        "semantic_expectation",
+        bad_report["original"]["failure_class"], "semantic_expectation",
         "{family} seed {seed} bad failure class"
     );
     assert_eq!(
@@ -627,9 +684,9 @@ fn run_generated_shrink_matrix_cases(
     cases: Vec<GeneratedShrinkMatrixCase>,
 ) -> Vec<GeneratedShrinkMatrixEntry> {
     assert_eq!(cases.len(), 58, "generated shrink matrix case manifest");
-    let queue = std::sync::Arc::new(std::sync::Mutex::new(
-        std::collections::VecDeque::from(cases),
-    ));
+    let queue = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::from(
+        cases,
+    )));
     let mut entries = std::thread::scope(|scope| {
         let mut workers = Vec::with_capacity(GENERATED_SHRINK_MATRIX_WORKERS);
         for worker_index in 0..GENERATED_SHRINK_MATRIX_WORKERS {
@@ -3779,9 +3836,30 @@ impl GeneratedShrinkArtifacts {
             .unwrap_or_else(|err| panic!("{err}"))
     }
 
+    async fn run_minimizer_with_preprovisioned_principals(
+        &self,
+        pool: &PgPool,
+    ) -> serde_json::Value {
+        self.try_run_minimizer_with_principal_setup(pool, false)
+            .await
+            .unwrap_or_else(|err| panic!("{err}"))
+    }
+
     async fn try_run_minimizer(&self, pool: &PgPool) -> Result<serde_json::Value, String> {
+        self.try_run_minimizer_with_principal_setup(pool, true)
+            .await
+    }
+
+    async fn try_run_minimizer_with_principal_setup(
+        &self,
+        pool: &PgPool,
+        provision_principals: bool,
+    ) -> Result<serde_json::Value, String> {
         let fixture_json = fs::read_to_string(&self.fixture_path)
             .map_err(|err| format!("read generated minimizer fixture: {err}"))?;
+        if provision_principals {
+            ensure_minimizer_fixture_principals(pool, &fixture_json).await?;
+        }
         let reduced_path_label = self.reduced_path.to_string_lossy().into_owned();
         let artifacts = operator_proof::minimizer::minimize_fixture_json(
             pool,
@@ -3802,6 +3880,48 @@ impl GeneratedShrinkArtifacts {
         );
         Ok(artifacts.report)
     }
+}
+
+async fn ensure_minimizer_fixture_principals(
+    pool: &PgPool,
+    fixture_json: &str,
+) -> Result<(), String> {
+    let principals = minimizer_fixture_principals(fixture_json)?;
+    ensure_test_principals(pool, principals.iter().map(String::as_str)).await;
+    Ok(())
+}
+
+fn minimizer_fixture_principals(fixture_json: &str) -> Result<BTreeSet<String>, String> {
+    let fixture: serde_json::Value = serde_json::from_str(fixture_json)
+        .map_err(|err| format!("parse generated minimizer identity fixture: {err}"))?;
+    let roster = fixture
+        .get("roster")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "generated minimizer fixture is missing roster".to_string())?;
+    let mut principals = BTreeSet::from(["fixture_host".to_string()]);
+    for slot in roster {
+        let slot = slot
+            .get("slot")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "generated minimizer roster entry is missing slot".to_string())?;
+        let slot_number = slot
+            .strip_prefix("slot_")
+            .and_then(|number| number.parse::<usize>().ok())
+            .unwrap_or(0);
+        principals.insert(format!("fixture_user_{slot_number}"));
+    }
+    Ok(principals)
+}
+
+fn generated_shrink_matrix_principals(
+    cases: &[GeneratedShrinkMatrixCase],
+) -> Result<BTreeSet<String>, String> {
+    let mut principals = BTreeSet::new();
+    for case in cases {
+        principals.extend(minimizer_fixture_principals(&case.success_fixture_json)?);
+        principals.extend(minimizer_fixture_principals(&case.bad_fixture_json)?);
+    }
+    Ok(principals)
 }
 
 async fn generated_shrink_failure_message(
@@ -6819,17 +6939,9 @@ async fn resolution_payload(
     pool: &PgPool,
     game: Uuid,
     phase_id: &str,
-    seed: u64,
+    _seed: u64,
 ) -> serde_json::Value {
-    sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = $2",
-    )
-    .bind(game)
-    .bind(phase_id)
-    .fetch_one(pool)
-    .await
-    .unwrap_or_else(|err| panic!("seed {seed}: fetch {phase_id} ResolutionApplied failed: {err}"))
+    stored_payload_where(pool, game, "ResolutionApplied", &[("phase_id", phase_id)]).await
 }
 
 fn slot_number(slot: &str) -> usize {
@@ -7025,7 +7137,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -7048,14 +7160,8 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
         .await
         .expect("host resolves self-destruct day");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     assert!(d01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -7081,7 +7187,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -7104,14 +7210,8 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
         .await
         .expect("host resolves wolf carry night");
 
-    let n01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let n01 = domain::validate_resolution_json(&n01_payload, domain::RESULT_VERSION).unwrap();
     assert!(n01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -7288,14 +7388,8 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
     .await
     .expect("host resolves target setup");
 
-    let n01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let n01 = domain::validate_resolution_json(&n01_payload, domain::RESULT_VERSION).unwrap();
     assert!(n01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -7360,14 +7454,8 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
     .await
     .expect("host resolves target lynch");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     assert!(d01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -7389,14 +7477,8 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
                 && metadata["source_action"] == case.action_id
     )));
 
-    let d01_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let d01_trace = domain::validate_trace_json(&d01_trace_payload, domain::TRACE_VERSION)
         .expect("valid target-lynch-win trace");
     let trace_source = format!("action:{}", case.action_id);
@@ -7444,14 +7526,8 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
         serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
         "slot_effect rebuild must preserve target mark"
     );
-    let d01_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         d01_trace_payload, d01_trace_after_rebuild,
         "projection rebuild must not rewrite target-lynch-win trace envelope"
@@ -7531,7 +7607,7 @@ async fn assert_mafia_universe_bomber_case(
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         pool,
         game,
         &[eventstore::EventInput::new(
@@ -7554,14 +7630,8 @@ async fn assert_mafia_universe_bomber_case(
         .await
         .unwrap_or_else(|err| panic!("host resolves Mafia Universe {bomber_role}: {err:?}"));
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .unwrap_or_else(|err| panic!("valid Mafia Universe {bomber_role} result: {err}"));
     let trigger_index = applied
@@ -7608,14 +7678,8 @@ async fn assert_mafia_universe_bomber_case(
         "{bomber_role} vertical should stay focused on bomb trigger, not win resolution"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .unwrap_or_else(|err| panic!("valid Mafia Universe {bomber_role} trace: {err}"));
     assert!(
@@ -7664,14 +7728,8 @@ async fn assert_mafia_universe_bomber_case(
         serde_json::to_string(&slot_state(pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Mafia Universe {bomber_role} trigger deaths"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Mafia Universe {bomber_role} trace envelope"
@@ -7758,20 +7816,7 @@ async fn install_forced_deadline_stream_conflict(pool: &PgPool, game: Uuid) {
         CREATE OR REPLACE FUNCTION test_force_deadline_stream_conflict() RETURNS trigger AS $$
         BEGIN
             IF NEW.stream_id = '{game}'::uuid AND NEW.kind = 'DeadlineExtended' THEN
-                INSERT INTO events
-                    (stream_id, stream_seq, kind, version, payload, actor, occurred_at, causation_id, meta)
-                VALUES
-                    (
-                        NEW.stream_id,
-                        NEW.stream_seq,
-                        'ThreadUnlocked',
-                        1,
-                        '{{"channel_id":"main","source":"forced_stream_conflict"}}'::jsonb,
-                        NEW.actor,
-                        NEW.occurred_at,
-                        NEW.causation_id,
-                        NEW.meta
-                    );
+                NEW.stream_seq := NEW.stream_seq - 1;
             END IF;
             RETURN NEW;
         END;
@@ -7982,14 +8027,7 @@ async fn wait_for_cancelled_command_cleanup(
             .fetch_one(pool)
             .await
             .unwrap();
-            let event_count: i64 = sqlx::query_scalar(
-                "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' AND payload->>'body' = $2",
-            )
-            .bind(game)
-            .bind(body)
-            .fetch_one(pool)
-            .await
-            .unwrap();
+            let event_count: i64 = stored_event_count_where(pool, game, "PostSubmitted", &[("body", body)]).await as i64;
             let projection_count: i64 = sqlx::query_scalar(
                 "SELECT count(*) FROM thread_view WHERE game_id = $1 AND body = $2",
             )

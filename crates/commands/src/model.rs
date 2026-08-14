@@ -434,6 +434,9 @@ pub enum Reject {
     /// The program document or one of its materialized events is invalid.
     #[error("day program validation failed: {0}")]
     DayProgramValidation(String),
+    /// The selected rules pack is missing or fails semantic validation.
+    #[error("pack validation failed: {0}")]
+    PackValidation(String),
     /// The same immutable program generation is already attached.
     #[error("day program generation already attached")]
     DayProgramAlreadyAttached,

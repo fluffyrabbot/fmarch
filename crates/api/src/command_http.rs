@@ -275,7 +275,7 @@ fn command_api_error_response(id: u64, error: ApiError) -> Response {
 async fn import_completed_game_export(
     State(state): State<CommandHttpState>,
     headers: HeaderMap,
-    Json(export): Json<eventstore::StreamExport>,
+    Json(export): Json<projections::CompletedGameExport>,
 ) -> Result<Json<projections::ProjectionAuditReport>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     require_global_admin(&state.auth, token, "completed-game import").await?;
@@ -453,6 +453,7 @@ fn protocol_reject(message: impl Into<String>) -> RejectMsg {
 pub(super) fn command_reject_api_error(reject: commands::Reject) -> ApiError {
     let status = match &reject {
         commands::Reject::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        commands::Reject::PackValidation(_) => StatusCode::BAD_REQUEST,
         commands::Reject::UnknownGame
         | commands::Reject::UnknownSlot
         | commands::Reject::UnknownDayEvent => StatusCode::NOT_FOUND,

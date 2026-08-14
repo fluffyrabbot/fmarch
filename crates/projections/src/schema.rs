@@ -1,5 +1,5 @@
 use sqlx::postgres::PgPool;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
@@ -12,9 +12,8 @@ pub async fn ensure_schema_ready(pool: &PgPool) -> Result<(), sqlx::Error> {
         .map(|migration| migration.version)
         .collect::<Vec<_>>();
     let applied = sqlx::query_as::<_, (i64, Vec<u8>, bool)>(
-        "SELECT version, checksum, success FROM _sqlx_migrations WHERE version = ANY($1)",
+        "SELECT version, checksum, success FROM _sqlx_migrations",
     )
-    .bind(&expected_versions)
     .fetch_all(pool)
     .await?;
     let applied = applied
@@ -34,6 +33,15 @@ pub async fn ensure_schema_ready(pool: &PgPool) -> Result<(), sqlx::Error> {
                 migration.version
             )));
         }
+    }
+    let expected_versions = expected_versions.into_iter().collect::<BTreeSet<_>>();
+    if let Some(version) = applied
+        .keys()
+        .find(|version| !expected_versions.contains(version))
+    {
+        return Err(sqlx::Error::Protocol(format!(
+            "database schema is newer than this binary: migration {version} is unknown"
+        )));
     }
     Ok(())
 }

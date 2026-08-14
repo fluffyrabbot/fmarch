@@ -44,6 +44,125 @@ async fn post_json(
         .unwrap()
 }
 
+async fn register_classic_account(
+    app: &axum::Router,
+    account_id: &str,
+    password: &str,
+) -> (String, String) {
+    let response = post_json(
+        app,
+        "/auth/accounts/registrations",
+        None,
+        serde_json::json!({ "account_id": account_id, "password": password }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_body(response).await;
+    (
+        body["principal_user_id"].as_str().unwrap().to_string(),
+        body["session_token"].as_str().unwrap().to_string(),
+    )
+}
+
+async fn issue_dev_admin(app: &axum::Router, principal_user_id: &str) -> String {
+    let response = post_json(
+        app,
+        "/auth/dev-session",
+        None,
+        serde_json::json!({
+            "principal_user_id": principal_user_id,
+            "expires_at": 4_102_444_800i64,
+            "global_capabilities": ["GlobalAdmin"]
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    json_body(response).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+async fn wait_for_owner_lock_waiters(pool: &sqlx::PgPool, expected: i64) {
+    for _ in 0..200 {
+        let waiters: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND pid <> pg_backend_pid()
+              AND wait_event_type = 'Lock'
+              AND query LIKE '%FROM platform_principal%'
+              AND query LIKE '%FOR UPDATE%'
+            "#,
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if waiters >= expected {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("expected {expected} canonical owner-lock waiter(s)");
+}
+
+async fn assert_erased_without_eligible_sessions(pool: &sqlx::PgPool, principal_user_id: &str) {
+    let (principal_status, subject_state): (String, String) = sqlx::query_as(
+        r#"
+        SELECT principal.status, subject.lifecycle_state
+        FROM platform_principal AS principal
+        JOIN privacy_subject AS subject USING (principal_user_id)
+        WHERE principal.principal_user_id = $1
+        "#,
+    )
+    .bind(principal_user_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let eligible_sessions: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM auth_session AS session
+        JOIN platform_principal AS principal USING (principal_user_id)
+        WHERE session.principal_user_id = $1
+          AND session.revoked_at IS NULL
+          AND session.expires_at > $2
+          AND session.idle_expires_at > $2
+          AND principal.status = 'active'
+        "#,
+    )
+    .bind(principal_user_id)
+    .bind(unix_now_seconds())
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (
+            principal_status.as_str(),
+            subject_state.as_str(),
+            eligible_sessions
+        ),
+        ("disabled", "erased", 0)
+    );
+}
+
+async fn assert_success_without_deadlock(response: axum::response::Response) {
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8_lossy(&body);
+    assert!(!body.contains("40P01"), "deadlock SQLSTATE leaked: {body}");
+    assert!(
+        !body.contains("deadlock detected"),
+        "deadlock surfaced: {body}"
+    );
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "unexpected mutation response: {body}"
+    );
+}
+
 async fn get_session(app: &axum::Router, token: &str) -> axum::response::Response {
     app.clone()
         .oneshot(
@@ -139,7 +258,7 @@ async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn login_issues_backend_token_and_lazily_upgrades_legacy_accounts(pool: sqlx::PgPool) {
+async fn orphan_accounts_fail_closed_without_creating_identity_rows(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
 
@@ -148,8 +267,8 @@ async fn login_issues_backend_token_and_lazily_upgrades_legacy_accounts(pool: sq
     sqlx::query(
         "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, $3, 1, NULL, '{}')",
     )
-    .bind("legacy-player@example.test")
-    .bind("legacy-player-principal")
+    .bind("orphan-player@example.test")
+    .bind("orphan-player-principal")
     .bind(password_hash)
     .execute(&pool)
     .await
@@ -160,44 +279,26 @@ async fn login_issues_backend_token_and_lazily_upgrades_legacy_accounts(pool: sq
         "/auth/accounts/login",
         None,
         serde_json::json!({
-            "account_id": "legacy-player@example.test",
+            "account_id": "orphan-player@example.test",
             "password": password
         }),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = json_body(response).await;
-    let session_token = body["session_token"].as_str().unwrap().to_string();
-    assert!(identity::token::is_app_session_token(
-        session_token.as_str()
-    ));
-    assert!(body["expires_at"].as_i64().unwrap() > 0);
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
-    let (principal_status, method_id, method_kind, _) =
-        classic_identity_rows(&pool, "legacy-player@example.test").await;
-    assert_eq!(principal_status, "active");
-    assert_eq!(method_kind, "classic_password");
-    let (session_method, session_assurance) = session_row(&pool, session_token.as_str()).await;
-    assert_eq!(session_method, Some(method_id));
-    assert_eq!(session_assurance.as_deref(), Some("password"));
-
-    let response = get_session(&app, session_token.as_str()).await;
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let second_login = post_json(
-        &app,
-        "/auth/accounts/login",
-        None,
-        serde_json::json!({
-            "account_id": "legacy-player@example.test",
-            "password": password
-        }),
+    let (principals, subjects, methods, sessions): (i64, i64, i64, i64) = sqlx::query_as(
+        r#"
+        SELECT
+            (SELECT COUNT(*) FROM platform_principal WHERE principal_user_id = 'orphan-player-principal'),
+            (SELECT COUNT(*) FROM privacy_subject WHERE principal_user_id = 'orphan-player-principal'),
+            (SELECT COUNT(*) FROM authentication_method WHERE principal_user_id = 'orphan-player-principal'),
+            (SELECT COUNT(*) FROM auth_session WHERE principal_user_id = 'orphan-player-principal')
+        "#,
     )
-    .await;
-    assert_eq!(second_login.status(), StatusCode::OK);
-    let (_, second_method_id, _, _) =
-        classic_identity_rows(&pool, "legacy-player@example.test").await;
-    assert_eq!(second_method_id, method_id);
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!((principals, subjects, methods, sessions), (0, 0, 0, 0));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -1315,4 +1416,347 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     .await
     .unwrap();
     assert_eq!(rebuilt_persona_name, pseudonym);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let account_id = "recovery-race@example.test";
+    let password = "correct horse battery staple";
+    let (principal, token) = register_classic_account(&app, account_id, password).await;
+    let response = post_json(
+        &app,
+        "/auth/accounts/recovery-credentials",
+        Some(&token),
+        serde_json::json!({
+            "account_id": account_id,
+            "current_password": password,
+            "expires_at": unix_now_seconds() + 3600
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let credential = json_body(response).await;
+    let recovery_id = Uuid::parse_str(credential["recovery_id"].as_str().unwrap()).unwrap();
+    let recovery_token = credential["recovery_token"].as_str().unwrap().to_string();
+
+    let mut owner_gate = pool.begin().await.unwrap();
+    sqlx::query(
+        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(&principal)
+    .execute(&mut *owner_gate)
+    .await
+    .unwrap();
+    let start = Arc::new(tokio::sync::Barrier::new(2));
+    let mutation_app = app.clone();
+    let mutation_start = Arc::clone(&start);
+    let mutation = tokio::spawn(async move {
+        mutation_start.wait().await;
+        post_json(
+            &mutation_app,
+            "/auth/accounts/recoveries",
+            None,
+            serde_json::json!({
+                "account_id": account_id,
+                "recovery_token": recovery_token,
+                "new_password": "recovered horse battery staple"
+            }),
+        )
+        .await
+    });
+    start.wait().await;
+    wait_for_owner_lock_waiters(&pool, 1).await;
+
+    // Waiting at the owner boundary must not hold the recovery row yet.
+    let mut probe = pool.begin().await.unwrap();
+    sqlx::query("SELECT recovery_id FROM auth_account_recovery_credential WHERE recovery_id = $1 FOR UPDATE NOWAIT")
+        .bind(recovery_id)
+        .execute(&mut *probe)
+        .await
+        .unwrap();
+    probe.rollback().await.unwrap();
+
+    let erasure_pool = pool.clone();
+    let erasure_principal = principal.clone();
+    let erasure = tokio::spawn(async move {
+        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+    });
+    wait_for_owner_lock_waiters(&pool, 2).await;
+    owner_gate.commit().await.unwrap();
+
+    let (mutation, erasure) = tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(mutation, erasure)
+    })
+    .await
+    .expect("recovery and erasure must serialize without deadlock");
+    assert_success_without_deadlock(mutation.unwrap()).await;
+    erasure.unwrap().unwrap();
+    assert_erased_without_eligible_sessions(&pool, &principal).await;
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root).with_dev_auth(true));
+    let account_id = "invite-race@example.test";
+    let password = "correct horse battery staple";
+    let invite_token = "invite-erasure-race-token";
+    let (principal, _) = register_classic_account(&app, account_id, password).await;
+    let admin_token = issue_dev_admin(&app, "invite-race-admin").await;
+    let response = post_json(
+        &app,
+        "/auth/invites",
+        Some(&admin_token),
+        serde_json::json!({
+            "invite_token": invite_token,
+            "account_id": account_id,
+            "expected_principal_user_id": principal,
+            "expires_at": unix_now_seconds() + 3600,
+            "global_capabilities": []
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let invite_hash = identity::token::hash_token(invite_token);
+
+    let mut owner_gate = pool.begin().await.unwrap();
+    sqlx::query(
+        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(&principal)
+    .execute(&mut *owner_gate)
+    .await
+    .unwrap();
+    let start = Arc::new(tokio::sync::Barrier::new(2));
+    let mutation_app = app.clone();
+    let mutation_start = Arc::clone(&start);
+    let mutation = tokio::spawn(async move {
+        mutation_start.wait().await;
+        post_json(
+            &mutation_app,
+            "/auth/invites/redeem",
+            None,
+            serde_json::json!({
+                "invite_token": invite_token,
+                "account_id": account_id,
+                "password": password
+            }),
+        )
+        .await
+    });
+    start.wait().await;
+    wait_for_owner_lock_waiters(&pool, 1).await;
+    let mut probe = pool.begin().await.unwrap();
+    sqlx::query("SELECT token_hash FROM auth_invite WHERE token_hash = $1 FOR UPDATE NOWAIT")
+        .bind(&invite_hash)
+        .execute(&mut *probe)
+        .await
+        .unwrap();
+    probe.rollback().await.unwrap();
+
+    let erasure_pool = pool.clone();
+    let erasure_principal = principal.clone();
+    let erasure = tokio::spawn(async move {
+        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+    });
+    wait_for_owner_lock_waiters(&pool, 2).await;
+    owner_gate.commit().await.unwrap();
+    let (mutation, erasure) = tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(mutation, erasure)
+    })
+    .await
+    .expect("invite redemption and erasure must serialize without deadlock");
+    assert_success_without_deadlock(mutation.unwrap()).await;
+    erasure.unwrap().unwrap();
+    assert_erased_without_eligible_sessions(&pool, &principal).await;
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root).with_dev_auth(true));
+    let account_id = "disable-race@example.test";
+    let (principal, _) =
+        register_classic_account(&app, account_id, "correct horse battery staple").await;
+    let admin_token = issue_dev_admin(&app, "disable-race-admin").await;
+
+    let mut owner_gate = pool.begin().await.unwrap();
+    sqlx::query(
+        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(&principal)
+    .execute(&mut *owner_gate)
+    .await
+    .unwrap();
+    let start = Arc::new(tokio::sync::Barrier::new(2));
+    let mutation_app = app.clone();
+    let mutation_start = Arc::clone(&start);
+    let mutation = tokio::spawn(async move {
+        mutation_start.wait().await;
+        post_json(
+            &mutation_app,
+            "/auth/accounts/disable",
+            Some(&admin_token),
+            serde_json::json!({ "account_id": account_id, "expected_disabled": false }),
+        )
+        .await
+    });
+    start.wait().await;
+    wait_for_owner_lock_waiters(&pool, 1).await;
+    let mut probe = pool.begin().await.unwrap();
+    sqlx::query("SELECT account_id FROM auth_account WHERE account_id = $1 FOR UPDATE NOWAIT")
+        .bind(account_id)
+        .execute(&mut *probe)
+        .await
+        .unwrap();
+    probe.rollback().await.unwrap();
+
+    let erasure_pool = pool.clone();
+    let erasure_principal = principal.clone();
+    let erasure = tokio::spawn(async move {
+        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+    });
+    wait_for_owner_lock_waiters(&pool, 2).await;
+    owner_gate.commit().await.unwrap();
+    let (mutation, erasure) = tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(mutation, erasure)
+    })
+    .await
+    .expect("account mutation and erasure must serialize without deadlock");
+    assert_success_without_deadlock(mutation.unwrap()).await;
+    erasure.unwrap().unwrap();
+    assert_erased_without_eligible_sessions(&pool, &principal).await;
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let (principal, token) = register_classic_account(
+        &app,
+        "session-race@example.test",
+        "correct horse battery staple",
+    )
+    .await;
+    let token_hash = identity::token::hash_token(&token);
+
+    let mut owner_gate = pool.begin().await.unwrap();
+    sqlx::query(
+        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(&principal)
+    .execute(&mut *owner_gate)
+    .await
+    .unwrap();
+    let start = Arc::new(tokio::sync::Barrier::new(2));
+    let mutation_app = app.clone();
+    let mutation_start = Arc::clone(&start);
+    let mutation = tokio::spawn(async move {
+        mutation_start.wait().await;
+        post_json(
+            &mutation_app,
+            "/auth/session-rotations",
+            Some(&token),
+            serde_json::json!({}),
+        )
+        .await
+    });
+    start.wait().await;
+    wait_for_owner_lock_waiters(&pool, 1).await;
+    let mut probe = pool.begin().await.unwrap();
+    sqlx::query("SELECT token_hash FROM auth_session WHERE token_hash = $1 FOR UPDATE NOWAIT")
+        .bind(&token_hash)
+        .execute(&mut *probe)
+        .await
+        .unwrap();
+    probe.rollback().await.unwrap();
+
+    let erasure_pool = pool.clone();
+    let erasure_principal = principal.clone();
+    let erasure = tokio::spawn(async move {
+        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+    });
+    wait_for_owner_lock_waiters(&pool, 2).await;
+    owner_gate.commit().await.unwrap();
+    let (mutation, erasure) = tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(mutation, erasure)
+    })
+    .await
+    .expect("session mutation and erasure must serialize without deadlock");
+    assert_success_without_deadlock(mutation.unwrap()).await;
+    erasure.unwrap().unwrap();
+    assert_erased_without_eligible_sessions(&pool, &principal).await;
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(test_state(pool.clone(), &root));
+    let (principal, _) = register_classic_account(
+        &app,
+        "rebuild-race@example.test",
+        "correct horse battery staple",
+    )
+    .await;
+    identity::apply_member_lifecycle(
+        &pool,
+        &principal,
+        identity::MemberLifecycleCommand::Deactivate {
+            reason: "rebuild_race_fixture".to_string(),
+        },
+        unix_now_seconds(),
+    )
+    .await
+    .unwrap();
+
+    let mut owner_gate = pool.begin().await.unwrap();
+    sqlx::query(
+        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(&principal)
+    .execute(&mut *owner_gate)
+    .await
+    .unwrap();
+    let rebuild_pool = pool.clone();
+    let rebuild_principal = principal.clone();
+    let rebuild = tokio::spawn(async move {
+        identity::rebuild_member_lifecycle(&rebuild_pool, &rebuild_principal).await
+    });
+    wait_for_owner_lock_waiters(&pool, 1).await;
+
+    // Rebuild cannot read and hold a stale projection before owner
+    // serialization; otherwise erasure could commit and then be overwritten.
+    let mut probe = pool.begin().await.unwrap();
+    sqlx::query("SELECT principal_user_id FROM member_lifecycle_projection WHERE principal_user_id = $1 FOR UPDATE NOWAIT")
+        .bind(&principal)
+        .execute(&mut *probe)
+        .await
+        .unwrap();
+    probe.rollback().await.unwrap();
+
+    let erasure_pool = pool.clone();
+    let erasure_principal = principal.clone();
+    let erasure = tokio::spawn(async move {
+        identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
+    });
+    wait_for_owner_lock_waiters(&pool, 2).await;
+    owner_gate.commit().await.unwrap();
+    let (rebuild, erasure) = tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(rebuild, erasure)
+    })
+    .await
+    .expect("lifecycle rebuild and erasure must serialize without deadlock");
+    assert_eq!(
+        rebuild.unwrap().unwrap().status,
+        identity::MemberLifecycleStatus::Deactivated
+    );
+    erasure.unwrap().unwrap();
+
+    let rebuilt = identity::rebuild_member_lifecycle(&pool, &principal)
+        .await
+        .unwrap();
+    assert_eq!(rebuilt.status, identity::MemberLifecycleStatus::Erased);
+    assert_erased_without_eligible_sessions(&pool, &principal).await;
 }

@@ -19,11 +19,15 @@ struct EventEnvelope {
     seq: u64,                 // per-stream monotonic order (the canonical game order)
     kind: EventKind,          // tagged discriminant (see taxonomy below)
     version: u16,             // schema version of THIS event kind (additive evolution)
-    payload: EventPayload,    // shape determined by `kind`
-    actor: ActorId,           // who/what caused it
     occurred_at: LogicalTime, // deterministic timestamp
+    sealed_body: AeadEnvelope<EventBody>,
+}
+
+struct EventBody {
+    payload: EventPayload,      // shape determined by `kind`
+    actor: ActorId,             // who/what caused it
     causation_id: Option<Uuid>, // command/event that caused this
-    meta: EventMeta,          // capability used, request id, run_id, etc. (audit)
+    meta: EventMeta,            // capability used, request id, run_id, etc. (audit)
 }
 
 enum ActorId {
@@ -59,8 +63,8 @@ enum EventKind {
     GameCreated,            // pack ref, host, config
     SignupsOpened,
     SlotAdded,              // { slot_id }
-    GamePersonaRegistered,  // { persona_id, principal_user_id, public_name } (private binding + public identity)
-    GamePersonaRenamed,     // { persona_id, public_name }
+    GamePersonaRegistered,  // canonical { persona_id, subject_id, claim_id }; presentation is a subject claim
+    GamePersonaRenamed,     // canonical { persona_id, subject_id, claim_id }
     SlotOccupancyStarted,   // { occupancy_id, transition_id, slot_id, persona_id, reason }
     SlotOccupancyEnded,     // { occupancy_id, transition_id, slot_id, persona_id, reason }
     GameStarted,            // freezes roster; engine state seeded
@@ -74,10 +78,10 @@ enum EventKind {
     SlotModkilled,          // host removes a seat from play (becomes an engine submission)
 
     // ── Roles ──
-    RoleAssigned,           // storage: { slot_id, private }; load_stream: { slot_id, role_key, alignment, role_effects } (06)
+    RoleAssigned,           // logical body: { slot_id, role_key, alignment, role_effects }; whole body sealed (06)
 
     // ── Posting ──
-    PostSubmitted,          // public storage: { channel_id, slot_or_user, body, media, phase_id, quotations? }; private storage encrypts body and quotations as { body_private } (06, RFC 0002)
+    PostSubmitted,          // logical body: { channel_id, slot_or_user, body, media, phase_id, quotations? }; whole body sealed (06, RFC 0002)
     PostEdited,             // { post_id, new_body_ref }   original recoverable
     PostRetracted,          // { post_id }
 

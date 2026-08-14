@@ -169,3 +169,52 @@ test("private game reads derive principals only from authenticated sessions", as
     );
   }
 });
+
+test("host live-stack fixture inspects sealed events only at the opaque storage boundary", async () => {
+  const source = await readFile(
+    "tools/host_console_live_stack_smoke.mjs",
+    "utf8",
+  );
+
+  for (const retiredPlaintextAccess of [
+    /payload\s*->/,
+    /payload\s*\?/,
+    /NEW\.(?:payload|actor|causation_id|meta)\b/,
+    /INSERT\s+INTO\s+events\b/i,
+    /UPDATE\s+events\b/i,
+    /DELETE\s+FROM\s+events\b/i,
+  ]) {
+    assert.doesNotMatch(source, retiredPlaintextAccess);
+  }
+  for (const sealedBoundary of [
+    /sealed_version\s*=\s*2/,
+    /octet_length\(sealed_nonce\)\s*=\s*24/,
+    /octet_length\(sealed_body\)\s*>=\s*16/,
+    /FROM vote_ballot/,
+    /FROM command_receipt/,
+    /\/resolution-audit/,
+    /\/resolution-traces/,
+  ]) {
+    assert.match(source, sealedBoundary);
+  }
+
+});
+
+test("scratch server proofs isolate disposable subject authorities from repo state", async () => {
+  // A scratch database must never reuse the repo-default erasure journal. A
+  // journal is deliberately authoritative across database restores, so sharing
+  // it with an unrelated ephemeral database must fail server readiness.
+  for (const file of [
+    "tools/auth_invite_role_proof.mjs",
+    "tools/host_console_live_stack_smoke.mjs",
+  ]) {
+    const source = await readFile(file, "utf8");
+    assert.match(
+      source,
+      /mkdtemp\(path\.join\(artifactDir, "subject-authority-"\)\)/,
+      `${file} must allocate an authority unique to its scratch database`,
+    );
+    assert.match(source, /FMARCH_SUBJECT_KEY_DIR:\s*subjectKeyRoot/);
+    assert.match(source, /rm\(subjectKeyRoot, \{ recursive: true, force: true \}\)/);
+  }
+});

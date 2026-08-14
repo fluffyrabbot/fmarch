@@ -87,6 +87,7 @@ dependencies = [
  "ciborium",
  "commands",
  "community",
+ "content_registry",
  "domain",
  "eventstore",
  "futures-util",
@@ -94,6 +95,7 @@ dependencies = [
  "hmac 0.12.1",
  "identity",
  "media",
+ "object_store",
  "png",
  "projections",
  "reqwest 0.12.28",
@@ -624,9 +626,11 @@ version = "0.1.0"
 dependencies = [
  "caps",
  "community",
+ "content_registry",
  "domain",
  "eventstore",
  "game_platform",
+ "identity",
  "libc",
  "operator_proof",
  "projections",
@@ -655,6 +659,18 @@ name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
+
+[[package]]
+name = "content_registry"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "domain",
+ "game_platform",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+]
 
 [[package]]
 name = "core-foundation"
@@ -1551,15 +1567,23 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "async-trait",
+ "base64",
+ "bytes",
+ "chacha20poly1305",
+ "futures-util",
+ "hmac 0.12.1",
  "jsonwebtoken",
+ "object_store",
  "rand 0.8.6",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "sqlx",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "url",
  "uuid",
 ]
 
@@ -2146,6 +2170,7 @@ dependencies = [
  "caps",
  "commands",
  "domain",
+ "eventstore",
  "projections",
  "serde",
  "serde_json",
@@ -2325,12 +2350,17 @@ name = "projections"
 version = "0.1.0"
 dependencies = [
  "community",
+ "content_registry",
  "domain",
  "eventstore",
  "game_platform",
+ "identity",
+ "object_store",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlx",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "uuid",
@@ -2964,11 +2994,13 @@ dependencies = [
  "api",
  "axum",
  "commands",
+ "content_registry",
  "eventstore",
  "identity",
  "media",
  "operator_api",
  "projections",
+ "serde_json",
  "sqlx",
  "tokio",
  "tower",

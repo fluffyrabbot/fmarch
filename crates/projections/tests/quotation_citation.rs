@@ -10,11 +10,27 @@ use projections::{
 use sqlx::Row;
 use uuid::Uuid;
 
+fn test_pack_ref(key: &str) -> serde_json::Value {
+    serde_json::json!({
+        "key": key,
+        "version": 1,
+        "content_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    })
+}
+
+async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
+    let mut connection = pool.acquire().await.unwrap();
+    identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
+        .await
+        .unwrap();
+}
+
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     let area = Uuid::from_u128(81);
     let topic = Uuid::from_u128(82);
     let profile = Uuid::from_u128(83);
+    ensure_test_principal(&pool, "quote_member").await;
     append_profile_and_project(
         &pool,
         profile,
@@ -140,7 +156,7 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack": "mafiascum" }),
+                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("mafiascum") }),
                 ActorId::User("host".into()),
                 1,
             ),
@@ -244,6 +260,7 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
     let area = Uuid::from_u128(101);
     let topic = Uuid::from_u128(102);
     let profile = Uuid::from_u128(103);
+    ensure_test_principal(&pool, "reader").await;
     append_profile_and_project(
         &pool,
         profile,

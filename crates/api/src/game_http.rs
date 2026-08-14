@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::path::Path as FsPath;
+use std::sync::OnceLock;
 use uuid::Uuid;
 use wire::{
     DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
@@ -245,7 +245,7 @@ async fn completed_game_export(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     headers: HeaderMap,
-) -> Result<Json<eventstore::StreamExport>, ApiError> {
+) -> Result<Json<projections::CompletedGameExport>, ApiError> {
     let authorization = required_game_authorization(&state, &headers).await?;
     let capabilities = caps::resolve(
         &state.pool,
@@ -1535,32 +1535,24 @@ mod tests {
     }
 }
 
-async fn load_pack_for_game(state: &GameHttpState, game: Uuid) -> Result<domain::Pack, ApiError> {
-    let pack_name = sqlx::query_scalar::<_, Option<String>>(
-        "SELECT payload->>'pack' FROM events WHERE stream_id = $1 AND kind = 'GameCreated' ORDER BY stream_seq ASC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_optional(&state.pool)
-    .await?
-    .flatten()
-    .ok_or_else(|| ApiError::Reject {
-        status: StatusCode::NOT_FOUND,
-        error: RejectCode::UnknownGame,
-        message: "game stream has no GameCreated pack".to_string(),
-    })?;
-    let path = FsPath::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../packs")
-        .join(&pack_name)
-        .join("pack.json");
-    let raw = std::fs::read_to_string(&path).map_err(|err| ApiError::Reject {
+async fn load_pack_for_game(
+    state: &GameHttpState,
+    game: Uuid,
+) -> Result<&'static domain::Pack, ApiError> {
+    let pack_ref = pack_ref_for_game(state, game).await?;
+    resolve_pack_ref(&pack_ref)
+}
+
+fn resolve_pack_ref(
+    pack_ref: &content_registry::PackRef,
+) -> Result<&'static domain::Pack, ApiError> {
+    content_registry::resolve_pack(pack_ref).map_err(|err| ApiError::Reject {
         status: StatusCode::INTERNAL_SERVER_ERROR,
         error: RejectCode::Internal,
-        message: format!("read pack {}: {err}", path.display()),
-    })?;
-    domain::load_pack_from_json(&raw).map_err(|err| ApiError::Reject {
-        status: StatusCode::INTERNAL_SERVER_ERROR,
-        error: RejectCode::Internal,
-        message: format!("load pack {pack_name}: {err}"),
+        message: format!(
+            "resolve embedded pack {}@{}#{}: {err}",
+            pack_ref.key, pack_ref.version, pack_ref.content_hash
+        ),
     })
 }
 
@@ -2281,9 +2273,9 @@ async fn load_host_setup_state(
     state: &GameHttpState,
     game: Uuid,
 ) -> Result<HostSetupStateResponse, ApiError> {
-    let pack_key = pack_name_for_game(state, game).await?;
-    let pack = load_pack_by_name(&pack_key)?;
-    let program_catalog = product_day_program_catalog(&pack)?;
+    let pack_ref = pack_ref_for_game(state, game).await?;
+    let pack = resolve_pack_ref(&pack_ref)?;
+    let program_catalog = product_day_program_catalog(pack)?;
     let attached_programs = projections::day_programs(&state.pool, game)
         .await?
         .into_iter()
@@ -2304,14 +2296,7 @@ async fn load_host_setup_state(
             deadline: row.deadline,
         });
     let slot_occupancy = projections::slot_occupancy(&state.pool, game).await?;
-    let mut assigned_principals = BTreeMap::new();
-    for occupancy in &slot_occupancy {
-        if let Some(principal_user_id) =
-            projections::slot_occupant(&state.pool, game, &occupancy.slot_id).await?
-        {
-            assigned_principals.insert(occupancy.slot_id.clone(), principal_user_id);
-        }
-    }
+    let assigned_principals = projections::slot_occupants(&state.pool, game).await?;
     let slots = projections::slot_state(&state.pool, game)
         .await?
         .into_iter()
@@ -2347,8 +2332,8 @@ async fn load_host_setup_state(
         game,
         created: true,
         pack: HostSetupPackState {
-            key: pack_key,
-            name: pack.name,
+            key: pack_ref.key,
+            name: pack.name.clone(),
             valid: true,
             role_keys: pack.roles.keys().cloned().collect(),
             roles,
@@ -2365,63 +2350,70 @@ async fn load_host_setup_state(
     })
 }
 
-async fn pack_name_for_game(state: &GameHttpState, game: Uuid) -> Result<String, ApiError> {
-    sqlx::query_scalar::<_, Option<String>>(
-        "SELECT payload->>'pack' FROM events WHERE stream_id = $1 AND kind = 'GameCreated' ORDER BY stream_seq ASC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_optional(&state.pool)
-    .await?
-    .flatten()
-    .ok_or_else(|| ApiError::Reject {
-        status: StatusCode::NOT_FOUND,
-        error: RejectCode::UnknownGame,
-        message: "game stream has no GameCreated pack".to_string(),
-    })
-}
-
-fn load_pack_by_name(pack_name: &str) -> Result<domain::Pack, ApiError> {
-    let path = FsPath::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../packs")
-        .join(pack_name)
-        .join("pack.json");
-    let raw = std::fs::read_to_string(&path).map_err(|err| ApiError::Reject {
-        status: StatusCode::INTERNAL_SERVER_ERROR,
-        error: RejectCode::Internal,
-        message: format!("read pack {}: {err}", path.display()),
-    })?;
-    domain::load_pack_from_json(&raw).map_err(|err| ApiError::Reject {
-        status: StatusCode::INTERNAL_SERVER_ERROR,
-        error: RejectCode::Internal,
-        message: format!("load pack {pack_name}: {err}"),
-    })
+async fn pack_ref_for_game(
+    state: &GameHttpState,
+    game: Uuid,
+) -> Result<content_registry::PackRef, ApiError> {
+    projections::game_pack_ref(&state.pool, game)
+        .await?
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::UnknownGame,
+            message: "game projection has no pack".to_string(),
+        })
 }
 
 fn product_day_program_catalog(
     pack: &domain::Pack,
 ) -> Result<Vec<HostSetupProgramOption>, ApiError> {
-    let library =
-        program_library::load_checked_in_program_library().map_err(|error| ApiError::Reject {
+    static CATALOGS: OnceLock<Result<BTreeMap<String, Vec<HostSetupProgramOption>>, String>> =
+        OnceLock::new();
+    let catalogs = CATALOGS.get_or_init(build_product_day_program_catalogs);
+    let catalogs = catalogs.as_ref().map_err(|message| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: message.clone(),
+    })?;
+    catalogs
+        .get(&pack.name)
+        .cloned()
+        .ok_or_else(|| ApiError::Reject {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             error: RejectCode::Internal,
-            message: format!("load checked-in day-program library: {error}"),
-        })?;
+            message: format!("embedded day-program catalog has no pack `{}`", pack.name),
+        })
+}
+
+fn build_product_day_program_catalogs(
+) -> Result<BTreeMap<String, Vec<HostSetupProgramOption>>, String> {
+    let registry = content_registry::product_registry().map_err(|error| error.to_string())?;
+    registry
+        .packs()
+        .iter()
+        .map(|artifact| {
+            build_product_day_program_catalog(&artifact.document)
+                .map(|catalog| (artifact.pack_ref.key.clone(), catalog))
+        })
+        .collect()
+}
+
+fn build_product_day_program_catalog(
+    pack: &domain::Pack,
+) -> Result<Vec<HostSetupProgramOption>, String> {
+    let library =
+        program_library::load_checked_in_program_library().map_err(|error| error.to_string())?;
     let mut programs = Vec::new();
     for artifact in library.for_audience(program_library::ProgramAudience::Product) {
         let compatibility = commands::day_program::inspect(pack, &artifact.document);
-        let compilation = compatibility
-            .compilation
-            .as_ref()
-            .ok_or_else(|| ApiError::Reject {
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-                error: RejectCode::Internal,
-                message: format!(
-                    "validate day program {}@{}: {}",
-                    artifact.program_ref.id,
-                    artifact.program_ref.version,
-                    compatibility.summary()
-                ),
-            })?;
+        let compilation = compatibility.compilation.as_ref().ok_or_else(|| {
+            format!(
+                "validate day program {}@{} for pack {}: {}",
+                artifact.program_ref.id,
+                artifact.program_ref.version,
+                pack.name,
+                compatibility.summary()
+            )
+        })?;
         let schedule_previews = compilation
             .events
             .iter()
@@ -2563,8 +2555,9 @@ mod day_program_catalog_tests {
         );
         for product_pack in product_packs {
             let pack_key = product_pack.key;
-            let pack = load_pack_by_name(&pack_key).unwrap();
-            let catalog = product_day_program_catalog(&pack).unwrap();
+            let pack_ref = content_registry::pack_ref(&pack_key).unwrap();
+            let pack = content_registry::resolve_pack(pack_ref).unwrap();
+            let catalog = product_day_program_catalog(pack).unwrap();
             assert_eq!(catalog.len(), 4);
             assert!(catalog
                 .iter()
@@ -2607,27 +2600,16 @@ mod day_program_catalog_tests {
 }
 
 fn product_pack_catalog() -> Result<Vec<AdminGameBootstrapPack>, ApiError> {
-    let root = FsPath::new(env!("CARGO_MANIFEST_DIR")).join("../../packs");
-    let entries = std::fs::read_dir(&root).map_err(|err| ApiError::Reject {
+    let registry = content_registry::product_registry().map_err(|err| ApiError::Reject {
         status: StatusCode::INTERNAL_SERVER_ERROR,
         error: RejectCode::Internal,
-        message: format!("read pack catalog {}: {err}", root.display()),
+        message: format!("initialize embedded content registry: {err}"),
     })?;
-    let mut packs = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|err| ApiError::Reject {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            error: RejectCode::Internal,
-            message: format!("read pack catalog entry: {err}"),
-        })?;
-        let key = entry.file_name().to_string_lossy().to_string();
-        if key.starts_with("test_") || key.starts_with("dev_") || !entry.path().is_dir() {
-            continue;
-        }
-        let pack = load_pack_by_name(key.as_str())?;
+    let mut packs = Vec::with_capacity(registry.packs().len());
+    for artifact in registry.packs() {
         packs.push(AdminGameBootstrapPack {
-            key,
-            name: humanize_identifier(pack.name.as_str()),
+            key: artifact.pack_ref.key.clone(),
+            name: humanize_identifier(artifact.document.name.as_str()),
         });
     }
     packs.sort_by(|left, right| left.name.cmp(&right.name).then(left.key.cmp(&right.key)));

@@ -27,6 +27,14 @@ use wire::{
     SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
+fn test_pack_ref(key: &str) -> serde_json::Value {
+    serde_json::json!({
+        "key": key,
+        "version": 1,
+        "content_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    })
+}
+
 fn decode_server_envelope(message: tokio_tungstenite::tungstenite::Message) -> ServerEnvelope {
     let tokio_tungstenite::tungstenite::Message::Binary(bytes) = message else {
         panic!("expected binary CBOR websocket frame");
@@ -87,6 +95,31 @@ fn shared_test_media_store() -> MediaStore {
     static ROOT: OnceLock<TempDir> = OnceLock::new();
     let root = ROOT.get_or_init(|| tempfile::tempdir().expect("create shared API test media root"));
     MediaStore::open(root.path(), MediaLimits::default()).expect("open shared API test media store")
+}
+
+async fn logical_event_payloads(
+    pool: &sqlx::PgPool,
+    stream_id: Uuid,
+    kind: &str,
+) -> Vec<serde_json::Value> {
+    eventstore::load_stream(pool, stream_id)
+        .await
+        .expect("load canonical event stream")
+        .into_iter()
+        .filter(|event| event.kind == kind)
+        .map(|event| event.payload)
+        .collect()
+}
+
+async fn last_logical_event_payload(
+    pool: &sqlx::PgPool,
+    stream_id: Uuid,
+    kind: &str,
+) -> serde_json::Value {
+    logical_event_payloads(pool, stream_id, kind)
+        .await
+        .pop()
+        .unwrap_or_else(|| panic!("missing {kind} event in {stream_id}"))
 }
 
 async fn issue_dev_session(
@@ -895,13 +928,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
         )
         .await,
     );
-    let payload: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' ORDER BY seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload = last_logical_event_payload(&pool, game, "PostSubmitted").await;
     assert_eq!(payload["media"][0]["content_id"], upload.content_id);
     assert_eq!(payload["media"][0]["alt"], "Private uploaded receipt");
     assert_eq!(
@@ -1356,18 +1383,19 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
         command_id += 1;
     }
 
-    let stored_private_posts = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
-         AND payload->>'channel_id' IN ('private:mason', 'private:neighbor') ORDER BY stream_seq",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let stored_private_posts: Vec<_> = logical_event_payloads(&pool, game, "PostSubmitted")
+        .await
+        .into_iter()
+        .filter(|payload| {
+            matches!(
+                payload["channel_id"].as_str(),
+                Some("private:mason" | "private:neighbor")
+            )
+        })
+        .collect();
     assert_eq!(stored_private_posts.len(), 2);
     for payload in &stored_private_posts {
-        assert!(payload.get("body").is_none());
-        assert!(payload["body_private"]["ciphertext"].is_string());
+        assert!(payload["body"].is_string());
         assert_eq!(payload["media"][0]["content_id"], upload.content_id);
     }
 
@@ -1743,16 +1771,13 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     );
     command_id += 1;
 
-    let stored: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
-         AND payload->>'channel_id' = 'dead' ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert!(stored.get("body").is_none());
-    assert!(stored["body_private"]["ciphertext"].is_string());
+    let stored = logical_event_payloads(&pool, game, "PostSubmitted")
+        .await
+        .into_iter()
+        .rev()
+        .find(|payload| payload["channel_id"] == "dead")
+        .expect("dead-chat post event");
+    assert_eq!(stored["body"], "dead history with canonical media");
     assert_eq!(stored["media"][0]["content_id"], upload.content_id);
 
     expect_ack(
@@ -2095,19 +2120,13 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         .await,
     );
 
-    let stored: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
-         AND payload->>'channel_id' = 'spectator' ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert!(stored.get("body").is_none());
-    assert!(stored["body_private"]["ciphertext"].is_string());
-    assert!(!stored
-        .to_string()
-        .contains("Host notice for the spectator room"));
+    let stored = logical_event_payloads(&pool, game, "PostSubmitted")
+        .await
+        .into_iter()
+        .rev()
+        .find(|payload| payload["channel_id"] == "spectator")
+        .expect("spectator post event");
+    assert_eq!(stored["body"], "Host notice for the spectator room");
     assert_eq!(stored["media"][0]["content_id"], content_id);
 
     let spectator_ticket = issue_websocket_ticket(&app, &spectator_token, game, "spectator").await;
@@ -2400,6 +2419,19 @@ async fn post_command_with_command_id(
     principal_user_id: &str,
     command: Command,
 ) -> ServerEnvelope {
+    let private_claim_principal = match &command {
+        Command::SeatPersona {
+            principal_user_id, ..
+        } => Some(principal_user_id.as_str()),
+        Command::ProcessReplacement {
+            incoming_principal_user_id,
+            ..
+        } => Some(incoming_principal_user_id.as_str()),
+        _ => None,
+    };
+    if let Some(private_claim_principal) = private_claim_principal {
+        let _ = issue_dev_session(&app, private_claim_principal, &[]).await;
+    }
     let global_capabilities = if matches!(&command, Command::CreateGame { .. }) {
         vec!["GlobalAdmin"]
     } else {
@@ -3020,6 +3052,11 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
+    let mut connection = pool.acquire().await.unwrap();
+    identity::methods::ensure_principal(&mut connection, "player_mira", &[], 1)
+        .await
+        .unwrap();
+    drop(connection);
     sqlx::query(
         "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, global_capabilities) VALUES ('mira@example.test', 'player_mira', 'unused-in-this-test', 1, '{}')",
     )
@@ -4907,8 +4944,8 @@ async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: s
     let hidden_source_seq = 41_i64;
     sqlx::query(
         "INSERT INTO game_index \
-         (game_id, pack, status, phase_id, created_seq, started_seq, completed_seq, updated_seq) \
-         VALUES ($1, 'mafiascum', 'active', 'D01', 1, 2, NULL, $2)",
+         (game_id, pack_key, pack_version, pack_content_hash, status, phase_id, created_seq, started_seq, completed_seq, updated_seq) \
+         VALUES ($1, 'mafiascum', 1, repeat('0', 64), 'active', 'D01', 1, 2, NULL, $2)",
     )
     .bind(game)
     .bind(hidden_source_seq)
@@ -4998,7 +5035,7 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
         (setup_game, "epicmafia", "setup", None, 140_i64, None),
     ] {
         sqlx::query(
-            "INSERT INTO game_index (game_id, pack, status, phase_id, created_seq, started_seq, completed_seq, updated_seq) VALUES ($1, $2, $3, $4, 1, 2, $5, $6)",
+            "INSERT INTO game_index (game_id, pack_key, pack_version, pack_content_hash, status, phase_id, created_seq, started_seq, completed_seq, updated_seq) VALUES ($1, $2, 1, repeat('0', 64), $3, $4, 1, 2, $5, $6)",
         )
         .bind(game)
         .bind(pack)
@@ -5164,11 +5201,13 @@ async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::Pg
     ));
     let response = get_as_dev_principal(&app, "export_host", format!("/games/{game}/export")).await;
     assert_eq!(response.status(), StatusCode::OK);
-    let export: eventstore::StreamExport =
+    let export: projections::CompletedGameExport =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert_eq!(export.stream_id, game);
-    assert_eq!(export.checksum_sha256.len(), 64);
+    assert_eq!(export.stream.stream_id, game);
+    assert_eq!(export.stream.checksum_sha256.len(), 64);
+    assert_eq!(export.archive_checksum_sha256.len(), 64);
     assert!(export
+        .stream
         .events
         .iter()
         .any(|event| event.kind == "GameCompleted"));
@@ -5864,7 +5903,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
             eventstore::EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack": "moderation_api" }),
+                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("moderation_api") }),
                 eventstore::ActorId::User("host".into()),
                 1,
             ),
@@ -6965,19 +7004,11 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
         )
         .await,
     );
-    let payload: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' ORDER BY seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload = last_logical_event_payload(&pool, game, "PostSubmitted").await;
     assert_eq!(payload["channel_id"], "private:role_pm:slot_1");
     assert_eq!(payload["slot_or_user"]["slot"], "slot_1");
     assert_eq!(payload["phase_id"], "D01");
-    assert!(payload.get("body").is_none());
-    assert!(payload["body_private"]["ciphertext"].is_string());
-    assert!(payload["body_private"]["kid"].is_string());
+    assert_eq!(payload["body"], "private role confirmation");
 
     let private_thread = get_as_dev_principal(
         &app,

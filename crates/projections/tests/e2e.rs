@@ -23,9 +23,40 @@ use projections::{
     rebuild_profile_stream, slot_effects, slot_state, votecount, ProjectionError,
     PublicSearchFilter,
 };
+use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
+
+fn test_pack_ref(key: &str) -> serde_json::Value {
+    serde_json::json!({
+        "key": key,
+        "version": 1,
+        "content_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    })
+}
+
+fn refresh_completed_game_archive_checksum(export: &mut projections::CompletedGameExport) {
+    #[derive(serde::Serialize)]
+    struct ChecksumManifest<'a> {
+        stream: &'a eventstore::StreamExport,
+        detached_subject_aliases: &'a [projections::CompletedGameDetachedAlias],
+    }
+
+    let bytes = serde_json::to_vec(&ChecksumManifest {
+        stream: &export.stream,
+        detached_subject_aliases: &export.detached_subject_aliases,
+    })
+    .unwrap();
+    export.archive_checksum_sha256 = format!("{:x}", Sha256::digest(bytes));
+}
+
+async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
+    let mut connection = pool.acquire().await.unwrap();
+    identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
+        .await
+        .unwrap();
+}
 
 fn load_pack() -> Pack {
     let current_dir = std::env::current_dir().expect("resolve current directory");
@@ -1521,7 +1552,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host_active", "pack": "mafiascum" }),
+                serde_json::json!({ "host": "host_active", "pack_ref": test_pack_ref("mafiascum") }),
                 ActorId::User("host_active".into()),
                 100,
             ),
@@ -1550,7 +1581,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host_completed", "pack": "mafia_universe" }),
+                serde_json::json!({ "host": "host_completed", "pack_ref": test_pack_ref("mafia_universe") }),
                 ActorId::User("host_completed".into()),
                 90,
             ),
@@ -1578,7 +1609,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
         &[EventInput::new(
             "GameCreated",
             1,
-            serde_json::json!({ "host": "host_setup", "pack": "epicmafia" }),
+            serde_json::json!({ "host": "host_setup", "pack_ref": test_pack_ref("epicmafia") }),
             ActorId::User("host_setup".into()),
             150,
         )],
@@ -1589,6 +1620,12 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
     let latest = game_index(&pool, None, 1).await.unwrap();
     assert_eq!(latest.games.len(), 1);
     assert_eq!(latest.games[0].game_id, completed_game);
+    assert_eq!(latest.games[0].pack_ref.key, "mafia_universe");
+    assert_eq!(latest.games[0].pack_ref.version, 1);
+    assert_eq!(
+        latest.games[0].pack_ref.content_hash.as_str(),
+        "0000000000000000000000000000000000000000000000000000000000000000"
+    );
     assert_eq!(latest.games[0].status, "completed");
     assert_eq!(latest.games[0].phase_id.as_deref(), Some("D01"));
     assert_eq!(latest.games[0].completed_seq, Some(6));
@@ -1597,6 +1634,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
     let older = game_index(&pool, Some(cursor), 1).await.unwrap();
     assert_eq!(older.games.len(), 1);
     assert_eq!(older.games[0].game_id, active_game);
+    assert_eq!(older.games[0].pack_ref.key, "mafiascum");
     assert_eq!(older.games[0].status, "active");
     assert_eq!(older.games[0].phase_id.as_deref(), Some("N01"));
     assert_eq!(older.next_cursor, None);
@@ -1637,6 +1675,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     let area = Uuid::from_u128(42);
     let topic = Uuid::from_u128(43);
     let game = Uuid::from_u128(44);
+    ensure_test_principal(&pool, "signal_member").await;
     append_profile_and_project(
         &pool,
         profile,
@@ -1698,7 +1737,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack": "signal_pack" }),
+                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("signal_pack") }),
                 ActorId::User("host".into()),
                 5,
             ),
@@ -1858,7 +1897,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack": "moderation_pack" }),
+                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("moderation_pack") }),
                 ActorId::User("host".into()),
                 1,
             ),
@@ -2077,7 +2116,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
         EventInput::new(
             "GameCreated",
             1,
-            serde_json::json!({ "host": "host", "pack": "moderation_limit" }),
+            serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("moderation_limit") }),
             ActorId::User("host".into()),
             1,
         ),
@@ -2151,6 +2190,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     let profile = Uuid::new_v4();
     let area = Uuid::new_v4();
     let topic = Uuid::new_v4();
+    ensure_test_principal(&pool, "author_a").await;
     append_profile_and_project(
         &pool,
         profile,
@@ -2453,7 +2493,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack": "watch_pack" }),
+                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("watch_pack") }),
                 ActorId::User("host".into()),
                 15,
             ),
@@ -2546,30 +2586,35 @@ async fn encrypted_private_events_still_fold_and_rebuild(pool: sqlx::PgPool) {
 
     append_and_project(&pool, game, &events).await.unwrap();
 
-    let raw_role: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned'",
+    let raw_role: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned'",
     )
     .bind(game)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(raw_role["slot_id"], "slot_1");
-    assert!(raw_role.get("role_key").is_none());
-    assert!(raw_role["private"]["ciphertext"].is_string());
-    assert!(raw_role["private"]["kid"].is_string());
+    assert_eq!(raw_role.0, 2);
+    assert!(!raw_role.1.is_empty());
+    assert_eq!(raw_role.2.len(), 24);
+    assert!(raw_role.3.len() >= 16);
+    let raw_role_body = String::from_utf8_lossy(&raw_role.3);
+    assert!(!raw_role_body.contains("slot_1"));
+    assert!(!raw_role_body.contains("godfather"));
 
-    let raw_post: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
+    let raw_post: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
     )
     .bind(game)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(raw_post["channel_id"], "private:mafia_day_chat");
-    assert_eq!(raw_post["phase_id"], "D01");
-    assert!(raw_post.get("body").is_none());
-    assert!(raw_post["body_private"]["ciphertext"].is_string());
-    assert!(raw_post["body_private"]["kid"].is_string());
+    assert_eq!(raw_post.0, 2);
+    assert!(!raw_post.1.is_empty());
+    assert_eq!(raw_post.2.len(), 24);
+    assert!(raw_post.3.len() >= 16);
+    let raw_post_body = String::from_utf8_lossy(&raw_post.3);
+    assert!(!raw_post_body.contains("private:mafia_day_chat"));
+    assert!(!raw_post_body.contains("private night plan"));
 
     let projected_role = slot_state(&pool, game)
         .await
@@ -2627,6 +2672,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
     let visible_topic = Uuid::from_u128(102);
     let hidden_topic = Uuid::from_u128(103);
 
+    ensure_test_principal(&pool, "member").await;
     append_profile_and_project(
         &pool,
         member_profile,
@@ -2828,6 +2874,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
             "Orchid Author",
         ),
     ] {
+        ensure_test_principal(&pool, principal).await;
         append_profile_and_project(
             &pool,
             profile,
@@ -3071,6 +3118,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn profile_projection_keeps_owner_state_private_and_rebuildable(pool: sqlx::PgPool) {
     let profile = Uuid::from_u128(201);
+    ensure_test_principal(&pool, "owner_a").await;
     append_profile_and_project(
         &pool,
         profile,
@@ -3129,6 +3177,8 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
     pool: sqlx::PgPool,
 ) {
     let game = Uuid::new_v4();
+    let principal = format!("archive-persona-owner-{}", Uuid::new_v4().simple());
+    ensure_test_principal(&pool, &principal).await;
     append_and_project(
         &pool,
         game,
@@ -3136,11 +3186,32 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "export_host", "pack": "mafiascum" }),
+                serde_json::json!({ "host": "export_host", "pack_ref": test_pack_ref("mafiascum") }),
                 ActorId::User("export_host".into()),
                 1,
             ),
-            EventInput::new("GameCompleted", 1, serde_json::json!({}), ActorId::Host, 2),
+            EventInput::new(
+                "GamePersonaRegistered",
+                1,
+                serde_json::json!({
+                    "persona_id": "portable-persona",
+                    "principal_user_id": principal,
+                    "public_name": "Source Persona Name",
+                }),
+                ActorId::User(principal.clone()),
+                2,
+            ),
+            EventInput::new(
+                "GamePersonaRenamed",
+                1,
+                serde_json::json!({
+                    "persona_id": "portable-persona",
+                    "public_name": "Latest Source Persona Name",
+                }),
+                ActorId::User(principal.clone()),
+                3,
+            ),
+            EventInput::new("GameCompleted", 1, serde_json::json!({}), ActorId::Host, 4),
         ],
     )
     .await
@@ -3148,6 +3219,28 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
     let export = projections::export_completed_game(&pool, game)
         .await
         .unwrap();
+    assert_eq!(export.detached_subject_aliases.len(), 1);
+    let detached_alias = export.detached_subject_aliases[0].detached_alias.clone();
+    let subject_id: Uuid =
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
+            .bind(&principal)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let archive_json = serde_json::to_string(&export).unwrap();
+    assert!(!archive_json.contains(&principal));
+    assert!(!archive_json.contains("Source Persona Name"));
+    assert!(!archive_json.contains("Latest Source Persona Name"));
+    assert!(!archive_json.contains(&subject_id.to_string()));
+    assert!(archive_json.contains("\"stream_id\""));
+    assert!(!archive_json.contains("\"stream\""));
+    identity::active_subject_key_store()
+        .await
+        .unwrap()
+        .destroy(identity::SubjectId::from_uuid(subject_id))
+        .await
+        .unwrap();
+
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL for target import");
     let (prefix, _) = database_url.rsplit_once('/').expect("database URL path");
     let admin = PgPoolOptions::new()
@@ -3168,10 +3261,167 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
         .await
         .unwrap();
     sqlx::migrate!("./migrations").run(&target).await.unwrap();
+    let mut tampered_alias_export = export.clone();
+    tampered_alias_export.detached_subject_aliases[0].detached_alias =
+        "Archived player 00000000000000000000".to_string();
+    let tamper_error = projections::import_completed_game_export(&target, &tampered_alias_export)
+        .await
+        .expect_err("the wrapper checksum must authenticate detached aliases");
+    assert!(tamper_error
+        .to_string()
+        .contains("archive checksum mismatch"));
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&target)
+            .await
+            .unwrap(),
+        0
+    );
+    let mut missing_alias_export = export.clone();
+    missing_alias_export.detached_subject_aliases.clear();
+    refresh_completed_game_archive_checksum(&mut missing_alias_export);
+    let subject_set_error =
+        projections::import_completed_game_export(&target, &missing_alias_export)
+            .await
+            .expect_err("the alias manifest must cover the exact authenticated subject set");
+    assert!(subject_set_error
+        .to_string()
+        .contains("exactly cover the authenticated game-persona subject set"));
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&target)
+            .await
+            .unwrap(),
+        0,
+        "a post-insert subject-set failure must roll the imported stream back"
+    );
+    sqlx::query(
+        r#"
+        CREATE FUNCTION reject_archive_game_index() RETURNS trigger
+            LANGUAGE plpgsql AS $$
+        BEGIN
+            RAISE EXCEPTION 'forced archive rebuild failure';
+        END;
+        $$
+        "#,
+    )
+    .execute(&target)
+    .await
+    .unwrap();
+    sqlx::query(
+        "CREATE TRIGGER reject_archive_game_index BEFORE INSERT ON game_index \
+         FOR EACH ROW EXECUTE FUNCTION reject_archive_game_index()",
+    )
+    .execute(&target)
+    .await
+    .unwrap();
+    assert!(projections::import_completed_game_export(&target, &export)
+        .await
+        .is_err());
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&target)
+            .await
+            .unwrap(),
+        0,
+        "a failed first rebuild must leave no imported event prefix"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM completed_game_detached_alias WHERE game_id = $1",
+        )
+        .bind(game)
+        .fetch_one(&target)
+        .await
+        .unwrap(),
+        0,
+        "detached aliases must roll back with their failed event import"
+    );
+    sqlx::query("DROP TRIGGER reject_archive_game_index ON game_index")
+        .execute(&target)
+        .await
+        .unwrap();
+    sqlx::query("DROP FUNCTION reject_archive_game_index()")
+        .execute(&target)
+        .await
+        .unwrap();
+    let collision_alias = "Global tombstone collision must not win";
+    sqlx::query(
+        "INSERT INTO platform_principal \
+         (principal_user_id, status, created_at, disabled_at) \
+         VALUES ('unrelated-collision-principal', 'disabled', 1, 2)",
+    )
+    .execute(&target)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO privacy_subject \
+         (subject_id, principal_user_id, created_at, lifecycle_state) \
+         VALUES ($1, 'unrelated-collision-principal', 1, 'erased')",
+    )
+    .bind(subject_id)
+    .execute(&target)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO subject_tombstone (subject_id, replacement_alias, destroyed_at) \
+         VALUES ($1, $2, 2)",
+    )
+    .bind(subject_id)
+    .bind(collision_alias)
+    .execute(&target)
+    .await
+    .unwrap();
     let audit = projections::import_completed_game_export(&target, &export)
         .await
         .unwrap();
     assert!(audit.ok);
+    let imported_persona = sqlx::query(
+        "SELECT public.current_public_name, private.principal_user_id, private.subject_id, private.current_claim_id \
+         FROM game_persona_public AS public \
+         JOIN game_persona_private AS private USING (game_id, persona_id) \
+         WHERE public.game_id = $1 AND public.persona_id = 'portable-persona'",
+    )
+    .bind(game)
+    .fetch_one(&target)
+    .await
+    .unwrap();
+    assert_eq!(
+        imported_persona.get::<String, _>("current_public_name"),
+        detached_alias
+    );
+    assert_eq!(
+        imported_persona.get::<String, _>("principal_user_id"),
+        detached_alias
+    );
+    assert_ne!(
+        imported_persona.get::<String, _>("current_public_name"),
+        collision_alias
+    );
+    assert_eq!(imported_persona.get::<Option<Uuid>, _>("subject_id"), None);
+    assert_eq!(
+        imported_persona.get::<Option<Uuid>, _>("current_claim_id"),
+        None
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM privacy_subject")
+            .fetch_one(&target)
+            .await
+            .unwrap(),
+        1,
+        "the import must not create or retain a subject link beyond the deliberate collision row"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM subject_private_claim")
+            .fetch_one(&target)
+            .await
+            .unwrap(),
+        0
+    );
+
     drop(target);
     sqlx::query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1")
         .bind(&target_name)

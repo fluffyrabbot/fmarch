@@ -514,7 +514,14 @@ function sanitizeDatabaseName(name) {
 }
 
 async function seedLiveHostGame() {
-  for (const principalUserId of [hostPrincipal, "player-mira"]) {
+  // Every persona/replacement target must exist before the command names it.
+  // Dev sessions are this scratch fixture's canonical principal provisioner.
+  for (const principalUserId of [
+    hostPrincipal,
+    "player-mira",
+    "player-target",
+    "player-rowan",
+  ]) {
     const session = await postJson(`${apiBaseUrl}/auth/dev-session`, {
       principal_user_id: principalUserId,
       expires_at: 4_102_444_800,

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -203,6 +203,13 @@ const spectatorDefinition = Object.freeze({
   liveBody: "Second host notice delivered live to spectators",
   mediaAlt: "Spectator room notice receipt",
 });
+const accountOnlyFixturePrincipals = Object.freeze([
+  "player-beloved",
+  "player-town-extra",
+  "action-target",
+  "action-town",
+  ...additionalRoomDefinitions.map((room) => room.peer.principalUserId),
+]);
 const factionDayChatUploadAsset = Object.freeze({
   contentAddress: "live-stack-private-upload-source",
   variantName: "source",
@@ -265,6 +272,7 @@ let server;
 let vite;
 let browser;
 let smokeDatabase;
+let subjectKeyRoot;
 let serverOutput = "";
 let primaryError = null;
 const moderatorSocketDiagnostics = [];
@@ -280,6 +288,7 @@ process.chdir(frontendRoot);
 
 try {
   await mkdir(artifactDir, { recursive: true });
+  subjectKeyRoot = await mkdtemp(path.join(artifactDir, "subject-authority-"));
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   await writeProgress({ stage: "create-temp-database" });
   smokeDatabase = await createScratchDatabase(databaseUrl);
@@ -293,6 +302,7 @@ try {
       DATABASE_URL: smokeDatabase.url,
       FMARCH_BIND: `${host}:${apiPort}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
+      FMARCH_SUBJECT_KEY_DIR: subjectKeyRoot,
       FMARCH_EVENT_ENCRYPTION_KEY:
         process.env.FMARCH_EVENT_ENCRYPTION_KEY ??
         "host-console-live-proof-key-at-least-32-bytes",
@@ -330,6 +340,7 @@ try {
   let additionalRoomSessions = null;
   let deadChatSessions = null;
   let spectatorSession = null;
+  let accountOnlyPrincipals = [];
   if (dayEventRoomOnly) {
     await writeProgress({ stage: "create-day-event-room-host-session", dayEventRoomGame });
     grantedSessions = {
@@ -342,6 +353,14 @@ try {
   } else {
     await writeProgress({ stage: "create-granted-sessions", game });
     grantedSessions = await createGrantedSessions();
+    await writeProgress({ stage: "provision-account-only-fixture-principals" });
+    accountOnlyPrincipals = await provisionAccountOnlyFixturePrincipals();
+    await writeProgress({ stage: "create-additional-room-sessions", additionalRoomsGame });
+    additionalRoomSessions = await createAdditionalRoomSessions();
+    await writeProgress({ stage: "create-dead-chat-sessions", deadChatGame });
+    deadChatSessions = await createDeadChatSessions();
+    await writeProgress({ stage: "create-spectator-session", spectatorGame });
+    spectatorSession = await createSpectatorSession();
     await writeProgress({ stage: "seed-admin-setup-game", game: adminCreatedGame });
     await sendCommand("admin_a", {
       CreateGame: { game: adminCreatedGame, pack: "mafiascum" },
@@ -358,22 +377,16 @@ try {
     spectatorSeed = await seedSpectatorGame();
     await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
     privateChannelFixture = await seedFactionDayChatFixture();
-    await writeProgress({ stage: "create-additional-room-sessions", additionalRoomsGame });
-    additionalRoomSessions = await createAdditionalRoomSessions();
-    await writeProgress({ stage: "create-dead-chat-sessions", deadChatGame });
-    deadChatSessions = await createDeadChatSessions();
-    await writeProgress({ stage: "create-spectator-session", spectatorGame });
-    spectatorSession = await createSpectatorSession();
   }
-  await writeProgress({ stage: "seed-day-event-room-game", dayEventRoomGame });
-  const dayEventRoomSeed = await seedDayEventRoomScenario({
-    fixture: dayEventRoomFixture,
-    sendCommand,
-  });
   await writeProgress({ stage: "create-day-event-room-sessions", dayEventRoomGame });
   const dayEventRoomSessions = await createDayEventRoomScenarioSessions({
     fixture: dayEventRoomFixture,
     createAccountSession,
+  });
+  await writeProgress({ stage: "seed-day-event-room-game", dayEventRoomGame });
+  const dayEventRoomSeed = await seedDayEventRoomScenario({
+    fixture: dayEventRoomFixture,
+    sendCommand,
   });
 
   await writeProgress({ stage: "start-sveltekit" });
@@ -457,6 +470,7 @@ try {
     privateChannelFixture,
     rootAdminSession,
     grantedSessions,
+    accountOnlyPrincipals,
     additionalRoomSessions,
     deadChatSessions,
     spectatorSession,
@@ -536,6 +550,9 @@ try {
         }`,
       );
     }
+  }
+  if (subjectKeyRoot !== undefined) {
+    await rm(subjectKeyRoot, { recursive: true, force: true });
   }
   if (previousSmokeAuth === undefined) {
     delete process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH;
@@ -1113,6 +1130,17 @@ async function createGrantedSessions() {
       principalUserId: "cohost_c",
     }),
   };
+}
+
+async function provisionAccountOnlyFixturePrincipals() {
+  for (const principalUserId of accountOnlyFixturePrincipals) {
+    await createAuthAccount({
+      accountId: `live-stack-fixture-${principalUserId}-${crypto.randomUUID()}@example.test`,
+      password: `live-stack fixture password ${principalUserId} ${crypto.randomUUID()}`,
+      principalUserId,
+    });
+  }
+  return [...accountOnlyFixturePrincipals];
 }
 
 async function createAdditionalRoomSessions() {
@@ -1822,22 +1850,12 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
   }
   await incomingContext.close();
 
-  const encryptedStorage = await runSqlScalar(
-    smokeDatabase.url,
-    `SELECT concat(
-       count(*)::text, '|',
-       count(*) FILTER (WHERE payload ? 'body')::text, '|',
-       count(*) FILTER (WHERE payload->'body_private'->>'ciphertext' IS NOT NULL)::text, '|',
-       count(*) FILTER (WHERE position(${sqlLiteral(room.historyBody)} in payload::text) > 0
-                         OR position(${sqlLiteral(room.incomingBody)} in payload::text) > 0)::text)
-     FROM events
-     WHERE stream_id = '${additionalRoomsGame}'
-       AND kind = 'PostSubmitted'
-       AND payload->>'channel_id' = ${sqlLiteral(room.channelId)}`,
-  );
-  if (encryptedStorage !== "2|0|2|0") {
-    throw new Error(`${room.kind} encrypted storage proof drifted: ${encryptedStorage}`);
-  }
+  const encryptedStorage = await proveSealedPostStorage({
+    gameId: additionalRoomsGame,
+    posts: finalThread.posts,
+    plaintextBodies: [room.historyBody, room.incomingBody],
+    label: `${room.kind} encrypted storage`,
+  });
 
   const staleOutgoing = await proveAdditionalRoomDenial({
     frontendBaseUrl,
@@ -2288,22 +2306,15 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   }
   await incomingContext.close();
 
-  const encryptedStorage = await runSqlScalar(
-    smokeDatabase.url,
-    `SELECT concat(
-       count(*)::text, '|',
-       count(*) FILTER (WHERE payload ? 'body')::text, '|',
-       count(*) FILTER (WHERE payload->'body_private'->>'ciphertext' IS NOT NULL)::text, '|',
-       count(*) FILTER (WHERE position(${sqlLiteral(deadChatDefinition.historyBody)} in payload::text) > 0
-                         OR position(${sqlLiteral(deadChatDefinition.incomingBody)} in payload::text) > 0)::text)
-     FROM events
-     WHERE stream_id = '${deadChatGame}'
-       AND kind = 'PostSubmitted'
-       AND payload->>'channel_id' = 'dead'`,
-  );
-  if (encryptedStorage !== "2|0|2|0") {
-    throw new Error(`dead-chat encrypted storage proof drifted: ${encryptedStorage}`);
-  }
+  const encryptedStorage = await proveSealedPostStorage({
+    gameId: deadChatGame,
+    posts: finalThread.posts,
+    plaintextBodies: [
+      deadChatDefinition.historyBody,
+      deadChatDefinition.incomingBody,
+    ],
+    label: "dead-chat encrypted storage",
+  });
 
   const staleOutgoing = await proveDeadChatDenial({
     frontendBaseUrl,
@@ -2562,22 +2573,33 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
     body: spectatorDefinition.liveBody,
   });
   const liveDelta = await privateThreadLiveDelta(page, spectatorDefinition.liveBody);
-  const encryptedStorage = await runSqlScalar(
-    smokeDatabase.url,
-    `SELECT concat(
-       count(*)::text, '|',
-       count(*) FILTER (WHERE payload ? 'body')::text, '|',
-       count(*) FILTER (WHERE payload->'body_private'->>'ciphertext' IS NOT NULL)::text, '|',
-       count(*) FILTER (WHERE position(${sqlLiteral(spectatorDefinition.historyBody)} in payload::text) > 0
-                         OR position(${sqlLiteral(spectatorDefinition.liveBody)} in payload::text) > 0)::text)
-     FROM events
-     WHERE stream_id = '${spectatorGame}'
-       AND kind = 'PostSubmitted'
-       AND payload->>'channel_id' = 'spectator'`,
+  const finalThread = await fetchJson(
+    `${apiBaseUrl}/games/${spectatorGame}/channels/spectator/thread?limit=50`,
+    { headers: { authorization: `Bearer ${spectatorDefinition.sessionToken}` } },
   );
-  if (encryptedStorage !== "2|0|2|0") {
-    throw new Error(`spectator encrypted storage proof drifted: ${encryptedStorage}`);
+  if (
+    finalThread.posts?.length !== 2 ||
+    finalThread.posts.some(
+      (post) => post.channel_id !== spectatorDefinition.channelId,
+    ) ||
+    !finalThread.posts.some(
+      (post) => post.body === spectatorDefinition.historyBody,
+    ) ||
+    !finalThread.posts.some((post) => post.body === spectatorDefinition.liveBody)
+  ) {
+    throw new Error(
+      `spectator channel-scoped API history drifted: ${JSON.stringify(finalThread)}`,
+    );
   }
+  const encryptedStorage = await proveSealedPostStorage({
+    gameId: spectatorGame,
+    posts: finalThread.posts,
+    plaintextBodies: [
+      spectatorDefinition.historyBody,
+      spectatorDefinition.liveBody,
+    ],
+    label: "spectator encrypted storage",
+  });
   const reload = await page.reload({ waitUntil: "networkidle", timeout: 180_000 });
   if (reload === null || !reload.ok()) {
     throw new Error("spectator role URL reload failed");
@@ -3684,10 +3706,14 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     );
     concurrentVoteRows = await runSql(
       smokeDatabase.url,
-      `SELECT kind, stream_seq, payload->>'actor' AS actor, payload->>'target' AS target, payload->>'phase_id' AS phase_id
-       FROM events
-       WHERE stream_id = '${game}' AND kind = 'VoteSubmitted' AND payload->>'actor' IN ('slot-7', 'slot_4')
-       ORDER BY stream_seq`,
+      `SELECT 'VoteSubmitted' AS acknowledged_command,
+              actor_slot AS actor,
+              target,
+              phase_id
+       FROM vote_ballot
+       WHERE game_id = '${game}'
+         AND actor_slot IN ('slot-7', 'slot_4')
+       ORDER BY actor_slot`,
     );
     assertConcurrentPlayerVoteRows(concurrentVoteRows);
     concurrentVoteRace = {
@@ -3700,7 +3726,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         () => window.__fmarchPlayerProjection,
       ),
       proof:
-        "Two authenticated seeded player role pages submitted distinct SubmitVote commands for slot-7 and slot_4 under a scratch VoteSubmitted insert delay; both browser commands ACKed without StreamConflict, the stale race page recovered to authoritative votecount 3 through the player resync hook, and the scratch event stream retained one VoteSubmitted row for each actor.",
+        "Two authenticated seeded player role pages submitted distinct SubmitVote commands for slot-7 and slot_4 under a scratch append delay; both browser commands ACKed without StreamConflict, the vote_ballot projection retained one current ballot for each actor, and the stale race page recovered to authoritative votecount 3 through the player resync hook.",
     };
 
     playerStep = "duplicate-vote-retry";
@@ -3711,10 +3737,13 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     });
     duplicateVoteRows = await runSql(
       smokeDatabase.url,
-      `SELECT kind, payload->>'actor' AS actor, payload->>'target' AS target, payload->>'phase_id' AS phase_id
-       FROM events
-       WHERE stream_id = '${game}' AND kind = 'VoteSubmitted' AND payload->>'actor' = 'slot-7'
-       ORDER BY stream_seq`,
+      `SELECT 'VoteSubmitted' AS acknowledged_command,
+              actor_slot AS actor,
+              target,
+              phase_id
+       FROM vote_ballot
+       WHERE game_id = '${game}'
+         AND actor_slot = 'slot-7'`,
     );
     assertSinglePlayerVoteSubmittedRow(duplicateVoteRows);
     duplicateVoteReceiptRows = await runSql(
@@ -4019,7 +4048,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       voteRows: duplicateVoteRows,
       receiptRows: duplicateVoteReceiptRows,
       proof:
-        "A second stale seeded player page loaded /g/{game} before the live player vote, retried SubmitVote with the same command_id after the live page ACK, received the original ACK stream seqs from command_receipt through a separate browser submission, refreshed votecount to 2, and the scratch event stream retained exactly one VoteSubmitted row for slot-7.",
+        "A second stale seeded player page loaded /g/{game} before the live player vote, retried SubmitVote with the same command_id after the live page ACK, received the original ACK stream seqs from command_receipt through a separate browser submission, refreshed votecount to 2, and vote_ballot retained exactly one current ballot for slot-7.",
     },
     reconnect: reconnectEvidence,
     staleVoteRecovery: {
@@ -4360,13 +4389,23 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     winningCommandId: legalOutcome.commandId,
   });
 
-  const actionRows = await runSql(
+  const duplicateReceiptRows = await runSql(
     smokeDatabase.url,
-    `SELECT kind, payload->>'action_id' AS action_id, payload->>'template_id' AS template_id, payload->>'actor' AS actor, payload->'targets' AS targets
-     FROM events
-     WHERE stream_id = '${actionGame}' AND kind = 'ActionSubmitted'
-     ORDER BY stream_seq`,
+    `SELECT 'ActionSubmitted' AS acknowledged_command,
+            principal_user_id,
+            command_id::text,
+            stream_seqs
+     FROM command_receipt
+     WHERE principal_user_id = 'action-goon'
+       AND command_id = '${duplicatePlayerSubmitCommandId}'::uuid`,
   );
+  const actionRows = [
+    duplicateReceiptRows,
+    JSON.stringify(
+      legalOutcome.requestEnvelope?.body?.body?.command?.SubmitAction ?? null,
+    ),
+    JSON.stringify(duplicateRetry.commandState.noActionCommandState),
+  ].join("\n");
   if (
     !actionRows.includes("role_factional_kill") ||
     !actionRows.includes("factional_kill") ||
@@ -4374,16 +4413,9 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     !actionRows.includes("slot-2") ||
     actionRows.includes("invalid_self_factional_kill")
   ) {
-    throw new Error(`action submission audit rows drifted:\n${actionRows}`);
+    throw new Error(`action submission boundary evidence drifted:\n${actionRows}`);
   }
   assertSinglePlayerActionSubmittedRow(actionRows);
-  const duplicateReceiptRows = await runSql(
-    smokeDatabase.url,
-    `SELECT principal_user_id, command_id::text, stream_seqs
-     FROM command_receipt
-     WHERE principal_user_id = 'action-goon'
-       AND command_id = '${duplicatePlayerSubmitCommandId}'::uuid`,
-  );
   assertDuplicatePlayerSubmitReceipt({
     commandId: duplicatePlayerSubmitCommandId,
     receiptRows: duplicateReceiptRows,
@@ -4445,16 +4477,40 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
       `resolved factional kill did not kill slot-2: ${JSON.stringify(actionGameHostState.slots)}`,
     );
   }
-  const resolutionRows = await runSql(
-    smokeDatabase.url,
-    `SELECT kind FROM events WHERE stream_id = '${actionGame}' AND kind IN ('ResolutionApplied', 'ResolutionTrace') ORDER BY stream_seq`,
+  const resolutionAudit = await fetchJson(
+    `${apiBaseUrl}/games/${actionGame}/resolution-audit`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
+  );
+  const resolutionTraces = await fetchJson(
+    `${apiBaseUrl}/games/${actionGame}/resolution-traces`,
+    { headers: { authorization: `Bearer ${hostSessionToken}` } },
+  );
+  const matchedResolution = resolutionAudit.phases?.find(
+    (phase) =>
+      phase.phase_id === "N01" &&
+      phase.status === "matched" &&
+      phase.applied_matches === true &&
+      phase.trace_matches === true &&
+      Number.isSafeInteger(phase.applied_stream_seq) &&
+      Number.isSafeInteger(phase.trace_stream_seq),
+  );
+  const inspectedTrace = resolutionTraces.traces?.find(
+    (trace) =>
+      trace.phase_id === "N01" &&
+      Number.isSafeInteger(trace.applied_stream_seq) &&
+      Number.isSafeInteger(trace.trace_stream_seq),
   );
   if (
-    !resolutionRows.includes("ResolutionApplied") ||
-    !resolutionRows.includes("ResolutionTrace")
+    resolutionAudit.ok !== true ||
+    Number(resolutionAudit.audited ?? 0) < 1 ||
+    matchedResolution === undefined ||
+    inspectedTrace === undefined
   ) {
-    throw new Error(`action resolution rows missing:\n${resolutionRows}`);
+    throw new Error(
+      `action resolution audit/trace inspection drifted: ${JSON.stringify({ resolutionAudit, resolutionTraces })}`,
+    );
   }
+  const resolutionRows = { audit: resolutionAudit, traces: resolutionTraces };
 
   const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
   const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
@@ -4492,7 +4548,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, then a stale second player page retried the legal action with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and refreshed to N01/no-actions. A stale third player page submitted the same action with a distinct command_id and rendered ActionAlreadySubmitted recovery guidance while refreshing to N01/no-actions. The proof left exactly one ActionSubmitted row. The host then resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. A fourth stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, then a stale second player page retried the legal action with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and refreshed to N01/no-actions. A stale third player page submitted the same action with a distinct command_id and rendered ActionAlreadySubmitted recovery guidance while refreshing to N01/no-actions. The canonical receipt and command-state boundaries retained exactly one ActionSubmitted decision. The host then resolved that stored action through Command::ResolvePhase into a dead target slot, and the host-authorized resolution-audit plus trace-inspection APIs matched both sealed envelopes. A fourth stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
   };
 }
 
@@ -5026,20 +5082,11 @@ async function installDeadlineStreamConflictTrigger() {
     CREATE OR REPLACE FUNCTION test_force_deadline_stream_conflict() RETURNS trigger AS $$
     BEGIN
       IF NEW.stream_id = ${sqlLiteral(game)}::uuid AND NEW.kind = 'DeadlineExtended' THEN
-        INSERT INTO events
-          (stream_id, stream_seq, kind, version, payload, actor, occurred_at, causation_id, meta)
-        VALUES
-          (
-            NEW.stream_id,
-            NEW.stream_seq,
-            'ThreadUnlocked',
-            1,
-            '{"channel_id":"main","source":"forced_stream_conflict"}'::jsonb,
-            NEW.actor,
-            NEW.occurred_at,
-            NEW.causation_id,
-            NEW.meta
-          );
+        -- Exercise the event-store's unique-conflict mapping without forging an
+        -- event body outside the canonical Rust sealing boundary.
+        RAISE EXCEPTION USING
+          ERRCODE = '23505',
+          MESSAGE = 'live-stack forced unique append conflict';
       END IF;
       RETURN NEW;
     END;
@@ -5818,6 +5865,72 @@ async function hostSlotPersonaId(gameId, slotId) {
     );
   }
   return personaId;
+}
+
+async function proveSealedPostStorage({
+  gameId,
+  posts,
+  plaintextBodies,
+  label,
+}) {
+  if (!Array.isArray(posts) || posts.length === 0) {
+    throw new Error(`${label} requires projected posts`);
+  }
+  const sourceSeqs = posts.map((post) => {
+    const sourceSeq = Number(post.source_seq ?? post.sourceSeq);
+    if (!Number.isSafeInteger(sourceSeq) || sourceSeq <= 0) {
+      throw new Error(
+        `${label} received an invalid projected source seq: ${JSON.stringify(post)}`,
+      );
+    }
+    return sourceSeq;
+  });
+  if (new Set(sourceSeqs).size !== sourceSeqs.length) {
+    throw new Error(`${label} projected duplicate source seqs: ${sourceSeqs}`);
+  }
+  if (
+    !Array.isArray(plaintextBodies) ||
+    plaintextBodies.length !== posts.length ||
+    plaintextBodies.some(
+      (body) => typeof body !== "string" || body.length === 0,
+    )
+  ) {
+    throw new Error(`${label} requires one non-empty plaintext canary per post`);
+  }
+
+  const plaintextPredicate = plaintextBodies
+    .map(
+      (body) =>
+        `position(convert_to(${sqlLiteral(body)}, 'UTF8') in sealed_body) > 0`,
+    )
+    .join(" OR ");
+  const rawCheck = await runSqlScalar(
+    smokeDatabase.url,
+    `SELECT concat(
+       count(*)::text, '|',
+       (SELECT count(*)::text
+          FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'events'
+           AND column_name IN ('payload', 'actor', 'causation_id', 'meta')), '|',
+       count(*) FILTER (
+         WHERE sealed_version = 2
+           AND octet_length(sealed_kid) BETWEEN 1 AND 128
+           AND sealed_kid = btrim(sealed_kid)
+           AND octet_length(sealed_nonce) = 24
+           AND octet_length(sealed_body) >= 16
+       )::text, '|',
+       count(*) FILTER (WHERE ${plaintextPredicate})::text)
+     FROM events
+     WHERE stream_id = ${sqlLiteral(gameId)}::uuid
+       AND kind = 'PostSubmitted'
+       AND seq IN (${sourceSeqs.join(", ")})`,
+  );
+  const expected = `${posts.length}|0|${posts.length}|0`;
+  if (rawCheck !== expected) {
+    throw new Error(`${label} proof drifted: ${rawCheck}, expected ${expected}`);
+  }
+  return rawCheck;
 }
 
 async function waitForHealth() {

@@ -70,7 +70,13 @@ export function validateSecretCustodyPolicy(policy) {
   assert.equal(policy.rules?.retirement_requires_successful_redeploy, true);
   assert.deepEqual(
     policy.families?.map((family) => family.id),
-    ["auth-source-signing", "event-encryption", "object-storage", "workos"],
+    [
+      "auth-source-signing",
+      "event-encryption",
+      "object-storage",
+      "subject-key-authority",
+      "workos",
+    ],
   );
   for (const family of policy.families ?? []) {
     assert.ok(family.owner, `${family.id} must name an owner`);
@@ -101,6 +107,17 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
         "FMARCH_EVENT_ENCRYPTION_KEY",
         "FMARCH_EVENT_ENCRYPTION_KID",
         "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
+        "FMARCH_SUBJECT_AUTHORITY_ENDPOINT",
+        "FMARCH_SUBJECT_AUTHORITY_REGION",
+        "FMARCH_SUBJECT_AUTHORITY_BUCKET",
+        "FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID",
+        "FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY",
+        "FMARCH_SUBJECT_AUTHORITY_ID",
+        "FMARCH_SUBJECT_AUTHORITY_WRAP_KID",
+        "FMARCH_SUBJECT_AUTHORITY_WRAP_KEY",
+        "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID",
+        "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY",
+        "FMARCH_SUBJECT_KEY_AUTHORITY_REVISION",
         "FMARCH_WORKOS_CREDENTIAL_KID",
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
@@ -133,6 +150,17 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
         "FMARCH_EVENT_ENCRYPTION_KEY",
         "FMARCH_EVENT_ENCRYPTION_KID",
         "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
+        "FMARCH_SUBJECT_AUTHORITY_ENDPOINT",
+        "FMARCH_SUBJECT_AUTHORITY_REGION",
+        "FMARCH_SUBJECT_AUTHORITY_BUCKET",
+        "FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID",
+        "FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY",
+        "FMARCH_SUBJECT_AUTHORITY_ID",
+        "FMARCH_SUBJECT_AUTHORITY_WRAP_KID",
+        "FMARCH_SUBJECT_AUTHORITY_WRAP_KEY",
+        "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID",
+        "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY",
+        "FMARCH_SUBJECT_KEY_AUTHORITY_REVISION",
         "FMARCH_WORKOS_CREDENTIAL_KID",
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
@@ -207,6 +235,39 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
     productionApi.FMARCH_EVENT_ENCRYPTION_KID !== stagingApi.FMARCH_EVENT_ENCRYPTION_KID,
     "production and staging must not share the event encryption KID",
   );
+  assertSecretRelation(
+    productionApi.FMARCH_SUBJECT_KEY_AUTHORITY_REVISION !==
+      stagingApi.FMARCH_SUBJECT_KEY_AUTHORITY_REVISION,
+    "production and staging must not share the subject-key authority revision",
+  );
+  assertSecretRelation(
+    productionApi.FMARCH_SUBJECT_AUTHORITY_ID !== stagingApi.FMARCH_SUBJECT_AUTHORITY_ID &&
+      productionApi.FMARCH_SUBJECT_AUTHORITY_BUCKET !==
+        stagingApi.FMARCH_SUBJECT_AUTHORITY_BUCKET &&
+      productionApi.FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID !==
+        stagingApi.FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID &&
+      productionApi.FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY !==
+        stagingApi.FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY &&
+      productionApi.FMARCH_SUBJECT_AUTHORITY_WRAP_KEY !==
+        stagingApi.FMARCH_SUBJECT_AUTHORITY_WRAP_KEY &&
+      productionApi.FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY !==
+        stagingApi.FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY,
+    "production and staging must use isolated subject authorities",
+  );
+  for (const [name, variables] of [
+    ["staging", stagingApi],
+    ["production", productionApi],
+  ]) {
+    assertSecretRelation(
+      variables.FMARCH_SUBJECT_AUTHORITY_BUCKET !== variables.AWS_S3_BUCKET_NAME,
+      `${name} subject authority must not reuse its media bucket`,
+    );
+    assertSecretRelation(
+      variables.FMARCH_SUBJECT_AUTHORITY_WRAP_KEY !==
+        variables.FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY,
+      `${name} subject wrapping and journal keys must be separate`,
+    );
+  }
   assertSecretRelation(
     productionApi.AWS_ACCESS_KEY_ID !== stagingApi.AWS_ACCESS_KEY_ID &&
       productionApi.AWS_SECRET_ACCESS_KEY !== stagingApi.AWS_SECRET_ACCESS_KEY &&
@@ -472,7 +533,8 @@ async function validateEnvironment(config, environment, commit, urls) {
       (body) =>
         body.ok === true &&
         body.database_schema === true &&
-        body.object_storage === true,
+        body.object_storage === true &&
+        body.subject_authority === true,
       `${environment} API`,
     ),
     health(

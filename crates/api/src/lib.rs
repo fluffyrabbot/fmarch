@@ -44,7 +44,7 @@ use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use identity::AccessTokenVerifier;
+use identity::{AccessTokenVerifier, FilesystemSubjectKeyStore, SubjectKeyStore};
 use media::{MediaRepository, VariantLimits};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
@@ -60,6 +60,7 @@ pub struct ApiState {
     pool: PgPool,
     auth: AuthHttpState,
     media_store: MediaRepository,
+    subject_key_store: Option<Arc<dyn SubjectKeyStore>>,
     variant_limits: VariantLimits,
     server_name: String,
     live_projection: LiveProjectionPublisher,
@@ -90,6 +91,13 @@ impl ApiState {
             pool,
             auth,
             media_store: media_store.into(),
+            subject_key_store: if cfg!(debug_assertions) {
+                FilesystemSubjectKeyStore::from_environment()
+                    .ok()
+                    .map(|store| Arc::new(store) as Arc<dyn SubjectKeyStore>)
+            } else {
+                None
+            },
             variant_limits: VariantLimits::default(),
             server_name: "fmarch-dev".to_string(),
             live_projection: LiveProjectionPublisher::new(live_projection_capacity),
@@ -228,6 +236,11 @@ impl ApiState {
     pub fn uses_external_identity(&self) -> bool {
         self.auth.access_token_verifier.is_some()
     }
+
+    pub fn with_subject_key_store(mut self, store: Arc<dyn SubjectKeyStore>) -> Self {
+        self.subject_key_store = Some(store);
+        self
+    }
 }
 
 pub fn router(pool: PgPool, media_store: impl Into<MediaRepository>) -> Router {
@@ -263,7 +276,9 @@ pub struct Health {
 pub struct Readiness {
     pub ok: bool,
     pub database_schema: bool,
+    pub event_encryption: bool,
     pub object_storage: bool,
+    pub subject_authority: bool,
 }
 
 async fn healthz() -> Json<Health> {
@@ -271,20 +286,36 @@ async fn healthz() -> Json<Health> {
 }
 
 async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) {
-    let (database_schema, object_storage) = tokio::join!(
+    let (database_schema, event_encryption, object_storage, subject_authority) = tokio::join!(
         projections::ensure_schema_ready(&state.pool),
+        eventstore::ensure_event_encryption_key_coverage(&state.pool),
         state.media_store.check_readiness(),
+        async {
+            match state.subject_key_store.as_ref() {
+                Some(store) => store.check_readiness().await,
+                None => Err(identity::SubjectPrivacyError::Configuration(
+                    "subject authority is not installed".to_string(),
+                )),
+            }
+        },
     );
     let readiness = Readiness {
-        ok: database_schema.is_ok() && object_storage.is_ok(),
+        ok: database_schema.is_ok()
+            && event_encryption.is_ok()
+            && object_storage.is_ok()
+            && subject_authority.is_ok(),
         database_schema: database_schema.is_ok(),
+        event_encryption: event_encryption.is_ok(),
         object_storage: object_storage.is_ok(),
+        subject_authority: subject_authority.is_ok(),
     };
     if !readiness.ok {
         tracing::warn!(
             event = "readiness_failed",
             database_schema_ready = readiness.database_schema,
+            event_encryption_ready = readiness.event_encryption,
             object_storage_ready = readiness.object_storage,
+            subject_authority_ready = readiness.subject_authority,
             "API dependency readiness failed"
         );
     }

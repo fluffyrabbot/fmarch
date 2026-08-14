@@ -20,6 +20,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "community_member_mute",
     "community_subscription",
     "community_subscription_period",
+    "completed_game_detached_alias",
     "day_event",
     "day_event_narrative",
     "day_event_participation",
@@ -62,6 +63,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "player_notification",
     "post_citation",
     "post_policy",
+    "privacy_subject",
     "private_channel_member",
     "profile_editor",
     "profile_public",
@@ -72,10 +74,40 @@ const EXPECTED_TABLES: &[&str] = &[
     "slot_state",
     "slot_status_tag",
     "spectator_membership",
+    "subject_authority_binding",
+    "subject_key_destruction_receipt",
+    "subject_private_claim",
+    "subject_tombstone",
     "thread_view",
     "visit_history",
     "vote_ballot",
     "workos_session_exchange",
+];
+
+const EXPECTED_EVENT_COLUMNS: &[&str] = &[
+    "seq:bigint",
+    "stream_id:uuid",
+    "stream_seq:bigint",
+    "kind:text",
+    "version:smallint",
+    "occurred_at:bigint",
+    "sealed_version:smallint",
+    "sealed_kid:text",
+    "sealed_nonce:bytea",
+    "sealed_body:bytea",
+];
+
+const EXPECTED_GAME_INDEX_COLUMNS: &[&str] = &[
+    "game_id:uuid",
+    "pack_key:text",
+    "status:text",
+    "phase_id:text",
+    "created_seq:bigint",
+    "started_seq:bigint",
+    "completed_seq:bigint",
+    "updated_seq:bigint",
+    "pack_version:bigint",
+    "pack_content_hash:text",
 ];
 
 const EXPECTED_INDEXES: &[&str] = &[
@@ -135,6 +167,8 @@ const EXPECTED_INDEXES: &[&str] = &[
     "community_subscription_period_pkey",
     "community_subscription_pkey",
     "community_subscription_target_idx",
+    "completed_game_detached_alias_game_alias_key",
+    "completed_game_detached_alias_pkey",
     "day_event_narrative_pending_idx",
     "day_event_narrative_pkey",
     "day_event_participation_page_idx",
@@ -161,7 +195,6 @@ const EXPECTED_INDEXES: &[&str] = &[
     "discussion_topic_area_page_idx",
     "discussion_topic_pkey",
     "events_pkey",
-    "events_stream_order_idx",
     "events_stream_seq_unique",
     "external_identity_method_id_key",
     "external_identity_pkey",
@@ -174,6 +207,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "game_persona_name_history_pkey",
     "game_persona_private_pkey",
     "game_persona_private_principal_idx",
+    "game_persona_private_subject_idx",
     "game_persona_public_pkey",
     "game_persona_redaction_pkey",
     "game_result_pkey",
@@ -216,10 +250,13 @@ const EXPECTED_INDEXES: &[&str] = &[
     "post_citation_pkey",
     "post_citation_quoted_idx",
     "post_policy_pkey",
+    "privacy_subject_pkey",
+    "privacy_subject_principal_user_id_key",
     "private_channel_member_pkey",
     "private_channel_member_slot_idx",
     "profile_editor_pkey",
     "profile_editor_principal_user_id_key",
+    "profile_editor_subject_idx",
     "profile_public_handle_key",
     "profile_public_pkey",
     "profile_public_visible_handle_idx",
@@ -238,6 +275,14 @@ const EXPECTED_INDEXES: &[&str] = &[
     "slot_status_tag_by_tag_idx",
     "slot_status_tag_pkey",
     "spectator_membership_pkey",
+    "subject_authority_binding_pkey",
+    "subject_key_destruction_receipt_pkey",
+    "subject_key_destruction_receipt_subject_id_key",
+    "subject_private_claim_pkey",
+    "subject_private_claim_scope_idx",
+    "subject_private_claim_subject_idx",
+    "subject_tombstone_pkey",
+    "subject_tombstone_replacement_alias_key",
     "thread_view_page_idx",
     "thread_view_pkey",
     "visit_history_actor_idx",
@@ -318,6 +363,11 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "community_subscription_pkey:p",
     "community_subscription_read_through_seq_check:c",
     "community_subscription_target_kind_check:c",
+    "completed_game_detached_alias_game_alias_key:u",
+    "completed_game_detached_alias_pkey:p",
+    "completed_game_detached_alias_shape_check:c",
+    "completed_game_detached_alias_subject_ref_check:c",
+    "completed_game_detached_alias_version_check:c",
     "day_event_auto_seed_check:c",
     "day_event_definition_check:c",
     "day_event_lock_observation_check:c",
@@ -365,6 +415,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "discussion_topic_posting_state_check:c",
     "discussion_topic_visibility_check:c",
     "events_pkey:p",
+    "events_sealed_body_shape:c",
     "events_stream_seq_unique:u",
     "external_identity_method_id_fkey:f",
     "external_identity_method_id_key:u",
@@ -376,11 +427,16 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "external_identity_subject_check:c",
     "game_authority_pkey:p",
     "game_cohost_policy_pkey:p",
+    "game_index_pack_content_hash_check:c",
+    "game_index_pack_key_check:c",
+    "game_index_pack_version_check:c",
     "game_index_pkey:p",
     "game_index_status_check:c",
     "game_persona_name_claim_pkey:p",
     "game_persona_name_history_pkey:p",
+    "game_persona_private_current_claim_id_fkey:f",
     "game_persona_private_pkey:p",
+    "game_persona_private_subject_id_fkey:f",
     "game_persona_public_pkey:p",
     "game_persona_redaction_pkey:p",
     "game_result_pkey:p",
@@ -397,14 +453,18 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "member_lifecycle_event_pkey:p",
     "member_lifecycle_event_principal_user_id_fkey:f",
     "member_lifecycle_event_seq_check:c",
+    "member_lifecycle_event_subject_id_fkey:f",
     "member_lifecycle_projection_pkey:p",
     "member_lifecycle_projection_principal_user_id_fkey:f",
     "member_lifecycle_projection_seq_check:c",
     "member_lifecycle_projection_status_check:c",
+    "member_lifecycle_projection_subject_id_fkey:f",
+    "member_personal_export_envelope_shape:c",
     "member_personal_export_expiry_check:c",
     "member_personal_export_pkey:p",
     "member_personal_export_principal_user_id_fkey:f",
     "member_personal_export_seq_check:c",
+    "member_personal_export_subject_id_fkey:f",
     "moderation_case_history_case_id_fkey:f",
     "moderation_case_history_pkey:p",
     "moderation_case_pkey:p",
@@ -430,10 +490,16 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "post_citation_quoted_kind_check:c",
     "post_citation_quoting_kind_check:c",
     "post_policy_pkey:p",
+    "privacy_subject_lifecycle_state_check:c",
+    "privacy_subject_pkey:p",
+    "privacy_subject_principal_user_id_fkey:f",
+    "privacy_subject_principal_user_id_key:u",
     "private_channel_member_pkey:p",
+    "profile_editor_current_claim_id_fkey:f",
     "profile_editor_pkey:p",
     "profile_editor_principal_user_id_key:u",
     "profile_editor_profile_id_fkey:f",
+    "profile_editor_subject_id_fkey:f",
     "profile_public_handle_key:u",
     "profile_public_pkey:p",
     "profile_public_visibility_check:c",
@@ -446,6 +512,22 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "slot_state_pkey:p",
     "slot_status_tag_pkey:p",
     "spectator_membership_pkey:p",
+    "subject_authority_binding_manifest_check:c",
+    "subject_authority_binding_pkey:p",
+    "subject_authority_binding_revision_check:c",
+    "subject_authority_binding_singleton_check:c",
+    "subject_key_destruction_receipt_fingerprint_check:c",
+    "subject_key_destruction_receipt_pkey:p",
+    "subject_key_destruction_receipt_subject_id_fkey:f",
+    "subject_key_destruction_receipt_subject_id_key:u",
+    "subject_private_claim_kind_check:c",
+    "subject_private_claim_pkey:p",
+    "subject_private_claim_scope_check:c",
+    "subject_private_claim_subject_id_fkey:f",
+    "subject_tombstone_alias_check:c",
+    "subject_tombstone_pkey:p",
+    "subject_tombstone_replacement_alias_key:u",
+    "subject_tombstone_subject_id_fkey:f",
     "thread_view_author_present:c",
     "thread_view_body_storage:c",
     "thread_view_pkey:p",
@@ -503,6 +585,32 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     .await
     .expect("read baseline constraint inventory");
     assert_inventory("constraint", &constraints, EXPECTED_CONSTRAINTS);
+
+    let event_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'events' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read event storage column inventory");
+    assert_inventory("event column", &event_columns, EXPECTED_EVENT_COLUMNS);
+
+    let game_index_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'game_index' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read game index column inventory");
+    assert_inventory(
+        "game index column",
+        &game_index_columns,
+        EXPECTED_GAME_INDEX_COLUMNS,
+    );
 }
 
 fn assert_foreign_key_violation(error: sqlx::Error, constraint: &str) {
@@ -584,4 +692,27 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
             .await
             .expect_err("a referenced principal must not be deleted");
     assert_foreign_key_violation(owner_delete, "auth_session_principal_user_id_fkey");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn schema_readiness_rejects_a_database_newer_than_the_binary(pool: PgPool) {
+    projections::ensure_schema_ready(&pool)
+        .await
+        .expect("the exact embedded migration head must be ready");
+    sqlx::query(
+        "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) VALUES (9223372036854775000, 'future destructive migration', TRUE, '\\x01'::bytea, 0)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let error = projections::ensure_schema_ready(&pool)
+        .await
+        .expect_err("an older binary must refuse a database with an unknown migration");
+    assert!(
+        error
+            .to_string()
+            .contains("database schema is newer than this binary"),
+        "unexpected readiness error: {error}"
+    );
 }

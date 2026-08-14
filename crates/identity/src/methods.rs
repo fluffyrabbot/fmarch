@@ -181,7 +181,240 @@ pub async fn ensure_principal(
     .bind(now)
     .execute(&mut *conn)
     .await?;
+    lock_active_principal_and_subject(conn, principal_user_id, now).await?;
     Ok(())
+}
+
+/// Hold the canonical principal -> privacy-subject ownership locks for an
+/// authentication transaction. Authentication methods and their provider
+/// detail rows must only be locked after this returns.
+pub(crate) async fn lock_active_principal_and_subject(
+    conn: &mut PgConnection,
+    principal_user_id: &str,
+    now: i64,
+) -> Result<Vec<String>, IdentityFlowError> {
+    use crate::{active_subject_key_store, SubjectId};
+
+    let principal = sqlx::query_as::<_, (String, Vec<String>)>(
+        "SELECT status, global_capabilities FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(principal_user_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    let (principal_status, global_capabilities) = principal;
+    if principal_status != "active" {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let existing: Option<String> = sqlx::query_scalar(
+        "SELECT lifecycle_state FROM privacy_subject WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(principal_user_id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    if let Some(lifecycle_state) = existing {
+        return if lifecycle_state == "active" {
+            Ok(global_capabilities)
+        } else {
+            Err(IdentityFlowError::Unauthorized)
+        };
+    }
+    // Defensive restore guard: even if an older backup lacks the permanent
+    // privacy_subject owner row, lifecycle facts prevent minting a new subject.
+    let destroyed_subject: Option<Uuid> = sqlx::query_scalar(
+        "SELECT subject_id FROM member_lifecycle_event WHERE principal_user_id = $1 AND subject_id IS NOT NULL ORDER BY seq DESC LIMIT 1",
+    )
+    .bind(principal_user_id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    if destroyed_subject.is_some() {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+
+    let key_store = active_subject_key_store()
+        .await
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    let candidate = SubjectId::random();
+    key_store
+        .create(candidate)
+        .await
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    let inserted = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at) VALUES ($1,$2,$3) ON CONFLICT (principal_user_id) DO NOTHING RETURNING subject_id",
+    )
+    .bind(candidate.as_uuid())
+    .bind(principal_user_id)
+    .bind(now)
+    .fetch_optional(&mut *conn)
+    .await?;
+    if inserted.is_none() {
+        key_store
+            .destroy(candidate)
+            .await
+            .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    }
+    Ok(global_capabilities)
+}
+
+/// How far an identity mutation must advance through the canonical row-lock
+/// order. Skipping a group is safe when the mutation never reads or writes
+/// that group; callers must not acquire a skipped earlier group later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentityMutationExtent {
+    Owner,
+    Authentication,
+    Complete,
+}
+
+/// Owner state captured while the canonical identity mutation locks are held.
+/// Callers use this to revalidate a non-locking identifier discovery after
+/// serialization with erasure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentityMutationOwner {
+    pub principal_user_id: String,
+    pub principal_status: String,
+    pub global_capabilities: Vec<String>,
+    pub subject_id: Uuid,
+    pub subject_lifecycle_state: String,
+}
+
+impl IdentityMutationOwner {
+    pub fn require_active(&self) -> Result<(), IdentityFlowError> {
+        if self.principal_status == "active" && self.subject_lifecycle_state == "active" {
+            Ok(())
+        } else {
+            Err(IdentityFlowError::Unauthorized)
+        }
+    }
+}
+
+/// Serialize every identity mutation on its owner before taking subordinate
+/// locks. The order is deliberately centralized here:
+///
+/// principal -> privacy subject -> sessions -> methods -> accounts ->
+/// recovery/invites/delivery -> external identities -> projections.
+///
+/// Identifiers such as a session hash, account id, invite hash, or recovery
+/// hash must be discovered without a row lock, then their owner is passed here.
+/// The caller must re-read and validate the identifier after this returns.
+pub async fn lock_identity_mutation(
+    conn: &mut PgConnection,
+    principal_user_id: &str,
+    extent: IdentityMutationExtent,
+) -> Result<IdentityMutationOwner, IdentityFlowError> {
+    let (principal_status, global_capabilities) = sqlx::query_as::<_, (String, Vec<String>)>(
+        r#"
+            SELECT status, global_capabilities
+            FROM platform_principal
+            WHERE principal_user_id = $1
+            FOR UPDATE
+            "#,
+    )
+    .bind(principal_user_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    let (subject_id, subject_lifecycle_state) = sqlx::query_as::<_, (Uuid, String)>(
+        r#"
+        SELECT subject_id, lifecycle_state
+        FROM privacy_subject
+        WHERE principal_user_id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(principal_user_id)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+
+    if matches!(
+        extent,
+        IdentityMutationExtent::Authentication | IdentityMutationExtent::Complete
+    ) {
+        // Sessions (including credentials derived from a session).
+        sqlx::query_scalar::<_, String>(
+            "SELECT token_hash FROM auth_session WHERE principal_user_id = $1 ORDER BY token_hash FOR UPDATE",
+        )
+        .bind(principal_user_id)
+        .fetch_all(&mut *conn)
+        .await?;
+        sqlx::query_scalar::<_, String>(
+            "SELECT token_hash FROM auth_websocket_ticket WHERE principal_user_id = $1 ORDER BY token_hash FOR UPDATE",
+        )
+        .bind(principal_user_id)
+        .fetch_all(&mut *conn)
+        .await?;
+
+        // Authentication methods.
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT method_id FROM authentication_method WHERE principal_user_id = $1 ORDER BY method_id FOR UPDATE",
+        )
+        .bind(principal_user_id)
+        .fetch_all(&mut *conn)
+        .await?;
+
+        // Classic account details.
+        sqlx::query_scalar::<_, String>(
+            "SELECT account_id FROM auth_account WHERE principal_user_id = $1 ORDER BY account_id FOR UPDATE",
+        )
+        .bind(principal_user_id)
+        .fetch_all(&mut *conn)
+        .await?;
+
+        // One-time recovery, invite, and delivery material.
+        sqlx::query_scalar::<_, Uuid>(
+            r#"
+            SELECT recovery.recovery_id
+            FROM auth_account_recovery_credential AS recovery
+            JOIN auth_account AS account USING (account_id)
+            WHERE account.principal_user_id = $1
+            ORDER BY recovery.recovery_id
+            FOR UPDATE OF recovery
+            "#,
+        )
+        .bind(principal_user_id)
+        .fetch_all(&mut *conn)
+        .await?;
+        sqlx::query_scalar::<_, String>(
+            "SELECT token_hash FROM auth_invite WHERE principal_user_id = $1 ORDER BY token_hash FOR UPDATE",
+        )
+        .bind(principal_user_id)
+        .fetch_all(&mut *conn)
+        .await?;
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT delivery_id FROM auth_delivery_intent WHERE principal_user_id = $1 ORDER BY delivery_id FOR UPDATE",
+        )
+        .bind(principal_user_id)
+        .fetch_all(&mut *conn)
+        .await?;
+    }
+
+    if extent == IdentityMutationExtent::Complete {
+        // External identity details come after all local authentication rows.
+        sqlx::query_as::<_, (String, String)>(
+            "SELECT provider, subject FROM external_identity WHERE principal_user_id = $1 ORDER BY provider, subject FOR UPDATE",
+        )
+        .bind(principal_user_id)
+        .fetch_all(&mut *conn)
+        .await?;
+
+        // Lifecycle projection is the serialization point for event appends
+        // and rebuilds. Subject ownership already excludes new sealed claims.
+        sqlx::query_scalar::<_, String>(
+            "SELECT principal_user_id FROM member_lifecycle_projection WHERE principal_user_id = $1 FOR UPDATE",
+        )
+        .bind(principal_user_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+    }
+
+    Ok(IdentityMutationOwner {
+        principal_user_id: principal_user_id.to_string(),
+        principal_status,
+        global_capabilities,
+        subject_id,
+        subject_lifecycle_state,
+    })
 }
 
 /// Create the umbrella row for a new authentication method. The partial unique
@@ -239,55 +472,10 @@ pub async fn touch_method(
     Ok(())
 }
 
-/// Resolve the workos method for an external identity, lazily upgrading rows
-/// that predate the authentication_method umbrella. Returns the method id
-/// backing this (provider, subject) identity.
-pub async fn link_workos_method(
-    conn: &mut PgConnection,
-    subject: &str,
-    principal_user_id: &str,
-    now: i64,
-) -> Result<Uuid, IdentityFlowError> {
-    if let Some((method_id, status, linked_principal)) =
-        sqlx::query_as::<_, (Option<Uuid>, Option<String>, String)>(
-            r#"
-        SELECT identity.method_id, method.status, identity.principal_user_id
-        FROM external_identity AS identity
-        LEFT JOIN authentication_method AS method ON method.method_id = identity.method_id
-        WHERE identity.provider = 'workos' AND identity.subject = $1
-        "#,
-        )
-        .bind(subject)
-        .fetch_optional(&mut *conn)
-        .await?
-    {
-        if linked_principal != principal_user_id {
-            return Err(IdentityFlowError::Unauthorized);
-        }
-        if let Some(method_id) = method_id {
-            if status.as_deref() != Some("active") {
-                return Err(IdentityFlowError::Unauthorized);
-            }
-            touch_method(conn, method_id, now).await?;
-            return Ok(method_id);
-        }
-    }
-    let method_id = create_method(conn, principal_user_id, MethodKind::Workos, now).await?;
-    sqlx::query(
-        "UPDATE external_identity SET method_id = $2 WHERE provider = 'workos' AND subject = $1",
-    )
-    .bind(subject)
-    .bind(method_id)
-    .execute(&mut *conn)
-    .await?;
-    touch_method(conn, method_id, now).await?;
-    Ok(method_id)
-}
-
-/// Resolve the classic method for an existing account, lazily upgrading rows
-/// that predate the authentication_method umbrella: ensure the principal row,
-/// create the method, and link auth_account.method_id — all in the caller's
-/// transaction. Returns the method id backing this account.
+/// Resolve the classic method for an account created in the caller's current
+/// transaction, or touch its existing method. New-account callers establish
+/// the owner before inserting method details; orphan stored accounts are not
+/// upgraded by sign-in and fail at the canonical owner lock.
 pub async fn link_classic_method(
     conn: &mut PgConnection,
     account_id: &str,

@@ -160,6 +160,8 @@ pub enum MashScaleError {
     Serialization(#[from] serde_json::Error),
     #[error(transparent)]
     ProgramLibrary(#[from] ProgramLibraryError),
+    #[error(transparent)]
+    Identity(#[from] identity::IdentityFlowError),
     #[error("host-console scale read failed: {0}")]
     HostConsole(String),
     #[error("player-attention scale read failed: {0}")]
@@ -277,16 +279,15 @@ pub async fn run_mash_scale_acceptance(
         .iter()
         .filter(|row| row.status == "published")
         .count();
-    let narrative_counts = sqlx::query(
-        "SELECT count(*)::bigint AS posts, \
-                count(DISTINCT payload->'day_event_narrative'->>'receipt_id')::bigint AS receipts \
-         FROM events \
-         WHERE stream_id = $1 AND kind = 'PostSubmitted' \
-           AND payload ? 'day_event_narrative'",
-    )
-    .bind(game)
-    .fetch_one(pool)
-    .await?;
+    let narrative_posts = narratives
+        .iter()
+        .filter(|row| row.published_seq.is_some())
+        .count();
+    let distinct_narrative_receipts = narratives
+        .iter()
+        .filter_map(|row| row.published_seq)
+        .collect::<BTreeSet<_>>()
+        .len();
     let scheduler = MashScaleSchedulerEvidence {
         replicas: 2,
         open_claimed_games: claimed_games(&open_reports),
@@ -297,8 +298,8 @@ pub async fn run_mash_scale_acceptance(
             .iter()
             .filter(|event| event.state == "locked")
             .count(),
-        narrative_posts: narrative_counts.get("posts"),
-        distinct_narrative_receipts: narrative_counts.get("receipts"),
+        narrative_posts: narrative_posts as i64,
+        distinct_narrative_receipts: distinct_narrative_receipts as i64,
         published_narratives,
         elapsed_ms: scheduler_elapsed_ms,
         threshold_ms: MASH_SCALE_MAX_SCHEDULER_MS,
@@ -492,6 +493,13 @@ pub async fn run_mash_scale_acceptance(
 }
 
 async fn seed_game(pool: &PgPool, game: Uuid) -> Result<(), MashScaleError> {
+    let mut connection = pool.acquire().await?;
+    identity::methods::ensure_principal(&mut connection, HOST, &[], 1).await?;
+    for slot_number in 1..=MASH_SCALE_ROSTER_COUNT {
+        identity::methods::ensure_principal(&mut connection, &user_id(slot_number), &[], 1).await?;
+    }
+    drop(connection);
+
     commands::handle(
         pool,
         &Principal::user(HOST),

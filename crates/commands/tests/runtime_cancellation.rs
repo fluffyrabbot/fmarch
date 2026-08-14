@@ -13,6 +13,11 @@ use commands::{
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[path = "pipeline/common.rs"]
+#[allow(dead_code)]
+mod common;
+use common::ensure_test_principal;
+
 fn user(id: &str) -> Principal {
     Principal::user(id)
 }
@@ -20,6 +25,8 @@ fn user(id: &str) -> Principal {
 async fn setup_game(pool: &PgPool) -> Uuid {
     let game = Uuid::new_v4();
     let host = user("host_h");
+    ensure_test_principal(pool, "host_h").await;
+    ensure_test_principal(pool, "user_a").await;
     for command in [
         Command::CreateGame {
             game,
@@ -116,15 +123,12 @@ async fn artifact_counts(
     .fetch_one(pool)
     .await
     .unwrap();
-    let events = sqlx::query_scalar(
-        "SELECT count(*) FROM events \
-         WHERE stream_id = $1 AND kind = 'PostSubmitted' AND payload->>'body' = $2",
-    )
-    .bind(game)
-    .bind(body)
-    .fetch_one(pool)
-    .await
-    .unwrap();
+    let events = eventstore::load_stream(pool, game)
+        .await
+        .expect("load logical event stream")
+        .into_iter()
+        .filter(|event| event.kind == "PostSubmitted" && event.payload["body"] == body)
+        .count() as i64;
     let projections =
         sqlx::query_scalar("SELECT count(*) FROM thread_view WHERE game_id = $1 AND body = $2")
             .bind(game)

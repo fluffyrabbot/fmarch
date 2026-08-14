@@ -166,6 +166,7 @@ async fn test_command(
             }),
         ));
     };
+    provision_fixture_command_principal(&state.pool, &command).await;
     let body =
         match commands::handle_idempotent(&state.pool, &principal, msg.command_id, command).await {
             Ok(ack) => ServerMsg::Ack(AckMsg::from(ack)),
@@ -176,6 +177,27 @@ async fn test_command(
 
 fn stable_command_id(id: u64) -> Uuid {
     Uuid::from_u128(id as u128)
+}
+
+async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
+    let mut connection = pool.acquire().await.expect("acquire identity connection");
+    identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
+        .await
+        .expect("provision test principal and privacy subject");
+}
+
+async fn provision_fixture_command_principal(pool: &sqlx::PgPool, command: &commands::Command) {
+    let principal_user_id = match command {
+        commands::Command::SeatPersona {
+            principal_user_id, ..
+        }
+        | commands::Command::ProcessReplacement {
+            incoming_principal_user_id: principal_user_id,
+            ..
+        } => principal_user_id,
+        _ => return,
+    };
+    ensure_test_principal(pool, principal_user_id).await;
 }
 
 fn command_envelope_with_command_id(
@@ -4050,9 +4072,12 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn vertical_resolution_audit_is_host_audit_only_and_reports_drift(pool: sqlx::PgPool) {
+async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
+    for principal_user_id in ["user_1", "user_2", "user_3"] {
+        ensure_test_principal(&pool, principal_user_id).await;
+    }
 
     expect_ack(
         post_command(
@@ -4160,42 +4185,62 @@ async fn vertical_resolution_audit_is_host_audit_only_and_reports_drift(pool: sq
         .await,
     );
 
+    let original_seal: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body \
+         FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .expect("read typed ResolutionApplied seal before tamper");
+    assert_eq!(original_seal.0, 2);
+    assert!(!original_seal.1.is_empty());
+    assert_eq!(original_seal.2.len(), 24);
+    assert!(original_seal.3.len() >= 16);
+
     let mut tx = pool.begin().await.unwrap();
     sqlx::query("ALTER TABLE events DISABLE TRIGGER events_no_update")
         .execute(&mut *tx)
         .await
         .expect("temporarily disable append-only guard for API drift");
     let update = sqlx::query(
-        "WITH outcome AS ( \
-             SELECT e.stream_id, e.stream_seq, (item.ordinality - 1)::text AS event_index \
-             FROM events e, \
-                  jsonb_array_elements(e.payload->'events') WITH ORDINALITY AS item(event, ordinality) \
-             WHERE e.stream_id = $1 \
-               AND e.kind = 'ResolutionApplied' \
-               AND item.event->>'kind' = 'DayVoteOutcome' \
-             LIMIT 1 \
+        "UPDATE events \
+         SET sealed_body = set_byte( \
+             sealed_body, 0, \
+             CASE WHEN get_byte(sealed_body, 0) = 255 \
+                  THEN 254 ELSE get_byte(sealed_body, 0) + 1 END \
          ) \
-         UPDATE events e \
-         SET payload = jsonb_set( \
-             e.payload, \
-             ARRAY['events', outcome.event_index, 'payload', 'winner'], \
-             '\"slot_2\"'::jsonb, \
-             false \
-         ) \
-         FROM outcome \
-         WHERE e.stream_id = outcome.stream_id \
-           AND e.stream_seq = outcome.stream_seq",
+         WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
     )
     .bind(game)
     .execute(&mut *tx)
     .await
-    .expect("perturb stored ResolutionApplied winner for API");
-    assert_eq!(update.rows_affected(), 1, "one applied envelope perturbed");
+    .expect("tamper with stored ResolutionApplied ciphertext");
+    assert_eq!(update.rows_affected(), 1, "one sealed envelope tampered");
     sqlx::query("ALTER TABLE events ENABLE TRIGGER events_no_update")
         .execute(&mut *tx)
         .await
         .expect("restore append-only guard after API drift");
-    tx.commit().await.expect("commit API drift perturbation");
+    tx.commit().await.expect("commit sealed-body tamper");
+
+    let tampered_seal: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body \
+         FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .expect("read typed ResolutionApplied seal after tamper");
+    assert_eq!(tampered_seal.0, original_seal.0);
+    assert_eq!(tampered_seal.1, original_seal.1);
+    assert_eq!(tampered_seal.2, original_seal.2);
+    assert_eq!(tampered_seal.3.len(), original_seal.3.len());
+    assert_ne!(tampered_seal.3, original_seal.3);
+
+    let load_error = eventstore::load_stream(&pool, game)
+        .await
+        .expect_err("authenticated ciphertext tamper must fail closed");
+    assert!(load_error.to_string().contains("cryptography error"));
 
     let response = app
         .clone()
@@ -4210,23 +4255,7 @@ async fn vertical_resolution_audit_is_host_audit_only_and_reports_drift(pool: sq
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let report: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(report["game_id"], game.to_string());
-    assert_eq!(report["ok"], false);
-    assert_eq!(report["summary"]["matched"], 0);
-    assert_eq!(report["summary"]["drifted"], 1);
-    assert_eq!(report["summary"]["skipped"], 0);
-    assert_eq!(report["phases"][0]["status"], "drifted");
-    assert_eq!(
-        report["summary"]["first_drift_paths"][0]["envelope"],
-        "applied"
-    );
-    assert_eq!(
-        report["summary"]["first_drift_paths"][0]["path"],
-        "$.events[2].payload.winner"
-    );
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     let response = app
         .clone()
@@ -4241,94 +4270,7 @@ async fn vertical_resolution_audit_is_host_audit_only_and_reports_drift(pool: sq
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let html = String::from_utf8(bytes.to_vec()).unwrap();
-    assert!(html.contains("Resolution Replay Audit"));
-    assert!(html.contains("Drifted"));
-    assert!(html.contains("$.events[2].payload.winner"));
-    assert!(html.contains("expected:"));
-    assert!(html.contains("&quot;slot_3&quot;"));
-    assert!(html.contains("actual:"));
-    assert!(html.contains("&quot;slot_2&quot;"));
-    assert!(html.contains("href=\"#audit-diff-row-0-0\""));
-    assert!(html.contains("id=\"audit-diff-row-0-0\""));
-    assert!(html.contains("href=\"#audit-diff-expected-0-0\""));
-    assert!(html.contains("id=\"audit-diff-expected-0-0\""));
-    assert!(html.contains("href=\"#audit-diff-actual-0-0\""));
-    assert!(html.contains("id=\"audit-diff-actual-0-0\""));
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/resolution-audit?principal_user_id=cohost_c"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let cohost_report: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(cohost_report["summary"], report["summary"]);
-    assert_eq!(cohost_report["phases"][0]["status"], "drifted");
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/resolution-audit/view?principal_user_id=cohost_c"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let cohost_html = String::from_utf8(bytes.to_vec()).unwrap();
-    assert!(cohost_html.contains("$.events[2].payload.winner"));
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/resolution-audit?principal_user_id=user_1"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/resolution-audit/view?principal_user_id=user_1"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

@@ -1,0 +1,14 @@
+[package]
+name = "content_registry"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+blake3 = "1"
+domain = { path = "../domain", version = "0.1.0" }
+game_platform = { path = "../game_platform", version = "0.1.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+

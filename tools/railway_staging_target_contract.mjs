@@ -91,6 +91,32 @@ async function contract() {
     /^FMARCH_WORKOS_CREDENTIAL_KID=/m,
   );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /FMARCH_MEDIA_ROOT/);
+  assert.doesNotMatch(source["deploy/railway/api.env.example"], /^FMARCH_SUBJECT_KEY_DIR=/m);
+  for (const variable of [
+    "ENDPOINT",
+    "ACCESS_KEY_ID",
+    "SECRET_ACCESS_KEY",
+    "BUCKET",
+    "REGION",
+  ]) {
+    assert.match(
+      source["deploy/railway/api.env.example"],
+      new RegExp(`^FMARCH_SUBJECT_AUTHORITY_${variable}=\\$\\{\\{subject-authority\\.${variable}\\}\\}$`, "m"),
+    );
+  }
+  for (const variable of [
+    "FMARCH_SUBJECT_AUTHORITY_ID",
+    "FMARCH_SUBJECT_AUTHORITY_WRAP_KID",
+    "FMARCH_SUBJECT_AUTHORITY_WRAP_KEY",
+    "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID",
+    "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY",
+  ]) {
+    assert.match(source["deploy/railway/api.env.example"], new RegExp(`^${variable}=`, "m"));
+  }
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_SUBJECT_KEY_AUTHORITY_REVISION=/m,
+  );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /^FMARCH_BIND=/m);
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /^RAILWAY_RUN_UID=/m);
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_CLIENT_ID=/m);
@@ -133,7 +159,13 @@ async function contract() {
   assert.deepEqual(custody.environments, ["staging", "production"]);
   assert.deepEqual(
     custody.families.map((family) => family.id),
-    ["auth-source-signing", "event-encryption", "object-storage", "workos"],
+    [
+      "auth-source-signing",
+      "event-encryption",
+      "object-storage",
+      "subject-key-authority",
+      "workos",
+    ],
   );
 
   assert.match(source["crates/server/src/main.rs"], /platform_port/);
@@ -156,6 +188,10 @@ async function contract() {
     /state\.media_store\.check_readiness\(\)/,
   );
   assert.match(
+    source["crates/api/src/lib.rs"],
+    /store\.check_readiness\(\)\.await/,
+  );
+  assert.match(
     source["crates/media/src/repository.rs"],
     /list_with_delimiter\(Some\(&prefix\)\)/,
   );
@@ -168,6 +204,10 @@ async function contract() {
   assert.match(
     source["tools/production_promotion.mjs"],
     /body\.object_storage === true/,
+  );
+  assert.match(
+    source["tools/production_promotion.mjs"],
+    /body\.subject_authority === true/,
   );
 
   const runbook = source["docs/ops/railway-staging-target.md"];
@@ -182,6 +222,8 @@ async function contract() {
     "`production` branch is a release pointer",
     "production services must watch `production`, never `main`.",
     "separate Postgres service instances",
+    "subject-authority buckets",
+    "--bootstrap-subject-authority",
     "npm run promote:production -- --check",
     "npm run proof:lanes -- --mode full --run",
     "fmarch-frontend-staging.up.railway.app",

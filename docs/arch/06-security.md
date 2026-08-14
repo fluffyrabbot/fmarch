@@ -212,22 +212,38 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   reveal flips the flag ([02](02-event-sourcing.md)). The client UI hiding something is
   never the only line of defense.
 
-## Encryption at rest
+## Encryption at rest and subject-owned private data
 
-- **Private channel bodies and role assignments** are encrypted at the column level with a
-  server-held key (managed via env today; KMS-backed rotation is future hardening). A leaked
-  database or backup does not hand over scumchat logs or the role list in plaintext.
-- The event log's *sensitive payloads* (e.g. `RoleAssigned`, private `PostSubmitted`
-  bodies) are stored encrypted; non-sensitive event metadata stays queryable.
-- Current implemented slice: `RoleAssigned` stores plaintext `slot_id` and an authenticated
-  ciphertext envelope for `role_key`, `alignment`, and `role_effects`; non-`main`
-  `PostSubmitted` stores plaintext `channel_id`, `slot_or_user`, `phase_id`, and media metadata
-  with `body` in an authenticated ciphertext envelope. `eventstore::load_stream` and projection
-  rebuild decode those envelopes at the durable read boundary.
-- The local real-stack proof exercises this envelope independently for Mason and Neighbor
-  browser posts: each room records two ciphertext envelopes, no plaintext `body` fields, and
-  no plaintext body occurrence in the stored JSON. This is local at-rest and replay proof,
-  not a hosted key-management or backup-encryption claim.
+- **Every event body is sealed.** `payload`, `actor`, `causation_id`, and audit `meta` share one
+  XChaCha20-Poly1305 envelope. Only ordering/type headers remain clear. A leaked event table or
+  `StreamExport` v2 archive therefore exposes neither role/action/resolution content nor actor
+  attribution in plaintext. AAD prevents relocating a body across stream, position, kind,
+  version, or logical time.
+- The release event keyring is parsed once per process instead of reparsed or re-reading the
+  environment for every replayed event. Debug tests retain source-aware cache invalidation so
+  isolated key-rotation cases can share a process. Ciphertext records its `kid`; writes use the
+  active key and reads may trust an explicit historical ring during rotation.
+- Profile presentation and game-persona ownership are separate subject-private claims. Canonical
+  events retain only random `SubjectId`/`ClaimId` references; claim ciphertext uses a random
+  per-subject key stored outside Postgres. Erasure records an append-only random-alias tombstone and
+  external revocation receipt before destroying that key. Startup reconciles the external monotonic
+  revocation journal before serving traffic, so restoring a pre-erasure database backup cannot make
+  the destroyed subject claims readable again.
+- Missing claim material fails closed for an active subject. For an erased subject, profile and
+  game rebuilds deterministically fold the tombstone alias, clear private bindings and name claims,
+  and never require the destroyed key. Database backups contain envelopes and tombstones, not
+  subject keys. Hosted authority objects live in a dedicated shared S3-compatible bucket, never
+  a per-replica filesystem or the media bucket. Each subject key is itself client-side AEAD-wrapped;
+  revocation records are separately authenticated and immutable.
+- Completed-game portability does not copy live game-persona claims or erasure tombstones. Its
+  authenticated event bodies determine an exact set of game-scoped hashed subject references, each
+  mapped to a canonical detached `Archived player …` alias under an outer archive checksum. An
+  isolated import persists only those append-only aliases, leaves subject/claim tables empty, and
+  commits event rows, aliases, first rebuild, and replay audit atomically.
+- The subject-owned slice currently covers profile presentation, game-persona presentation/
+  ownership, and member personal-export artifacts. Other retained content and service-required
+  moderation evidence remain governed by their explicit retention policy; this is not a claim that
+  all user-authored prose is erasable.
 - Library-level local tests fall back to a deterministic `local-dev` key if
   `FMARCH_EVENT_ENCRYPTION_KEY` is unset so tests stay runnable. The local real-stack harness
   opts into that debug-only fallback explicitly. Staged and production deployments must provide
@@ -238,11 +254,20 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   (`FMARCH_DEV_AUTH=1` or `FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true`). The ban applies only to
   the active write kid; historical `FMARCH_EVENT_ENCRYPTION_KEYS` ring entries may still use
   `local-dev` for decrypt during rotation. Setting KEY+KID does not bypass the ban.
-- The ciphertext envelope records an encryption key id alongside the ciphertext. Writes use the
-  active `FMARCH_EVENT_ENCRYPTION_KEY` / `FMARCH_EVENT_ENCRYPTION_KID`; reads resolve by the
-  envelope `kid` against the active key plus historical `FMARCH_EVENT_ENCRYPTION_KEYS`
-  `kid=key` entries, so old and new encrypted payloads can coexist during manual rotation. This
-  is not yet KMS-backed rotation, automated key retirement, or log re-encryption.
+- Release event keys are canonical padded base64 encodings of exactly 32 random bytes; release
+  startup never derives a key from a passphrase. Before listeners start, and on every readiness
+  probe, the service also proves that every `events.sealed_kid` is present in the configured
+  active-plus-historical ring. Omitting a historical key therefore fails closed before replay.
+- Event encryption is not yet KMS-backed envelope rotation or automated retirement. The external
+  subject-key authority has an immutable genesis/revision manifest bound to the database, and normal
+  startup refuses an unbootstrapped, wrong, unreachable, or incomplete authority. Its wrapping and
+  journal-authentication keys remain release secrets and rotate only through an explicit authority
+  migration; deleted subject key objects must never be restored.
+- A Railway Bucket closes database-only rollback and replica-local-volume failure, but it is not a
+  WORM boundary. Coordinated rollback by a bucket administrator, or compromise of both database and
+  authority credentials, is outside that deployment guarantee. A threat model that includes those
+  actors must use an authority with object lock/version governance and KMS-backed custody rather
+  than representing the Railway adapter as stronger than it is.
 - Transport is TLS end-to-end; the at-rest layer is in addition to, not instead of, TLS.
 
 ## Operational hygiene

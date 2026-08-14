@@ -4,6 +4,7 @@ pub mod member_lifecycle;
 pub mod methods;
 pub mod password;
 pub mod session;
+pub mod subject_privacy;
 pub mod token;
 pub mod workos;
 
@@ -22,6 +23,16 @@ pub use member_lifecycle::{
 };
 pub use session::{
     AuthorizationContext, IssuedSession, RotatedSession, SessionPolicy, SessionSpec,
+};
+pub use subject_privacy::{
+    active_subject_key_store, bootstrap_subject_key_authority_from_environment,
+    configured_subject_key_authority, configured_subject_key_store, install_subject_key_store,
+    open_subject_claim, prepare_subject_authority_for_service, random_tombstone_alias,
+    reconcile_subject_revocations, reconcile_subject_revocations_with_store, seal_subject_claim,
+    verify_active_subject_keys, verify_or_bind_database_authority, ClaimId,
+    ConfiguredSubjectKeyAuthority, FilesystemSubjectKeyStore, ObjectSubjectKeyStore,
+    ObjectSubjectKeyStoreConfig, SubjectAuthorityManifest, SubjectClaimEnvelope, SubjectId,
+    SubjectKeyStore, SubjectPrivacyError, SubjectRevocationRecord,
 };
 pub use workos::{
     AccessTokenVerifier, IdentityError, StaticAccessTokenVerifier, VerifiedIdentity,

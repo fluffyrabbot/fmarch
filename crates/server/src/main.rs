@@ -349,7 +349,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    // Content is a prerequisite of the process, not a deployment-side file.
+    // This check intentionally precedes environment and database startup so the
+    // exact runtime image can prove its embedded artifact closure in isolation.
+    let content_check = content_registry::check_content_json()?;
+    if env::args().skip(1).eq(["--check-content"]) {
+        println!("{content_check}");
+        return Ok(());
+    }
+    if env::args().skip(1).eq(["--bootstrap-subject-authority"]) {
+        let manifest = identity::bootstrap_subject_key_authority_from_environment().await?;
+        println!("{}", serde_json::to_string(&manifest)?);
+        return Ok(());
+    }
+
     let config = Config::from_env()?;
+    // Validate the external erasure authority before opening a database
+    // connection. `--check-content` intentionally exits above this requirement.
+    let subject_authority = identity::configured_subject_key_authority().await?;
+    identity::install_subject_key_store(subject_authority.key_store.clone())?;
     let dev_auth_enabled = env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
     if dev_auth_enabled && !cfg!(debug_assertions) {
         return Err(std::io::Error::new(
@@ -422,6 +440,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     server::ensure_schema_ready(&pool).await?;
+    eventstore::ensure_event_encryption_key_coverage(&pool).await?;
+    identity::prepare_subject_authority_for_service(&pool, &subject_authority).await?;
     let _day_event_scheduler =
         commands::day_scheduler::spawn_day_event_scheduler(pool.clone(), config.scheduler.clone())?;
 
@@ -520,6 +540,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut api_state = api::ApiState::new(pool.clone(), media_store)
         .with_classic_auth(classic_enabled)
         .with_dev_auth(dev_auth_enabled)
+        .with_subject_key_store(subject_authority.key_store.clone())
         .with_identity_delivery_gateway(gateway);
     if let Some(verifier) = workos_verifier {
         api_state = api_state.with_access_token_verifier(std::sync::Arc::new(verifier));

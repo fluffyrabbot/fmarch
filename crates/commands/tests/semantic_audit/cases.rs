@@ -424,13 +424,7 @@ async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
         "alignment reveal resolution appends ResolutionApplied, ResolutionTrace, and ThreadLocked"
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("alignment-reveal ResolutionApplied validates");
     assert_eq!(applied.phase_id, "D01");
@@ -1668,14 +1662,8 @@ async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPo
         );
     }
 
-    let n02_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let n02_trace = domain::validate_trace_json(&n02_trace_payload, domain::TRACE_VERSION)
         .expect("valid Mafia Universe backup inheritance trace");
     assert_decision_trace(
@@ -1782,14 +1770,8 @@ async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPo
         serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
         "slot_effect rebuild must preserve Mafia Universe backup source marks"
     );
-    let n02_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         n02_trace_payload, n02_trace_after_rebuild,
         "projection rebuild must not rewrite persisted Mafia Universe backup trace envelope"
@@ -1911,13 +1893,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel(pool: PgPool) {
         "vote-duel resolution appends ResolutionApplied, ResolutionTrace, and ThreadLocked"
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("vote-duel ResolutionApplied validates");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -2129,13 +2105,7 @@ async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgP
         "Hero vote-duel resolution appends ResolutionApplied, ResolutionTrace, and ThreadLocked"
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("Hero vote-duel ResolutionApplied validates");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -2335,13 +2305,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel_no_ballots(pool: PgPool)
         "vote-duel resolution appends ResolutionApplied, ResolutionTrace, and ThreadLocked"
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("no-ballot vote-duel ResolutionApplied validates");
     let outcome = applied
@@ -2530,13 +2494,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel_tied_ballots(pool: PgPoo
         "vote-duel resolution appends ResolutionApplied, ResolutionTrace, and ThreadLocked"
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("tied-ballot vote-duel ResolutionApplied validates");
     let outcome = applied
@@ -3696,14 +3654,8 @@ async fn host_resolve_phase_day_action_win_runs_after_announcement(pool: PgPool)
     );
     assert_win_revealed_all_slots(&slots, "terminal day-action win");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid terminal day-action trace");
     assert_decision_trace(
@@ -5244,14 +5196,8 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
             "seed {seed}: trigger resolve events plus phase lock"
         );
 
-        let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-            "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-             AND payload->>'phase_id' = 'N01'",
-        )
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap_or_else(|err| panic!("seed {seed}: fetch ResolutionApplied failed: {err}"));
+        let applied_payload =
+            stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
         let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
             .unwrap_or_else(|err| panic!("seed {seed}: ResolutionApplied invalid: {err}"));
         let expected_trace = match case_name {
@@ -5936,7 +5882,7 @@ async fn generated_persistent_trigger_bad_expectations_shrink_to_failing_artifac
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_shrink_matrix_writes_compact_operator_report(
-    _pool_options: sqlx::postgres::PgPoolOptions,
+    pool_options: sqlx::postgres::PgPoolOptions,
     connect_options: sqlx::postgres::PgConnectOptions,
 ) {
     let mut cases = Vec::new();
@@ -6007,6 +5953,16 @@ async fn generated_shrink_matrix_writes_compact_operator_report(
             });
         }
     }
+
+    let fixture_principals = generated_shrink_matrix_principals(&cases)
+        .expect("generated shrink matrix principals should derive from valid fixtures");
+    let fixture_pool = pool_options
+        .max_connections(1)
+        .connect_with(connect_options.clone())
+        .await
+        .expect("connect generated shrink identity fixture pool");
+    ensure_test_principals(&fixture_pool, fixture_principals.iter().map(String::as_str)).await;
+    fixture_pool.close().await;
 
     let entries = run_generated_shrink_matrix_cases(connect_options, cases);
 
@@ -7186,12 +7142,7 @@ async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: 
         "large graph projection rebuild audit drifted: {projection_audit:?}"
     );
 
-    let event_count =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .expect("large graph event count");
+    let event_count = stored_event_count(&pool, game).await as i64;
     // Each named seating now persists an immutable GamePersona registration in
     // addition to the occupancy epoch that replaced the former direct slot
     // assignment. Keep the legacy stream ceiling, plus exactly that one
@@ -9675,30 +9626,14 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             );
         }
 
-        let prompt_payload = match sqlx::query_scalar::<_, serde_json::Value>(
-            "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-             AND payload->>'run_id' LIKE 'host-prompt:%' \
-             ORDER BY stream_seq DESC LIMIT 1",
+        let prompt_payload = latest_stored_payload_with_prefix(
+            &pool,
+            game,
+            "ResolutionApplied",
+            "run_id",
+            "host-prompt:",
         )
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        {
-            Ok(payload) => payload,
-            Err(err) => {
-                panic!(
-                    "{}",
-                    generated_shrink_failure_message(
-                        &pool,
-                        &shrink_stem,
-                        &fixture_json,
-                        &summary,
-                        format!("fetch PK prompt ResolutionApplied failed: {err}"),
-                    )
-                    .await
-                )
-            }
-        };
+        .await;
         let prompt_applied =
             match domain::validate_resolution_json(&prompt_payload, domain::RESULT_VERSION) {
                 Ok(applied) => applied,
@@ -12021,14 +11956,8 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
         .await
         .expect("host resolves Super-Saint lynch trigger");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Super-Saint result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -12068,14 +11997,8 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
             && !*unstoppable
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Super-Saint trace");
     assert!(
@@ -12125,14 +12048,8 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Super-Saint lynch trigger outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite Super-Saint lynch trigger trace envelope"
@@ -12230,14 +12147,8 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
         .await
         .expect("host resolves Beloved Princess lynch prompt");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Beloved Princess result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -12259,14 +12170,8 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
         Some(domain::InnerEvent::PhaseAnnouncement(_))
     ));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Beloved Princess trace");
     assert_decision_trace(
@@ -12376,14 +12281,13 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
     assert_eq!(phase.phase_id, "N02");
     assert!(!phase.locked);
 
-    let phase_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
-         AND payload->>'source_prompt_id' = 'D01:skip_next_day:slot_1'",
+    let phase_payload = stored_payload_where(
+        &pool,
+        game,
+        "PhaseAdvanced",
+        &[("source_prompt_id", "D01:skip_next_day:slot_1")],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(phase_payload["phase_id"], "N02");
     assert_eq!(phase_payload["source_phase_id"], "D01");
     assert_eq!(phase_payload["skipped_phase_id"], "D02");
@@ -12405,15 +12309,13 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
     .await
     .expect_err("resolved host prompt must reject stale duplicate resolution");
     assert_eq!(duplicate_prompt_err, Reject::PromptAlreadyResolved);
-    let duplicate_prompt_event_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events \
-         WHERE stream_id = $1 AND kind = 'HostPromptResolved' \
-           AND payload->>'prompt_id' = 'D01:skip_next_day:slot_1'",
+    let duplicate_prompt_event_count: i64 = stored_event_count_where(
+        &pool,
+        game,
+        "HostPromptResolved",
+        &[("prompt_id", "D01:skip_next_day:slot_1")],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         duplicate_prompt_event_count, 1,
         "duplicate prompt resolution must not append another HostPromptResolved event"
@@ -12451,14 +12353,8 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
         serde_json::to_string(&phase_state(&pool, game).await.unwrap().unwrap()).unwrap(),
         "phase_state rebuild must preserve Beloved Princess skip-next-day phase control"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite Beloved Princess trace envelope"
@@ -12550,14 +12446,8 @@ async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool
         .await
         .expect("host resolves Virgin night-death prompt");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Virgin night-death result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -12581,14 +12471,8 @@ async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool
         Some(domain::InnerEvent::PhaseAnnouncement(_))
     ));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Virgin night-death trace");
     assert_decision_trace(
@@ -12648,14 +12532,13 @@ async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool
     assert_eq!(phase.phase_id, "N02");
     assert!(!phase.locked);
 
-    let phase_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
-         AND payload->>'source_prompt_id' = 'N01:skip_next_day:slot_2'",
+    let phase_payload = stored_payload_where(
+        &pool,
+        game,
+        "PhaseAdvanced",
+        &[("source_prompt_id", "N01:skip_next_day:slot_2")],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(phase_payload["phase_id"], "N02");
     assert_eq!(phase_payload["source_phase_id"], "N01");
     assert_eq!(phase_payload["skipped_phase_id"], "D02");
@@ -12776,13 +12659,7 @@ async fn host_resolve_phase_uses_pack_declared_vote_weights(pool: PgPool) {
         .await
         .expect("host resolves weighted day vote");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied: domain::ResolutionApplied = serde_json::from_value(payload).unwrap();
     let outcome = applied
         .events
@@ -12904,13 +12781,7 @@ async fn host_resolve_phase_uses_pack_declared_role_tiebreaker(pool: PgPool) {
         .await
         .expect("host resolves role-tiebreaker day vote");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied: domain::ResolutionApplied = serde_json::from_value(payload).unwrap();
     let outcome = applied
         .events
@@ -13804,14 +13675,8 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt(pool
         "dynamic NoMajority must emit the configured revote prompt"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid dynamic no-majority trace");
     assert_decision_trace(
@@ -14008,13 +13873,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
     .await
     .expect("host resolves loved threshold day vote");
 
-    let loved_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(loved_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let loved_payload = stored_payload(&pool, loved_game, "ResolutionApplied").await;
     let loved_applied: domain::ResolutionApplied = serde_json::from_value(loved_payload).unwrap();
     let loved_outcome = loved_applied
         .events
@@ -14039,13 +13898,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
                 && prompt.metadata["policy"] == "no_majority_revote"
                 && prompt.metadata["status"] == "NoMajority"
     )));
-    let loved_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(loved_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let loved_trace_payload = stored_payload(&pool, loved_game, "ResolutionTrace").await;
     let loved_trace = domain::validate_trace_json(&loved_trace_payload, domain::TRACE_VERSION)
         .expect("valid loved no-majority trace");
     assert_decision_trace(
@@ -14177,14 +14030,13 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
     )
     .await
     .expect("host resolves NoMajority revote phase");
-    let revote_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01R1'",
+    let revote_payload = stored_payload_where(
+        &pool,
+        loved_game,
+        "ResolutionApplied",
+        &[("phase_id", "D01R1")],
     )
-    .bind(loved_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     let revote_applied: domain::ResolutionApplied = serde_json::from_value(revote_payload).unwrap();
     let revote_outcome = revote_applied
         .events
@@ -14345,13 +14197,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
     .await
     .expect("host resolves hated threshold day vote");
 
-    let hated_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(hated_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let hated_payload = stored_payload(&pool, hated_game, "ResolutionApplied").await;
     let hated_applied: domain::ResolutionApplied = serde_json::from_value(hated_payload).unwrap();
     let hated_outcome = hated_applied
         .events
@@ -14475,13 +14321,7 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
         .await
         .expect("host resolves EpicMafia PK tie vote");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied: domain::ResolutionApplied = serde_json::from_value(payload).unwrap();
     let outcome = applied
         .events
@@ -14507,13 +14347,7 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
                 && prompt.metadata["tiebreak"] == "HostDecides"
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid EpicMafia PK trace");
     assert_decision_trace(
@@ -14600,13 +14434,7 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
         "prompt resolution appends HostPromptResolved, ResolutionApplied, and ResolutionTrace"
     );
 
-    let resolved_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'HostPromptResolved'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let resolved_payload = stored_payload(&pool, game, "HostPromptResolved").await;
     assert_eq!(resolved_payload["prompt_id"], "D01:pk:Tie");
     assert_eq!(resolved_payload["kind"], "pk");
     assert_eq!(resolved_payload["resolved_by"], host);
@@ -14622,15 +14450,14 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
         })
     );
 
-    let prompt_applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'run_id' LIKE 'host-prompt:%' \
-         ORDER BY stream_seq DESC LIMIT 1",
+    let prompt_applied_payload = latest_stored_payload_with_prefix(
+        &pool,
+        game,
+        "ResolutionApplied",
+        "run_id",
+        "host-prompt:",
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     let prompt_applied: domain::ResolutionApplied =
         serde_json::from_value(prompt_applied_payload).unwrap();
     assert!(prompt_applied.events.iter().any(|indexed| matches!(
@@ -14669,15 +14496,9 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
         }]
     );
 
-    let prompt_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'run_id' LIKE 'host-prompt:%' \
-         ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let prompt_trace_payload =
+        latest_stored_payload_with_prefix(&pool, game, "ResolutionTrace", "run_id", "host-prompt:")
+            .await;
     let prompt_trace = domain::validate_trace_json(&prompt_trace_payload, domain::TRACE_VERSION)
         .expect("valid EpicMafia PK prompt trace");
     assert_decision_trace(
@@ -14759,15 +14580,9 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve EpicMafia host-selected PK death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'run_id' LIKE 'host-prompt:%' \
-         ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        latest_stored_payload_with_prefix(&pool, game, "ResolutionTrace", "run_id", "host-prompt:")
+            .await;
     assert_eq!(
         trace_before, trace_after_rebuild,
         "projection rebuild must not rewrite persisted PK prompt trace envelope"
@@ -14918,14 +14733,8 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
         "dynamic weighted tie must emit the configured PK prompt"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid dynamic PK trace");
     assert_decision_trace(
@@ -14987,13 +14796,7 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
         "dynamic PK prompt resolution appends HostPromptResolved plus validated envelopes"
     );
 
-    let resolved_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'HostPromptResolved'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let resolved_payload = stored_payload(&pool, game, "HostPromptResolved").await;
     assert_eq!(
         resolved_payload["public_resolution"],
         serde_json::json!({
@@ -15004,15 +14807,14 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
         })
     );
 
-    let prompt_applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'run_id' LIKE 'host-prompt:%' \
-         ORDER BY stream_seq DESC LIMIT 1",
+    let prompt_applied_payload = latest_stored_payload_with_prefix(
+        &pool,
+        game,
+        "ResolutionApplied",
+        "run_id",
+        "host-prompt:",
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     let prompt_applied: domain::ResolutionApplied =
         serde_json::from_value(prompt_applied_payload).unwrap();
     assert!(prompt_applied.events.iter().any(|indexed| matches!(
@@ -15029,15 +14831,9 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
             && *unstoppable
     )));
 
-    let prompt_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'run_id' LIKE 'host-prompt:%' \
-         ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let prompt_trace_payload =
+        latest_stored_payload_with_prefix(&pool, game, "ResolutionTrace", "run_id", "host-prompt:")
+            .await;
     let prompt_trace = domain::validate_trace_json(&prompt_trace_payload, domain::TRACE_VERSION)
         .expect("valid dynamic PK prompt trace");
     assert_decision_trace(
@@ -15115,15 +14911,9 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve dynamic PK selected death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'run_id' LIKE 'host-prompt:%' \
-         ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        latest_stored_payload_with_prefix(&pool, game, "ResolutionTrace", "run_id", "host-prompt:")
+            .await;
     assert_eq!(
         trace_before, trace_after_rebuild,
         "projection rebuild must not rewrite persisted dynamic PK prompt trace envelope"
@@ -15198,7 +14988,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -15238,14 +15028,8 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
         .await
         .expect("host resolves sheriff election day");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     let d01_badge = d01
         .events
@@ -15287,7 +15071,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -15327,7 +15111,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -15367,14 +15151,8 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
         .await
         .expect("host resolves sheriff destroy day");
 
-    let d03_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D03'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d03_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D03")]).await;
     let d03 = domain::validate_resolution_json(&d03_payload, domain::RESULT_VERSION).unwrap();
     let d03_badge_index = d03
         .events
@@ -15497,7 +15275,7 @@ async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -15521,14 +15299,8 @@ async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
         .await
         .expect("host resolves knight duel day");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     assert!(d01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -15635,7 +15407,7 @@ async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -15677,14 +15449,8 @@ async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool
         .await
         .expect("host resolves failed knight duel day");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     let duel_index = d01
         .events
@@ -15824,7 +15590,7 @@ async fn host_resolve_phase_carries_wolf_self_destruct_trade(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -15848,14 +15614,8 @@ async fn host_resolve_phase_carries_wolf_self_destruct_trade(pool: PgPool) {
         .await
         .expect("host resolves wolf self-destruct day");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     assert!(d01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -16056,7 +15816,7 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
     };
     domain::validate_resolution_applied(&queued, domain::RESULT_VERSION)
         .expect("passive carry seed envelope validates");
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -16080,7 +15840,7 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -16103,14 +15863,8 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
         .await
         .expect("host resolves passive White Wolf carry night");
 
-    let n01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let n01 = domain::validate_resolution_json(&n01_payload, domain::RESULT_VERSION).unwrap();
     assert!(n01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -16589,7 +16343,7 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -16612,14 +16366,8 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
         .await
         .expect("host resolves wolf beauty mark night");
 
-    let n01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let n01 = domain::validate_resolution_json(&n01_payload, domain::RESULT_VERSION).unwrap();
     assert!(n01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -16678,14 +16426,8 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
         .await
         .expect("host resolves wolf beauty drag day");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     assert!(d01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -16712,14 +16454,8 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
             && *unstoppable
     )));
 
-    let d01_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let d01_trace = domain::validate_trace_json(&d01_trace_payload, domain::TRACE_VERSION)
         .expect("valid Wolf Beauty day-drag trace");
     assert_decision_trace(
@@ -16773,14 +16509,8 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
         serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
         "slot_effect rebuild must preserve the projected beauty mark"
     );
-    let d01_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         d01_trace_payload, d01_trace_after_rebuild,
         "projection rebuild must not rewrite persisted Wolf Beauty day-drag trace envelope"
@@ -16855,7 +16585,7 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -16888,7 +16618,7 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -16911,14 +16641,8 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
         .await
         .expect("host resolves witch poison beauty drag night");
 
-    let n02_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let n02 = domain::validate_resolution_json(&n02_payload, domain::RESULT_VERSION).unwrap();
     assert!(n02.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -16958,14 +16682,8 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
             && *unstoppable
     )));
 
-    let n02_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let n02_trace = domain::validate_trace_json(&n02_trace_payload, domain::TRACE_VERSION)
         .expect("valid Wolf Beauty night-drag trace");
     assert_decision_trace(
@@ -17037,14 +16755,8 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve Witch poison use"
     );
-    let n02_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         n02_trace_payload, n02_trace_after_rebuild,
         "projection rebuild must not rewrite persisted Wolf Beauty night-drag trace envelope"
@@ -17119,7 +16831,7 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -17152,7 +16864,7 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -17190,14 +16902,8 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
         .await
         .expect("host resolves stacked wolf beauty drag night");
 
-    let n02_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let n02 = domain::validate_resolution_json(&n02_payload, domain::RESULT_VERSION)
         .expect("valid stacked Wolf Beauty resolution");
     assert!(n02.events.iter().any(|indexed| matches!(
@@ -17236,14 +16942,8 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
         "Wolf Beauty drag race must not append a duplicate PlayerKilled event"
     );
 
-    let n02_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let n02_trace = domain::validate_trace_json(&n02_trace_payload, domain::TRACE_VERSION)
         .expect("valid stacked Wolf Beauty trace");
     assert_decision_trace(
@@ -17320,14 +17020,8 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve Witch poison use"
     );
-    let n02_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         n02_trace_payload, n02_trace_after_rebuild,
         "projection rebuild must not rewrite persisted stacked Wolf Beauty trace envelope"
@@ -17401,7 +17095,7 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -17452,14 +17146,8 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
         .await
         .expect("host resolves guard/witch poison policy night");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -17479,14 +17167,8 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
         "guard policy should prevent the poison kill from landing"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_decision_trace(
         &trace,
@@ -17623,7 +17305,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -17674,14 +17356,8 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
         .await
         .expect("host resolves Guard/Witch double-save policy night");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -17701,14 +17377,8 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
         "default Guard/Witch NoDeath policy should prevent the wolf kill"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_decision_trace(
         &trace,
@@ -17781,14 +17451,8 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve Witch heal use marker"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Guard/Witch double-save trace envelope"
@@ -17894,14 +17558,8 @@ async fn host_resolve_phase_carries_chinese_guard_self_save_night_one_policy(poo
         .await
         .expect("host resolves Chinese Guard self-save N01 policy");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -17921,14 +17579,8 @@ async fn host_resolve_phase_carries_chinese_guard_self_save_night_one_policy(poo
         "Guard self-save should stop the N01 wolf kill"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_decision_trace(
         &trace,
@@ -17976,14 +17628,8 @@ async fn host_resolve_phase_carries_chinese_guard_self_save_night_one_policy(poo
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Chinese Guard self-save state"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Chinese Guard self-save trace envelope"
@@ -18057,7 +17703,7 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -18108,14 +17754,8 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
         .await
         .expect("host resolves Guard/Witch KillTarget policy night");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
     assert!(
         applied.events.iter().any(|indexed| matches!(
@@ -18142,14 +17782,8 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
         "KillTarget same-target policy must not also emit a save for the target"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_decision_trace(
         &trace,
@@ -18222,14 +17856,8 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve Witch heal use marker"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Guard/Witch KillTarget trace envelope"
@@ -18305,7 +17933,7 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -18347,14 +17975,8 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
         .await
         .expect("host resolves ITA day");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     assert!(d01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -18593,22 +18215,14 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
         )
     })
     .collect::<Vec<_>>();
-    projections::append_and_project(&pool, game, &submissions)
-        .await
-        .unwrap();
+    append_and_project(&pool, game, &submissions).await.unwrap();
 
     handle(&pool, &h, Command::ResolvePhase { game, seed: 910001 })
         .await
         .expect("host resolves ITA invalidation day");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("ITA invalidation ResolutionApplied validates");
     let invalidated = applied
@@ -18696,14 +18310,8 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
             && *global_shots_fired == 2
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     let invalidated_trace = trace
         .generated
@@ -18762,14 +18370,8 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve both queued ITA shot uses"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted ITA invalidation trace envelope"
@@ -18885,7 +18487,7 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
         started_at: 0,
         finished_at: 0,
     };
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -18909,7 +18511,7 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
         "seeded prior ResolutionApplied death must fold before D01 resolve"
     );
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -18935,14 +18537,8 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
         .await
         .expect("host resolves ITA refund day");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("ITA refund ResolutionApplied validates");
     let refunded = applied
@@ -19047,14 +18643,8 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
             && counters.shots_refunded == 1
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     let refunded_trace = trace
         .generated
@@ -19111,14 +18701,8 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve quota-neutral ITA refund"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted ITA refund trace envelope"
@@ -19210,14 +18794,8 @@ async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: 
         .await
         .expect("host resolves buffered ITA day");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("buffered ITA ResolutionApplied validates");
     let buffered = applied
@@ -19292,14 +18870,8 @@ async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: 
         "buffered session must remain open for a later release pass"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     let buffered_trace = trace
         .generated
@@ -19342,14 +18914,8 @@ async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve buffered ITA non-kill state"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted buffered ITA trace envelope"
@@ -19464,14 +19030,8 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
         .await
         .expect("host releases buffered ITA shot on D01R1");
 
-    let release_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let release_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01R1")]).await;
     let release = domain::validate_resolution_json(&release_payload, domain::RESULT_VERSION)
         .expect("released ITA ResolutionApplied validates");
     assert!(
@@ -19532,14 +19092,8 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
         domain::InnerEvent::ItaSessionClosed { session_id, .. } if session_id == "d1"
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01R1")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert!(trace.generated.iter().any(|generated| {
         generated.source == "ItaShotQueued"
@@ -19597,14 +19151,8 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve released ITA shot use"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01R1")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted buffered-release trace envelope"
@@ -19721,14 +19269,8 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
         .await
         .expect("host releases buffered ITA shots on D01R1");
 
-    let release_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let release_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01R1")]).await;
     let release = domain::validate_resolution_json(&release_payload, domain::RESULT_VERSION)
         .expect("released invalidation ResolutionApplied validates");
     assert!(
@@ -19807,14 +19349,8 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
             && *global_shots_fired == 2
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01R1")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     let invalidated_trace = trace
         .generated
@@ -19887,14 +19423,8 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve released invalidated shot use"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01R1")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted buffered-invalidation trace envelope"
@@ -20029,7 +19559,7 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
         started_at: 0,
         finished_at: 0,
     };
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -20071,14 +19601,8 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
         .await
         .expect("host releases buffered ITA refund on D01R1");
 
-    let release_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let release_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01R1")]).await;
     let release = domain::validate_resolution_json(&release_payload, domain::RESULT_VERSION)
         .expect("released refund ResolutionApplied validates");
     let refunded = release
@@ -20135,14 +19659,8 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
         "refunded released buffered shot must not also resolve"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01R1")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     let refunded_trace = trace
         .generated
@@ -20199,14 +19717,8 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve quota-neutral released ITA refund"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01R1")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted buffered-refund trace envelope"
@@ -20308,13 +19820,7 @@ async fn host_resolve_phase_applies_ita_lifecycle_pause_control(pool: PgPool) {
         .await
         .expect("host resolves paused ITA session");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("paused ITA lifecycle ResolutionApplied validates");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -20491,14 +19997,8 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
         .await
         .expect("host releases buffered HP/hybrid ITA shots on D01R1");
 
-    let release_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let release_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01R1")]).await;
     let release = domain::validate_resolution_json(&release_payload, domain::RESULT_VERSION)
         .expect("released HP/hybrid ResolutionApplied validates");
     assert!(
@@ -20590,14 +20090,8 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
     assert_eq!(hybrid_hp.9.hp_remaining.get("slot_6"), Some(&1));
     assert_eq!(hybrid_hp.9.hp_damage.get("slot_6"), Some(&1));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01R1")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert!(trace.generated.iter().any(|generated| {
         generated.source == "ItaShotResolved"
@@ -20670,14 +20164,8 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve released HP/hybrid shot use"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01R1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01R1")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted buffered HP/hybrid trace envelope"
@@ -20781,22 +20269,14 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
         )
     })
     .collect::<Vec<_>>();
-    projections::append_and_project(&pool, game, &submissions)
-        .await
-        .unwrap();
+    append_and_project(&pool, game, &submissions).await.unwrap();
 
     handle(&pool, &h, Command::ResolvePhase { game, seed: 17 })
         .await
         .expect("host resolves ITA modifier day");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     let resolved: Vec<_> = d01
         .events
@@ -20899,14 +20379,8 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
     assert_eq!(updated.shields_spent.get("slot_4"), Some(&1));
     assert_eq!(updated.shields_spent.get("slot_9"), Some(&1));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     let blocked_trace = trace
         .generated
@@ -22148,14 +21622,8 @@ async fn host_resolve_phase_carries_mafiascum_faith_healer_chance_protect(pool: 
             )));
         }
 
-        let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-            "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-             AND payload->>'phase_id' = 'N01'",
-        )
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let trace_payload =
+            stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
         let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
             .unwrap_or_else(|err| panic!("{label}: valid Faith Healer trace: {err}"));
         assert_decision_trace(
@@ -22417,14 +21885,8 @@ async fn host_resolve_phase_carries_mafia_universe_night_desperado_kills(pool: P
         "same-alignment target should survive alignment failback"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert!(
         trace.decisions.iter().any(|decision| {
@@ -23058,14 +22520,8 @@ async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: 
                 && !outcome.weights.contains_key("slot_4")
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert!(
         trace.decisions.iter().any(|decision| {
@@ -27473,14 +26929,8 @@ async fn host_resolve_phase_carries_mafia_universe_redirect_graph(pool: PgPool) 
     .await
     .expect("host resolves Mafia Universe redirect graph");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Mafia Universe redirect trace");
     assert_trace_edge(
@@ -27571,14 +27021,8 @@ async fn host_resolve_phase_carries_mafia_universe_redirect_graph(pool: PgPool) 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve MU redirect graph outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted MU redirect trace envelope"
@@ -27731,14 +27175,8 @@ async fn host_resolve_phase_carries_mafia_universe_commute(pool: PgPool) {
     .await
     .expect("host resolves Mafia Universe commute scenario");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Mafia Universe commute trace");
     assert_decision_trace(
@@ -27846,14 +27284,8 @@ async fn host_resolve_phase_carries_mafia_universe_commute(pool: PgPool) {
             .all(|effect| effect.effect != "commuted"),
         "slot_effect rebuild must preserve MU commute non-durability"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted MU commute trace envelope"
@@ -27990,14 +27422,8 @@ async fn host_resolve_phase_carries_mafia_universe_rolestop(pool: PgPool) {
     .await
     .expect("host resolves Mafia Universe rolestop scenario");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Mafia Universe rolestop trace");
     assert_decision_trace(
@@ -28108,14 +27534,8 @@ async fn host_resolve_phase_carries_mafia_universe_rolestop(pool: PgPool) {
             .all(|effect| effect.effect != "untargetable"),
         "slot_effect rebuild must preserve MU rolestop non-durability"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted MU rolestop trace envelope"
@@ -28296,14 +27716,8 @@ async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death
     )
     .await
     .expect("host resolves MU poison cure");
-    let cure_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cure_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let cure_trace = domain::validate_trace_json(&cure_trace_payload, domain::TRACE_VERSION)
         .expect("valid MU cure trace");
     assert_decision_trace(
@@ -28410,14 +27824,8 @@ async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death
     )
     .await
     .expect("host resolves MU pending poison death");
-    let poison_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N04'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let poison_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N04")]).await;
     let poison_trace = domain::validate_trace_json(&poison_trace_payload, domain::TRACE_VERSION)
         .expect("valid MU pending poison trace");
     assert_decision_trace(
@@ -28472,22 +27880,10 @@ async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death
         serde_json::to_string(&delayed_death_queues(&pool, game).await.unwrap()).unwrap(),
         "delayed_death_queue rebuild must preserve consumed MU poison queues"
     );
-    let cure_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let poison_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N04'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cure_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
+    let poison_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N04")]).await;
     assert_eq!(
         cure_trace_payload, cure_trace_after_rebuild,
         "projection rebuild must not rewrite persisted MU cure trace envelope"
@@ -28704,14 +28100,8 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
     .await
     .expect("host resolves MU healer alias cures");
 
-    let cure_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cure_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let cure_trace = domain::validate_trace_json(&cure_trace_payload, domain::TRACE_VERSION)
         .expect("valid MU healer alias cure trace");
     assert_decision_trace(
@@ -28822,14 +28212,8 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
         serde_json::to_string(&player_notifications(&pool, game).await.unwrap()).unwrap(),
         "player_notification rebuild must preserve MU healer alias effect notices"
     );
-    let cure_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cure_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         cure_trace_payload, cure_trace_after_rebuild,
         "projection rebuild must not rewrite persisted MU healer alias cure trace envelope"
@@ -29026,14 +28410,8 @@ async fn host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite(p
     )
     .await
     .expect("host resolves MU extinguish before ignite");
-    let extinguish_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let extinguish_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let extinguish_trace =
         domain::validate_trace_json(&extinguish_trace_payload, domain::TRACE_VERSION)
             .expect("valid MU extinguish trace");
@@ -29193,14 +28571,8 @@ async fn host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite(p
         serde_json::to_string(&player_notifications(&pool, game).await.unwrap()).unwrap(),
         "player_notification rebuild must preserve MU arson notices"
     );
-    let extinguish_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let extinguish_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         extinguish_trace_payload, extinguish_trace_after_rebuild,
         "projection rebuild must not rewrite persisted MU extinguish trace envelope"
@@ -29396,14 +28768,8 @@ async fn host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alia
     .await
     .expect("host resolves MU firefighter-preempt alias before ignite");
 
-    let extinguish_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let extinguish_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let extinguish_trace =
         domain::validate_trace_json(&extinguish_trace_payload, domain::TRACE_VERSION)
             .expect("valid MU firefighter-preempt alias trace");
@@ -29479,14 +28845,8 @@ async fn host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alia
         serde_json::to_string(&player_notifications(&pool, game).await.unwrap()).unwrap(),
         "player_notification rebuild must preserve MU firefighter-preempt alias notices"
     );
-    let extinguish_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let extinguish_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         extinguish_trace_payload, extinguish_trace_after_rebuild,
         "projection rebuild must not rewrite persisted MU firefighter-preempt alias trace envelope"
@@ -29610,14 +28970,8 @@ async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(p
     .await
     .expect("host resolves MU motivator grants");
 
-    let grant_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let grant_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let grant_generated = grant_trace_payload["generated"]
         .as_array()
         .expect("generated trace rows");
@@ -29761,14 +29115,8 @@ async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(p
     .await
     .expect("host resolves MU motivated extra actions");
 
-    let spend_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let spend_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let spend_applied =
         domain::validate_resolution_json(&spend_payload, domain::RESULT_VERSION).unwrap();
     assert!(
@@ -29812,14 +29160,8 @@ async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(p
         "MU Mafia Motivator extra-action grant should be consumed by the extra track action"
     );
 
-    let spend_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let spend_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let spend_generated = spend_trace_payload["generated"]
         .as_array()
         .expect("generated trace rows");
@@ -29985,14 +29327,8 @@ async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(po
     .await
     .expect("host resolves MU fruit vendor notifications");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied =
         domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
     assert_eq!(
@@ -30246,14 +29582,8 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
     .await
     .expect("host resolves MU inventor item grants");
 
-    let grant_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let grant_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let grant_generated = grant_trace_payload["generated"]
         .as_array()
         .expect("generated trace rows");
@@ -30394,14 +29724,8 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
     .await
     .expect("host resolves MU generated item uses");
 
-    let spend_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let spend_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let spend_applied =
         domain::validate_resolution_json(&spend_payload, domain::RESULT_VERSION).unwrap();
     assert!(
@@ -30541,14 +29865,8 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
         "MU mafia-generated vest item action should privately notify the marked target"
     );
 
-    let spend_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let spend_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let spend_generated = spend_trace_payload["generated"]
         .as_array()
         .expect("generated trace rows");
@@ -30847,14 +30165,8 @@ async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) 
     .await
     .expect("host resolves MU Empowerer bypass");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied =
         domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
     assert!(
@@ -30882,14 +30194,8 @@ async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) 
         "Empowered MU Cop should not emit a roleblocked interference event"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let decisions = trace_payload["decisions"]
         .as_array()
         .expect("trace decisions");
@@ -31000,7 +30306,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -31058,7 +30364,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
     .unwrap();
 
     for (seq, actor) in [(1, "slot_1"), (2, "slot_4"), (3, "slot_6")] {
-        projections::append_and_project(
+        append_and_project(
             &pool,
             game,
             &[eventstore::EventInput::new(
@@ -31081,14 +30387,8 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
         .await
         .expect("host resolves day notes day");
 
-    let d02_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d02_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D02")]).await;
     let d02 = domain::validate_resolution_json(&d02_payload, domain::RESULT_VERSION).unwrap();
     let day_notes = d02
         .events
@@ -31645,14 +30945,8 @@ async fn host_resolve_phase_applies_godfather_investigation_override(pool: PgPoo
         .await
         .expect("host resolves godfather investigation override");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
         .expect("godfather override ResolutionApplied validates");
     assert!(
@@ -31787,14 +31081,8 @@ async fn host_resolve_phase_applies_lawyer_result_mod_override(pool: PgPool) {
         .await
         .expect("host resolves lawyer result_mod override");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
         .expect("lawyer result_mod ResolutionApplied validates");
     assert!(
@@ -31938,14 +31226,8 @@ async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
         .await
         .expect("host resolves Mafiascum info actions");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
         .expect("Mafiascum info ResolutionApplied validates");
     let info_events: Vec<_> = applied
@@ -32143,14 +31425,8 @@ async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: Pg
     .await
     .expect("host resolves Mafiascum Fruit Vendor notification");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
         .expect("Mafiascum Fruit Vendor ResolutionApplied validates");
     assert!(
@@ -32357,14 +31633,8 @@ async fn host_resolve_phase_projects_mafiascum_action_investigation_guards(pool:
     .await
     .expect("host resolves Mafiascum action-investigation guards");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
         .expect("Mafiascum action-investigation ResolutionApplied validates");
     assert!(
@@ -32601,14 +31871,8 @@ async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
         .await
         .expect("host resolves N02 comparison");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
     assert!(
         applied.events.iter().any(|indexed| {
@@ -32720,7 +31984,7 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -32743,14 +32007,8 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
         .await
         .expect("host resolves N01 visit");
 
-    let n01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let n01_applied = domain::validate_resolution_json(&n01_payload, domain::RESULT_VERSION)
         .expect("N01 ResolutionApplied validates");
     assert!(
@@ -32801,7 +32059,7 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -32824,14 +32082,8 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
         .await
         .expect("host resolves N02 prior-motion read");
 
-    let n02_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let n02_applied = domain::validate_resolution_json(&n02_payload, domain::RESULT_VERSION)
         .expect("N02 ResolutionApplied validates");
     assert!(
@@ -32937,14 +32189,8 @@ async fn host_resolve_phase_records_friendly_neighbor_visit(pool: PgPool) {
         .await
         .expect("host resolves friendly neighbor visit");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("friendly neighbor ResolutionApplied validates");
     assert!(
@@ -33062,14 +32308,8 @@ async fn host_resolve_phase_records_neighborize_visit(pool: PgPool) {
         .await
         .expect("host resolves neighborize visit");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("neighborize ResolutionApplied validates");
     assert!(
@@ -33165,7 +32405,7 @@ async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgP
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -33224,7 +32464,7 @@ async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgP
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -33248,14 +32488,8 @@ async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgP
         .await
         .expect("host resolves N02 action");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let applied: domain::ResolutionApplied = serde_json::from_value(payload).unwrap();
     assert!(
         applied.events.iter().any(
@@ -33979,7 +33213,7 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -34018,14 +33252,8 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
         .await
         .expect("host resolves conversion/effect night");
 
-    let conversion_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let conversion_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let conversion_trace =
         domain::validate_trace_json(&conversion_trace_payload, domain::TRACE_VERSION)
             .expect("valid conversion trace");
@@ -34144,7 +33372,7 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -34220,14 +33448,8 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
             .expect("read thread view after rebuild"),
         "thread_view rebuild must preserve Epicmafia douse notification non-leakage"
     );
-    let conversion_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let conversion_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         conversion_trace_payload, conversion_trace_after_rebuild,
         "projection rebuild must not rewrite persisted conversion trace envelope"
@@ -34290,7 +33512,7 @@ async fn host_resolve_phase_blocks_conversion_of_dead_target(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -34363,14 +33585,8 @@ async fn host_resolve_phase_blocks_conversion_of_dead_target(pool: PgPool) {
         "dead target must not be converted after being killed"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("dead-target conversion ResolutionTrace validates");
     assert_decision_trace(
@@ -34405,14 +33621,8 @@ async fn host_resolve_phase_blocks_conversion_of_dead_target(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve dead-target conversion block"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted dead-target conversion trace"
@@ -34475,7 +33685,7 @@ async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPo
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -34522,7 +33732,7 @@ async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPo
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -34586,14 +33796,8 @@ async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPo
         "pending-death target must not be converted before poison lands"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("pending-death conversion ResolutionTrace validates");
     assert_decision_trace(
@@ -34658,14 +33862,8 @@ async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPo
         serde_json::to_string(&delayed_death_queues(&pool, game).await.unwrap()).unwrap(),
         "delayed_death_queue rebuild must preserve consumed pending-death conversion queue"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted pending-death conversion trace"
@@ -34728,7 +33926,7 @@ async fn host_resolve_phase_filters_hidden_effect_notifications(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -34907,7 +34105,7 @@ async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) 
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -34931,14 +34129,8 @@ async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) 
         .await
         .expect("host resolves loyal conversion block");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid loyal conversion trace");
     assert_decision_trace(
@@ -34960,14 +34152,8 @@ async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) 
         },
     );
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
         .expect("valid loyal conversion result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -34996,14 +34182,8 @@ async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve the blocked loyal conversion"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted loyal conversion trace envelope"
@@ -35112,14 +34292,8 @@ async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool
         .await
         .expect("host resolves disloyal conversion modifier");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid disloyal modifier trace");
     assert_decision_trace(
@@ -35213,14 +34387,8 @@ async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve disloyal suppression plus cross-alignment conversion"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted disloyal trace envelope"
@@ -35284,7 +34452,7 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -35344,7 +34512,7 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -35366,14 +34534,8 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
     handle(&pool, &h, Command::ResolvePhase { game, seed: 7102 })
         .await
         .expect("host resolves poison cure");
-    let cure_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cure_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let cure_trace = domain::validate_trace_json(&cure_trace_payload, domain::TRACE_VERSION)
         .expect("valid cure trace");
     assert_decision_trace(
@@ -35420,7 +34582,7 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -35470,14 +34632,8 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
     handle(&pool, &h, Command::ResolvePhase { game, seed: 7104 })
         .await
         .expect("host resolves pending poison death");
-    let poison_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N04'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let poison_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N04")]).await;
     let poison_trace = domain::validate_trace_json(&poison_trace_payload, domain::TRACE_VERSION)
         .expect("valid pending poison trace");
     assert_decision_trace(
@@ -35530,22 +34686,10 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
         serde_json::to_string(&delayed_death_queues(&pool, game).await.unwrap()).unwrap(),
         "delayed_death_queue rebuild must preserve consumed poison queues"
     );
-    let cure_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let poison_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N04'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cure_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
+    let poison_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N04")]).await;
     assert_eq!(
         cure_trace_payload, cure_trace_after_rebuild,
         "projection rebuild must not rewrite persisted cure trace envelope"
@@ -35611,7 +34755,7 @@ async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPo
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -35664,14 +34808,8 @@ async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPo
         .await
         .expect("host resolves already-dead pending poison target");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
         .expect("already-dead pending poison ResolutionApplied validates");
     assert!(
@@ -35691,14 +34829,8 @@ async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPo
         "already-dead pending poison target must not receive a duplicate poison death"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid already-dead pending poison trace");
     assert_decision_trace(
@@ -35745,14 +34877,8 @@ async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPo
         serde_json::to_string(&delayed_death_queues(&pool, game).await.unwrap()).unwrap(),
         "delayed_death_queue rebuild must preserve consumed already-dead poison queue"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted already-dead pending poison trace envelope"
@@ -35815,7 +34941,7 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -35848,7 +34974,7 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -35886,14 +35012,8 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
         .await
         .expect("host resolves cleanse before ignite");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid cleanse trace");
     assert_decision_trace(
@@ -35928,14 +35048,8 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve cleanse-before-ignite survival"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted cleanse trace envelope"
@@ -35998,7 +35112,7 @@ async fn host_resolve_phase_projects_motivator_grant(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -36049,14 +35163,8 @@ async fn host_resolve_phase_projects_motivator_grant(pool: PgPool) {
         }),
         "ResolvePhase must append ActionGranted"
     );
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert!(
         trace_payload["generated"]
             .as_array()
@@ -36142,7 +35250,7 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -36164,14 +35272,8 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
     handle(&pool, &h, Command::ResolvePhase { game, seed: 7301 })
         .await
         .expect("host resolves cult conversion");
-    let convert_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let convert_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let convert_trace = domain::validate_trace_json(&convert_trace_payload, domain::TRACE_VERSION)
         .expect("valid convert trace");
     assert_decision_trace(
@@ -36233,7 +35335,7 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -36255,14 +35357,8 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
     handle(&pool, &h, Command::ResolvePhase { game, seed: 7302 })
         .await
         .expect("host resolves deprogramming");
-    let deprogram_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let deprogram_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let deprogram_trace =
         domain::validate_trace_json(&deprogram_trace_payload, domain::TRACE_VERSION)
             .expect("valid deprogram trace");
@@ -36303,22 +35399,10 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve conversion and deprogramming"
     );
-    let convert_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let deprogram_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let convert_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
+    let deprogram_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         convert_trace_payload, convert_trace_after_rebuild,
         "projection rebuild must not rewrite persisted conversion trace envelope"
@@ -36415,14 +35499,8 @@ async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
         .await
         .expect("host resolves vanillaize mutation");
 
-    let vanillaize_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let vanillaize_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let vanillaize_trace =
         domain::validate_trace_json(&vanillaize_trace_payload, domain::TRACE_VERSION)
             .expect("valid vanillaize trace");
@@ -36503,14 +35581,8 @@ async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
         .await
         .expect("host resolves restore mutation");
 
-    let restore_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let restore_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let restore_trace = domain::validate_trace_json(&restore_trace_payload, domain::TRACE_VERSION)
         .expect("valid restore trace");
     assert_decision_trace(
@@ -36549,22 +35621,10 @@ async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve vanillaize and restore mutation"
     );
-    let vanillaize_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let restore_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let vanillaize_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
+    let restore_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         vanillaize_trace_payload, vanillaize_trace_after_rebuild,
         "projection rebuild must not rewrite persisted vanillaize trace envelope"
@@ -36632,7 +35692,7 @@ async fn host_resolve_phase_backup_cop_inherits_on_death(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -36655,14 +35715,8 @@ async fn host_resolve_phase_backup_cop_inherits_on_death(pool: PgPool) {
         .await
         .expect("host resolves backup inheritance");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid passive backup inheritance trace");
     assert_decision_trace(
@@ -36794,14 +35848,8 @@ async fn host_resolve_phase_targeted_backup_inherits_chosen_source(pool: PgPool)
     handle(&pool, &h, Command::ResolvePhase { game, seed: 7311 })
         .await
         .expect("host resolves backup targeting");
-    let n01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let n01 = domain::validate_resolution_json(&n01_payload, domain::RESULT_VERSION).unwrap();
     assert!(n01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -36845,14 +35893,8 @@ async fn host_resolve_phase_targeted_backup_inherits_chosen_source(pool: PgPool)
         .await
         .expect("host resolves targeted backup inheritance");
 
-    let n02_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let n02_trace = domain::validate_trace_json(&n02_trace_payload, domain::TRACE_VERSION)
         .expect("valid targeted backup inheritance trace");
     assert_decision_trace(
@@ -36903,14 +35945,8 @@ async fn host_resolve_phase_targeted_backup_inherits_chosen_source(pool: PgPool)
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve targeted backup inheritance"
     );
-    let n02_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         n02_trace_payload, n02_trace_after_rebuild,
         "projection rebuild must not rewrite persisted targeted backup trace envelope"
@@ -37039,14 +36075,8 @@ async fn host_resolve_phase_carries_jester_self_lynch_win(pool: PgPool) {
         .await
         .expect("host resolves jester self lynch");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     assert!(d01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -37076,14 +36106,8 @@ async fn host_resolve_phase_carries_jester_self_lynch_win(pool: PgPool) {
         "Jester self-lynch win must suppress ordinary post-lynch mafia parity"
     );
 
-    let d01_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let d01_trace = domain::validate_trace_json(&d01_trace_payload, domain::TRACE_VERSION)
         .expect("valid jester self-lynch trace");
     assert_decision_trace(
@@ -37120,14 +36144,8 @@ async fn host_resolve_phase_carries_jester_self_lynch_win(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve jester self-lynch win"
     );
-    let d01_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         d01_trace_payload, d01_trace_after_rebuild,
         "projection rebuild must not rewrite jester trace envelope"
@@ -37216,14 +36234,8 @@ async fn host_resolve_phase_carries_saulus_alignment_flip_on_lynch(pool: PgPool)
         .await
         .expect("host resolves Saulus alignment flip");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     assert!(d01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -37266,14 +36278,8 @@ async fn host_resolve_phase_carries_saulus_alignment_flip_on_lynch(pool: PgPool)
         domain::InnerEvent::WinReached { winner, .. } if winner == "town"
     )));
 
-    let d01_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let d01_trace = domain::validate_trace_json(&d01_trace_payload, domain::TRACE_VERSION)
         .expect("valid Saulus alignment-flip trace");
     assert_decision_trace(
@@ -37319,14 +36325,8 @@ async fn host_resolve_phase_carries_saulus_alignment_flip_on_lynch(pool: PgPool)
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Saulus alignment flip"
     );
-    let d01_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         d01_trace_payload, d01_trace_after_rebuild,
         "projection rebuild must not rewrite Saulus trace envelope"
@@ -37415,14 +36415,8 @@ async fn host_resolve_phase_awards_survivor_alive_at_end(pool: PgPool) {
         .await
         .expect("host resolves Survivor alive-at-end win award");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     assert!(d01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -37458,14 +36452,8 @@ async fn host_resolve_phase_awards_survivor_alive_at_end(pool: PgPool) {
         ])
     );
 
-    let d01_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let d01_trace = domain::validate_trace_json(&d01_trace_payload, domain::TRACE_VERSION)
         .expect("valid Survivor alive-at-end trace");
     assert_decision_trace(
@@ -37508,14 +36496,8 @@ async fn host_resolve_phase_awards_survivor_alive_at_end(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Survivor alive-at-end award"
     );
-    let d01_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         d01_trace_payload, d01_trace_after_rebuild,
         "projection rebuild must not rewrite Survivor trace envelope"
@@ -37603,13 +36585,8 @@ async fn host_resolve_phase_counts_traitor_for_mafia_parity(pool: PgPool) {
     .unwrap_err();
     assert_eq!(err, Reject::InvalidTarget);
 
-    let action_submitted_count = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND kind = 'ActionSubmitted'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let action_submitted_count =
+        stored_event_count_by_kind(&pool, game, "ActionSubmitted").await as i64;
     assert_eq!(
         action_submitted_count, 0,
         "invalid Traitor factional-kill attempt must not append an action"
@@ -37624,14 +36601,8 @@ async fn host_resolve_phase_counts_traitor_for_mafia_parity(pool: PgPool) {
         "Traitor parity resolve appends ResolutionApplied, ResolutionTrace, and ThreadLocked atomically"
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Traitor parity ResolutionApplied");
     assert_eq!(applied.phase_id, "N01");
@@ -37660,14 +36631,8 @@ async fn host_resolve_phase_counts_traitor_for_mafia_parity(pool: PgPool) {
         applied.events
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Traitor parity trace");
     let win_source = format!("event_index:{win_index}");
@@ -37705,14 +36670,8 @@ async fn host_resolve_phase_counts_traitor_for_mafia_parity(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Traitor mafia parity"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite Traitor parity trace envelope"
@@ -37804,14 +36763,8 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
         .await
         .expect("host resolves executioner target setup");
 
-    let n01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let n01 = domain::validate_resolution_json(&n01_payload, domain::RESULT_VERSION).unwrap();
     assert!(n01.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -37860,14 +36813,8 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
         .await
         .expect("host resolves jester self lynch with target/faction collisions");
 
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
     let wins = d01
         .events
@@ -37903,14 +36850,8 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
         "Jester self-lynch must suppress ordinary post-lynch mafia parity"
     );
 
-    let d01_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let d01_trace = domain::validate_trace_json(&d01_trace_payload, domain::TRACE_VERSION)
         .expect("valid self-lynch collision trace");
     assert_decision_trace(
@@ -37955,14 +36896,8 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve self-lynch collision win"
     );
-    let d01_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         d01_trace_payload, d01_trace_after_rebuild,
         "projection rebuild must not rewrite self-lynch collision trace envelope"
@@ -38026,7 +36961,7 @@ async fn host_resolve_phase_projects_pgo_visit_trigger(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -38049,13 +36984,7 @@ async fn host_resolve_phase_projects_pgo_visit_trigger(pool: PgPool) {
         .await
         .expect("host resolves PGO visit trigger");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert!(
         trace
@@ -38104,13 +37033,7 @@ async fn host_resolve_phase_projects_pgo_visit_trigger(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve PGO trigger death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild = stored_payload(&pool, game, "ResolutionTrace").await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted trigger trace envelope"
@@ -38174,7 +37097,7 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -38212,14 +37135,8 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
         .await
         .expect("host resolves target-filtered visitor_kill");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid target-filtered visitor_kill result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -38262,14 +37179,8 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
         "ordinary visitor should not die to target-filtered visitor_kill"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid target-filtered visitor_kill trace");
     assert!(
@@ -38319,13 +37230,7 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve target-filtered visitor_kill death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild = stored_payload(&pool, game, "ResolutionTrace").await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted visitor_kill trace envelope"
@@ -38389,7 +37294,7 @@ async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -38412,14 +37317,8 @@ async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
         .await
         .expect("host resolves Epicmafia bomb trigger");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Epicmafia bomb result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -38457,14 +37356,8 @@ async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
         "second mafia slot should keep the bomb trigger vertical win-free"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Epicmafia bomb trace");
     assert!(
@@ -38522,14 +37415,8 @@ async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Epicmafia bomb trigger deaths"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Epicmafia bomb trace envelope"
@@ -38593,7 +37480,7 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -38631,14 +37518,8 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
         .await
         .expect("host resolves protected PGO trigger");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid protected PGO trigger result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -38661,14 +37542,8 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
         "protected generated PGO kill must not kill the visitor"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid protected PGO trigger trace");
     assert!(
@@ -38732,14 +37607,8 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve protected generated PGO outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite protected generated PGO trace envelope"
@@ -38803,7 +37672,7 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -38841,14 +37710,8 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
         .await
         .expect("host resolves target-state-gated generated PGO trigger");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid target-state-gated PGO trigger result");
     let (pgo_trigger_event_index, pgo_trigger_payload) = applied
@@ -38882,14 +37745,8 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
         "same-resolution rolestop must keep the generated PGO kill from killing the visitor"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid target-state-gated PGO trigger trace");
     assert_trigger_generated_trace(
@@ -38936,14 +37793,8 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve target-state-gated generated PGO outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite target-state-gated generated PGO trace envelope"
@@ -39008,7 +37859,7 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -39059,14 +37910,8 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
         .await
         .expect("host resolves bodyguard-intercepted PGO trigger");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid bodyguard-intercepted PGO trigger result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -39102,14 +37947,8 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
         "bodyguard-intercepted generated PGO kill must not kill the visitor"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid bodyguard-intercepted PGO trigger trace");
     assert!(
@@ -39201,14 +38040,8 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve bodyguard-intercepted generated PGO outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite bodyguard-intercepted generated PGO trace envelope"
@@ -39314,14 +38147,8 @@ async fn host_resolve_phase_persists_martyr_intercept_policy(pool: PgPool) {
         .await
         .expect("host resolves Martyr intercept scenario");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Martyr intercept resolution");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -39352,14 +38179,8 @@ async fn host_resolve_phase_persists_martyr_intercept_policy(pool: PgPool) {
         "Martyr-protected target must not receive a PlayerKilled event"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Martyr intercept trace");
     let protect = trace
@@ -39411,14 +38232,8 @@ async fn host_resolve_phase_persists_martyr_intercept_policy(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Martyr intercept outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Martyr intercept trace"
@@ -39510,14 +38325,8 @@ async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
         .await
         .expect("host resolves CPR harm scenario");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid CPR harm resolution");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -39541,14 +38350,8 @@ async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
         "unneeded CPR must not save its target"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid CPR trace");
     let harm = trace
@@ -39587,14 +38390,8 @@ async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve CPR harm outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted CPR harm trace"
@@ -39658,7 +38455,7 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -39696,14 +38493,8 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
         .await
         .expect("host resolves Strongman trigger");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Strongman trigger result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -39725,14 +38516,8 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
             && *unstoppable
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Strongman trigger trace");
     assert!(
@@ -39819,14 +38604,8 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve generated Strongman trigger outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite generated Strongman trigger trace envelope"
@@ -39890,7 +38669,7 @@ async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -39913,14 +38692,8 @@ async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
         .await
         .expect("host resolves death-trigger generated kill");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid death trigger result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -39951,14 +38724,8 @@ async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
                 && !*unstoppable
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid death trigger trace");
     assert!(
@@ -40008,14 +38775,8 @@ async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve death-trigger generated kill outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted death-trigger trace envelope"
@@ -40079,7 +38840,7 @@ async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -40102,14 +38863,8 @@ async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
         .await
         .expect("host resolves effect-marked generated kill");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid effect-marked trigger result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -40140,14 +38895,8 @@ async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
                 && !*unstoppable
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid effect-marked trigger trace");
     assert!(
@@ -40210,14 +38959,8 @@ async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
         serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
         "slot_effect rebuild must preserve effect-marked trigger mark"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted effect-marked trace envelope"
@@ -40285,14 +39028,8 @@ async fn host_resolve_phase_projects_phase_end_trigger_kill(pool: PgPool) {
         .await
         .expect("host resolves phase-end generated kill");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid phase-end trigger result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -40315,14 +39052,8 @@ async fn host_resolve_phase_projects_phase_end_trigger_kill(pool: PgPool) {
                 && !*unstoppable
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid phase-end trigger trace");
     assert!(
@@ -40372,14 +39103,8 @@ async fn host_resolve_phase_projects_phase_end_trigger_kill(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve phase-end trigger death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted phase-end trigger trace envelope"
@@ -40445,14 +39170,8 @@ async fn host_resolve_phase_projects_win_trigger_before_final_win(pool: PgPool) 
         .await
         .expect("host resolves win-trigger phase");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid win-trigger result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -40490,14 +39209,8 @@ async fn host_resolve_phase_projects_win_trigger_before_final_win(pool: PgPool) 
         "PhaseAnnouncement should immediately precede final WinReached"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid win-trigger trace");
     assert!(
@@ -40534,14 +39247,8 @@ async fn host_resolve_phase_projects_win_trigger_before_final_win(pool: PgPool) 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve win-trigger result"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted win-trigger trace envelope"
@@ -40606,7 +39313,7 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -40644,14 +39351,8 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
         .await
         .expect("host resolves protected ordinary vengeful trigger");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid protected vengeful trigger result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -40680,14 +39381,8 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
         "ordinary vengeful trigger kill should be saved by Doctor protection"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid protected vengeful trigger trace");
     assert!(
@@ -40771,14 +39466,8 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve protected ordinary vengeful trigger outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite protected ordinary vengeful trace envelope"
@@ -40843,7 +39532,7 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -40881,14 +39570,8 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
         .await
         .expect("host resolves Strongman trigger against Bodyguard");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Strongman trigger Bodyguard result");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -40925,14 +39608,8 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
         "Bodyguard must not intercept an unstoppable generated trigger kill"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Strongman trigger Bodyguard trace");
     assert!(
@@ -41019,14 +39696,8 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve generated Strongman-vs-Bodyguard outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite generated Strongman-vs-Bodyguard trace envelope"
@@ -41090,7 +39761,7 @@ async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -41128,13 +39799,7 @@ async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
         .await
         .expect("host resolves Bus Driver redirect trace");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_trace_edge(
         &trace,
@@ -41180,13 +39845,7 @@ async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve redirected death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild = stored_payload(&pool, game, "ResolutionTrace").await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted redirect trace envelope"
@@ -41252,7 +39911,7 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -41316,14 +39975,8 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
         .await
         .expect("host resolves mass redirect rotate scenario");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid mass redirect trace");
     let edges = trace
@@ -41350,14 +40003,8 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
         assert_eq!(edge.detail["steps"][0]["redirect_kind"], "Rotate");
     }
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid mass redirect resolution");
     assert!(
@@ -41398,14 +40045,8 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve mass redirect rotate outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted mass redirect trace envelope"
@@ -41474,7 +40115,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -41590,13 +40231,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
         .await
         .expect("host resolves suppression/conflict trace scenario");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_decision_trace(
         &trace,
@@ -41713,13 +40348,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
             .alive,
         "stacked kill target should be dead once with merged attribution"
     );
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied =
         domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
     let stacked_kill = applied
@@ -41783,13 +40412,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve strongman kill outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild = stored_payload(&pool, game, "ResolutionTrace").await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted suppression/conflict trace envelope"
@@ -41922,14 +40545,8 @@ async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
         "Strong-Willed action must not emit roleblocked interference"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid StrongWilled trace");
     assert!(
@@ -41951,14 +40568,8 @@ async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild should preserve StrongWilled resolution state"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted StrongWilled trace envelope"
@@ -42105,14 +40716,8 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
         "roleblocked Cop must not receive an investigation result"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid non-roleblockable trace");
     let suppression = trace
@@ -42150,14 +40755,8 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild should preserve non-roleblockable resolution state"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted non-roleblockable trace envelope"
@@ -42277,14 +40876,8 @@ async fn host_resolve_phase_persists_jailkeeper_block_plus_protect_policy(pool: 
         .await
         .expect("host resolves jailkeeper block-plus-protect scenario");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid jailkeeper resolution");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -42307,14 +40900,8 @@ async fn host_resolve_phase_persists_jailkeeper_block_plus_protect_policy(pool: 
         "jailkept target must not receive a PlayerKilled event"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid jailkeeper trace");
     let suppression = trace
@@ -42367,26 +40954,14 @@ async fn host_resolve_phase_persists_jailkeeper_block_plus_protect_policy(pool: 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Jailkeeper block-plus-protect outcome"
     );
-    let applied_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     assert_eq!(
         applied_payload, applied_after_rebuild,
         "projection rebuild must not rewrite persisted Jailkeeper resolution"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Jailkeeper trace"
@@ -42450,7 +41025,7 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -42501,13 +41076,7 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
         .await
         .expect("host resolves catastrophic roleblock scenario");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied =
         domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
     assert_eq!(
@@ -42533,13 +41102,7 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
         "catastrophic block should suppress both Inventor grant actions"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     let suppressed_templates = trace
         .decisions
@@ -42564,13 +41127,7 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
 
     let trace_before_rebuild = trace_payload;
     rebuild(&pool, game).await.expect("projection rebuild");
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild = stored_payload(&pool, game, "ResolutionTrace").await;
     assert_eq!(
         trace_before_rebuild, trace_after_rebuild,
         "projection rebuild must not rewrite catastrophic suppression trace envelope"
@@ -42634,7 +41191,7 @@ async fn host_resolve_phase_preserves_protected_multi_attacker_no_death(pool: Pg
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -42685,14 +41242,8 @@ async fn host_resolve_phase_preserves_protected_multi_attacker_no_death(pool: Pg
         .await
         .expect("host resolves protected multi-attacker no-death scenario");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid protected multi-attacker resolution");
     assert!(
@@ -42732,14 +41283,8 @@ async fn host_resolve_phase_preserves_protected_multi_attacker_no_death(pool: Pg
         "protected multi-attacker phase should announce no deaths"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid protected multi-attacker trace");
     let mut attackers: Vec<_> = trace
@@ -42789,26 +41334,14 @@ async fn host_resolve_phase_preserves_protected_multi_attacker_no_death(pool: Pg
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve protected multi-attacker no-death outcome"
     );
-    let applied_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     assert_eq!(
         applied_payload, applied_after_rebuild,
         "projection rebuild must not rewrite persisted protected multi-attacker resolution"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted protected multi-attacker trace envelope"
@@ -42878,7 +41411,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -42968,14 +41501,8 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
         .await
         .expect("host resolves combined trace audit scenario");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid combined trace audit resolution");
     assert!(applied.events.iter().any(|indexed| matches!(
@@ -43020,14 +41547,8 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
                 && attackers == &vec!["slot_9".to_string()]
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid combined trace audit trace");
 
@@ -43180,14 +41701,8 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve combined trace audit outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted combined trace audit envelope"
@@ -43258,7 +41773,7 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -43348,14 +41863,8 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
         .await
         .expect("host resolves redirect loop-cap trace scenario");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid redirect loop-cap trace");
     assert!(
@@ -43416,14 +41925,8 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
         },
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid redirect loop-cap resolution");
     assert!(
@@ -43464,14 +41967,8 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve redirect loop-cap outcome"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted redirect loop-cap trace envelope"
@@ -43591,14 +42088,8 @@ async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
         .await
         .expect("host resolves trigger loop-cap trace scenario");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid trigger loop-cap resolution");
     assert_eq!(applied.counts.kills, 2);
@@ -43645,14 +42136,8 @@ async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
                 && attackers == &vec!["slot_2".to_string()]
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid trigger loop-cap trace");
     let vengeful_trigger_note = format!(
@@ -43754,14 +42239,8 @@ async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
         serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
         "slot_effect rebuild must preserve trigger loop-cap fixture effect"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted trigger loop-cap trace envelope"
@@ -43882,13 +42361,7 @@ async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) 
         .await
         .expect("host resolves target-state trace scenario");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_decision_trace(
         &trace,
@@ -43969,13 +42442,7 @@ async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve target-state survival"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild = stored_payload(&pool, game, "ResolutionTrace").await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted target-state trace envelope"
@@ -44103,14 +42570,8 @@ async fn host_resolve_phase_carries_mafiascum_ascetic_non_lethal_immunity(pool: 
         "ResolvePhase should append applied results, trace, and phase lock atomically"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Ascetic target-state trace");
     assert_decision_trace(
@@ -44447,13 +42908,7 @@ async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
     let private_results_before = serde_json::to_string(&private_results)
         .expect("serialize graph-derived private results before rebuild");
     let slots_before = serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap();
-    let trace_before = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_before = stored_payload(&pool, game, "ResolutionTrace").await;
     rebuild(&pool, game).await.expect("projection rebuild");
     assert_eq!(
         slots_before,
@@ -44477,13 +42932,7 @@ async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
             .expect("read thread view after rebuild"),
         "thread_view rebuild must preserve graph-derived private result non-leakage"
     );
-    let trace_after = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after = stored_payload(&pool, game, "ResolutionTrace").await;
     assert_eq!(
         trace_before, trace_after,
         "projection rebuild must not rewrite persisted Ninja visibility trace envelope"
@@ -45044,14 +43493,8 @@ async fn host_resolve_phase_persists_rolestop_and_shield_target_state(pool: PgPo
         .await
         .expect("host resolves rolestop/shield target-state scenario");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid rolestop/shield target-state trace");
     assert_decision_trace(
@@ -45105,14 +43548,8 @@ async fn host_resolve_phase_persists_rolestop_and_shield_target_state(pool: PgPo
         },
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid rolestop/shield resolution");
     assert!(
@@ -45172,14 +43609,8 @@ async fn host_resolve_phase_persists_rolestop_and_shield_target_state(pool: PgPo
         serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
         "slot_effect rebuild must not invent durable rolestop/shield effects"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted rolestop/shield trace envelope"
@@ -45245,7 +43676,7 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -45296,14 +43727,8 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
         .await
         .expect("host resolves babysitter dependency death");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("ResolutionApplied should validate");
     assert!(
@@ -45324,14 +43749,8 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
         "babysitter death should generate the ward death"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid babysitter dependency trace");
     assert_decision_trace(
@@ -45376,14 +43795,8 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve babysitter generated death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted babysitter dependency trace envelope"
@@ -45449,7 +43862,7 @@ async fn host_resolve_phase_stacks_babysitter_dependency_with_direct_ward_death(
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -45500,14 +43913,8 @@ async fn host_resolve_phase_stacks_babysitter_dependency_with_direct_ward_death(
         .await
         .expect("host resolves babysitter dependency stacked with direct ward death");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("ResolutionApplied should validate");
     let ward_kill = applied
@@ -45552,14 +43959,8 @@ async fn host_resolve_phase_stacks_babysitter_dependency_with_direct_ward_death(
         }))
     }));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid babysitter dependency stack trace");
     assert_decision_trace(
@@ -45620,14 +44021,8 @@ async fn host_resolve_phase_stacks_babysitter_dependency_with_direct_ward_death(
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve merged babysitter dependency death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted babysitter dependency stack trace envelope"
@@ -45694,7 +44089,7 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -45745,14 +44140,8 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
         .await
         .expect("host resolves hider host-death dependency");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("ResolutionApplied should validate");
     assert!(
@@ -45773,14 +44162,8 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
         "host death should generate the hider death"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid hider dependency trace");
     assert_decision_trace(
@@ -45825,14 +44208,8 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve hider generated death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted hider dependency trace envelope"
@@ -45898,7 +44275,7 @@ async fn host_resolve_phase_stacks_hider_dependency_with_direct_death(pool: PgPo
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -45949,14 +44326,8 @@ async fn host_resolve_phase_stacks_hider_dependency_with_direct_death(pool: PgPo
         .await
         .expect("host resolves hider dependency stacked with direct death");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("ResolutionApplied should validate");
     let hider_kill = applied
@@ -46001,14 +44372,8 @@ async fn host_resolve_phase_stacks_hider_dependency_with_direct_death(pool: PgPo
         }))
     }));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid hider dependency stack trace");
     assert_decision_trace(
@@ -46069,14 +44434,8 @@ async fn host_resolve_phase_stacks_hider_dependency_with_direct_death(pool: PgPo
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve merged hider dependency death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted hider dependency stack trace envelope"
@@ -46140,7 +44499,7 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -46163,14 +44522,8 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
         .await
         .expect("host resolves lover link");
 
-    let link_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let link_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let linked = domain::validate_resolution_json(&link_payload, domain::RESULT_VERSION).unwrap();
     assert!(
         linked.events.iter().any(|event| {
@@ -46190,7 +44543,7 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -46213,14 +44566,8 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
         .await
         .expect("host resolves lover suicide");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid lover-suicide trace");
     assert_decision_trace(
@@ -46264,14 +44611,8 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve lover-suicide generated death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted lover-suicide trace envelope"
@@ -46337,7 +44678,7 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -46370,7 +44711,7 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[
@@ -46408,14 +44749,8 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
         .await
         .expect("host resolves lover suicide stack");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid stacked lover-suicide resolution");
     assert!(
@@ -46447,14 +44782,8 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
         "lover-suicide race must not append a duplicate PlayerKilled event"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid stacked lover-suicide trace");
     assert_decision_trace(
@@ -46514,14 +44843,8 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve merged lover-suicide death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted lover-suicide stack trace envelope"
@@ -46619,7 +44942,7 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
         started_at: 0,
         finished_at: 0,
     };
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -46643,7 +44966,7 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -46666,14 +44989,8 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
         .await
         .expect("host resolves Mafia Universe lover cascade");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("Mafia Universe Lover ResolutionApplied validates");
     assert!(
@@ -46696,14 +45013,8 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
         "linked Mafia Universe Lover should die from folded setup state"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Mafia Universe lover cascade trace");
     assert_decision_trace(
@@ -46757,14 +45068,8 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Mafia Universe lover cascade"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Mafia Universe lover trace envelope"
@@ -46860,7 +45165,7 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -46883,14 +45188,8 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
         .await
         .expect("host resolves Mafiascum Bomb trigger");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Mafiascum Bomb result");
     let trigger_index = applied
@@ -46937,14 +45236,8 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
         "second mafia slot should keep the Bomb trigger vertical win-free"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Mafiascum Bomb trace");
     assert!(
@@ -47001,14 +45294,8 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Mafiascum Bomb trigger deaths"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Mafiascum Bomb trace envelope"
@@ -47073,7 +45360,7 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
     .await
     .unwrap();
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -47096,14 +45383,8 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
         .await
         .expect("host resolves hunter choice");
 
-    let arm_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let arm_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let armed = domain::validate_resolution_json(&arm_payload, domain::RESULT_VERSION).unwrap();
     assert!(
         armed.events.iter().any(|event| {
@@ -47123,7 +45404,7 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -47146,14 +45427,8 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
         .await
         .expect("host resolves hunter retaliation");
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid hunter-retaliation trace");
     assert_decision_trace(
@@ -47203,14 +45478,8 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve hunter-retaliation generated death"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted hunter-retaliation trace envelope"
@@ -47273,7 +45542,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         allowed_game,
         &[eventstore::EventInput::new(
@@ -47313,7 +45582,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         allowed_game,
         &[eventstore::EventInput::new(
@@ -47343,14 +45612,13 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
     .await
     .expect("host resolves Chinese Hunter wolf-kill retaliation");
 
-    let allowed_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
+    let allowed_payload = stored_payload_where(
+        &pool,
+        allowed_game,
+        "ResolutionApplied",
+        &[("phase_id", "N02")],
     )
-    .bind(allowed_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     let allowed =
         domain::validate_resolution_json(&allowed_payload, domain::RESULT_VERSION).unwrap();
     let allowed_event_kinds = allowed
@@ -47382,14 +45650,13 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
                 && cause == "hunter_retaliate"
                 && attackers == &vec!["slot_1".to_string()]
     )));
-    let allowed_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
+    let allowed_trace_payload = stored_payload_where(
+        &pool,
+        allowed_game,
+        "ResolutionTrace",
+        &[("phase_id", "N02")],
     )
-    .bind(allowed_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     let allowed_trace = domain::validate_trace_json(&allowed_trace_payload, domain::TRACE_VERSION)
         .expect("valid Chinese Hunter immediate-retaliation trace");
     assert_decision_trace(
@@ -47442,14 +45709,13 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, allowed_game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Chinese Hunter wolf-kill retaliation"
     );
-    let allowed_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
+    let allowed_trace_after_rebuild = stored_payload_where(
+        &pool,
+        allowed_game,
+        "ResolutionTrace",
+        &[("phase_id", "N02")],
     )
-    .bind(allowed_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(
         allowed_trace_payload, allowed_trace_after_rebuild,
         "projection rebuild must not rewrite persisted Chinese Hunter immediate-retaliation trace envelope"
@@ -47507,7 +45773,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         poison_game,
         &[eventstore::EventInput::new(
@@ -47547,7 +45813,7 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         poison_game,
         &[eventstore::EventInput::new(
@@ -47577,14 +45843,13 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
     .await
     .expect("host resolves Chinese Hunter poison suppression");
 
-    let poison_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
+    let poison_payload = stored_payload_where(
+        &pool,
+        poison_game,
+        "ResolutionApplied",
+        &[("phase_id", "N02")],
     )
-    .bind(poison_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     let poison = domain::validate_resolution_json(&poison_payload, domain::RESULT_VERSION).unwrap();
     assert!(poison.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -47602,14 +45867,13 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
         "Chinese poison death should suppress Hunter retaliation"
     );
 
-    let poison_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
+    let poison_trace_payload = stored_payload_where(
+        &pool,
+        poison_game,
+        "ResolutionTrace",
+        &[("phase_id", "N02")],
     )
-    .bind(poison_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     let poison_trace = domain::validate_trace_json(&poison_trace_payload, domain::TRACE_VERSION)
         .expect("valid Chinese Hunter poison-suppression trace");
     assert_decision_trace(
@@ -47654,14 +45918,13 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, poison_game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Chinese Hunter poison suppression"
     );
-    let poison_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
+    let poison_trace_after_rebuild = stored_payload_where(
+        &pool,
+        poison_game,
+        "ResolutionTrace",
+        &[("phase_id", "N02")],
     )
-    .bind(poison_game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(
         poison_trace_payload, poison_trace_after_rebuild,
         "projection rebuild must not rewrite persisted Chinese Hunter poison-suppression trace envelope"
@@ -47736,7 +45999,7 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -47804,14 +46067,8 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
     .await
     .expect("host resolves Chinese Hunter day-vote retaliation");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Chinese Hunter day-vote retaliation result");
     let day_vote_index = applied
@@ -47889,14 +46146,8 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
         "Chinese Hunter day-vote retaliation must not emit a pending host prompt"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Chinese Hunter day-vote-retaliation trace");
     assert_decision_trace(
@@ -47949,14 +46200,8 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Chinese Hunter day-vote retaliation"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Chinese Hunter day-vote trace envelope"
@@ -48054,14 +46299,8 @@ async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) 
         .await
         .expect("host resolves Chinese Idiot first lynch");
 
-    let day_one_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let day_one_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let day_one =
         domain::validate_resolution_json(&day_one_payload, domain::RESULT_VERSION).unwrap();
     assert!(day_one.events.iter().any(|indexed| matches!(
@@ -48129,14 +46368,13 @@ async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) 
     .await
     .expect_err("vote-lost Chinese Idiot cannot submit later ballots");
     assert_eq!(vote_lost_err, Reject::VoteNotAllowed);
-    let rejected_vote_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND kind = 'VoteSubmitted' \
-         AND payload->>'phase_id' = 'D02' AND payload->>'actor' = 'slot_1'",
+    let rejected_vote_count: i64 = stored_event_count_where(
+        &pool,
+        game,
+        "VoteSubmitted",
+        &[("phase_id", "D02"), ("actor", "slot_1")],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         rejected_vote_count, 0,
         "vote-lost Idiot rejection must append no VoteSubmitted"
@@ -48163,14 +46401,8 @@ async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) 
         .await
         .expect("host resolves Chinese Idiot later lynch");
 
-    let day_two_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let day_two_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D02")]).await;
     let day_two =
         domain::validate_resolution_json(&day_two_payload, domain::RESULT_VERSION).unwrap();
     let outcome = day_two
@@ -48283,7 +46515,7 @@ async fn host_resolve_phase_carries_chinese_prophet_alignment_result(pool: PgPoo
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -48306,14 +46538,8 @@ async fn host_resolve_phase_carries_chinese_prophet_alignment_result(pool: PgPoo
         .await
         .expect("host resolves Chinese Prophet alignment investigation");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
     let prophet_index = applied
         .events
@@ -48456,7 +46682,7 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -48479,14 +46705,8 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
         .await
         .expect("host resolves Chinese Cupid lover link");
 
-    let link_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let link_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let linked = domain::validate_resolution_json(&link_payload, domain::RESULT_VERSION).unwrap();
     assert!(linked.events.iter().any(|event| matches!(
         &event.event,
@@ -48535,7 +46755,7 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -48558,14 +46778,8 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
         .await
         .expect("host resolves Chinese lovers cascade");
 
-    let cascade_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cascade_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let cascade =
         domain::validate_resolution_json(&cascade_payload, domain::RESULT_VERSION).unwrap();
     assert!(cascade.events.iter().any(|event| matches!(
@@ -48577,14 +46791,8 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
                 && *unstoppable
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Chinese Cupid lover cascade trace");
     assert_decision_trace(
@@ -48628,14 +46836,8 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Chinese Cupid lover cascade"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Chinese Cupid lover cascade trace envelope"
@@ -48700,7 +46902,7 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -48733,7 +46935,7 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -48756,14 +46958,8 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
         .await
         .expect("host resolves Chinese lover poison cascade");
 
-    let cascade_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cascade_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let cascade =
         domain::validate_resolution_json(&cascade_payload, domain::RESULT_VERSION).unwrap();
     assert!(cascade.events.iter().any(|event| matches!(
@@ -48798,14 +46994,8 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
                 && *unstoppable
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Chinese Cupid lover poison cascade trace");
     assert_decision_trace(
@@ -48871,14 +47061,8 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter rebuild must preserve Witch poison spend"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Chinese Cupid lover poison trace envelope"
@@ -48952,7 +47136,7 @@ async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
     )
     .await
     .unwrap();
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -49006,14 +47190,8 @@ async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
         .await
         .expect("host resolves Chinese lover lynch cascade");
 
-    let cascade_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let cascade_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let cascade =
         domain::validate_resolution_json(&cascade_payload, domain::RESULT_VERSION).unwrap();
     assert!(cascade.events.iter().any(|event| matches!(
@@ -49031,14 +47209,8 @@ async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
                 && *unstoppable
     )));
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid Chinese Cupid lover lynch cascade trace");
     assert_decision_trace(
@@ -49082,14 +47254,8 @@ async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve Chinese Cupid lover lynch cascade"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted Chinese Cupid lover lynch trace envelope"
@@ -49194,14 +47360,8 @@ async fn host_resolve_phase_emits_hammer_vote_outcome(pool: PgPool) {
         "hammer resolve appends ResolutionApplied, ResolutionTrace, and ThreadLocked"
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("hammer ResolutionApplied validates");
     let outcome = applied

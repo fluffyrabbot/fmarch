@@ -54,8 +54,12 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     "0016_member_lifecycle.sql",
     "0017_auth_session_integrity.sql",
     "0018_post_citation.sql",
+    "0019_subject_privacy.sql",
+    "0020_sealed_event_body.sql",
+    "0021_game_pack_ref.sql",
+    "0022_completed_game_detached_aliases.sql",
   ]);
-  assert.equal(report.migration_file_count, 18);
+  assert.equal(report.migration_file_count, 22);
   assert.ok(report.statement_count > 100);
 });
 
@@ -103,6 +107,24 @@ test("projection migrations reject destructive data and schema mutations", async
       },
     );
   }
+});
+
+test("sealed-event migration cannot erase existing event history", async () => {
+  const files = { [baselineFilename]: checkedBaseline };
+  for (let version = 2; version < 20; version += 1) {
+    const prefix = String(version).padStart(4, "0");
+    files[`${prefix}_constructive.sql`] =
+      `-- ${prefix}_constructive.sql — constructive fixture.\nCREATE TABLE public.constructive_${prefix} (id bigint);`;
+  }
+  files["0020_sealed_event_body.sql"] =
+    "-- 0020_sealed_event_body.sql — destructive fixture.\nTRUNCATE TABLE public.events;";
+
+  await withMigrationDirectory(files, async (root) => {
+    await assert.rejects(
+      inspectProjectionBaseline({ root }),
+      /TRUNCATE data migration/,
+    );
+  });
 });
 
 test("projection migrations permit constructive schema additions", async () => {

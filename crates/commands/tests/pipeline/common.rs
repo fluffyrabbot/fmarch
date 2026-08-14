@@ -1,16 +1,327 @@
 //! Shared harness for pipeline integration tests.
 
 use caps::Principal;
-use commands::{handle, CohostPermissionClass, Command, ThreadPostMedia, ThreadPostMediaVariant};
+use commands::{
+    Ack, CohostPermissionClass, Command, Reject, ThreadPostMedia, ThreadPostMediaVariant,
+};
 use projections::votecount;
-use sqlx::PgPool;
-use std::collections::BTreeMap;
+use sqlx::{PgPool, Row};
+use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
 // ───────────────────────── helpers ─────────────────────────
 
+/// Read logical events through the canonical sealed-body decoder. Tests must
+/// not couple behavioral assertions to the physical event table shape.
+pub async fn stored_events(pool: &PgPool, game: Uuid) -> Vec<eventstore::StoredEvent> {
+    eventstore::load_stream(pool, game)
+        .await
+        .expect("load logical event stream")
+}
+
+pub async fn stored_payloads(pool: &PgPool, game: Uuid, kind: &str) -> Vec<serde_json::Value> {
+    stored_events(pool, game)
+        .await
+        .into_iter()
+        .filter(|event| event.kind == kind)
+        .map(|event| event.payload)
+        .collect()
+}
+
+pub async fn stored_event(pool: &PgPool, game: Uuid, kind: &str) -> eventstore::StoredEvent {
+    stored_events(pool, game)
+        .await
+        .into_iter()
+        .find(|event| event.kind == kind)
+        .unwrap_or_else(|| panic!("missing {kind} in stream {game}"))
+}
+
+pub async fn latest_stored_event(pool: &PgPool, game: Uuid, kind: &str) -> eventstore::StoredEvent {
+    stored_events(pool, game)
+        .await
+        .into_iter()
+        .rfind(|event| event.kind == kind)
+        .unwrap_or_else(|| panic!("missing {kind} in stream {game}"))
+}
+
+pub async fn stored_payloads_where(
+    pool: &PgPool,
+    game: Uuid,
+    kind: &str,
+    fields: &[(&str, &str)],
+) -> Vec<serde_json::Value> {
+    stored_payloads(pool, game, kind)
+        .await
+        .into_iter()
+        .filter(|payload| {
+            fields.iter().all(|(field, expected)| {
+                payload.get(*field).and_then(|v| v.as_str()) == Some(*expected)
+            })
+        })
+        .collect()
+}
+
+pub async fn stored_payload(pool: &PgPool, game: Uuid, kind: &str) -> serde_json::Value {
+    stored_payloads(pool, game, kind)
+        .await
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("missing {kind} in stream {game}"))
+}
+
+pub async fn stored_payload_where(
+    pool: &PgPool,
+    game: Uuid,
+    kind: &str,
+    fields: &[(&str, &str)],
+) -> serde_json::Value {
+    stored_payloads_where(pool, game, kind, fields)
+        .await
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("missing matching {kind} in stream {game}"))
+}
+
+pub async fn latest_stored_payload(pool: &PgPool, game: Uuid, kind: &str) -> serde_json::Value {
+    stored_payloads(pool, game, kind)
+        .await
+        .into_iter()
+        .next_back()
+        .unwrap_or_else(|| panic!("missing {kind} in stream {game}"))
+}
+
+pub async fn latest_stored_payload_with_prefix(
+    pool: &PgPool,
+    game: Uuid,
+    kind: &str,
+    field: &str,
+    prefix: &str,
+) -> serde_json::Value {
+    stored_payloads(pool, game, kind)
+        .await
+        .into_iter()
+        .rfind(|payload| {
+            payload
+                .get(field)
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| value.starts_with(prefix))
+        })
+        .unwrap_or_else(|| panic!("missing matching {kind} in stream {game}"))
+}
+
+pub async fn stored_payload_with_prefix(
+    pool: &PgPool,
+    game: Uuid,
+    kind: &str,
+    field: &str,
+    prefix: &str,
+) -> serde_json::Value {
+    stored_payloads(pool, game, kind)
+        .await
+        .into_iter()
+        .find(|payload| {
+            payload
+                .get(field)
+                .and_then(|value| value.as_str())
+                .is_some_and(|value| value.starts_with(prefix))
+        })
+        .unwrap_or_else(|| panic!("missing matching {kind} in stream {game}"))
+}
+
+pub async fn stored_event_count(pool: &PgPool, game: Uuid) -> usize {
+    stored_events(pool, game).await.len()
+}
+
+pub async fn stored_event_count_by_kind(pool: &PgPool, game: Uuid, kind: &str) -> usize {
+    stored_events(pool, game)
+        .await
+        .into_iter()
+        .filter(|event| event.kind == kind)
+        .count()
+}
+
+pub async fn stored_event_count_by_kinds(pool: &PgPool, game: Uuid, kinds: &[&str]) -> usize {
+    stored_events(pool, game)
+        .await
+        .into_iter()
+        .filter(|event| kinds.contains(&event.kind.as_str()))
+        .count()
+}
+
+pub async fn stored_event_count_where(
+    pool: &PgPool,
+    game: Uuid,
+    kind: &str,
+    fields: &[(&str, &str)],
+) -> usize {
+    stored_payloads_where(pool, game, kind, fields).await.len()
+}
+
+pub async fn stored_event_count_all_where(
+    pool: &PgPool,
+    game: Uuid,
+    fields: &[(&str, &str)],
+) -> usize {
+    stored_events(pool, game)
+        .await
+        .into_iter()
+        .filter(|event| {
+            fields.iter().all(|(field, expected)| {
+                event.payload.get(*field).and_then(|value| value.as_str()) == Some(*expected)
+            })
+        })
+        .count()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredSealedEvent {
+    pub sealed_version: i16,
+    pub kid: String,
+    pub nonce: Vec<u8>,
+    pub body: Vec<u8>,
+}
+
+impl StoredSealedEvent {
+    pub fn body_contains(&self, plaintext: &str) -> bool {
+        self.body
+            .windows(plaintext.len())
+            .any(|window| window == plaintext.as_bytes())
+    }
+}
+
+/// Physical storage canary for tests whose subject is encryption at rest.
+/// Behavioral tests must use `stored_events`; this is intentionally the only
+/// helper in the command corpus that reads the event table's typed seal.
+pub async fn sealed_event_bodies(pool: &PgPool, game: Uuid, kind: &str) -> Vec<StoredSealedEvent> {
+    sqlx::query(
+        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body FROM events \
+         WHERE stream_id = $1 AND kind = $2 ORDER BY stream_seq",
+    )
+    .bind(game)
+    .bind(kind)
+    .fetch_all(pool)
+    .await
+    .expect("read physical sealed event bodies")
+    .into_iter()
+    .map(|row| StoredSealedEvent {
+        sealed_version: row.get("sealed_version"),
+        kid: row.get("sealed_kid"),
+        nonce: row.get("sealed_nonce"),
+        body: row.get("sealed_body"),
+    })
+    .collect()
+}
+
+pub async fn latest_sealed_event_body(pool: &PgPool, game: Uuid, kind: &str) -> StoredSealedEvent {
+    sealed_event_bodies(pool, game, kind)
+        .await
+        .into_iter()
+        .next_back()
+        .unwrap_or_else(|| panic!("missing sealed {kind} in stream {game}"))
+}
+
 pub fn user(id: &str) -> Principal {
     Principal::user(id)
+}
+
+/// Provision a test account through the same identity seam used by real
+/// authentication. Persona/profile commands deliberately require this owner
+/// row and its external subject key before accepting private claims.
+pub async fn ensure_test_principal(pool: &PgPool, principal_user_id: &str) {
+    ensure_test_principals(pool, [principal_user_id]).await;
+}
+
+/// Provision a set of test accounts while sharing one database connection.
+/// Deduplication keeps generated fixtures cheap when the same owner appears in
+/// several private claims.
+pub async fn ensure_test_principals<'a>(
+    pool: &PgPool,
+    principal_user_ids: impl IntoIterator<Item = &'a str>,
+) {
+    let principal_user_ids: BTreeSet<_> = principal_user_ids.into_iter().collect();
+    let mut connection = pool.acquire().await.expect("acquire identity connection");
+    for principal_user_id in principal_user_ids {
+        let already_active: bool = sqlx::query_scalar(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM platform_principal AS principal
+                JOIN privacy_subject AS subject
+                  ON subject.principal_user_id = principal.principal_user_id
+                WHERE principal.principal_user_id = $1
+                  AND principal.status = 'active'
+                  AND subject.lifecycle_state = 'active'
+            )
+            "#,
+        )
+        .bind(principal_user_id)
+        .fetch_one(&mut *connection)
+        .await
+        .expect("inspect test principal privacy binding");
+        if already_active {
+            continue;
+        }
+        identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
+            .await
+            .expect("provision test principal and privacy subject");
+    }
+}
+
+async fn ensure_command_principals(pool: &PgPool, command: &Command) {
+    let referenced = match command {
+        Command::SeatPersona {
+            principal_user_id, ..
+        } => Some(principal_user_id.as_str()),
+        Command::ProcessReplacement {
+            incoming_principal_user_id,
+            ..
+        } => Some(incoming_principal_user_id.as_str()),
+        _ => None,
+    };
+    if let Some(principal_user_id) = referenced {
+        ensure_test_principal(pool, principal_user_id).await;
+    }
+}
+
+/// Test boundary around the production command entry point. Authentication
+/// fixtures are provisioned explicitly; command behavior remains production-identical.
+pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> Result<Ack, Reject> {
+    ensure_command_principals(pool, &command).await;
+    commands::handle(pool, principal, command).await
+}
+
+pub async fn handle_idempotent(
+    pool: &PgPool,
+    principal: &Principal,
+    command_id: Uuid,
+    command: Command,
+) -> Result<Ack, Reject> {
+    ensure_command_principals(pool, &command).await;
+    commands::handle_idempotent(pool, principal, command_id, command).await
+}
+
+/// Test boundary for direct projection fixtures. Any legacy logical event that
+/// carries a private principal first provisions its subject/key authority.
+pub async fn append_and_project(
+    pool: &PgPool,
+    stream_id: Uuid,
+    events: &[eventstore::EventInput],
+) -> Result<Vec<eventstore::StoredEvent>, projections::ProjectionError> {
+    for event in events {
+        if matches!(
+            event.kind.as_str(),
+            "GamePersonaRegistered" | "ProfileCreated" | "ProfileUpdated"
+        ) {
+            if let Some(principal_user_id) = event
+                .payload
+                .get("principal_user_id")
+                .and_then(serde_json::Value::as_str)
+            {
+                ensure_test_principal(pool, principal_user_id).await;
+            }
+        }
+    }
+    projections::append_and_project(pool, stream_id, events).await
 }
 
 /// Stand up a running game: host H creates it, adds slot S, seats a named

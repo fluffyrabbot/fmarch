@@ -31,18 +31,15 @@ events
   stream_seq   BIGINT     NOT NULL         -- per-stream order; (stream_id, stream_seq) UNIQUE
   kind         TEXT       NOT NULL         -- variant tag, e.g. "VoteSubmitted"
   version      SMALLINT   NOT NULL         -- schema version of this event type
-  payload      JSONB      NOT NULL         -- typed body (see evolution rules below)
-  actor        JSONB      NOT NULL         -- ActorId enum, serialized {type,id} (Slot/Host/System/User) — not a UUID
   occurred_at  BIGINT     NOT NULL         -- LogicalTime (u64); deterministic, not wall-clock (docs 09/10)
-  causation_id UUID                        -- command/event that caused this (nullable)
-  meta         JSONB      NOT NULL DEFAULT '{}'  -- capability used, request id, run_id, for audit
+  sealed_body  JSONB      NOT NULL         -- AEAD envelope over payload, actor, causation, and audit metadata
 ```
 
-> Shipped in [03-backend](03-backend.md)'s `eventstore` crate. `actor` is `JSONB` (not a
-> UUID) because `ActorId` is a 4-variant enum and slot/user ids are strings; `occurred_at` is
-> `BIGINT` logical time, not `TIMESTAMPTZ`, to honor the determinism rule. A DB-level trigger
-> hard-rejects `UPDATE`/`DELETE`/`TRUNCATE` on `events`, enforcing append-only in Postgres
-> itself.
+> Shipped in [03-backend](03-backend.md)'s `eventstore` crate. Only the structural header is
+> queryable. `payload`, `actor`, `causation_id`, and `meta` form one authenticated encrypted
+> body whose AAD binds it to the stream, position, kind, version, and logical time. The canonical
+> loader is the only production boundary that opens it. A DB trigger hard-rejects
+> `UPDATE`/`DELETE`/`TRUNCATE` on `events`.
 
 - **Streams** are aggregates. The natural aggregate is the **game**; a game's entire
   history is one stream, which keeps a game internally consistent and easy to replay,
@@ -244,11 +241,21 @@ Unmuting immediately restores the same immutable posts and inbox references with
 shared search, discussion, game, or subscription history. Relationship replay deterministically
 reproduces both active and inactive final states.
 
-Completed game streams can be exported as versioned `StreamExport` manifests. The checksum covers
-the canonical manifest content, stream sequence positions must be contiguous, and imports refuse
-tampered manifests or non-empty target streams. A completed-game import rebuilds projections and
-runs the replay audit in an isolated migrated database; the host export route exposes only the
-validated manifest summary, not a public archive endpoint.
+Completed games export as a `CompletedGameExport` that serde-flattens the `StreamExport` v2 fields,
+so existing browser consumers retain the top-level stream/version/events/checksum contract. The
+stream contains exact stored headers and sealed bodies—never decoded roles, private posts, action
+targets, actor identity, or audit metadata. A second wrapper checksum covers a sorted manifest of
+deterministic game-scoped detached persona aliases. Each lookup reference is a domain-separated
+hash of game plus authenticated subject ID; it contains neither the raw subject ID, a subject claim,
+PII, nor an erasure tombstone, and cannot be correlated across games.
+
+Import authenticates every body, derives the exact persona-subject set from those bodies, and
+rejects missing, extra, reordered, or non-canonical aliases. Event insertion, detached-alias rows,
+the first projection rebuild, and a second deterministic replay audit share one transaction; any
+failure leaves zero event rows for the target stream. The rebuilt archive uses detached aliases and
+requires no `privacy_subject`, `subject_private_claim`, or external subject-key material. The current
+archive remains coupled to a trusted event-key ring; cross-custody archive-key wrapping is a separate
+operational boundary, not an implied property.
 
 ### Update strategy
 

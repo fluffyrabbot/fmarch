@@ -5,6 +5,8 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY docs ./docs
+COPY packs ./packs
+COPY programs ./programs
 
 RUN cargo build --release --locked -p server --bins
 

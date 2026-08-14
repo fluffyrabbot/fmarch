@@ -5,8 +5,8 @@ use commands::day_scheduler::{
     day_event_scheduler_status, run_day_event_scheduler_once, DayEventSchedulerConfig,
 };
 use commands::{
-    advance_day_event_automation_as_scheduler, handle, handle_idempotent, load_engine_snapshot,
-    CohostPermissionClass, Command, Reject,
+    advance_day_event_automation_as_scheduler, load_engine_snapshot, CohostPermissionClass,
+    Command, Reject,
 };
 use eventstore::ActorId;
 use projections::{
@@ -165,12 +165,7 @@ async fn day_program_attachment_compiles_atomically_and_preserves_generations(po
         game_platform::DayEventState::Scheduled
     );
 
-    let before_duplicate: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let before_duplicate = stored_event_count(&pool, game).await;
     assert_eq!(
         handle(
             &pool,
@@ -184,12 +179,7 @@ async fn day_program_attachment_compiles_atomically_and_preserves_generations(po
         .expect_err("a program generation is immutable"),
         Reject::DayProgramAlreadyAttached
     );
-    let after_duplicate: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let after_duplicate = stored_event_count(&pool, game).await;
     assert_eq!(after_duplicate, before_duplicate);
 
     let mut invalid_adapter =
@@ -241,12 +231,7 @@ async fn day_program_attachment_compiles_atomically_and_preserves_generations(po
         "later generations cannot rewrite an existing definition"
     );
 
-    let before_collision: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let before_collision = stored_event_count(&pool, game).await;
     assert_eq!(
         handle(
             &pool,
@@ -260,12 +245,7 @@ async fn day_program_attachment_compiles_atomically_and_preserves_generations(po
         .expect_err("one event-id collision rejects the complete attachment"),
         Reject::DayEventAlreadyExists
     );
-    let after_collision: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let after_collision = stored_event_count(&pool, game).await;
     assert_eq!(after_collision, before_collision);
     assert_eq!(day_programs(&pool, game).await.unwrap().len(), 2);
     assert!(day_events(&pool, game)
@@ -294,11 +274,7 @@ async fn incompatible_day_program_rejects_before_any_program_fact(pool: PgPool) 
         "../../../../programs/mash-scale-acceptance.v1.program.json"
     ))
     .unwrap();
-    let before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before = stored_event_count(&pool, game).await;
 
     let rejection = handle(
         &pool,
@@ -313,11 +289,7 @@ async fn incompatible_day_program_rejects_before_any_program_fact(pool: PgPool) 
             if message.contains("scale-event-1")
                 && message.contains("not declared by pack `default_open`")
     ));
-    let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after = stored_event_count(&pool, game).await;
     assert_eq!(after, before);
     assert!(day_programs(&pool, game).await.unwrap().is_empty());
     assert!(day_events(&pool, game).await.unwrap().is_empty());
@@ -375,21 +347,16 @@ async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(poo
         .await
         .unwrap();
     assert!(duplicate_lock.stream_seqs.is_empty());
-    let evidence = sqlx::query_as::<_, (String, serde_json::Value, serde_json::Value)>(
-        "SELECT kind, payload, actor FROM events WHERE stream_id = $1 \
-         AND kind IN ('DayEventOpenDue', 'DayEventLockDue') ORDER BY stream_seq",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let evidence: Vec<_> = stored_events(&pool, game)
+        .await
+        .into_iter()
+        .filter(|event| matches!(event.kind.as_str(), "DayEventOpenDue" | "DayEventLockDue"))
+        .collect();
     assert_eq!(evidence.len(), 2);
-    assert_eq!(evidence[0].0, "DayEventOpenDue");
-    assert_eq!(evidence[0].1["source"], "absolute");
-    assert_eq!(evidence[1].0, "DayEventLockDue");
-    assert!(evidence
-        .iter()
-        .all(|(_, _, actor)| actor["type"] == "System"));
+    assert_eq!(evidence[0].kind, "DayEventOpenDue");
+    assert_eq!(evidence[0].payload["source"], "absolute");
+    assert_eq!(evidence[1].kind, "DayEventLockDue");
+    assert!(evidence.iter().all(|event| event.actor == ActorId::System));
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
@@ -525,13 +492,12 @@ async fn scheduler_worker_catches_up_missed_boundaries_and_records_service_autho
     assert_eq!(event.open_due_at, Some(100));
     assert_eq!(event.lock_due_at, Some(200));
 
-    let meta: serde_json::Value = sqlx::query_scalar(
-        "SELECT meta FROM events WHERE stream_id = $1 AND kind = 'DayEventOpenDue'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let meta = stored_events(&pool, game)
+        .await
+        .into_iter()
+        .find(|event| event.kind == "DayEventOpenDue")
+        .expect("DayEventOpenDue event")
+        .meta;
     assert_eq!(meta["principal_user_id"], "service:day-event-automation");
     assert_eq!(
         meta["authority_used"],
@@ -588,13 +554,7 @@ async fn concurrent_scheduler_replicas_claim_one_game_without_duplicate_evidence
             .sum::<usize>(),
         2
     );
-    let evidence: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'DayEventOpenDue'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let evidence = stored_event_count_by_kind(&pool, game, "DayEventOpenDue").await;
     assert_eq!(evidence, 1);
 }
 
@@ -1068,7 +1028,7 @@ async fn narrative_publish_failure_never_rolls_back_scheduled_mechanics(pool: Pg
     sqlx::query(
         "CREATE FUNCTION fail_day_event_narrative_post() RETURNS trigger LANGUAGE plpgsql AS $$ \
          BEGIN \
-           IF NEW.kind = 'PostSubmitted' AND NEW.payload ? 'day_event_narrative' THEN \
+           IF NEW.kind = 'PostSubmitted' THEN \
              RAISE EXCEPTION 'injected narrative delivery failure'; \
            END IF; \
            RETURN NEW; \
@@ -1378,13 +1338,7 @@ async fn auto_resolution_claim_is_replica_safe_and_manual_cancel_wins_before_cla
             .sum::<usize>(),
         1
     );
-    let resolutions: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'DayEventResolved'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let resolutions = stored_event_count_by_kind(&pool, game, "DayEventResolved").await;
     assert_eq!(resolutions, 1);
 
     let cancelled_id = game_platform::DayEventId::new("event-auto-cancel").unwrap();
@@ -1458,13 +1412,8 @@ async fn auto_resolution_claim_is_replica_safe_and_manual_cancel_wins_before_cla
         .unwrap();
     assert_eq!(cancelled.state, "cancelled");
     assert!(cancelled.resolution_evidence.is_none());
-    let resolutions_after_cancel: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'DayEventResolved'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let resolutions_after_cancel =
+        stored_event_count_by_kind(&pool, game, "DayEventResolved").await;
     assert_eq!(resolutions_after_cancel, 1);
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
@@ -1718,11 +1667,7 @@ async fn day_event_reward_adapters_fail_before_scheduling(pool: PgPool) {
     event.rewards[0].reward_key = game_platform::RewardKey::new("bad-cookie").unwrap();
     let mut valid = minimal_day_event("source", "bomb");
     event.rewards.insert(0, valid.rewards.remove(0));
-    let before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before = stored_event_count(&pool, game).await;
     assert!(matches!(
         handle(
             &pool,
@@ -1733,11 +1678,7 @@ async fn day_event_reward_adapters_fail_before_scheduling(pool: PgPool) {
         .expect_err("an unmaterializable reward adapter rejects the definition"),
         Reject::DayEventValidation(_)
     ));
-    let after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after = stored_event_count(&pool, game).await;
     assert_eq!(after, before);
     assert!(day_events(&pool, game).await.unwrap().is_empty());
     assert!(slot_effects(&pool, game).await.unwrap().is_empty());

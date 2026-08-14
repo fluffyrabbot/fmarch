@@ -12,7 +12,7 @@ export const baselineFilename = "0001_baseline.sql";
 // Deliberate greenfield rebaseline: persona/occupancy is a foundational
 // projection identity replacement, so it belongs in the no-user baseline
 // rather than as a compatibility migration retaining the obsolete table.
-export const baselineSha256 = "1e37f568be5541a92270f5b7c20b5c0d00b92585769c421b62e9bb9844b8156f";
+export const baselineSha256 = "4e6a96e5b95542492090885200e88cac5e871cc72580ab5045770c6d99a556b9";
 
 const migrationFilenamePattern = /^(\d{4})_[a-z0-9_]+\.sql$/u;
 
@@ -28,6 +28,7 @@ const forbiddenStatements = Object.freeze([
 ]);
 
 const privateProjectionEncryptionMigration = "0006_encrypt_private_projections.sql";
+const sealedEventBodyMigration = "0020_sealed_event_body.sql";
 const allowedPrivateProjectionErasureStatements = Object.freeze([
   /^TRUNCATE\s+TABLE\s+investigation_memory,\s*player_info_result,\s*player_investigation_result,\s*private_channel_member,\s*slot_state,\s*thread_view$/i,
   /^ALTER\s+TABLE\s+investigation_memory\s+DROP\s+COLUMN\s+result,\s*ADD\s+COLUMN\s+result_private\s+JSONB\s+NOT\s+NULL$/i,
@@ -39,8 +40,15 @@ const allowedPrivateProjectionErasureStatements = Object.freeze([
 ]);
 
 function isAllowedPrivateProjectionErasure(file, statement) {
-  return file === privateProjectionEncryptionMigration
-    && allowedPrivateProjectionErasureStatements.some((pattern) => pattern.test(statement));
+  if (file === privateProjectionEncryptionMigration) {
+    return allowedPrivateProjectionErasureStatements.some((pattern) => pattern.test(statement));
+  }
+  if (file === sealedEventBodyMigration) {
+    return [
+      /^ALTER\s+TABLE\s+public\.events\s+DROP\s+COLUMN\s+payload,\s*DROP\s+COLUMN\s+actor,\s*DROP\s+COLUMN\s+causation_id,\s*DROP\s+COLUMN\s+meta,\s*ADD\s+COLUMN\s+sealed_version\s+smallint\s+NOT\s+NULL,\s*ADD\s+COLUMN\s+sealed_kid\s+text\s+NOT\s+NULL,\s*ADD\s+COLUMN\s+sealed_nonce\s+bytea\s+NOT\s+NULL,\s*ADD\s+COLUMN\s+sealed_body\s+bytea\s+NOT\s+NULL$/i,
+    ].some((pattern) => pattern.test(statement));
+  }
+  return false;
 }
 
 function executableStatements(sql) {

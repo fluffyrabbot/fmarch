@@ -6,7 +6,7 @@
 //! and the shared append-and-project persistence boundary.
 
 use super::{
-    load_pack, metadata_from_payload, pack_name_from_stream, persist, phase_kind, phase_number,
+    load_pack, metadata_from_payload, pack_ref_from_stream, persist, phase_kind, phase_number,
     require_game, require_open_phase, require_slot_alive, require_slot_occupant,
     resolve_capabilities_in_tx, EngineInputBuilder, EngineRunKind, Reject,
 };
@@ -56,6 +56,7 @@ struct ActionValidationContext<'operation, 'transaction> {
     tx: &'operation mut Transaction<'transaction, Postgres>,
     game: Uuid,
     pack: &'operation domain::Pack,
+    stream: &'operation [eventstore::StoredEvent],
     phase_id: &'operation str,
     request: &'operation ActionSubmissionRequest,
 }
@@ -63,6 +64,7 @@ struct ActionValidationContext<'operation, 'transaction> {
 struct ActionCapacityContext<'operation, 'transaction> {
     tx: &'operation mut Transaction<'transaction, Postgres>,
     game: Uuid,
+    stream: &'operation [eventstore::StoredEvent],
     phase_id: &'operation str,
     phase_number: u32,
     actor_slot: &'operation str,
@@ -112,12 +114,13 @@ pub(super) async fn submit_action(
     let stream = eventstore::load_stream_in_tx(tx, request.game)
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
+    let pack_ref = pack_ref_from_stream(&stream)?;
+    let pack = load_pack(&pack_ref)?;
     let action_window = validate_action_submission(ActionValidationContext {
         tx,
         game: request.game,
-        pack: &pack,
+        pack,
+        stream: &stream,
         phase_id: &phase,
         request: &request,
     })
@@ -194,6 +197,7 @@ async fn validate_action_submission(
         tx,
         game,
         pack,
+        stream,
         phase_id,
         request,
     } = context;
@@ -407,6 +411,7 @@ async fn validate_action_submission(
     validate_action_slot_capacity(ActionCapacityContext {
         tx,
         game,
+        stream,
         phase_id,
         phase_number,
         actor_slot: &request.actor_slot,
@@ -536,6 +541,7 @@ async fn validate_action_slot_capacity(
     let ActionCapacityContext {
         tx,
         game,
+        stream,
         phase_id,
         phase_number,
         actor_slot,
@@ -544,7 +550,7 @@ async fn validate_action_slot_capacity(
         grant_id,
         source,
     } = context;
-    let active = active_actions_for_actor_phase_in_tx(tx, game, phase_id, actor_slot).await?;
+    let active = active_actions_from_stream(stream, phase_id, actor_slot);
     let uses_grant_option = matches!(source, ActionSource::Role)
         && grant_id
             .and_then(|id| selected_grant_option(template, id))
@@ -603,18 +609,6 @@ fn grant_kind_name(kind: GrantKind) -> &'static str {
     }
 }
 
-async fn active_actions_for_actor_phase_in_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    game: Uuid,
-    phase_id: &str,
-    actor_slot: &str,
-) -> Result<BTreeMap<String, ActiveAction>, Reject> {
-    let stream = eventstore::load_stream_in_tx(tx, game)
-        .await
-        .map_err(|error| Reject::Internal(error.to_string()))?;
-    Ok(active_actions_from_stream(stream, phase_id, actor_slot))
-}
-
 pub(super) async fn active_actions_for_actor_phase(
     pool: &PgPool,
     game: Uuid,
@@ -624,11 +618,11 @@ pub(super) async fn active_actions_for_actor_phase(
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
-    Ok(active_actions_from_stream(stream, phase_id, actor_slot))
+    Ok(active_actions_from_stream(&stream, phase_id, actor_slot))
 }
 
 fn active_actions_from_stream(
-    stream: Vec<eventstore::StoredEvent>,
+    stream: &[eventstore::StoredEvent],
     phase_id: &str,
     actor_slot: &str,
 ) -> BTreeMap<String, ActiveAction> {

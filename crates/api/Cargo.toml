@@ -8,6 +8,7 @@ publish.workspace = true
 caps = { path = "../caps", version = "0.1.0" }
 community = { path = "../community", version = "0.1.0" }
 commands = { path = "../commands", version = "0.1.0" }
+content_registry = { path = "../content_registry", version = "0.1.0" }
 domain = { path = "../domain", version = "0.1.0" }
 eventstore = { path = "../eventstore", version = "0.1.0" }
 game_platform = { path = "../game_platform", version = "0.1.0" }
@@ -33,6 +34,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
 futures-util = "0.3"
+object_store = { version = "0.14.1", default-features = false }
 png = "0.18"
 sha2 = "0.10"
 tempfile = "3"

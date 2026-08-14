@@ -127,7 +127,7 @@ export type ClientEnvelope = { v: number, id: bigint, body: ClientMsg, };
 
 export type AckMsg = { stream_seqs: Array<bigint>, };
 
-export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "CohostPermissionDenied" | "PhaseLocked" | "SlotNotAlive" | "VoteNotAllowed" | "InvalidTarget" | "ActionAlreadySubmitted" | "InvalidRole" | "StreamConflict" | "CommandIdConflict" | "UnknownGame" | "UnknownSlot" | "UnknownPrompt" | "PromptAlreadyResolved" | "GameAlreadyCompleted" | "InvalidPromptDecision" | "UnknownDayEvent" | "DayEventAlreadyExists" | "DayEventStateConflict" | "DuplicateParticipation" | "ParticipationNotFound" | "ParticipationNotAllowed" | "DayEventValidation" | "DayProgramValidation" | "DayProgramAlreadyAttached" | "EffectSpecValidation" | "Internal";
+export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "CohostPermissionDenied" | "PhaseLocked" | "SlotNotAlive" | "VoteNotAllowed" | "InvalidTarget" | "ActionAlreadySubmitted" | "InvalidRole" | "StreamConflict" | "CommandIdConflict" | "UnknownGame" | "UnknownSlot" | "UnknownPrompt" | "PromptAlreadyResolved" | "GameAlreadyCompleted" | "InvalidPromptDecision" | "UnknownDayEvent" | "DayEventAlreadyExists" | "DayEventStateConflict" | "DuplicateParticipation" | "ParticipationNotFound" | "ParticipationNotAllowed" | "DayEventValidation" | "DayProgramValidation" | "PackValidation" | "DayProgramAlreadyAttached" | "EffectSpecValidation" | "Internal";
 
 export type RejectMsg = { error: RejectCode, retryable: boolean, message: string, };
 

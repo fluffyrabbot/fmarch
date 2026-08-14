@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::day_program;
 use crate::model::CohostPermissionClass;
 use crate::{
-    build_host_notice, current_pack_name, current_phase, load_pack, next_stream_logical_time,
+    build_host_notice, current_pack_ref, current_phase, load_pack, next_stream_logical_time,
     persist, phase_kind, phase_number, plan_effect_events, require_game,
     require_game_not_completed, require_game_run, require_slot_alive, require_slot_occupant,
     resolve_capabilities_in_tx, unix_seconds_now, validate_game_post_body, Ack,
@@ -237,8 +237,8 @@ pub(crate) async fn schedule_day_event(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
     event.validate().map_err(day_event_validation)?;
-    let pack = load_pack(&current_pack_name(tx, game).await?)?;
-    let compatibility_issues = day_program::inspect_event(&pack, &event);
+    let pack = load_pack(&current_pack_ref(tx, game).await?)?;
+    let compatibility_issues = day_program::inspect_event(pack, &event);
     if !compatibility_issues.is_empty() {
         return Err(day_event_reject(day_program::summarize_issues(
             &compatibility_issues,
@@ -274,8 +274,8 @@ pub(crate) async fn attach_day_program(
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::ProgramAttach).await?;
-    let pack = load_pack(&current_pack_name(tx, game).await?)?;
-    let compatibility = day_program::inspect(&pack, &program);
+    let pack = load_pack(&current_pack_ref(tx, game).await?)?;
+    let compatibility = day_program::inspect(pack, &program);
     let compilation = compatibility
         .into_compilation()
         .map_err(|report| Reject::DayProgramValidation(report.summary()))?;

@@ -2,8 +2,7 @@ use std::{collections::BTreeMap, env, fs, future::Future, path::Path};
 
 use caps::Principal;
 use commands::{
-    audit_resolution_envelopes, handle, inspect_resolution_traces, Command, HostPromptDecision,
-    VoteTarget,
+    audit_resolution_envelopes, inspect_resolution_traces, Command, HostPromptDecision, VoteTarget,
 };
 use projections::{
     audit_rebuild, delayed_death_queues, player_notifications, sheriff_badges, slot_effects,
@@ -12,6 +11,85 @@ use projections::{
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use uuid::Uuid;
+
+/// Run one proof-fixture command through the production handler after ensuring
+/// that identity-owning command targets exist as active platform principals.
+/// Persona and replacement canonicalization then establish their subject-owned
+/// private claims through the same path used by the service.
+pub async fn handle_fixture_command(
+    pool: &PgPool,
+    actor: &Principal,
+    command: Command,
+) -> Result<commands::Ack, commands::Reject> {
+    if let Some(principal_user_id) = fixture_command_principal(&command) {
+        ensure_fixture_principal(pool, principal_user_id).await?;
+    }
+    commands::handle(pool, actor, command).await
+}
+
+fn fixture_command_principal(command: &Command) -> Option<&str> {
+    match command {
+        Command::SeatPersona {
+            principal_user_id, ..
+        }
+        | Command::ProcessReplacement {
+            incoming_principal_user_id: principal_user_id,
+            ..
+        } => Some(principal_user_id),
+        _ => None,
+    }
+}
+
+async fn ensure_fixture_principal(
+    pool: &PgPool,
+    principal_user_id: &str,
+) -> Result<(), commands::Reject> {
+    let already_active: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM platform_principal AS principal
+            JOIN privacy_subject AS subject
+              ON subject.principal_user_id = principal.principal_user_id
+            WHERE principal.principal_user_id = $1
+              AND principal.status = 'active'
+              AND subject.lifecycle_state = 'active'
+        )
+        "#,
+    )
+    .bind(principal_user_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|error| commands::Reject::Internal(error.to_string()))?;
+    if already_active {
+        return Ok(());
+    }
+    sqlx::query(
+        r#"
+        INSERT INTO platform_principal (
+            principal_user_id, status, global_capabilities, created_at, disabled_at
+        )
+        VALUES ($1, 'active', ARRAY[]::TEXT[], 0, NULL)
+        ON CONFLICT (principal_user_id) DO NOTHING
+        "#,
+    )
+    .bind(principal_user_id)
+    .execute(pool)
+    .await
+    .map_err(|error| commands::Reject::Internal(error.to_string()))?;
+    let status: String =
+        sqlx::query_scalar("SELECT status FROM platform_principal WHERE principal_user_id = $1")
+            .bind(principal_user_id)
+            .fetch_one(pool)
+            .await
+            .map_err(|error| commands::Reject::Internal(error.to_string()))?;
+    if status != "active" {
+        return Err(commands::Reject::Internal(format!(
+            "fixture principal `{principal_user_id}` is not active"
+        )));
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct NightFixture {
@@ -650,7 +728,7 @@ fn prune_slot_references(fixture: &mut NightFixture, removed_slot: &str) {
 async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
     let game = Uuid::new_v4();
     let host = Principal::user("fixture_host");
-    if let Err(err) = handle(
+    if let Err(err) = handle_fixture_command(
         pool,
         &host,
         Command::CreateGame {
@@ -669,7 +747,7 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
     }
 
     for slot in &fixture.roster {
-        if let Err(err) = handle(
+        if let Err(err) = handle_fixture_command(
             pool,
             &host,
             Command::AddSlot {
@@ -685,7 +763,7 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
                 game,
             );
         }
-        if let Err(err) = handle(
+        if let Err(err) = handle_fixture_command(
             pool,
             &host,
             commands::seat_persona! {
@@ -702,7 +780,7 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
                 game,
             );
         }
-        if let Err(err) = handle(
+        if let Err(err) = handle_fixture_command(
             pool,
             &host,
             Command::AssignRole {
@@ -812,15 +890,16 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
 
     let semantic_expectations_checked = fixture.expectations.count();
     if semantic_expectations_checked > 0 {
-        let applied_payloads = match sqlx::query_scalar::<_, serde_json::Value>(
-            "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-             AND payload->>'phase_id' = $2 ORDER BY stream_seq",
-        )
-        .bind(game)
-        .bind(&fixture.phase)
-        .fetch_all(pool)
-        .await
-        {
+        let applied_payloads = match eventstore::load_stream(pool, game).await.map(|events| {
+            events
+                .into_iter()
+                .filter(|event| {
+                    event.kind == "ResolutionApplied"
+                        && event.payload["phase_id"].as_str() == Some(fixture.phase.as_str())
+                })
+                .map(|event| event.payload)
+                .collect::<Vec<_>>()
+        }) {
             Ok(payloads) if !payloads.is_empty() => payloads,
             Ok(_) => {
                 return RunReport {
@@ -922,7 +1001,7 @@ async fn run_fixture_phase(
     host: &Principal,
     phase: &FixturePhase,
 ) -> Result<(), RunReport> {
-    if let Err(err) = handle(
+    if let Err(err) = handle_fixture_command(
         pool,
         host,
         Command::StartGame {
@@ -940,7 +1019,7 @@ async fn run_fixture_phase(
     }
 
     for control in &phase.ita_session_controls {
-        if let Err(err) = handle(
+        if let Err(err) = handle_fixture_command(
             pool,
             host,
             Command::ControlItaSession {
@@ -964,7 +1043,7 @@ async fn run_fixture_phase(
     }
 
     for action in &phase.actions {
-        if let Err(err) = handle(
+        if let Err(err) = handle_fixture_command(
             pool,
             &Principal::user(format!(
                 "fixture_user_{}",
@@ -993,7 +1072,7 @@ async fn run_fixture_phase(
     }
 
     for vote in &phase.votes {
-        if let Err(err) = handle(
+        if let Err(err) = handle_fixture_command(
             pool,
             &Principal::user(format!(
                 "fixture_user_{}",
@@ -1018,7 +1097,7 @@ async fn run_fixture_phase(
         }
     }
 
-    if let Err(err) = handle(
+    if let Err(err) = handle_fixture_command(
         pool,
         host,
         Command::ResolvePhase {
@@ -1036,7 +1115,7 @@ async fn run_fixture_phase(
     }
 
     if let Some(decision) = &phase.host_prompt_decision {
-        if let Err(err) = handle(
+        if let Err(err) = handle_fixture_command(
             pool,
             host,
             Command::ResolveHostPrompt {
@@ -1100,13 +1179,12 @@ async fn validate_semantic_expectations(
     }
 
     if !expectations.stream_events.is_empty() {
-        let stream_events = sqlx::query_as::<_, (String, serde_json::Value)>(
-            "SELECT kind, payload FROM events WHERE stream_id = $1 ORDER BY stream_seq",
-        )
-        .bind(game)
-        .fetch_all(pool)
-        .await
-        .map_err(|err| format!("fetch stream events failed: {err}"))?;
+        let stream_events = eventstore::load_stream(pool, game)
+            .await
+            .map_err(|err| format!("fetch stream events failed: {err}"))?
+            .into_iter()
+            .map(|event| (event.kind, event.payload))
+            .collect::<Vec<_>>();
         for expected in &expectations.stream_events {
             let found = stream_events.iter().any(|(kind, payload)| {
                 kind == &expected.kind
@@ -1412,6 +1490,34 @@ fn slot_number(slot: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fixture_dispatch_provisions_only_identity_owning_command_targets() {
+        let game = Uuid::nil();
+        let seat = Command::SeatPersona {
+            game,
+            slot: "slot_1".to_string(),
+            principal_user_id: "incoming-seat".to_string(),
+            public_name: "Incoming Seat".to_string(),
+        };
+        let replacement = Command::ProcessReplacement {
+            game,
+            slot: "slot_1".to_string(),
+            outgoing_persona_id: "gp-outgoing".to_string(),
+            incoming_principal_user_id: "incoming-replacement".to_string(),
+        };
+        let ordinary = Command::AddSlot {
+            game,
+            slot: "slot_2".to_string(),
+        };
+
+        assert_eq!(fixture_command_principal(&seat), Some("incoming-seat"));
+        assert_eq!(
+            fixture_command_principal(&replacement),
+            Some("incoming-replacement")
+        );
+        assert_eq!(fixture_command_principal(&ordinary), None);
+    }
 
     #[test]
     fn parses_fixture_defaults() {

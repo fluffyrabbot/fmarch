@@ -197,6 +197,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
         (5, "slot_2", "goon_user", "mafia_goon"),
         (8, "slot_3", "traitor_user", "traitor"),
     ] {
+        let _ = dev_session_token(&app, user, Vec::new()).await;
         expect_ack(
             post_command(
                 app.clone(),
@@ -267,31 +268,42 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
         .await,
     );
 
-    let raw_roles: Vec<serde_json::Value> = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned' ORDER BY stream_seq",
+    let raw_roles: Vec<(i16, String, Vec<u8>, Vec<u8>)> = sqlx::query_as(
+        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body \
+         FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned' ORDER BY stream_seq",
     )
     .bind(game)
     .fetch_all(&pool)
     .await
     .unwrap();
     assert_eq!(raw_roles.len(), 3);
-    assert!(raw_roles.iter().all(|payload| {
-        payload.get("role_key").is_none()
-            && payload["private"]["kid"] == old_kid
-            && payload["private"]["ciphertext"].is_string()
+    assert!(raw_roles.iter().all(|(version, kid, nonce, body)| {
+        *version == 2
+            && kid == old_kid
+            && nonce.len() == 24
+            && body.len() >= 16
+            && !body
+                .windows("godfather".len())
+                .any(|window| window == b"godfather")
     }));
 
-    let raw_post: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' ORDER BY stream_seq DESC LIMIT 1",
+    let raw_post: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body \
+         FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
+         ORDER BY stream_seq DESC LIMIT 1",
     )
     .bind(game)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(raw_post["channel_id"], "private:mafia_day_chat");
-    assert!(raw_post.get("body").is_none());
-    assert_eq!(raw_post["body_private"]["kid"], new_kid);
-    assert!(raw_post["body_private"]["ciphertext"].is_string());
+    assert_eq!(raw_post.0, 2);
+    assert_eq!(raw_post.1, new_kid);
+    assert_eq!(raw_post.2.len(), 24);
+    assert!(raw_post.3.len() >= 16);
+    assert!(!raw_post
+        .3
+        .windows("mixed-key day chat survives replay".len())
+        .any(|window| window == b"mixed-key day chat survives replay"));
 
     env.set_active(new_kid, new_key);
     let missing_old = projections::audit_rebuild(&pool, game)

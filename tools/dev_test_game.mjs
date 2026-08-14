@@ -854,6 +854,7 @@ async function seedSessionToken(principalUserId) {
 }
 
 async function sendCommandResult(principalUserId, command) {
+  await ensureCommandTargetPrincipal(command);
   const sessionToken = await seedSessionToken(principalUserId);
   return await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
@@ -873,6 +874,16 @@ async function sendCommandResult(principalUserId, command) {
       },
     }),
   });
+}
+
+async function ensureCommandTargetPrincipal(command) {
+  const principalUserId =
+    command.SeatPersona?.principal_user_id ??
+    command.ProcessReplacement?.incoming_principal_user_id;
+  if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
+    return;
+  }
+  await ensureLocalAccount({ principalUserId });
 }
 
 function commandSummary(principalUserId, command, response) {

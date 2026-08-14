@@ -12,6 +12,7 @@
     "test:dependency-policy": "node tools/dependency_policy.mjs && cargo deny check --hide-inclusion-graph advisories licenses sources bans && npm audit --audit-level=moderate && npm --prefix frontend audit --audit-level=moderate",
     "test:frontend-csp-browser": "node tools/frontend_csp_browser_proof.mjs",
     "check:build-posture": "bash scripts/check-build-posture.sh",
+    "test:exact-image-content": "node tools/exact_image_content_smoke.mjs",
     "dev:postgres": "node tools/dev_postgres.mjs",
     "dev:test-game:prebuild": "cargo build -p server",
     "test:capacity-overload-contract": "node --test tools/capacity_overload_contract.test.mjs",

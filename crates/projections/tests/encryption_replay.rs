@@ -124,7 +124,7 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
     .expect("append new-key private post through projection boundary");
 
     let raw_rows = sqlx::query(
-        "SELECT seq, kind, payload FROM events WHERE stream_id = $1 ORDER BY stream_seq",
+        "SELECT seq, kind, sealed_version, sealed_kid, sealed_nonce, sealed_body FROM events WHERE stream_id = $1 ORDER BY stream_seq",
     )
     .bind(game)
     .fetch_all(&pool)
@@ -132,19 +132,25 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
     .expect("raw encrypted event rows");
     assert_eq!(raw_rows.len(), 2);
 
-    let raw_role: serde_json::Value = raw_rows[0].get("payload");
+    let raw_role: Vec<u8> = raw_rows[0].get("sealed_body");
     assert_eq!(raw_rows[0].get::<String, _>("kind"), "RoleAssigned");
-    assert_eq!(raw_role["slot_id"], "slot_1");
-    assert!(raw_role.get("role_key").is_none());
-    assert_eq!(raw_role["private"]["kid"], "old-kid");
-    assert!(raw_role["private"]["ciphertext"].is_string());
+    assert_eq!(raw_rows[0].get::<i16, _>("sealed_version"), 2);
+    assert_eq!(raw_rows[0].get::<String, _>("sealed_kid"), "old-kid");
+    assert_eq!(raw_rows[0].get::<Vec<u8>, _>("sealed_nonce").len(), 24);
+    assert!(raw_role.len() >= 16);
+    let raw_role = String::from_utf8_lossy(&raw_role);
+    assert!(!raw_role.contains("slot_1"));
+    assert!(!raw_role.contains("godfather"));
 
-    let raw_post: serde_json::Value = raw_rows[1].get("payload");
+    let raw_post: Vec<u8> = raw_rows[1].get("sealed_body");
     assert_eq!(raw_rows[1].get::<String, _>("kind"), "PostSubmitted");
-    assert_eq!(raw_post["channel_id"], "private:mafia_day_chat");
-    assert!(raw_post.get("body").is_none());
-    assert_eq!(raw_post["body_private"]["kid"], "new-kid");
-    assert!(raw_post["body_private"]["ciphertext"].is_string());
+    assert_eq!(raw_rows[1].get::<i16, _>("sealed_version"), 2);
+    assert_eq!(raw_rows[1].get::<String, _>("sealed_kid"), "new-kid");
+    assert_eq!(raw_rows[1].get::<Vec<u8>, _>("sealed_nonce").len(), 24);
+    assert!(raw_post.len() >= 16);
+    let raw_post = String::from_utf8_lossy(&raw_post);
+    assert!(!raw_post.contains("private:mafia_day_chat"));
+    assert!(!raw_post.contains("coordinate with the new key"));
 
     let raw_slot: serde_json::Value = sqlx::query_scalar(
         "SELECT private FROM slot_state WHERE game_id = $1 AND slot_id = 'slot_1'",

@@ -24,10 +24,9 @@ CREATE TABLE IF NOT EXISTS events (
     CONSTRAINT events_stream_seq_unique UNIQUE (stream_id, stream_seq)
 );
 
--- The UNIQUE constraint already provides a (stream_id, stream_seq) index used to
--- compute current_max and to order a stream load; `seq` is the PK (indexed).
--- An explicit stream-ordered index name documents the load path.
-CREATE INDEX IF NOT EXISTS events_stream_order_idx ON events (stream_id, stream_seq);
+-- The UNIQUE constraint already provides the (stream_id, stream_seq) index used
+-- to compute current_max and order stream loads; `seq` is the indexed PK. Do not
+-- duplicate that index: every append would otherwise maintain the same btree twice.
 
 -- Belt-and-suspenders: forbid mutation of history at the database level. Any
 -- UPDATE or DELETE against `events` raises, so an append-only invariant cannot

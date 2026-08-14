@@ -65,10 +65,17 @@
 //!
 //! Runtime sqlx queries only (no `query!` macro) so `cargo build` needs no DB.
 
+use content_registry::{ContentHash, PackRef};
 use eventstore::{append_in_tx, EventInput, StoreError, StoredEvent};
+use identity::{
+    active_subject_key_store, open_subject_claim, seal_subject_claim, ClaimId,
+    SubjectClaimEnvelope, SubjectId, SubjectKeyStore,
+};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use uuid::Uuid;
 
 mod community_writes;
@@ -493,7 +500,7 @@ pub struct ThreadViewPage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GameIndexRow {
     pub game_id: Uuid,
-    pub pack: String,
+    pub pack_ref: PackRef,
     pub status: String,
     pub phase_id: Option<String>,
     /// `events.seq` for the lifecycle event that last changed this public row.
@@ -775,6 +782,10 @@ pub enum ProjectionError {
     Store(#[from] StoreError),
     #[error(transparent)]
     Db(#[from] sqlx::Error),
+    #[error("subject privacy boundary failed: {0}")]
+    Privacy(String),
+    #[error("stored pack identity is invalid: {0}")]
+    PackIdentity(String),
     #[error("this active report already exists")]
     DuplicateModerationReport,
     #[error("the reporter submission limit has been reached")]
@@ -826,6 +837,28 @@ pub struct ProjectionAuditReport {
     pub tables: Vec<ProjectionAuditTable>,
 }
 
+/// One game-scoped, unlinkable lookup key and its deterministic non-PII
+/// archive alias. Neither value is a live subject identifier, subject claim,
+/// nor erasure tombstone.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompletedGameDetachedAlias {
+    pub subject_ref_sha256: String,
+    pub detached_alias: String,
+    pub alias_version: u16,
+}
+
+/// Portable completed-game archive. Flattening preserves the original
+/// top-level `StreamExport` browser contract while the outer checksum binds the
+/// exact detached-alias manifest to the authenticated ciphertext stream.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CompletedGameExport {
+    #[serde(flatten)]
+    pub stream: eventstore::StreamExport,
+    pub detached_subject_aliases: Vec<CompletedGameDetachedAlias>,
+    pub archive_checksum_sha256: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct PhaseAdvancedPayload {
     phase_id: String,
@@ -855,6 +888,7 @@ async fn fold_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
     ev: &StoredEvent,
+    opened_claims: Option<&HashMap<Uuid, GamePersonaPrivateClaim>>,
 ) -> Result<(), ProjectionError> {
     match ev.kind.as_str() {
         // ── votecount (running, ballot-keyed) ──
@@ -905,8 +939,17 @@ async fn fold_event(
         "GameCreated" => {
             let host = str_field(&ev.payload, "host", &ev.kind)?;
             upsert_authority(tx, game_id, &host, "host").await?;
-            let pack = str_field(&ev.payload, "pack", &ev.kind)?;
-            insert_game_index_setup(tx, game_id, &pack, ev.seq).await?;
+            let pack_ref = serde_json::from_value(
+                ev.payload
+                    .get("pack_ref")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null),
+            )
+            .map_err(|source| ProjectionError::Payload {
+                kind: ev.kind.clone(),
+                source,
+            })?;
+            insert_game_index_setup(tx, game_id, &pack_ref, ev.seq).await?;
             let denied = cohost_denied_from_payload(&ev.payload);
             upsert_cohost_policy(tx, game_id, &denied, ev.seq).await?;
         }
@@ -931,14 +974,15 @@ async fn fold_event(
         "GamePersonaRegistered" => {
             let p = &ev.payload;
             let persona_id = str_field(p, "persona_id", &ev.kind)?;
-            let principal_user_id = str_field(p, "principal_user_id", &ev.kind)?;
-            let public_name = str_field(p, "public_name", &ev.kind)?;
+            let subject_id = SubjectId::from_uuid(uuid_field(p, "subject_id", &ev.kind)?);
+            let claim_id = ClaimId::from_uuid(uuid_field(p, "claim_id", &ev.kind)?);
             register_game_persona(
                 tx,
                 game_id,
                 &persona_id,
-                &principal_user_id,
-                &public_name,
+                subject_id,
+                claim_id,
+                opened_claims.and_then(|claims| claims.get(&claim_id.as_uuid())),
                 ev.seq,
             )
             .await?;
@@ -946,8 +990,18 @@ async fn fold_event(
         "GamePersonaRenamed" => {
             let p = &ev.payload;
             let persona_id = str_field(p, "persona_id", &ev.kind)?;
-            let public_name = str_field(p, "public_name", &ev.kind)?;
-            rename_game_persona(tx, game_id, &persona_id, &public_name, ev.seq).await?;
+            let subject_id = SubjectId::from_uuid(uuid_field(p, "subject_id", &ev.kind)?);
+            let claim_id = ClaimId::from_uuid(uuid_field(p, "claim_id", &ev.kind)?);
+            rename_game_persona(
+                tx,
+                game_id,
+                &persona_id,
+                subject_id,
+                claim_id,
+                opened_claims.and_then(|claims| claims.get(&claim_id.as_uuid())),
+                ev.seq,
+            )
+            .await?;
         }
         "SlotOccupancyStarted" => {
             let p = &ev.payload;
@@ -2482,6 +2536,624 @@ async fn fold_inner(
 
 // ───────────────────────── public API ─────────────────────────
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ProfilePrivateClaim {
+    principal_user_id: String,
+    handle: String,
+    display_name: String,
+    bio: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GamePersonaPrivateClaim {
+    principal_user_id: String,
+    public_name: String,
+}
+
+async fn subject_key_store() -> Result<std::sync::Arc<dyn SubjectKeyStore>, ProjectionError> {
+    active_subject_key_store()
+        .await
+        .map_err(|error| ProjectionError::Privacy(error.to_string()))
+}
+
+async fn lock_active_subject(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subject_id: SubjectId,
+) -> Result<(), ProjectionError> {
+    // Identity creation and erasure both lock principal -> subject. Resolve the
+    // stable owner first, then take those two locks explicitly in that same
+    // order. A joined `FOR UPDATE OF subject, principal` lets the query planner
+    // choose the opposite row-lock order and can deadlock a replay opening an
+    // existing claim against another game issuing a claim for the same member.
+    let principal_user_id: String = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT principal_user_id FROM privacy_subject WHERE subject_id = $1",
+    )
+    .bind(subject_id.as_uuid())
+    .fetch_optional(&mut **tx)
+    .await?
+    .flatten()
+    .ok_or_else(|| {
+        ProjectionError::Privacy("private claim subject owner is missing".to_string())
+    })?;
+    let principal_status: String = sqlx::query_scalar(
+        "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(&principal_user_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| ProjectionError::Privacy("private claim principal is missing".to_string()))?;
+    let row = sqlx::query(
+        r#"
+        SELECT subject.principal_user_id, subject.lifecycle_state,
+               EXISTS (
+                   SELECT 1 FROM subject_tombstone AS tombstone
+                   WHERE tombstone.subject_id = subject.subject_id
+               ) AS tombstoned
+        FROM privacy_subject AS subject
+        WHERE subject.subject_id = $1
+        FOR UPDATE OF subject
+        "#,
+    )
+    .bind(subject_id.as_uuid())
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| ProjectionError::Privacy("private claim subject is missing".to_string()))?;
+    let locked_principal_user_id: Option<String> = row.try_get("principal_user_id")?;
+    let lifecycle_state: String = row.try_get("lifecycle_state")?;
+    let tombstoned: bool = row.try_get("tombstoned")?;
+    if locked_principal_user_id.as_deref() != Some(principal_user_id.as_str())
+        || lifecycle_state != "active"
+        || principal_status != "active"
+        || tombstoned
+    {
+        return Err(ProjectionError::Privacy(
+            "an inactive subject cannot acquire or open private claims".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn referenced_subject_ids(events: &[StoredEvent]) -> Result<Vec<Uuid>, ProjectionError> {
+    let mut subject_ids = BTreeSet::new();
+    for event in events {
+        if event.payload.get("subject_id").is_some() {
+            subject_ids.insert(uuid_field(&event.payload, "subject_id", &event.kind)?);
+        }
+    }
+    Ok(subject_ids.into_iter().collect())
+}
+
+/// Lock every live subject referenced by a replay before the replay mutates a
+/// projection row. Identity issuance and erasure lock principal then subject;
+/// replay uses that same pair order and sorts the complete owner set so two
+/// multi-subject rebuilds cannot invert one another either.
+///
+/// The initial owner lookup deliberately takes no row lock. If erasure wins
+/// before replay reaches an owner, replay waits on the principal, observes the
+/// now-erased subject after acquiring its row, and subsequently folds the
+/// tombstone. If replay wins, erasure waits until the private projection has
+/// been rebuilt and then scrubs it before committing.
+async fn prelock_rebuild_subject_owners(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    events: &[StoredEvent],
+) -> Result<(), ProjectionError> {
+    let subject_ids = referenced_subject_ids(events)?;
+    if subject_ids.is_empty() {
+        return Ok(());
+    }
+
+    let owners = sqlx::query(
+        r#"
+        SELECT subject_id, principal_user_id
+        FROM privacy_subject
+        WHERE subject_id = ANY($1)
+          AND lifecycle_state = 'active'
+          AND principal_user_id IS NOT NULL
+        ORDER BY principal_user_id, subject_id
+        "#,
+    )
+    .bind(&subject_ids)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    for owner in owners {
+        let subject_id: Uuid = owner.try_get("subject_id")?;
+        let principal_user_id: String = owner.try_get("principal_user_id")?;
+        let principal_status: Option<String> = sqlx::query_scalar(
+            "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+        )
+        .bind(&principal_user_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        if principal_status.is_none() {
+            return Err(ProjectionError::Privacy(
+                "private claim principal is missing".to_string(),
+            ));
+        }
+
+        let locked_owner: Option<String> = sqlx::query_scalar(
+            "SELECT principal_user_id FROM privacy_subject WHERE subject_id = $1 FOR UPDATE",
+        )
+        .bind(subject_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .flatten();
+        if locked_owner.as_deref() != Some(principal_user_id.as_str()) {
+            return Err(ProjectionError::Privacy(
+                "private claim subject owner changed during rebuild".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+async fn ensure_active_subject(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_user_id: &str,
+    created_at: i64,
+) -> Result<SubjectId, ProjectionError> {
+    let principal_status: Option<String> = sqlx::query_scalar(
+        "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(principal_user_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let principal_status = principal_status.ok_or_else(|| {
+        ProjectionError::Privacy(
+            "private claims require an existing authenticated principal".to_string(),
+        )
+    })?;
+    if principal_status != "active" {
+        return Err(ProjectionError::Privacy(
+            "a disabled principal cannot acquire private claims".to_string(),
+        ));
+    }
+    if let Some(subject_id) = sqlx::query_scalar::<_, Uuid>(
+        "SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(principal_user_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    {
+        let subject_id = SubjectId::from_uuid(subject_id);
+        lock_active_subject(tx, subject_id).await?;
+        return Ok(subject_id);
+    }
+
+    let candidate = SubjectId::random();
+    let key_store = subject_key_store().await?;
+    key_store
+        .create(candidate)
+        .await
+        .map_err(|error| ProjectionError::Privacy(error.to_string()))?;
+    let inserted = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        INSERT INTO privacy_subject (subject_id, principal_user_id, created_at)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (principal_user_id) DO NOTHING
+        RETURNING subject_id
+        "#,
+    )
+    .bind(candidate.as_uuid())
+    .bind(principal_user_id)
+    .bind(created_at)
+    .fetch_optional(&mut **tx)
+    .await?;
+    if inserted.is_some() {
+        return Ok(candidate);
+    }
+
+    // Another stream may have established the same subject concurrently. Its
+    // key is authoritative; the unused random candidate has no database link.
+    key_store
+        .destroy(candidate)
+        .await
+        .map_err(|error| ProjectionError::Privacy(error.to_string()))?;
+    let subject_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1",
+    )
+    .bind(principal_user_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(SubjectId::from_uuid(subject_id))
+}
+
+async fn insert_subject_claim<T: Serialize>(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subject_id: SubjectId,
+    claim_kind: &str,
+    scope_id: Uuid,
+    scope_key: Option<&str>,
+    created_at: i64,
+    claim: &T,
+) -> Result<ClaimId, ProjectionError> {
+    lock_active_subject(tx, subject_id).await?;
+    let claim_id = ClaimId::random();
+    let scope = subject_claim_aad_scope(scope_id, scope_key);
+    let key_store = subject_key_store().await?;
+    let envelope = seal_subject_claim(
+        key_store.as_ref(),
+        subject_id,
+        claim_id,
+        claim_kind,
+        scope.as_str(),
+        claim,
+    )
+    .await
+    .map_err(|error| ProjectionError::Privacy(error.to_string()))?;
+    let envelope = serde_json::to_value(envelope).map_err(|source| ProjectionError::Payload {
+        kind: "SubjectPrivateClaim".to_string(),
+        source,
+    })?;
+    sqlx::query(
+        r#"
+        INSERT INTO subject_private_claim
+            (claim_id, subject_id, claim_kind, scope_id, scope_key, envelope, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        "#,
+    )
+    .bind(claim_id.as_uuid())
+    .bind(subject_id.as_uuid())
+    .bind(claim_kind)
+    .bind(scope_id)
+    .bind(scope_key)
+    .bind(envelope)
+    .bind(created_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(claim_id)
+}
+
+async fn open_active_subject_claim<T: for<'de> Deserialize<'de>>(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subject_id: SubjectId,
+    claim_id: ClaimId,
+    claim_kind: &str,
+    scope_id: Uuid,
+    scope_key: Option<&str>,
+) -> Result<T, ProjectionError> {
+    lock_active_subject(tx, subject_id).await?;
+    let envelope = sqlx::query_scalar::<_, serde_json::Value>(
+        r#"
+        SELECT envelope
+        FROM subject_private_claim
+        WHERE claim_id = $1 AND subject_id = $2 AND claim_kind = $3 AND scope_id = $4
+          AND scope_key IS NOT DISTINCT FROM $5
+        "#,
+    )
+    .bind(claim_id.as_uuid())
+    .bind(subject_id.as_uuid())
+    .bind(claim_kind)
+    .bind(scope_id)
+    .bind(scope_key)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| {
+        ProjectionError::Privacy("canonical event references an invalid private claim".to_string())
+    })?;
+    let envelope: SubjectClaimEnvelope =
+        serde_json::from_value(envelope).map_err(|source| ProjectionError::Payload {
+            kind: "SubjectPrivateClaim".to_string(),
+            source,
+        })?;
+    let scope = subject_claim_aad_scope(scope_id, scope_key);
+    let key_store = subject_key_store().await?;
+    open_subject_claim(
+        key_store.as_ref(),
+        subject_id,
+        claim_id,
+        claim_kind,
+        scope.as_str(),
+        &envelope,
+    )
+    .await
+    .map_err(|error| ProjectionError::Privacy(error.to_string()))
+}
+
+async fn subject_tombstone_alias(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subject_id: SubjectId,
+) -> Result<Option<String>, ProjectionError> {
+    Ok(
+        sqlx::query_scalar("SELECT replacement_alias FROM subject_tombstone WHERE subject_id = $1")
+            .bind(subject_id.as_uuid())
+            .fetch_optional(&mut **tx)
+            .await?,
+    )
+}
+
+async fn completed_game_detached_alias(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    subject_id: SubjectId,
+) -> Result<Option<String>, ProjectionError> {
+    let subject_ref_sha256 = completed_game_subject_ref(game_id, subject_id.as_uuid());
+    Ok(sqlx::query_scalar(
+        r#"
+        SELECT detached_alias
+        FROM completed_game_detached_alias
+        WHERE game_id = $1 AND subject_ref_sha256 = $2 AND alias_version = 1
+        "#,
+    )
+    .bind(game_id)
+    .bind(subject_ref_sha256)
+    .fetch_optional(&mut **tx)
+    .await?)
+}
+
+fn subject_claim_aad_scope(scope_id: Uuid, scope_key: Option<&str>) -> String {
+    match scope_key {
+        Some(scope_key) => format!("{scope_id}/{scope_key}"),
+        None => scope_id.to_string(),
+    }
+}
+
+fn canonical_event(event: &EventInput, payload: serde_json::Value) -> EventInput {
+    let mut canonical = event.clone();
+    canonical.payload = payload;
+    canonical.meta = serde_json::json!({});
+    canonical
+}
+
+fn canonical_subject_event(
+    event: &EventInput,
+    subject_id: SubjectId,
+    payload: serde_json::Value,
+) -> EventInput {
+    let mut canonical = canonical_event(event, payload);
+    canonical.actor = eventstore::ActorId::User(subject_id.to_string());
+    canonical
+}
+
+async fn canonicalize_profile_events(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    events: &[EventInput],
+) -> Result<(Vec<EventInput>, HashMap<Uuid, ProfilePrivateClaim>), ProjectionError> {
+    let mut current: Option<(SubjectId, ProfilePrivateClaim)> = None;
+    let mut canonical = Vec::with_capacity(events.len());
+    let mut opened_claims = HashMap::new();
+    for event in events {
+        match event.kind.as_str() {
+            "ProfileCreated" if event.payload.get("claim_id").is_none() => {
+                let principal_user_id =
+                    str_field(&event.payload, "principal_user_id", &event.kind)?;
+                let claim = ProfilePrivateClaim {
+                    principal_user_id: principal_user_id.clone(),
+                    handle: str_field(&event.payload, "handle", &event.kind)?,
+                    display_name: str_field(&event.payload, "display_name", &event.kind)?,
+                    bio: str_field(&event.payload, "bio", &event.kind)?,
+                };
+                let visibility = str_field(&event.payload, "visibility", &event.kind)?;
+                let subject_id =
+                    ensure_active_subject(tx, &principal_user_id, event.occurred_at).await?;
+                let claim_id = insert_subject_claim(
+                    tx,
+                    subject_id,
+                    "profile",
+                    stream_id,
+                    None,
+                    event.occurred_at,
+                    &claim,
+                )
+                .await?;
+                opened_claims.insert(claim_id.as_uuid(), claim.clone());
+                canonical.push(canonical_subject_event(
+                    event,
+                    subject_id,
+                    serde_json::json!({
+                        "subject_id": subject_id,
+                        "claim_id": claim_id,
+                        "visibility": visibility,
+                    }),
+                ));
+                current = Some((subject_id, claim));
+            }
+            "ProfileUpdated" if event.payload.get("claim_id").is_none() => {
+                let (subject_id, mut claim) = match current.clone() {
+                    Some(current) => current,
+                    None => load_current_profile_claim(tx, stream_id).await?,
+                };
+                claim.display_name = str_field(&event.payload, "display_name", &event.kind)?;
+                claim.bio = str_field(&event.payload, "bio", &event.kind)?;
+                let visibility = str_field(&event.payload, "visibility", &event.kind)?;
+                let claim_id = insert_subject_claim(
+                    tx,
+                    subject_id,
+                    "profile",
+                    stream_id,
+                    None,
+                    event.occurred_at,
+                    &claim,
+                )
+                .await?;
+                opened_claims.insert(claim_id.as_uuid(), claim.clone());
+                canonical.push(canonical_subject_event(
+                    event,
+                    subject_id,
+                    serde_json::json!({
+                        "subject_id": subject_id,
+                        "claim_id": claim_id,
+                        "visibility": visibility,
+                    }),
+                ));
+                current = Some((subject_id, claim));
+            }
+            "ProfileCreated" | "ProfileUpdated" => {
+                let subject_id =
+                    SubjectId::from_uuid(uuid_field(&event.payload, "subject_id", &event.kind)?);
+                let claim_id =
+                    ClaimId::from_uuid(uuid_field(&event.payload, "claim_id", &event.kind)?);
+                let visibility = str_field(&event.payload, "visibility", &event.kind)?;
+                canonical.push(canonical_subject_event(
+                    event,
+                    subject_id,
+                    serde_json::json!({
+                        "subject_id": subject_id,
+                        "claim_id": claim_id,
+                        "visibility": visibility,
+                    }),
+                ));
+            }
+            _ => canonical.push(event.clone()),
+        }
+    }
+    Ok((canonical, opened_claims))
+}
+
+async fn load_current_profile_claim(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+) -> Result<(SubjectId, ProfilePrivateClaim), ProjectionError> {
+    let row = sqlx::query(
+        "SELECT subject_id, current_claim_id FROM profile_editor WHERE profile_id = $1",
+    )
+    .bind(stream_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| {
+        ProjectionError::Privacy("profile has no private subject binding".to_string())
+    })?;
+    let subject_id =
+        SubjectId::from_uuid(row.try_get::<Uuid, _>("subject_id").map_err(|_| {
+            ProjectionError::Privacy("profile subject binding is missing".to_string())
+        })?);
+    let claim_id =
+        ClaimId::from_uuid(row.try_get::<Uuid, _>("current_claim_id").map_err(|_| {
+            ProjectionError::Privacy("profile current claim is missing".to_string())
+        })?);
+    let claim =
+        open_active_subject_claim(tx, subject_id, claim_id, "profile", stream_id, None).await?;
+    Ok((subject_id, claim))
+}
+
+async fn canonicalize_game_events(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    events: &[EventInput],
+) -> Result<(Vec<EventInput>, HashMap<Uuid, GamePersonaPrivateClaim>), ProjectionError> {
+    let mut current: HashMap<String, (SubjectId, GamePersonaPrivateClaim)> = HashMap::new();
+    let mut canonical = Vec::with_capacity(events.len());
+    let mut opened_claims = HashMap::new();
+    for event in events {
+        match event.kind.as_str() {
+            "GamePersonaRegistered" if event.payload.get("claim_id").is_none() => {
+                let persona_id = str_field(&event.payload, "persona_id", &event.kind)?;
+                let principal_user_id =
+                    str_field(&event.payload, "principal_user_id", &event.kind)?;
+                let claim = GamePersonaPrivateClaim {
+                    principal_user_id: principal_user_id.clone(),
+                    public_name: str_field(&event.payload, "public_name", &event.kind)?,
+                };
+                let subject_id =
+                    ensure_active_subject(tx, &principal_user_id, event.occurred_at).await?;
+                let claim_id = insert_subject_claim(
+                    tx,
+                    subject_id,
+                    "game_persona",
+                    game_id,
+                    Some(persona_id.as_str()),
+                    event.occurred_at,
+                    &claim,
+                )
+                .await?;
+                opened_claims.insert(claim_id.as_uuid(), claim.clone());
+                canonical.push(canonical_subject_event(
+                    event,
+                    subject_id,
+                    serde_json::json!({
+                        "persona_id": persona_id,
+                        "subject_id": subject_id,
+                        "claim_id": claim_id,
+                    }),
+                ));
+                current.insert(persona_id, (subject_id, claim));
+            }
+            "GamePersonaRenamed" if event.payload.get("claim_id").is_none() => {
+                let persona_id = str_field(&event.payload, "persona_id", &event.kind)?;
+                let (subject_id, mut claim) = match current.get(&persona_id).cloned() {
+                    Some(current) => current,
+                    None => load_current_game_persona_claim(tx, game_id, &persona_id).await?,
+                };
+                claim.public_name = str_field(&event.payload, "public_name", &event.kind)?;
+                let claim_id = insert_subject_claim(
+                    tx,
+                    subject_id,
+                    "game_persona",
+                    game_id,
+                    Some(persona_id.as_str()),
+                    event.occurred_at,
+                    &claim,
+                )
+                .await?;
+                opened_claims.insert(claim_id.as_uuid(), claim.clone());
+                canonical.push(canonical_subject_event(
+                    event,
+                    subject_id,
+                    serde_json::json!({
+                        "persona_id": persona_id,
+                        "subject_id": subject_id,
+                        "claim_id": claim_id,
+                    }),
+                ));
+                current.insert(persona_id, (subject_id, claim));
+            }
+            "GamePersonaRegistered" | "GamePersonaRenamed" => {
+                let persona_id = str_field(&event.payload, "persona_id", &event.kind)?;
+                let subject_id =
+                    SubjectId::from_uuid(uuid_field(&event.payload, "subject_id", &event.kind)?);
+                let claim_id =
+                    ClaimId::from_uuid(uuid_field(&event.payload, "claim_id", &event.kind)?);
+                canonical.push(canonical_subject_event(
+                    event,
+                    subject_id,
+                    serde_json::json!({
+                        "persona_id": persona_id,
+                        "subject_id": subject_id,
+                        "claim_id": claim_id,
+                    }),
+                ));
+            }
+            _ => canonical.push(event.clone()),
+        }
+    }
+    Ok((canonical, opened_claims))
+}
+
+async fn load_current_game_persona_claim(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    persona_id: &str,
+) -> Result<(SubjectId, GamePersonaPrivateClaim), ProjectionError> {
+    let row = sqlx::query(
+        "SELECT subject_id, current_claim_id FROM game_persona_private WHERE game_id = $1 AND persona_id = $2",
+    )
+    .bind(game_id)
+    .bind(persona_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| {
+        ProjectionError::Privacy("game persona has no private subject binding".to_string())
+    })?;
+    let subject_id = SubjectId::from_uuid(row.try_get::<Uuid, _>("subject_id").map_err(|_| {
+        ProjectionError::Privacy("game persona subject binding is missing".to_string())
+    })?);
+    let claim_id =
+        ClaimId::from_uuid(row.try_get::<Uuid, _>("current_claim_id").map_err(|_| {
+            ProjectionError::Privacy("game persona current claim is missing".to_string())
+        })?);
+    let claim = open_active_subject_claim(
+        tx,
+        subject_id,
+        claim_id,
+        "game_persona",
+        game_id,
+        Some(persona_id),
+    )
+    .await?;
+    Ok((subject_id, claim))
+}
+
 /// Append `events` to `stream_id` AND fold them into the projections, **in one
 /// DB transaction** (doc 02 synchronous projections). The append's optimistic
 /// concurrency still applies: a conflicting concurrent append returns
@@ -2509,9 +3181,10 @@ pub async fn append_and_project_in_tx(
     stream_id: Uuid,
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
-    let stored = append_in_tx(tx, stream_id, events).await?;
+    let (canonical, opened_claims) = canonicalize_game_events(tx, stream_id, events).await?;
+    let stored = append_in_tx(tx, stream_id, &canonical).await?;
     for ev in &stored {
-        fold_event(tx, stream_id, ev).await?;
+        fold_event(tx, stream_id, ev, Some(&opened_claims)).await?;
     }
     Ok(stored)
 }
@@ -3603,20 +4276,22 @@ pub async fn append_profile_and_project_in_tx(
     stream_id: Uuid,
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
-    let stored = append_in_tx(tx, stream_id, events).await?;
+    let (canonical, opened_claims) = canonicalize_profile_events(tx, stream_id, events).await?;
+    let stored = append_in_tx(tx, stream_id, &canonical).await?;
     for event in &stored {
-        fold_profile_event(tx, stream_id, event).await?;
+        fold_profile_event(tx, stream_id, event, Some(&opened_claims)).await?;
     }
     Ok(stored)
 }
 
 /// Rebuild one profile stream from its append-only events.
 pub async fn rebuild_profile_stream(pool: &PgPool, stream_id: Uuid) -> Result<(), ProjectionError> {
-    let events = eventstore::load_stream(pool, stream_id).await?;
+    let mut tx = pool.begin().await?;
+    let events = eventstore::load_stream_in_tx(&mut tx, stream_id).await?;
     if !events.iter().any(|event| event.kind == "ProfileCreated") {
         return Ok(());
     }
-    let mut tx = pool.begin().await?;
+    prelock_rebuild_subject_owners(&mut tx, &events).await?;
     sqlx::query("DELETE FROM profile_editor WHERE profile_id = $1")
         .bind(stream_id)
         .execute(&mut *tx)
@@ -3632,7 +4307,7 @@ pub async fn rebuild_profile_stream(pool: &PgPool, stream_id: Uuid) -> Result<()
     .execute(&mut *tx)
     .await?;
     for event in &events {
-        fold_profile_event(&mut tx, stream_id, event).await?;
+        fold_profile_event(&mut tx, stream_id, event, None).await?;
     }
     tx.commit().await?;
     Ok(())
@@ -3642,14 +4317,42 @@ async fn fold_profile_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     stream_id: Uuid,
     event: &StoredEvent,
+    opened_claims: Option<&HashMap<Uuid, ProfilePrivateClaim>>,
 ) -> Result<(), ProjectionError> {
     match event.kind.as_str() {
         "ProfileCreated" => {
-            let principal_user_id = str_field(&event.payload, "principal_user_id", &event.kind)?;
-            let handle = str_field(&event.payload, "handle", &event.kind)?;
-            let display_name = str_field(&event.payload, "display_name", &event.kind)?;
-            let bio = str_field(&event.payload, "bio", &event.kind)?;
-            let visibility = str_field(&event.payload, "visibility", &event.kind)?;
+            let subject_id =
+                SubjectId::from_uuid(uuid_field(&event.payload, "subject_id", &event.kind)?);
+            let claim_id = ClaimId::from_uuid(uuid_field(&event.payload, "claim_id", &event.kind)?);
+            let requested_visibility = str_field(&event.payload, "visibility", &event.kind)?;
+            let (claim, erased_alias): (ProfilePrivateClaim, Option<String>) =
+                match subject_tombstone_alias(tx, subject_id).await? {
+                    Some(alias) => (
+                        ProfilePrivateClaim {
+                            principal_user_id: alias.clone(),
+                            handle: tombstone_profile_handle(stream_id),
+                            display_name: alias.clone(),
+                            bio: String::new(),
+                        },
+                        Some(alias),
+                    ),
+                    None => (
+                        match opened_claims.and_then(|claims| claims.get(&claim_id.as_uuid())) {
+                            Some(claim) => claim.clone(),
+                            None => {
+                                open_active_subject_claim(
+                                    tx, subject_id, claim_id, "profile", stream_id, None,
+                                )
+                                .await?
+                            }
+                        },
+                        None,
+                    ),
+                };
+            let visibility = erased_alias
+                .as_ref()
+                .map(|_| "public")
+                .unwrap_or(requested_visibility.as_str());
             sqlx::query(
                 r#"
                 INSERT INTO profile_public
@@ -3658,39 +4361,82 @@ async fn fold_profile_event(
                 "#,
             )
             .bind(stream_id)
-            .bind(&handle)
-            .bind(display_name)
-            .bind(bio)
+            .bind(&claim.handle)
+            .bind(&claim.display_name)
+            .bind(&claim.bio)
             .bind(visibility)
             .bind(event.seq)
             .execute(&mut **tx)
             .await?;
             sqlx::query(
-                "INSERT INTO profile_editor (profile_id, principal_user_id, last_edit_seq) VALUES ($1, $2, $3)",
+                "INSERT INTO profile_editor (profile_id, principal_user_id, last_edit_seq, subject_id, current_claim_id) VALUES ($1, $2, $3, $4, $5)",
             )
             .bind(stream_id)
-            .bind(principal_user_id)
+            .bind(&claim.principal_user_id)
             .bind(event.seq)
+            .bind(subject_id.as_uuid())
+            .bind(if erased_alias.is_some() {
+                None
+            } else {
+                Some(claim_id.as_uuid())
+            })
             .execute(&mut **tx)
             .await?;
         }
         "ProfileUpdated" => {
-            let display_name = str_field(&event.payload, "display_name", &event.kind)?;
-            let bio = str_field(&event.payload, "bio", &event.kind)?;
-            let visibility = str_field(&event.payload, "visibility", &event.kind)?;
+            let subject_id =
+                SubjectId::from_uuid(uuid_field(&event.payload, "subject_id", &event.kind)?);
+            let claim_id = ClaimId::from_uuid(uuid_field(&event.payload, "claim_id", &event.kind)?);
+            let requested_visibility = str_field(&event.payload, "visibility", &event.kind)?;
+            let (claim, erased) = match subject_tombstone_alias(tx, subject_id).await? {
+                Some(alias) => (
+                    ProfilePrivateClaim {
+                        principal_user_id: alias.clone(),
+                        handle: tombstone_profile_handle(stream_id),
+                        display_name: alias,
+                        bio: String::new(),
+                    },
+                    true,
+                ),
+                None => (
+                    match opened_claims.and_then(|claims| claims.get(&claim_id.as_uuid())) {
+                        Some(claim) => claim.clone(),
+                        None => {
+                            open_active_subject_claim(
+                                tx, subject_id, claim_id, "profile", stream_id, None,
+                            )
+                            .await?
+                        }
+                    },
+                    false,
+                ),
+            };
+            let visibility = if erased {
+                "public"
+            } else {
+                requested_visibility.as_str()
+            };
             sqlx::query(
-                "UPDATE profile_public SET display_name = $2, bio = $3, visibility = $4, updated_seq = $5 WHERE profile_id = $1",
+                "UPDATE profile_public SET handle = $2, display_name = $3, bio = $4, visibility = $5, updated_seq = $6 WHERE profile_id = $1",
             )
             .bind(stream_id)
-            .bind(display_name)
-            .bind(bio)
+            .bind(&claim.handle)
+            .bind(&claim.display_name)
+            .bind(&claim.bio)
             .bind(visibility)
             .bind(event.seq)
             .execute(&mut **tx)
             .await?;
-            sqlx::query("UPDATE profile_editor SET last_edit_seq = $2 WHERE profile_id = $1")
+            sqlx::query("UPDATE profile_editor SET principal_user_id = $2, last_edit_seq = $3, subject_id = $4, current_claim_id = $5 WHERE profile_id = $1")
                 .bind(stream_id)
-                .bind(event.seq)
+            .bind(&claim.principal_user_id)
+            .bind(event.seq)
+            .bind(subject_id.as_uuid())
+            .bind(if erased {
+                None
+            } else {
+                Some(claim_id.as_uuid())
+            })
                 .execute(&mut **tx)
                 .await?;
         }
@@ -3698,6 +4444,10 @@ async fn fold_profile_event(
     }
     sync_profile_search_document(tx, stream_id).await?;
     Ok(())
+}
+
+fn tombstone_profile_handle(profile_id: Uuid) -> String {
+    format!("former-member-{}", profile_id.simple())
 }
 
 /// Rebuild a game's projections from the log: truncate this game's projection
@@ -3715,17 +4465,34 @@ pub async fn rebuild(pool: &PgPool, game_id: Uuid) -> Result<(), ProjectionError
 pub async fn export_completed_game(
     pool: &PgPool,
     game_id: Uuid,
-) -> Result<eventstore::StreamExport, ProjectionError> {
-    let export = eventstore::export_stream(pool, game_id).await?;
-    if !export
-        .events
-        .iter()
-        .any(|event| event.kind == "GameCompleted")
+) -> Result<CompletedGameExport, ProjectionError> {
+    let stream = eventstore::export_stream(pool, game_id).await?;
+    let opened = eventstore::load_stream(pool, game_id).await?;
+    if stream.events.len() != opened.len()
+        || stream.events.iter().zip(&opened).any(|(archived, event)| {
+            archived.stream_seq != event.stream_seq
+                || archived.kind != event.kind
+                || archived.version != event.version
+                || archived.occurred_at != event.occurred_at
+        })
     {
+        return Err(invalid_completed_game_export(
+            "stream changed while the completed-game archive was assembled",
+        ));
+    }
+    if !opened.iter().any(|event| event.kind == "GameCompleted") {
         return Err(ProjectionError::Store(StoreError::InvalidExport(
             "only completed games can be exported".to_string(),
         )));
     }
+    let subjects = completed_game_subjects(&opened)?;
+    let detached_subject_aliases = completed_game_detached_aliases(game_id, &subjects);
+    let mut export = CompletedGameExport {
+        stream,
+        detached_subject_aliases,
+        archive_checksum_sha256: String::new(),
+    };
+    export.archive_checksum_sha256 = completed_game_export_checksum(&export)?;
     Ok(export)
 }
 
@@ -3733,26 +4500,164 @@ pub async fn export_completed_game(
 /// rebuild all game projections, then prove that replay remains deterministic.
 pub async fn import_completed_game_export(
     pool: &PgPool,
-    export: &eventstore::StreamExport,
+    export: &CompletedGameExport,
 ) -> Result<ProjectionAuditReport, ProjectionError> {
-    if !export
-        .events
-        .iter()
-        .any(|event| event.kind == "GameCompleted")
-    {
-        return Err(ProjectionError::Store(StoreError::InvalidExport(
-            "only completed-game manifests can be imported".to_string(),
-        )));
+    validate_completed_game_export_wrapper(export)?;
+
+    let mut tx = pool.begin().await?;
+    let imported = eventstore::import_stream_in_tx(&mut tx, &export.stream).await?;
+    if !imported.iter().any(|event| event.kind == "GameCompleted") {
+        return Err(invalid_completed_game_export(
+            "only completed-game manifests can be imported",
+        ));
     }
-    eventstore::import_stream(pool, export).await?;
-    rebuild(pool, export.stream_id).await?;
-    audit_rebuild(pool, export.stream_id).await
+    let subjects = completed_game_subjects(&imported)?;
+    let expected_aliases = completed_game_detached_aliases(export.stream.stream_id, &subjects);
+    if export.detached_subject_aliases != expected_aliases {
+        return Err(invalid_completed_game_export(
+            "detached aliases must exactly cover the authenticated game-persona subject set",
+        ));
+    }
+    for alias in &export.detached_subject_aliases {
+        sqlx::query(
+            r#"
+            INSERT INTO completed_game_detached_alias
+                (game_id, subject_ref_sha256, detached_alias, alias_version)
+            VALUES ($1, $2, $3, $4)
+            "#,
+        )
+        .bind(export.stream.stream_id)
+        .bind(&alias.subject_ref_sha256)
+        .bind(&alias.detached_alias)
+        .bind(alias.alias_version as i16)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    rebuild_in_tx(&mut tx, export.stream.stream_id).await?;
+    let audit = audit_rebuild_in_tx(&mut tx, export.stream.stream_id).await?;
+    if !audit.ok {
+        return Err(invalid_completed_game_export(
+            "completed-game projection replay is not deterministic",
+        ));
+    }
+    tx.commit().await?;
+    Ok(audit)
+}
+
+const COMPLETED_GAME_ALIAS_VERSION: u16 = 1;
+const COMPLETED_GAME_SUBJECT_REF_DOMAIN: &[u8] = b"fmarch/completed-game/detached-subject-ref/v1\0";
+
+fn invalid_completed_game_export(message: impl Into<String>) -> ProjectionError {
+    ProjectionError::Store(StoreError::InvalidExport(message.into()))
+}
+
+fn completed_game_subjects(events: &[StoredEvent]) -> Result<BTreeSet<Uuid>, ProjectionError> {
+    let mut subjects = BTreeSet::new();
+    for event in events {
+        if matches!(
+            event.kind.as_str(),
+            "GamePersonaRegistered" | "GamePersonaRenamed"
+        ) {
+            subjects.insert(uuid_field(&event.payload, "subject_id", &event.kind)?);
+        }
+    }
+    Ok(subjects)
+}
+
+fn completed_game_subject_ref(game_id: Uuid, subject_id: Uuid) -> String {
+    let mut digest = Sha256::new();
+    digest.update(COMPLETED_GAME_SUBJECT_REF_DOMAIN);
+    digest.update(game_id.as_bytes());
+    digest.update(subject_id.as_bytes());
+    format!("{:x}", digest.finalize())
+}
+
+fn detached_alias_for_subject_ref(subject_ref_sha256: &str) -> String {
+    format!("Archived player {}", &subject_ref_sha256[..20])
+}
+
+fn completed_game_detached_aliases(
+    game_id: Uuid,
+    subjects: &BTreeSet<Uuid>,
+) -> Vec<CompletedGameDetachedAlias> {
+    let mut aliases = subjects
+        .iter()
+        .map(|subject_id| {
+            let subject_ref_sha256 = completed_game_subject_ref(game_id, *subject_id);
+            CompletedGameDetachedAlias {
+                detached_alias: detached_alias_for_subject_ref(&subject_ref_sha256),
+                subject_ref_sha256,
+                alias_version: COMPLETED_GAME_ALIAS_VERSION,
+            }
+        })
+        .collect::<Vec<_>>();
+    aliases.sort_by(|left, right| left.subject_ref_sha256.cmp(&right.subject_ref_sha256));
+    aliases
+}
+
+fn completed_game_export_checksum(export: &CompletedGameExport) -> Result<String, ProjectionError> {
+    #[derive(Serialize)]
+    struct ChecksumManifest<'a> {
+        stream: &'a eventstore::StreamExport,
+        detached_subject_aliases: &'a [CompletedGameDetachedAlias],
+    }
+
+    let bytes = serde_json::to_vec(&ChecksumManifest {
+        stream: &export.stream,
+        detached_subject_aliases: &export.detached_subject_aliases,
+    })
+    .map_err(|error| {
+        invalid_completed_game_export(format!("cannot serialize completed-game manifest: {error}"))
+    })?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+fn validate_completed_game_export_wrapper(
+    export: &CompletedGameExport,
+) -> Result<(), ProjectionError> {
+    let expected_checksum = completed_game_export_checksum(export)?;
+    if export.archive_checksum_sha256 != expected_checksum {
+        return Err(invalid_completed_game_export(
+            "completed-game archive checksum mismatch",
+        ));
+    }
+    for (index, alias) in export.detached_subject_aliases.iter().enumerate() {
+        if alias.alias_version != COMPLETED_GAME_ALIAS_VERSION
+            || alias.subject_ref_sha256.len() != 64
+            || !alias
+                .subject_ref_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            || alias.detached_alias != detached_alias_for_subject_ref(&alias.subject_ref_sha256)
+        {
+            return Err(invalid_completed_game_export(
+                "detached subject alias is not canonical",
+            ));
+        }
+        if index > 0
+            && export.detached_subject_aliases[index - 1].subject_ref_sha256
+                >= alias.subject_ref_sha256
+        {
+            return Err(invalid_completed_game_export(
+                "detached subject aliases must be uniquely sorted",
+            ));
+        }
+    }
+    Ok(())
 }
 
 async fn rebuild_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
 ) -> Result<(), ProjectionError> {
+    // Eventstore is the only code allowed to open sealed bodies. Load and
+    // pre-lock their private subjects before taking any projection row lock.
+    // This makes rebuild and erasure share principal -> subject -> projection
+    // order and keeps the replay on one transaction snapshot.
+    let events = eventstore::load_stream_in_tx(tx, game_id).await?;
+    prelock_rebuild_subject_owners(tx, &events).await?;
+
     sqlx::query(
         "DELETE FROM post_citation WHERE quoting_kind = 'game_post' AND quoting_scope_id = $1",
     )
@@ -3814,36 +4719,8 @@ async fn rebuild_in_tx(
         .execute(&mut **tx)
         .await?;
 
-    // Load the stream in order (within this tx) and re-fold. We read inside the
-    // tx so the rebuild is a consistent snapshot.
-    let rows = sqlx::query(
-        r#"
-        SELECT seq, stream_id, stream_seq, kind, version, payload, actor, occurred_at, causation_id, meta
-        FROM events
-        WHERE stream_id = $1
-        ORDER BY stream_seq ASC
-        "#,
-    )
-    .bind(game_id)
-    .fetch_all(&mut **tx)
-    .await?;
-
-    for row in rows {
-        let stored = StoredEvent {
-            seq: row.try_get("seq")?,
-            stream_id: row.try_get("stream_id")?,
-            stream_seq: row.try_get("stream_seq")?,
-            kind: row.try_get("kind")?,
-            version: row.try_get("version")?,
-            payload: row.try_get("payload")?,
-            actor: serde_json::from_value(row.try_get::<serde_json::Value, _>("actor")?)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-            occurred_at: row.try_get("occurred_at")?,
-            causation_id: row.try_get("causation_id")?,
-            meta: row.try_get("meta")?,
-        };
-        let stored = eventstore::upcast(eventstore::decode_stored_payload(stored)?);
-        fold_event(tx, game_id, &stored).await?;
+    for stored in &events {
+        fold_event(tx, game_id, stored, None).await?;
     }
 
     Ok(())
@@ -4009,21 +4886,31 @@ pub async fn audit_rebuild(
     game_id: Uuid,
 ) -> Result<ProjectionAuditReport, ProjectionError> {
     let mut tx = pool.begin().await?;
+    let report = audit_rebuild_in_tx(&mut tx, game_id).await?;
+    tx.rollback().await?;
+    Ok(report)
+}
 
+/// Compare one projection snapshot with an immediate second rebuild while
+/// retaining the caller's transaction. Completed-game import uses this to make
+/// event insertion, detached aliases, first rebuild, and determinism proof one
+/// all-or-nothing commit.
+async fn audit_rebuild_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+) -> Result<ProjectionAuditReport, ProjectionError> {
     let mut before = Vec::with_capacity(AUDIT_PROJECTIONS.len());
     for projection in AUDIT_PROJECTIONS {
-        before.push(projection_snapshot(&mut tx, projection, game_id).await?);
+        before.push(projection_snapshot(tx, projection, game_id).await?);
     }
 
-    rebuild_in_tx(&mut tx, game_id).await?;
+    rebuild_in_tx(tx, game_id).await?;
 
     let mut tables = Vec::with_capacity(AUDIT_PROJECTIONS.len());
     for (projection, before) in AUDIT_PROJECTIONS.iter().zip(before) {
-        let rebuilt = projection_snapshot(&mut tx, projection, game_id).await?;
+        let rebuilt = projection_snapshot(tx, projection, game_id).await?;
         tables.push(audit_table(projection.table, before, rebuilt));
     }
-
-    tx.rollback().await?;
 
     Ok(ProjectionAuditReport {
         game_id,
@@ -5555,6 +6442,32 @@ where
     Ok(row.map(|r| r.get("assigned_principal_user_id")))
 }
 
+/// All open slot-to-principal bindings for an authorized game-scoped read.
+/// Keeping this separate from [`slot_occupancy`] prevents private authority
+/// data from leaking into the public roster shape while avoiding per-slot SQL.
+pub async fn slot_occupants<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<BTreeMap<String, String>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows = sqlx::query(
+        "SELECT o.slot_id, p.principal_user_id AS assigned_principal_user_id \
+         FROM slot_occupancy_epoch o \
+         JOIN game_persona_private p \
+           ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
+         WHERE o.game_id = $1 AND o.ended_seq IS NULL ORDER BY o.slot_id",
+    )
+    .bind(game_id)
+    .fetch_all(executor)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| (row.get("slot_id"), row.get("assigned_principal_user_id")))
+        .collect())
+}
+
 /// Read a game's open occupancy epochs with only public persona presentation,
 /// ordered deterministically.
 pub async fn slot_occupancy<'e, E>(
@@ -5708,6 +6621,25 @@ where
     Ok(row.is_some())
 }
 
+/// Exact content identity committed for a game. Consumers must resolve this
+/// complete reference through the embedded registry; the key alone is not an
+/// executable identity.
+pub async fn game_pack_ref<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Option<PackRef>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let row = sqlx::query(
+        "SELECT pack_key, pack_version, pack_content_hash FROM game_index WHERE game_id = $1",
+    )
+    .bind(game_id)
+    .fetch_optional(executor)
+    .await?;
+    row.map(|row| stored_pack_ref(&row)).transpose()
+}
+
 /// Read the main thread as a stable cold-load page. Results are returned
 /// oldest-to-newest for direct rendering. To page older, pass the previous
 /// response's `next_before_seq` as `before_seq`.
@@ -5753,7 +6685,8 @@ pub async fn game_index(
         Some(cursor) => {
             sqlx::query(
                 r#"
-                SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+                SELECT game_id, pack_key, pack_version, pack_content_hash,
+                       status, phase_id, updated_seq, completed_seq
                 FROM game_index
                 WHERE status IN ('active', 'completed')
                   AND (updated_seq < $1 OR (updated_seq = $1 AND game_id < $2))
@@ -5770,7 +6703,8 @@ pub async fn game_index(
         None => {
             sqlx::query(
                 r#"
-                SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+                SELECT game_id, pack_key, pack_version, pack_content_hash,
+                       status, phase_id, updated_seq, completed_seq
                 FROM game_index
                 WHERE status IN ('active', 'completed')
                 ORDER BY updated_seq DESC, game_id DESC
@@ -5786,15 +6720,17 @@ pub async fn game_index(
     let games: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
-        .map(|row| GameIndexRow {
-            game_id: row.get("game_id"),
-            pack: row.get("pack"),
-            status: row.get("status"),
-            phase_id: row.get("phase_id"),
-            updated_seq: row.get("updated_seq"),
-            completed_seq: row.get("completed_seq"),
+        .map(|row| {
+            Ok(GameIndexRow {
+                game_id: row.get("game_id"),
+                pack_ref: stored_pack_ref(&row)?,
+                status: row.get("status"),
+                phase_id: row.get("phase_id"),
+                updated_seq: row.get("updated_seq"),
+                completed_seq: row.get("completed_seq"),
+            })
         })
-        .collect();
+        .collect::<Result<_, ProjectionError>>()?;
     let next_cursor = has_more.then(|| {
         let last = games.last().expect("full page has a final game");
         GameIndexCursor {
@@ -5818,7 +6754,8 @@ pub async fn operator_game_index(
         Some(cursor) => {
             sqlx::query(
                 r#"
-                SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+                SELECT game_id, pack_key, pack_version, pack_content_hash,
+                       status, phase_id, updated_seq, completed_seq
                 FROM game_index
                 WHERE updated_seq < $1 OR (updated_seq = $1 AND game_id < $2)
                 ORDER BY updated_seq DESC, game_id DESC
@@ -5834,7 +6771,8 @@ pub async fn operator_game_index(
         None => {
             sqlx::query(
                 r#"
-                SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+                SELECT game_id, pack_key, pack_version, pack_content_hash,
+                       status, phase_id, updated_seq, completed_seq
                 FROM game_index
                 ORDER BY updated_seq DESC, game_id DESC
                 LIMIT $1
@@ -5849,15 +6787,17 @@ pub async fn operator_game_index(
     let games: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
-        .map(|row| GameIndexRow {
-            game_id: row.get("game_id"),
-            pack: row.get("pack"),
-            status: row.get("status"),
-            phase_id: row.get("phase_id"),
-            updated_seq: row.get("updated_seq"),
-            completed_seq: row.get("completed_seq"),
+        .map(|row| {
+            Ok(GameIndexRow {
+                game_id: row.get("game_id"),
+                pack_ref: stored_pack_ref(&row)?,
+                status: row.get("status"),
+                phase_id: row.get("phase_id"),
+                updated_seq: row.get("updated_seq"),
+                completed_seq: row.get("completed_seq"),
+            })
         })
-        .collect();
+        .collect::<Result<_, ProjectionError>>()?;
     let next_cursor = has_more.then(|| {
         let last = games.last().expect("full operator page has a final game");
         GameIndexCursor {
@@ -5875,7 +6815,8 @@ pub async fn public_game_by_id(
 ) -> Result<Option<GameIndexRow>, ProjectionError> {
     let row = sqlx::query(
         r#"
-        SELECT game_id, pack, status, phase_id, updated_seq, completed_seq
+        SELECT game_id, pack_key, pack_version, pack_content_hash,
+               status, phase_id, updated_seq, completed_seq
         FROM game_index
         WHERE game_id = $1 AND status IN ('active', 'completed')
         "#,
@@ -5883,14 +6824,17 @@ pub async fn public_game_by_id(
     .bind(game_id)
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(|row| GameIndexRow {
-        game_id: row.get("game_id"),
-        pack: row.get("pack"),
-        status: row.get("status"),
-        phase_id: row.get("phase_id"),
-        updated_seq: row.get("updated_seq"),
-        completed_seq: row.get("completed_seq"),
-    }))
+    row.map(|row| {
+        Ok(GameIndexRow {
+            game_id: row.get("game_id"),
+            pack_ref: stored_pack_ref(&row)?,
+            status: row.get("status"),
+            phase_id: row.get("phase_id"),
+            updated_seq: row.get("updated_seq"),
+            completed_seq: row.get("completed_seq"),
+        })
+    })
+    .transpose()
 }
 
 /// Search the public-only document projection by weighted PostgreSQL full-text
@@ -7023,7 +7967,7 @@ pub async fn community_inbox(
                subscription.active AS subscribed,
                CASE item.target_kind
                  WHEN 'discussion_topic' THEN topic.title
-                 ELSE game.pack || ' game'
+                 ELSE game.pack_key || ' game'
                END AS title,
                CASE item.target_kind
                  WHEN 'discussion_topic' THEN '/discussions/' || area.slug || '/t/' || item.scope_id::text || '#post-' || item.source_seq::text
@@ -7931,11 +8875,15 @@ async fn register_game_persona(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
     persona_id: &str,
-    principal_user_id: &str,
-    public_name: &str,
+    subject_id: SubjectId,
+    claim_id: ClaimId,
+    opened_claim: Option<&GamePersonaPrivateClaim>,
     seq: i64,
 ) -> Result<(), ProjectionError> {
-    let normalized_name = public_name.trim().to_lowercase();
+    let resolved =
+        resolve_game_persona_claim(tx, game_id, persona_id, subject_id, claim_id, opened_claim)
+            .await?;
+    let normalized_name = resolved.public_name.trim().to_lowercase();
     if normalized_name.is_empty() {
         return Err(ProjectionError::Payload {
             kind: "GamePersonaRegistered".to_string(),
@@ -7944,14 +8892,17 @@ async fn register_game_persona(
     }
     sqlx::query(
         r#"
-        INSERT INTO game_persona_private (game_id, persona_id, principal_user_id, registered_seq)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO game_persona_private
+            (game_id, persona_id, principal_user_id, registered_seq, subject_id, current_claim_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
         "#,
     )
     .bind(game_id)
     .bind(persona_id)
-    .bind(principal_user_id)
+    .bind(&resolved.principal_user_id)
     .bind(seq)
+    .bind(resolved.retained_subject_id)
+    .bind(resolved.retained_claim_id)
     .execute(&mut **tx)
     .await?;
     sqlx::query(
@@ -7960,7 +8911,7 @@ async fn register_game_persona(
     )
     .bind(game_id)
     .bind(persona_id)
-    .bind(public_name.trim())
+    .bind(resolved.public_name.trim())
     .bind(seq)
     .execute(&mut **tx)
     .await?;
@@ -7971,7 +8922,7 @@ async fn register_game_persona(
     .bind(game_id)
     .bind(persona_id)
     .bind(seq)
-    .bind(public_name.trim())
+    .bind(resolved.public_name.trim())
     .execute(&mut **tx)
     .await?;
     sqlx::query(
@@ -7991,10 +8942,15 @@ async fn rename_game_persona(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
     persona_id: &str,
-    public_name: &str,
+    subject_id: SubjectId,
+    claim_id: ClaimId,
+    opened_claim: Option<&GamePersonaPrivateClaim>,
     seq: i64,
 ) -> Result<(), ProjectionError> {
-    let normalized_name = public_name.trim().to_lowercase();
+    let resolved =
+        resolve_game_persona_claim(tx, game_id, persona_id, subject_id, claim_id, opened_claim)
+            .await?;
+    let normalized_name = resolved.public_name.trim().to_lowercase();
     if normalized_name.is_empty() {
         return Err(ProjectionError::Payload {
             kind: "GamePersonaRenamed".to_string(),
@@ -8007,8 +8963,18 @@ async fn rename_game_persona(
     )
     .bind(game_id)
     .bind(persona_id)
-    .bind(public_name.trim())
+    .bind(resolved.public_name.trim())
     .bind(seq)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "UPDATE game_persona_private SET principal_user_id = $3, subject_id = $4, current_claim_id = $5 WHERE game_id = $1 AND persona_id = $2",
+    )
+    .bind(game_id)
+    .bind(persona_id)
+    .bind(&resolved.principal_user_id)
+    .bind(resolved.retained_subject_id)
+    .bind(resolved.retained_claim_id)
     .execute(&mut **tx)
     .await?;
     sqlx::query(
@@ -8018,7 +8984,7 @@ async fn rename_game_persona(
     .bind(game_id)
     .bind(persona_id)
     .bind(seq)
-    .bind(public_name.trim())
+    .bind(resolved.public_name.trim())
     .execute(&mut **tx)
     .await?;
     sqlx::query(
@@ -8032,6 +8998,62 @@ async fn rename_game_persona(
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+async fn resolve_game_persona_claim(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    persona_id: &str,
+    subject_id: SubjectId,
+    claim_id: ClaimId,
+    opened_claim: Option<&GamePersonaPrivateClaim>,
+) -> Result<ResolvedGamePersonaClaim, ProjectionError> {
+    // A completed archive is a detached, game-scoped identity universe. Its
+    // authenticated alias must win even if this database happens to reuse and
+    // tombstone the same otherwise-global SubjectId.
+    if let Some(alias) = completed_game_detached_alias(tx, game_id, subject_id).await? {
+        return Ok(ResolvedGamePersonaClaim {
+            principal_user_id: alias.clone(),
+            public_name: alias,
+            retained_subject_id: None,
+            retained_claim_id: None,
+        });
+    }
+    if let Some(alias) = subject_tombstone_alias(tx, subject_id).await? {
+        return Ok(ResolvedGamePersonaClaim {
+            principal_user_id: alias.clone(),
+            public_name: alias,
+            retained_subject_id: Some(subject_id.as_uuid()),
+            retained_claim_id: None,
+        });
+    }
+    let claim = match opened_claim {
+        Some(claim) => claim.clone(),
+        None => {
+            open_active_subject_claim(
+                tx,
+                subject_id,
+                claim_id,
+                "game_persona",
+                game_id,
+                Some(persona_id),
+            )
+            .await?
+        }
+    };
+    Ok(ResolvedGamePersonaClaim {
+        principal_user_id: claim.principal_user_id,
+        public_name: claim.public_name,
+        retained_subject_id: Some(subject_id.as_uuid()),
+        retained_claim_id: Some(claim_id.as_uuid()),
+    })
+}
+
+struct ResolvedGamePersonaClaim {
+    principal_user_id: String,
+    public_name: String,
+    retained_subject_id: Option<Uuid>,
+    retained_claim_id: Option<Uuid>,
 }
 
 struct OccupancyEpochStart<'a> {
@@ -8303,18 +9325,22 @@ async fn set_phase(
 async fn insert_game_index_setup(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    pack: &str,
+    pack_ref: &PackRef,
     event_seq: i64,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
-        INSERT INTO game_index (game_id, pack, status, phase_id, created_seq, started_seq, completed_seq, updated_seq)
-        VALUES ($1, $2, 'setup', NULL, $3, NULL, NULL, $3)
+        INSERT INTO game_index
+            (game_id, pack_key, pack_version, pack_content_hash, status, phase_id,
+             created_seq, started_seq, completed_seq, updated_seq)
+        VALUES ($1, $2, $3, $4, 'setup', NULL, $5, NULL, NULL, $5)
         ON CONFLICT (game_id) DO NOTHING
         "#,
     )
     .bind(game_id)
-    .bind(pack)
+    .bind(&pack_ref.key)
+    .bind(i64::from(pack_ref.version))
+    .bind(pack_ref.content_hash.as_str())
     .bind(event_seq)
     .execute(&mut **tx)
     .await?;
@@ -8385,8 +9411,8 @@ async fn sync_game_search_documents(
             href, updated_seq, published_at
         )
         SELECT 'game', game.game_id::text, 'game', game.game_id,
-               game.pack || ' game',
-               concat_ws(' ', game.pack, game.status, game.phase_id),
+               game.pack_key || ' game',
+               concat_ws(' ', game.pack_key, game.status, game.phase_id),
                '/games/' || game.game_id::text,
                game.updated_seq, event.occurred_at
         FROM game_index AS game
@@ -8405,7 +9431,7 @@ async fn sync_game_search_documents(
         )
         SELECT 'game_post', post.game_id::text || '-' || post.source_seq::text,
                'game', post.game_id,
-               'Post in ' || game.pack || ' game', post.body,
+               'Post in ' || game.pack_key || ' game', post.body,
                '/games/' || post.game_id::text || '#thread-post-' || post.source_seq::text,
                post.source_seq, post.occurred_at
         FROM thread_view AS post
@@ -8441,7 +9467,7 @@ async fn insert_game_post_search_document(
         )
         SELECT 'game_post', post.game_id::text || '-' || post.source_seq::text,
                'game', post.game_id,
-               'Post in ' || game.pack || ' game', post.body,
+               'Post in ' || game.pack_key || ' game', post.body,
                '/games/' || post.game_id::text || '#thread-post-' || post.source_seq::text,
                post.source_seq, post.occurred_at
         FROM thread_view AS post
@@ -8945,6 +9971,21 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
 }
 
 // ───────────────────────── payload accessors ─────────────────────────
+
+fn stored_pack_ref(row: &sqlx::postgres::PgRow) -> Result<PackRef, ProjectionError> {
+    let version: i64 = row.get("pack_version");
+    let version = u32::try_from(version).map_err(|_| {
+        ProjectionError::PackIdentity(format!("pack version {version} is outside u32"))
+    })?;
+    let content_hash: String = row.get("pack_content_hash");
+    let content_hash = ContentHash::new(content_hash)
+        .map_err(|error| ProjectionError::PackIdentity(error.to_string()))?;
+    Ok(PackRef {
+        key: row.get("pack_key"),
+        version,
+        content_hash,
+    })
+}
 
 fn str_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<String, ProjectionError> {
     p.get(key)

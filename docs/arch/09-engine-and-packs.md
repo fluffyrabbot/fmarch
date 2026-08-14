@@ -147,6 +147,23 @@ shape and validates it before command-side resolution can append `ResolutionAppl
 `ResolutionTrace`, or `ThreadLocked`. Pack versions are exact: unsupported versions fail at this
 boundary instead of receiving an implicit migration or compatibility interpretation.
 
+Release runtime content is an immutable embedded registry, not an ambient workspace filesystem.
+`content_registry` compiles the product pack/program catalogs and their JSON bytes into the server,
+parses and validates them once, indexes content-addressed references, rejects duplicate or drifting
+inventory, and exposes one deterministic registry hash. Normal startup validates the registry before
+opening the service; `fmarch-server --check-content` performs the same check before environment or
+database configuration. The exact-image smoke builds the release Dockerfile and proves that command
+works as the non-root runtime user while `/packs` and `/programs` are absent, then compares the
+image's complete registry digest and reference inventory with the host result.
+
+`GameCreated` commits the complete `PackRef { key, version, content_hash }`, and `game_index`
+projects all three fields. Every game runtime resolves that exact reference; a binary whose embedded
+content differs fails closed instead of silently substituting the current document with the same key.
+The event does not duplicate the full pack document: continued execution therefore requires an image
+that retains the referenced artifact. A future cross-version archive/registry round should add durable
+content-addressed pack custody before old game streams need to outlive their original image lineage.
+Debug-only malformed pack fixtures remain a separate test tier and cannot enter the product catalog.
+
 Golden fixture checking/regeneration uses the same boundary: `domain::golden_events_from_input_value`
 reruns a fixture input, `domain::normalize_golden_event` strips only explicitly non-canonical
 `DayVoteOutcome.reason` / `WinReached.reason` prose plus whole-number JSON float drift, and

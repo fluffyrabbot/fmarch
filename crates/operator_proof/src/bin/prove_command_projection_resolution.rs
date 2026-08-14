@@ -7,7 +7,8 @@ use std::{
 };
 
 use caps::Principal;
-use commands::{audit_resolution_envelopes, handle, load_engine_phase_input, Command};
+use commands::{audit_resolution_envelopes, load_engine_phase_input, Command};
+use operator_proof::minimizer::handle_fixture_command;
 use operator_proof::{
     build_operator_command_projection_resolution_report,
     build_operator_projection_rebuild_audit_report, build_operator_resolution_diff_report,
@@ -157,7 +158,7 @@ async fn seed_and_resolve_fixture_game(
 ) -> Result<Uuid, Box<dyn std::error::Error>> {
     let game = Uuid::new_v4();
     let host = Principal::user("fixture_host");
-    handle(
+    handle_fixture_command(
         pool,
         &host,
         Command::CreateGame {
@@ -169,7 +170,7 @@ async fn seed_and_resolve_fixture_game(
     .await?;
 
     for slot in &fixture.roster {
-        handle(
+        handle_fixture_command(
             pool,
             &host,
             Command::AddSlot {
@@ -178,7 +179,7 @@ async fn seed_and_resolve_fixture_game(
             },
         )
         .await?;
-        handle(
+        handle_fixture_command(
             pool,
             &host,
             commands::seat_persona! {
@@ -188,7 +189,7 @@ async fn seed_and_resolve_fixture_game(
             },
         )
         .await?;
-        handle(
+        handle_fixture_command(
             pool,
             &host,
             Command::AssignRole {
@@ -200,7 +201,7 @@ async fn seed_and_resolve_fixture_game(
         .await?;
     }
 
-    handle(
+    handle_fixture_command(
         pool,
         &host,
         Command::StartGame {
@@ -211,7 +212,7 @@ async fn seed_and_resolve_fixture_game(
     .await?;
 
     for action in &fixture.actions {
-        handle(
+        handle_fixture_command(
             pool,
             &Principal::user(format!(
                 "fixture_user_{}",
@@ -230,10 +231,10 @@ async fn seed_and_resolve_fixture_game(
     }
 
     let phase_input = load_engine_phase_input(pool, game, &fixture.phase).await?;
-    if phase_input.pack_name != fixture.pack {
+    if phase_input.pack_ref.key != fixture.pack {
         return Err(format!(
             "engine input builder loaded pack `{}` for fixture pack `{}`",
-            phase_input.pack_name, fixture.pack
+            phase_input.pack_ref.key, fixture.pack
         )
         .into());
     }
@@ -246,7 +247,7 @@ async fn seed_and_resolve_fixture_game(
         .into());
     }
 
-    handle(
+    handle_fixture_command(
         pool,
         &host,
         Command::ResolvePhase {

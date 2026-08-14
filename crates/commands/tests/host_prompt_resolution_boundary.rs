@@ -42,7 +42,7 @@ fn host_prompt_resolution_has_one_typed_owner_without_admission_or_persistence_d
     for preserved_contract in [
         "projections::host_prompts(",
         "eventstore::load_stream_in_tx(",
-        "load_pack(&pack_name_from_stream(",
+        "load_pack(&pack_ref_from_stream(",
         "\"HostPromptResolved\"",
         "host_prompt_effect(",
         "host_prompt_public_resolution(",

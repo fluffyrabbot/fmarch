@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
@@ -95,17 +95,25 @@ let proofDatabase;
 let server;
 let vite;
 let browser;
+let subjectKeyRoot;
 let serverOutput = "";
 const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
 const previousAuthSourceSigningKey = process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY;
 
 try {
   await mkdir(artifactDir, { recursive: true });
+  subjectKeyRoot = await mkdtemp(path.join(artifactDir, "subject-authority-"));
   proofDatabase = await createScratchDatabase(databaseUrl);
   const apiBaseUrl = await startApi(proofDatabase.url);
   await seedRootAdminSession(proofDatabase.url);
-  const seedCommands = await seedGame(apiBaseUrl);
   const accounts = await createAccounts(apiBaseUrl);
+  const seedTargetAccounts = await provisionSeedTargetAccounts({
+    apiBaseUrl,
+    existingPrincipals: Object.values(accounts).map(
+      (account) => account.principalUserId,
+    ),
+  });
+  const seedCommands = await seedGame(apiBaseUrl);
   const invites = await createInvites(apiBaseUrl);
   const frontendBaseUrl = await startFrontend(apiBaseUrl);
   browser = await chromium.launch();
@@ -211,6 +219,7 @@ try {
     apiBaseUrl,
     frontendBaseUrl,
     seedCommands,
+    seedTargetAccounts,
     invites,
     accounts,
     roles,
@@ -243,6 +252,9 @@ try {
   }
   if (proofDatabase !== undefined) {
     await dropScratchDatabase(proofDatabase);
+  }
+  if (subjectKeyRoot !== undefined) {
+    await rm(subjectKeyRoot, { recursive: true, force: true });
   }
   if (previousApiBaseUrl === undefined) {
     delete process.env.FMARCH_API_BASE_URL;
@@ -358,6 +370,28 @@ async function createAccounts(apiBaseUrl) {
       principalUserId: "player-mira",
     }),
   };
+}
+
+async function provisionSeedTargetAccounts({ apiBaseUrl, existingPrincipals }) {
+  const existing = new Set(existingPrincipals);
+  const targets = new Set();
+  for (const [, command] of seedCommandPlanForGame(game)) {
+    const principalUserId =
+      command.SeatPersona?.principal_user_id ??
+      command.ProcessReplacement?.incoming_principal_user_id;
+    if (typeof principalUserId === "string" && !existing.has(principalUserId)) {
+      targets.add(principalUserId);
+    }
+  }
+  return await Promise.all(
+    [...targets].sort().map((principalUserId) =>
+      createAccount(apiBaseUrl, {
+        accountId: `seed-${principalUserId}-${game}@example.test`,
+        password: `seed-account-password-${principalUserId}-${game}`,
+        principalUserId,
+      }),
+    ),
+  );
 }
 
 async function createAccount(
@@ -3629,6 +3663,7 @@ async function startApi(url) {
       DATABASE_URL: url,
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
+      FMARCH_SUBJECT_KEY_DIR: subjectKeyRoot,
       FMARCH_EVENT_ENCRYPTION_KEY: eventEncryptionKey,
       FMARCH_EVENT_ENCRYPTION_KID: eventEncryptionKid,
       FMARCH_AUTH_SOURCE_SIGNING_KEY: authSourceSigningKey,

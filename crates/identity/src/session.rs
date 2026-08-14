@@ -197,8 +197,17 @@ pub async fn validate_session_for_update(
     if !is_canonical_app_session_token(token) {
         return Err(IdentityFlowError::Unauthorized);
     }
+    let session_reference = hash_token(token);
+    let principal_user_id = discover_session_principal(conn, session_reference.as_str()).await?;
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        principal_user_id.as_str(),
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
     Ok(
-        lock_eligible_session(conn, hash_token(token).as_str(), policy)
+        lock_eligible_session(conn, session_reference.as_str(), policy)
             .await?
             .context,
     )
@@ -238,6 +247,15 @@ pub async fn rotate_session(
     }
     let previous_session_reference = hash_token(token);
     let mut tx = pool.begin().await?;
+    let principal_user_id =
+        discover_session_principal(&mut tx, previous_session_reference.as_str()).await?;
+    let owner = crate::methods::lock_identity_mutation(
+        &mut tx,
+        principal_user_id.as_str(),
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
     let eligible =
         lock_eligible_session(&mut tx, previous_session_reference.as_str(), policy).await?;
     let now = unix_now_seconds();
@@ -339,6 +357,20 @@ pub async fn rotate_session(
         issued,
         context,
     })
+}
+
+/// Resolve only the owner identifier before taking any row lock. The binding
+/// is deliberately untrusted until the canonical owner-first mutation lock is
+/// held and [`lock_eligible_session`] revalidates the session.
+async fn discover_session_principal(
+    conn: &mut PgConnection,
+    session_reference: &str,
+) -> Result<String, IdentityFlowError> {
+    sqlx::query_scalar("SELECT principal_user_id FROM auth_session WHERE token_hash = $1")
+        .bind(session_reference)
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or(IdentityFlowError::Unauthorized)
 }
 
 async fn lock_eligible_session(

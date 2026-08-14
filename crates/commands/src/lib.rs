@@ -21,7 +21,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::pending;
-use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -165,7 +164,7 @@ pub struct EnginePhaseInputAudit {
     pub phase_id: String,
     pub phase_kind: domain::pack::PhaseKind,
     pub phase_number: u32,
-    pub pack_name: String,
+    pub pack_ref: content_registry::PackRef,
     pub state: domain::StateSnapshot,
     pub submissions: Vec<domain::Submission>,
     pub day_phase_inputs: domain::DayPhaseInputs,
@@ -185,8 +184,8 @@ pub struct EngineInputBuilder<'a> {
 #[derive(Debug, Clone)]
 pub struct EnginePhaseInput {
     pub game: Uuid,
-    pub pack_name: String,
-    pub pack: domain::Pack,
+    pub pack_ref: content_registry::PackRef,
+    pub pack: &'static domain::Pack,
     pub phase_id: String,
     pub phase_kind: domain::pack::PhaseKind,
     pub phase_number: u32,
@@ -222,11 +221,11 @@ impl<'a> EngineInputBuilder<'a> {
     }
 
     pub fn build(self) -> Result<EnginePhaseInput, Reject> {
-        let pack_name = pack_name_from_stream(self.stream)?;
-        let pack = load_pack(&pack_name)?;
+        let pack_ref = pack_ref_from_stream(self.stream)?;
+        let pack = load_pack(&pack_ref)?;
         let phase_kind = phase_kind(self.phase_id)?;
         let phase_number = phase_number(self.phase_id)?;
-        let state = current_snapshot(self.stream, &pack, self.phase_id, phase_kind, phase_number)?;
+        let state = current_snapshot(self.stream, pack, self.phase_id, phase_kind, phase_number)?;
         let submissions = current_submissions(self.stream, self.phase_id);
         let day_phase_inputs =
             current_day_phase_inputs(self.stream, &state, phase_kind, phase_number)?;
@@ -234,7 +233,7 @@ impl<'a> EngineInputBuilder<'a> {
 
         Ok(EnginePhaseInput {
             game: self.game,
-            pack_name,
+            pack_ref,
             pack,
             phase_id: self.phase_id.to_string(),
             phase_kind,
@@ -292,7 +291,7 @@ impl EnginePhaseInput {
             state: self.state.clone(),
             submissions: self.submissions.clone(),
             day_phase_inputs: self.day_phase_inputs.clone(),
-            pack: self.pack.clone(),
+            pack: (*self.pack).clone(),
             seed,
             logical_time,
         }
@@ -1134,7 +1133,8 @@ async fn create_game(
     if projections::game_exists(&mut **tx, game).await? {
         return Err(Reject::UnknownGame); // already exists → treat as bad request
     }
-    load_pack(&pack)?;
+    let pack_ref = selected_pack_ref(&pack)?;
+    load_pack(&pack_ref)?;
     let host = principal.user_id().to_string();
     let denied: Vec<&str> = cohost_denied.iter().map(|c| c.as_str()).collect();
     let ev = EventInput::new(
@@ -1142,7 +1142,7 @@ async fn create_game(
         1,
         serde_json::json!({
             "host": host,
-            "pack": pack,
+            "pack_ref": pack_ref,
             "cohost_denied": denied,
         }),
         ActorId::User(host.clone()),
@@ -1296,9 +1296,9 @@ async fn host_phase_lifecycle(
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
-    validate_pack_phase_id(&pack, &phase)?;
+    let pack_ref = pack_ref_from_stream(&stream)?;
+    let pack = load_pack(&pack_ref)?;
+    validate_pack_phase_id(pack, &phase)?;
     let phase_opened_at = unix_seconds_now()?;
 
     persist(
@@ -1392,9 +1392,9 @@ async fn start_game(
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
-    validate_pack_phase_id(&pack, &phase)?;
+    let pack_ref = pack_ref_from_stream(&stream)?;
+    let pack = load_pack(&pack_ref)?;
+    validate_pack_phase_id(pack, &phase)?;
     let phase_opened_at = unix_seconds_now()?;
 
     let mut events = vec![EventInput::new(
@@ -1408,7 +1408,7 @@ async fn start_game(
         0,
     )];
     events.extend(role_pm_declarations(&stream)?);
-    events.extend(pack_private_channel_declarations(&pack, &stream)?);
+    events.extend(pack_private_channel_declarations(pack, &stream)?);
     persist(tx, game, &events).await
 }
 
@@ -1423,8 +1423,8 @@ async fn advance_phase(
 
     let (phase, stream) = resolved_locked_phase_stream(tx, game).await?;
     let source_phase_id = phase.phase_id.clone();
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
+    let pack_ref = pack_ref_from_stream(&stream)?;
+    let pack = load_pack(&pack_ref)?;
     let next_phase_id = next_declared_phase_id(&pack.phases, &source_phase_id)?;
     let phase_opened_at = unix_seconds_now()?;
     let payload = serde_json::json!({
@@ -1470,8 +1470,8 @@ async fn advance_phase_by_deadline(
     }
 
     let source_phase_id = phase.phase_id.clone();
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
+    let pack_ref = pack_ref_from_stream(&stream)?;
+    let pack = load_pack(&pack_ref)?;
     let next_phase_id = next_declared_phase_id(&pack.phases, &source_phase_id)?;
     let deadline_ev = EventInput::new(
         "PhaseDeadlineElapsed",
@@ -1675,7 +1675,7 @@ pub(crate) async fn plan_effect_events(
         .ok_or_else(|| effect_spec_reject("effect plans require an active phase"))?;
     let phase_kind = phase_kind(&phase.phase_id)?;
     let phase_number = phase_number(&phase.phase_id)?;
-    let pack = load_pack(&current_pack_name(tx, game).await?)?;
+    let pack = load_pack(&current_pack_ref(tx, game).await?)?;
     // Preflight the entire plan before appending anything. Lifecycle validation
     // advances this in-memory view so multiple operations on one slot are
     // checked in plan order without consulting partially folded projections.
@@ -1717,7 +1717,7 @@ pub(crate) async fn plan_effect_events(
             }
             game_platform::ConcreteEffect::Mark { target, effect } => {
                 require_effect_target(tx, game, target.as_str()).await?;
-                let policy = persistent_effect_policy(&pack, effect.as_str())?;
+                let policy = persistent_effect_policy(pack, effect.as_str())?;
                 vec![EventInput::new(
                     "EffectsMarked",
                     1,
@@ -1738,7 +1738,7 @@ pub(crate) async fn plan_effect_events(
             }
             game_platform::ConcreteEffect::Clear { target, effect } => {
                 require_effect_target(tx, game, target.as_str()).await?;
-                persistent_effect_policy(&pack, effect.as_str())?;
+                persistent_effect_policy(pack, effect.as_str())?;
                 vec![EventInput::new(
                     "EffectsCleared",
                     1,
@@ -1757,7 +1757,7 @@ pub(crate) async fn plan_effect_events(
             }
             game_platform::ConcreteEffect::Grant { target, grant } => {
                 require_effect_target(tx, game, target.as_str()).await?;
-                validate_platform_grant(&pack, &grant)?;
+                validate_platform_grant(pack, &grant)?;
                 let source_action = application.grant_source(index);
                 let mut grant_events = vec![EventInput::new(
                     "ActionGranted",
@@ -2146,7 +2146,7 @@ async fn assign_role(
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack = load_pack(&pack_name_from_stream(&stream)?)?;
+    let pack = load_pack(&pack_ref_from_stream(&stream)?)?;
     let role = pack
         .roles
         .get(&role_key)
@@ -2195,7 +2195,7 @@ async fn submit_vote(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let phase_input = EngineInputBuilder::new(game, &stream, &phase).build()?;
-    validate_vote_actor_policy(&phase_input.pack, &phase_input.state, &actor_slot)?;
+    validate_vote_actor_policy(phase_input.pack, &phase_input.state, &actor_slot)?;
     validate_vote_policy_target(&phase_input.pack.vote, &actor_slot, &target)?;
     let target_str = validate_target(tx, game, &target).await?;
 
@@ -2763,7 +2763,7 @@ async fn resolve_phase(
     );
     let mut events = vec![applied_ev, trace_ev];
     events.extend(private_channel_revocations(
-        &phase_input.pack,
+        phase_input.pack,
         &output.post_state,
     ));
     events.push(lock_ev);
@@ -2790,7 +2790,7 @@ async fn control_ita_session(
     let phase = require_open_day_phase(tx, game).await?;
     let phase_number = phase_number(&phase)?;
 
-    let pack = load_pack(&current_pack_name(tx, game).await?)?;
+    let pack = load_pack(&current_pack_ref(tx, game).await?)?;
     if !pack.ita.lifecycle.allows(control) {
         return Err(Reject::InvalidTarget);
     }
@@ -3469,15 +3469,20 @@ async fn resolution_payload_for_phase(
     game: Uuid,
     phase_id: &str,
 ) -> Result<serde_json::Value, Reject> {
-    sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = $2",
-    )
-    .bind(game)
-    .bind(phase_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|err| Reject::Internal(err.to_string()))
+    eventstore::load_stream(pool, game)
+        .await
+        .map_err(|err| Reject::Internal(err.to_string()))?
+        .into_iter()
+        .find(|event| {
+            event.kind == "ResolutionApplied"
+                && event.payload["phase_id"].as_str() == Some(phase_id)
+        })
+        .map(|event| event.payload)
+        .ok_or_else(|| {
+            Reject::Internal(format!(
+                "ResolutionApplied for phase `{phase_id}` is missing"
+            ))
+        })
 }
 
 fn slot_number(slot: &str) -> Result<usize, Reject> {
@@ -3749,13 +3754,17 @@ fn next_declared_phase_id(
     Ok(phase_id)
 }
 
-fn pack_name_from_stream(stream: &[eventstore::StoredEvent]) -> Result<String, Reject> {
-    stream
+fn pack_ref_from_stream(
+    stream: &[eventstore::StoredEvent],
+) -> Result<content_registry::PackRef, Reject> {
+    let value = stream
         .iter()
         .find(|ev| ev.kind == "GameCreated")
-        .and_then(|ev| ev.payload["pack"].as_str())
-        .map(str::to_string)
-        .ok_or_else(|| Reject::Internal("game stream has no GameCreated.pack".to_string()))
+        .and_then(|ev| ev.payload.get("pack_ref"))
+        .cloned()
+        .ok_or_else(|| Reject::Internal("game stream has no GameCreated.pack_ref".to_string()))?;
+    serde_json::from_value(value)
+        .map_err(|error| Reject::Internal(format!("malformed GameCreated.pack_ref: {error}")))
 }
 
 fn pack_private_channel_declarations(
@@ -3951,25 +3960,37 @@ fn role_assignments_from_stream(
     Ok(assignments)
 }
 
-pub(crate) fn load_pack(name: &str) -> Result<domain::Pack, Reject> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../packs")
-        .join(name)
-        .join("pack.json");
-    let raw = std::fs::read_to_string(&path)
-        .map_err(|e| Reject::Internal(format!("read pack {}: {e}", path.display())))?;
-    domain::load_pack_from_json(&raw)
-        .map_err(|e| Reject::Internal(format!("load pack {name}: {e}")))
+pub(crate) fn load_pack(
+    pack_ref: &content_registry::PackRef,
+) -> Result<&'static domain::Pack, Reject> {
+    content_registry::resolve_pack(pack_ref).map_err(|error| match error {
+        content_registry::RegistryError::Initialization(message) => Reject::Internal(format!(
+            "initialize embedded content registry while resolving {}: {message}",
+            pack_ref.key
+        )),
+        other => Reject::PackValidation(other.to_string()),
+    })
 }
 
-pub(crate) async fn current_pack_name(
+fn selected_pack_ref(name: &str) -> Result<content_registry::PackRef, Reject> {
+    content_registry::pack_ref(name)
+        .cloned()
+        .map_err(|error| match error {
+            content_registry::RegistryError::Initialization(message) => Reject::Internal(format!(
+                "initialize embedded content registry while selecting {name}: {message}"
+            )),
+            other => Reject::PackValidation(other.to_string()),
+        })
+}
+
+pub(crate) async fn current_pack_ref(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-) -> Result<String, Reject> {
-    let stream = eventstore::load_stream_in_tx(tx, game)
+) -> Result<content_registry::PackRef, Reject> {
+    projections::game_pack_ref(&mut **tx, game)
         .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    pack_name_from_stream(&stream)
+        .map_err(|error| Reject::Internal(error.to_string()))?
+        .ok_or(Reject::UnknownGame)
 }
 
 /// Load the engine-facing, slot-only snapshot for a stored game stream and
@@ -4007,7 +4028,7 @@ pub async fn load_engine_phase_input(
         phase_id: phase_input.phase_id,
         phase_kind: phase_input.phase_kind,
         phase_number: phase_input.phase_number,
-        pack_name: phase_input.pack_name,
+        pack_ref: phase_input.pack_ref,
         state: phase_input.state,
         submissions: phase_input.submissions,
         day_phase_inputs: phase_input.day_phase_inputs,
@@ -5059,7 +5080,7 @@ async fn require_slot_can_post(
     match projections::slot_alive(&mut **tx, game, slot).await? {
         Some(true) => Ok(()),
         Some(false) => {
-            let pack = load_pack(&current_pack_name(tx, game).await?)?;
+            let pack = load_pack(&current_pack_ref(tx, game).await?)?;
             if !pack.treestump_policy.enabled {
                 return Err(Reject::SlotNotAlive);
             }

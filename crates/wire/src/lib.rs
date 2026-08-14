@@ -835,6 +835,7 @@ pub enum RejectCode {
     ParticipationNotAllowed,
     DayEventValidation,
     DayProgramValidation,
+    PackValidation,
     DayProgramAlreadyAttached,
     EffectSpecValidation,
     Internal,
@@ -869,6 +870,7 @@ impl From<&commands::Reject> for RejectCode {
             commands::Reject::ParticipationNotAllowed(_) => RejectCode::ParticipationNotAllowed,
             commands::Reject::DayEventValidation(_) => RejectCode::DayEventValidation,
             commands::Reject::DayProgramValidation(_) => RejectCode::DayProgramValidation,
+            commands::Reject::PackValidation(_) => RejectCode::PackValidation,
             commands::Reject::DayProgramAlreadyAttached => RejectCode::DayProgramAlreadyAttached,
             commands::Reject::EffectSpecValidation(_) => RejectCode::EffectSpecValidation,
             commands::Reject::Internal(_) => RejectCode::Internal,
@@ -1543,7 +1545,7 @@ impl From<projections::GameIndexRow> for GameIndexEntry {
     fn from(row: projections::GameIndexRow) -> Self {
         GameIndexEntry {
             game: row.game_id,
-            pack: row.pack,
+            pack: row.pack_ref.key,
             status: row.status,
             phase_id: row.phase_id,
             updated_seq: row.updated_seq,

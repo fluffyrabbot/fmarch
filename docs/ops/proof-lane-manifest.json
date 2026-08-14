@@ -15,6 +15,7 @@
   "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract"],
   "lanes": {
     "cargo:clippy-workspace": { "kind": "shell", "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings" },
+    "cargo:content-registry": { "kind": "shell", "command": "cargo test -p content_registry" },
     "cargo:domain": { "kind": "shell", "command": "cargo test -p domain" },
     "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -- --test-threads=1" },
     "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1" },
@@ -93,9 +94,17 @@
     "test:security-release-baseline": { "kind": "npm" },
     "test:dependency-policy": { "kind": "npm" },
     "test:frontend-csp-browser": { "kind": "npm" },
-    "check:build-posture": { "kind": "npm" }
+    "check:build-posture": { "kind": "npm" },
+    "test:exact-image-content": { "kind": "npm" }
   },
   "areas": [
+    {
+      "id": "crate:content-registry",
+      "tier": "active",
+      "paths": ["crates/content_registry/"],
+      "crate": "content_registry",
+      "lanes": ["cargo:content-registry", "cargo:clippy-workspace", "test:exact-image-content"]
+    },
     {
       "id": "crate:domain",
       "tier": "frozen",
@@ -273,13 +282,13 @@
       "tier": "active",
       "paths": ["crates/server/"],
       "crate": "server",
-      "lanes": ["cargo:server", "cargo:clippy-workspace", "test:release-topology", "test:security-release-baseline"]
+      "lanes": ["cargo:server", "cargo:clippy-workspace", "test:release-topology", "test:security-release-baseline", "test:exact-image-content"]
     },
     {
       "id": "packs",
       "tier": "frozen",
       "paths": ["packs/"],
-      "lanes": ["cargo:domain", "cargo:commands-pg"],
+      "lanes": ["cargo:domain", "cargo:content-registry", "cargo:commands-pg", "test:exact-image-content"],
       "capabilities": ["foundation.resolution-engine-parity"]
     },
     {
@@ -287,10 +296,12 @@
       "tier": "active",
       "paths": ["programs/"],
       "lanes": [
+        "cargo:content-registry",
         "cargo:game-platform",
         "cargo:commands-pg",
         "cargo:api",
-        "test:mash-scale-acceptance"
+        "test:mash-scale-acceptance",
+        "test:exact-image-content"
       ],
       "capabilities": [
         "product.mash.day-program-library",
@@ -428,6 +439,12 @@
       "capabilities": ["foundation.security-release-baseline"]
     },
     {
+      "id": "proof:exact-image-content",
+      "tier": "active",
+      "paths": ["tools/exact_image_content_smoke.mjs"],
+      "lanes": ["test:exact-image-content"]
+    },
+    {
       "id": "tools:proof-infra",
       "tier": "active",
       "paths": ["tools/"],
@@ -468,7 +485,8 @@
       "lanes": [
         "check:build-posture",
         "test:railway-staging-target",
-        "test:security-release-baseline"
+        "test:security-release-baseline",
+        "test:exact-image-content"
       ]
     },
     {
@@ -479,6 +497,7 @@
         "check:build-posture",
         "test:projection-baseline:static",
         "cargo:clippy-workspace",
+        "cargo:content-registry",
         "cargo:commands-unit",
         "cargo:commands-pg",
         "cargo:commands-concurrency",

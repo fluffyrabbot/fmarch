@@ -153,13 +153,8 @@ async fn host_phase_movement_respects_pack_cadence(pool: PgPool) {
         "rejected phase advance must not mutate phase_state"
     );
 
-    let invalid_phase_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND payload->>'phase_id' = 'T01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let invalid_phase_events: i64 =
+        stored_event_count_all_where(&pool, game, &[("phase_id", "T01")]).await as i64;
     assert_eq!(
         invalid_phase_events, 0,
         "rejected phase movement must not append invalid phase events"
@@ -224,14 +219,15 @@ async fn start_game_declares_mason_neighbor_private_channels(pool: PgPool) {
     .await
     .expect("start declares setup private channels");
 
-    let declarations = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PrivateChannelDeclared' \
-         ORDER BY payload->>'channel_id'",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let declarations = {
+        let mut payloads = stored_payloads(&pool, game, "PrivateChannelDeclared").await;
+        payloads.sort_by(|left, right| {
+            left["channel_id"]
+                .as_str()
+                .cmp(&right["channel_id"].as_str())
+        });
+        payloads
+    };
     assert_eq!(declarations.len(), 2);
     assert_eq!(declarations[0]["channel_id"], "private:mason");
     assert_eq!(declarations[0]["kind"], "Mason");
@@ -361,14 +357,13 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
     .await
     .expect("start declares Encryptor-gated mafia day chat");
 
-    let declaration = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PrivateChannelDeclared' \
-         AND payload->>'channel_id' = 'private:mafia_day_chat'",
+    let declaration = stored_payload_where(
+        &pool,
+        game,
+        "PrivateChannelDeclared",
+        &[("channel_id", "private:mafia_day_chat")],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(declaration["kind"], "FactionDayChat");
     assert_eq!(
         declaration["member_alignments"],
@@ -453,14 +448,8 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
         4,
         "Encryptor lynch appends ResolutionApplied, ResolutionTrace, PrivateChannelRevoked, and ThreadLocked atomically"
     );
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid Encryptor lynch result");
     assert!(
@@ -473,14 +462,13 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
         applied.events
     );
 
-    let revocation = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PrivateChannelRevoked' \
-         AND payload->>'channel_id' = 'private:mafia_day_chat'",
+    let revocation = stored_payload_where(
+        &pool,
+        game,
+        "PrivateChannelRevoked",
+        &[("channel_id", "private:mafia_day_chat")],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(revocation["kind"], "FactionDayChat");
     assert_eq!(revocation["reason"], "source_role_not_alive");
     assert_eq!(revocation["source"], "pack.private_channels.mafia_day_chat");
@@ -567,14 +555,15 @@ async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool
     .await
     .expect("start declares Mafia Universe setup private channels");
 
-    let declarations = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PrivateChannelDeclared' \
-         ORDER BY payload->>'channel_id'",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let declarations = {
+        let mut payloads = stored_payloads(&pool, game, "PrivateChannelDeclared").await;
+        payloads.sort_by(|left, right| {
+            left["channel_id"]
+                .as_str()
+                .cmp(&right["channel_id"].as_str())
+        });
+        payloads
+    };
     assert_eq!(declarations.len(), 2);
     assert_eq!(declarations[0]["channel_id"], "private:mason");
     assert_eq!(declarations[0]["kind"], "Mason");
@@ -684,11 +673,7 @@ async fn resolve_phase_rejects_invalid_pack_precedence_before_append(pool: PgPoo
     .await
     .expect("seed invalid-pack open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -699,8 +684,8 @@ async fn resolve_phase_rejects_invalid_pack_precedence_before_append(pool: PgPoo
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_invalid_precedence")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_invalid_precedence` is invalid")
                     && message.contains("night_resolution.precedence")
                     && message.contains(
                         "requires Block precedence before suppressed ability `Protect`"
@@ -714,23 +699,17 @@ async fn resolve_phase_rejects_invalid_pack_precedence_before_append(pool: PgPoo
         ),
         "unexpected invalid-pack rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "invalid pack resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "invalid pack resolve must not append resolution envelopes or lock the phase"
@@ -752,11 +731,7 @@ async fn resolve_phase_rejects_unsupported_pack_versions_before_append(pool: PgP
     .await
     .expect("seed unsupported-version open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -767,33 +742,67 @@ async fn resolve_phase_rejects_unsupported_pack_versions_before_append(pool: PgP
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_unsupported_ir_version")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_unsupported_ir_version` is invalid")
                     && message.contains("unsupported pack version 2")
                     && message.contains("supported version is 1")
         ),
         "unexpected unsupported-version rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "unsupported pack resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "unsupported pack resolve must not append resolution envelopes or lock the phase"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn resolve_phase_rejects_pack_content_drift_without_name_fallback(pool: PgPool) {
+    let host_id = "pack_ref_drift_host";
+    let game = Uuid::new_v4();
+    let mut drifted_ref = content_registry::pack_ref("mafiascum").unwrap().clone();
+    drifted_ref.content_hash = content_registry::ContentHash::new("0".repeat(64)).unwrap();
+    seed_open_night_game_with_pack_ref(
+        &pool,
+        game,
+        host_id,
+        &drifted_ref,
+        ("roleblocker", "town"),
+        ("mafia_goon", "mafia"),
+    )
+    .await
+    .expect("seed drifted pack reference");
+
+    let before_count = stored_event_count(&pool, game).await;
+    let error = handle(
+        &pool,
+        &user(host_id),
+        Command::ResolvePhase { game, seed: 9903 },
+    )
+    .await
+    .expect_err("content hash drift must fail closed");
+    assert!(
+        matches!(
+            error,
+            Reject::PackValidation(ref message)
+                if message.contains("unknown embedded pack reference mafiascum@1#")
+        ),
+        "unexpected pack-reference rejection: {error:?}"
+    );
+    assert_eq!(
+        stored_event_count(&pool, game).await,
+        before_count,
+        "pack drift must reject before appending resolution events"
     );
 }
 
@@ -812,11 +821,7 @@ async fn resolve_phase_rejects_invalid_action_contract_before_append(pool: PgPoo
     .await
     .expect("seed invalid-action-contract open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -827,8 +832,8 @@ async fn resolve_phase_rejects_invalid_action_contract_before_append(pool: PgPoo
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_invalid_action_contract")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_invalid_action_contract` is invalid")
                     && message.contains("roles.malformed_investigator.actions[0].mode")
                     && message.contains("Investigate actions must declare mode")
                     && message.contains("roles.malformed_investigator.actions[1].mode")
@@ -836,23 +841,17 @@ async fn resolve_phase_rejects_invalid_action_contract_before_append(pool: PgPoo
         ),
         "unexpected invalid-action-contract rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "invalid action contract resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "invalid action contract resolve must not append resolution envelopes or lock the phase"
@@ -874,11 +873,7 @@ async fn resolve_phase_rejects_invalid_effect_contract_before_append(pool: PgPoo
     .await
     .expect("seed invalid-effect-contract open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -889,8 +884,8 @@ async fn resolve_phase_rejects_invalid_effect_contract_before_append(pool: PgPoo
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_invalid_effect_contract")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_invalid_effect_contract` is invalid")
                     && message.contains("roles.malformed_effect_user.actions[0].effect")
                     && message.contains("Mark/Clear actions must declare effect")
                     && message.contains("roles.malformed_effect_user.actions[1].effect")
@@ -900,23 +895,17 @@ async fn resolve_phase_rejects_invalid_effect_contract_before_append(pool: PgPoo
         ),
         "unexpected invalid-effect-contract rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "invalid effect contract resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "invalid effect contract resolve must not append resolution envelopes or lock the phase"
@@ -938,11 +927,7 @@ async fn resolve_phase_rejects_invalid_target_window_contract_before_append(pool
     .await
     .expect("seed invalid-target-window-contract open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -953,8 +938,8 @@ async fn resolve_phase_rejects_invalid_target_window_contract_before_append(pool
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_invalid_target_window_contract")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_invalid_target_window_contract` is invalid")
                     && message.contains("roles.malformed_target_window_user.actions[0].window")
                     && message.contains("action window Night is absent from phases.cadence")
                     && message.contains("roles.malformed_target_window_user.actions[1].constraints.max_targets")
@@ -964,23 +949,17 @@ async fn resolve_phase_rejects_invalid_target_window_contract_before_append(pool
         ),
         "unexpected invalid-target-window-contract rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "invalid target/window contract resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "invalid target/window contract resolve must not append resolution envelopes or lock the phase"
@@ -1002,11 +981,7 @@ async fn resolve_phase_rejects_invalid_target_state_policy_before_append(pool: P
     .await
     .expect("seed invalid-target-state-policy open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -1017,8 +992,8 @@ async fn resolve_phase_rejects_invalid_target_state_policy_before_append(pool: P
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_invalid_target_state_policy")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_invalid_target_state_policy` is invalid")
                     && message.contains("night_resolution.target_state_save_policy")
                     && message.contains(
                         "explicit night_resolution policy must classify target-state saves"
@@ -1036,23 +1011,17 @@ async fn resolve_phase_rejects_invalid_target_state_policy_before_append(pool: P
         ),
         "unexpected invalid-target-state-policy rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "invalid target-state policy resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "invalid target-state policy resolve must not append resolution envelopes or lock the phase"
@@ -1074,11 +1043,7 @@ async fn resolve_phase_rejects_invalid_generated_kill_ownership_before_append(po
     .await
     .expect("seed invalid-generated-kill-ownership open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -1089,8 +1054,8 @@ async fn resolve_phase_rejects_invalid_generated_kill_ownership_before_append(po
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_invalid_generated_kill_ownership")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_invalid_generated_kill_ownership` is invalid")
                     && message.contains(
                         "night_resolution.generated_kill_ownership.pgo_shoots_visitor"
                     )
@@ -1106,23 +1071,17 @@ async fn resolve_phase_rejects_invalid_generated_kill_ownership_before_append(po
         ),
         "unexpected invalid-generated-kill-ownership rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "invalid generated-kill ownership resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "invalid generated-kill ownership resolve must not append resolution envelopes or lock the phase"
@@ -1144,11 +1103,7 @@ async fn resolve_phase_rejects_invalid_reference_contract_before_append(pool: Pg
     .await
     .expect("seed invalid-reference-contract open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -1159,8 +1114,8 @@ async fn resolve_phase_rejects_invalid_reference_contract_before_append(pool: Pg
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_invalid_reference_contract")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_invalid_reference_contract` is invalid")
                     && message.contains("roles.malformed_reference_user.actions[0].reads_effect")
                     && message.contains("unknown effect tag `missing_effect`")
                     && message.contains("investigation_results.parity.alignment_results.missing_alignment")
@@ -1172,23 +1127,17 @@ async fn resolve_phase_rejects_invalid_reference_contract_before_append(pool: Pg
         ),
         "unexpected invalid-reference-contract rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "invalid reference contract resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "invalid reference contract resolve must not append resolution envelopes or lock the phase"
@@ -1210,11 +1159,7 @@ async fn resolve_phase_rejects_invalid_trigger_reference_contract_before_append(
     .await
     .expect("seed invalid-trigger-reference-contract open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -1225,8 +1170,8 @@ async fn resolve_phase_rejects_invalid_trigger_reference_contract_before_append(
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_invalid_trigger_reference_contract")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_invalid_trigger_reference_contract` is invalid")
                     && message.contains("triggers[0].if_target_has")
                     && message.contains("trigger filter tags must not be empty")
                     && message.contains("unknown effect tag `missing_tag`")
@@ -1247,23 +1192,17 @@ async fn resolve_phase_rejects_invalid_trigger_reference_contract_before_append(
         ),
         "unexpected invalid-trigger-reference-contract rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "invalid trigger reference contract resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "invalid trigger reference contract resolve must not append resolution envelopes or lock the phase"
@@ -1285,11 +1224,7 @@ async fn resolve_phase_rejects_invalid_win_policy_contract_before_append(pool: P
     .await
     .expect("seed invalid-win-policy-contract open night stream");
 
-    let before_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let before_count: i64 = stored_event_count(&pool, game).await as i64;
     let err = handle(
         &pool,
         &user(host_id),
@@ -1300,8 +1235,8 @@ async fn resolve_phase_rejects_invalid_win_policy_contract_before_append(pool: P
     assert!(
         matches!(
             err,
-            Reject::Internal(ref message)
-                if message.contains("load pack test_invalid_win_policy_contract")
+            Reject::PackValidation(ref message)
+                if message.contains("embedded debug pack `test_invalid_win_policy_contract` is invalid")
                     && message.contains("win.rules[0].winner")
                     && message.contains(
                         "FactionEliminated rules must not award the eliminated faction"
@@ -1327,23 +1262,17 @@ async fn resolve_phase_rejects_invalid_win_policy_contract_before_append(pool: P
         ),
         "unexpected invalid-win-policy-contract rejection: {err:?}"
     );
-    let after_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-        .bind(game)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let after_count: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         before_count, after_count,
         "invalid win policy contract resolve must not append any events"
     );
-    let resolution_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('ResolutionApplied', 'ResolutionTrace', 'ThreadLocked')",
+    let resolution_events: i64 = stored_event_count_by_kinds(
+        &pool,
+        game,
+        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         resolution_events, 0,
         "invalid win policy contract resolve must not append resolution envelopes or lock the phase"
@@ -1402,13 +1331,7 @@ async fn resolve_phase_uses_pack_derived_custom_precedence_order(pool: PgPool) {
     .await
     .expect("host resolves precedence-order scenario");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied =
         domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
     assert!(
@@ -1439,13 +1362,7 @@ async fn resolve_phase_uses_pack_derived_custom_precedence_order(pool: PgPool) {
         "self-protect must not save when pack precedence orders Kill before Protect"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_decision_trace(
         &trace,
@@ -1508,13 +1425,7 @@ async fn resolve_phase_folds_night_kill_into_faction_win_and_rebuild(pool: PgPoo
         "night win resolve appends ResolutionApplied, ResolutionTrace, and ThreadLocked atomically"
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("default_open night win ResolutionApplied validates");
     assert_eq!(applied.phase_id, "N01");
@@ -1557,13 +1468,7 @@ async fn resolve_phase_folds_night_kill_into_faction_win_and_rebuild(pool: PgPoo
         "death should be folded into state before the faction win check"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("default_open night win ResolutionTrace validates");
     assert_eq!(trace.run_id, applied.run_id);
@@ -1725,14 +1630,8 @@ async fn resolve_phase_folds_three_faction_elimination_win_and_rebuild(pool: PgP
     handle(&pool, &h, Command::ResolvePhase { game, seed: 9912 })
         .await
         .expect("host resolves epicmafia D01 cult lynch");
-    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d01_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION)
         .expect("epicmafia D01 ResolutionApplied validates");
     assert!(d01.events.iter().any(|indexed| matches!(
@@ -1784,14 +1683,8 @@ async fn resolve_phase_folds_three_faction_elimination_win_and_rebuild(pool: PgP
         "D02 town win resolve appends ResolutionApplied, ResolutionTrace, and ThreadLocked atomically"
     );
 
-    let d02_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let d02_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D02")]).await;
     let d02 = domain::validate_resolution_json(&d02_payload, domain::RESULT_VERSION)
         .expect("epicmafia D02 ResolutionApplied validates");
     let lynch_index = d02
@@ -1832,14 +1725,8 @@ async fn resolve_phase_folds_three_faction_elimination_win_and_rebuild(pool: PgP
         "mafia elimination must fold into state before the three-faction town win"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D02")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("epicmafia D02 ResolutionTrace validates");
     assert_eq!(trace.run_id, d02.run_id);
@@ -1978,8 +1865,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
         .find(|event| event.kind == "SlotOccupancyStarted")
         .expect("replacement opens the incoming immutable epoch");
     assert_eq!(
-        replacement_end.payload["transition_id"],
-        replacement_start.payload["transition_id"],
+        replacement_end.payload["transition_id"], replacement_start.payload["transition_id"],
         "replacement is one atomic occupancy transition"
     );
     assert!(
@@ -1996,13 +1882,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
     );
 
     // (b) S's post is STILL attributed to slot S in the event log.
-    let posts = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let posts = stored_payloads(&pool, game, "PostSubmitted").await;
     assert_eq!(posts.len(), 1, "one post");
     assert_eq!(
         posts[0]["slot_or_user"]["slot"], slot,
@@ -2202,16 +2082,16 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
         Reject::NotAuthorized,
     );
 
-    let encrypted: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
-         AND payload->>'channel_id' = 'dead' ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert!(encrypted.get("body").is_none());
-    assert!(encrypted["body_private"]["ciphertext"].is_string());
+    let sealed = latest_sealed_event_body(&pool, game, "PostSubmitted").await;
+    assert_eq!(sealed.sealed_version, 2);
+    assert!(!sealed.kid.is_empty());
+    assert_eq!(sealed.nonce.len(), 24);
+    assert!(sealed.body.len() >= 16);
+    assert!(!sealed.body_contains("dead history before replacement"));
+    assert_eq!(
+        latest_stored_payload(&pool, game, "PostSubmitted").await["body"],
+        "dead history before replacement"
+    );
 
     handle(
         &pool,
@@ -2522,16 +2402,16 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
     )
     .await
     .unwrap();
-    let stored: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
-         AND payload->>'channel_id' = 'spectator' ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert!(stored.get("body").is_none());
-    assert!(stored["body_private"]["ciphertext"].is_string());
+    let sealed = latest_sealed_event_body(&pool, game, "PostSubmitted").await;
+    assert_eq!(sealed.sealed_version, 2);
+    assert!(!sealed.kid.is_empty());
+    assert_eq!(sealed.nonce.len(), 24);
+    assert!(sealed.body.len() >= 16);
+    assert!(!sealed.body_contains("host-authored spectator notice"));
+    assert_eq!(
+        latest_stored_payload(&pool, game, "PostSubmitted").await["body"],
+        "host-authored spectator notice"
+    );
 
     rebuild(&pool, game).await.unwrap();
     assert_eq!(
@@ -2590,15 +2470,13 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
     let game = setup_game(&pool, host, slot, outgoing).await;
     let channel_id = domain::role_pm_channel_id(slot);
 
-    let declaration: serde_json::Value = sqlx::query_scalar(
-        "SELECT payload FROM events WHERE stream_id = $1 \
-         AND kind = 'PrivateChannelDeclared' AND payload->>'channel_id' = $2",
+    let declaration: serde_json::Value = stored_payload_where(
+        &pool,
+        game,
+        "PrivateChannelDeclared",
+        &[("channel_id", &channel_id)],
     )
-    .bind(game)
-    .bind(&channel_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(declaration["kind"], "RolePm");
     assert_eq!(declaration["source"], "engine.role_pm");
     assert_eq!(declaration["members"][0]["slot_id"], slot);
@@ -2763,20 +2641,17 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
     assert_eq!(first_ack.stream_seqs.len(), 1);
     assert_eq!(second_ack.stream_seqs.len(), 1);
 
-    let event_rows = sqlx::query(
-        "SELECT stream_seq, occurred_at, payload FROM events \
-         WHERE stream_id = $1 AND kind = 'PostSubmitted' ORDER BY stream_seq",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let event_rows: Vec<_> = stored_events(&pool, game)
+        .await
+        .into_iter()
+        .filter(|event| event.kind == "PostSubmitted")
+        .collect();
     assert_eq!(event_rows.len(), 2);
-    let first_stream_seq: i64 = event_rows[0].get("stream_seq");
-    let first_occurred_at: i64 = event_rows[0].get("occurred_at");
-    let first_payload: serde_json::Value = event_rows[0].get("payload");
-    let second_stream_seq: i64 = event_rows[1].get("stream_seq");
-    let second_occurred_at: i64 = event_rows[1].get("occurred_at");
+    let first_stream_seq = event_rows[0].stream_seq;
+    let first_occurred_at = event_rows[0].occurred_at;
+    let first_payload = &event_rows[0].payload;
+    let second_stream_seq = event_rows[1].stream_seq;
+    let second_occurred_at = event_rows[1].occurred_at;
     assert_eq!(
         first_occurred_at, first_stream_seq,
         "PostSubmitted occurred_at should be the deterministic stream logical time"
@@ -3038,28 +2913,23 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
     .expect("private post");
     assert_eq!(ack.stream_seqs.len(), 1);
 
-    let raw = sqlx::query(
-        "SELECT stream_seq, occurred_at, payload FROM events \
-         WHERE stream_id = $1 AND kind = 'PostSubmitted' ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let stream_seq: i64 = raw.get("stream_seq");
-    let occurred_at: i64 = raw.get("occurred_at");
-    let payload: serde_json::Value = raw.get("payload");
+    let stored = latest_stored_event(&pool, game, "PostSubmitted").await;
+    let stream_seq = stored.stream_seq;
+    let occurred_at = stored.occurred_at;
+    let payload = stored.payload;
     assert_eq!(occurred_at, stream_seq);
     assert_eq!(payload["channel_id"], "private:mafia_day_chat");
-    assert!(
-        payload.get("body").is_none(),
-        "private PostSubmitted body must not be stored in plaintext"
-    );
-    assert!(payload["body_private"]["ciphertext"].is_string());
+    assert_eq!(payload["body"], "private media body");
     assert_eq!(
         payload["media"][0]["content_id"],
         "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
     );
+    let sealed = latest_sealed_event_body(&pool, game, "PostSubmitted").await;
+    assert_eq!(sealed.sealed_version, 2);
+    assert!(!sealed.kid.is_empty());
+    assert_eq!(sealed.nonce.len(), 24);
+    assert!(sealed.body.len() >= 16);
+    assert!(!sealed.body_contains("private media body"));
 
     let thread =
         projections::thread_view_for_channel(&pool, game, "private:mafia_day_chat", None, 10)
@@ -3191,7 +3061,9 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
         .expect("winning post event exists");
     let replacement_event = events
         .iter()
-        .find(|event| event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement")
+        .find(|event| {
+            event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement"
+        })
         .expect("replacement event exists");
     assert_eq!(post_event.payload["slot_or_user"]["slot"], slot);
     assert!(
@@ -3309,7 +3181,9 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) 
         .expect("winning vote event exists");
     let replacement_event = events
         .iter()
-        .find(|event| event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement")
+        .find(|event| {
+            event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement"
+        })
         .expect("replacement event exists");
     assert_eq!(vote_event.payload["actor"], slot);
     assert_eq!(vote_event.payload["target"], target);
@@ -3467,7 +3341,9 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
     let events = eventstore::load_stream(&pool, game).await.unwrap();
     let replacement_event = events
         .iter()
-        .find(|event| event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement")
+        .find(|event| {
+            event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement"
+        })
         .expect("replacement event exists");
     let action_events: Vec<_> = events
         .iter()
@@ -3948,12 +3824,7 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
         "alive"
     );
 
-    let event_count_before: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let event_count_before: i64 = stored_event_count(&pool, game).await as i64;
     let incompatible = handle(
         &pool,
         &user("host_h"),
@@ -3982,12 +3853,7 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
         Reject::EffectSpecValidation(message)
             if message.contains("is not declared by pack `mafiascum` dynamic vote policy")
     ));
-    let event_count_after: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let event_count_after: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         event_count_after, event_count_before,
         "preflight failure must append none of the earlier valid effects"
@@ -4304,14 +4170,7 @@ async fn host_fiat_vote_weight_grant_hammers_from_folded_snapshot(pool: PgPool) 
     .expect("one host-granted 2.0-weight ballot reaches majority");
     assert_eq!(hammer_ack.stream_seqs.len(), 2);
     assert!(phase_state(&pool, game).await.unwrap().unwrap().locked);
-    let lock_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ThreadLocked' \
-         ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let lock_payload = latest_stored_payload(&pool, game, "ThreadLocked").await;
     assert_eq!(lock_payload["reason"], "hammer");
     assert_eq!(lock_payload["actor"], "slot_1");
     assert_eq!(lock_payload["target"], "slot_2");
@@ -4831,8 +4690,6 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
     for expected_user in [
         "user_host_alpha",
         "user_cohost_beta",
-        "user_player_red",
-        "user_player_blue",
         "user_replacement_green",
     ] {
         assert!(
@@ -4841,6 +4698,12 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
                 .iter()
                 .any(|user| user == expected_user),
             "audit should discover {expected_user} in stream identities: {audit:?}"
+        );
+    }
+    for private_principal in ["user_player_red", "user_player_blue"] {
+        assert!(
+            !audit.stream_user_ids.iter().any(|user| user == private_principal),
+            "subject-owned seating claims must keep {private_principal} out of the durable game stream: {audit:?}"
         );
     }
     assert!(
@@ -5205,13 +5068,7 @@ async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: P
         .await
         .expect("host resolves treestump lynch");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
     let tag_index = applied
         .events
@@ -5371,19 +5228,23 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
     .await
     .unwrap();
 
-    let raw_role_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned' \
-         AND payload->>'slot_id' = 'slot_1'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(raw_role_payload["slot_id"], "slot_1");
-    assert!(raw_role_payload.get("role_key").is_none());
-    assert!(raw_role_payload.get("alignment").is_none());
-    assert!(raw_role_payload.get("role_effects").is_none());
-    assert!(raw_role_payload["private"]["ciphertext"].is_string());
+    let role_payload =
+        stored_payload_where(&pool, game, "RoleAssigned", &[("slot_id", "slot_1")]).await;
+    assert_eq!(role_payload["slot_id"], "slot_1");
+    assert_eq!(role_payload["role_key"], "godfather");
+    assert_eq!(role_payload["alignment"], "mafia");
+    assert!(role_payload["role_effects"].is_array());
+    let sealed_role = sealed_event_bodies(&pool, game, "RoleAssigned")
+        .await
+        .into_iter()
+        .next()
+        .expect("sealed RoleAssigned body");
+    assert_eq!(sealed_role.sealed_version, 2);
+    assert!(!sealed_role.kid.is_empty());
+    assert_eq!(sealed_role.nonce.len(), 24);
+    assert!(sealed_role.body.len() >= 16);
+    assert!(!sealed_role.body_contains("godfather"));
+    assert!(!sealed_role.body_contains("mafia"));
 
     let snapshot = load_engine_snapshot(&pool, game, "D01")
         .await
@@ -5449,13 +5310,8 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
         .await
         .expect_err("completed game must reject stale duplicate completion");
     assert_eq!(duplicate_complete_err, Reject::GameAlreadyCompleted);
-    let completed_event_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND kind = 'GameCompleted'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let completed_event_count: i64 =
+        stored_event_count_by_kind(&pool, game, "GameCompleted").await as i64;
     assert_eq!(
         completed_event_count, 1,
         "duplicate CompleteGame must not append another GameCompleted event"
@@ -5538,13 +5394,8 @@ async fn concurrent_complete_game_serializes_to_one_ack(pool: PgPool) {
         "losing CompleteGame command should revalidate after the winner completes the game"
     );
 
-    let completed_event_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND kind = 'GameCompleted'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let completed_event_count: i64 =
+        stored_event_count_by_kind(&pool, game, "GameCompleted").await as i64;
     assert_eq!(
         completed_event_count, 1,
         "concurrent CompleteGame commands must append one GameCompleted event"
@@ -5710,27 +5561,20 @@ async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
         "instant action resolution must not lock the phase"
     );
 
-    let submitted_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ActionSubmitted' \
-         AND payload->>'action_id' = 'instant_self_001'",
+    let submitted_payload = stored_payload_where(
+        &pool,
+        game,
+        "ActionSubmitted",
+        &[("action_id", "instant_self_001")],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await;
     assert_eq!(
         submitted_payload["instant_resolved"],
         serde_json::json!(true)
     );
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'run_id' LIKE 'instant:%'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_with_prefix(&pool, game, "ResolutionApplied", "run_id", "instant:").await;
     let applied =
         domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
     assert!(
@@ -5790,14 +5634,7 @@ async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
     .await
     .expect("ordinary D01 ResolvePhase skips already-resolved instant submission");
 
-    let applied_payloads = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         ORDER BY stream_seq",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let applied_payloads = stored_payloads(&pool, game, "ResolutionApplied").await;
     let instant_kill_events = applied_payloads
         .iter()
         .map(|payload| domain::validate_resolution_json(payload, domain::RESULT_VERSION).unwrap())
@@ -6155,13 +5992,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
         "resolve appends ResolutionApplied, ResolutionTrace, and ThreadLocked atomically"
     );
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
     assert_eq!(applied.phase_id, "D01");
     assert_eq!(applied.phase_kind, domain::pack::PhaseKind::Day);
@@ -6254,13 +6085,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
         "ResolutionApplied was folded through append_and_project"
     );
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_eq!(trace.run_id, applied.run_id);
     assert_eq!(trace.phase_id, "D01");
@@ -6336,36 +6161,19 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
         "prompt-free ResolvePhase closes the resolved phase"
     );
 
-    let lock_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ThreadLocked' \
-         ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let lock_payload = latest_stored_payload(&pool, game, "ThreadLocked").await;
     assert_eq!(lock_payload["phase_id"], "D01");
     assert_eq!(lock_payload["reason"], "phase_resolved");
     assert_eq!(lock_payload["source"], "resolve_phase");
 
-    let event_count_before_non_host_advance: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let event_count_before_non_host_advance: i64 = stored_event_count(&pool, game).await as i64;
     let phase_before_non_host_advance =
         serde_json::to_string(&phase_state(&pool, game).await.unwrap()).unwrap();
     let non_host_advance_err = handle(&pool, &user("user_1"), Command::AdvancePhase { game })
         .await
         .expect_err("non-host cannot advance the resolved phase");
     assert_eq!(non_host_advance_err, Reject::NotHost);
-    let event_count_after_non_host_advance: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
-            .bind(game)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let event_count_after_non_host_advance: i64 = stored_event_count(&pool, game).await as i64;
     assert_eq!(
         event_count_before_non_host_advance, event_count_after_non_host_advance,
         "platform capability rejection must append no phase-control events"
@@ -6520,14 +6328,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
         "host-controlled cadence advance reopens the next declared phase"
     );
 
-    let advance_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
-         ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let advance_payload = latest_stored_payload(&pool, game, "PhaseAdvanced").await;
     assert_eq!(advance_payload["phase_id"], "N01");
     assert_eq!(advance_payload["source_phase_id"], "D01");
     assert_eq!(advance_payload["reason"], "resolved_phase");
@@ -6811,14 +6612,9 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
     .expect_err("deadline command rejects stale or wrong phase ids");
     assert_eq!(wrong_phase_err, Reject::InvalidTarget);
 
-    let deadline_control_events_before_non_host: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('PhaseDeadlineElapsed', 'PhaseAdvanced')",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let deadline_control_events_before_non_host: i64 =
+        stored_event_count_by_kinds(&pool, game, &["PhaseDeadlineElapsed", "PhaseAdvanced"]).await
+            as i64;
     let non_host_deadline_err = handle(
         &pool,
         &user("user_1"),
@@ -6831,14 +6627,9 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
     .await
     .expect_err("non-host cannot advance by deadline evidence");
     assert_eq!(non_host_deadline_err, Reject::NotHost);
-    let deadline_control_events_after_non_host: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('PhaseDeadlineElapsed', 'PhaseAdvanced')",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let deadline_control_events_after_non_host: i64 =
+        stored_event_count_by_kinds(&pool, game, &["PhaseDeadlineElapsed", "PhaseAdvanced"]).await
+            as i64;
     assert_eq!(
         deadline_control_events_before_non_host, deadline_control_events_after_non_host,
         "non-host deadline rejection must append no deadline evidence or phase advance"
@@ -6869,28 +6660,26 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         "PhaseAdvanced is the only event in the command that moves the cursor"
     );
 
-    let rows = sqlx::query_as::<_, (String, serde_json::Value, serde_json::Value)>(
-        "SELECT kind, payload, actor FROM events WHERE stream_id = $1 \
-         ORDER BY stream_seq DESC LIMIT 2",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let rows: Vec<_> = stored_events(&pool, game)
+        .await
+        .into_iter()
+        .rev()
+        .take(2)
+        .collect();
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[1].0, "PhaseDeadlineElapsed");
-    assert_eq!(rows[1].1["phase_id"], "D01");
-    assert_eq!(rows[1].1["deadline_at"], 100);
-    assert_eq!(rows[1].1["observed_at"], 101);
-    assert_eq!(rows[1].1["source"], "scheduler");
-    assert_eq!(rows[1].2["type"], "System");
-    assert_eq!(rows[0].0, "PhaseAdvanced");
-    assert_eq!(rows[0].1["phase_id"], "N01");
-    assert_eq!(rows[0].1["source_phase_id"], "D01");
-    assert_eq!(rows[0].1["reason"], "deadline_elapsed");
-    assert_eq!(rows[0].1["source_event_kind"], "PhaseDeadlineElapsed");
-    assert_eq!(rows[0].1["source_deadline_at"], 100);
-    assert_eq!(rows[0].2["type"], "System");
+    assert_eq!(rows[1].kind, "PhaseDeadlineElapsed");
+    assert_eq!(rows[1].payload["phase_id"], "D01");
+    assert_eq!(rows[1].payload["deadline_at"], 100);
+    assert_eq!(rows[1].payload["observed_at"], 101);
+    assert_eq!(rows[1].payload["source"], "scheduler");
+    assert_eq!(rows[1].actor, ActorId::System);
+    assert_eq!(rows[0].kind, "PhaseAdvanced");
+    assert_eq!(rows[0].payload["phase_id"], "N01");
+    assert_eq!(rows[0].payload["source_phase_id"], "D01");
+    assert_eq!(rows[0].payload["reason"], "deadline_elapsed");
+    assert_eq!(rows[0].payload["source_event_kind"], "PhaseDeadlineElapsed");
+    assert_eq!(rows[0].payload["source_deadline_at"], 100);
+    assert_eq!(rows[0].actor, ActorId::System);
 
     let phase_before_rebuild =
         serde_json::to_string(&phase_state(&pool, game).await.unwrap().unwrap()).unwrap();
@@ -7018,7 +6807,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
     assert_eq!(night_input.phase_id, "N01");
     assert_eq!(night_input.phase_kind, domain::pack::PhaseKind::Night);
     assert_eq!(night_input.phase_number, 1);
-    assert_eq!(night_input.pack_name, "mafiascum");
+    assert_eq!(night_input.pack_ref.key, "mafiascum");
     assert_eq!(night_input.state.phase_id, "N01");
     assert_eq!(night_input.state.phase_kind, domain::pack::PhaseKind::Night);
     assert_eq!(night_input.state.phase_number, 1);
@@ -7203,14 +6992,8 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
     handle(&pool, &h, Command::ResolvePhase { game, seed: 9876 })
         .await
         .expect("host resolves D01");
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
         .expect("day vote withdraw ResolutionApplied validates");
     let recorded_votes: Vec<_> = applied
@@ -7289,14 +7072,8 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
             .is_none(),
         "host console official row is folded from ResolutionApplied, not the running projection"
     );
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("day vote withdraw ResolutionTrace validates");
     assert!(
@@ -7332,22 +7109,10 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
         serde_json::to_string(&day_vote_outcomes(&pool, game).await.unwrap()).unwrap(),
         "official day vote outcome rebuild must preserve the canonical engine result"
     );
-    let applied_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "D01")]).await;
     assert_eq!(
         payload, applied_after_rebuild,
         "projection rebuild must not rewrite persisted day-vote withdraw ResolutionApplied envelope"
@@ -7679,9 +7444,15 @@ async fn action_submission_rejects_day_specific_action_in_night_window(pool: PgP
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn audit_resolution_reports_structural_drift_path_expected_and_actual(pool: PgPool) {
-    let game = setup_resolved_audit_drift_game(&pool, "applied_drift", 778).await;
-    let (winner_event_index, expected_winner) =
-        perturb_stored_resolution_winner(&pool, game, "slot_2").await;
+    let fixture = setup_mutated_audit_resolution(
+        &pool,
+        "applied_drift",
+        778,
+        AuditResolutionMutation::AppliedWinner("slot_2"),
+    )
+    .await;
+    let game = fixture.game;
+    let (winner_event_index, expected_winner) = fixture.winner_event.unwrap();
     let winner_path = format!("$.events[{winner_event_index}].payload.winner");
 
     let audit = audit_resolution_envelopes(&pool, game)
@@ -7719,29 +7490,15 @@ async fn audit_resolution_reports_structural_drift_path_expected_and_actual(pool
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn audit_resolution_reports_trace_drift_path_expected_and_actual(pool: PgPool) {
-    let game = setup_resolved_audit_drift_game(&pool, "trace_drift", 779).await;
-    let expected_outcome = stored_first_trace_decision_outcome(&pool, game).await;
-
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query("ALTER TABLE events DISABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("temporarily disable append-only guard for synthetic trace drift");
-    let update = sqlx::query(
-        "UPDATE events \
-         SET payload = jsonb_set(payload, '{decisions,0,outcome}', '\"tampered_trace\"'::jsonb, false) \
-         WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
+    let fixture = setup_mutated_audit_resolution(
+        &pool,
+        "trace_drift",
+        779,
+        AuditResolutionMutation::TraceOutcome("tampered_trace"),
     )
-    .bind(game)
-    .execute(&mut *tx)
-    .await
-    .expect("perturb stored ResolutionTrace outcome");
-    assert_eq!(update.rows_affected(), 1, "one trace envelope perturbed");
-    sqlx::query("ALTER TABLE events ENABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("restore append-only guard after synthetic trace drift");
-    tx.commit().await.expect("commit trace drift perturbation");
+    .await;
+    let game = fixture.game;
+    let expected_outcome = fixture.first_trace_outcome.unwrap();
 
     let audit = audit_resolution_envelopes(&pool, game)
         .await
@@ -7781,27 +7538,14 @@ async fn audit_resolution_reports_trace_drift_path_expected_and_actual(pool: PgP
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn audit_resolution_reports_missing_trace_root_diff(pool: PgPool) {
-    let game = setup_resolved_audit_drift_game(&pool, "missing_trace", 780).await;
-
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query("ALTER TABLE events DISABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("temporarily disable append-only guard for synthetic missing trace");
-    let deleted =
-        sqlx::query("DELETE FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'")
-            .bind(game)
-            .execute(&mut *tx)
-            .await
-            .expect("delete stored ResolutionTrace");
-    assert_eq!(deleted.rows_affected(), 1, "one trace envelope deleted");
-    sqlx::query("ALTER TABLE events ENABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("restore append-only guard after synthetic missing trace");
-    tx.commit()
-        .await
-        .expect("commit missing trace perturbation");
+    let game = setup_mutated_audit_resolution(
+        &pool,
+        "missing_trace",
+        780,
+        AuditResolutionMutation::MissingTrace,
+    )
+    .await
+    .game;
 
     let audit = audit_resolution_envelopes(&pool, game)
         .await
@@ -7872,9 +7616,15 @@ async fn audit_resolution_in_process_reports_success_for_matched_game(pool: PgPo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn audit_resolution_in_process_reports_diffs_for_drift(pool: PgPool) {
-    let game = setup_resolved_audit_drift_game(&pool, "cli_drift", 782).await;
-    let (winner_event_index, expected_winner) =
-        perturb_stored_resolution_winner(&pool, game, "slot_2").await;
+    let fixture = setup_mutated_audit_resolution(
+        &pool,
+        "cli_drift",
+        782,
+        AuditResolutionMutation::AppliedWinner("slot_2"),
+    )
+    .await;
+    let game = fixture.game;
+    let (winner_event_index, expected_winner) = fixture.winner_event.unwrap();
     let winner_path = format!("$.events[{winner_event_index}].payload.winner");
 
     let output = run_audit_resolution_in_process(&pool, game).await;
@@ -7953,9 +7703,15 @@ async fn audit_resolution_diff_artifact_in_process_writes_matched_and_drift_repo
     assert_eq!(matched_file["diff_count"], 0);
     assert_eq!(matched_file["phases"][0]["status"], "matched");
 
-    let drift_game = setup_resolved_audit_drift_game(&pool, "artifact_drift", 784).await;
-    let (winner_event_index, expected_winner) =
-        perturb_stored_resolution_winner(&pool, drift_game, "slot_2").await;
+    let fixture = setup_mutated_audit_resolution(
+        &pool,
+        "artifact_drift",
+        784,
+        AuditResolutionMutation::AppliedWinner("slot_2"),
+    )
+    .await;
+    let drift_game = fixture.game;
+    let (winner_event_index, expected_winner) = fixture.winner_event.unwrap();
     let winner_path = format!("$.events[{winner_event_index}].payload.winner");
     let drift_path = test_operator_proof_artifact_path("resolution-diff-drift", drift_game);
     let _ = fs::remove_file(&drift_path);
@@ -9150,13 +8906,7 @@ async fn submit_vote_hammer_uses_folded_vote_weight_grant(pool: PgPool) {
         "folded VoteWeight grant lets the first D02 ballot hammer"
     );
 
-    let lock_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ThreadLocked' ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let lock_payload = latest_stored_payload(&pool, game, "ThreadLocked").await;
     assert_eq!(lock_payload["reason"], "hammer");
     assert_eq!(lock_payload["phase_id"], "D02");
     assert_eq!(lock_payload["actor"], "slot_1");
@@ -9317,15 +9067,19 @@ async fn host_prompt_skip_next_day_rejects_unsupported_pack_cadence(pool: PgPool
         "rejected prompt transition must preserve phase_state"
     );
 
-    let rejected_events: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM events WHERE stream_id = $1 \
-         AND kind IN ('HostPromptResolved', 'PhaseAdvanced') \
-         AND stream_seq > (SELECT MIN(stream_seq) FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied')",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let stream = stored_events(&pool, game).await;
+    let resolution_seq = stream
+        .iter()
+        .find(|event| event.kind == "ResolutionApplied")
+        .expect("ResolutionApplied event")
+        .stream_seq;
+    let rejected_events = stream
+        .iter()
+        .filter(|event| {
+            event.stream_seq > resolution_seq
+                && matches!(event.kind.as_str(), "HostPromptResolved" | "PhaseAdvanced")
+        })
+        .count();
     assert_eq!(
         rejected_events, 0,
         "rejected prompt transition must append no HostPromptResolved or PhaseAdvanced"
@@ -9492,14 +9246,8 @@ async fn host_resolve_phase_loads_action_submissions_from_stream(pool: PgPool) {
         .await
         .expect("host resolves night action");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("withdrawn-action ResolutionApplied validates");
     assert!(
@@ -9521,14 +9269,8 @@ async fn host_resolve_phase_loads_action_submissions_from_stream(pool: PgPool) {
         }),
         "withdrawn action id must not appear in ResolutionApplied"
     );
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("withdrawn-action ResolutionTrace validates");
     assert!(
@@ -9552,14 +9294,8 @@ async fn host_resolve_phase_loads_action_submissions_from_stream(pool: PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "slot_state rebuild must preserve live-vs-withdrawn action resolution"
     );
-    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_after_rebuild =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted withdrawn-action trace envelope"
@@ -9657,7 +9393,7 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
         "invalid command template must not append ActionSubmitted"
     );
 
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -9680,14 +9416,8 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
         .await
         .expect("resolver remains total over historical invalid template ids");
 
-    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let applied_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N01")]).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("valid ResolutionApplied");
     assert!(
@@ -9736,14 +9466,8 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
     assert_eq!(halt.7, "template_not_available_to_actor");
     assert_eq!(halt.8.as_deref(), None);
 
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
         .expect("valid ResolutionTrace");
     assert_decision_trace(
@@ -11366,14 +11090,8 @@ async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
     handle(&pool, &h, Command::ResolvePhase { game, seed: 8812 })
         .await
         .expect("host resolves base plus extra action");
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let applied: domain::ResolutionApplied = serde_json::from_value(payload).unwrap();
     assert!(
         applied.events.iter().any(|indexed| {
@@ -11395,14 +11113,8 @@ async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
         }),
         "ResolvePhase records durable extra-action grant consumption"
     );
-    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let trace_payload =
+        stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N02")]).await;
     assert!(
         trace_payload["generated"]
             .as_array()
@@ -11599,14 +11311,8 @@ async fn action_submission_spends_inventor_item_grant(pool: PgPool) {
     handle(&pool, &h, Command::ResolvePhase { game, seed: 9912 })
         .await
         .expect("host resolves item use");
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let applied: domain::ResolutionApplied = serde_json::from_value(payload).unwrap();
     assert!(
         applied.events.iter().any(|indexed| {
@@ -11837,14 +11543,8 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
         .await
         .expect("host resolves vest item use");
 
-    let n02_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N02'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n02_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N02")]).await;
     let n02 = domain::validate_resolution_json(&n02_payload, domain::RESULT_VERSION).unwrap();
     assert!(n02.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -11922,14 +11622,8 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
         .await
         .expect("host resolves vest save");
 
-    let n03_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'N03'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let n03_payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "N03")]).await;
     let n03 = domain::validate_resolution_json(&n03_payload, domain::RESULT_VERSION).unwrap();
     assert!(n03.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -12215,13 +11909,7 @@ async fn stale_host_phase_controls_reject_before_duplicate_lifecycle_events(pool
         .expect_err("stale lock control rejects once phase is already locked");
     assert_eq!(duplicate_lock, Reject::PhaseLocked);
 
-    let locked_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ThreadLocked'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let locked_count = stored_event_count_by_kind(&pool, game, "ThreadLocked").await as i64;
     assert_eq!(
         locked_count, 1,
         "stale lock rejection must not append a duplicate ThreadLocked event"
@@ -12239,13 +11927,7 @@ async fn stale_host_phase_controls_reject_before_duplicate_lifecycle_events(pool
         .expect_err("stale unlock control rejects once phase is open");
     assert_eq!(duplicate_unlock, Reject::PhaseLocked);
 
-    let unlocked_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ThreadUnlocked'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let unlocked_count = stored_event_count_by_kind(&pool, game, "ThreadUnlocked").await as i64;
     assert_eq!(
         unlocked_count, 1,
         "stale unlock rejection must not append a duplicate ThreadUnlocked event"
@@ -12278,25 +11960,14 @@ async fn concurrent_host_resolve_phase_serializes_to_one_ack(pool: PgPool) {
         "the losing concurrent resolve should revalidate after the winner locks"
     );
 
-    let resolution_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let resolution_count =
+        stored_event_count_by_kind(&pool, game, "ResolutionApplied").await as i64;
     assert_eq!(
         resolution_count, 1,
         "concurrent resolve must not append duplicate resolution envelopes"
     );
 
-    let lock_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ThreadLocked'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let lock_count = stored_event_count_by_kind(&pool, game, "ThreadLocked").await as i64;
     assert_eq!(
         lock_count, 1,
         "concurrent resolve must not append duplicate phase locks"
@@ -12540,14 +12211,9 @@ async fn concurrent_host_advance_phase_serializes_to_one_ack(pool: PgPool) {
         "the losing concurrent advance should revalidate after the winner advances"
     );
 
-    let advance_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
-         AND payload->>'source_phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let advance_count =
+        stored_event_count_where(&pool, game, "PhaseAdvanced", &[("source_phase_id", "D01")]).await
+            as i64;
     assert_eq!(
         advance_count, 1,
         "concurrent advance must not append duplicate phase transitions"
@@ -12625,27 +12291,20 @@ async fn concurrent_host_deadline_advance_serializes_to_one_ack(pool: PgPool) {
         "deadline advance appends elapsed evidence plus the phase transition atomically"
     );
 
-    let deadline_evidence_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseDeadlineElapsed' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let deadline_evidence_count =
+        stored_event_count_where(&pool, game, "PhaseDeadlineElapsed", &[("phase_id", "D01")]).await
+            as i64;
     assert_eq!(
         deadline_evidence_count, 1,
         "concurrent deadline advance must not append duplicate deadline evidence"
     );
-    let advance_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
-         AND payload->>'source_phase_id' = 'D01' \
-         AND payload->>'reason' = 'deadline_elapsed'",
+    let advance_count = stored_event_count_where(
+        &pool,
+        game,
+        "PhaseAdvanced",
+        &[("source_phase_id", "D01"), ("reason", "deadline_elapsed")],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         advance_count, 1,
         "concurrent deadline advance must not append duplicate phase transitions"
@@ -12718,26 +12377,16 @@ async fn concurrent_host_mixed_advance_serializes_to_one_ack(pool: PgPool) {
         "mixed advance winner appends either a normal phase advance or deadline evidence plus phase advance"
     );
 
-    let deadline_evidence_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseDeadlineElapsed' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let deadline_evidence_count =
+        stored_event_count_where(&pool, game, "PhaseDeadlineElapsed", &[("phase_id", "D01")]).await
+            as i64;
     assert!(
         deadline_evidence_count <= 1,
         "mixed normal/deadline advance must not append duplicate deadline evidence"
     );
-    let advance_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
-         AND payload->>'source_phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let advance_count =
+        stored_event_count_where(&pool, game, "PhaseAdvanced", &[("source_phase_id", "D01")]).await
+            as i64;
     assert_eq!(
         advance_count, 1,
         "mixed normal/deadline advance must not append duplicate phase transitions"
@@ -12856,14 +12505,13 @@ async fn concurrent_player_action_and_host_advance_phase_rejects_late_action(poo
         !phase.locked,
         "host advance should leave the next day phase open"
     );
-    let late_action_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ActionSubmitted' \
-         AND payload->>'action_id' = 'late_night_action'",
+    let late_action_count = stored_event_count_where(
+        &pool,
+        game,
+        "ActionSubmitted",
+        &[("action_id", "late_night_action")],
     )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    .await as i64;
     assert_eq!(
         late_action_count, 0,
         "stale player action must not append into the old phase while host advances"
@@ -12908,15 +12556,9 @@ async fn duplicate_add_slot_rejects_without_duplicate_event(pool: PgPool) {
     .expect_err("stale duplicate add-slot rejects once the slot exists");
     assert_eq!(duplicate, Reject::InvalidTarget);
 
-    let slot_added_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events \
-         WHERE stream_id = $1 AND kind = 'SlotAdded' \
-           AND payload->>'slot_id' = 'slot_extra'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let slot_added_count =
+        stored_event_count_where(&pool, game, "SlotAdded", &[("slot_id", "slot_extra")]).await
+            as i64;
     assert_eq!(
         slot_added_count, 1,
         "stale duplicate add-slot rejection must not append duplicate SlotAdded events"
@@ -13055,17 +12697,17 @@ async fn duplicate_slot_lifecycle_status_rejects_without_duplicate_event(pool: P
     .expect_err("stale restore-alive control rejects once slot is already alive");
     assert_eq!(duplicate_alive, Reject::InvalidTarget);
 
-    let lifecycle_events = sqlx::query_as::<_, (String, i64)>(
-        "SELECT payload->>'status' AS status, count(*) AS count \
-         FROM events \
-         WHERE stream_id = $1 AND kind = 'SlotStatusChanged' \
-         GROUP BY payload->>'status' \
-         ORDER BY payload->>'status'",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let lifecycle_events: Vec<(String, i64)> = stored_payloads(&pool, game, "SlotStatusChanged")
+        .await
+        .into_iter()
+        .fold(BTreeMap::new(), |mut counts, payload| {
+            *counts
+                .entry(payload["status"].as_str().unwrap().to_owned())
+                .or_insert(0) += 1;
+            counts
+        })
+        .into_iter()
+        .collect();
     assert_eq!(
         lifecycle_events,
         vec![
@@ -13129,17 +12771,17 @@ async fn concurrent_host_lifecycle_collision_serializes_to_one_ack(pool: PgPool)
         "losing lifecycle collision command should revalidate after the winner changes the slot"
     );
 
-    let lifecycle_events = sqlx::query_as::<_, (String, i64)>(
-        "SELECT payload->>'status' AS status, count(*) AS count \
-         FROM events \
-         WHERE stream_id = $1 AND kind = 'SlotStatusChanged' \
-         GROUP BY payload->>'status' \
-         ORDER BY payload->>'status'",
-    )
-    .bind(game)
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let lifecycle_events: Vec<(String, i64)> = stored_payloads(&pool, game, "SlotStatusChanged")
+        .await
+        .into_iter()
+        .fold(BTreeMap::new(), |mut counts, payload| {
+            *counts
+                .entry(payload["status"].as_str().unwrap().to_owned())
+                .or_insert(0) += 1;
+            counts
+        })
+        .into_iter()
+        .collect();
     assert_eq!(
         lifecycle_events.len(),
         1,
@@ -13208,13 +12850,7 @@ async fn submit_vote_enforces_pack_no_lynch_and_self_vote_policy(pool: PgPool) {
     .expect_err("no-lynch should be rejected when pack disallows it");
     assert_eq!(no_lynch_err, Reject::InvalidTarget);
 
-    let rejected_vote_count = sqlx::query_scalar::<_, i64>(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'VoteSubmitted'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let rejected_vote_count = stored_event_count_by_kind(&pool, game, "VoteSubmitted").await as i64;
     assert_eq!(
         rejected_vote_count, 0,
         "invalid pack-disallowed ballots must reject before VoteSubmitted"
@@ -13436,13 +13072,7 @@ async fn submit_vote_hammer_locks_phase_when_threshold_is_reached(pool: PgPool) 
         "hammer locks the current day phase"
     );
 
-    let lock_payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ThreadLocked' ORDER BY stream_seq DESC LIMIT 1",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let lock_payload = latest_stored_payload(&pool, game, "ThreadLocked").await;
     assert_eq!(lock_payload["reason"], "hammer");
     assert_eq!(lock_payload["phase_id"], "D01");
     assert_eq!(lock_payload["actor"], "slot_2");
@@ -13509,7 +13139,7 @@ async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
         started_at: 1,
         finished_at: 2,
     };
-    projections::append_and_project(
+    append_and_project(
         &pool,
         game,
         &[eventstore::EventInput::new(
@@ -13673,14 +13303,8 @@ async fn no_lynch_votes_resolve_to_official_engine_outcome(pool: PgPool) {
     assert_eq!(official[0].votes["slot_1"], "no_lynch");
     assert_eq!(official[0].votes["slot_2"], "no_lynch");
 
-    let payload = sqlx::query_scalar::<_, serde_json::Value>(
-        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-         AND payload->>'phase_id' = 'D01'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let payload =
+        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01")]).await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
     assert!(
         applied.events.iter().all(|indexed| !matches!(
@@ -13916,13 +13540,7 @@ async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
     assert_eq!(receipt.get::<i32, _>("fingerprint_bytes"), 32);
     assert_eq!(receipt.get::<Vec<i64>, _>("stream_seqs"), first.stream_seqs);
 
-    let posts: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
-    )
-    .bind(game)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let posts: i64 = stored_event_count_by_kind(&pool, game, "PostSubmitted").await as i64;
     assert_eq!(posts, 1, "replay and conflict append no additional event");
 }
 

@@ -173,9 +173,11 @@ async function seedReadFixtures({ psql, databaseUrl }) {
     databaseUrl,
     `
       INSERT INTO game_index (
-        game_id, pack, status, phase_id, created_seq, started_seq, completed_seq, updated_seq
+        game_id, pack_key, pack_version, pack_content_hash, status, phase_id,
+        created_seq, started_seq, completed_seq, updated_seq
       ) VALUES (
-        '${largeThreadGame}', ${pack}, 'active', 'D01', 1, 1, NULL, ${budgets.largeThreadRows}
+        '${largeThreadGame}', ${pack}, 1, repeat('0', 64), 'active', 'D01',
+        1, 1, NULL, ${budgets.largeThreadRows}
       );
       INSERT INTO thread_view (
         game_id, source_seq, stream_seq, channel_id, author_slot, author_user,
@@ -196,9 +198,10 @@ async function seedReadFixtures({ psql, databaseUrl }) {
              value, '[]'::JSONB
       FROM generate_series(1, ${budgets.largeThreadRows}) AS value;
       INSERT INTO game_index (
-        game_id, pack, status, phase_id, created_seq, started_seq, completed_seq, updated_seq
+        game_id, pack_key, pack_version, pack_content_hash, status, phase_id,
+        created_seq, started_seq, completed_seq, updated_seq
       )
-      SELECT ${uuidExpression}, ${pack}, 'active', 'D01', value, value, NULL,
+      SELECT ${uuidExpression}, ${pack}, 1, repeat('0', 64), 'active', 'D01', value, value, NULL,
              ${budgets.largeThreadRows} + value
       FROM generate_series(1, ${budgets.crawlerGames}) AS value;
       INSERT INTO public_search_document (
@@ -747,7 +750,7 @@ async function cleanupReadFixtures({ psql, databaseUrl }) {
     databaseUrl,
     `DELETE FROM public_search_document WHERE scope_id = '${crawlerScope}';
      DELETE FROM thread_view WHERE game_id = '${largeThreadGame}';
-     DELETE FROM game_index WHERE pack = ${pack};`,
+     DELETE FROM game_index WHERE pack_key = ${pack};`,
   );
 }
 
