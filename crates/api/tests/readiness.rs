@@ -89,17 +89,15 @@ async fn readyz_revalidates_subject_authority_after_startup(pool: sqlx::PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn readyz_rejects_an_event_kid_missing_from_the_configured_ring(pool: sqlx::PgPool) {
+async fn readyz_rejects_a_direct_envelope_kid_missing_from_the_configured_ring(pool: sqlx::PgPool) {
     sqlx::query(
         r#"
-        INSERT INTO events (
-            stream_id, stream_seq, kind, version, occurred_at,
-            sealed_version, sealed_kid, sealed_nonce, sealed_body
-        ) VALUES ($1, 1, 'CoverageCanary', 1, 1, 2, 'missing-readiness-kid',
-                  decode(repeat('00', 24), 'hex'), decode(repeat('00', 16), 'hex'))
+        INSERT INTO event_direct_key_sentinel (
+            kid, sentinel_version, sentinel_nonce, sentinel_ciphertext
+        ) VALUES ('missing-readiness-kid', 1,
+                  decode(repeat('00', 24), 'hex'), decode(repeat('00', 56), 'hex'))
         "#,
     )
-    .bind(Uuid::new_v4())
     .execute(&pool)
     .await
     .unwrap();

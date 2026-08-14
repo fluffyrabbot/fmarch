@@ -58,6 +58,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const baseUrl = `http://127.0.0.1:${port}`;
   try {
     await startServer({ baseUrl, port, databaseUrl, env });
+    await seedPostBurstGame(baseUrl);
     await seedReadFixtures({ psql, databaseUrl });
 
     const scenarios = {};
@@ -166,7 +167,6 @@ async function startServer({ baseUrl, port, databaseUrl, env }) {
 }
 
 async function seedReadFixtures({ psql, databaseUrl }) {
-  const pack = sqlLiteral(`capacity-proof-${runId}`);
   const uuidExpression = sqlUuidFromMd5(`'${runId}' || value::TEXT`);
   await runPsql(
     psql,
@@ -175,10 +175,12 @@ async function seedReadFixtures({ psql, databaseUrl }) {
       INSERT INTO game_index (
         game_id, pack_key, pack_version, pack_content_hash, status, phase_id,
         created_seq, started_seq, completed_seq, updated_seq
-      ) VALUES (
-        '${largeThreadGame}', ${pack}, 1, repeat('0', 64), 'active', 'D01',
-        1, 1, NULL, ${budgets.largeThreadRows}
-      );
+      )
+      SELECT '${largeThreadGame}', pack_key, pack_version, content_hash,
+             'active', 'D01', 1, 1, NULL, ${budgets.largeThreadRows}
+      FROM pack_artifact
+      ORDER BY pack_key, pack_version, content_hash
+      LIMIT 1;
       INSERT INTO thread_view (
         game_id, source_seq, stream_seq, channel_id, author_slot, author_user,
         phase_id, body, body_private, occurred_at, media
@@ -201,9 +203,16 @@ async function seedReadFixtures({ psql, databaseUrl }) {
         game_id, pack_key, pack_version, pack_content_hash, status, phase_id,
         created_seq, started_seq, completed_seq, updated_seq
       )
-      SELECT ${uuidExpression}, ${pack}, 1, repeat('0', 64), 'active', 'D01', value, value, NULL,
+      SELECT ${uuidExpression}, artifact.pack_key, artifact.pack_version,
+             artifact.content_hash, 'active', 'D01', value, value, NULL,
              ${budgets.largeThreadRows} + value
-      FROM generate_series(1, ${budgets.crawlerGames}) AS value;
+      FROM generate_series(1, ${budgets.crawlerGames}) AS value
+      CROSS JOIN LATERAL (
+        SELECT pack_key, pack_version, content_hash
+        FROM pack_artifact
+        ORDER BY pack_key, pack_version, content_hash
+        LIMIT 1
+      ) AS artifact;
       INSERT INTO public_search_document (
         document_kind, document_key, scope_kind, scope_id, title, body, href,
         updated_seq, published_at
@@ -324,12 +333,9 @@ async function proveAnonymousCrawler({ baseUrl }) {
 }
 
 async function proveSingleGamePostBurst({ baseUrl }) {
-  for (const [principalUserId, command] of seedSetupCommandPlanForGame(postBurstGame)) {
-    const seeded = await sendCommand(baseUrl, principalUserId, command);
-    assert(seeded.kind === "Ack", `game seed rejected: ${JSON.stringify(seeded)}`);
-  }
-  // Mint the burst principal's session before the burst so the mint itself is
-  // never queued behind capacity-limited burst traffic.
+  // The setup game is created before direct read-fixture installation so its
+  // verified, content-addressed PackArtifact can back every synthetic row.
+  // This scenario measures only the burst itself.
   await seedSessionToken(baseUrl, "player-mira");
   const records = await mapConcurrent(
     Array.from({ length: budgets.postBurstRequests }, (_, index) => index),
@@ -358,6 +364,13 @@ async function proveSingleGamePostBurst({ baseUrl }) {
       records.map((record) => ({ status: 200, elapsedMs: record.elapsedMs })),
     ),
   };
+}
+
+async function seedPostBurstGame(baseUrl) {
+  for (const [principalUserId, command] of seedSetupCommandPlanForGame(postBurstGame)) {
+    const seeded = await sendCommand(baseUrl, principalUserId, command);
+    assert(seeded.kind === "Ack", `game seed rejected: ${JSON.stringify(seeded)}`);
+  }
 }
 
 async function proveSlowWebsocketConsumers({ baseUrl }) {
@@ -744,13 +757,18 @@ async function waitUntil(predicate, timeoutMs, message) {
 
 async function cleanupReadFixtures({ psql, databaseUrl }) {
   if (!psql) return;
-  const pack = sqlLiteral(`capacity-proof-${runId}`);
+  const uuidExpression = sqlUuidFromMd5(`'${runId}' || value::TEXT`);
   await runPsql(
     psql,
     databaseUrl,
     `DELETE FROM public_search_document WHERE scope_id = '${crawlerScope}';
      DELETE FROM thread_view WHERE game_id = '${largeThreadGame}';
-     DELETE FROM game_index WHERE pack_key = ${pack};`,
+     DELETE FROM game_index
+     WHERE game_id = '${largeThreadGame}'
+        OR game_id IN (
+          SELECT ${uuidExpression}
+          FROM generate_series(1, ${budgets.crawlerGames}) AS value
+        );`,
   );
 }
 

@@ -1308,10 +1308,10 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
         serde_json::json!({}),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let erased = json_body(response).await;
-    assert_eq!(erased["status"], "erased");
-    let pseudonym = erased["pseudonym"].as_str().unwrap().to_string();
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    let pending = json_body(response).await;
+    assert_eq!(pending["status"], "erasure_in_progress");
+    let pseudonym = pending["pseudonym"].as_str().unwrap().to_string();
 
     let response = get_session(&app, token.as_str()).await;
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -1343,6 +1343,37 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     .await
     .unwrap();
     assert_eq!(redacted_name, pseudonym);
+    let pending_kinds: Vec<String> = sqlx::query_scalar(
+        "SELECT kind FROM member_lifecycle_event WHERE principal_user_id = $1 ORDER BY seq",
+    )
+    .bind(principal.as_str())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        pending_kinds,
+        [
+            "MemberPersonalExportRecorded",
+            "MemberDeactivated",
+            "MemberErasureRequested",
+            "MemberCredentialsErased",
+        ]
+    );
+    assert_eq!(
+        identity::process_pending_subject_erasures(&pool, "api-test-worker", unix_now_seconds())
+            .await
+            .unwrap(),
+        1
+    );
+    let terminal: (String, Option<String>) = sqlx::query_as(
+        "SELECT status, pseudonym FROM member_lifecycle_projection WHERE principal_user_id = $1",
+    )
+    .bind(principal.as_str())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(terminal.0, "erased");
+    assert_eq!(terminal.1.as_deref(), Some(pseudonym.as_str()));
     let kinds: Vec<String> = sqlx::query_scalar(
         "SELECT kind FROM member_lifecycle_event WHERE principal_user_id = $1 ORDER BY seq",
     )

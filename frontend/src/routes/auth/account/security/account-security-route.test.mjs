@@ -423,7 +423,7 @@ test("security action creates a download-ready personal export", async () => {
   assert.deepEqual(result.artifact, { schema_version: 1, profiles: [] });
 });
 
-test("security erasure requires explicit confirmation and clears the session on success", async () => {
+test("security erasure request clears the session once durable work is accepted", async () => {
   const rejected = await actions.eraseMember({
     cookies: { get: () => "fmss_active-session" },
     fetch: async () => {
@@ -445,11 +445,14 @@ test("security erasure requires explicit confirmation and clears the session on 
       },
       fetch: async (url, init) => {
         observed.request = { url, authorization: init.headers.authorization, body: JSON.parse(init.body) };
-        return jsonResponse({ status: "erased", pseudonym: "Former member 1234" });
+        return jsonResponse(
+          { status: "erasure_in_progress", pseudonym: "Former member 1234" },
+          { status: 202 },
+        );
       },
       request: formRequest({ confirmation: "ERASE" }),
     }),
-    (error) => error.status === 303 && error.location === "/?accountErased=1",
+    (error) => error.status === 303 && error.location === "/?accountErasureRequested=1",
   );
   assert.deepEqual(observed.request, {
     url: "/auth/account/erasure",

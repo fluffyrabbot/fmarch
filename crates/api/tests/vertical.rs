@@ -27,12 +27,19 @@ use wire::{
     SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget, PROTOCOL_VERSION,
 };
 
-fn test_pack_ref(key: &str) -> serde_json::Value {
-    serde_json::json!({
-        "key": key,
-        "version": 1,
-        "content_hash": "0000000000000000000000000000000000000000000000000000000000000000"
-    })
+fn test_pack_artifact(key: &str) -> content_registry::PackArtifactSnapshot {
+    content_registry::select_pack_artifact(key).expect("select verified test pack artifact")
+}
+
+async fn install_test_pack_artifact(
+    pool: &sqlx::PgPool,
+    artifact: &content_registry::PackArtifactSnapshot,
+) {
+    let mut tx = pool.begin().await.expect("begin pack artifact install");
+    projections::install_pack_artifact_in_tx(&mut tx, artifact)
+        .await
+        .expect("install verified test pack artifact");
+    tx.commit().await.expect("commit pack artifact install");
 }
 
 fn decode_server_envelope(message: tokio_tungstenite::tungstenite::Message) -> ServerEnvelope {
@@ -4942,12 +4949,17 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
 async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let hidden_source_seq = 41_i64;
+    let pack_artifact = test_pack_artifact("mafiascum");
+    install_test_pack_artifact(&pool, &pack_artifact).await;
     sqlx::query(
         "INSERT INTO game_index \
          (game_id, pack_key, pack_version, pack_content_hash, status, phase_id, created_seq, started_seq, completed_seq, updated_seq) \
-         VALUES ($1, 'mafiascum', 1, repeat('0', 64), 'active', 'D01', 1, 2, NULL, $2)",
+         VALUES ($1, $2, $3, $4, 'active', 'D01', 1, 2, NULL, $5)",
     )
     .bind(game)
+    .bind(&pack_artifact.pack_ref.key)
+    .bind(i64::from(pack_artifact.pack_ref.version))
+    .bind(pack_artifact.pack_ref.content_hash.as_str())
     .bind(hidden_source_seq)
     .execute(&pool)
     .await
@@ -5034,11 +5046,15 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
         ),
         (setup_game, "epicmafia", "setup", None, 140_i64, None),
     ] {
+        let pack_artifact = test_pack_artifact(pack);
+        install_test_pack_artifact(&pool, &pack_artifact).await;
         sqlx::query(
-            "INSERT INTO game_index (game_id, pack_key, pack_version, pack_content_hash, status, phase_id, created_seq, started_seq, completed_seq, updated_seq) VALUES ($1, $2, 1, repeat('0', 64), $3, $4, 1, 2, $5, $6)",
+            "INSERT INTO game_index (game_id, pack_key, pack_version, pack_content_hash, status, phase_id, created_seq, started_seq, completed_seq, updated_seq) VALUES ($1, $2, $3, $4, $5, $6, 1, 2, $7, $8)",
         )
         .bind(game)
-        .bind(pack)
+        .bind(&pack_artifact.pack_ref.key)
+        .bind(i64::from(pack_artifact.pack_ref.version))
+        .bind(pack_artifact.pack_ref.content_hash.as_str())
         .bind(status)
         .bind(phase_id)
         .bind(completed_seq)
@@ -5896,6 +5912,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     }
 
     let game = Uuid::new_v4();
+    let pack_artifact = test_pack_artifact("mafiascum");
     projections::append_and_project(
         &pool,
         game,
@@ -5903,7 +5920,11 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
             eventstore::EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("moderation_api") }),
+                serde_json::json!({
+                    "host": "host",
+                    "pack_ref": pack_artifact.pack_ref.clone(),
+                    "pack_artifact": pack_artifact,
+                }),
                 eventstore::ActorId::User("host".into()),
                 1,
             ),
@@ -6487,7 +6508,9 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     .execute(&pool)
     .await
     .unwrap();
+    let mut member_tx = pool.begin().await.unwrap();
     let member_private = eventstore::encrypt_private_projection(
+        &mut member_tx,
         serde_json::json!({
             "role_key": "vanilla_townie",
             "reveals_alignment": "never"
@@ -6496,6 +6519,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
             "fmarch-projection-v1:private_channel_member:{game_text}:private:role_pm:slot_1:slot_1"
         ),
     )
+    .await
     .unwrap();
     sqlx::query(
         "INSERT INTO private_channel_member \
@@ -6504,13 +6528,15 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     )
     .bind(game)
     .bind(member_private)
-    .execute(&pool)
+    .execute(&mut *member_tx)
     .await
     .unwrap();
+    member_tx.commit().await.unwrap();
     for (source_seq, channel_id, body) in [
         (10_i64, "main", "main thread post"),
         (11_i64, "private:role_pm:slot_1", "private role note"),
     ] {
+        let mut tx = pool.begin().await.unwrap();
         let (body, body_private) = if channel_id == "main" {
             (Some(body), None)
         } else {
@@ -6518,11 +6544,13 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
                 None,
                 Some(
                     eventstore::encrypt_private_projection(
+                        &mut tx,
                         serde_json::json!({ "body": body }),
                         &format!(
                             "fmarch-projection-v1:thread_view:{game_text}:{source_seq}:{channel_id}"
                         ),
                     )
+                    .await
                     .unwrap(),
                 ),
             )
@@ -6537,9 +6565,10 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
         .bind(channel_id)
         .bind(body)
         .bind(body_private)
-        .execute(&pool)
+        .execute(&mut *tx)
         .await
         .unwrap();
+        tx.commit().await.unwrap();
     }
 
     let app = router(pool);

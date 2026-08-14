@@ -60,7 +60,7 @@ arrive wrapped in a `resolution.applied` envelope.
 ```rust
 enum EventKind {
     // ── Game lifecycle ──
-    GameCreated,            // pack ref, host, config
+    GameCreated,            // exact pack ref + canonical artifact snapshot, host, config
     SignupsOpened,
     SlotAdded,              // { slot_id }
     GamePersonaRegistered,  // canonical { persona_id, subject_id, claim_id }; presentation is a subject claim

@@ -562,9 +562,11 @@ pub(super) async fn deliver_auth_credential(
     let delivery_id = Uuid::new_v4();
     let provider_id = state.identity_delivery_gateway.provider_id().to_string();
     let credential_envelope = eventstore::encrypt_delivery_credential(
+        tx,
         request.credential_material,
         &delivery_aad(delivery_id, request.delivery_kind),
     )
+    .await
     .map_err(|error| ApiError::Reject {
         status: StatusCode::INTERNAL_SERVER_ERROR,
         error: RejectCode::Internal,

@@ -65,7 +65,7 @@
 //!
 //! Runtime sqlx queries only (no `query!` macro) so `cargo build` needs no DB.
 
-use content_registry::{ContentHash, PackRef};
+use content_registry::{ContentHash, PackArtifactSnapshot, PackRef};
 use eventstore::{append_in_tx, EventInput, StoreError, StoredEvent};
 use identity::{
     active_subject_key_store, open_subject_claim, seal_subject_claim, ClaimId,
@@ -939,7 +939,7 @@ async fn fold_event(
         "GameCreated" => {
             let host = str_field(&ev.payload, "host", &ev.kind)?;
             upsert_authority(tx, game_id, &host, "host").await?;
-            let pack_ref = serde_json::from_value(
+            let pack_ref: PackRef = serde_json::from_value(
                 ev.payload
                     .get("pack_ref")
                     .cloned()
@@ -949,6 +949,22 @@ async fn fold_event(
                 kind: ev.kind.clone(),
                 source,
             })?;
+            let pack_artifact: PackArtifactSnapshot = serde_json::from_value(
+                ev.payload
+                    .get("pack_artifact")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null),
+            )
+            .map_err(|source| ProjectionError::Payload {
+                kind: ev.kind.clone(),
+                source,
+            })?;
+            if pack_artifact.pack_ref != pack_ref {
+                return Err(ProjectionError::PackIdentity(
+                    "GameCreated pack_ref does not match its canonical pack_artifact".to_string(),
+                ));
+            }
+            install_pack_artifact_in_tx(tx, &pack_artifact).await?;
             insert_game_index_setup(tx, game_id, &pack_ref, ev.seq).await?;
             let denied = cohost_denied_from_payload(&ev.payload);
             upsert_cohost_policy(tx, game_id, &denied, ev.seq).await?;
@@ -1384,11 +1400,15 @@ async fn fold_event(
                     } else {
                         (
                             None,
-                            Some(seal_private_projection(
-                                "day_event_narrative",
-                                &[game.as_str(), definition.id.as_str(), lifecycle, "template"],
-                                serde_json::json!({ "body": narrative.body }),
-                            )?),
+                            Some(
+                                seal_private_projection(
+                                    tx,
+                                    "day_event_narrative",
+                                    &[game.as_str(), definition.id.as_str(), lifecycle, "template"],
+                                    serde_json::json!({ "body": narrative.body }),
+                                )
+                                .await?,
+                            ),
                         )
                     };
                 sqlx::query(
@@ -1936,11 +1956,15 @@ async fn activate_day_event_narrative(
     } else {
         (
             None,
-            Some(seal_private_projection(
-                "day_event_narrative",
-                &[game.as_str(), event_id, lifecycle.as_str(), "rendered"],
-                serde_json::json!({ "body": rendered }),
-            )?),
+            Some(
+                seal_private_projection(
+                    tx,
+                    "day_event_narrative",
+                    &[game.as_str(), event_id, lifecycle.as_str(), "rendered"],
+                    serde_json::json!({ "body": rendered }),
+                )
+                .await?,
+            ),
         )
     };
     sqlx::query(
@@ -2136,10 +2160,12 @@ async fn fold_inner(
             let game = game_id.to_string();
             let event = event_index.to_string();
             let result_private = seal_private_projection(
+                tx,
                 "player_investigation_result",
                 &[game.as_str(), phase_id, event.as_str(), audience_slot],
                 serde_json::json!({ "result": result }),
-            )?;
+            )
+            .await?;
             sqlx::query(
                 "INSERT INTO player_investigation_result \
                  (game_id, phase_id, event_index, audience_slot, mode, target_slot, result_private) \
@@ -2176,10 +2202,12 @@ async fn fold_inner(
                 let game = game_id.to_string();
                 let event = event_index.to_string();
                 let result_private = seal_private_projection(
+                    tx,
                     "player_info_result",
                     &[game.as_str(), phase_id, event.as_str(), audience_slot],
                     serde_json::json!({ "result": result }),
-                )?;
+                )
+                .await?;
                 sqlx::query(
                     "INSERT INTO player_info_result \
                      (game_id, phase_id, event_index, audience_slot, kind, actor_slot, \
@@ -2235,10 +2263,12 @@ async fn fold_inner(
             let game = game_id.to_string();
             let mode_name = format!("{mode:?}");
             let result_private = seal_private_projection(
+                tx,
                 "investigation_memory",
                 &[game.as_str(), investigator, target, mode_name.as_str()],
                 serde_json::json!({ "result": result }),
-            )?;
+            )
+            .await?;
             sqlx::query(
                 "INSERT INTO investigation_memory \
                  (game_id, investigator_slot, target_slot, mode, memory_scope, result_private, source_action, template_id, phase_id, phase_kind, phase_number) \
@@ -2854,12 +2884,29 @@ async fn subject_tombstone_alias(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     subject_id: SubjectId,
 ) -> Result<Option<String>, ProjectionError> {
-    Ok(
-        sqlx::query_scalar("SELECT replacement_alias FROM subject_tombstone WHERE subject_id = $1")
-            .bind(subject_id.as_uuid())
-            .fetch_optional(&mut **tx)
-            .await?,
+    // A committed erasure intent is already a presentation tombstone. The
+    // terminal tombstone wins after key destruction, but both carry the same
+    // immutable random alias. Rebuilds therefore cannot republish private
+    // claims while external authority work is delayed or being retried.
+    Ok(sqlx::query_scalar(
+        r#"
+        SELECT replacement_alias
+        FROM (
+            SELECT replacement_alias, 0 AS priority
+            FROM subject_tombstone
+            WHERE subject_id = $1
+            UNION ALL
+            SELECT replacement_alias, 1 AS priority
+            FROM subject_erasure_outbox
+            WHERE subject_id = $1
+        ) AS presentation_tombstone
+        ORDER BY priority
+        LIMIT 1
+        "#,
     )
+    .bind(subject_id.as_uuid())
+    .fetch_optional(&mut **tx)
+    .await?)
 }
 
 async fn completed_game_detached_alias(
@@ -4485,6 +4532,19 @@ pub async fn export_completed_game(
             "only completed games can be exported".to_string(),
         )));
     }
+    let stream_pack_artifact = pack_artifact_from_events(&opened)?;
+    content_registry::verify_pack_artifact(&stream_pack_artifact)
+        .map_err(|error| ProjectionError::PackIdentity(error.to_string()))?;
+    let stored_pack_artifact = game_pack_artifact(pool, game_id).await?.ok_or_else(|| {
+        ProjectionError::PackIdentity(
+            "completed game has no durable pack artifact custody".to_string(),
+        )
+    })?;
+    if stored_pack_artifact != stream_pack_artifact {
+        return Err(ProjectionError::PackIdentity(
+            "completed game pack custody differs from GameCreated".to_string(),
+        ));
+    }
     let subjects = completed_game_subjects(&opened)?;
     let detached_subject_aliases = completed_game_detached_aliases(game_id, &subjects);
     let mut export = CompletedGameExport {
@@ -4511,6 +4571,9 @@ pub async fn import_completed_game_export(
             "only completed-game manifests can be imported",
         ));
     }
+    let imported_pack_artifact = pack_artifact_from_events(&imported)?;
+    content_registry::verify_pack_artifact(&imported_pack_artifact)
+        .map_err(|error| invalid_completed_game_export(error.to_string()))?;
     let subjects = completed_game_subjects(&imported)?;
     let expected_aliases = completed_game_detached_aliases(export.stream.stream_id, &subjects);
     if export.detached_subject_aliases != expected_aliases {
@@ -4550,6 +4613,43 @@ const COMPLETED_GAME_SUBJECT_REF_DOMAIN: &[u8] = b"fmarch/completed-game/detache
 
 fn invalid_completed_game_export(message: impl Into<String>) -> ProjectionError {
     ProjectionError::Store(StoreError::InvalidExport(message.into()))
+}
+
+fn pack_artifact_from_events(
+    events: &[StoredEvent],
+) -> Result<PackArtifactSnapshot, ProjectionError> {
+    let created = events
+        .iter()
+        .find(|event| event.kind == "GameCreated")
+        .ok_or_else(|| ProjectionError::PackIdentity("GameCreated is missing".to_string()))?;
+    let pack_ref: PackRef = serde_json::from_value(
+        created
+            .payload
+            .get("pack_ref")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(|source| ProjectionError::Payload {
+        kind: created.kind.clone(),
+        source,
+    })?;
+    let artifact: PackArtifactSnapshot = serde_json::from_value(
+        created
+            .payload
+            .get("pack_artifact")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(|source| ProjectionError::Payload {
+        kind: created.kind.clone(),
+        source,
+    })?;
+    if artifact.pack_ref != pack_ref {
+        return Err(ProjectionError::PackIdentity(
+            "GameCreated pack_ref differs from pack_artifact".to_string(),
+        ));
+    }
+    Ok(artifact)
 }
 
 fn completed_game_subjects(events: &[StoredEvent]) -> Result<BTreeSet<Uuid>, ProjectionError> {
@@ -5162,15 +5262,18 @@ fn private_projection_context(table: &str, identity: &[&str]) -> String {
     format!("fmarch-projection-v1:{table}:{}", identity.join(":"))
 }
 
-fn seal_private_projection(
+async fn seal_private_projection(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     table: &str,
     identity: &[&str],
     value: serde_json::Value,
 ) -> Result<serde_json::Value, ProjectionError> {
     Ok(eventstore::encrypt_private_projection(
+        tx,
         value,
         &private_projection_context(table, identity),
-    )?)
+    )
+    .await?)
 }
 
 fn open_private_projection(
@@ -6621,9 +6724,83 @@ where
     Ok(row.is_some())
 }
 
-/// Exact content identity committed for a game. Consumers must resolve this
-/// complete reference through the embedded registry; the key alone is not an
-/// executable identity.
+/// Install one verified content-addressed artifact. `GameCreated` folding calls
+/// this before inserting `game_index`, whose composite FK makes the custody
+/// relationship non-optional. Conflicting bytes at one hash fail closed.
+pub async fn install_pack_artifact_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    artifact: &PackArtifactSnapshot,
+) -> Result<(), ProjectionError> {
+    content_registry::verify_pack_artifact(artifact)
+        .map_err(|error| ProjectionError::PackIdentity(error.to_string()))?;
+    let schema_version = i16::try_from(artifact.schema_version).map_err(|_| {
+        ProjectionError::PackIdentity("artifact schema version is outside i16".to_string())
+    })?;
+    sqlx::query(
+        r#"
+        INSERT INTO pack_artifact
+            (content_hash, pack_key, pack_version, artifact_schema_version, canonical_json)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (content_hash) DO NOTHING
+        "#,
+    )
+    .bind(artifact.pack_ref.content_hash.as_str())
+    .bind(&artifact.pack_ref.key)
+    .bind(i64::from(artifact.pack_ref.version))
+    .bind(schema_version)
+    .bind(&artifact.canonical_json)
+    .execute(&mut **tx)
+    .await?;
+
+    let stored = sqlx::query_as::<_, (String, i64, i16, String)>(
+        "SELECT pack_key, pack_version, artifact_schema_version, canonical_json FROM pack_artifact WHERE content_hash = $1",
+    )
+    .bind(artifact.pack_ref.content_hash.as_str())
+    .fetch_one(&mut **tx)
+    .await?;
+    if stored.0 != artifact.pack_ref.key
+        || stored.1 != i64::from(artifact.pack_ref.version)
+        || stored.2 != schema_version
+        || stored.3 != artifact.canonical_json
+    {
+        return Err(ProjectionError::PackIdentity(format!(
+            "pack artifact {} collides with different immutable custody bytes",
+            artifact.pack_ref.content_hash
+        )));
+    }
+    Ok(())
+}
+
+/// Exact canonical artifact owned by a game. The embedded registry is not
+/// consulted; callers revalidate these bytes through `content_registry`.
+pub async fn game_pack_artifact<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Option<PackArtifactSnapshot>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let row = sqlx::query(
+        r#"
+        SELECT artifact.pack_key, artifact.pack_version,
+               artifact.content_hash AS pack_content_hash,
+               artifact.artifact_schema_version, artifact.canonical_json
+        FROM game_index AS game
+        JOIN pack_artifact AS artifact
+          ON artifact.pack_key = game.pack_key
+         AND artifact.pack_version = game.pack_version
+         AND artifact.content_hash = game.pack_content_hash
+        WHERE game.game_id = $1
+        "#,
+    )
+    .bind(game_id)
+    .fetch_optional(executor)
+    .await?;
+    row.map(|row| stored_pack_artifact(&row)).transpose()
+}
+
+/// Exact content identity committed for a game. The matching canonical bytes
+/// are available through [`game_pack_artifact`].
 pub async fn game_pack_ref<'e, E>(
     executor: E,
     game_id: Uuid,
@@ -8722,10 +8899,12 @@ async fn set_slot_private(
 ) -> Result<(), ProjectionError> {
     let game = game_id.to_string();
     let private = seal_private_projection(
+        tx,
         "slot_state",
         &[game.as_str(), slot_id],
         serde_json::json!({ "role_key": role_key, "alignment": alignment }),
-    )?;
+    )
+    .await?;
     sqlx::query("UPDATE slot_state SET private = $3 WHERE game_id = $1 AND slot_id = $2")
         .bind(game_id)
         .bind(slot_id)
@@ -8768,7 +8947,8 @@ async fn update_slot_private(
     if let Some(alignment) = alignment {
         object.insert("alignment".to_string(), serde_json::json!(alignment));
     }
-    let private = seal_private_projection("slot_state", &[game.as_str(), slot_id], private)?;
+    let private =
+        seal_private_projection(tx, "slot_state", &[game.as_str(), slot_id], private).await?;
     sqlx::query("UPDATE slot_state SET private = $3 WHERE game_id = $1 AND slot_id = $2")
         .bind(game_id)
         .bind(slot_id)
@@ -9748,11 +9928,15 @@ async fn insert_thread_post(
     } else {
         (
             None,
-            Some(seal_private_projection(
-                "thread_view",
-                &[game.as_str(), source.as_str(), post.channel_id.as_str()],
-                serde_json::json!({ "body": post.body, "quotations": quotations }),
-            )?),
+            Some(
+                seal_private_projection(
+                    tx,
+                    "thread_view",
+                    &[game.as_str(), source.as_str(), post.channel_id.as_str()],
+                    serde_json::json!({ "body": post.body, "quotations": quotations }),
+                )
+                .await?,
+            ),
             serde_json::json!([]),
         )
     };
@@ -9984,6 +10168,23 @@ fn stored_pack_ref(row: &sqlx::postgres::PgRow) -> Result<PackRef, ProjectionErr
         key: row.get("pack_key"),
         version,
         content_hash,
+    })
+}
+
+fn stored_pack_artifact(
+    row: &sqlx::postgres::PgRow,
+) -> Result<PackArtifactSnapshot, ProjectionError> {
+    let pack_ref = stored_pack_ref(row)?;
+    let schema_version: i16 = row.get("artifact_schema_version");
+    let schema_version = u16::try_from(schema_version).map_err(|_| {
+        ProjectionError::PackIdentity(format!(
+            "pack artifact schema version {schema_version} is outside u16"
+        ))
+    })?;
+    Ok(PackArtifactSnapshot {
+        schema_version,
+        pack_ref,
+        canonical_json: row.get("canonical_json"),
     })
 }
 

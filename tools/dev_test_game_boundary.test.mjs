@@ -187,7 +187,8 @@ test("host live-stack fixture inspects sealed events only at the opaque storage 
     assert.doesNotMatch(source, retiredPlaintextAccess);
   }
   for (const sealedBoundary of [
-    /sealed_version\s*=\s*2/,
+    /sealed_version\s*=\s*3/,
+    /stream_key_epoch\s*>\s*0/,
     /octet_length\(sealed_nonce\)\s*=\s*24/,
     /octet_length\(sealed_body\)\s*>=\s*16/,
     /FROM vote_ballot/,

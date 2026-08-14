@@ -303,11 +303,16 @@ try {
       FMARCH_BIND: `${host}:${apiPort}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_SUBJECT_KEY_DIR: subjectKeyRoot,
-      FMARCH_EVENT_ENCRYPTION_KEY:
-        process.env.FMARCH_EVENT_ENCRYPTION_KEY ??
+      FMARCH_EVENT_WRAP_KEY:
+        process.env.FMARCH_EVENT_WRAP_KEY ??
         "host-console-live-proof-key-at-least-32-bytes",
-      FMARCH_EVENT_ENCRYPTION_KID:
-        process.env.FMARCH_EVENT_ENCRYPTION_KID ?? "host-console-live-proof-v1",
+      FMARCH_EVENT_WRAP_KID:
+        process.env.FMARCH_EVENT_WRAP_KID ?? "host-console-live-proof-wrap-v1",
+      FMARCH_EVENT_ARCHIVE_KEY:
+        process.env.FMARCH_EVENT_ARCHIVE_KEY ??
+        "host-console-live-proof-archive-key-at-least-32-bytes",
+      FMARCH_EVENT_ARCHIVE_KID:
+        process.env.FMARCH_EVENT_ARCHIVE_KID ?? "host-console-live-proof-archive-v1",
       FMARCH_AUTH_SOURCE_SIGNING_KEY:
         process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
         "host-console-live-proof-signing-key-at-least-32-bytes",
@@ -5914,9 +5919,8 @@ async function proveSealedPostStorage({
            AND table_name = 'events'
            AND column_name IN ('payload', 'actor', 'causation_id', 'meta')), '|',
        count(*) FILTER (
-         WHERE sealed_version = 2
-           AND octet_length(sealed_kid) BETWEEN 1 AND 128
-           AND sealed_kid = btrim(sealed_kid)
+         WHERE sealed_version = 3
+           AND stream_key_epoch > 0
            AND octet_length(sealed_nonce) = 24
            AND octet_length(sealed_body) >= 16
        )::text, '|',

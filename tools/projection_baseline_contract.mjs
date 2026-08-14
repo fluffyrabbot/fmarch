@@ -29,6 +29,7 @@ const forbiddenStatements = Object.freeze([
 
 const privateProjectionEncryptionMigration = "0006_encrypt_private_projections.sql";
 const sealedEventBodyMigration = "0020_sealed_event_body.sql";
+const streamKeyEpochMigration = "0024_event_stream_keys.sql";
 const allowedPrivateProjectionErasureStatements = Object.freeze([
   /^TRUNCATE\s+TABLE\s+investigation_memory,\s*player_info_result,\s*player_investigation_result,\s*private_channel_member,\s*slot_state,\s*thread_view$/i,
   /^ALTER\s+TABLE\s+investigation_memory\s+DROP\s+COLUMN\s+result,\s*ADD\s+COLUMN\s+result_private\s+JSONB\s+NOT\s+NULL$/i,
@@ -46,6 +47,11 @@ function isAllowedPrivateProjectionErasure(file, statement) {
   if (file === sealedEventBodyMigration) {
     return [
       /^ALTER\s+TABLE\s+public\.events\s+DROP\s+COLUMN\s+payload,\s*DROP\s+COLUMN\s+actor,\s*DROP\s+COLUMN\s+causation_id,\s*DROP\s+COLUMN\s+meta,\s*ADD\s+COLUMN\s+sealed_version\s+smallint\s+NOT\s+NULL,\s*ADD\s+COLUMN\s+sealed_kid\s+text\s+NOT\s+NULL,\s*ADD\s+COLUMN\s+sealed_nonce\s+bytea\s+NOT\s+NULL,\s*ADD\s+COLUMN\s+sealed_body\s+bytea\s+NOT\s+NULL$/i,
+    ].some((pattern) => pattern.test(statement));
+  }
+  if (file === streamKeyEpochMigration) {
+    return [
+      /^ALTER\s+TABLE\s+public\.events\s+DROP\s+CONSTRAINT\s+events_sealed_body_shape,\s*DROP\s+COLUMN\s+sealed_kid,\s*ADD\s+COLUMN\s+stream_key_epoch\s+bigint\s+NOT\s+NULL,\s*ADD\s+CONSTRAINT\s+events_stream_key_epoch_fk\s+FOREIGN\s+KEY\s*\(stream_id,\s*stream_key_epoch\)\s+REFERENCES\s+public\.event_stream_keys\s*\(stream_id,\s*key_epoch\),\s*ADD\s+CONSTRAINT\s+events_sealed_body_shape\s+CHECK\s*\([\s\S]+\)$/i,
     ].some((pattern) => pattern.test(statement));
   }
   return false;

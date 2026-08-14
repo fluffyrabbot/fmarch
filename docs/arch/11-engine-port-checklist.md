@@ -307,9 +307,9 @@ The only identity that crosses into the engine is `SlotId`.
 
 - [x] Version `ir_version`, pack version, result version, and trace version independently.
   [`unsupported_version_fixture_is_rejected_by_pack_linter` proves unsupported pack/IR versions
-  fail pack validation, and `resolve_phase_rejects_unsupported_pack_versions_before_append`
-  proves `ResolvePhase` rejects that incompatibility before appending resolution envelopes or
-  locking the phase]
+  fail pack validation, and `game_creation_rejects_unsupported_pack_versions_before_append`
+  proves `CreateGame` rejects that incompatibility before appending `GameCreated` or installing
+  game-scoped artifact custody]
 - [x] Enforce a derived additive `ir_version` floor for declared action and policy features.
   [`validate_pack_required_ir_version` derives the minimum version, private domain tests
   `pack_required_ir_version_covers_versioned_action_features` and
@@ -320,28 +320,29 @@ The only identity that crosses into the engine is `SlotId`.
   action ids.
   [`invalid_reference_contract_fixture_is_rejected_by_pack_linter` proves malformed role,
   alignment, effect-tag, and policy action references fail the pack boundary, and
-  `resolve_phase_rejects_invalid_reference_contract_before_append` proves `ResolvePhase` rejects
-  the same pack before appending resolution envelopes or locking the phase]
+  `game_creation_rejects_invalid_reference_contract_before_append` proves `CreateGame` rejects
+  the same pack before appending `GameCreated` or installing game-scoped artifact custody]
 - [x] Validate trigger filter references, trigger ids, and generated trigger production shapes.
   [`invalid_trigger_reference_contract_fixture_is_rejected_by_pack_linter` proves malformed trigger
   filter tags, duplicate ids, unsupported actor/target refs, unsupported generated ability, and
   invalid generated Kill modifiers fail the pack boundary, and
-  `resolve_phase_rejects_invalid_trigger_reference_contract_before_append` proves `ResolvePhase`
-  rejects the same pack before appending resolution envelopes or locking the phase]
+  `game_creation_rejects_invalid_trigger_reference_contract_before_append` proves `CreateGame`
+  rejects the same pack before appending `GameCreated` or installing game-scoped artifact custody]
 - [x] Enforce `Investigate` has `mode`; non-investigate actions must not have `mode`.
   [`invalid_action_contract_fixture_is_rejected_by_pack_linter` proves both malformed modes at the
-  pack boundary, and `resolve_phase_rejects_invalid_action_contract_before_append` proves
-  `ResolvePhase` rejects the same pack before appending resolution envelopes or locking the phase]
+  pack boundary, and `game_creation_rejects_invalid_action_contract_before_append` proves
+  `CreateGame` rejects the same pack before appending `GameCreated` or installing game-scoped
+  artifact custody]
 - [x] Enforce `Mark`/`Clear` have `effect`.
   [`invalid_effect_contract_fixture_is_rejected_by_pack_linter` proves missing/illegal `effect`
   and illegal `reads_effect` fields at the pack boundary, and
-  `resolve_phase_rejects_invalid_effect_contract_before_append` proves `ResolvePhase` rejects the
-  same pack before appending resolution envelopes or locking the phase]
+  `game_creation_rejects_invalid_effect_contract_before_append` proves `CreateGame` rejects the
+  same pack before appending `GameCreated` or installing game-scoped artifact custody]
 - [x] Enforce target cardinality and action window/cadence compatibility.
   [`invalid_target_window_contract_fixture_is_rejected_by_pack_linter` proves a `Night` action in
   a Day-only cadence plus `TargetSpec::None` cardinality/state mismatches fail the pack boundary,
-  and `resolve_phase_rejects_invalid_target_window_contract_before_append` proves `ResolvePhase`
-  rejects the same pack before appending resolution envelopes or locking the phase]
+  and `game_creation_rejects_invalid_target_window_contract_before_append` proves `CreateGame`
+  rejects the same pack before appending `GameCreated` or installing game-scoped artifact custody]
 - [x] Enforce `Grant` requires `ir_version >= 2` and a well-formed grant payload.
 - [x] Enforce selectable Grant options require `ir_version >= 42`, a Grant action, unique option
   ids, and item options that reference declared `item_actions`; `SubmitAction.grant_id` must select
@@ -365,7 +366,7 @@ The only identity that crosses into the engine is `SlotId`.
 - [x] Enforce `reads_effect` only on actions that intentionally read persistent state.
 - [x] Enforce v1 window legality: Day, Night, Any against pack cadence. [proven:
   `invalid_target_window_contract_fixture_is_rejected_by_pack_linter` and
-  `resolve_phase_rejects_invalid_target_window_contract_before_append`]
+  `game_creation_rejects_invalid_target_window_contract_before_append`]
 - [x] Encode vote policy: majority, plurality, supermajority, hammer, no-lynch, self-vote, weighted voting, dynamic vote modifiers, and tie-break semantics. [proven:
   `validate_pack` now rejects malformed and non-super supermajority ratios,
   hammer on plurality, threshold modifiers on plurality, empty/invalid `PerRole` vote-weight
@@ -424,8 +425,8 @@ The only identity that crosses into the engine is `SlotId`.
   pack priorities or precedence edges change,
   `resolve_phase_uses_pack_derived_custom_precedence_order` proves a valid
   Kill-before-Protect pack persists that order and folds the resulting kill through projections, and command test
-  `resolve_phase_rejects_invalid_pack_precedence_before_append` proves invalid explicit night-resolution
-  precedence rejects before `ResolutionApplied`/`ResolutionTrace`/`ThreadLocked` append; goldens prove
+  `game_creation_rejects_invalid_pack_precedence_before_append` proves invalid explicit night-resolution
+  precedence rejects before `GameCreated` or game-scoped artifact custody; goldens prove
   roleblock suppression, doctor/bodyguard protection, Strongman bypasses, and PGO `Visit`
   triggers through the generated-kill/protection path; Chinese structured now declares
   `protect_before_guard_blockable_kills`, validates that enabled `guard_policy` has a
@@ -451,9 +452,9 @@ The only identity that crosses into the engine is `SlotId`.
   mafiascum also declares `strongman_bypasses_protect: true`, packs in `Explicit` night-resolution mode reject a
   missing explicit bypass flag, and a domain regression proves Strongman bypass no longer depends
   on generic `precedence.unless_modifiers`; the pure resolver now also fail-closes when an in-memory
-  explicit night-resolution pack disables the explicit bypass flag; `resolve_phase_rejects_invalid_pack_precedence_before_append`
+  explicit night-resolution pack disables the explicit bypass flag; `game_creation_rejects_invalid_pack_precedence_before_append`
   proves the same missing explicit Strongman bypass policy rejects at the command seam before
-  `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked` append; mafiascum now declares
+  `GameCreated` or game-scoped artifact custody; mafiascum now declares
   `night_resolution.protection_cause_policy` for Doctor, Babysitter, Bodyguard, Martyr, and Jailkeeper
   sources against every cataloged explicit night-resolution kill-like cause, mafiascum now declares
   `night_resolution.kill_cause_ids` for submitted/chosen/generated kill causes, enabled explicit night-resolution
@@ -478,7 +479,7 @@ The only identity that crosses into the engine is `SlotId`.
   bypasses, and
   non-roleblockable actions classified as suppressed; the pack linter now also rejects enabled
   explicit night-resolution packs whose suppression table can stop a night action unless Block has a precedence
-  path before that action's ability; `resolve_phase_rejects_invalid_pack_precedence_before_append`
+  path before that action's ability; `game_creation_rejects_invalid_pack_precedence_before_append`
   proves missing suppression `scope` rejects before append, and the resolver now fails closed
   instead of defaulting missing explicit night-resolution scope; the pure resolver now also fail-closes before
   night resolution when in-memory explicit night-resolution suppression tables omit a role action or item
@@ -530,8 +531,8 @@ The only identity that crosses into the engine is `SlotId`.
   resolver now rejects a explicit night-resolution pack that reaches resolution with missing target-state save
   catalog, policy, or per-cause classifier instead of silently using implicit fallback behavior, and
   `test_invalid_target_state_policy` plus
-  `resolve_phase_rejects_invalid_target_state_policy_before_append` prove missing `bulletproof`
-  save policy rejects before `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked` append;
+  `game_creation_rejects_invalid_target_state_policy_before_append` prove missing `bulletproof`
+  save policy rejects before `GameCreated` or game-scoped artifact custody;
   mafiascum now
   declares `night_resolution.target_state_gate_tags` plus `night_resolution.target_state_gate_policy` for
   `commuted` and `untargetable`, packs in `Explicit` night-resolution mode reject missing/unknown/duplicate/empty
@@ -559,9 +560,9 @@ The only identity that crosses into the engine is `SlotId`.
   protection-cause and target-state save bypass policy, with malformed-pack tests now proving
   omitted generated triggers are named by the protection/source and target-state save classifiers;
   `test_invalid_generated_kill_ownership` plus
-  `resolve_phase_rejects_invalid_generated_kill_ownership_before_append` now prove an otherwise
-  declared generated kill trigger still rejects before `ResolutionApplied`, `ResolutionTrace`, or
-  `ThreadLocked` append when the trigger is not owned by protection-cause, target-state save, and
+  `game_creation_rejects_invalid_generated_kill_ownership_before_append` now prove an otherwise
+  declared generated kill trigger still rejects before `GameCreated` or game-scoped artifact
+  custody when the trigger is not owned by protection-cause, target-state save, and
   roleblock suppression tables; the pure resolver now also fail-closes before the trigger
   fixpoint when an in-memory explicit night-resolution pack omits that generated trigger from protection,
   target-state save, or roleblock suppression ownership;
@@ -637,9 +638,9 @@ The only identity that crosses into the engine is `SlotId`.
   `FactionReachesParity` / `AllOtherFactionsEliminated` awards a faction other than the matching
   parity/surviving faction, with shipped-pack validation proving the stricter shape is satisfied;
   `test_invalid_win_policy_contract` and
-  `resolve_phase_rejects_invalid_win_policy_contract_before_append` prove the same malformed
-  contract is rejected at the command seam before `ResolutionApplied`, `ResolutionTrace`, or
-  `ThreadLocked` can append; duplicate `win.rules[*].when` terminal conditions now fail validation
+  `game_creation_rejects_invalid_win_policy_contract_before_append` prove the same malformed
+  contract is rejected at the command seam before `GameCreated` or game-scoped artifact custody;
+  duplicate `win.rules[*].when` terminal conditions now fail validation
   as first-match dead policy, and the same invalid fixture/command proof covers that duplicate
   `FactionEliminated(mafia)` case before append; duplicate target-lynch win policy role/effect
   sources now fail validation before one Mark action can emit two independent target-win records,
@@ -1643,8 +1644,8 @@ The only identity that crosses into the engine is `SlotId`.
   target-state save classifier gaps now name omitted generated-trigger causes explicitly, and
   suppression omissions now also name any night action that can feed a generated-kill trigger;
   `test_invalid_generated_kill_ownership` plus
-  `resolve_phase_rejects_invalid_generated_kill_ownership_before_append` prove those cross-table
-  ownership gaps reject before command/projection append, and focused resolver regressions prove
+  `game_creation_rejects_invalid_generated_kill_ownership_before_append` prove those cross-table
+  ownership gaps reject before game creation/custody, and focused resolver regressions prove
   the same ownership gaps fail closed before trigger fixpoint entry;
   `night_resolution.chosen_retaliation_cause_policy`
   separately owns folded Hunter-style chosen-retaliation causes before `RetaliationArmed` state is

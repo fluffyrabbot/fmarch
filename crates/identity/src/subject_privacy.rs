@@ -47,6 +47,12 @@ const SUBJECT_KEY_OBJECT_MAX_BYTES: usize = 4 * 1024;
 const SUBJECT_REVOCATION_OBJECT_MAX_BYTES: usize = 16 * 1024;
 const SUBJECT_AUTHORITY_MANIFEST_MAX_BYTES: usize = 4 * 1024;
 const SUBJECT_AUTHORITY_IO_CONCURRENCY: usize = 16;
+const SUBJECT_ERASURE_LEASE_SECONDS: i64 = 60;
+// A complete erasure finalization performs a long owner-locked transaction.
+// Keep at least half of the default ten-connection pool available to HTTP and
+// other background work; journal authentication retains its separate 16-way
+// object-I/O cap above.
+const SUBJECT_ERASURE_JOB_CONCURRENCY: usize = 4;
 const SUBJECT_ENVELOPE_SCHEME: &str = "fmarch-subject-claim-v1";
 const SUBJECT_ENVELOPE_ALG: &str = "XChaCha20Poly1305";
 
@@ -121,6 +127,20 @@ pub struct SubjectRevocationRecord {
     pub destroyed_at: i64,
     pub key_fingerprint_sha256: String,
     pub receipt_id: Uuid,
+}
+
+/// Immutable database work payload committed before the external authority is
+/// touched. The mutable lease lives in `subject_erasure`; this value is safe to
+/// carry across the no-database-lock object-store phase.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubjectErasureWork {
+    pub erasure_id: Uuid,
+    pub principal_user_id: String,
+    pub record: SubjectRevocationRecord,
+    pub authority_id: Option<Uuid>,
+    pub authority_revision: Option<String>,
+    pub authority_manifest_sha256: Option<String>,
+    pub requested_at: i64,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -221,7 +241,7 @@ impl ObjectSubjectKeyStoreConfig {
                 "HTTP subject authority requires explicit {SUBJECT_AUTHORITY_ALLOW_HTTP_ENV}=1"
             )));
         }
-        Ok(Self {
+        let config = Self {
             endpoint,
             region: required_authority_env(SUBJECT_AUTHORITY_REGION_ENV)?,
             bucket: required_authority_env(SUBJECT_AUTHORITY_BUCKET_ENV)?,
@@ -241,7 +261,23 @@ impl ObjectSubjectKeyStoreConfig {
             wrap_key: decode_authority_key(SUBJECT_AUTHORITY_WRAP_KEY_ENV)?,
             journal_kid: required_authority_env(SUBJECT_AUTHORITY_JOURNAL_KID_ENV)?,
             journal_key: decode_authority_key(SUBJECT_AUTHORITY_JOURNAL_KEY_ENV)?,
-        })
+        };
+        config.validate_key_separation()?;
+        Ok(config)
+    }
+
+    fn validate_key_separation(&self) -> Result<(), SubjectPrivacyError> {
+        if self.wrap_kid == self.journal_kid {
+            return Err(SubjectPrivacyError::Configuration(format!(
+                "{SUBJECT_AUTHORITY_WRAP_KID_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KID_ENV} must identify distinct keys"
+            )));
+        }
+        if self.wrap_key == self.journal_key {
+            return Err(SubjectPrivacyError::Configuration(format!(
+                "{SUBJECT_AUTHORITY_WRAP_KEY_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KEY_ENV} must decode to distinct key material"
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -301,6 +337,7 @@ impl std::fmt::Debug for ObjectSubjectKeyStore {
 
 impl ObjectSubjectKeyStore {
     pub fn s3(config: ObjectSubjectKeyStoreConfig) -> Result<Self, SubjectPrivacyError> {
+        config.validate_key_separation()?;
         let endpoint = subject_authority_bucket_endpoint(&config)?;
         let store = AmazonS3Builder::new()
             .with_endpoint(endpoint)
@@ -1321,39 +1358,543 @@ pub async fn reconcile_subject_revocations_with_store(
     pool: &sqlx::PgPool,
     key_store: &dyn SubjectKeyStore,
 ) -> Result<usize, SubjectPrivacyError> {
-    let records = key_store.revocations().await?;
-    let pending = unreconciled_subject_revocations(pool, &records)
-        .await?
-        .into_iter()
-        .cloned()
-        .collect::<Vec<_>>();
-    let reconciled = pending.len();
-    futures_util::stream::iter(pending)
-        .map(|record| async move { reconcile_subject_revocation(pool, key_store, &record).await })
-        .buffer_unordered(SUBJECT_AUTHORITY_IO_CONCURRENCY)
-        .try_collect::<Vec<_>>()
-        .await?;
-    let journaled = records
-        .iter()
-        .map(|record| record.subject_id.as_uuid())
-        .collect::<std::collections::BTreeSet<_>>();
-    let database_tombstones =
-        sqlx::query_scalar::<_, Uuid>("SELECT subject_id FROM subject_tombstone")
-            .fetch_all(pool)
-            .await
-            .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    if let Some(unbacked) = database_tombstones
-        .into_iter()
-        .find(|subject_id| !journaled.contains(subject_id))
-    {
-        return Err(SubjectPrivacyError::Storage(format!(
-            "database tombstone {unbacked} has no external revocation record"
-        )));
-    }
-    Ok(reconciled)
+    reconcile_subject_revocations_with_store_inner(pool, key_store)
+        .await
+        .map(|(completed, _)| completed)
 }
 
-async fn discover_revoked_subject_owner(
+/// Test/diagnostic surface for proving the journal preflight remains batched.
+/// The count covers only database round trips used to classify authenticated
+/// journal subjects before any necessary per-subject recovery/finalization.
+#[doc(hidden)]
+pub async fn reconcile_subject_revocations_with_store_and_preflight_query_count(
+    pool: &sqlx::PgPool,
+    key_store: &dyn SubjectKeyStore,
+) -> Result<(usize, usize), SubjectPrivacyError> {
+    reconcile_subject_revocations_with_store_inner(pool, key_store).await
+}
+
+async fn reconcile_subject_revocations_with_store_inner(
+    pool: &sqlx::PgPool,
+    key_store: &dyn SubjectKeyStore,
+) -> Result<(usize, usize), SubjectPrivacyError> {
+    // Authenticate the complete journal before using any record as destruction
+    // evidence. A restored database may predate its durable outbox; recreate
+    // that pending intent under the canonical owner locks before finalization.
+    let records = key_store.revocations().await?;
+    let subject_ids = records
+        .iter()
+        .map(|record| record.subject_id)
+        .collect::<Vec<_>>();
+    let mut preflight_query_count = 0;
+    let work_by_subject = if subject_ids.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        preflight_query_count += 1;
+        load_subject_erasure_work_by_subjects(pool, &subject_ids).await?
+    };
+    let missing_subject_ids = subject_ids
+        .iter()
+        .copied()
+        .filter(|subject_id| !work_by_subject.contains_key(subject_id))
+        .collect::<Vec<_>>();
+    let presence_by_subject = if missing_subject_ids.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        preflight_query_count += 1;
+        subject_database_presence_batch(pool, &missing_subject_ids).await?
+    };
+    for record in &records {
+        let work = match work_by_subject.get(&record.subject_id).cloned() {
+            Some(work) => work,
+            None => {
+                let (has_subject, has_dependent_reference) = presence_by_subject
+                    .get(&record.subject_id)
+                    .copied()
+                    .ok_or_else(|| {
+                        SubjectPrivacyError::Storage(format!(
+                            "journal subject {} was omitted from batched database classification",
+                            record.subject_id
+                        ))
+                    })?;
+                if !has_subject && !has_dependent_reference {
+                    // The database snapshot predates this subject's entire
+                    // lifetime. The authenticated external revocation is
+                    // historical evidence, not an orphaned local principal to
+                    // reconstruct in an older backup.
+                    continue;
+                }
+                if !has_subject {
+                    return Err(SubjectPrivacyError::Storage(format!(
+                        "revoked subject {} has dependent database references but no canonical privacy subject; explicit recovery is required",
+                        record.subject_id
+                    )));
+                }
+                crate::member_lifecycle::recover_member_erasure_from_revocation(pool, record)
+                    .await
+                    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?
+            }
+        };
+        verify_work_record(&work, record)?;
+    }
+
+    let worker_id = format!("startup-{}", Uuid::new_v4().simple());
+    let now = unix_now_seconds()?;
+    let authenticated_by_subject = records
+        .iter()
+        .map(|record| (record.subject_id, record))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut completed_records = Vec::new();
+    loop {
+        let claims = claim_pending_subject_erasure_batch(pool, &worker_id, now).await?;
+        if claims.is_empty() {
+            break;
+        }
+        let batch = futures_util::stream::iter(claims)
+            .map(|claim| {
+                let authenticated = authenticated_by_subject
+                    .get(&claim.work.record.subject_id)
+                    .copied();
+                async move {
+                    process_claimed_subject_erasure(pool, key_store, &claim, authenticated, now)
+                        .await
+                }
+            })
+            .buffer_unordered(SUBJECT_ERASURE_JOB_CONCURRENCY)
+            .try_collect::<Vec<_>>()
+            .await?;
+        completed_records.extend(batch);
+    }
+    let completed = completed_records.len();
+
+    // Capture the database terminal set first, then authenticate a fresh
+    // journal snapshot. A replica may have published its create-only external
+    // receipt and committed the tombstone after our initial journal LIST; the
+    // second LIST prevents that valid interleaving from becoming a false
+    // readiness failure while still requiring exact external evidence.
+    let database_evidence =
+        sqlx::query_as::<_, (Uuid, String, i64, Option<Uuid>, Option<String>, Option<i64>)>(
+            r#"
+        SELECT tombstone.subject_id,
+               tombstone.replacement_alias,
+               tombstone.destroyed_at,
+               receipt.receipt_id,
+               receipt.key_fingerprint_sha256,
+               receipt.destroyed_at
+        FROM subject_tombstone AS tombstone
+        LEFT JOIN subject_key_destruction_receipt AS receipt USING (subject_id)
+        ORDER BY tombstone.subject_id
+        "#,
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    let final_records = key_store.revocations().await?;
+    let final_by_subject = final_records
+        .iter()
+        .map(|record| (record.subject_id, record))
+        .collect::<std::collections::HashMap<_, _>>();
+    for (subject_id, alias, destroyed_at, receipt_id, fingerprint, receipt_destroyed_at) in
+        database_evidence
+    {
+        let subject_id = SubjectId::from_uuid(subject_id);
+        let external = final_by_subject.get(&subject_id).copied().ok_or_else(|| {
+            SubjectPrivacyError::Storage(format!(
+                "database tombstone {subject_id} has no external revocation record"
+            ))
+        })?;
+        if external.replacement_alias != alias
+            || external.destroyed_at != destroyed_at
+            || receipt_id != Some(external.receipt_id)
+            || fingerprint.as_deref() != Some(external.key_fingerprint_sha256.as_str())
+            || receipt_destroyed_at != Some(external.destroyed_at)
+        {
+            return Err(SubjectPrivacyError::Storage(format!(
+                "database tombstone {subject_id} conflicts with its external revocation evidence"
+            )));
+        }
+    }
+    Ok((completed, preflight_query_count))
+}
+
+fn unix_now_seconds() -> Result<i64, SubjectPrivacyError> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))
+}
+
+fn subject_erasure_work_from_row(
+    row: &sqlx::postgres::PgRow,
+) -> Result<SubjectErasureWork, SubjectPrivacyError> {
+    use sqlx::Row;
+
+    Ok(SubjectErasureWork {
+        erasure_id: row
+            .try_get("erasure_id")
+            .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+        principal_user_id: row
+            .try_get("principal_user_id")
+            .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+        record: SubjectRevocationRecord {
+            subject_id: SubjectId::from_uuid(
+                row.try_get("subject_id")
+                    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+            ),
+            replacement_alias: row
+                .try_get("replacement_alias")
+                .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+            destroyed_at: row
+                .try_get("requested_at")
+                .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+            key_fingerprint_sha256: row
+                .try_get("key_fingerprint_sha256")
+                .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+            receipt_id: row
+                .try_get("receipt_id")
+                .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+        },
+        authority_id: row
+            .try_get("authority_id")
+            .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+        authority_revision: row
+            .try_get("authority_revision")
+            .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+        authority_manifest_sha256: row
+            .try_get("authority_manifest_sha256")
+            .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+        requested_at: row
+            .try_get("requested_at")
+            .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+    })
+}
+
+const SUBJECT_ERASURE_WORK_SELECT: &str = r#"
+    SELECT outbox.erasure_id,
+           outbox.subject_id,
+           outbox.principal_user_id,
+           outbox.receipt_id,
+           outbox.replacement_alias,
+           outbox.key_fingerprint_sha256,
+           outbox.requested_at,
+           outbox.authority_id,
+           outbox.authority_revision,
+           outbox.authority_manifest_sha256
+    FROM subject_erasure_outbox AS outbox
+"#;
+
+pub(crate) async fn load_subject_erasure_work_by_principal(
+    pool: &sqlx::PgPool,
+    principal_user_id: &str,
+) -> Result<Option<SubjectErasureWork>, SubjectPrivacyError> {
+    let row = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "{SUBJECT_ERASURE_WORK_SELECT} WHERE outbox.principal_user_id = $1"
+    )))
+    .bind(principal_user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    row.as_ref().map(subject_erasure_work_from_row).transpose()
+}
+
+async fn load_subject_erasure_work_by_subjects(
+    pool: &sqlx::PgPool,
+    subject_ids: &[SubjectId],
+) -> Result<std::collections::HashMap<SubjectId, SubjectErasureWork>, SubjectPrivacyError> {
+    let subject_ids = subject_ids
+        .iter()
+        .map(|subject_id| subject_id.as_uuid())
+        .collect::<Vec<_>>();
+    let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "{SUBJECT_ERASURE_WORK_SELECT} WHERE outbox.subject_id = ANY($1)"
+    )))
+    .bind(&subject_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    rows.iter()
+        .map(|row| {
+            let work = subject_erasure_work_from_row(row)?;
+            Ok((work.record.subject_id, work))
+        })
+        .collect()
+}
+
+async fn subject_database_presence_batch(
+    pool: &sqlx::PgPool,
+    subject_ids: &[SubjectId],
+) -> Result<std::collections::HashMap<SubjectId, (bool, bool)>, SubjectPrivacyError> {
+    let subject_ids = subject_ids
+        .iter()
+        .map(|subject_id| subject_id.as_uuid())
+        .collect::<Vec<_>>();
+    let rows = sqlx::query_as::<_, (Uuid, bool, bool)>(
+        r#"
+        SELECT
+            journal.subject_id,
+            subject.subject_id IS NOT NULL,
+            EXISTS(
+                SELECT 1 FROM subject_erasure_outbox WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM subject_private_claim WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM subject_tombstone WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM subject_key_destruction_receipt WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM member_lifecycle_event WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM member_lifecycle_projection WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM member_personal_export WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM profile_editor WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM game_persona_private WHERE subject_id = journal.subject_id
+            )
+        FROM UNNEST($1::uuid[]) AS journal(subject_id)
+        LEFT JOIN privacy_subject AS subject USING (subject_id)
+        "#,
+    )
+    .bind(&subject_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    Ok(rows
+        .into_iter()
+        .map(|(subject_id, has_subject, has_reference)| {
+            (
+                SubjectId::from_uuid(subject_id),
+                (has_subject, has_reference),
+            )
+        })
+        .collect())
+}
+
+#[derive(Debug, Clone)]
+struct ClaimedSubjectErasure {
+    work: SubjectErasureWork,
+    claim_token: Uuid,
+    claim_owner: String,
+}
+
+async fn load_subject_erasure_work_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    erasure_id: Uuid,
+) -> Result<SubjectErasureWork, SubjectPrivacyError> {
+    let row = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "{SUBJECT_ERASURE_WORK_SELECT} WHERE outbox.erasure_id = $1"
+    )))
+    .bind(erasure_id)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    subject_erasure_work_from_row(&row)
+}
+
+async fn claim_subject_erasure(
+    pool: &sqlx::PgPool,
+    erasure_id: Uuid,
+    worker_id: &str,
+    now: i64,
+) -> Result<Option<ClaimedSubjectErasure>, SubjectPrivacyError> {
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    let claim_token = Uuid::new_v4();
+    let claim_expires_at = now.saturating_add(SUBJECT_ERASURE_LEASE_SECONDS);
+    let claimed = sqlx::query_scalar::<_, Uuid>(
+        "UPDATE subject_erasure SET claim_token = $2, claim_owner = $3, claim_expires_at = $4, attempt_count = attempt_count + 1, last_attempt_at = $5 WHERE erasure_id = $1 AND state = 'pending' AND (claim_token IS NULL OR claim_expires_at <= $5) RETURNING erasure_id",
+    )
+        .bind(erasure_id)
+        .bind(claim_token)
+        .bind(worker_id)
+        .bind(claim_expires_at)
+        .bind(now)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    if claimed.is_none() {
+        tx.commit()
+            .await
+            .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+        return Ok(None);
+    }
+    let work = load_subject_erasure_work_in_tx(&mut tx, erasure_id).await?;
+    tx.commit()
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    Ok(Some(ClaimedSubjectErasure {
+        work,
+        claim_token,
+        claim_owner: worker_id.to_string(),
+    }))
+}
+
+/// Atomically reserve a bounded batch. `SKIP LOCKED` lets replicas divide the
+/// queue without first reading every pending id and opening one futile claim
+/// transaction per row. Live leases are never stolen; only unclaimed or
+/// expired rows are eligible.
+async fn claim_pending_subject_erasure_batch(
+    pool: &sqlx::PgPool,
+    worker_id: &str,
+    now: i64,
+) -> Result<Vec<ClaimedSubjectErasure>, SubjectPrivacyError> {
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    let erasure_ids = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT erasure_id
+        FROM subject_erasure
+        WHERE state = 'pending'
+          AND (claim_token IS NULL OR claim_expires_at <= $1)
+        ORDER BY claim_expires_at NULLS FIRST, erasure_id
+        FOR UPDATE SKIP LOCKED
+        LIMIT $2
+        "#,
+    )
+    .bind(now)
+    .bind(SUBJECT_ERASURE_JOB_CONCURRENCY as i64)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    let mut claims = Vec::with_capacity(erasure_ids.len());
+    for erasure_id in erasure_ids {
+        let claim_token = Uuid::new_v4();
+        let claim_expires_at = now.saturating_add(SUBJECT_ERASURE_LEASE_SECONDS);
+        let updated = sqlx::query(
+            "UPDATE subject_erasure SET claim_token = $2, claim_owner = $3, claim_expires_at = $4, attempt_count = attempt_count + 1, last_attempt_at = $5 WHERE erasure_id = $1 AND state = 'pending' AND (claim_token IS NULL OR claim_expires_at <= $5)",
+        )
+        .bind(erasure_id)
+        .bind(claim_token)
+        .bind(worker_id)
+        .bind(claim_expires_at)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+        if updated.rows_affected() != 1 {
+            return Err(SubjectPrivacyError::Storage(format!(
+                "locked erasure {erasure_id} could not be claimed"
+            )));
+        }
+        claims.push(ClaimedSubjectErasure {
+            work: load_subject_erasure_work_in_tx(&mut tx, erasure_id).await?,
+            claim_token,
+            claim_owner: worker_id.to_string(),
+        });
+    }
+    tx.commit()
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    Ok(claims)
+}
+
+fn verify_work_record(
+    work: &SubjectErasureWork,
+    record: &SubjectRevocationRecord,
+) -> Result<(), SubjectPrivacyError> {
+    if &work.record != record {
+        return Err(SubjectPrivacyError::Storage(format!(
+            "external revocation conflicts with erasure outbox {}",
+            work.erasure_id
+        )));
+    }
+    Ok(())
+}
+
+async fn process_claimed_subject_erasure(
+    pool: &sqlx::PgPool,
+    key_store: &dyn SubjectKeyStore,
+    claim: &ClaimedSubjectErasure,
+    authenticated_record: Option<&SubjectRevocationRecord>,
+    completed_at: i64,
+) -> Result<SubjectRevocationRecord, SubjectPrivacyError> {
+    let work = &claim.work;
+    // The claim transaction has committed. No database transaction or row lock
+    // exists across these authority operations.
+    let authenticated = match authenticated_record {
+        Some(record) => {
+            verify_work_record(work, record)?;
+            record.clone()
+        }
+        None => {
+            // Each adapter's create-only write verifies the exact immutable
+            // subject object (including its authenticated contents) before it
+            // returns. Re-listing the complete journal here would turn a batch
+            // of N new erasures into N full LIST+GET sweeps.
+            key_store.record_revocation(&work.record).await?;
+            work.record.clone()
+        }
+    };
+    verify_work_record(work, &authenticated)?;
+    let key_was_present = key_store.destroy(work.record.subject_id).await?;
+    match key_store.load(work.record.subject_id).await {
+        Err(SubjectPrivacyError::MissingKey { .. }) => {}
+        Ok(_) => {
+            return Err(SubjectPrivacyError::Storage(format!(
+                "subject key {} remained readable after destruction",
+                work.record.subject_id
+            )))
+        }
+        Err(error) => return Err(error),
+    }
+    finalize_subject_erasure(pool, claim, &authenticated, key_was_present, completed_at).await?;
+    Ok(authenticated)
+}
+
+async fn process_subject_erasure_id_with_store(
+    pool: &sqlx::PgPool,
+    key_store: &dyn SubjectKeyStore,
+    erasure_id: Uuid,
+    worker_id: &str,
+    now: i64,
+) -> Result<bool, SubjectPrivacyError> {
+    let Some(claim) = claim_subject_erasure(pool, erasure_id, worker_id, now).await? else {
+        return Ok(false);
+    };
+    process_claimed_subject_erasure(pool, key_store, &claim, None, now).await?;
+    Ok(true)
+}
+
+pub async fn process_pending_subject_erasures_with_store(
+    pool: &sqlx::PgPool,
+    key_store: &dyn SubjectKeyStore,
+    worker_id: &str,
+    now: i64,
+) -> Result<usize, SubjectPrivacyError> {
+    let mut completed = 0;
+    loop {
+        let claims = claim_pending_subject_erasure_batch(pool, worker_id, now).await?;
+        if claims.is_empty() {
+            return Ok(completed);
+        }
+        completed += futures_util::stream::iter(claims)
+            .map(|claim| async move {
+                process_claimed_subject_erasure(pool, key_store, &claim, None, now).await
+            })
+            .buffer_unordered(SUBJECT_ERASURE_JOB_CONCURRENCY)
+            .try_collect::<Vec<_>>()
+            .await?
+            .len();
+    }
+}
+
+pub async fn process_pending_subject_erasures(
+    pool: &sqlx::PgPool,
+    worker_id: &str,
+    now: i64,
+) -> Result<usize, SubjectPrivacyError> {
+    let key_store = active_subject_key_store().await?;
+    process_pending_subject_erasures_with_store(pool, key_store.as_ref(), worker_id, now).await
+}
+
+pub(crate) async fn process_subject_erasure_with_store(
+    pool: &sqlx::PgPool,
+    key_store: &dyn SubjectKeyStore,
+    erasure_id: Uuid,
+    worker_id: &str,
+    now: i64,
+) -> Result<bool, SubjectPrivacyError> {
+    process_subject_erasure_id_with_store(pool, key_store, erasure_id, worker_id, now).await
+}
+
+pub(crate) async fn discover_revoked_subject_owner(
     pool: &sqlx::PgPool,
     subject_id: SubjectId,
 ) -> Result<String, SubjectPrivacyError> {
@@ -1385,66 +1926,108 @@ async fn discover_revoked_subject_owner(
     Ok(owner)
 }
 
-async fn reconcile_subject_revocation(
+async fn finalize_subject_erasure(
     pool: &sqlx::PgPool,
-    key_store: &dyn SubjectKeyStore,
-    record: &SubjectRevocationRecord,
+    claim: &ClaimedSubjectErasure,
+    authenticated_record: &SubjectRevocationRecord,
+    key_was_present: bool,
+    completed_at: i64,
 ) -> Result<(), SubjectPrivacyError> {
     use sqlx::Row;
 
-    // Owner discovery takes no row lock. The transaction then follows the one
-    // canonical identity order used by claim issuance and erasure: principal
-    // first, subject second. Revalidating the subject after both locks closes
-    // the discovery-to-lock race without ever taking subject -> principal.
-    let principal = discover_revoked_subject_owner(pool, record.subject_id).await?;
+    let work = &claim.work;
+    verify_work_record(work, authenticated_record)?;
+    let record = authenticated_record;
+    let principal = &work.principal_user_id;
     let mut tx = pool
         .begin()
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    let principal_exists = sqlx::query_scalar::<_, String>(
-        "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    let owner = crate::methods::lock_identity_mutation(
+        &mut tx,
+        principal,
+        crate::methods::IdentityMutationExtent::Complete,
     )
-    .bind(&principal)
-    .fetch_optional(&mut *tx)
     .await
-    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?
-    .is_some();
-    if !principal_exists {
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    if owner.subject_id != record.subject_id.as_uuid()
+        || owner.principal_user_id != *principal
+        || !matches!(
+            owner.subject_lifecycle_state.as_str(),
+            "erasure_pending" | "erased"
+        )
+    {
         return Err(SubjectPrivacyError::Storage(format!(
-            "revoked subject {} owner `{principal}` is missing; explicit recovery is required",
-            record.subject_id
-        )));
-    }
-    let subject = sqlx::query(
-        "SELECT principal_user_id, lifecycle_state FROM privacy_subject WHERE subject_id = $1 FOR UPDATE",
-    )
-    .bind(record.subject_id.as_uuid())
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?
-    .ok_or_else(|| {
-        SubjectPrivacyError::Storage(format!(
-            "revoked subject {} disappeared after owner discovery; explicit recovery is required",
-            record.subject_id
-        ))
-    })?;
-    let locked_owner: Option<String> = subject.try_get("principal_user_id").map_err(|error| {
-        SubjectPrivacyError::Storage(format!(
-            "revoked subject {} owner is invalid: {error}",
-            record.subject_id
-        ))
-    })?;
-    if locked_owner.as_deref() != Some(principal.as_str()) {
-        return Err(SubjectPrivacyError::Storage(format!(
-            "revoked subject {} changed owners during reconciliation; explicit recovery is required",
-            record.subject_id
+            "erasure outbox {} no longer matches its locked owner",
+            work.erasure_id
         )));
     }
 
-    // Keep both database locks across irreversible key deletion. A claim that
-    // already owns them commits first and is scrubbed below; a later claim
-    // waits, observes the erased subject, and rejects.
-    let key_was_present = key_store.destroy(record.subject_id).await?;
+    let (state, claim_token, claim_owner): (String, Option<Uuid>, Option<String>) =
+        sqlx::query_as(
+            "SELECT state, claim_token, claim_owner FROM subject_erasure WHERE erasure_id = $1 FOR UPDATE",
+        )
+        .bind(work.erasure_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?
+        .ok_or_else(|| {
+            SubjectPrivacyError::Storage(format!(
+                "erasure outbox {} has no durable state row",
+                work.erasure_id
+            ))
+        })?;
+    if state != "pending"
+        || claim_token != Some(claim.claim_token)
+        || claim_owner.as_deref() != Some(claim.claim_owner.as_str())
+    {
+        return Err(SubjectPrivacyError::Storage(format!(
+            "erasure worker {} lost fenced claim {} for {}",
+            claim.claim_owner, claim.claim_token, work.erasure_id
+        )));
+    }
+
+    let binding = sqlx::query_as::<_, (Uuid, String, String)>(
+        "SELECT authority_id, authority_revision, manifest_sha256 FROM subject_authority_binding WHERE singleton = TRUE",
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    let expected_binding = work.authority_id.map(|authority_id| {
+        (
+            authority_id,
+            work.authority_revision.clone().unwrap_or_default(),
+            work.authority_manifest_sha256.clone().unwrap_or_default(),
+        )
+    });
+    if binding != expected_binding {
+        return Err(SubjectPrivacyError::Storage(format!(
+            "erasure outbox {} authority binding changed before finalization",
+            work.erasure_id
+        )));
+    }
+
+    let locked_work = sqlx::query(sqlx::AssertSqlSafe(format!(
+        "{SUBJECT_ERASURE_WORK_SELECT} WHERE outbox.erasure_id = $1"
+    )))
+    .bind(work.erasure_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    let locked_work = subject_erasure_work_from_row(&locked_work)?;
+    if locked_work != *work {
+        return Err(SubjectPrivacyError::Storage(format!(
+            "erasure outbox {} changed after worker verification",
+            work.erasure_id
+        )));
+    }
+
+    if owner.subject_lifecycle_state == "erased" {
+        return Err(SubjectPrivacyError::Storage(format!(
+            "subject {} is terminally erased without completed erasure state",
+            record.subject_id
+        )));
+    }
     sqlx::query("UPDATE privacy_subject SET lifecycle_state = 'erased' WHERE subject_id = $1")
         .bind(record.subject_id.as_uuid())
         .execute(&mut *tx)
@@ -1460,13 +2043,14 @@ async fn reconcile_subject_revocation(
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query(
-        "INSERT INTO subject_key_destruction_receipt (receipt_id, subject_id, key_fingerprint_sha256, key_was_present, destroyed_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (subject_id) DO NOTHING",
+        "INSERT INTO subject_key_destruction_receipt (receipt_id, subject_id, key_fingerprint_sha256, key_was_present, destroyed_at, erasure_id) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (subject_id) DO NOTHING",
     )
     .bind(record.receipt_id)
     .bind(record.subject_id.as_uuid())
     .bind(&record.key_fingerprint_sha256)
     .bind(key_was_present)
     .bind(record.destroyed_at)
+    .bind(work.erasure_id)
     .execute(&mut *tx)
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
@@ -1476,6 +2060,7 @@ async fn reconcile_subject_revocation(
         SELECT tombstone.replacement_alias,
                tombstone.destroyed_at AS tombstone_destroyed_at,
                receipt.receipt_id,
+               receipt.erasure_id,
                receipt.key_fingerprint_sha256,
                receipt.destroyed_at AS receipt_destroyed_at
         FROM subject_tombstone AS tombstone
@@ -1490,6 +2075,7 @@ async fn reconcile_subject_revocation(
     if evidence.get::<String, _>("replacement_alias") != record.replacement_alias
         || evidence.get::<i64, _>("tombstone_destroyed_at") != record.destroyed_at
         || evidence.get::<Uuid, _>("receipt_id") != record.receipt_id
+        || evidence.get::<Uuid, _>("erasure_id") != work.erasure_id
         || evidence.get::<String, _>("key_fingerprint_sha256") != record.key_fingerprint_sha256
         || evidence.get::<i64, _>("receipt_destroyed_at") != record.destroyed_at
     {
@@ -1510,129 +2096,75 @@ async fn reconcile_subject_revocation(
         &mut tx,
         record.subject_id,
         &record.replacement_alias,
-        Some(&principal),
+        Some(principal),
         record.destroyed_at,
     )
     .await?;
-    reconcile_member_lifecycle(&mut tx, record, &principal).await?;
+    reconcile_member_lifecycle(&mut tx, record, principal).await?;
     sqlx::query("DELETE FROM member_personal_export WHERE principal_user_id = $1")
-        .bind(&principal)
+        .bind(principal)
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("DELETE FROM workos_session_exchange WHERE subject IN (SELECT subject FROM external_identity WHERE principal_user_id = $1)")
-        .bind(&principal)
+        .bind(principal)
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("DELETE FROM external_identity WHERE principal_user_id = $1")
-        .bind(&principal)
+        .bind(principal)
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("UPDATE authentication_method SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2) WHERE principal_user_id = $1")
-        .bind(&principal).bind(record.destroyed_at).execute(&mut *tx).await
+        .bind(principal).bind(record.destroyed_at).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("UPDATE auth_session SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_user_id = $1")
-        .bind(&principal).bind(record.destroyed_at).execute(&mut *tx).await
+        .bind(principal).bind(record.destroyed_at).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("DELETE FROM auth_websocket_ticket WHERE principal_user_id = $1")
-        .bind(&principal)
+        .bind(principal)
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("DELETE FROM auth_invite WHERE principal_user_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1)")
-        .bind(&principal).execute(&mut *tx).await
+        .bind(principal).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("DELETE FROM auth_delivery_intent WHERE principal_user_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1)")
-        .bind(&principal).execute(&mut *tx).await
+        .bind(principal).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("DELETE FROM auth_account_recovery_credential WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1)")
-        .bind(&principal).execute(&mut *tx).await
+        .bind(principal).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     let erased_account_id = format!("erased_{}", record.receipt_id.simple());
     sqlx::query("UPDATE auth_account SET account_id = $2, disabled_at = COALESCE(disabled_at, $3), password_hash = $4, global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
-        .bind(&principal).bind(erased_account_id).bind(record.destroyed_at).bind(format!("erased:{}", record.receipt_id)).execute(&mut *tx).await
+        .bind(principal).bind(erased_account_id).bind(record.destroyed_at).bind(format!("erased:{}", record.receipt_id)).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("UPDATE identity_lifecycle_audit SET actor_user_id = CASE WHEN actor_user_id = $1 THEN $2 ELSE actor_user_id END, principal_user_id = $2, metadata = '{}'::jsonb WHERE principal_user_id = $1 OR actor_user_id = $1")
-        .bind(&principal).bind(&record.replacement_alias).execute(&mut *tx).await
+        .bind(principal).bind(&record.replacement_alias).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("UPDATE platform_principal SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2), global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
-        .bind(&principal).bind(record.destroyed_at).execute(&mut *tx).await
+        .bind(principal).bind(record.destroyed_at).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    let completed = sqlx::query(
+        "UPDATE subject_erasure SET state = 'complete', claim_token = NULL, claim_owner = NULL, claim_expires_at = NULL, completed_at = $2 WHERE erasure_id = $1 AND state = 'pending' AND claim_token = $3 AND claim_owner = $4",
+    )
+    .bind(work.erasure_id)
+    .bind(completed_at)
+    .bind(claim.claim_token)
+    .bind(&claim.claim_owner)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    if completed.rows_affected() != 1 {
+        return Err(SubjectPrivacyError::Storage(format!(
+            "erasure worker {} lost fenced claim {} while completing {}",
+            claim.claim_owner, claim.claim_token, work.erasure_id
+        )));
+    }
     tx.commit()
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))
-}
-
-/// Identify journal records whose complete database-side erasure transaction
-/// has not committed yet. A matching destruction receipt, tombstone, and
-/// irreversible subject state are the transaction's durable completion marker.
-///
-/// The external journal is still fully listed and authenticated on every
-/// startup. This filter only avoids repeating key deletion and the large
-/// database scrub transaction for records already proven complete.
-async fn unreconciled_subject_revocations<'a>(
-    pool: &sqlx::PgPool,
-    records: &'a [SubjectRevocationRecord],
-) -> Result<Vec<&'a SubjectRevocationRecord>, SubjectPrivacyError> {
-    use sqlx::Row;
-    use std::collections::HashMap;
-
-    if records.is_empty() {
-        return Ok(Vec::new());
-    }
-    let subject_ids = records
-        .iter()
-        .map(|record| record.subject_id.as_uuid())
-        .collect::<Vec<_>>();
-    let rows = sqlx::query(
-        r#"
-        SELECT receipt.subject_id,
-               receipt.receipt_id,
-               receipt.key_fingerprint_sha256,
-               receipt.destroyed_at AS receipt_destroyed_at,
-               tombstone.replacement_alias,
-               tombstone.destroyed_at AS tombstone_destroyed_at,
-               subject.lifecycle_state
-        FROM subject_key_destruction_receipt AS receipt
-        JOIN subject_tombstone AS tombstone USING (subject_id)
-        JOIN privacy_subject AS subject USING (subject_id)
-        WHERE receipt.subject_id = ANY($1)
-        "#,
-    )
-    .bind(&subject_ids)
-    .fetch_all(pool)
-    .await
-    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    let committed = rows
-        .into_iter()
-        .map(|row| (row.get::<Uuid, _>("subject_id"), row))
-        .collect::<HashMap<_, _>>();
-
-    let mut pending = Vec::new();
-    for record in records {
-        let Some(row) = committed.get(&record.subject_id.as_uuid()) else {
-            pending.push(record);
-            continue;
-        };
-        let receipt_matches = row.get::<Uuid, _>("receipt_id") == record.receipt_id
-            && row.get::<String, _>("key_fingerprint_sha256") == record.key_fingerprint_sha256
-            && row.get::<i64, _>("receipt_destroyed_at") == record.destroyed_at;
-        let tombstone_matches = row.get::<String, _>("replacement_alias")
-            == record.replacement_alias
-            && row.get::<i64, _>("tombstone_destroyed_at") == record.destroyed_at;
-        if !receipt_matches || !tombstone_matches {
-            return Err(SubjectPrivacyError::Storage(format!(
-                "database erasure evidence conflicts with external revocation for subject {}",
-                record.subject_id
-            )));
-        }
-        if row.get::<String, _>("lifecycle_state") != "erased" {
-            pending.push(record);
-        }
-    }
-    Ok(pending)
 }
 
 /// Bind an empty database to one immutable authority genesis, reconcile its
@@ -1760,9 +2292,13 @@ pub async fn verify_active_subject_keys(
         r#"
         SELECT subject.subject_id,
                subject.lifecycle_state,
-               tombstone.subject_id IS NOT NULL AS tombstoned
+               tombstone.subject_id IS NOT NULL AS tombstoned,
+               outbox.erasure_id IS NOT NULL AS has_erasure_intent,
+               erasure.state AS erasure_state
         FROM privacy_subject AS subject
         LEFT JOIN subject_tombstone AS tombstone USING (subject_id)
+        LEFT JOIN subject_erasure_outbox AS outbox USING (subject_id)
+        LEFT JOIN subject_erasure AS erasure USING (erasure_id)
         ORDER BY subject.subject_id
         "#,
     )
@@ -1774,32 +2310,78 @@ pub async fn verify_active_subject_keys(
         let subject_id = SubjectId::from_uuid(subject.get("subject_id"));
         let lifecycle_state: String = subject.get("lifecycle_state");
         let tombstoned: bool = subject.get("tombstoned");
-        match (lifecycle_state.as_str(), tombstoned) {
-            ("active", false) => active.push(subject_id),
-            ("erased", true) => {}
+        let has_erasure_intent: bool = subject.get("has_erasure_intent");
+        let erasure_state: Option<String> = subject.get("erasure_state");
+        match (
+            lifecycle_state.as_str(),
+            tombstoned,
+            has_erasure_intent,
+            erasure_state.as_deref(),
+        ) {
+            ("active", false, false, None) => active.push(subject_id),
+            ("erasure_pending", false, true, Some("pending")) => {}
+            ("erased", true, true, Some("complete")) => {}
             _ => {
                 return Err(SubjectPrivacyError::Storage(format!(
-                    "subject {subject_id} has inconsistent lifecycle state `{lifecycle_state}` and tombstone={tombstoned}"
+                    "subject {subject_id} has inconsistent lifecycle state `{lifecycle_state}`, tombstone={tombstoned}, erasure_intent={has_erasure_intent}, erasure_state={erasure_state:?}"
                 )))
             }
         }
     }
     futures_util::stream::iter(active)
         .map(|subject_id| async move {
-            key_store
-                .load(subject_id)
-                .await
-                .map(|_| ())
-                .map_err(|error| {
-                    SubjectPrivacyError::Storage(format!(
-                        "active subject {subject_id} has no valid authority key: {error}"
-                    ))
-                })
+            match key_store.load(subject_id).await {
+                Ok(_) => Ok(()),
+                Err(SubjectPrivacyError::MissingKey { .. })
+                    if subject_transitioned_to_erasure(pool, subject_id).await? =>
+                {
+                    Ok(())
+                }
+                Err(error) => Err(SubjectPrivacyError::Storage(format!(
+                    "active subject {subject_id} has no valid authority key: {error}"
+                ))),
+            }
         })
         .buffer_unordered(SUBJECT_AUTHORITY_IO_CONCURRENCY)
         .try_collect::<Vec<_>>()
         .await?;
     Ok(())
+}
+
+async fn subject_transitioned_to_erasure(
+    pool: &sqlx::PgPool,
+    subject_id: SubjectId,
+) -> Result<bool, SubjectPrivacyError> {
+    let state = sqlx::query_as::<_, (String, bool, bool, Option<String>)>(
+        r#"
+        SELECT subject.lifecycle_state,
+               outbox.erasure_id IS NOT NULL,
+               tombstone.subject_id IS NOT NULL,
+               erasure.state
+        FROM privacy_subject AS subject
+        LEFT JOIN subject_erasure_outbox AS outbox USING (subject_id)
+        LEFT JOIN subject_erasure AS erasure USING (erasure_id)
+        LEFT JOIN subject_tombstone AS tombstone USING (subject_id)
+        WHERE subject.subject_id = $1
+        "#,
+    )
+    .bind(subject_id.as_uuid())
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    Ok(match state {
+        Some((lifecycle, true, false, Some(erasure_state)))
+            if lifecycle == "erasure_pending" && erasure_state == "pending" =>
+        {
+            true
+        }
+        Some((lifecycle, true, true, Some(erasure_state)))
+            if lifecycle == "erased" && erasure_state == "complete" =>
+        {
+            true
+        }
+        _ => false,
+    })
 }
 
 async fn reconcile_member_lifecycle(
@@ -1928,6 +2510,160 @@ fn sync_directory(path: &Path) -> Result<(), SubjectPrivacyError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
+    use std::sync::{Mutex, MutexGuard};
+
+    const SUBJECT_AUTHORITY_ENV_NAMES: [&str; 13] = [
+        SUBJECT_AUTHORITY_REVISION_ENV,
+        SUBJECT_AUTHORITY_ENDPOINT_ENV,
+        SUBJECT_AUTHORITY_REGION_ENV,
+        SUBJECT_AUTHORITY_BUCKET_ENV,
+        SUBJECT_AUTHORITY_ACCESS_KEY_ENV,
+        SUBJECT_AUTHORITY_SECRET_KEY_ENV,
+        SUBJECT_AUTHORITY_URL_STYLE_ENV,
+        SUBJECT_AUTHORITY_ALLOW_HTTP_ENV,
+        SUBJECT_AUTHORITY_ID_ENV,
+        SUBJECT_AUTHORITY_WRAP_KID_ENV,
+        SUBJECT_AUTHORITY_WRAP_KEY_ENV,
+        SUBJECT_AUTHORITY_JOURNAL_KID_ENV,
+        SUBJECT_AUTHORITY_JOURNAL_KEY_ENV,
+    ];
+    static SUBJECT_AUTHORITY_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct SubjectAuthorityEnvGuard {
+        prior: Vec<(&'static str, Option<OsString>)>,
+        _lock: MutexGuard<'static, ()>,
+    }
+
+    impl SubjectAuthorityEnvGuard {
+        fn isolated() -> Self {
+            let lock = SUBJECT_AUTHORITY_ENV_LOCK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let prior = SUBJECT_AUTHORITY_ENV_NAMES
+                .into_iter()
+                .map(|name| (name, std::env::var_os(name)))
+                .collect();
+            for name in SUBJECT_AUTHORITY_ENV_NAMES {
+                std::env::remove_var(name);
+            }
+            Self { prior, _lock: lock }
+        }
+
+        fn configure(
+            &self,
+            wrap_kid: &str,
+            wrap_key: [u8; 32],
+            journal_kid: &str,
+            journal_key: [u8; 32],
+        ) {
+            std::env::set_var(SUBJECT_AUTHORITY_REVISION_ENV, "test-revision");
+            std::env::set_var(
+                SUBJECT_AUTHORITY_ENDPOINT_ENV,
+                "https://objects.example.invalid",
+            );
+            std::env::set_var(SUBJECT_AUTHORITY_REGION_ENV, "test-region");
+            std::env::set_var(SUBJECT_AUTHORITY_BUCKET_ENV, "subject-keys");
+            std::env::set_var(SUBJECT_AUTHORITY_ACCESS_KEY_ENV, "test-access-key");
+            std::env::set_var(SUBJECT_AUTHORITY_SECRET_KEY_ENV, "test-secret-key");
+            std::env::set_var(SUBJECT_AUTHORITY_ID_ENV, Uuid::new_v4().to_string());
+            std::env::set_var(SUBJECT_AUTHORITY_WRAP_KID_ENV, wrap_kid);
+            std::env::set_var(SUBJECT_AUTHORITY_WRAP_KEY_ENV, STANDARD.encode(wrap_key));
+            std::env::set_var(SUBJECT_AUTHORITY_JOURNAL_KID_ENV, journal_kid);
+            std::env::set_var(
+                SUBJECT_AUTHORITY_JOURNAL_KEY_ENV,
+                STANDARD.encode(journal_key),
+            );
+        }
+    }
+
+    impl Drop for SubjectAuthorityEnvGuard {
+        fn drop(&mut self) {
+            for (name, value) in &self.prior {
+                match value {
+                    Some(value) => std::env::set_var(name, value),
+                    None => std::env::remove_var(name),
+                }
+            }
+        }
+    }
+
+    fn object_authority_config(
+        wrap_kid: &str,
+        wrap_key: [u8; 32],
+        journal_kid: &str,
+        journal_key: [u8; 32],
+    ) -> ObjectSubjectKeyStoreConfig {
+        ObjectSubjectKeyStoreConfig {
+            endpoint: "https://objects.example.invalid".to_string(),
+            region: "test-region".to_string(),
+            bucket: "subject-keys".to_string(),
+            access_key_id: "test-access-key".to_string(),
+            secret_access_key: "test-secret-key".to_string(),
+            virtual_hosted_style: false,
+            allow_http: false,
+            authority_revision: "test-revision".to_string(),
+            authority_id: Uuid::new_v4(),
+            wrap_kid: wrap_kid.to_string(),
+            wrap_key,
+            journal_kid: journal_kid.to_string(),
+            journal_key,
+        }
+    }
+
+    fn assert_configuration_error<T>(result: Result<T, SubjectPrivacyError>, expected: &str) {
+        match result {
+            Err(SubjectPrivacyError::Configuration(message)) => assert_eq!(message, expected),
+            Err(error) => panic!("expected configuration error, found {error}"),
+            Ok(_) => panic!("expected configuration error"),
+        }
+    }
+
+    #[test]
+    fn environment_config_requires_purpose_separated_authority_keys() {
+        let environment = SubjectAuthorityEnvGuard::isolated();
+        environment.configure("shared-v1", [7_u8; 32], "shared-v1", [9_u8; 32]);
+        assert_configuration_error(
+            ObjectSubjectKeyStoreConfig::from_environment(),
+            &format!(
+                "{SUBJECT_AUTHORITY_WRAP_KID_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KID_ENV} must identify distinct keys"
+            ),
+        );
+
+        environment.configure("wrap-v1", [7_u8; 32], "journal-v1", [7_u8; 32]);
+        assert_configuration_error(
+            ObjectSubjectKeyStoreConfig::from_environment(),
+            &format!(
+                "{SUBJECT_AUTHORITY_WRAP_KEY_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KEY_ENV} must decode to distinct key material"
+            ),
+        );
+    }
+
+    #[test]
+    fn s3_constructor_requires_purpose_separated_authority_keys() {
+        assert_configuration_error(
+            ObjectSubjectKeyStore::s3(object_authority_config(
+                "shared-v1",
+                [7_u8; 32],
+                "shared-v1",
+                [9_u8; 32],
+            )),
+            &format!(
+                "{SUBJECT_AUTHORITY_WRAP_KID_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KID_ENV} must identify distinct keys"
+            ),
+        );
+        assert_configuration_error(
+            ObjectSubjectKeyStore::s3(object_authority_config(
+                "wrap-v1",
+                [7_u8; 32],
+                "journal-v1",
+                [7_u8; 32],
+            )),
+            &format!(
+                "{SUBJECT_AUTHORITY_WRAP_KEY_ENV} and {SUBJECT_AUTHORITY_JOURNAL_KEY_ENV} must decode to distinct key material"
+            ),
+        );
+    }
 
     fn store() -> (tempfile::TempDir, FilesystemSubjectKeyStore) {
         let directory = tempfile::tempdir().unwrap();

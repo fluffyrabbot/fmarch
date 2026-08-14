@@ -72,7 +72,8 @@ export function validateSecretCustodyPolicy(policy) {
     policy.families?.map((family) => family.id),
     [
       "auth-source-signing",
-      "event-encryption",
+      "event-runtime-wrap",
+      "event-archive",
       "object-storage",
       "subject-key-authority",
       "workos",
@@ -104,8 +105,10 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
       [
         "FMARCH_AUTH_SOURCE_SIGNING_KEY",
         "FMARCH_AUTH_SOURCE_SIGNING_KID",
-        "FMARCH_EVENT_ENCRYPTION_KEY",
-        "FMARCH_EVENT_ENCRYPTION_KID",
+        "FMARCH_EVENT_WRAP_KEY",
+        "FMARCH_EVENT_WRAP_KID",
+        "FMARCH_EVENT_ARCHIVE_KEY",
+        "FMARCH_EVENT_ARCHIVE_KID",
         "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
         "FMARCH_SUBJECT_AUTHORITY_ENDPOINT",
         "FMARCH_SUBJECT_AUTHORITY_REGION",
@@ -147,8 +150,10 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
         "DATABASE_URL",
         "FMARCH_AUTH_SOURCE_SIGNING_KEY",
         "FMARCH_AUTH_SOURCE_SIGNING_KID",
-        "FMARCH_EVENT_ENCRYPTION_KEY",
-        "FMARCH_EVENT_ENCRYPTION_KID",
+        "FMARCH_EVENT_WRAP_KEY",
+        "FMARCH_EVENT_WRAP_KID",
+        "FMARCH_EVENT_ARCHIVE_KEY",
+        "FMARCH_EVENT_ARCHIVE_KID",
         "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
         "FMARCH_SUBJECT_AUTHORITY_ENDPOINT",
         "FMARCH_SUBJECT_AUTHORITY_REGION",
@@ -228,12 +233,29 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
     "production and staging must not share the auth-source signing key",
   );
   assertSecretRelation(
-    productionApi.FMARCH_EVENT_ENCRYPTION_KEY !== stagingApi.FMARCH_EVENT_ENCRYPTION_KEY,
-    "production and staging must not share the event encryption key",
+    productionApi.FMARCH_EVENT_WRAP_KEY !== stagingApi.FMARCH_EVENT_WRAP_KEY,
+    "production and staging must not share the event wrapping key",
   );
   assertSecretRelation(
-    productionApi.FMARCH_EVENT_ENCRYPTION_KID !== stagingApi.FMARCH_EVENT_ENCRYPTION_KID,
-    "production and staging must not share the event encryption KID",
+    productionApi.FMARCH_EVENT_ARCHIVE_KEY !== stagingApi.FMARCH_EVENT_ARCHIVE_KEY,
+    "production and staging must not share the event archive key",
+  );
+  for (const [label, variables] of [
+    ["staging", stagingApi],
+    ["production", productionApi],
+  ]) {
+    assertSecretRelation(
+      variables.FMARCH_EVENT_WRAP_KEY !== variables.FMARCH_EVENT_ARCHIVE_KEY,
+      `${label} event wrapping and archive keys must be separate`,
+    );
+  }
+  assertSecretRelation(
+    productionApi.FMARCH_EVENT_WRAP_KID !== stagingApi.FMARCH_EVENT_WRAP_KID,
+    "production and staging must not share the event wrapping KID",
+  );
+  assertSecretRelation(
+    productionApi.FMARCH_EVENT_ARCHIVE_KID !== stagingApi.FMARCH_EVENT_ARCHIVE_KID,
+    "production and staging must not share the event archive KID",
   );
   assertSecretRelation(
     productionApi.FMARCH_SUBJECT_KEY_AUTHORITY_REVISION !==
@@ -263,9 +285,27 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
       `${name} subject authority must not reuse its media bucket`,
     );
     assertSecretRelation(
-      variables.FMARCH_SUBJECT_AUTHORITY_WRAP_KEY !==
-        variables.FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY,
-      `${name} subject wrapping and journal keys must be separate`,
+      variables.FMARCH_SUBJECT_AUTHORITY_WRAP_KID !==
+        variables.FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID,
+      `${name} subject wrapping and journal KIDs must be separate`,
+    );
+    for (const [purpose, value] of [
+      ["wrapping", variables.FMARCH_SUBJECT_AUTHORITY_WRAP_KEY],
+      ["journal", variables.FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY],
+    ]) {
+      assertSecretRelation(
+        isCanonicalBase64Key(value),
+        `${name} subject ${purpose} key must be canonical padded base64 encoding exactly 32 bytes`,
+      );
+    }
+    const subjectWrapKey = Buffer.from(variables.FMARCH_SUBJECT_AUTHORITY_WRAP_KEY, "base64");
+    const subjectJournalKey = Buffer.from(
+      variables.FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY,
+      "base64",
+    );
+    assertSecretRelation(
+      !subjectWrapKey.equals(subjectJournalKey),
+      `${name} subject wrapping and journal keys must decode to separate material`,
     );
   }
   assertSecretRelation(
@@ -311,6 +351,16 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
       stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KID,
     ],
     [
+      "event wrapping KID",
+      productionApi.FMARCH_EVENT_WRAP_KID,
+      stagingApi.FMARCH_EVENT_WRAP_KID,
+    ],
+    [
+      "event archive KID",
+      productionApi.FMARCH_EVENT_ARCHIVE_KID,
+      stagingApi.FMARCH_EVENT_ARCHIVE_KID,
+    ],
+    [
       "object-storage credential KID",
       productionApi.FMARCH_OBJECT_STORAGE_CREDENTIAL_KID,
       stagingApi.FMARCH_OBJECT_STORAGE_CREDENTIAL_KID,
@@ -327,8 +377,6 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
   for (const [label, value] of [
     ["staging auth-source signing key", stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY],
     ["production auth-source signing key", productionApi.FMARCH_AUTH_SOURCE_SIGNING_KEY],
-    ["staging event encryption key", stagingApi.FMARCH_EVENT_ENCRYPTION_KEY],
-    ["production event encryption key", productionApi.FMARCH_EVENT_ENCRYPTION_KEY],
     ["staging WorkOS cookie password", stagingFrontend.WORKOS_COOKIE_PASSWORD],
     ["production WorkOS cookie password", productionFrontend.WORKOS_COOKIE_PASSWORD],
   ]) {
@@ -336,6 +384,27 @@ export function validateHostedVariables({ stagingApi, stagingFrontend, productio
       typeof value === "string" && value.length >= 32 && !value.includes("replace_me"),
       `${label} must be a non-placeholder value of at least 32 characters`,
     );
+  }
+  for (const [label, value] of [
+    ["staging event wrapping key", stagingApi.FMARCH_EVENT_WRAP_KEY],
+    ["production event wrapping key", productionApi.FMARCH_EVENT_WRAP_KEY],
+    ["staging event archive key", stagingApi.FMARCH_EVENT_ARCHIVE_KEY],
+    ["production event archive key", productionApi.FMARCH_EVENT_ARCHIVE_KEY],
+  ]) {
+    assertSecretRelation(
+      isCanonicalBase64Key(value),
+      `${label} must be canonical padded base64 encoding exactly 32 bytes`,
+    );
+  }
+}
+
+function isCanonicalBase64Key(value) {
+  if (typeof value !== "string") return false;
+  try {
+    const decoded = Buffer.from(value, "base64");
+    return decoded.byteLength === 32 && decoded.toString("base64") === value;
+  } catch {
+    return false;
   }
 }
 

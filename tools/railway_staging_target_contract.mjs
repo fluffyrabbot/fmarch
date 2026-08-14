@@ -161,7 +161,8 @@ async function contract() {
     custody.families.map((family) => family.id),
     [
       "auth-source-signing",
-      "event-encryption",
+      "event-runtime-wrap",
+      "event-archive",
       "object-storage",
       "subject-key-authority",
       "workos",

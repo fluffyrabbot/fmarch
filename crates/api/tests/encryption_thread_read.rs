@@ -1,4 +1,4 @@
-//! Mixed-KID private payload proof through the HTTP thread read boundary.
+//! Mixed stream-key epoch proof through the HTTP thread read boundary.
 //!
 //! The projection test proves replay can decrypt old and new envelopes. This
 //! test continues one hop outward: after replay/rebuild, the real API private
@@ -28,49 +28,46 @@ impl EncryptionEnvGuard {
     fn new() -> Self {
         let lock = ENCRYPTION_ENV_LOCK.lock().unwrap();
         let guard = Self {
-            prior_key: std::env::var("FMARCH_EVENT_ENCRYPTION_KEY").ok(),
-            prior_kid: std::env::var("FMARCH_EVENT_ENCRYPTION_KID").ok(),
-            prior_keys: std::env::var("FMARCH_EVENT_ENCRYPTION_KEYS").ok(),
+            prior_key: std::env::var("FMARCH_EVENT_WRAP_KEY").ok(),
+            prior_kid: std::env::var("FMARCH_EVENT_WRAP_KID").ok(),
+            prior_keys: std::env::var("FMARCH_EVENT_WRAP_KEYS").ok(),
             _lock: lock,
         };
-        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEY");
-        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KID");
-        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS");
+        std::env::remove_var("FMARCH_EVENT_WRAP_KEY");
+        std::env::remove_var("FMARCH_EVENT_WRAP_KID");
+        std::env::remove_var("FMARCH_EVENT_WRAP_KEYS");
         guard
     }
 
     fn set_active(&self, kid: &str, key: &str) {
-        std::env::set_var("FMARCH_EVENT_ENCRYPTION_KID", kid);
-        std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEY", key);
-        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS");
+        std::env::set_var("FMARCH_EVENT_WRAP_KID", kid);
+        std::env::set_var("FMARCH_EVENT_WRAP_KEY", key);
+        std::env::remove_var("FMARCH_EVENT_WRAP_KEYS");
     }
 
     fn set_active_with_prior_key(&self, kid: &str, key: &str, prior_kid: &str, prior_key: &str) {
         self.set_active(kid, key);
-        std::env::set_var(
-            "FMARCH_EVENT_ENCRYPTION_KEYS",
-            format!("{prior_kid}={prior_key}"),
-        );
+        std::env::set_var("FMARCH_EVENT_WRAP_KEYS", format!("{prior_kid}={prior_key}"));
     }
 
     fn trust_prior_key(&self, kid: &str, key: &str) {
-        std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEYS", format!("{kid}={key}"));
+        std::env::set_var("FMARCH_EVENT_WRAP_KEYS", format!("{kid}={key}"));
     }
 }
 
 impl Drop for EncryptionEnvGuard {
     fn drop(&mut self) {
         match &self.prior_key {
-            Some(value) => std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEY", value),
-            None => std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEY"),
+            Some(value) => std::env::set_var("FMARCH_EVENT_WRAP_KEY", value),
+            None => std::env::remove_var("FMARCH_EVENT_WRAP_KEY"),
         }
         match &self.prior_kid {
-            Some(value) => std::env::set_var("FMARCH_EVENT_ENCRYPTION_KID", value),
-            None => std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KID"),
+            Some(value) => std::env::set_var("FMARCH_EVENT_WRAP_KID", value),
+            None => std::env::remove_var("FMARCH_EVENT_WRAP_KID"),
         }
         match &self.prior_keys {
-            Some(value) => std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEYS", value),
-            None => std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS"),
+            Some(value) => std::env::set_var("FMARCH_EVENT_WRAP_KEYS", value),
+            None => std::env::remove_var("FMARCH_EVENT_WRAP_KEYS"),
         }
     }
 }
@@ -251,6 +248,12 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     );
 
     env.set_active_with_prior_key(new_kid, new_key, old_kid, old_key);
+    assert_eq!(
+        eventstore::rotate_stream_data_key(&pool, game)
+            .await
+            .unwrap(),
+        2
+    );
     expect_ack(
         post_command(
             app.clone(),
@@ -268,8 +271,8 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
         .await,
     );
 
-    let raw_roles: Vec<(i16, String, Vec<u8>, Vec<u8>)> = sqlx::query_as(
-        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body \
+    let raw_roles: Vec<(i16, i64, Vec<u8>, Vec<u8>)> = sqlx::query_as(
+        "SELECT sealed_version, stream_key_epoch, sealed_nonce, sealed_body \
          FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned' ORDER BY stream_seq",
     )
     .bind(game)
@@ -277,9 +280,9 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     .await
     .unwrap();
     assert_eq!(raw_roles.len(), 3);
-    assert!(raw_roles.iter().all(|(version, kid, nonce, body)| {
-        *version == 2
-            && kid == old_kid
+    assert!(raw_roles.iter().all(|(version, epoch, nonce, body)| {
+        *version == 3
+            && *epoch == 1
             && nonce.len() == 24
             && body.len() >= 16
             && !body
@@ -287,8 +290,8 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
                 .any(|window| window == b"godfather")
     }));
 
-    let raw_post: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
-        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body \
+    let raw_post: (i16, i64, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, stream_key_epoch, sealed_nonce, sealed_body \
          FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted' \
          ORDER BY stream_seq DESC LIMIT 1",
     )
@@ -296,14 +299,26 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(raw_post.0, 2);
-    assert_eq!(raw_post.1, new_kid);
+    assert_eq!(raw_post.0, 3);
+    assert_eq!(raw_post.1, 2);
     assert_eq!(raw_post.2.len(), 24);
     assert!(raw_post.3.len() >= 16);
     assert!(!raw_post
         .3
         .windows("mixed-key day chat survives replay".len())
         .any(|window| window == b"mixed-key day chat survives replay"));
+
+    let wrapped_epochs: Vec<(i64, String)> = sqlx::query_as(
+        "SELECT key_epoch, wrap_kid FROM event_stream_keys WHERE stream_id = $1 ORDER BY key_epoch",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        wrapped_epochs,
+        vec![(1, old_kid.into()), (2, new_kid.into())]
+    );
 
     env.set_active(new_kid, new_key);
     let missing_old = projections::audit_rebuild(&pool, game)

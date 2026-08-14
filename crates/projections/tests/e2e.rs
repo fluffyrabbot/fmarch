@@ -28,11 +28,19 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-fn test_pack_ref(key: &str) -> serde_json::Value {
+fn test_pack_artifact(key: &str) -> content_registry::PackArtifactSnapshot {
+    let mut pack = load_pack();
+    pack.name = key.to_string();
+    content_registry::PackArtifactSnapshot::from_document(&pack)
+        .unwrap_or_else(|error| panic!("build canonical test pack artifact `{key}`: {error}"))
+}
+
+fn test_game_created_payload(host: &str, key: &str) -> serde_json::Value {
+    let artifact = test_pack_artifact(key);
     serde_json::json!({
-        "key": key,
-        "version": 1,
-        "content_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        "host": host,
+        "pack_ref": &artifact.pack_ref,
+        "pack_artifact": artifact,
     })
 }
 
@@ -49,6 +57,27 @@ fn refresh_completed_game_archive_checksum(export: &mut projections::CompletedGa
     })
     .unwrap();
     export.archive_checksum_sha256 = format!("{:x}", Sha256::digest(bytes));
+}
+
+fn refresh_stream_export_checksum(export: &mut eventstore::StreamExport) {
+    #[derive(serde::Serialize)]
+    struct ChecksumManifest<'a> {
+        version: u16,
+        stream_id: Uuid,
+        active_epoch: Option<i64>,
+        stream_keys: &'a [eventstore::ExportStreamKey],
+        events: &'a [eventstore::ExportEvent],
+    }
+
+    let bytes = serde_json::to_vec(&ChecksumManifest {
+        version: export.version,
+        stream_id: export.stream_id,
+        active_epoch: export.active_epoch,
+        stream_keys: &export.stream_keys,
+        events: &export.events,
+    })
+    .unwrap();
+    export.checksum_sha256 = format!("{:x}", Sha256::digest(bytes));
 }
 
 async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
@@ -1031,16 +1060,19 @@ async fn tamper_slot_state_role(pool: &PgPool, game: Uuid, slot: &str, role_key:
     let mut plaintext = eventstore::decrypt_private_projection(&envelope, &context)
         .expect("open live slot state before tamper");
     plaintext["role_key"] = serde_json::json!(role_key);
-    let private = eventstore::encrypt_private_projection(plaintext, &context)
+    let mut tx = pool.begin().await.expect("begin slot-state tamper");
+    let private = eventstore::encrypt_private_projection(&mut tx, plaintext, &context)
+        .await
         .expect("seal tampered slot state");
     let update =
         sqlx::query("UPDATE slot_state SET private = $3 WHERE game_id = $1 AND slot_id = $2")
             .bind(game)
             .bind(slot)
             .bind(private)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .expect("tamper live slot_state role");
+    tx.commit().await.expect("commit slot-state tamper");
     assert_eq!(update.rows_affected(), 1, "one slot_state row tampered");
 }
 
@@ -1552,7 +1584,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host_active", "pack_ref": test_pack_ref("mafiascum") }),
+                test_game_created_payload("host_active", "mafiascum"),
                 ActorId::User("host_active".into()),
                 100,
             ),
@@ -1581,7 +1613,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host_completed", "pack_ref": test_pack_ref("mafia_universe") }),
+                test_game_created_payload("host_completed", "mafia_universe"),
                 ActorId::User("host_completed".into()),
                 90,
             ),
@@ -1609,7 +1641,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
         &[EventInput::new(
             "GameCreated",
             1,
-            serde_json::json!({ "host": "host_setup", "pack_ref": test_pack_ref("epicmafia") }),
+            test_game_created_payload("host_setup", "epicmafia"),
             ActorId::User("host_setup".into()),
             150,
         )],
@@ -1624,7 +1656,10 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
     assert_eq!(latest.games[0].pack_ref.version, 1);
     assert_eq!(
         latest.games[0].pack_ref.content_hash.as_str(),
-        "0000000000000000000000000000000000000000000000000000000000000000"
+        test_pack_artifact("mafia_universe")
+            .pack_ref
+            .content_hash
+            .as_str()
     );
     assert_eq!(latest.games[0].status, "completed");
     assert_eq!(latest.games[0].phase_id.as_deref(), Some("D01"));
@@ -1737,7 +1772,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("signal_pack") }),
+                test_game_created_payload("host", "signal_pack"),
                 ActorId::User("host".into()),
                 5,
             ),
@@ -1897,7 +1932,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("moderation_pack") }),
+                test_game_created_payload("host", "moderation_pack"),
                 ActorId::User("host".into()),
                 1,
             ),
@@ -2116,7 +2151,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
         EventInput::new(
             "GameCreated",
             1,
-            serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("moderation_limit") }),
+            test_game_created_payload("host", "moderation_limit"),
             ActorId::User("host".into()),
             1,
         ),
@@ -2493,7 +2528,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("watch_pack") }),
+                test_game_created_payload("host", "watch_pack"),
                 ActorId::User("host".into()),
                 15,
             ),
@@ -2586,30 +2621,30 @@ async fn encrypted_private_events_still_fold_and_rebuild(pool: sqlx::PgPool) {
 
     append_and_project(&pool, game, &events).await.unwrap();
 
-    let raw_role: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
-        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned'",
+    let raw_role: (i16, i64, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, stream_key_epoch, sealed_nonce, sealed_body FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned'",
     )
     .bind(game)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(raw_role.0, 2);
-    assert!(!raw_role.1.is_empty());
+    assert_eq!(raw_role.0, 3);
+    assert!(raw_role.1 > 0);
     assert_eq!(raw_role.2.len(), 24);
     assert!(raw_role.3.len() >= 16);
     let raw_role_body = String::from_utf8_lossy(&raw_role.3);
     assert!(!raw_role_body.contains("slot_1"));
     assert!(!raw_role_body.contains("godfather"));
 
-    let raw_post: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
-        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
+    let raw_post: (i16, i64, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, stream_key_epoch, sealed_nonce, sealed_body FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
     )
     .bind(game)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(raw_post.0, 2);
-    assert!(!raw_post.1.is_empty());
+    assert_eq!(raw_post.0, 3);
+    assert!(raw_post.1 > 0);
     assert_eq!(raw_post.2.len(), 24);
     assert!(raw_post.3.len() >= 16);
     let raw_post_body = String::from_utf8_lossy(&raw_post.3);
@@ -3186,7 +3221,7 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "export_host", "pack_ref": test_pack_ref("mafiascum") }),
+                test_game_created_payload("export_host", "archived_removed_pack"),
                 ActorId::User("export_host".into()),
                 1,
             ),
@@ -3277,6 +3312,37 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
             .await
             .unwrap(),
         0
+    );
+    let mut tampered_artifact_export = export.clone();
+    let created = tampered_artifact_export
+        .stream
+        .events
+        .iter_mut()
+        .find(|event| event.kind == "GameCreated")
+        .expect("archived GameCreated artifact attachment");
+    let first = created
+        .sealed_body
+        .ciphertext
+        .chars()
+        .next()
+        .expect("non-empty GameCreated ciphertext");
+    created
+        .sealed_body
+        .ciphertext
+        .replace_range(..1, if first == 'A' { "B" } else { "A" });
+    refresh_stream_export_checksum(&mut tampered_artifact_export.stream);
+    refresh_completed_game_archive_checksum(&mut tampered_artifact_export);
+    projections::import_completed_game_export(&target, &tampered_artifact_export)
+        .await
+        .expect_err("authenticated GameCreated pack artifact tampering must fail closed");
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&target)
+            .await
+            .unwrap(),
+        0,
+        "artifact attachment tampering must fail before import"
     );
     let mut missing_alias_export = export.clone();
     missing_alias_export.detached_subject_aliases.clear();
@@ -3379,6 +3445,14 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
         .await
         .unwrap();
     assert!(audit.ok);
+    assert_eq!(
+        projections::game_pack_artifact(&target, game)
+            .await
+            .unwrap()
+            .expect("isolated import rebuilt exact artifact custody"),
+        test_pack_artifact("archived_removed_pack"),
+        "isolated import must restore the exact self-contained artifact without registry lookup"
+    );
     let imported_persona = sqlx::query(
         "SELECT public.current_public_name, private.principal_user_id, private.subject_id, private.current_claim_id \
          FROM game_persona_public AS public \

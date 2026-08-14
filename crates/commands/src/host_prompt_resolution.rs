@@ -7,7 +7,7 @@
 //! phase-advance adaptation, and deterministic replay reconstruction.
 
 use super::{
-    load_pack, pack_ref_from_stream, persist, phase_kind, phase_number, require_slot_alive,
+    load_pack, pack_artifact_from_stream, persist, phase_kind, phase_number, require_slot_alive,
     str_payload, unix_seconds_now, validate_phase_id_for_policy, Ack, HostPromptDecision,
     RebuiltResolutionEnvelope, Reject,
 };
@@ -108,7 +108,7 @@ pub(super) async fn resolve_host_prompt(
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
-    let pack = load_pack(&pack_ref_from_stream(&stream)?)?;
+    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
     let next_seq = stream.last().map(|event| event.stream_seq + 1).unwrap_or(1);
     let decision_json =
         serde_json::to_value(&decision).map_err(|error| Reject::Internal(error.to_string()))?;
@@ -145,7 +145,7 @@ pub(super) async fn resolve_host_prompt(
         } => {
             require_slot_alive(tx, game, &selected).await?;
             let rebuilt = build_pk_prompt_resolution(PkResolutionContext {
-                pack,
+                pack: &pack,
                 game,
                 prompt: &prompt,
                 selected,
@@ -212,7 +212,7 @@ pub(super) fn rerun_stored_host_prompt(
             Reject::Internal(format!("malformed HostPromptResolved decision: {error}"))
         })?;
     let resolved_by = str_payload(resolved, "resolved_by")?;
-    let pack = load_pack(&pack_ref_from_stream(prefix)?)?;
+    let pack = load_pack(&pack_artifact_from_stream(prefix)?)?;
     let stored_public_resolution: domain::HostPromptPublicResolution =
         serde_json::from_value(resolved.payload["public_resolution"].clone()).map_err(|error| {
             Reject::Internal(format!(
@@ -239,7 +239,7 @@ pub(super) fn rerun_stored_host_prompt(
             selected,
             contenders,
         } => Ok(Some(build_pk_prompt_resolution(PkResolutionContext {
-            pack,
+            pack: &pack,
             game,
             prompt: &prompt,
             selected,

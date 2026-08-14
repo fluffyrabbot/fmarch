@@ -8,7 +8,8 @@
 //!
 //! Invariant: this crate issues only `INSERT` and `SELECT` against `events`.
 //! There is no `UPDATE` and no `DELETE` code path, and the migration installs a
-//! trigger that rejects either at the database level (doc 02).
+//! trigger that rejects either at the database level (doc 02). Runtime KEK
+//! rotation updates only the wrapping envelope in `event_stream_keys`.
 
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize, Serializer};
@@ -127,8 +128,23 @@ struct EventBodyRef<'a> {
 pub struct StreamExport {
     pub version: u16,
     pub stream_id: Uuid,
+    pub active_epoch: Option<i64>,
+    /// One archive-KEK-wrapped DEK for each stream epoch. Runtime KEK ids and
+    /// plaintext DEKs never cross the archive boundary.
+    pub stream_keys: Vec<ExportStreamKey>,
     pub events: Vec<ExportEvent>,
     pub checksum_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExportStreamKey {
+    pub key_epoch: i64,
+    pub scheme: String,
+    pub alg: String,
+    pub archive_kid: String,
+    pub nonce: String,
+    pub wrapped_dek: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -149,7 +165,7 @@ pub struct ExportEvent {
 pub struct ExportSealedBody {
     pub scheme: String,
     pub alg: String,
-    pub kid: String,
+    pub key_epoch: i64,
     pub nonce: String,
     pub ciphertext: String,
 }
@@ -157,7 +173,7 @@ pub struct ExportSealedBody {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SealedEventBody {
     version: i16,
-    kid: String,
+    key_epoch: i64,
     nonce: [u8; 24],
     ciphertext: Vec<u8>,
 }
@@ -165,6 +181,28 @@ struct SealedEventBody {
 struct ValidatedExportEvent {
     sealed: SealedEventBody,
     body: EventBody,
+}
+
+#[derive(Clone)]
+struct StreamDataKey {
+    stream_id: Uuid,
+    key_epoch: i64,
+    bytes: [u8; 32],
+}
+
+struct WrappedStreamDataKey {
+    stream_id: Uuid,
+    key_epoch: i64,
+    wrap_version: i16,
+    wrap_kid: String,
+    wrap_nonce: [u8; 24],
+    wrapped_dek: Vec<u8>,
+}
+
+struct ValidatedStreamExport {
+    active_epoch: Option<i64>,
+    keys: HashMap<i64, StreamDataKey>,
+    events: Vec<ValidatedExportEvent>,
 }
 
 /// Typed errors from the store.
@@ -258,17 +296,18 @@ async fn append_in_tx_checked(
             stream_seq: base + 1,
         });
     }
+    let data_key = active_stream_data_key_in_tx(tx, stream_id).await?;
     let mut out = Vec::with_capacity(events.len());
 
     for (i, ev) in events.iter().enumerate() {
         let stream_seq = base + 1 + i as i64;
-        let sealed = seal_event_body(ev, stream_id, stream_seq)?;
+        let sealed = seal_event_body(ev, stream_id, stream_seq, &data_key)?;
 
         let res = sqlx::query(
             r#"
             INSERT INTO events
                 (stream_id, stream_seq, kind, version, occurred_at,
-                 sealed_version, sealed_kid, sealed_nonce, sealed_body)
+                 sealed_version, stream_key_epoch, sealed_nonce, sealed_body)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING seq
             "#,
@@ -279,7 +318,7 @@ async fn append_in_tx_checked(
         .bind(ev.version)
         .bind(ev.occurred_at)
         .bind(sealed.version)
-        .bind(&sealed.kid)
+        .bind(sealed.key_epoch)
         .bind(sealed.nonce.as_slice())
         .bind(&sealed.ciphertext)
         .fetch_one(&mut **tx)
@@ -330,6 +369,153 @@ pub async fn lock_stream_in_tx(
     Ok(())
 }
 
+async fn active_stream_data_key_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+) -> Result<StreamDataKey, StoreError> {
+    let row = sqlx::query(
+        r#"
+        SELECT k.key_epoch, k.wrap_version, k.wrap_kid, k.wrap_nonce, k.wrapped_dek
+        FROM event_stream_key_state s
+        JOIN event_stream_keys k
+          ON k.stream_id = s.stream_id AND k.key_epoch = s.active_epoch
+        WHERE s.stream_id = $1
+        "#,
+    )
+    .bind(stream_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    if let Some(row) = row {
+        return unwrap_stream_data_key(WrappedStreamDataKey::from_storage_row(stream_id, &row)?);
+    }
+
+    let data_key = new_stream_data_key(stream_id, 1);
+    insert_wrapped_stream_data_key_in_tx(tx, &data_key).await?;
+    sqlx::query("INSERT INTO event_stream_key_state (stream_id, active_epoch) VALUES ($1, $2)")
+        .bind(stream_id)
+        .bind(data_key.key_epoch)
+        .execute(&mut **tx)
+        .await?;
+    Ok(data_key)
+}
+
+/// Advance one stream to a fresh random DEK. Existing event rows and earlier
+/// epochs remain unchanged and readable; subsequent appends use the new epoch.
+pub async fn rotate_stream_data_key(pool: &PgPool, stream_id: Uuid) -> Result<i64, StoreError> {
+    let mut tx = pool.begin().await?;
+    lock_stream_in_tx(&mut tx, stream_id).await?;
+    let active = sqlx::query_scalar::<_, i64>(
+        "SELECT active_epoch FROM event_stream_key_state WHERE stream_id = $1",
+    )
+    .bind(stream_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let next_epoch = match active {
+        Some(epoch) => epoch.checked_add(1).ok_or_else(|| {
+            StoreError::Crypto("event stream key epoch exhausted i64 range".to_string())
+        })?,
+        None => 1,
+    };
+    let data_key = new_stream_data_key(stream_id, next_epoch);
+    insert_wrapped_stream_data_key_in_tx(&mut tx, &data_key).await?;
+    match active {
+        Some(_) => {
+            sqlx::query("UPDATE event_stream_key_state SET active_epoch = $2 WHERE stream_id = $1")
+                .bind(stream_id)
+                .bind(next_epoch)
+                .execute(&mut *tx)
+                .await?;
+        }
+        None => {
+            sqlx::query(
+                "INSERT INTO event_stream_key_state (stream_id, active_epoch) VALUES ($1, $2)",
+            )
+            .bind(stream_id)
+            .bind(next_epoch)
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+    tx.commit().await?;
+    Ok(next_epoch)
+}
+
+/// Rewrap every DEK epoch for one stream under the active runtime KEK. This is
+/// intentionally the only event-crypto mutation path: it updates key envelopes
+/// and never rewrites append-only event rows or changes plaintext DEKs.
+pub async fn rewrap_stream_data_keys(pool: &PgPool, stream_id: Uuid) -> Result<u64, StoreError> {
+    let mut tx = pool.begin().await?;
+    lock_stream_in_tx(&mut tx, stream_id).await?;
+    let rows = sqlx::query(
+        r#"
+        SELECT key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek
+        FROM event_stream_keys
+        WHERE stream_id = $1
+        ORDER BY key_epoch
+        FOR UPDATE
+        "#,
+    )
+    .bind(stream_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let active_key = event_encryption_keyring()?.active.clone();
+    let mut updated = 0_u64;
+    for row in rows {
+        let data_key =
+            unwrap_stream_data_key(WrappedStreamDataKey::from_storage_row(stream_id, &row)?)?;
+        let wrapped = wrap_stream_data_key(&data_key, &active_key)?;
+        sqlx::query(
+            r#"
+            UPDATE event_stream_keys
+            SET wrap_version = $3, wrap_kid = $4, wrap_nonce = $5, wrapped_dek = $6
+            WHERE stream_id = $1 AND key_epoch = $2
+            "#,
+        )
+        .bind(stream_id)
+        .bind(data_key.key_epoch)
+        .bind(wrapped.wrap_version)
+        .bind(&wrapped.wrap_kid)
+        .bind(wrapped.wrap_nonce.as_slice())
+        .bind(&wrapped.wrapped_dek)
+        .execute(&mut *tx)
+        .await?;
+        updated += 1;
+    }
+    tx.commit().await?;
+    Ok(updated)
+}
+
+async fn insert_wrapped_stream_data_key_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    data_key: &StreamDataKey,
+) -> Result<(), StoreError> {
+    let wrapped = wrap_stream_data_key(data_key, &event_encryption_keyring()?.active)?;
+    insert_stream_data_key_envelope_in_tx(tx, &wrapped).await
+}
+
+async fn insert_stream_data_key_envelope_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    wrapped: &WrappedStreamDataKey,
+) -> Result<(), StoreError> {
+    sqlx::query(
+        r#"
+        INSERT INTO event_stream_keys
+            (stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        "#,
+    )
+    .bind(wrapped.stream_id)
+    .bind(wrapped.key_epoch)
+    .bind(wrapped.wrap_version)
+    .bind(&wrapped.wrap_kid)
+    .bind(wrapped.wrap_nonce.as_slice())
+    .bind(&wrapped.wrapped_dek)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 /// Append `events` to `stream_id` in their own transaction.
 pub async fn append(
     pool: &PgPool,
@@ -366,11 +552,14 @@ where
 {
     let rows = sqlx::query(
         r#"
-        SELECT seq, stream_id, stream_seq, kind, version, occurred_at,
-               sealed_version, sealed_kid, sealed_nonce, sealed_body
-        FROM events
-        WHERE stream_id = $1
-        ORDER BY stream_seq ASC
+        SELECT e.seq, e.stream_id, e.stream_seq, e.kind, e.version, e.occurred_at,
+               e.sealed_version, e.stream_key_epoch, e.sealed_nonce, e.sealed_body,
+               k.wrap_version, k.wrap_kid, k.wrap_nonce, k.wrapped_dek
+        FROM events e
+        JOIN event_stream_keys k
+          ON k.stream_id = e.stream_id AND k.key_epoch = e.stream_key_epoch
+        WHERE e.stream_id = $1
+        ORDER BY e.stream_seq ASC
         "#,
     )
     .bind(stream_id)
@@ -378,6 +567,7 @@ where
     .await?;
 
     let mut out = Vec::with_capacity(rows.len());
+    let mut data_keys = HashMap::<i64, StreamDataKey>::new();
     for row in rows {
         let seq = row.try_get("seq")?;
         let stream_id = row.try_get("stream_id")?;
@@ -387,10 +577,17 @@ where
         let occurred_at = row.try_get("occurred_at")?;
         let sealed = SealedEventBody::from_storage_parts(
             row.try_get("sealed_version")?,
-            row.try_get("sealed_kid")?,
+            row.try_get("stream_key_epoch")?,
             row.try_get("sealed_nonce")?,
             row.try_get("sealed_body")?,
         )?;
+        let data_key = match data_keys.entry(sealed.key_epoch) {
+            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let wrapped = WrappedStreamDataKey::from_storage_row(stream_id, &row)?;
+                entry.insert(unwrap_stream_data_key(wrapped)?)
+            }
+        };
         out.push(upcast(open_stored_event(
             seq,
             stream_id,
@@ -399,34 +596,65 @@ where
             version,
             occurred_at,
             &sealed,
+            data_key,
         )?));
     }
     Ok(out)
 }
 
-/// Export one stream as its exact stored ciphertext. No event body is opened.
+/// Export one stream as exact event ciphertext plus an archive-KEK-wrapped DEK
+/// bundle. Runtime wrapping KEKs and plaintext DEKs never enter the manifest.
 pub async fn export_stream(pool: &PgPool, stream_id: Uuid) -> Result<StreamExport, StoreError> {
+    let mut tx = pool.begin().await?;
+    lock_stream_in_tx(&mut tx, stream_id).await?;
+    let active_epoch = sqlx::query_scalar::<_, i64>(
+        "SELECT active_epoch FROM event_stream_key_state WHERE stream_id = $1",
+    )
+    .bind(stream_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let key_rows = sqlx::query(
+        r#"
+        SELECT key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek
+        FROM event_stream_keys
+        WHERE stream_id = $1
+        ORDER BY key_epoch
+        "#,
+    )
+    .bind(stream_id)
+    .fetch_all(&mut *tx)
+    .await?;
+    let stream_keys = key_rows
+        .iter()
+        .map(|row| {
+            let wrapped = WrappedStreamDataKey::from_storage_row(stream_id, row)?;
+            let data_key = unwrap_stream_data_key(wrapped)?;
+            archive_wrap_stream_data_key(&data_key)
+        })
+        .collect::<Result<Vec<_>, StoreError>>()?;
     let rows = sqlx::query(
         r#"
         SELECT stream_seq, kind, version, occurred_at,
-               sealed_version, sealed_kid, sealed_nonce, sealed_body
+               sealed_version, stream_key_epoch, sealed_nonce, sealed_body
         FROM events
         WHERE stream_id = $1
         ORDER BY stream_seq ASC
         "#,
     )
     .bind(stream_id)
-    .fetch_all(pool)
+    .fetch_all(&mut *tx)
     .await?;
     let mut export = StreamExport {
-        version: 2,
+        version: STREAM_EXPORT_VERSION,
         stream_id,
+        active_epoch,
+        stream_keys,
         events: rows
             .into_iter()
             .map(|row| {
                 let sealed = SealedEventBody::from_storage_parts(
                     row.try_get("sealed_version")?,
-                    row.try_get("sealed_kid")?,
+                    row.try_get("stream_key_epoch")?,
                     row.try_get("sealed_nonce")?,
                     row.try_get("sealed_body")?,
                 )?;
@@ -442,21 +670,47 @@ pub async fn export_stream(pool: &PgPool, stream_id: Uuid) -> Result<StreamExpor
         checksum_sha256: String::new(),
     };
     export.checksum_sha256 = stream_export_checksum(&export)?;
+    tx.commit().await?;
     Ok(export)
 }
 
 /// Verify version, sequence continuity, and canonical checksum before import.
 pub fn validate_stream_export(export: &StreamExport) -> Result<(), StoreError> {
-    validate_stream_export_events(export).map(|_| ())
+    validate_stream_export_contents(export).map(|_| ())
 }
 
-fn validate_stream_export_events(
+fn validate_stream_export_contents(
     export: &StreamExport,
-) -> Result<Vec<ValidatedExportEvent>, StoreError> {
-    if export.version != 2 {
+) -> Result<ValidatedStreamExport, StoreError> {
+    if export.version != STREAM_EXPORT_VERSION {
         return Err(StoreError::InvalidExport(
             "unsupported manifest version".to_string(),
         ));
+    }
+    let expected = stream_export_checksum(export)?;
+    if export.checksum_sha256 != expected {
+        return Err(StoreError::InvalidExport("checksum mismatch".to_string()));
+    }
+
+    let mut keys = HashMap::with_capacity(export.stream_keys.len());
+    for (index, wrapped) in export.stream_keys.iter().enumerate() {
+        let expected_epoch = index as i64 + 1;
+        if wrapped.key_epoch != expected_epoch {
+            return Err(StoreError::InvalidExport(
+                "stream key epochs must begin at one and be contiguous".to_string(),
+            ));
+        }
+        let data_key = archive_unwrap_stream_data_key(export.stream_id, wrapped)?;
+        keys.insert(data_key.key_epoch, data_key);
+    }
+    match (export.active_epoch, export.stream_keys.last()) {
+        (None, None) => {}
+        (Some(active), Some(last)) if active == last.key_epoch => {}
+        _ => {
+            return Err(StoreError::InvalidExport(
+                "active epoch must identify the final stream key epoch".to_string(),
+            ));
+        }
     }
     for (index, event) in export.events.iter().enumerate() {
         if event.stream_seq != index as i64 + 1 {
@@ -465,16 +719,17 @@ fn validate_stream_export_events(
             ));
         }
     }
-    let expected = stream_export_checksum(export)?;
-    if export.checksum_sha256 != expected {
-        return Err(StoreError::InvalidExport("checksum mismatch".to_string()));
-    }
-
-    export
+    let events = export
         .events
         .iter()
         .map(|event| {
             let sealed = SealedEventBody::from_export(&event.sealed_body)?;
+            let data_key = keys.get(&sealed.key_epoch).ok_or_else(|| {
+                StoreError::InvalidExport(format!(
+                    "event references missing stream key epoch {}",
+                    sealed.key_epoch
+                ))
+            })?;
             let body = open_event_body(
                 export.stream_id,
                 event.stream_seq,
@@ -482,10 +737,16 @@ fn validate_stream_export_events(
                 event.version,
                 event.occurred_at,
                 &sealed,
+                data_key,
             )?;
             Ok(ValidatedExportEvent { sealed, body })
         })
-        .collect()
+        .collect::<Result<Vec<_>, StoreError>>()?;
+    Ok(ValidatedStreamExport {
+        active_epoch: export.active_epoch,
+        keys,
+        events,
+    })
 }
 
 /// Append a validated export to an empty stream. The caller chooses the target
@@ -511,20 +772,59 @@ pub async fn import_stream_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     export: &StreamExport,
 ) -> Result<Vec<StoredEvent>, StoreError> {
-    let validated = validate_stream_export_events(export)?;
+    // Fully authenticate the archive and construct every target KEK envelope
+    // before taking a database lock or writing. From the first INSERT onward,
+    // all remaining failure modes are database errors that abort the transaction.
+    let validated = validate_stream_export_contents(export)?;
+    let target_wrapping_key = event_encryption_keyring()?.active.clone();
+    let target_wrapped_keys = export
+        .stream_keys
+        .iter()
+        .map(|archive_key| {
+            let data_key = validated
+                .keys
+                .get(&archive_key.key_epoch)
+                .expect("validated archive key exists");
+            wrap_stream_data_key(data_key, &target_wrapping_key)
+        })
+        .collect::<Result<Vec<_>, StoreError>>()?;
     lock_stream_in_tx(tx, export.stream_id).await?;
-    if current_stream_seq(&mut **tx, export.stream_id).await? != 0 {
+    let target_facts = sqlx::query(
+        r#"
+        SELECT
+          EXISTS(SELECT 1 FROM events WHERE stream_id = $1) AS has_events,
+          EXISTS(SELECT 1 FROM event_stream_keys WHERE stream_id = $1) AS has_keys,
+          EXISTS(SELECT 1 FROM event_stream_key_state WHERE stream_id = $1) AS has_state
+        "#,
+    )
+    .bind(export.stream_id)
+    .fetch_one(&mut **tx)
+    .await?;
+    if target_facts.try_get::<bool, _>("has_events")?
+        || target_facts.try_get::<bool, _>("has_keys")?
+        || target_facts.try_get::<bool, _>("has_state")?
+    {
         return Err(StoreError::InvalidExport(
             "target stream is not empty".to_string(),
         ));
     }
+    for wrapped in &target_wrapped_keys {
+        insert_stream_data_key_envelope_in_tx(tx, wrapped).await?;
+    }
+    if let Some(active_epoch) = validated.active_epoch {
+        sqlx::query("INSERT INTO event_stream_key_state (stream_id, active_epoch) VALUES ($1, $2)")
+            .bind(export.stream_id)
+            .bind(active_epoch)
+            .execute(&mut **tx)
+            .await?;
+    }
     let mut imported = Vec::with_capacity(export.events.len());
-    for (event, validated) in export.events.iter().zip(validated) {
+    for (event, validated_event) in export.events.iter().zip(validated.events) {
         let row = sqlx::query(
             r#"
             INSERT INTO events
                 (stream_id, stream_seq, kind, version, occurred_at,
-                 sealed_version, sealed_kid, sealed_nonce, sealed_body)
+                 sealed_version, stream_key_epoch, sealed_nonce, sealed_body)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING seq
             "#,
@@ -534,10 +834,10 @@ pub async fn import_stream_in_tx(
         .bind(&event.kind)
         .bind(event.version)
         .bind(event.occurred_at)
-        .bind(validated.sealed.version)
-        .bind(&validated.sealed.kid)
-        .bind(validated.sealed.nonce.as_slice())
-        .bind(&validated.sealed.ciphertext)
+        .bind(validated_event.sealed.version)
+        .bind(validated_event.sealed.key_epoch)
+        .bind(validated_event.sealed.nonce.as_slice())
+        .bind(&validated_event.sealed.ciphertext)
         .fetch_one(&mut **tx)
         .await?;
         imported.push(upcast(StoredEvent {
@@ -546,11 +846,11 @@ pub async fn import_stream_in_tx(
             stream_seq: event.stream_seq,
             kind: event.kind.clone(),
             version: event.version,
-            payload: validated.body.payload,
-            actor: validated.body.actor,
+            payload: validated_event.body.payload,
+            actor: validated_event.body.actor,
             occurred_at: event.occurred_at,
-            causation_id: validated.body.causation_id,
-            meta: validated.body.meta,
+            causation_id: validated_event.body.causation_id,
+            meta: validated_event.body.meta,
         }));
     }
     Ok(imported)
@@ -561,12 +861,16 @@ fn stream_export_checksum(export: &StreamExport) -> Result<String, StoreError> {
     struct ChecksumManifest<'a> {
         version: u16,
         stream_id: Uuid,
+        active_epoch: Option<i64>,
+        stream_keys: &'a [ExportStreamKey],
         events: &'a [ExportEvent],
     }
 
     let bytes = serde_json::to_vec(&ChecksumManifest {
         version: export.version,
         stream_id: export.stream_id,
+        active_epoch: export.active_epoch,
+        stream_keys: &export.stream_keys,
         events: &export.events,
     })
     .map_err(|error| StoreError::InvalidExport(format!("cannot serialize manifest: {error}")))?;
@@ -584,46 +888,114 @@ pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::Error> {
         .map_err(|e| sqlx::Error::Migrate(Box::new(e)))
 }
 
-/// Fail startup/readiness closed when an existing row references a key id that
-/// the configured active+historical ring cannot open.
-pub async fn ensure_event_encryption_key_coverage(pool: &PgPool) -> Result<(), StoreError> {
-    let stored_kids = sqlx::query_scalar::<_, String>(
-        "SELECT DISTINCT sealed_kid FROM events ORDER BY sealed_kid",
+/// Exhaustive startup/operator audit of the event-encryption custody graph.
+///
+/// This intentionally scans the stream-key catalog. Internet-facing readiness
+/// must use [`ensure_event_encryption_key_readiness`] instead so probe cost is
+/// bounded by the configured keyring, not tenant or stream cardinality.
+pub async fn audit_event_encryption_key_coverage(pool: &PgPool) -> Result<(), StoreError> {
+    authenticate_direct_key_sentinels(pool).await?;
+
+    let invalid_state = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT keys.stream_id
+        FROM event_stream_keys keys
+        LEFT JOIN event_stream_key_state state USING (stream_id)
+        GROUP BY keys.stream_id, state.active_epoch
+        HAVING state.active_epoch IS NULL OR state.active_epoch <> MAX(keys.key_epoch)
+        LIMIT 1
+        "#,
+    )
+    .fetch_optional(pool)
+    .await?;
+    if let Some(stream_id) = invalid_state {
+        return Err(StoreError::Crypto(format!(
+            "event stream `{stream_id}` has missing or stale active key state"
+        )));
+    }
+
+    let representative_keys = sqlx::query(
+        r#"
+        SELECT DISTINCT ON (wrap_kid)
+               stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek
+        FROM event_stream_keys
+        ORDER BY wrap_kid, stream_id, key_epoch
+        "#,
     )
     .fetch_all(pool)
     .await?;
     let keyring = event_encryption_keyring()?;
-    let missing = stored_kids
-        .into_iter()
-        .filter(|kid| !keyring.by_kid.contains_key(kid))
-        .collect::<Vec<_>>();
-    if missing.is_empty() {
-        Ok(())
-    } else {
-        Err(StoreError::Crypto(format!(
-            "event encryption keyring is missing stored kid(s): {}",
-            missing.join(", ")
-        )))
+    for row in representative_keys {
+        let kid: String = row.try_get("wrap_kid")?;
+        if !keyring.by_kid.contains_key(&kid) {
+            return Err(StoreError::Crypto(format!(
+                "event encryption key `{kid}` is unavailable"
+            )));
+        }
+        let stream_id = row.try_get("stream_id")?;
+        unwrap_stream_data_key(WrappedStreamDataKey::from_storage_row(stream_id, &row)?)?;
     }
+    Ok(())
+}
+
+/// Bounded readiness proof for the process-static runtime event keyring.
+///
+/// The immutable sentinel catalog has one authenticated row per KID used by a
+/// direct private-projection or delivery-credential envelope. Its size is
+/// bounded by rotations (K), independent of event/projection row counts.
+pub async fn ensure_event_encryption_key_readiness(pool: &PgPool) -> Result<(), StoreError> {
+    authenticate_direct_key_sentinels(pool).await?;
+    Ok(())
+}
+
+async fn authenticate_direct_key_sentinels(pool: &PgPool) -> Result<(), StoreError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT kid, sentinel_version, sentinel_nonce, sentinel_ciphertext
+        FROM event_direct_key_sentinel
+        ORDER BY kid
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+    let keyring = event_encryption_keyring()?;
+    for row in rows {
+        let kid: String = row.try_get("kid")?;
+        let key = keyring.by_kid.get(&kid).ok_or_else(|| {
+            StoreError::Crypto(format!(
+                "event encryption key `{kid}` required by the direct-key sentinel catalog is unavailable"
+            ))
+        })?;
+        authenticate_direct_key_sentinel_row(&row, key)?;
+    }
+    Ok(())
 }
 
 const PRIVATE_SCHEME: &str = "fmarch-event-aead-v1";
-const EVENT_BODY_SCHEME: &str = "fmarch-event-body-v2";
-const EVENT_BODY_STORAGE_VERSION: i16 = 2;
+const EVENT_BODY_SCHEME: &str = "fmarch-event-body-v3";
+const EVENT_BODY_STORAGE_VERSION: i16 = 3;
+const STREAM_KEY_WRAP_SCHEME: &str = "fmarch-event-stream-dek-wrap-v1";
+const STREAM_KEY_WRAP_VERSION: i16 = 1;
+const ARCHIVE_KEY_WRAP_SCHEME: &str = "fmarch-event-archive-dek-wrap-v1";
+const STREAM_EXPORT_VERSION: u16 = 3;
 const PRIVATE_ALG: &str = "XChaCha20Poly1305";
+const DIRECT_KEY_SENTINEL_SCHEME: &str = "fmarch-event-direct-key-sentinel-v1";
+const DIRECT_KEY_SENTINEL_VERSION: i16 = 1;
+const DIRECT_KEY_SENTINEL_PLAINTEXT: &[u8] = b"fmarch:eventstore:direct-key-sentinel:v1";
 /// Debug-only default / fallback encryption key id. Banned as the *active* write kid
-/// outside explicit debug dev mode; historical `FMARCH_EVENT_ENCRYPTION_KEYS` ring
+/// outside explicit debug dev mode; historical `FMARCH_EVENT_WRAP_KEYS` ring
 /// entries may still carry this kid for decrypt.
-const LOCAL_DEV_EVENT_ENCRYPTION_KID: &str = "local-dev";
+const LOCAL_DEV_EVENT_WRAP_KID: &str = "local-dev";
+const LOCAL_DEV_EVENT_ARCHIVE_KID: &str = "local-dev-archive";
 
 impl SealedEventBody {
     fn from_storage_parts(
         version: i16,
-        kid: String,
+        key_epoch: i64,
         nonce: Vec<u8>,
         ciphertext: Vec<u8>,
     ) -> Result<Self, StoreError> {
-        Self::from_parts(version, kid, nonce, ciphertext).map_err(StoreError::Crypto)
+        Self::from_parts(version, key_epoch, nonce, ciphertext).map_err(StoreError::Crypto)
     }
 
     fn from_export(export: &ExportSealedBody) -> Result<Self, StoreError> {
@@ -660,7 +1032,7 @@ impl SealedEventBody {
         }
         Self::from_parts(
             EVENT_BODY_STORAGE_VERSION,
-            export.kid.clone(),
+            export.key_epoch,
             nonce,
             ciphertext,
         )
@@ -669,15 +1041,15 @@ impl SealedEventBody {
 
     fn from_parts(
         version: i16,
-        kid: String,
+        key_epoch: i64,
         nonce: Vec<u8>,
         ciphertext: Vec<u8>,
     ) -> Result<Self, String> {
         if version != EVENT_BODY_STORAGE_VERSION {
             return Err(format!("unsupported sealed event body version {version}"));
         }
-        if kid.is_empty() || kid.trim() != kid || kid.len() > 128 {
-            return Err("sealed event body kid must be 1..=128 unpadded bytes".to_string());
+        if key_epoch <= 0 {
+            return Err("sealed event body key epoch must be positive".to_string());
         }
         let nonce = nonce
             .try_into()
@@ -687,7 +1059,7 @@ impl SealedEventBody {
         }
         Ok(Self {
             version,
-            kid,
+            key_epoch,
             nonce,
             ciphertext,
         })
@@ -700,11 +1072,355 @@ impl SealedEventBody {
         ExportSealedBody {
             scheme: EVENT_BODY_SCHEME.to_string(),
             alg: PRIVATE_ALG.to_string(),
-            kid: self.kid.clone(),
+            key_epoch: self.key_epoch,
             nonce: STANDARD.encode(self.nonce),
             ciphertext: STANDARD.encode(&self.ciphertext),
         }
     }
+}
+
+impl WrappedStreamDataKey {
+    fn from_storage_row(stream_id: Uuid, row: &sqlx::postgres::PgRow) -> Result<Self, StoreError> {
+        let key_epoch = row
+            .try_get("key_epoch")
+            .or_else(|_| row.try_get("stream_key_epoch"))?;
+        Self::from_parts(
+            stream_id,
+            key_epoch,
+            row.try_get("wrap_version")?,
+            row.try_get("wrap_kid")?,
+            row.try_get("wrap_nonce")?,
+            row.try_get("wrapped_dek")?,
+        )
+    }
+
+    fn from_parts(
+        stream_id: Uuid,
+        key_epoch: i64,
+        wrap_version: i16,
+        wrap_kid: String,
+        wrap_nonce: Vec<u8>,
+        wrapped_dek: Vec<u8>,
+    ) -> Result<Self, StoreError> {
+        if key_epoch <= 0 {
+            return Err(StoreError::Crypto(
+                "stream data key epoch must be positive".to_string(),
+            ));
+        }
+        if wrap_version != STREAM_KEY_WRAP_VERSION {
+            return Err(StoreError::Crypto(format!(
+                "unsupported stream data key wrap version {wrap_version}"
+            )));
+        }
+        validate_key_id(&wrap_kid, "stream data key wrap kid")?;
+        let wrap_nonce = wrap_nonce.try_into().map_err(|_| {
+            StoreError::Crypto("stream data key wrap nonce must be 24 bytes".to_string())
+        })?;
+        if wrapped_dek.len() != 48 {
+            return Err(StoreError::Crypto(
+                "wrapped stream data key must be exactly 48 bytes".to_string(),
+            ));
+        }
+        Ok(Self {
+            stream_id,
+            key_epoch,
+            wrap_version,
+            wrap_kid,
+            wrap_nonce,
+            wrapped_dek,
+        })
+    }
+}
+
+fn validate_key_id(kid: &str, label: &str) -> Result<(), StoreError> {
+    if kid.is_empty() || kid.trim() != kid || kid.len() > 128 {
+        return Err(StoreError::Crypto(format!(
+            "{label} must be 1..=128 unpadded bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn direct_key_sentinel_aad(kid: &str) -> Result<Vec<u8>, StoreError> {
+    #[derive(Serialize)]
+    struct DirectKeySentinelAad<'a> {
+        context: &'static str,
+        scheme: &'static str,
+        alg: &'static str,
+        version: i16,
+        kid: &'a str,
+    }
+
+    serde_json::to_vec(&DirectKeySentinelAad {
+        context: "fmarch:eventstore:direct-key-sentinel:v1",
+        scheme: DIRECT_KEY_SENTINEL_SCHEME,
+        alg: PRIVATE_ALG,
+        version: DIRECT_KEY_SENTINEL_VERSION,
+        kid,
+    })
+    .map_err(|error| StoreError::Crypto(format!("serialize direct-key sentinel AAD: {error}")))
+}
+
+fn authenticate_direct_key_sentinel_row(
+    row: &sqlx::postgres::PgRow,
+    key: &EventEncryptionKey,
+) -> Result<(), StoreError> {
+    let kid: String = row.try_get("kid")?;
+    validate_key_id(&kid, "direct-key sentinel kid")?;
+    if kid != key.kid {
+        return Err(StoreError::Crypto(format!(
+            "direct-key sentinel kid `{kid}` does not match key `{}`",
+            key.kid
+        )));
+    }
+    let version: i16 = row.try_get("sentinel_version")?;
+    if version != DIRECT_KEY_SENTINEL_VERSION {
+        return Err(StoreError::Crypto(format!(
+            "unsupported direct-key sentinel version {version}"
+        )));
+    }
+    let nonce: [u8; 24] = row
+        .try_get::<Vec<u8>, _>("sentinel_nonce")?
+        .try_into()
+        .map_err(|_| StoreError::Crypto("direct-key sentinel nonce must be 24 bytes".into()))?;
+    let ciphertext: Vec<u8> = row.try_get("sentinel_ciphertext")?;
+    if ciphertext.len() != DIRECT_KEY_SENTINEL_PLAINTEXT.len() + 16 {
+        return Err(StoreError::Crypto(
+            "direct-key sentinel ciphertext has invalid length".into(),
+        ));
+    }
+    let plaintext = decrypt_bytes_with_key(
+        key,
+        &nonce,
+        &ciphertext,
+        &direct_key_sentinel_aad(&kid)?,
+        "authenticate direct-key sentinel",
+    )?;
+    if plaintext != DIRECT_KEY_SENTINEL_PLAINTEXT {
+        return Err(StoreError::Crypto(
+            "direct-key sentinel plaintext is invalid".into(),
+        ));
+    }
+    Ok(())
+}
+
+async fn ensure_direct_key_sentinel_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    key: &EventEncryptionKey,
+) -> Result<(), StoreError> {
+    validate_key_id(&key.kid, "direct-key sentinel kid")?;
+    let aad = direct_key_sentinel_aad(&key.kid)?;
+    let (nonce, ciphertext) = encrypt_bytes_with_key(key, DIRECT_KEY_SENTINEL_PLAINTEXT, &aad)?;
+    sqlx::query(
+        r#"
+        INSERT INTO event_direct_key_sentinel
+            (kid, sentinel_version, sentinel_nonce, sentinel_ciphertext)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (kid) DO NOTHING
+        "#,
+    )
+    .bind(&key.kid)
+    .bind(DIRECT_KEY_SENTINEL_VERSION)
+    .bind(nonce.as_slice())
+    .bind(ciphertext)
+    .execute(&mut **tx)
+    .await?;
+
+    let row = sqlx::query(
+        r#"
+        SELECT kid, sentinel_version, sentinel_nonce, sentinel_ciphertext
+        FROM event_direct_key_sentinel
+        WHERE kid = $1
+        "#,
+    )
+    .bind(&key.kid)
+    .fetch_one(&mut **tx)
+    .await?;
+    authenticate_direct_key_sentinel_row(&row, key)
+}
+
+fn new_stream_data_key(stream_id: Uuid, key_epoch: i64) -> StreamDataKey {
+    use rand::RngCore;
+
+    let mut bytes = [0_u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    StreamDataKey {
+        stream_id,
+        key_epoch,
+        bytes,
+    }
+}
+
+fn stream_key_wrap_aad(
+    stream_id: Uuid,
+    key_epoch: i64,
+    wrap_kid: &str,
+    scheme: &'static str,
+) -> Result<Vec<u8>, StoreError> {
+    #[derive(Serialize)]
+    struct StreamKeyWrapAad<'a> {
+        context: &'static str,
+        scheme: &'static str,
+        stream_id: Uuid,
+        key_epoch: i64,
+        wrap_kid: &'a str,
+    }
+
+    serde_json::to_vec(&StreamKeyWrapAad {
+        context: "fmarch:eventstore:stream-key-wrap:v1",
+        scheme,
+        stream_id,
+        key_epoch,
+        wrap_kid,
+    })
+    .map_err(|error| StoreError::Crypto(format!("serialize stream key wrap AAD: {error}")))
+}
+
+fn wrap_stream_data_key(
+    data_key: &StreamDataKey,
+    wrapping_key: &EventEncryptionKey,
+) -> Result<WrappedStreamDataKey, StoreError> {
+    let aad = stream_key_wrap_aad(
+        data_key.stream_id,
+        data_key.key_epoch,
+        &wrapping_key.kid,
+        STREAM_KEY_WRAP_SCHEME,
+    )?;
+    let (wrap_nonce, wrapped_dek) = encrypt_bytes_with_key(wrapping_key, &data_key.bytes, &aad)?;
+    Ok(WrappedStreamDataKey {
+        stream_id: data_key.stream_id,
+        key_epoch: data_key.key_epoch,
+        wrap_version: STREAM_KEY_WRAP_VERSION,
+        wrap_kid: wrapping_key.kid.clone(),
+        wrap_nonce,
+        wrapped_dek,
+    })
+}
+
+fn unwrap_stream_data_key(wrapped: WrappedStreamDataKey) -> Result<StreamDataKey, StoreError> {
+    let keyring = event_encryption_keyring()?;
+    let wrapping_key = keyring.by_kid.get(&wrapped.wrap_kid).ok_or_else(|| {
+        StoreError::Crypto(format!(
+            "missing event wrapping key for kid `{}`",
+            wrapped.wrap_kid
+        ))
+    })?;
+    let aad = stream_key_wrap_aad(
+        wrapped.stream_id,
+        wrapped.key_epoch,
+        &wrapped.wrap_kid,
+        STREAM_KEY_WRAP_SCHEME,
+    )?;
+    let plaintext = decrypt_bytes_with_key(
+        wrapping_key,
+        &wrapped.wrap_nonce,
+        &wrapped.wrapped_dek,
+        &aad,
+        "unwrap stream data key",
+    )?;
+    let bytes = plaintext.try_into().map_err(|_| {
+        StoreError::Crypto("unwrapped stream data key must be exactly 32 bytes".to_string())
+    })?;
+    Ok(StreamDataKey {
+        stream_id: wrapped.stream_id,
+        key_epoch: wrapped.key_epoch,
+        bytes,
+    })
+}
+
+fn archive_wrap_stream_data_key(data_key: &StreamDataKey) -> Result<ExportStreamKey, StoreError> {
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
+
+    let archive_keyring = archive_encryption_keyring()?;
+    let archive_key = &archive_keyring.active;
+    let aad = stream_key_wrap_aad(
+        data_key.stream_id,
+        data_key.key_epoch,
+        &archive_key.kid,
+        ARCHIVE_KEY_WRAP_SCHEME,
+    )?;
+    let (nonce, wrapped_dek) = encrypt_bytes_with_key(archive_key, &data_key.bytes, &aad)?;
+    Ok(ExportStreamKey {
+        key_epoch: data_key.key_epoch,
+        scheme: ARCHIVE_KEY_WRAP_SCHEME.to_string(),
+        alg: PRIVATE_ALG.to_string(),
+        archive_kid: archive_key.kid.clone(),
+        nonce: STANDARD.encode(nonce),
+        wrapped_dek: STANDARD.encode(wrapped_dek),
+    })
+}
+
+fn archive_unwrap_stream_data_key(
+    stream_id: Uuid,
+    wrapped: &ExportStreamKey,
+) -> Result<StreamDataKey, StoreError> {
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
+
+    if wrapped.scheme != ARCHIVE_KEY_WRAP_SCHEME || wrapped.alg != PRIVATE_ALG {
+        return Err(StoreError::InvalidExport(
+            "unsupported archive stream-key envelope".to_string(),
+        ));
+    }
+    if wrapped.key_epoch <= 0 {
+        return Err(StoreError::InvalidExport(
+            "archive stream key epoch must be positive".to_string(),
+        ));
+    }
+    validate_key_id(&wrapped.archive_kid, "archive wrapping kid")
+        .map_err(|error| StoreError::InvalidExport(error.to_string()))?;
+    let nonce_bytes = STANDARD
+        .decode(&wrapped.nonce)
+        .map_err(|error| StoreError::InvalidExport(format!("invalid key nonce base64: {error}")))?;
+    if STANDARD.encode(&nonce_bytes) != wrapped.nonce {
+        return Err(StoreError::InvalidExport(
+            "key nonce base64 must use canonical padded encoding".to_string(),
+        ));
+    }
+    let nonce: [u8; 24] = nonce_bytes
+        .try_into()
+        .map_err(|_| StoreError::InvalidExport("archive key nonce must be 24 bytes".to_string()))?;
+    let ciphertext = STANDARD.decode(&wrapped.wrapped_dek).map_err(|error| {
+        StoreError::InvalidExport(format!("invalid wrapped DEK base64: {error}"))
+    })?;
+    if STANDARD.encode(&ciphertext) != wrapped.wrapped_dek || ciphertext.len() != 48 {
+        return Err(StoreError::InvalidExport(
+            "wrapped DEK must be canonical base64 for exactly 48 bytes".to_string(),
+        ));
+    }
+    let archive_keyring = archive_encryption_keyring()?;
+    let archive_key = archive_keyring
+        .by_kid
+        .get(&wrapped.archive_kid)
+        .ok_or_else(|| {
+            StoreError::InvalidExport(format!(
+                "missing archive wrapping key for kid `{}`",
+                wrapped.archive_kid
+            ))
+        })?;
+    let aad = stream_key_wrap_aad(
+        stream_id,
+        wrapped.key_epoch,
+        &wrapped.archive_kid,
+        ARCHIVE_KEY_WRAP_SCHEME,
+    )?;
+    let plaintext = decrypt_bytes_with_key(
+        archive_key,
+        &nonce,
+        &ciphertext,
+        &aad,
+        "unwrap archive stream data key",
+    )
+    .map_err(|error| StoreError::InvalidExport(error.to_string()))?;
+    let bytes = plaintext.try_into().map_err(|_| {
+        StoreError::InvalidExport("archive DEK must open to exactly 32 bytes".to_string())
+    })?;
+    Ok(StreamDataKey {
+        stream_id,
+        key_epoch: wrapped.key_epoch,
+        bytes,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -738,6 +1454,7 @@ fn seal_event_body(
     ev: &EventInput,
     stream_id: Uuid,
     stream_seq: i64,
+    data_key: &StreamDataKey,
 ) -> Result<SealedEventBody, StoreError> {
     let plaintext = serde_json::to_vec(&EventBodyRef {
         payload: &ev.payload,
@@ -746,20 +1463,18 @@ fn seal_event_body(
         meta: &ev.meta,
     })
     .map_err(|err| StoreError::Crypto(format!("serialize event body: {err}")))?;
-    let keyring = event_encryption_keyring()?;
-    let key = &keyring.active;
     let aad = event_body_aad(
         stream_id,
         stream_seq,
         &ev.kind,
         ev.version,
         ev.occurred_at,
-        &key.kid,
+        data_key.key_epoch,
     )?;
-    let (nonce, ciphertext) = encrypt_bytes_with_key(key, &plaintext, &aad)?;
+    let (nonce, ciphertext) = encrypt_bytes_with_material(&data_key.bytes, &plaintext, &aad)?;
     Ok(SealedEventBody {
         version: EVENT_BODY_STORAGE_VERSION,
-        kid: key.kid.clone(),
+        key_epoch: data_key.key_epoch,
         nonce,
         ciphertext,
     })
@@ -774,6 +1489,7 @@ fn open_stored_event(
     version: i16,
     occurred_at: i64,
     sealed_body: &SealedEventBody,
+    data_key: &StreamDataKey,
 ) -> Result<StoredEvent, StoreError> {
     let body = open_event_body(
         stream_id,
@@ -782,6 +1498,7 @@ fn open_stored_event(
         version,
         occurred_at,
         sealed_body,
+        data_key,
     )?;
     Ok(StoredEvent {
         seq,
@@ -804,6 +1521,7 @@ fn open_event_body(
     version: i16,
     occurred_at: i64,
     sealed_body: &SealedEventBody,
+    data_key: &StreamDataKey,
 ) -> Result<EventBody, StoreError> {
     if sealed_body.version != EVENT_BODY_STORAGE_VERSION {
         return Err(StoreError::Crypto(format!(
@@ -811,19 +1529,25 @@ fn open_event_body(
             sealed_body.version
         )));
     }
+    if data_key.stream_id != stream_id || data_key.key_epoch != sealed_body.key_epoch {
+        return Err(StoreError::Crypto(
+            "stream data key identity does not match sealed event".to_string(),
+        ));
+    }
     let aad = event_body_aad(
         stream_id,
         stream_seq,
         kind,
         version,
         occurred_at,
-        &sealed_body.kid,
+        sealed_body.key_epoch,
     )?;
-    let plaintext = decrypt_bytes(
-        &sealed_body.kid,
+    let plaintext = decrypt_bytes_with_material(
+        &data_key.bytes,
         &sealed_body.nonce,
         &sealed_body.ciphertext,
         &aad,
+        "decrypt sealed event body",
     )?;
     serde_json::from_slice(&plaintext)
         .map_err(|err| StoreError::Crypto(format!("decode sealed event body: {err}")))
@@ -840,35 +1564,27 @@ where
     }
 }
 
-fn encrypt_json(plaintext: serde_json::Value, aad: &[u8]) -> Result<serde_json::Value, StoreError> {
-    encrypt_json_with_scheme(plaintext, aad, PRIVATE_SCHEME)
-}
-
-fn encrypt_json_with_scheme(
+async fn encrypt_json_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     plaintext: serde_json::Value,
     aad: &[u8],
     scheme: &str,
 ) -> Result<serde_json::Value, StoreError> {
+    let key = event_encryption_keyring()?.active.clone();
+    ensure_direct_key_sentinel_in_tx(tx, &key).await?;
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
     let plaintext = serde_json::to_vec(&plaintext)
         .map_err(|err| StoreError::Crypto(format!("serialize private payload: {err}")))?;
-    let (kid, nonce, ciphertext) = encrypt_bytes(&plaintext, aad)?;
+    let (nonce, ciphertext) = encrypt_bytes_with_key(&key, &plaintext, aad)?;
 
     Ok(serde_json::json!({
         "scheme": scheme,
         "alg": PRIVATE_ALG,
-        "kid": kid,
+        "kid": key.kid,
         "nonce": STANDARD.encode(nonce),
         "ciphertext": STANDARD.encode(ciphertext),
     }))
-}
-
-fn encrypt_bytes(plaintext: &[u8], aad: &[u8]) -> Result<(String, [u8; 24], Vec<u8>), StoreError> {
-    let keyring = event_encryption_keyring()?;
-    let key = &keyring.active;
-    let (nonce, ciphertext) = encrypt_bytes_with_key(key, plaintext, aad)?;
-    Ok((key.kid.clone(), nonce, ciphertext))
 }
 
 fn encrypt_bytes_with_key(
@@ -876,10 +1592,18 @@ fn encrypt_bytes_with_key(
     plaintext: &[u8],
     aad: &[u8],
 ) -> Result<([u8; 24], Vec<u8>), StoreError> {
+    encrypt_bytes_with_material(&key.bytes, plaintext, aad)
+}
+
+fn encrypt_bytes_with_material(
+    key: &[u8; 32],
+    plaintext: &[u8],
+    aad: &[u8],
+) -> Result<([u8; 24], Vec<u8>), StoreError> {
     use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng, Payload};
     use chacha20poly1305::XChaCha20Poly1305;
 
-    let cipher = XChaCha20Poly1305::new((&key.bytes).into());
+    let cipher = XChaCha20Poly1305::new(key.into());
     let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
     let ciphertext = cipher
         .encrypt(
@@ -895,11 +1619,18 @@ fn encrypt_bytes_with_key(
 
 /// Seal private projection state while keeping key material and rotation
 /// semantics inside the event-store crypto boundary.
-pub fn encrypt_private_projection(
+pub async fn encrypt_private_projection(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     plaintext: serde_json::Value,
     authenticated_context: &str,
 ) -> Result<serde_json::Value, StoreError> {
-    encrypt_json(plaintext, authenticated_context.as_bytes())
+    encrypt_json_in_tx(
+        tx,
+        plaintext,
+        authenticated_context.as_bytes(),
+        PRIVATE_SCHEME,
+    )
+    .await
 }
 
 /// Open projection state sealed by [`encrypt_private_projection`]. The caller
@@ -915,13 +1646,19 @@ pub fn decrypt_private_projection(
 /// Fail an internet-facing process closed unless it has explicit key material.
 /// The deterministic fallback exists only in debug builds and server operators
 /// must opt into it explicitly through the dedicated flag or debug-only dev
-/// authentication mode. Active write kid [`LOCAL_DEV_EVENT_ENCRYPTION_KID`] is
-/// banned outside that same explicit debug dev mode even when KEY+KID are set.
+/// authentication mode. Runtime wrapping and archive custody are deliberately
+/// separate key domains; production configuration must supply both.
 pub fn require_secure_event_encryption_configuration() -> Result<(), StoreError> {
-    let key = std::env::var("FMARCH_EVENT_ENCRYPTION_KEY")
+    let wrap_key = std::env::var("FMARCH_EVENT_WRAP_KEY")
         .ok()
         .filter(|value| !value.trim().is_empty());
-    let kid = std::env::var("FMARCH_EVENT_ENCRYPTION_KID")
+    let wrap_kid = std::env::var("FMARCH_EVENT_WRAP_KID")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let archive_key = std::env::var("FMARCH_EVENT_ARCHIVE_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let archive_kid = std::env::var("FMARCH_EVENT_ARCHIVE_KID")
         .ok()
         .filter(|value| !value.trim().is_empty());
     let explicit_dev = cfg!(debug_assertions)
@@ -930,12 +1667,21 @@ pub fn require_secure_event_encryption_configuration() -> Result<(), StoreError>
             .is_some_and(|value| value.eq_ignore_ascii_case("true"))
             || std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1"));
 
-    if key.is_some() && kid.is_some() {
-        let active = active_event_encryption_key()?;
-        if active.kid == LOCAL_DEV_EVENT_ENCRYPTION_KID && !explicit_dev {
-            return Err(StoreError::Crypto(format!(
-                "active event encryption kid `{LOCAL_DEV_EVENT_ENCRYPTION_KID}` is banned outside explicit debug dev mode; set FMARCH_DEV_AUTH=1 or FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true in a debug build, or use a non-dev kid"
-            )));
+    if wrap_key.is_some() && wrap_kid.is_some() && archive_key.is_some() && archive_kid.is_some() {
+        let runtime = active_event_encryption_key()?;
+        let archive = archive_encryption_keyring()?.active.clone();
+        if (runtime.kid == LOCAL_DEV_EVENT_WRAP_KID || archive.kid == LOCAL_DEV_EVENT_ARCHIVE_KID)
+            && !explicit_dev
+        {
+            return Err(StoreError::Crypto(
+                "local-dev event wrapping kids are banned outside explicit debug dev mode; set FMARCH_DEV_AUTH=1 or FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true in a debug build, or use non-dev kids".to_string(),
+            ));
+        }
+        if runtime.bytes == archive.bytes {
+            return Err(StoreError::Crypto(
+                "runtime event wrapping key and archive custody key must use distinct material"
+                    .to_string(),
+            ));
         }
         return Ok(());
     }
@@ -945,21 +1691,25 @@ pub fn require_secure_event_encryption_configuration() -> Result<(), StoreError>
     }
 
     Err(StoreError::Crypto(
-        "FMARCH_EVENT_ENCRYPTION_KEY and FMARCH_EVENT_ENCRYPTION_KID are required; the debug-only fallback requires FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true or FMARCH_DEV_AUTH=1"
+        "FMARCH_EVENT_WRAP_KEY/KID and FMARCH_EVENT_ARCHIVE_KEY/KID are required; the debug-only fallback requires FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true or FMARCH_DEV_AUTH=1"
             .to_string(),
     ))
 }
 
 /// Encrypts a one-time identity credential for a committed delivery intent.
 /// The caller supplies stable AAD so the envelope cannot be moved to another intent.
-pub fn encrypt_delivery_credential(
+pub async fn encrypt_delivery_credential(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     credential: &str,
     aad: &str,
 ) -> Result<serde_json::Value, StoreError> {
-    encrypt_json(
+    encrypt_json_in_tx(
+        tx,
         serde_json::json!({ "credential": credential }),
         aad.as_bytes(),
+        PRIVATE_SCHEME,
     )
+    .await
 }
 
 /// Decrypts a delivery credential only at the provider boundary.
@@ -1017,14 +1767,35 @@ fn decrypt_bytes(
     ciphertext: &[u8],
     aad: &[u8],
 ) -> Result<Vec<u8>, StoreError> {
+    let keyring = event_encryption_keyring()?;
+    let key = keyring
+        .by_kid
+        .get(kid)
+        .ok_or_else(|| StoreError::Crypto(format!("missing event wrapping key for kid `{kid}`")))?;
+    decrypt_bytes_with_key(key, nonce, ciphertext, aad, "decrypt private payload")
+}
+
+fn decrypt_bytes_with_key(
+    key: &EventEncryptionKey,
+    nonce: &[u8; 24],
+    ciphertext: &[u8],
+    aad: &[u8],
+    operation: &str,
+) -> Result<Vec<u8>, StoreError> {
+    decrypt_bytes_with_material(&key.bytes, nonce, ciphertext, aad, operation)
+}
+
+fn decrypt_bytes_with_material(
+    key: &[u8; 32],
+    nonce: &[u8; 24],
+    ciphertext: &[u8],
+    aad: &[u8],
+    operation: &str,
+) -> Result<Vec<u8>, StoreError> {
     use chacha20poly1305::aead::{Aead, KeyInit, Payload};
     use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 
-    let keyring = event_encryption_keyring()?;
-    let key = keyring.by_kid.get(kid).ok_or_else(|| {
-        StoreError::Crypto(format!("missing event encryption key for kid `{kid}`"))
-    })?;
-    let cipher = XChaCha20Poly1305::new((&key.bytes).into());
+    let cipher = XChaCha20Poly1305::new(key.into());
     cipher
         .decrypt(
             XNonce::from_slice(nonce),
@@ -1033,7 +1804,7 @@ fn decrypt_bytes(
                 aad,
             },
         )
-        .map_err(|_| StoreError::Crypto("decrypt private payload".to_string()))
+        .map_err(|_| StoreError::Crypto(operation.to_string()))
 }
 
 fn event_encryption_keyring() -> Result<Arc<EventEncryptionKeyring>, StoreError> {
@@ -1057,9 +1828,9 @@ fn event_encryption_keyring() -> Result<Arc<EventEncryptionKeyring>, StoreError>
 
 fn event_encryption_source() -> EventEncryptionSource {
     EventEncryptionSource {
-        active_kid: std::env::var("FMARCH_EVENT_ENCRYPTION_KID").ok(),
-        active_key: std::env::var("FMARCH_EVENT_ENCRYPTION_KEY").ok(),
-        historical_keys: std::env::var("FMARCH_EVENT_ENCRYPTION_KEYS").ok(),
+        active_kid: std::env::var("FMARCH_EVENT_WRAP_KID").ok(),
+        active_key: std::env::var("FMARCH_EVENT_WRAP_KEY").ok(),
+        historical_keys: std::env::var("FMARCH_EVENT_WRAP_KEYS").ok(),
     }
 }
 
@@ -1096,16 +1867,10 @@ fn build_event_encryption_keyring(
             .filter(|entry| !entry.is_empty())
         {
             let (kid, raw_key) = entry.split_once('=').ok_or_else(|| {
-                StoreError::Crypto(
-                    "FMARCH_EVENT_ENCRYPTION_KEYS entries must be kid=key".to_string(),
-                )
+                StoreError::Crypto("FMARCH_EVENT_WRAP_KEYS entries must be kid=key".to_string())
             })?;
             let kid = kid.trim();
-            if kid.is_empty() {
-                return Err(StoreError::Crypto(
-                    "FMARCH_EVENT_ENCRYPTION_KEYS kid must not be empty".to_string(),
-                ));
-            }
+            validate_key_id(kid, "runtime wrapping kid")?;
             let key = EventEncryptionKey {
                 kid: kid.to_string(),
                 bytes: event_encryption_key_bytes(raw_key.trim())?,
@@ -1121,6 +1886,73 @@ fn build_event_encryption_keyring(
     Ok(keyring)
 }
 
+fn archive_encryption_keyring() -> Result<Arc<EventEncryptionKeyring>, StoreError> {
+    let source = EventEncryptionSource {
+        active_kid: std::env::var("FMARCH_EVENT_ARCHIVE_KID").ok(),
+        active_key: std::env::var("FMARCH_EVENT_ARCHIVE_KEY").ok(),
+        historical_keys: std::env::var("FMARCH_EVENT_ARCHIVE_KEYS").ok(),
+    };
+    let kid = source
+        .active_kid
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(LOCAL_DEV_EVENT_ARCHIVE_KID)
+        .to_string();
+    let bytes = match source.active_key.as_deref().map(str::trim) {
+        Some(raw) if !raw.is_empty() => event_encryption_key_bytes(raw)?,
+        _ if cfg!(debug_assertions) => Sha256::digest(b"fmarch-local-dev-event-archive-key-v1")
+            .to_vec()
+            .try_into()
+            .map_err(|_| StoreError::Crypto("archive key must be 32 bytes".to_string()))?,
+        _ => {
+            return Err(StoreError::Crypto(
+                "FMARCH_EVENT_ARCHIVE_KEY is required in release builds".to_string(),
+            ));
+        }
+    };
+    validate_key_id(&kid, "archive wrapping kid")?;
+    let active = EventEncryptionKey { kid, bytes };
+    let mut keys = HashMap::new();
+    insert_event_encryption_key(&mut keys, active.clone())?;
+    if let Some(raw) = source.historical_keys.as_deref() {
+        for entry in raw
+            .split(',')
+            .map(str::trim)
+            .filter(|entry| !entry.is_empty())
+        {
+            let (kid, raw_key) = entry.split_once('=').ok_or_else(|| {
+                StoreError::Crypto("FMARCH_EVENT_ARCHIVE_KEYS entries must be kid=key".to_string())
+            })?;
+            let kid = kid.trim();
+            validate_key_id(kid, "archive wrapping kid")?;
+            insert_event_encryption_key(
+                &mut keys,
+                EventEncryptionKey {
+                    kid: kid.to_string(),
+                    bytes: event_encryption_key_bytes(raw_key.trim())?,
+                },
+            )?;
+        }
+    }
+    let keyring = Arc::new(EventEncryptionKeyring {
+        active,
+        by_kid: keys,
+    });
+    let runtime = event_encryption_keyring()?;
+    if keyring.by_kid.values().any(|archive| {
+        runtime
+            .by_kid
+            .values()
+            .any(|runtime| archive.bytes == runtime.bytes)
+    }) {
+        return Err(StoreError::Crypto(
+            "event archive custody keys must not reuse runtime wrapping key material".to_string(),
+        ));
+    }
+    Ok(keyring)
+}
+
 fn insert_event_encryption_key(
     keys: &mut HashMap<String, EventEncryptionKey>,
     key: EventEncryptionKey,
@@ -1133,6 +1965,12 @@ fn insert_event_encryption_key(
             )));
         }
         return Ok(());
+    }
+    if let Some(existing) = keys.values().find(|existing| existing.bytes == key.bytes) {
+        return Err(StoreError::Crypto(format!(
+            "event encryption kids `{}` and `{}` must use distinct key material",
+            existing.kid, key.kid
+        )));
     }
     keys.insert(key.kid.clone(), key);
     Ok(())
@@ -1152,7 +1990,7 @@ fn active_event_encryption_key_from_source(
         .as_deref()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| LOCAL_DEV_EVENT_ENCRYPTION_KID.to_string());
+        .unwrap_or_else(|| LOCAL_DEV_EVENT_WRAP_KID.to_string());
     let bytes = match source.active_key.as_deref() {
         Some(raw) if !raw.trim().is_empty() => {
             let raw = raw.trim();
@@ -1164,10 +2002,11 @@ fn active_event_encryption_key_from_source(
             .map_err(|_| StoreError::Crypto("event encryption key must be 32 bytes".to_string()))?,
         _ => {
             return Err(StoreError::Crypto(
-                "FMARCH_EVENT_ENCRYPTION_KEY is required in release builds".to_string(),
+                "FMARCH_EVENT_WRAP_KEY is required in release builds".to_string(),
             ))
         }
     };
+    validate_key_id(&kid, "runtime wrapping kid")?;
     Ok(EventEncryptionKey { kid, bytes })
 }
 
@@ -1213,7 +2052,7 @@ fn event_body_aad(
     kind: &str,
     version: i16,
     occurred_at: i64,
-    sealed_kid: &str,
+    stream_key_epoch: i64,
 ) -> Result<Vec<u8>, StoreError> {
     // Every clear archive row header participates in the authentication tag.
     // Typed JSON serialization avoids delimiter ambiguity and a transient
@@ -1227,18 +2066,18 @@ fn event_body_aad(
         version: i16,
         occurred_at: i64,
         sealed_version: i16,
-        sealed_kid: &'a str,
+        stream_key_epoch: i64,
     }
 
     serde_json::to_vec(&EventBodyAad {
-        context: "fmarch:eventstore:event-body:v2",
+        context: "fmarch:eventstore:event-body:v3",
         stream_id,
         stream_seq,
         kind,
         version,
         occurred_at,
         sealed_version: EVENT_BODY_STORAGE_VERSION,
-        sealed_kid,
+        stream_key_epoch,
     })
     .map_err(|error| StoreError::Crypto(format!("serialize event body AAD: {error}")))
 }
@@ -1263,6 +2102,9 @@ mod secure_event_encryption_config_tests {
         prior_key: Option<String>,
         prior_kid: Option<String>,
         prior_keys: Option<String>,
+        prior_archive_key: Option<String>,
+        prior_archive_kid: Option<String>,
+        prior_archive_keys: Option<String>,
         prior_dev_auth: Option<String>,
         prior_allow_insecure: Option<String>,
         _lock: MutexGuard<'static, ()>,
@@ -1274,28 +2116,36 @@ mod secure_event_encryption_config_tests {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             let guard = Self {
-                prior_key: std::env::var("FMARCH_EVENT_ENCRYPTION_KEY").ok(),
-                prior_kid: std::env::var("FMARCH_EVENT_ENCRYPTION_KID").ok(),
-                prior_keys: std::env::var("FMARCH_EVENT_ENCRYPTION_KEYS").ok(),
+                prior_key: std::env::var("FMARCH_EVENT_WRAP_KEY").ok(),
+                prior_kid: std::env::var("FMARCH_EVENT_WRAP_KID").ok(),
+                prior_keys: std::env::var("FMARCH_EVENT_WRAP_KEYS").ok(),
+                prior_archive_key: std::env::var("FMARCH_EVENT_ARCHIVE_KEY").ok(),
+                prior_archive_kid: std::env::var("FMARCH_EVENT_ARCHIVE_KID").ok(),
+                prior_archive_keys: std::env::var("FMARCH_EVENT_ARCHIVE_KEYS").ok(),
                 prior_dev_auth: std::env::var("FMARCH_DEV_AUTH").ok(),
                 prior_allow_insecure: std::env::var("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY").ok(),
                 _lock: lock,
             };
-            std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEY");
-            std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KID");
-            std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS");
+            std::env::remove_var("FMARCH_EVENT_WRAP_KEY");
+            std::env::remove_var("FMARCH_EVENT_WRAP_KID");
+            std::env::remove_var("FMARCH_EVENT_WRAP_KEYS");
+            std::env::remove_var("FMARCH_EVENT_ARCHIVE_KEY");
+            std::env::remove_var("FMARCH_EVENT_ARCHIVE_KID");
+            std::env::remove_var("FMARCH_EVENT_ARCHIVE_KEYS");
             std::env::remove_var("FMARCH_DEV_AUTH");
             std::env::remove_var("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY");
             guard
         }
 
         fn set_active(&self, kid: &str, key: &str) {
-            std::env::set_var("FMARCH_EVENT_ENCRYPTION_KID", kid);
-            std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEY", key);
+            std::env::set_var("FMARCH_EVENT_WRAP_KID", kid);
+            std::env::set_var("FMARCH_EVENT_WRAP_KEY", key);
+            std::env::set_var("FMARCH_EVENT_ARCHIVE_KID", "unit-archive");
+            std::env::set_var("FMARCH_EVENT_ARCHIVE_KEY", format!("archive:{key}"));
         }
 
         fn set_keyring(&self, keys: &str) {
-            std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEYS", keys);
+            std::env::set_var("FMARCH_EVENT_WRAP_KEYS", keys);
         }
 
         fn set_dev_auth(&self, value: &str) {
@@ -1309,9 +2159,12 @@ mod secure_event_encryption_config_tests {
 
     impl Drop for EnvGuard {
         fn drop(&mut self) {
-            restore_env("FMARCH_EVENT_ENCRYPTION_KEY", &self.prior_key);
-            restore_env("FMARCH_EVENT_ENCRYPTION_KID", &self.prior_kid);
-            restore_env("FMARCH_EVENT_ENCRYPTION_KEYS", &self.prior_keys);
+            restore_env("FMARCH_EVENT_WRAP_KEY", &self.prior_key);
+            restore_env("FMARCH_EVENT_WRAP_KID", &self.prior_kid);
+            restore_env("FMARCH_EVENT_WRAP_KEYS", &self.prior_keys);
+            restore_env("FMARCH_EVENT_ARCHIVE_KEY", &self.prior_archive_key);
+            restore_env("FMARCH_EVENT_ARCHIVE_KID", &self.prior_archive_kid);
+            restore_env("FMARCH_EVENT_ARCHIVE_KEYS", &self.prior_archive_keys);
             restore_env("FMARCH_DEV_AUTH", &self.prior_dev_auth);
             restore_env(
                 "FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY",
@@ -1343,23 +2196,17 @@ mod secure_event_encryption_config_tests {
     #[test]
     fn local_dev_active_kid_banned_without_explicit_dev() {
         let env = EnvGuard::new();
-        env.set_active(
-            LOCAL_DEV_EVENT_ENCRYPTION_KID,
-            "unit-test-event-key-material",
-        );
+        env.set_active(LOCAL_DEV_EVENT_WRAP_KID, "unit-test-event-key-material");
         assert_crypto_err(
             require_secure_event_encryption_configuration(),
-            LOCAL_DEV_EVENT_ENCRYPTION_KID,
+            "local-dev event wrapping",
         );
     }
 
     #[test]
     fn local_dev_active_kid_allowed_with_dev_auth() {
         let env = EnvGuard::new();
-        env.set_active(
-            LOCAL_DEV_EVENT_ENCRYPTION_KID,
-            "unit-test-event-key-material",
-        );
+        env.set_active(LOCAL_DEV_EVENT_WRAP_KID, "unit-test-event-key-material");
         env.set_dev_auth("1");
         require_secure_event_encryption_configuration().expect("dev auth opts into local-dev");
     }
@@ -1367,10 +2214,7 @@ mod secure_event_encryption_config_tests {
     #[test]
     fn local_dev_active_kid_allowed_with_allow_insecure_flag() {
         let env = EnvGuard::new();
-        env.set_active(
-            LOCAL_DEV_EVENT_ENCRYPTION_KID,
-            "unit-test-event-key-material",
-        );
+        env.set_active(LOCAL_DEV_EVENT_WRAP_KID, "unit-test-event-key-material");
         env.set_allow_insecure("true");
         require_secure_event_encryption_configuration()
             .expect("allow-insecure flag opts into local-dev");
@@ -1379,10 +2223,7 @@ mod secure_event_encryption_config_tests {
     #[test]
     fn local_dev_active_kid_allowed_with_allow_insecure_case_insensitive() {
         let env = EnvGuard::new();
-        env.set_active(
-            LOCAL_DEV_EVENT_ENCRYPTION_KID,
-            "unit-test-event-key-material",
-        );
+        env.set_active(LOCAL_DEV_EVENT_WRAP_KID, "unit-test-event-key-material");
         env.set_allow_insecure("TRUE");
         require_secure_event_encryption_configuration().expect("allow-insecure accepts TRUE");
     }
@@ -1396,11 +2237,42 @@ mod secure_event_encryption_config_tests {
     }
 
     #[test]
+    fn runtime_wrapping_kids_must_fit_the_persisted_key_schema() {
+        let env = EnvGuard::new();
+        env.set_active(&"x".repeat(129), "unit-test-event-key-material");
+        assert_crypto_err(
+            require_secure_event_encryption_configuration(),
+            "runtime wrapping kid must be 1..=128",
+        );
+
+        env.set_active("runtime-v1", "unit-test-event-key-material");
+        env.set_keyring(&format!(
+            "{}=prior-unit-test-event-key-material",
+            "y".repeat(129)
+        ));
+        assert_crypto_err(
+            require_secure_event_encryption_configuration(),
+            "runtime wrapping kid must be 1..=128",
+        );
+    }
+
+    #[test]
+    fn archive_custody_cannot_reuse_runtime_wrapping_material() {
+        let env = EnvGuard::new();
+        env.set_active("runtime-v1", "shared-key-material");
+        std::env::set_var("FMARCH_EVENT_ARCHIVE_KEY", "shared-key-material");
+        assert_crypto_err(
+            require_secure_event_encryption_configuration(),
+            "must not reuse runtime wrapping key material",
+        );
+    }
+
+    #[test]
     fn missing_key_material_rejected_without_explicit_dev() {
         let _env = EnvGuard::new();
         assert_crypto_err(
             require_secure_event_encryption_configuration(),
-            "FMARCH_EVENT_ENCRYPTION_KEY and FMARCH_EVENT_ENCRYPTION_KID are required",
+            "FMARCH_EVENT_WRAP_KEY/KID and FMARCH_EVENT_ARCHIVE_KEY/KID are required",
         );
     }
 
@@ -1424,7 +2296,7 @@ mod secure_event_encryption_config_tests {
     fn default_active_kid_is_local_dev_constant() {
         let _env = EnvGuard::new();
         let active = active_event_encryption_key().expect("debug fallback key material");
-        assert_eq!(active.kid, LOCAL_DEV_EVENT_ENCRYPTION_KID);
+        assert_eq!(active.kid, LOCAL_DEV_EVENT_WRAP_KID);
     }
 
     #[test]
@@ -1442,32 +2314,15 @@ mod secure_event_encryption_config_tests {
     }
 
     #[test]
-    fn sealed_event_key_id_is_authenticated_even_for_same_material_aliases() {
+    fn runtime_keyring_rejects_same_material_aliases() {
         let env = EnvGuard::new();
         let material = "same-event-key-material";
         env.set_active("canonical-kid", material);
-        let stream_id = Uuid::new_v4();
-        let event = EventInput::new(
-            "AliasCounterexample",
-            1,
-            serde_json::json!({"secret": "bound-to-canonical-kid"}),
-            ActorId::System,
-            7,
-        );
-        let mut sealed = seal_event_body(&event, stream_id, 1).expect("seal canonical event");
-
         env.set_keyring(&format!("alias-kid={material}"));
-        sealed.kid = "alias-kid".to_string();
-        let error = open_event_body(
-            stream_id,
-            1,
-            &event.kind,
-            event.version,
-            event.occurred_at,
-            &sealed,
-        )
-        .expect_err("rewriting kid must invalidate authenticated context");
-        assert!(error.to_string().contains("decrypt private payload"));
+        assert_crypto_err(
+            event_encryption_keyring().map(|_| ()),
+            "must use distinct key material",
+        );
     }
 
     #[test]

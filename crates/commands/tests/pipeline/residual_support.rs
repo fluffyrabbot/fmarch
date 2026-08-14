@@ -49,18 +49,57 @@ async fn seed_open_night_game_with_pack(
     slot_1_role: (&str, &str),
     slot_2_role: (&str, &str),
 ) -> Result<Vec<eventstore::StoredEvent>, projections::ProjectionError> {
-    let pack_ref = content_registry::pack_ref(pack)
-        .unwrap_or_else(|error| panic!("embedded test pack {pack} has no identity: {error}"))
-        .clone();
-    seed_open_night_game_with_pack_ref(pool, game, host_id, &pack_ref, slot_1_role, slot_2_role)
-        .await
+    let pack_artifact = content_registry::select_pack_artifact(pack)
+        .unwrap_or_else(|error| panic!("embedded test pack {pack} has no artifact: {error}"));
+    seed_open_night_game_with_pack_artifact(
+        pool,
+        game,
+        host_id,
+        &pack_artifact,
+        slot_1_role,
+        slot_2_role,
+    )
+    .await
 }
 
-async fn seed_open_night_game_with_pack_ref(
+async fn reject_game_creation_with_invalid_pack(
     pool: &PgPool,
     game: Uuid,
     host_id: &str,
-    pack_ref: &content_registry::PackRef,
+    pack: &str,
+) -> Reject {
+    let err = handle(
+        pool,
+        &user(host_id),
+        Command::CreateGame {
+            game,
+            pack: pack.to_string(),
+            cohost_denied: vec![],
+        },
+    )
+    .await
+    .expect_err("invalid pack must reject at game creation");
+
+    assert_eq!(
+        stored_event_count(pool, game).await,
+        0,
+        "invalid pack must not append GameCreated or any other event"
+    );
+    assert!(
+        projections::game_pack_artifact(pool, game)
+            .await
+            .expect("load rejected game's pack custody")
+            .is_none(),
+        "invalid pack must not install game-scoped artifact custody"
+    );
+    err
+}
+
+async fn seed_open_night_game_with_pack_artifact(
+    pool: &PgPool,
+    game: Uuid,
+    host_id: &str,
+    pack_artifact: &content_registry::PackArtifactSnapshot,
     slot_1_role: (&str, &str),
     slot_2_role: (&str, &str),
 ) -> Result<Vec<eventstore::StoredEvent>, projections::ProjectionError> {
@@ -73,7 +112,8 @@ async fn seed_open_night_game_with_pack_ref(
                 1,
                 serde_json::json!({
                     "host": host_id,
-                    "pack_ref": pack_ref
+                    "pack_ref": &pack_artifact.pack_ref,
+                    "pack_artifact": pack_artifact
                 }),
                 ActorId::User(host_id.to_string()),
                 0,
@@ -535,16 +575,19 @@ async fn tamper_live_slot_state_role(pool: &PgPool, game: Uuid, slot: &str, role
     let mut plaintext = eventstore::decrypt_private_projection(&envelope, &context)
         .expect("open live slot state before tamper");
     plaintext["role_key"] = serde_json::json!(role_key);
-    let private = eventstore::encrypt_private_projection(plaintext, &context)
+    let mut tx = pool.begin().await.expect("begin slot-state tamper");
+    let private = eventstore::encrypt_private_projection(&mut tx, plaintext, &context)
+        .await
         .expect("seal tampered slot state");
     let update =
         sqlx::query("UPDATE slot_state SET private = $3 WHERE game_id = $1 AND slot_id = $2")
             .bind(game)
             .bind(slot)
             .bind(private)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .expect("tamper live slot_state role");
+    tx.commit().await.expect("commit slot-state tamper");
     assert_eq!(update.rows_affected(), 1, "one slot_state row tampered");
 }
 

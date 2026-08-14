@@ -32,6 +32,9 @@ const EXPECTED_TABLES: &[&str] = &[
     "discussion_area",
     "discussion_post",
     "discussion_topic",
+    "event_direct_key_sentinel",
+    "event_stream_key_state",
+    "event_stream_keys",
     "events",
     "external_identity",
     "game_authority",
@@ -56,6 +59,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "moderation_case_history",
     "moderation_report",
     "moderation_target_state",
+    "pack_artifact",
     "phase_state",
     "platform_principal",
     "player_info_result",
@@ -75,6 +79,8 @@ const EXPECTED_TABLES: &[&str] = &[
     "slot_status_tag",
     "spectator_membership",
     "subject_authority_binding",
+    "subject_erasure",
+    "subject_erasure_outbox",
     "subject_key_destruction_receipt",
     "subject_private_claim",
     "subject_tombstone",
@@ -92,9 +98,9 @@ const EXPECTED_EVENT_COLUMNS: &[&str] = &[
     "version:smallint",
     "occurred_at:bigint",
     "sealed_version:smallint",
-    "sealed_kid:text",
     "sealed_nonce:bytea",
     "sealed_body:bytea",
+    "stream_key_epoch:bigint",
 ];
 
 const EXPECTED_GAME_INDEX_COLUMNS: &[&str] = &[
@@ -108,6 +114,14 @@ const EXPECTED_GAME_INDEX_COLUMNS: &[&str] = &[
     "updated_seq:bigint",
     "pack_version:bigint",
     "pack_content_hash:text",
+];
+
+const EXPECTED_PACK_ARTIFACT_COLUMNS: &[&str] = &[
+    "content_hash:text",
+    "pack_key:text",
+    "pack_version:bigint",
+    "artifact_schema_version:smallint",
+    "canonical_json:text",
 ];
 
 const EXPECTED_INDEXES: &[&str] = &[
@@ -132,6 +146,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "auth_delivery_intent_claim_idx",
     "auth_delivery_intent_credential_hash_key",
     "auth_delivery_intent_pkey",
+    "auth_delivery_intent_principal_idx",
     "auth_delivery_intent_retry_idx",
     "auth_invite_account_idx",
     "auth_invite_expiry_idx",
@@ -148,6 +163,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "auth_session_principal_idx",
     "auth_websocket_ticket_expiry_idx",
     "auth_websocket_ticket_pkey",
+    "auth_websocket_ticket_principal_idx",
     "auth_websocket_ticket_session_idx",
     "authentication_method_classic_unique",
     "authentication_method_identity_key",
@@ -194,6 +210,10 @@ const EXPECTED_INDEXES: &[&str] = &[
     "discussion_post_topic_order_idx",
     "discussion_topic_area_page_idx",
     "discussion_topic_pkey",
+    "event_direct_key_sentinel_pkey",
+    "event_stream_key_state_pkey",
+    "event_stream_keys_pkey",
+    "event_stream_keys_wrap_kid_idx",
     "events_pkey",
     "events_stream_seq_unique",
     "external_identity_method_id_key",
@@ -206,6 +226,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "game_persona_name_claim_pkey",
     "game_persona_name_history_pkey",
     "game_persona_private_pkey",
+    "game_persona_private_principal_erasure_idx",
     "game_persona_private_principal_idx",
     "game_persona_private_subject_idx",
     "game_persona_public_pkey",
@@ -217,6 +238,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "host_phase_control_pkey",
     "host_prompt_phase_idx",
     "host_prompt_pkey",
+    "identity_lifecycle_audit_actor_idx",
     "identity_lifecycle_audit_event_at_idx",
     "identity_lifecycle_audit_event_kind_idx",
     "identity_lifecycle_audit_pkey",
@@ -227,9 +249,12 @@ const EXPECTED_INDEXES: &[&str] = &[
     "media_upload_ledger_principal_idx",
     "member_lifecycle_event_pkey",
     "member_lifecycle_event_principal_seq_idx",
+    "member_lifecycle_event_subject_idx",
     "member_lifecycle_projection_pkey",
+    "member_lifecycle_projection_subject_idx",
     "member_personal_export_pkey",
     "member_personal_export_principal_requested_idx",
+    "member_personal_export_subject_idx",
     "moderation_case_history_case_idx",
     "moderation_case_history_pkey",
     "moderation_case_pkey",
@@ -239,6 +264,8 @@ const EXPECTED_INDEXES: &[&str] = &[
     "moderation_report_pkey",
     "moderation_report_rate_idx",
     "moderation_target_state_pkey",
+    "pack_artifact_identity_key",
+    "pack_artifact_pkey",
     "phase_state_pkey",
     "platform_principal_pkey",
     "player_info_result_audience_idx",
@@ -250,6 +277,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "post_citation_pkey",
     "post_citation_quoted_idx",
     "post_policy_pkey",
+    "privacy_subject_exact_owner_unique",
     "privacy_subject_pkey",
     "privacy_subject_principal_user_id_key",
     "private_channel_member_pkey",
@@ -276,6 +304,14 @@ const EXPECTED_INDEXES: &[&str] = &[
     "slot_status_tag_pkey",
     "spectator_membership_pkey",
     "subject_authority_binding_pkey",
+    "subject_erasure_outbox_pkey",
+    "subject_erasure_outbox_principal_user_id_key",
+    "subject_erasure_outbox_receipt_id_key",
+    "subject_erasure_outbox_replacement_alias_key",
+    "subject_erasure_outbox_subject_id_key",
+    "subject_erasure_pending_claim_idx",
+    "subject_erasure_pkey",
+    "subject_key_destruction_receipt_erasure_id_key",
     "subject_key_destruction_receipt_pkey",
     "subject_key_destruction_receipt_subject_id_key",
     "subject_private_claim_pkey",
@@ -283,6 +319,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "subject_private_claim_subject_idx",
     "subject_tombstone_pkey",
     "subject_tombstone_replacement_alias_key",
+    "thread_view_author_user_idx",
     "thread_view_page_idx",
     "thread_view_pkey",
     "visit_history_actor_idx",
@@ -293,6 +330,17 @@ const EXPECTED_INDEXES: &[&str] = &[
     "workos_session_exchange_access_token_hash_key",
     "workos_session_exchange_expiry_idx",
     "workos_session_exchange_pkey",
+];
+
+const EXPECTED_ERASURE_INDEX_DEFINITIONS: &[&str] = &[
+    "auth_delivery_intent_principal_idx:CREATE INDEX auth_delivery_intent_principal_idx ON public.auth_delivery_intent USING btree (principal_user_id)",
+    "auth_websocket_ticket_principal_idx:CREATE INDEX auth_websocket_ticket_principal_idx ON public.auth_websocket_ticket USING btree (principal_user_id)",
+    "game_persona_private_principal_erasure_idx:CREATE INDEX game_persona_private_principal_erasure_idx ON public.game_persona_private USING btree (principal_user_id)",
+    "identity_lifecycle_audit_actor_idx:CREATE INDEX identity_lifecycle_audit_actor_idx ON public.identity_lifecycle_audit USING btree (actor_user_id)",
+    "member_lifecycle_event_subject_idx:CREATE INDEX member_lifecycle_event_subject_idx ON public.member_lifecycle_event USING btree (subject_id)",
+    "member_lifecycle_projection_subject_idx:CREATE INDEX member_lifecycle_projection_subject_idx ON public.member_lifecycle_projection USING btree (subject_id)",
+    "member_personal_export_subject_idx:CREATE INDEX member_personal_export_subject_idx ON public.member_personal_export USING btree (subject_id)",
+    "thread_view_author_user_idx:CREATE INDEX thread_view_author_user_idx ON public.thread_view USING btree (author_user) WHERE (author_user IS NOT NULL)",
 ];
 
 const EXPECTED_CONSTRAINTS: &[&str] = &[
@@ -414,8 +462,23 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "discussion_topic_pkey:p",
     "discussion_topic_posting_state_check:c",
     "discussion_topic_visibility_check:c",
+    "event_direct_key_sentinel_ciphertext_check:c",
+    "event_direct_key_sentinel_kid_check:c",
+    "event_direct_key_sentinel_nonce_check:c",
+    "event_direct_key_sentinel_pkey:p",
+    "event_direct_key_sentinel_version_check:c",
+    "event_stream_key_state_active_epoch_check:c",
+    "event_stream_key_state_pkey:p",
+    "event_stream_key_state_stream_id_active_epoch_fkey:f",
+    "event_stream_keys_key_epoch_check:c",
+    "event_stream_keys_pkey:p",
+    "event_stream_keys_wrap_kid_check:c",
+    "event_stream_keys_wrap_nonce_check:c",
+    "event_stream_keys_wrap_version_check:c",
+    "event_stream_keys_wrapped_dek_check:c",
     "events_pkey:p",
     "events_sealed_body_shape:c",
+    "events_stream_key_epoch_fk:f",
     "events_stream_seq_unique:u",
     "external_identity_method_id_fkey:f",
     "external_identity_method_id_key:u",
@@ -427,6 +490,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "external_identity_subject_check:c",
     "game_authority_pkey:p",
     "game_cohost_policy_pkey:p",
+    "game_index_pack_artifact_fkey:f",
     "game_index_pack_content_hash_check:c",
     "game_index_pack_key_check:c",
     "game_index_pack_version_check:c",
@@ -478,6 +542,13 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "moderation_target_state_pkey:p",
     "moderation_target_state_target_kind_check:c",
     "moderation_target_state_visibility_check:c",
+    "pack_artifact_content_hash_check:c",
+    "pack_artifact_document_check:c",
+    "pack_artifact_identity_key:u",
+    "pack_artifact_key_check:c",
+    "pack_artifact_pkey:p",
+    "pack_artifact_schema_version_check:c",
+    "pack_artifact_version_check:c",
     "phase_state_pkey:p",
     "platform_principal_disabled_shape_check:c",
     "platform_principal_id_check:c",
@@ -490,6 +561,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "post_citation_quoted_kind_check:c",
     "post_citation_quoting_kind_check:c",
     "post_policy_pkey:p",
+    "privacy_subject_exact_owner_unique:u",
     "privacy_subject_lifecycle_state_check:c",
     "privacy_subject_pkey:p",
     "privacy_subject_principal_user_id_fkey:f",
@@ -516,6 +588,24 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "subject_authority_binding_pkey:p",
     "subject_authority_binding_revision_check:c",
     "subject_authority_binding_singleton_check:c",
+    "subject_erasure_attempt_count_check:c",
+    "subject_erasure_claim_shape_check:c",
+    "subject_erasure_completion_shape_check:c",
+    "subject_erasure_erasure_id_fkey:f",
+    "subject_erasure_outbox_alias_check:c",
+    "subject_erasure_outbox_authority_check:c",
+    "subject_erasure_outbox_exact_owner_fkey:f",
+    "subject_erasure_outbox_fingerprint_check:c",
+    "subject_erasure_outbox_payload_version_check:c",
+    "subject_erasure_outbox_pkey:p",
+    "subject_erasure_outbox_principal_user_id_key:u",
+    "subject_erasure_outbox_receipt_id_key:u",
+    "subject_erasure_outbox_replacement_alias_key:u",
+    "subject_erasure_outbox_subject_id_key:u",
+    "subject_erasure_pkey:p",
+    "subject_erasure_state_check:c",
+    "subject_key_destruction_receipt_erasure_id_fkey:f",
+    "subject_key_destruction_receipt_erasure_id_key:u",
     "subject_key_destruction_receipt_fingerprint_check:c",
     "subject_key_destruction_receipt_pkey:p",
     "subject_key_destruction_receipt_subject_id_fkey:f",
@@ -544,6 +634,34 @@ fn assert_inventory(kind: &str, actual: &[String], expected: &[&str]) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn erasure_support_indexes_have_exact_catalog_definitions(pool: PgPool) {
+    let definitions: Vec<String> = sqlx::query_scalar(
+        "SELECT indexname || ':' || indexdef \
+         FROM pg_indexes \
+         WHERE schemaname = 'public' \
+           AND indexname IN ( \
+               'auth_delivery_intent_principal_idx', \
+               'auth_websocket_ticket_principal_idx', \
+               'game_persona_private_principal_erasure_idx', \
+               'identity_lifecycle_audit_actor_idx', \
+               'member_lifecycle_event_subject_idx', \
+               'member_lifecycle_projection_subject_idx', \
+               'member_personal_export_subject_idx', \
+               'thread_view_author_user_idx' \
+           ) \
+         ORDER BY indexname",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read erasure support index definitions");
+    assert_inventory(
+        "erasure support index definition",
+        &definitions,
+        EXPECTED_ERASURE_INDEX_DEFINITIONS,
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     let tables: Vec<String> = sqlx::query_scalar(
         "SELECT table_name \
@@ -569,6 +687,31 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     .await
     .expect("read baseline index inventory");
     assert_inventory("index", &indexes, EXPECTED_INDEXES);
+
+    let erasure_index_definitions: Vec<String> = sqlx::query_scalar(
+        "SELECT indexname || ':' || indexdef \
+         FROM pg_indexes \
+         WHERE schemaname = 'public' \
+           AND indexname IN ( \
+               'auth_delivery_intent_principal_idx', \
+               'auth_websocket_ticket_principal_idx', \
+               'game_persona_private_principal_erasure_idx', \
+               'identity_lifecycle_audit_actor_idx', \
+               'member_lifecycle_event_subject_idx', \
+               'member_lifecycle_projection_subject_idx', \
+               'member_personal_export_subject_idx', \
+               'thread_view_author_user_idx' \
+           ) \
+         ORDER BY indexname",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read erasure support index definitions");
+    assert_inventory(
+        "erasure support index definition",
+        &erasure_index_definitions,
+        EXPECTED_ERASURE_INDEX_DEFINITIONS,
+    );
 
     let constraints: Vec<String> = sqlx::query_scalar(
         "SELECT constraint_row.conname || ':' || constraint_row.contype::text \
@@ -610,6 +753,21 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
         "game index column",
         &game_index_columns,
         EXPECTED_GAME_INDEX_COLUMNS,
+    );
+
+    let pack_artifact_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'pack_artifact' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read pack artifact custody column inventory");
+    assert_inventory(
+        "pack artifact column",
+        &pack_artifact_columns,
+        EXPECTED_PACK_ARTIFACT_COLUMNS,
     );
 }
 

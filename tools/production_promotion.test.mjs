@@ -82,8 +82,10 @@ test("hosted variables require isolated production identity credentials", () => 
   const stagingApi = {
     FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key-at-least-32-bytes",
     FMARCH_AUTH_SOURCE_SIGNING_KID: "staging-auth-2026-08-04",
-    FMARCH_EVENT_ENCRYPTION_KEY: "staging-event-key-at-least-32-bytes",
-    FMARCH_EVENT_ENCRYPTION_KID: "staging-v1",
+    FMARCH_EVENT_WRAP_KEY: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+    FMARCH_EVENT_WRAP_KID: "staging-wrap-v1",
+    FMARCH_EVENT_ARCHIVE_KEY: "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+    FMARCH_EVENT_ARCHIVE_KID: "staging-archive-v1",
     FMARCH_OBJECT_STORAGE_CREDENTIAL_KID: "staging-storage-2026-08-04",
     FMARCH_SUBJECT_AUTHORITY_ENDPOINT: "https://staging-subjects.example.test",
     FMARCH_SUBJECT_AUTHORITY_REGION: "auto",
@@ -91,10 +93,10 @@ test("hosted variables require isolated production identity credentials", () => 
     FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID: "staging-subject-access",
     FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY: "staging-subject-secret",
     FMARCH_SUBJECT_AUTHORITY_ID: "11111111-1111-4111-8111-111111111111",
-    FMARCH_SUBJECT_AUTHORITY_WRAP_KID: "staging-wrap-v1",
-    FMARCH_SUBJECT_AUTHORITY_WRAP_KEY: "staging-wrap-secret",
+    FMARCH_SUBJECT_AUTHORITY_WRAP_KID: "staging-subject-wrap-v1",
+    FMARCH_SUBJECT_AUTHORITY_WRAP_KEY: "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU=",
     FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID: "staging-journal-v1",
-    FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY: "staging-journal-secret",
+    FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY: "BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgY=",
     FMARCH_SUBJECT_KEY_AUTHORITY_REVISION: "staging-subjects-2026-08-13",
     FMARCH_WORKOS_CREDENTIAL_KID: "staging-workos-2026-08-04",
     AWS_ACCESS_KEY_ID: "staging-access-key",
@@ -117,8 +119,10 @@ test("hosted variables require isolated production identity credentials", () => 
     DATABASE_URL: "postgres://postgres.railway.internal/db",
     FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key-at-least-32-bytes",
     FMARCH_AUTH_SOURCE_SIGNING_KID: "production-auth-2026-08-04",
-    FMARCH_EVENT_ENCRYPTION_KEY: "production-event-key-at-least-32-bytes",
-    FMARCH_EVENT_ENCRYPTION_KID: "production-v1",
+    FMARCH_EVENT_WRAP_KEY: "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
+    FMARCH_EVENT_WRAP_KID: "production-wrap-v1",
+    FMARCH_EVENT_ARCHIVE_KEY: "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ=",
+    FMARCH_EVENT_ARCHIVE_KID: "production-archive-v1",
     FMARCH_OBJECT_STORAGE_CREDENTIAL_KID: "production-storage-2026-08-04",
     FMARCH_SUBJECT_AUTHORITY_ENDPOINT: "https://production-subjects.example.test",
     FMARCH_SUBJECT_AUTHORITY_REGION: "auto",
@@ -126,10 +130,10 @@ test("hosted variables require isolated production identity credentials", () => 
     FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID: "production-subject-access",
     FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY: "production-subject-secret",
     FMARCH_SUBJECT_AUTHORITY_ID: "22222222-2222-4222-8222-222222222222",
-    FMARCH_SUBJECT_AUTHORITY_WRAP_KID: "production-wrap-v1",
-    FMARCH_SUBJECT_AUTHORITY_WRAP_KEY: "production-wrap-secret",
+    FMARCH_SUBJECT_AUTHORITY_WRAP_KID: "production-subject-wrap-v1",
+    FMARCH_SUBJECT_AUTHORITY_WRAP_KEY: "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
     FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID: "production-journal-v1",
-    FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY: "production-journal-secret",
+    FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY: "CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg=",
     FMARCH_SUBJECT_KEY_AUTHORITY_REVISION: "production-subjects-2026-08-13",
     FMARCH_WORKOS_CREDENTIAL_KID: "production-workos-2026-08-04",
     AWS_ACCESS_KEY_ID: "production-access-key",
@@ -170,6 +174,17 @@ test("hosted variables require isolated production identity credentials", () => 
         productionApi: { ...productionApi, WORKOS_CLIENT_ID: undefined },
       }),
     /missing WORKOS_CLIENT_ID/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_EVENT_WRAP_KEY: "long-but-not-canonical-base64-key-material",
+        },
+      }),
+    /canonical padded base64 encoding exactly 32 bytes/,
   );
   assert.throws(
     () =>
@@ -223,6 +238,30 @@ test("hosted variables require isolated production identity credentials", () => 
       }),
     /must use HTTPS/,
   );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID:
+            productionApi.FMARCH_SUBJECT_AUTHORITY_WRAP_KID,
+        },
+      }),
+    /subject wrapping and journal KIDs must be separate/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY:
+            productionApi.FMARCH_SUBJECT_AUTHORITY_WRAP_KEY,
+        },
+      }),
+    /subject wrapping and journal keys must decode to separate material/,
+  );
 });
 
 test("secret custody policy names owners, consumers, rotation, and retirement", () => {
@@ -237,7 +276,8 @@ test("secret custody policy names owners, consumers, rotation, and retirement", 
     },
     families: [
       ["auth-source-signing", "FMARCH_AUTH_SOURCE_SIGNING_KEY", "FMARCH_AUTH_SOURCE_SIGNING_KID"],
-      ["event-encryption", "FMARCH_EVENT_ENCRYPTION_KEY", "FMARCH_EVENT_ENCRYPTION_KID"],
+      ["event-runtime-wrap", "FMARCH_EVENT_WRAP_KEY", "FMARCH_EVENT_WRAP_KID"],
+      ["event-archive", "FMARCH_EVENT_ARCHIVE_KEY", "FMARCH_EVENT_ARCHIVE_KID"],
       ["object-storage", "AWS_SECRET_ACCESS_KEY", "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID"],
       [
         "subject-key-authority",

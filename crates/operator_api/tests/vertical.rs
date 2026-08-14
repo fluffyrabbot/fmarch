@@ -1308,13 +1308,16 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
     );
 
     let game_text = game.to_string();
+    let mut tx = pool.begin().await.expect("begin projection tamper");
     let tampered_private = eventstore::encrypt_private_projection(
+        &mut tx,
         serde_json::json!({
             "role_key": "tampered_role",
             "alignment": "town"
         }),
         &format!("fmarch-projection-v1:slot_state:{game_text}:slot_1"),
     )
+    .await
     .expect("seal tampered slot state");
     let update = sqlx::query(
         "UPDATE slot_state SET private = $2 \
@@ -1322,9 +1325,10 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
     )
     .bind(game)
     .bind(tampered_private)
-    .execute(&pool)
+    .execute(&mut *tx)
     .await
     .expect("tamper live slot_state row");
+    tx.commit().await.expect("commit projection tamper");
     assert_eq!(update.rows_affected(), 1, "one slot_state row tampered");
 
     let response = app
@@ -4185,16 +4189,16 @@ async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sql
         .await,
     );
 
-    let original_seal: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
-        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body \
+    let original_seal: (i16, i64, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, stream_key_epoch, sealed_nonce, sealed_body \
          FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
     )
     .bind(game)
     .fetch_one(&pool)
     .await
     .expect("read typed ResolutionApplied seal before tamper");
-    assert_eq!(original_seal.0, 2);
-    assert!(!original_seal.1.is_empty());
+    assert_eq!(original_seal.0, 3);
+    assert!(original_seal.1 > 0);
     assert_eq!(original_seal.2.len(), 24);
     assert!(original_seal.3.len() >= 16);
 
@@ -4223,8 +4227,8 @@ async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sql
         .expect("restore append-only guard after API drift");
     tx.commit().await.expect("commit sealed-body tamper");
 
-    let tampered_seal: (i16, String, Vec<u8>, Vec<u8>) = sqlx::query_as(
-        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body \
+    let tampered_seal: (i16, i64, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT sealed_version, stream_key_epoch, sealed_nonce, sealed_body \
          FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
     )
     .bind(game)

@@ -58,8 +58,11 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     "0020_sealed_event_body.sql",
     "0021_game_pack_ref.sql",
     "0022_completed_game_detached_aliases.sql",
+    "0023_erasure_outbox.sql",
+    "0024_event_stream_keys.sql",
+    "0025_pack_artifact_custody.sql",
   ]);
-  assert.equal(report.migration_file_count, 22);
+  assert.equal(report.migration_file_count, 25);
   assert.ok(report.statement_count > 100);
 });
 

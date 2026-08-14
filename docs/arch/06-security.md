@@ -216,13 +216,14 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
 
 - **Every event body is sealed.** `payload`, `actor`, `causation_id`, and audit `meta` share one
   XChaCha20-Poly1305 envelope. Only ordering/type headers remain clear. A leaked event table or
-  `StreamExport` v2 archive therefore exposes neither role/action/resolution content nor actor
+  `StreamExport` v3 archive therefore exposes neither role/action/resolution content nor actor
   attribution in plaintext. AAD prevents relocating a body across stream, position, kind,
-  version, or logical time.
-- The release event keyring is parsed once per process instead of reparsed or re-reading the
-  environment for every replayed event. Debug tests retain source-aware cache invalidation so
-  isolated key-rotation cases can share a process. Ciphertext records its `kid`; writes use the
-  active key and reads may trust an explicit historical ring during rotation.
+  version, logical time, or stream-key epoch.
+- Each stream epoch owns a random data-encryption key. Event rows record only the epoch; Postgres
+  stores the DEK wrapped by the active runtime KEK. Runtime KEK rotation rewraps the small key table
+  without rewriting immutable event rows, while DEK rotation advances the stream's epoch. Exports
+  rewrap the exact epoch keys under an independent archive KEK, so neither runtime KEKs nor plaintext
+  DEKs cross the archive boundary.
 - Profile presentation and game-persona ownership are separate subject-private claims. Canonical
   events retain only random `SubjectId`/`ClaimId` references; claim ciphertext uses a random
   per-subject key stored outside Postgres. Erasure records an append-only random-alias tombstone and
@@ -244,25 +245,35 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   ownership, and member personal-export artifacts. Other retained content and service-required
   moderation evidence remain governed by their explicit retention policy; this is not a claim that
   all user-authored prose is erasable.
-- Library-level local tests fall back to a deterministic `local-dev` key if
-  `FMARCH_EVENT_ENCRYPTION_KEY` is unset so tests stay runnable. The local real-stack harness
+- Library-level local tests fall back to deterministic `local-dev` runtime-wrap and archive keys if
+  `FMARCH_EVENT_WRAP_KEY` / `FMARCH_EVENT_ARCHIVE_KEY` are unset so tests stay runnable. The local real-stack harness
   opts into that debug-only fallback explicitly. Staged and production deployments must provide
-  `FMARCH_EVENT_ENCRYPTION_KEY` and `FMARCH_EVENT_ENCRYPTION_KID` from the environment or a
-  secrets manager.
-- Startup (`require_secure_event_encryption_configuration`) rejects an *active* write kid of
+  distinct `FMARCH_EVENT_WRAP_{KEY,KID}` and `FMARCH_EVENT_ARCHIVE_{KEY,KID}` values from the
+  environment or a secrets manager.
+- Startup (`require_secure_event_encryption_configuration`) rejects an active runtime or archive
+  kid of
   `local-dev` unless the process is a debug build with explicit opt-in
-  (`FMARCH_DEV_AUTH=1` or `FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true`). The ban applies only to
-  the active write kid; historical `FMARCH_EVENT_ENCRYPTION_KEYS` ring entries may still use
-  `local-dev` for decrypt during rotation. Setting KEY+KID does not bypass the ban.
-- Release event keys are canonical padded base64 encodings of exactly 32 random bytes; release
-  startup never derives a key from a passphrase. Before listeners start, and on every readiness
-  probe, the service also proves that every `events.sealed_kid` is present in the configured
-  active-plus-historical ring. Omitting a historical key therefore fails closed before replay.
-- Event encryption is not yet KMS-backed envelope rotation or automated retirement. The external
+  (`FMARCH_DEV_AUTH=1` or `FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY=true`). Historical wrap/archive
+  keyring entries exist only for bounded rotation and archive-retention windows.
+- Release KEKs are canonical padded base64 encodings of exactly 32 random bytes; release
+  startup never derives a key from a passphrase. Before listeners start, the exhaustive custody
+  audit proves stream active-epoch state is current and authenticates a representative DEK for
+  every persisted `event_stream_keys.wrap_kid`. Internet-facing readiness does not rescan the
+  stream catalog: it authenticates only the O(K) immutable `event_direct_key_sentinel` catalog.
+  Private-projection and delivery-credential sealing creates/authenticates that KID sentinel in
+  the same transaction as the envelope, so omitting or misconfiguring any direct-envelope key
+  fails readiness closed without making probe cost proportional to tenant data.
+- Runtime KEK retirement has two separate proofs. Rewrapping every stream DEK is sufficient to
+  remove a stream-only historical KEK. A KEK named by `event_direct_key_sentinel` must remain in
+  `FMARCH_EVENT_WRAP_KEYS`; this greenfield cut deliberately retains it until a future direct-
+  envelope re-encryption and sentinel-retirement tool exists. An unused active KEK does not need a
+  sentinel, and an empty direct-sentinel catalog is a valid readiness state.
+- Event envelope rotation is application-managed rather than KMS-backed or automatically retired. The external
   subject-key authority has an immutable genesis/revision manifest bound to the database, and normal
   startup refuses an unbootstrapped, wrong, unreachable, or incomplete authority. Its wrapping and
-  journal-authentication keys remain release secrets and rotate only through an explicit authority
-  migration; deleted subject key objects must never be restored.
+  journal-authentication KIDs and decoded key material must be pairwise distinct. They remain
+  release secrets and rotate only through an explicit authority migration; deleted subject key
+  objects must never be restored.
 - A Railway Bucket closes database-only rollback and replica-local-volume failure, but it is not a
   WORM boundary. Coordinated rollback by a bucket administrator, or compromise of both database and
   authority credentials, is outside that deployment guarantee. A threat model that includes those

@@ -164,13 +164,15 @@ async fn insert_member(
 ) -> Result<(), ProjectionError> {
     let game = game_id.to_string();
     let private = seal_private_projection(
+        tx,
         TABLE,
         &[game.as_str(), member.channel_id, member.slot_id],
         serde_json::json!({
             "role_key": member.role_key,
             "reveals_alignment": member.reveals_alignment,
         }),
-    )?;
+    )
+    .await?;
     sqlx::query(
         r#"
         INSERT INTO private_channel_member (

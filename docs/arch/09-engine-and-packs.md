@@ -156,13 +156,20 @@ database configuration. The exact-image smoke builds the release Dockerfile and 
 works as the non-root runtime user while `/packs` and `/programs` are absent, then compares the
 image's complete registry digest and reference inventory with the host result.
 
-`GameCreated` commits the complete `PackRef { key, version, content_hash }`, and `game_index`
-projects all three fields. Every game runtime resolves that exact reference; a binary whose embedded
-content differs fails closed instead of silently substituting the current document with the same key.
-The event does not duplicate the full pack document: continued execution therefore requires an image
-that retains the referenced artifact. A future cross-version archive/registry round should add durable
-content-addressed pack custody before old game streams need to outlive their original image lineage.
-Debug-only malformed pack fixtures remain a separate test tier and cannot enter the product catalog.
+`GameCreated` commits both the complete `PackRef { key, version, content_hash }` and a canonical
+typed `PackArtifactSnapshot { schema_version, pack_ref, canonical_json }`. The two references must
+match exactly. The event stream is therefore the historical source of truth: command replay and an
+isolated completed-game import authenticate the bytes, recompute the BLAKE3 address, deserialize and
+semantically validate the typed pack, and require an exact canonical round trip without consulting
+the binary registry.
+
+`pack_artifact` is an immutable, content-addressed projection/cache installed transactionally while
+folding `GameCreated`; `game_index` is composite-FK-bound to its exact key, version, and hash. It
+deduplicates canonical JSON across games for fast runtime reads, while rebuilds and completed-game
+archives can recreate custody from the event attachment. The embedded registry now has one runtime
+authority only: selecting the trusted artifact for a newly created game. Replacing or removing that
+registry entry cannot change an existing game. Debug-only malformed pack fixtures remain a separate
+test tier and cannot enter the product catalog.
 
 Golden fixture checking/regeneration uses the same boundary: `domain::golden_events_from_input_value`
 reruns a fixture input, `domain::normalize_golden_event` strips only explicitly non-canonical
@@ -221,9 +228,9 @@ The guard tests are `pack_required_ir_version_covers_versioned_action_features`,
 `pack_ir_version_must_cover_declared_additive_features`; `shipped_packs_validate`
 keeps the shipped packs honest against the same map. `unsupported_version_fixture_is_rejected_by_pack_linter`
 proves unsupported pack/IR versions are rejected at the pack boundary, and
-`resolve_phase_rejects_unsupported_pack_versions_before_append` proves command-side resolution now
-uses the strict load boundary and surfaces unsupported pack versions before appending
-`ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked`.
+`game_creation_rejects_unsupported_pack_versions_before_append` proves game creation uses the
+strict load boundary and rejects unsupported versions before appending `GameCreated` or installing
+game-scoped pack artifact custody.
 
 ### Roles → action templates
 
@@ -271,24 +278,24 @@ struct Constraints {
 
 `invalid_action_contract_fixture_is_rejected_by_pack_linter` proves missing `Investigate.mode`
 and illegal non-`Investigate` mode are rejected at the pack boundary; the Postgres command test
-`resolve_phase_rejects_invalid_action_contract_before_append` proves the same malformed pack cannot
-append `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked`.
+`game_creation_rejects_invalid_action_contract_before_append` proves the same malformed pack cannot
+append `GameCreated` or install game-scoped pack artifact custody.
 
 `invalid_reference_contract_fixture_is_rejected_by_pack_linter` proves malformed role, alignment,
 effect-tag, and policy action references are rejected at the pack boundary;
-`resolve_phase_rejects_invalid_reference_contract_before_append` proves the same malformed pack
-cannot append `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked`.
+`game_creation_rejects_invalid_reference_contract_before_append` proves the same malformed pack
+cannot append `GameCreated` or install game-scoped pack artifact custody.
 
 `invalid_trigger_reference_contract_fixture_is_rejected_by_pack_linter` proves trigger filter tags,
 duplicate trigger ids, unsupported actor/target refs, unsupported generated abilities, and invalid
 generated Kill modifiers are rejected at the pack boundary;
-`resolve_phase_rejects_invalid_trigger_reference_contract_before_append` proves the same malformed
-pack cannot append `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked`.
+`game_creation_rejects_invalid_trigger_reference_contract_before_append` proves the same malformed
+pack cannot append `GameCreated` or install game-scoped pack artifact custody.
 
 `invalid_target_window_contract_fixture_is_rejected_by_pack_linter` proves `TargetSpec::None`
 cardinality/state mismatches and action windows absent from `phases.cadence` are rejected at the
-pack boundary; `resolve_phase_rejects_invalid_target_window_contract_before_append` proves the same
-malformed pack cannot append `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked`.
+pack boundary; `game_creation_rejects_invalid_target_window_contract_before_append` proves the same
+malformed pack cannot append `GameCreated` or install game-scoped pack artifact custody.
 
 `ActionTemplate.source_ids` is a parity/accounting field, not a command alias table.
 Submissions still use the canonical `id`; `source_ids` records source-catalog action names that
@@ -895,8 +902,8 @@ enum TargetRef { Actor, Target, Killer, Other }
 >   Fresh same-night poison queues for a later resolution and cannot kill immediately.
 > - `invalid_effect_contract_fixture_is_rejected_by_pack_linter` proves missing/illegal `effect`
 >   and illegal `reads_effect` fields are rejected at the pack boundary; the Postgres command test
->   `resolve_phase_rejects_invalid_effect_contract_before_append` proves the same malformed pack
->   cannot append `ResolutionApplied`, `ResolutionTrace`, or `ThreadLocked`.
+>   `game_creation_rejects_invalid_effect_contract_before_append` proves the same malformed pack
+>   cannot append `GameCreated` or install game-scoped pack artifact custody.
 >
 > Both default-absent, so every existing pack and golden deserializes unchanged.
 
@@ -1846,9 +1853,9 @@ dispute resolution:
    policy, and enabled packs classify submitted ordinary Kill/Bodyguard/Martyr/CPR/Strongman actions from that table
    rather than from resolver-local role branches. It also rejects packs in `Explicit` night-resolution mode whose
    suppression policy can stop a night action unless Block has a precedence path before that
-   action's ability; `resolve_phase_rejects_invalid_pack_precedence_before_append` proves the command
-   path surfaces that pack validation failure before appending `ResolutionApplied`,
-   `ResolutionTrace`, or `ThreadLocked`. Folded chosen-retaliation Kill causes are
+   action's ability; `game_creation_rejects_invalid_pack_precedence_before_append` proves the command
+   path surfaces that pack validation failure before appending `GameCreated` or installing
+   game-scoped pack artifact custody. Folded chosen-retaliation Kill causes are
    classified through `night_resolution.chosen_retaliation_cause_policy` before the resolver consumes
    `RetaliationArmed` state. Trigger-produced Kill causes are classified
    through `night_resolution.generated_kill_cause_policy`, which validates trigger shape and drives

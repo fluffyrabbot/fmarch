@@ -173,7 +173,8 @@ export async function validateSecurityReleaseBaseline() {
       "deploy/railway/api.env.example",
       [
         "FMARCH_AUTH_SOURCE_SIGNING_KID",
-        "FMARCH_EVENT_ENCRYPTION_KID",
+        "FMARCH_EVENT_WRAP_KID",
+        "FMARCH_EVENT_ARCHIVE_KID",
         "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
         "FMARCH_WORKOS_CREDENTIAL_KID",
       ],

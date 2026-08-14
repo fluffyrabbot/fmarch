@@ -6,7 +6,7 @@
 //! and the shared append-and-project persistence boundary.
 
 use super::{
-    load_pack, metadata_from_payload, pack_ref_from_stream, persist, phase_kind, phase_number,
+    load_pack, metadata_from_payload, pack_artifact_from_stream, persist, phase_kind, phase_number,
     require_game, require_open_phase, require_slot_alive, require_slot_occupant,
     resolve_capabilities_in_tx, EngineInputBuilder, EngineRunKind, Reject,
 };
@@ -114,12 +114,11 @@ pub(super) async fn submit_action(
     let stream = eventstore::load_stream_in_tx(tx, request.game)
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
-    let pack_ref = pack_ref_from_stream(&stream)?;
-    let pack = load_pack(&pack_ref)?;
+    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
     let action_window = validate_action_submission(ActionValidationContext {
         tx,
         game: request.game,
-        pack,
+        pack: &pack,
         stream: &stream,
         phase_id: &phase,
         request: &request,

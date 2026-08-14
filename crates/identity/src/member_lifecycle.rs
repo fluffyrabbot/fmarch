@@ -1,10 +1,11 @@
 //! Durable member lifecycle stream, handler, and deterministic projection fold.
 
 use crate::session::revoke_sessions_for_principal;
+use crate::subject_privacy::SubjectErasureWork;
 use crate::{
     decide_member_lifecycle, ClaimId, IdentityFlowError, MemberLifecycleCommand,
     MemberLifecycleEvent, MemberLifecycleState, MemberLifecycleStatus, SubjectClaimEnvelope,
-    SubjectId,
+    SubjectId, SubjectKeyStore,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -73,23 +74,121 @@ pub async fn apply_member_lifecycle(
     Ok(next)
 }
 
-/// Atomically append the prerequisite deactivation, erasure, credentials wipe,
-/// and authorship-redaction facts. The final fact marks the aggregate erased;
-/// the individual facts retain the auditable lifecycle causality.
+/// Commit the authentication cutoff and immutable erasure outbox, then run one
+/// inline worker attempt for the current HTTP contract. A failed authority call
+/// leaves a durable `erasure_in_progress` aggregate for startup/background
+/// resumption; it never rolls the security cutoff back.
 pub async fn erase_member(
     pool: &PgPool,
     principal_user_id: &str,
     now: i64,
 ) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
+    let key_store = crate::active_subject_key_store()
+        .await
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    let (pending, work) =
+        request_member_erasure_with_store(pool, key_store.as_ref(), principal_user_id, now).await?;
+    let worker_id = format!("inline-{}", Uuid::new_v4().simple());
+    let processed = crate::subject_privacy::process_subject_erasure_with_store(
+        pool,
+        key_store.as_ref(),
+        work.erasure_id,
+        &worker_id,
+        now,
+    )
+    .await
+    .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    if !processed {
+        return Ok(pending);
+    }
+    member_lifecycle_snapshot(pool, principal_user_id).await
+}
+
+/// Step one of durable erasure: no object-authority call occurs after the
+/// owner transaction begins. The random alias, fingerprint, and authority
+/// identity are committed in a create-only outbox beside the immediate auth
+/// cutoff and pending-presentation redaction.
+pub async fn request_member_erasure(
+    pool: &PgPool,
+    principal_user_id: &str,
+    now: i64,
+) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
+    let key_store = crate::active_subject_key_store()
+        .await
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    request_member_erasure_with_store(pool, key_store.as_ref(), principal_user_id, now)
+        .await
+        .map(|(snapshot, _)| snapshot)
+}
+
+pub async fn request_member_erasure_with_store(
+    pool: &PgPool,
+    key_store: &dyn SubjectKeyStore,
+    principal_user_id: &str,
+    now: i64,
+) -> Result<(MemberLifecycleSnapshot, SubjectErasureWork), IdentityFlowError> {
+    if let Some(existing) =
+        crate::subject_privacy::load_subject_erasure_work_by_principal(pool, principal_user_id)
+            .await
+            .map_err(|error| IdentityFlowError::Internal(error.to_string()))?
+    {
+        return Ok((
+            member_lifecycle_snapshot(pool, principal_user_id).await?,
+            existing,
+        ));
+    }
+
+    // Discover and fingerprint before the owner transaction. Subject keys are
+    // immutable; the transaction revalidates the exact subject and immutable
+    // database authority tuple before persisting this fingerprint.
+    let discovered_subject_id: Uuid =
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
+            .bind(principal_user_id)
+            .fetch_optional(pool)
+            .await?
+            .ok_or(IdentityFlowError::Unauthorized)?;
+    let subject_id = SubjectId::from_uuid(discovered_subject_id);
+    let key_fingerprint_sha256 = key_store
+        .fingerprint(subject_id)
+        .await
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    let authority_before = authority_binding(pool).await?;
+    let work = SubjectErasureWork {
+        erasure_id: Uuid::new_v4(),
+        principal_user_id: principal_user_id.to_string(),
+        record: crate::SubjectRevocationRecord {
+            subject_id,
+            replacement_alias: crate::random_tombstone_alias(),
+            destroyed_at: now,
+            key_fingerprint_sha256,
+            receipt_id: Uuid::new_v4(),
+        },
+        authority_id: authority_before.as_ref().map(|binding| binding.0),
+        authority_revision: authority_before.as_ref().map(|binding| binding.1.clone()),
+        authority_manifest_sha256: authority_before.as_ref().map(|binding| binding.2.clone()),
+        requested_at: now,
+    };
+
     let mut tx = pool.begin().await?;
-    crate::methods::ensure_principal(&mut tx, principal_user_id, &[], now).await?;
     let owner = crate::methods::lock_identity_mutation(
         &mut tx,
         principal_user_id,
         crate::methods::IdentityMutationExtent::Complete,
     )
     .await?;
+    if let Some(existing) = load_subject_erasure_work_in_tx(&mut tx, principal_user_id).await? {
+        let snapshot = locked_snapshot(&mut tx, principal_user_id).await?;
+        tx.commit().await?;
+        return Ok((snapshot, existing));
+    }
     owner.require_active()?;
+    if owner.subject_id != discovered_subject_id
+        || authority_binding_in_tx(&mut tx).await? != authority_before
+    {
+        return Err(IdentityFlowError::Invalid(
+            "subject or authority changed while erasure was requested".to_string(),
+        ));
+    }
     let snapshot = locked_snapshot(&mut tx, principal_user_id).await?;
     let mut events = Vec::new();
     let mut state = snapshot.status;
@@ -110,59 +209,287 @@ pub async fn erase_member(
     )
     .map_err(|error| IdentityFlowError::Invalid(error.to_string()))?;
     events.extend(requested);
-    events.push(MemberLifecycleEvent::AuthorshipPseudonymized);
-
-    let key_store = crate::active_subject_key_store()
-        .await
-        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
-    let subject_id = SubjectId::from_uuid(owner.subject_id);
-    let pseudonym = crate::random_tombstone_alias();
-    let key_fingerprint = key_store
-        .fingerprint(subject_id)
-        .await
-        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
-    let receipt_id = Uuid::new_v4();
-    let revocation = crate::SubjectRevocationRecord {
-        subject_id,
-        replacement_alias: pseudonym.clone(),
-        destroyed_at: now,
-        key_fingerprint_sha256: key_fingerprint.clone(),
-        receipt_id,
-    };
     let next = append_and_project(
         &mut tx,
         principal_user_id,
         snapshot.clone(),
         &events,
         now,
-        Some(pseudonym.as_str()),
+        Some(work.record.replacement_alias.as_str()),
         Some(subject_id),
     )
     .await?;
-    record_subject_tombstone(&mut tx, &revocation, principal_user_id).await?;
+    sqlx::query(
+        "UPDATE privacy_subject SET lifecycle_state = 'erasure_pending' WHERE subject_id = $1 AND lifecycle_state = 'active'",
+    )
+    .bind(subject_id.as_uuid())
+    .execute(&mut *tx)
+    .await?;
+    insert_subject_erasure_work(&mut tx, &work).await?;
     revoke_sessions_for_principal(&mut tx, principal_user_id, now).await?;
-    erase_credentials_and_identifiers(&mut tx, principal_user_id, pseudonym.as_str(), now).await?;
-
-    // Prepare the complete database-side scrub before making the external
-    // revocation irreversible. The transaction remains open: if the journal
-    // write succeeds but the database commit later fails, startup
-    // reconciliation replays the authenticated journal toward erasure.
-    key_store
-        .record_revocation(&revocation)
-        .await
-        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
-    let key_was_present = key_store
-        .destroy(subject_id)
-        .await
-        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
-    record_subject_destruction_receipt(&mut tx, &revocation, key_was_present).await?;
+    disable_auth_for_erasure(&mut tx, principal_user_id, work.erasure_id, now).await?;
+    apply_retained_authorship_redaction(
+        &mut tx,
+        principal_user_id,
+        &work.record.replacement_alias,
+        now,
+    )
+    .await?;
     tx.commit().await?;
+    Ok((
+        MemberLifecycleSnapshot {
+            principal_user_id: principal_user_id.to_string(),
+            status: next,
+            last_seq: snapshot.last_seq + events.len() as i64,
+            pseudonym: Some(work.record.replacement_alias.clone()),
+        },
+        work,
+    ))
+}
+
+type AuthorityBinding = (Uuid, String, String);
+
+async fn authority_binding(pool: &PgPool) -> Result<Option<AuthorityBinding>, IdentityFlowError> {
+    Ok(sqlx::query_as(
+        "SELECT authority_id, authority_revision, manifest_sha256 FROM subject_authority_binding WHERE singleton = TRUE",
+    )
+    .fetch_optional(pool)
+    .await?)
+}
+
+async fn authority_binding_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<Option<AuthorityBinding>, IdentityFlowError> {
+    Ok(sqlx::query_as(
+        "SELECT authority_id, authority_revision, manifest_sha256 FROM subject_authority_binding WHERE singleton = TRUE",
+    )
+    .fetch_optional(&mut **tx)
+    .await?)
+}
+
+async fn load_subject_erasure_work_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    principal_user_id: &str,
+) -> Result<Option<SubjectErasureWork>, IdentityFlowError> {
+    let row = sqlx::query(
+        r#"
+        SELECT erasure_id, subject_id, principal_user_id, receipt_id,
+               replacement_alias, key_fingerprint_sha256, requested_at,
+               authority_id, authority_revision, authority_manifest_sha256
+        FROM subject_erasure_outbox
+        WHERE principal_user_id = $1
+        "#,
+    )
+    .bind(principal_user_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    row.map(|row| {
+        Ok(SubjectErasureWork {
+            erasure_id: row.try_get("erasure_id")?,
+            principal_user_id: row.try_get("principal_user_id")?,
+            record: crate::SubjectRevocationRecord {
+                subject_id: SubjectId::from_uuid(row.try_get("subject_id")?),
+                replacement_alias: row.try_get("replacement_alias")?,
+                destroyed_at: row.try_get("requested_at")?,
+                key_fingerprint_sha256: row.try_get("key_fingerprint_sha256")?,
+                receipt_id: row.try_get("receipt_id")?,
+            },
+            authority_id: row.try_get("authority_id")?,
+            authority_revision: row.try_get("authority_revision")?,
+            authority_manifest_sha256: row.try_get("authority_manifest_sha256")?,
+            requested_at: row.try_get("requested_at")?,
+        })
+    })
+    .transpose()
+}
+
+async fn insert_subject_erasure_work(
+    tx: &mut Transaction<'_, Postgres>,
+    work: &SubjectErasureWork,
+) -> Result<(), IdentityFlowError> {
+    sqlx::query(
+        r#"
+        INSERT INTO subject_erasure_outbox
+            (erasure_id, subject_id, principal_user_id, receipt_id,
+             replacement_alias, key_fingerprint_sha256, requested_at,
+             authority_id, authority_revision, authority_manifest_sha256)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        "#,
+    )
+    .bind(work.erasure_id)
+    .bind(work.record.subject_id.as_uuid())
+    .bind(&work.principal_user_id)
+    .bind(work.record.receipt_id)
+    .bind(&work.record.replacement_alias)
+    .bind(&work.record.key_fingerprint_sha256)
+    .bind(work.requested_at)
+    .bind(work.authority_id)
+    .bind(work.authority_revision.as_deref())
+    .bind(work.authority_manifest_sha256.as_deref())
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query("INSERT INTO subject_erasure (erasure_id) VALUES ($1)")
+        .bind(work.erasure_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn disable_auth_for_erasure(
+    tx: &mut Transaction<'_, Postgres>,
+    principal_user_id: &str,
+    erasure_id: Uuid,
+    now: i64,
+) -> Result<(), IdentityFlowError> {
+    sqlx::query("UPDATE authentication_method SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2) WHERE principal_user_id = $1")
+        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
+    sqlx::query("UPDATE auth_account SET disabled_at = COALESCE(disabled_at, $2), password_hash = $3, global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
+        .bind(principal_user_id).bind(now).bind(format!("erasure-pending:{erasure_id}")).execute(&mut **tx).await?;
+    sqlx::query("UPDATE auth_account_recovery_credential SET revoked_at = COALESCE(revoked_at, $2) WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1) AND used_at IS NULL")
+        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
+    sqlx::query("UPDATE auth_invite SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_user_id = $1 AND redeemed_at IS NULL")
+        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
+    sqlx::query("UPDATE auth_delivery_intent SET status = 'cancelled', outcome_kind = 'cancelled', outcome_code = 'member_erasure_pending', next_attempt_at = NULL, delivered_at = NULL, provider_receipt_id = NULL, claim_token = NULL, claim_expires_at = NULL, credential_envelope = NULL, updated_at = $2 WHERE principal_user_id = $1 AND status IN ('queued', 'processing', 'retryable_failed')")
+        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
+    sqlx::query("DELETE FROM auth_websocket_ticket WHERE principal_user_id = $1")
+        .bind(principal_user_id)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query("UPDATE platform_principal SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2), global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
+        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
+    Ok(())
+}
+
+async fn member_lifecycle_snapshot(
+    pool: &PgPool,
+    principal_user_id: &str,
+) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
+    let row = sqlx::query(
+        "SELECT status, last_seq, pseudonym FROM member_lifecycle_projection WHERE principal_user_id = $1",
+    )
+    .bind(principal_user_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| IdentityFlowError::Invalid("member lifecycle projection is missing".into()))?;
     Ok(MemberLifecycleSnapshot {
         principal_user_id: principal_user_id.to_string(),
-        status: next,
-        last_seq: snapshot.last_seq + events.len() as i64,
-        pseudonym: Some(pseudonym),
+        status: MemberLifecycleStatus::parse(row.try_get::<String, _>("status")?.as_str())
+            .ok_or_else(|| IdentityFlowError::Invalid("unknown lifecycle status".into()))?,
+        last_seq: row.try_get("last_seq")?,
+        pseudonym: row.try_get("pseudonym")?,
     })
+}
+
+pub(crate) async fn recover_member_erasure_from_revocation(
+    pool: &PgPool,
+    record: &crate::SubjectRevocationRecord,
+) -> Result<SubjectErasureWork, IdentityFlowError> {
+    if let Some(existing) = crate::subject_privacy::load_subject_erasure_work_by_principal(
+        pool,
+        &crate::subject_privacy::discover_revoked_subject_owner(pool, record.subject_id)
+            .await
+            .map_err(|error| IdentityFlowError::Internal(error.to_string()))?,
+    )
+    .await
+    .map_err(|error| IdentityFlowError::Internal(error.to_string()))?
+    {
+        return Ok(existing);
+    }
+    let principal_user_id =
+        crate::subject_privacy::discover_revoked_subject_owner(pool, record.subject_id)
+            .await
+            .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    let authority = authority_binding(pool).await?;
+    let work = SubjectErasureWork {
+        erasure_id: Uuid::new_v4(),
+        principal_user_id: principal_user_id.clone(),
+        record: record.clone(),
+        authority_id: authority.as_ref().map(|binding| binding.0),
+        authority_revision: authority.as_ref().map(|binding| binding.1.clone()),
+        authority_manifest_sha256: authority.as_ref().map(|binding| binding.2.clone()),
+        requested_at: record.destroyed_at,
+    };
+    let mut tx = pool.begin().await?;
+    let owner = crate::methods::lock_identity_mutation(
+        &mut tx,
+        &principal_user_id,
+        crate::methods::IdentityMutationExtent::Complete,
+    )
+    .await?;
+    if owner.subject_id != record.subject_id.as_uuid() {
+        return Err(IdentityFlowError::Invalid(
+            "external revocation owner changed during restore recovery".to_string(),
+        ));
+    }
+    if let Some(existing) = load_subject_erasure_work_in_tx(&mut tx, &principal_user_id).await? {
+        tx.commit().await?;
+        return Ok(existing);
+    }
+    let snapshot = locked_snapshot(&mut tx, &principal_user_id).await?;
+    let mut events = Vec::new();
+    let mut state = snapshot.status;
+    if state == MemberLifecycleStatus::Active {
+        events.extend(
+            decide_member_lifecycle(
+                &MemberLifecycleState { status: state },
+                MemberLifecycleCommand::Deactivate {
+                    reason: "external_revocation_recovery".to_string(),
+                },
+            )
+            .map_err(|error| IdentityFlowError::Invalid(error.to_string()))?,
+        );
+        state = MemberLifecycleStatus::Deactivated;
+    }
+    if state == MemberLifecycleStatus::Deactivated {
+        events.extend(
+            decide_member_lifecycle(
+                &MemberLifecycleState { status: state },
+                MemberLifecycleCommand::RequestErasure,
+            )
+            .map_err(|error| IdentityFlowError::Invalid(error.to_string()))?,
+        );
+    }
+    if !events.is_empty() {
+        append_and_project(
+            &mut tx,
+            &principal_user_id,
+            snapshot,
+            &events,
+            record.destroyed_at,
+            Some(&record.replacement_alias),
+            Some(record.subject_id),
+        )
+        .await?;
+    } else {
+        sqlx::query("UPDATE member_lifecycle_projection SET pseudonym = COALESCE(pseudonym, $2), subject_id = COALESCE(subject_id, $3) WHERE principal_user_id = $1")
+            .bind(&principal_user_id).bind(&record.replacement_alias).bind(record.subject_id.as_uuid()).execute(&mut *tx).await?;
+    }
+    if owner.subject_lifecycle_state == "active" {
+        sqlx::query(
+            "UPDATE privacy_subject SET lifecycle_state = 'erasure_pending' WHERE subject_id = $1",
+        )
+        .bind(record.subject_id.as_uuid())
+        .execute(&mut *tx)
+        .await?;
+    }
+    insert_subject_erasure_work(&mut tx, &work).await?;
+    revoke_sessions_for_principal(&mut tx, &principal_user_id, record.destroyed_at).await?;
+    disable_auth_for_erasure(
+        &mut tx,
+        &principal_user_id,
+        work.erasure_id,
+        record.destroyed_at,
+    )
+    .await?;
+    apply_retained_authorship_redaction(
+        &mut tx,
+        &principal_user_id,
+        &record.replacement_alias,
+        record.destroyed_at,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(work)
 }
 
 /// Assemble the subject-scoped export before erasure. It intentionally omits
@@ -361,21 +688,38 @@ pub async fn rebuild_member_lifecycle(
         fold_kind(&mut snapshot, &mut timestamps, kind.as_str(), occurred_at)?;
         snapshot.last_seq = seq;
     }
-    if snapshot.status == MemberLifecycleStatus::Erased {
-        let erased_subject = subject_id.ok_or_else(|| {
+    if matches!(
+        snapshot.status,
+        MemberLifecycleStatus::ErasureInProgress | MemberLifecycleStatus::Erased
+    ) {
+        let redacted_subject = subject_id.ok_or_else(|| {
             IdentityFlowError::Invalid(
-                "erased member lifecycle stream is missing its privacy subject".to_string(),
+                "erasing member lifecycle stream is missing its privacy subject".to_string(),
             )
         })?;
         snapshot.pseudonym = sqlx::query_scalar(
-            "SELECT replacement_alias FROM subject_tombstone WHERE subject_id = $1",
+            r#"
+            SELECT replacement_alias
+            FROM (
+                SELECT replacement_alias, 0 AS priority
+                FROM subject_tombstone
+                WHERE subject_id = $1
+                UNION ALL
+                SELECT replacement_alias, 1 AS priority
+                FROM subject_erasure_outbox
+                WHERE subject_id = $1
+            ) AS presentation_tombstone
+            ORDER BY priority
+            LIMIT 1
+            "#,
         )
-        .bind(erased_subject.as_uuid())
+        .bind(redacted_subject.as_uuid())
         .fetch_optional(&mut *tx)
         .await?;
         if snapshot.pseudonym.is_none() {
             return Err(IdentityFlowError::Invalid(
-                "erased member lifecycle stream is missing its tombstone".to_string(),
+                "erasing member lifecycle stream is missing its durable redaction alias"
+                    .to_string(),
             ));
         }
     }
@@ -584,67 +928,6 @@ async fn json_scalar(
     .transpose()
 }
 
-async fn erase_credentials_and_identifiers(
-    tx: &mut Transaction<'_, Postgres>,
-    principal_user_id: &str,
-    pseudonym: &str,
-    now: i64,
-) -> Result<(), IdentityFlowError> {
-    // Auth material and delivery data are no longer usable; append-only audit
-    // records intentionally remain restricted operator evidence.
-    sqlx::query("UPDATE authentication_method SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2) WHERE principal_user_id = $1")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_account SET disabled_at = COALESCE(disabled_at, $2), password_hash = $3, global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
-        .bind(principal_user_id).bind(now).bind(format!("erased:{}", pseudonym)).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_account_recovery_credential SET revoked_at = COALESCE(revoked_at, $2) WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1) AND used_at IS NULL")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_invite SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_user_id = $1 AND redeemed_at IS NULL")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_delivery_intent SET status = 'cancelled', outcome_kind = 'cancelled', outcome_code = 'member_erased', next_attempt_at = NULL, delivered_at = NULL, provider_receipt_id = NULL, claim_token = NULL, claim_expires_at = NULL, credential_envelope = NULL, updated_at = $2 WHERE principal_user_id = $1 AND status IN ('queued', 'processing', 'retryable_failed')")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
-
-    // Account labels and provider subject strings are PII-bearing credentials,
-    // not durable audit facts. Remove dependent one-time material before
-    // replacing the account key with a random receipt-scoped identifier.
-    sqlx::query("DELETE FROM auth_account_recovery_credential WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1)")
-        .bind(principal_user_id).execute(&mut **tx).await?;
-    sqlx::query("DELETE FROM auth_invite WHERE principal_user_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1)")
-        .bind(principal_user_id).execute(&mut **tx).await?;
-    sqlx::query("DELETE FROM auth_delivery_intent WHERE principal_user_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1)")
-        .bind(principal_user_id).execute(&mut **tx).await?;
-    sqlx::query("DELETE FROM auth_websocket_ticket WHERE principal_user_id = $1")
-        .bind(principal_user_id)
-        .execute(&mut **tx)
-        .await?;
-    sqlx::query("UPDATE auth_account SET account_id = $2 WHERE principal_user_id = $1")
-        .bind(principal_user_id)
-        .bind(format!("erased_{}", Uuid::new_v4().simple()))
-        .execute(&mut **tx)
-        .await?;
-
-    // Provider-owned identity details come after every local authentication
-    // row in the canonical protocol.
-    sqlx::query("DELETE FROM workos_session_exchange WHERE subject IN (SELECT subject FROM external_identity WHERE principal_user_id = $1)")
-        .bind(principal_user_id)
-        .execute(&mut **tx)
-        .await?;
-    sqlx::query("DELETE FROM external_identity WHERE principal_user_id = $1")
-        .bind(principal_user_id)
-        .execute(&mut **tx)
-        .await?;
-    sqlx::query("UPDATE identity_lifecycle_audit SET actor_user_id = CASE WHEN actor_user_id = $1 THEN $2 ELSE actor_user_id END, principal_user_id = $2, metadata = '{}'::jsonb WHERE principal_user_id = $1 OR actor_user_id = $1")
-        .bind(principal_user_id).bind(pseudonym).execute(&mut **tx).await?;
-    sqlx::query("UPDATE platform_principal SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2), global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
-
-    apply_retained_authorship_redaction(tx, principal_user_id, pseudonym, now).await?;
-    sqlx::query("DELETE FROM member_personal_export WHERE principal_user_id = $1")
-        .bind(principal_user_id)
-        .execute(&mut **tx)
-        .await?;
-    Ok(())
-}
-
 /// Apply the retained-public-data overlay. Calling it after a projection rebuild
 /// is safe and deterministic: it never touches immutable streams and every
 /// update converges on the same externally journaled random pseudonym.
@@ -682,48 +965,6 @@ async fn apply_retained_authorship_redaction(
     sqlx::query("UPDATE thread_view SET author_user = $2 WHERE author_user = $1")
         .bind(principal_user_id)
         .bind(pseudonym)
-        .execute(&mut **tx)
-        .await?;
-    Ok(())
-}
-
-async fn record_subject_tombstone(
-    tx: &mut Transaction<'_, Postgres>,
-    record: &crate::SubjectRevocationRecord,
-    principal_user_id: &str,
-) -> Result<(), IdentityFlowError> {
-    sqlx::query("UPDATE privacy_subject SET lifecycle_state = 'erased' WHERE subject_id = $1")
-        .bind(record.subject_id.as_uuid())
-        .execute(&mut **tx)
-        .await?;
-    sqlx::query("INSERT INTO subject_tombstone (subject_id, replacement_alias, destroyed_at) VALUES ($1,$2,$3) ON CONFLICT (subject_id) DO NOTHING")
-        .bind(record.subject_id.as_uuid()).bind(&record.replacement_alias).bind(record.destroyed_at)
-        .execute(&mut **tx).await?;
-    sqlx::query(
-        "UPDATE member_lifecycle_projection SET subject_id = $2 WHERE principal_user_id = $1",
-    )
-    .bind(principal_user_id)
-    .bind(record.subject_id.as_uuid())
-    .execute(&mut **tx)
-    .await?;
-    sqlx::query("DELETE FROM subject_private_claim WHERE subject_id = $1")
-        .bind(record.subject_id.as_uuid())
-        .execute(&mut **tx)
-        .await?;
-    Ok(())
-}
-
-async fn record_subject_destruction_receipt(
-    tx: &mut Transaction<'_, Postgres>,
-    record: &crate::SubjectRevocationRecord,
-    key_was_present: bool,
-) -> Result<(), IdentityFlowError> {
-    sqlx::query("INSERT INTO subject_key_destruction_receipt (receipt_id, subject_id, key_fingerprint_sha256, key_was_present, destroyed_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (subject_id) DO NOTHING")
-        .bind(record.receipt_id)
-        .bind(record.subject_id.as_uuid())
-        .bind(&record.key_fingerprint_sha256)
-        .bind(key_was_present)
-        .bind(record.destroyed_at)
         .execute(&mut **tx)
         .await?;
     Ok(())

@@ -659,28 +659,17 @@ async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_invalid_pack_precedence_before_append(pool: PgPool) {
+async fn game_creation_rejects_invalid_pack_precedence_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_invalid_precedence",
-        ("roleblocker", "town"),
-        ("mafia_goon", "mafia"),
     )
     .await
-    .expect("seed invalid-pack open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9901 },
-    )
-    .await
-    .expect_err("invalid pack precedence must reject before resolving");
+    ;
     assert!(
         matches!(
             err,
@@ -699,46 +688,19 @@ async fn resolve_phase_rejects_invalid_pack_precedence_before_append(pool: PgPoo
         ),
         "unexpected invalid-pack rejection: {err:?}"
     );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "invalid pack resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "invalid pack resolve must not append resolution envelopes or lock the phase"
-    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_unsupported_pack_versions_before_append(pool: PgPool) {
+async fn game_creation_rejects_unsupported_pack_versions_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_unsupported_ir_version",
-        ("vanilla_townie", "town"),
-        ("mafia_goon", "mafia"),
     )
-    .await
-    .expect("seed unsupported-version open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9902 },
-    )
-    .await
-    .expect_err("unsupported pack versions must reject before resolving");
+    .await;
     assert!(
         matches!(
             err,
@@ -749,86 +711,101 @@ async fn resolve_phase_rejects_unsupported_pack_versions_before_append(pool: PgP
         ),
         "unexpected unsupported-version rejection: {err:?}"
     );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "unsupported pack resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "unsupported pack resolve must not append resolution envelopes or lock the phase"
-    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_pack_content_drift_without_name_fallback(pool: PgPool) {
+async fn projection_rejects_same_pack_ref_with_drifted_artifact_bytes(pool: PgPool) {
     let host_id = "pack_ref_drift_host";
     let game = Uuid::new_v4();
-    let mut drifted_ref = content_registry::pack_ref("mafiascum").unwrap().clone();
-    drifted_ref.content_hash = content_registry::ContentHash::new("0".repeat(64)).unwrap();
-    seed_open_night_game_with_pack_ref(
+    let mut drifted_artifact = content_registry::select_pack_artifact("mafiascum").unwrap();
+    drifted_artifact.canonical_json.push(' ');
+    let error = seed_open_night_game_with_pack_artifact(
         &pool,
         game,
         host_id,
-        &drifted_ref,
+        &drifted_artifact,
         ("roleblocker", "town"),
         ("mafia_goon", "mafia"),
     )
     .await
-    .expect("seed drifted pack reference");
-
-    let before_count = stored_event_count(&pool, game).await;
-    let error = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9903 },
-    )
-    .await
-    .expect_err("content hash drift must fail closed");
+    .expect_err("content hash drift must fail before the game is projected");
     assert!(
-        matches!(
-            error,
-            Reject::PackValidation(ref message)
-                if message.contains("unknown embedded pack reference mafiascum@1#")
-        ),
-        "unexpected pack-reference rejection: {error:?}"
+        error
+            .to_string()
+            .contains("content hash mismatch"),
+        "unexpected pack-artifact rejection: {error:?}"
     );
     assert_eq!(
         stored_event_count(&pool, game).await,
-        before_count,
-        "pack drift must reject before appending resolution events"
+        0,
+        "pack drift must reject without leaving a projected or command-visible game"
     );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_invalid_action_contract_before_append(pool: PgPool) {
+async fn removed_registry_pack_resolves_and_replays_from_game_owned_artifact(pool: PgPool) {
+    let host_id = "removed_pack_host";
+    let game = Uuid::new_v4();
+    let source = content_registry::select_pack_artifact("mafiascum").unwrap();
+    let mut removed_document = (*content_registry::verify_pack_artifact(&source).unwrap()).clone();
+    removed_document.name = "historical_pack_absent_from_registry".to_string();
+    let historical_artifact =
+        content_registry::PackArtifactSnapshot::from_document(&removed_document).unwrap();
+    assert!(content_registry::pack_ref(&historical_artifact.pack_ref.key).is_err());
+
+    seed_open_night_game_with_pack_artifact(
+        &pool,
+        game,
+        host_id,
+        &historical_artifact,
+        ("roleblocker", "town"),
+        ("mafia_goon", "mafia"),
+    )
+    .await
+    .expect("seed a game whose exact pack no longer exists in the registry");
+    handle(
+        &pool,
+        &user(host_id),
+        Command::ResolvePhase { game, seed: 9904 },
+    )
+    .await
+    .expect("resolve exclusively from the game-owned artifact");
+
+    let before_rebuild = projections::game_pack_artifact(&pool, game)
+        .await
+        .unwrap()
+        .expect("durable pack custody");
+    assert_eq!(before_rebuild, historical_artifact);
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("replay the historical resolution");
+    assert!(audit.ok, "historical pack replay drifted: {audit:?}");
+    assert_eq!(audit.audited, 1);
+
+    rebuild(&pool, game)
+        .await
+        .expect("rebuild custody and projections from the self-contained stream");
+    assert_eq!(
+        projections::game_pack_artifact(&pool, game)
+            .await
+            .unwrap()
+            .expect("rebuilt pack custody"),
+        historical_artifact
+    );
+    assert!(audit_resolution_envelopes(&pool, game).await.unwrap().ok);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn game_creation_rejects_invalid_action_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_invalid_action_contract",
-        ("malformed_investigator", "town"),
-        ("mafia_goon", "mafia"),
     )
-    .await
-    .expect("seed invalid-action-contract open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9903 },
-    )
-    .await
-    .expect_err("invalid action mode contracts must reject before resolving");
+    .await;
     assert!(
         matches!(
             err,
@@ -841,46 +818,19 @@ async fn resolve_phase_rejects_invalid_action_contract_before_append(pool: PgPoo
         ),
         "unexpected invalid-action-contract rejection: {err:?}"
     );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "invalid action contract resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "invalid action contract resolve must not append resolution envelopes or lock the phase"
-    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_invalid_effect_contract_before_append(pool: PgPool) {
+async fn game_creation_rejects_invalid_effect_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_invalid_effect_contract",
-        ("malformed_effect_user", "town"),
-        ("mafia_goon", "mafia"),
     )
-    .await
-    .expect("seed invalid-effect-contract open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9904 },
-    )
-    .await
-    .expect_err("invalid effect/read-effect action contracts must reject before resolving");
+    .await;
     assert!(
         matches!(
             err,
@@ -895,46 +845,19 @@ async fn resolve_phase_rejects_invalid_effect_contract_before_append(pool: PgPoo
         ),
         "unexpected invalid-effect-contract rejection: {err:?}"
     );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "invalid effect contract resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "invalid effect contract resolve must not append resolution envelopes or lock the phase"
-    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_invalid_target_window_contract_before_append(pool: PgPool) {
+async fn game_creation_rejects_invalid_target_window_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_invalid_target_window_contract",
-        ("malformed_target_window_user", "town"),
-        ("mafia_goon", "mafia"),
     )
-    .await
-    .expect("seed invalid-target-window-contract open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9905 },
-    )
-    .await
-    .expect_err("invalid target/window action contracts must reject before resolving");
+    .await;
     assert!(
         matches!(
             err,
@@ -949,46 +872,19 @@ async fn resolve_phase_rejects_invalid_target_window_contract_before_append(pool
         ),
         "unexpected invalid-target-window-contract rejection: {err:?}"
     );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "invalid target/window contract resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "invalid target/window contract resolve must not append resolution envelopes or lock the phase"
-    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_invalid_target_state_policy_before_append(pool: PgPool) {
+async fn game_creation_rejects_invalid_target_state_policy_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_invalid_target_state_policy",
-        ("roleblocker", "town"),
-        ("mafia_goon", "mafia"),
     )
-    .await
-    .expect("seed invalid-target-state-policy open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9906 },
-    )
-    .await
-    .expect_err("invalid target-state night_resolution policy must reject before resolving");
+    .await;
     assert!(
         matches!(
             err,
@@ -1011,46 +907,19 @@ async fn resolve_phase_rejects_invalid_target_state_policy_before_append(pool: P
         ),
         "unexpected invalid-target-state-policy rejection: {err:?}"
     );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "invalid target-state policy resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "invalid target-state policy resolve must not append resolution envelopes or lock the phase"
-    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_invalid_generated_kill_ownership_before_append(pool: PgPool) {
+async fn game_creation_rejects_invalid_generated_kill_ownership_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_invalid_generated_kill_ownership",
-        ("roleblocker", "town"),
-        ("mafia_goon", "mafia"),
     )
-    .await
-    .expect("seed invalid-generated-kill-ownership open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9914 },
-    )
-    .await
-    .expect_err("invalid generated-kill ownership must reject before resolving");
+    .await;
     assert!(
         matches!(
             err,
@@ -1071,46 +940,19 @@ async fn resolve_phase_rejects_invalid_generated_kill_ownership_before_append(po
         ),
         "unexpected invalid-generated-kill-ownership rejection: {err:?}"
     );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "invalid generated-kill ownership resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "invalid generated-kill ownership resolve must not append resolution envelopes or lock the phase"
-    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_invalid_reference_contract_before_append(pool: PgPool) {
+async fn game_creation_rejects_invalid_reference_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_invalid_reference_contract",
-        ("malformed_reference_user", "town"),
-        ("mafia_goon", "mafia"),
     )
-    .await
-    .expect("seed invalid-reference-contract open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9906 },
-    )
-    .await
-    .expect_err("invalid reference contracts must reject before resolving");
+    .await;
     assert!(
         matches!(
             err,
@@ -1127,46 +969,19 @@ async fn resolve_phase_rejects_invalid_reference_contract_before_append(pool: Pg
         ),
         "unexpected invalid-reference-contract rejection: {err:?}"
     );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "invalid reference contract resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "invalid reference contract resolve must not append resolution envelopes or lock the phase"
-    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_invalid_trigger_reference_contract_before_append(pool: PgPool) {
+async fn game_creation_rejects_invalid_trigger_reference_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_invalid_trigger_reference_contract",
-        ("malformed_trigger_user", "town"),
-        ("mafia_goon", "mafia"),
     )
-    .await
-    .expect("seed invalid-trigger-reference-contract open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9907 },
-    )
-    .await
-    .expect_err("invalid trigger reference contracts must reject before resolving");
+    .await;
     assert!(
         matches!(
             err,
@@ -1192,46 +1007,19 @@ async fn resolve_phase_rejects_invalid_trigger_reference_contract_before_append(
         ),
         "unexpected invalid-trigger-reference-contract rejection: {err:?}"
     );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "invalid trigger reference contract resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "invalid trigger reference contract resolve must not append resolution envelopes or lock the phase"
-    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn resolve_phase_rejects_invalid_win_policy_contract_before_append(pool: PgPool) {
+async fn game_creation_rejects_invalid_win_policy_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    seed_open_night_game_with_pack(
+    let err = reject_game_creation_with_invalid_pack(
         &pool,
         game,
         host_id,
         "test_invalid_win_policy_contract",
-        ("malformed_win_townie", "town"),
-        ("mafia_goon", "mafia"),
     )
-    .await
-    .expect("seed invalid-win-policy-contract open night stream");
-
-    let before_count: i64 = stored_event_count(&pool, game).await as i64;
-    let err = handle(
-        &pool,
-        &user(host_id),
-        Command::ResolvePhase { game, seed: 9910 },
-    )
-    .await
-    .expect_err("invalid win policy contracts must reject before resolving");
+    .await;
     assert!(
         matches!(
             err,
@@ -1261,21 +1049,6 @@ async fn resolve_phase_rejects_invalid_win_policy_contract_before_append(pool: P
                     )
         ),
         "unexpected invalid-win-policy-contract rejection: {err:?}"
-    );
-    let after_count: i64 = stored_event_count(&pool, game).await as i64;
-    assert_eq!(
-        before_count, after_count,
-        "invalid win policy contract resolve must not append any events"
-    );
-    let resolution_events: i64 = stored_event_count_by_kinds(
-        &pool,
-        game,
-        &["ResolutionApplied", "ResolutionTrace", "ThreadLocked"],
-    )
-    .await as i64;
-    assert_eq!(
-        resolution_events, 0,
-        "invalid win policy contract resolve must not append resolution envelopes or lock the phase"
     );
 }
 
@@ -2083,8 +1856,8 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
     );
 
     let sealed = latest_sealed_event_body(&pool, game, "PostSubmitted").await;
-    assert_eq!(sealed.sealed_version, 2);
-    assert!(!sealed.kid.is_empty());
+    assert_eq!(sealed.sealed_version, 3);
+    assert!(sealed.key_epoch > 0);
     assert_eq!(sealed.nonce.len(), 24);
     assert!(sealed.body.len() >= 16);
     assert!(!sealed.body_contains("dead history before replacement"));
@@ -2403,8 +2176,8 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
     .await
     .unwrap();
     let sealed = latest_sealed_event_body(&pool, game, "PostSubmitted").await;
-    assert_eq!(sealed.sealed_version, 2);
-    assert!(!sealed.kid.is_empty());
+    assert_eq!(sealed.sealed_version, 3);
+    assert!(sealed.key_epoch > 0);
     assert_eq!(sealed.nonce.len(), 24);
     assert!(sealed.body.len() >= 16);
     assert!(!sealed.body_contains("host-authored spectator notice"));
@@ -2925,8 +2698,8 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
         "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
     );
     let sealed = latest_sealed_event_body(&pool, game, "PostSubmitted").await;
-    assert_eq!(sealed.sealed_version, 2);
-    assert!(!sealed.kid.is_empty());
+    assert_eq!(sealed.sealed_version, 3);
+    assert!(sealed.key_epoch > 0);
     assert_eq!(sealed.nonce.len(), 24);
     assert!(sealed.body.len() >= 16);
     assert!(!sealed.body_contains("private media body"));
@@ -5239,8 +5012,8 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
         .into_iter()
         .next()
         .expect("sealed RoleAssigned body");
-    assert_eq!(sealed_role.sealed_version, 2);
-    assert!(!sealed_role.kid.is_empty());
+    assert_eq!(sealed_role.sealed_version, 3);
+    assert!(sealed_role.key_epoch > 0);
     assert_eq!(sealed_role.nonce.len(), 24);
     assert!(sealed_role.body.len() >= 16);
     assert!(!sealed_role.body_contains("godfather"));

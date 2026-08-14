@@ -185,7 +185,7 @@ pub struct EngineInputBuilder<'a> {
 pub struct EnginePhaseInput {
     pub game: Uuid,
     pub pack_ref: content_registry::PackRef,
-    pub pack: &'static domain::Pack,
+    pub pack: Arc<domain::Pack>,
     pub phase_id: String,
     pub phase_kind: domain::pack::PhaseKind,
     pub phase_number: u32,
@@ -221,11 +221,12 @@ impl<'a> EngineInputBuilder<'a> {
     }
 
     pub fn build(self) -> Result<EnginePhaseInput, Reject> {
-        let pack_ref = pack_ref_from_stream(self.stream)?;
-        let pack = load_pack(&pack_ref)?;
+        let pack_artifact = pack_artifact_from_stream(self.stream)?;
+        let pack_ref = pack_artifact.pack_ref.clone();
+        let pack = load_pack(&pack_artifact)?;
         let phase_kind = phase_kind(self.phase_id)?;
         let phase_number = phase_number(self.phase_id)?;
-        let state = current_snapshot(self.stream, pack, self.phase_id, phase_kind, phase_number)?;
+        let state = current_snapshot(self.stream, &pack, self.phase_id, phase_kind, phase_number)?;
         let submissions = current_submissions(self.stream, self.phase_id);
         let day_phase_inputs =
             current_day_phase_inputs(self.stream, &state, phase_kind, phase_number)?;
@@ -1133,8 +1134,9 @@ async fn create_game(
     if projections::game_exists(&mut **tx, game).await? {
         return Err(Reject::UnknownGame); // already exists → treat as bad request
     }
-    let pack_ref = selected_pack_ref(&pack)?;
-    load_pack(&pack_ref)?;
+    let pack_artifact = selected_pack_artifact(&pack)?;
+    let pack_ref = pack_artifact.pack_ref.clone();
+    load_pack(&pack_artifact)?;
     let host = principal.user_id().to_string();
     let denied: Vec<&str> = cohost_denied.iter().map(|c| c.as_str()).collect();
     let ev = EventInput::new(
@@ -1143,6 +1145,7 @@ async fn create_game(
         serde_json::json!({
             "host": host,
             "pack_ref": pack_ref,
+            "pack_artifact": pack_artifact,
             "cohost_denied": denied,
         }),
         ActorId::User(host.clone()),
@@ -1296,9 +1299,8 @@ async fn host_phase_lifecycle(
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack_ref = pack_ref_from_stream(&stream)?;
-    let pack = load_pack(&pack_ref)?;
-    validate_pack_phase_id(pack, &phase)?;
+    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
+    validate_pack_phase_id(&pack, &phase)?;
     let phase_opened_at = unix_seconds_now()?;
 
     persist(
@@ -1392,9 +1394,8 @@ async fn start_game(
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack_ref = pack_ref_from_stream(&stream)?;
-    let pack = load_pack(&pack_ref)?;
-    validate_pack_phase_id(pack, &phase)?;
+    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
+    validate_pack_phase_id(&pack, &phase)?;
     let phase_opened_at = unix_seconds_now()?;
 
     let mut events = vec![EventInput::new(
@@ -1408,7 +1409,7 @@ async fn start_game(
         0,
     )];
     events.extend(role_pm_declarations(&stream)?);
-    events.extend(pack_private_channel_declarations(pack, &stream)?);
+    events.extend(pack_private_channel_declarations(&pack, &stream)?);
     persist(tx, game, &events).await
 }
 
@@ -1423,8 +1424,7 @@ async fn advance_phase(
 
     let (phase, stream) = resolved_locked_phase_stream(tx, game).await?;
     let source_phase_id = phase.phase_id.clone();
-    let pack_ref = pack_ref_from_stream(&stream)?;
-    let pack = load_pack(&pack_ref)?;
+    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
     let next_phase_id = next_declared_phase_id(&pack.phases, &source_phase_id)?;
     let phase_opened_at = unix_seconds_now()?;
     let payload = serde_json::json!({
@@ -1470,8 +1470,7 @@ async fn advance_phase_by_deadline(
     }
 
     let source_phase_id = phase.phase_id.clone();
-    let pack_ref = pack_ref_from_stream(&stream)?;
-    let pack = load_pack(&pack_ref)?;
+    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
     let next_phase_id = next_declared_phase_id(&pack.phases, &source_phase_id)?;
     let deadline_ev = EventInput::new(
         "PhaseDeadlineElapsed",
@@ -1675,7 +1674,7 @@ pub(crate) async fn plan_effect_events(
         .ok_or_else(|| effect_spec_reject("effect plans require an active phase"))?;
     let phase_kind = phase_kind(&phase.phase_id)?;
     let phase_number = phase_number(&phase.phase_id)?;
-    let pack = load_pack(&current_pack_ref(tx, game).await?)?;
+    let pack = current_pack(tx, game).await?;
     // Preflight the entire plan before appending anything. Lifecycle validation
     // advances this in-memory view so multiple operations on one slot are
     // checked in plan order without consulting partially folded projections.
@@ -1717,7 +1716,7 @@ pub(crate) async fn plan_effect_events(
             }
             game_platform::ConcreteEffect::Mark { target, effect } => {
                 require_effect_target(tx, game, target.as_str()).await?;
-                let policy = persistent_effect_policy(pack, effect.as_str())?;
+                let policy = persistent_effect_policy(&pack, effect.as_str())?;
                 vec![EventInput::new(
                     "EffectsMarked",
                     1,
@@ -1738,7 +1737,7 @@ pub(crate) async fn plan_effect_events(
             }
             game_platform::ConcreteEffect::Clear { target, effect } => {
                 require_effect_target(tx, game, target.as_str()).await?;
-                persistent_effect_policy(pack, effect.as_str())?;
+                persistent_effect_policy(&pack, effect.as_str())?;
                 vec![EventInput::new(
                     "EffectsCleared",
                     1,
@@ -1757,7 +1756,7 @@ pub(crate) async fn plan_effect_events(
             }
             game_platform::ConcreteEffect::Grant { target, grant } => {
                 require_effect_target(tx, game, target.as_str()).await?;
-                validate_platform_grant(pack, &grant)?;
+                validate_platform_grant(&pack, &grant)?;
                 let source_action = application.grant_source(index);
                 let mut grant_events = vec![EventInput::new(
                     "ActionGranted",
@@ -2146,7 +2145,7 @@ async fn assign_role(
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack = load_pack(&pack_ref_from_stream(&stream)?)?;
+    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
     let role = pack
         .roles
         .get(&role_key)
@@ -2195,7 +2194,7 @@ async fn submit_vote(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let phase_input = EngineInputBuilder::new(game, &stream, &phase).build()?;
-    validate_vote_actor_policy(phase_input.pack, &phase_input.state, &actor_slot)?;
+    validate_vote_actor_policy(&phase_input.pack, &phase_input.state, &actor_slot)?;
     validate_vote_policy_target(&phase_input.pack.vote, &actor_slot, &target)?;
     let target_str = validate_target(tx, game, &target).await?;
 
@@ -2763,7 +2762,7 @@ async fn resolve_phase(
     );
     let mut events = vec![applied_ev, trace_ev];
     events.extend(private_channel_revocations(
-        phase_input.pack,
+        &phase_input.pack,
         &output.post_state,
     ));
     events.push(lock_ev);
@@ -2790,7 +2789,7 @@ async fn control_ita_session(
     let phase = require_open_day_phase(tx, game).await?;
     let phase_number = phase_number(&phase)?;
 
-    let pack = load_pack(&current_pack_ref(tx, game).await?)?;
+    let pack = current_pack(tx, game).await?;
     if !pack.ita.lifecycle.allows(control) {
         return Err(Reject::InvalidTarget);
     }
@@ -3754,17 +3753,38 @@ fn next_declared_phase_id(
     Ok(phase_id)
 }
 
-fn pack_ref_from_stream(
+pub(crate) fn pack_artifact_from_stream(
     stream: &[eventstore::StoredEvent],
-) -> Result<content_registry::PackRef, Reject> {
+) -> Result<content_registry::PackArtifactSnapshot, Reject> {
     let value = stream
+        .iter()
+        .find(|ev| ev.kind == "GameCreated")
+        .and_then(|ev| ev.payload.get("pack_artifact"))
+        .cloned()
+        .ok_or_else(|| {
+            Reject::Internal("game stream has no GameCreated.pack_artifact".to_string())
+        })?;
+    let artifact: content_registry::PackArtifactSnapshot =
+        serde_json::from_value(value).map_err(|error| {
+            Reject::Internal(format!("malformed GameCreated.pack_artifact: {error}"))
+        })?;
+    let pack_ref: content_registry::PackRef = stream
         .iter()
         .find(|ev| ev.kind == "GameCreated")
         .and_then(|ev| ev.payload.get("pack_ref"))
         .cloned()
-        .ok_or_else(|| Reject::Internal("game stream has no GameCreated.pack_ref".to_string()))?;
-    serde_json::from_value(value)
-        .map_err(|error| Reject::Internal(format!("malformed GameCreated.pack_ref: {error}")))
+        .ok_or_else(|| Reject::Internal("game stream has no GameCreated.pack_ref".to_string()))
+        .and_then(|value| {
+            serde_json::from_value(value).map_err(|error| {
+                Reject::Internal(format!("malformed GameCreated.pack_ref: {error}"))
+            })
+        })?;
+    if artifact.pack_ref != pack_ref {
+        return Err(Reject::PackValidation(
+            "GameCreated pack_ref does not match pack_artifact".to_string(),
+        ));
+    }
+    Ok(artifact)
 }
 
 fn pack_private_channel_declarations(
@@ -3961,36 +3981,36 @@ fn role_assignments_from_stream(
 }
 
 pub(crate) fn load_pack(
-    pack_ref: &content_registry::PackRef,
-) -> Result<&'static domain::Pack, Reject> {
-    content_registry::resolve_pack(pack_ref).map_err(|error| match error {
+    artifact: &content_registry::PackArtifactSnapshot,
+) -> Result<Arc<domain::Pack>, Reject> {
+    content_registry::verify_pack_artifact(artifact)
+        .map_err(|error| Reject::PackValidation(error.to_string()))
+}
+
+fn selected_pack_artifact(name: &str) -> Result<content_registry::PackArtifactSnapshot, Reject> {
+    content_registry::select_pack_artifact(name).map_err(|error| match error {
         content_registry::RegistryError::Initialization(message) => Reject::Internal(format!(
-            "initialize embedded content registry while resolving {}: {message}",
-            pack_ref.key
+            "initialize embedded content registry while selecting {name}: {message}"
         )),
         other => Reject::PackValidation(other.to_string()),
     })
 }
 
-fn selected_pack_ref(name: &str) -> Result<content_registry::PackRef, Reject> {
-    content_registry::pack_ref(name)
-        .cloned()
-        .map_err(|error| match error {
-            content_registry::RegistryError::Initialization(message) => Reject::Internal(format!(
-                "initialize embedded content registry while selecting {name}: {message}"
-            )),
-            other => Reject::PackValidation(other.to_string()),
-        })
-}
-
-pub(crate) async fn current_pack_ref(
+pub(crate) async fn current_pack_artifact(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-) -> Result<content_registry::PackRef, Reject> {
-    projections::game_pack_ref(&mut **tx, game)
+) -> Result<content_registry::PackArtifactSnapshot, Reject> {
+    projections::game_pack_artifact(&mut **tx, game)
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?
         .ok_or(Reject::UnknownGame)
+}
+
+pub(crate) async fn current_pack(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+) -> Result<Arc<domain::Pack>, Reject> {
+    load_pack(&current_pack_artifact(tx, game).await?)
 }
 
 /// Load the engine-facing, slot-only snapshot for a stored game stream and
@@ -5080,7 +5100,7 @@ async fn require_slot_can_post(
     match projections::slot_alive(&mut **tx, game, slot).await? {
         Some(true) => Ok(()),
         Some(false) => {
-            let pack = load_pack(&current_pack_ref(tx, game).await?)?;
+            let pack = current_pack(tx, game).await?;
             if !pack.treestump_policy.enabled {
                 return Err(Reject::SlotNotAlive);
             }

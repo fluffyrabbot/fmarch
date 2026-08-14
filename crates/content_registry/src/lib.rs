@@ -5,11 +5,9 @@
 //! directory, or mutable files beside the process. Debug builds additionally
 //! embed test packs so command and acceptance tests use the same resolver seam.
 
-#[cfg(debug_assertions)]
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use domain::Pack;
 use game_platform::{DayProgram, DayProgramRef};
@@ -113,6 +111,46 @@ pub struct PackRef {
     pub content_hash: ContentHash,
 }
 
+pub const PACK_ARTIFACT_SCHEMA_VERSION: u16 = 1;
+
+/// Canonical, portable rule-pack custody attached to `GameCreated`.
+///
+/// The JSON string is deliberately retained byte-for-byte rather than as a
+/// `serde_json::Value`: its BLAKE3 digest is the PackRef content address, and
+/// canonical round-trip validation prevents alternate encodings from sharing
+/// that identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PackArtifactSnapshot {
+    pub schema_version: u16,
+    pub pack_ref: PackRef,
+    pub canonical_json: String,
+}
+
+impl PackArtifactSnapshot {
+    pub fn from_document(document: &Pack) -> Result<Self, RegistryError> {
+        domain::validate_pack(document).map_err(|error| RegistryError::InvalidPackArtifact {
+            key: document.name.clone(),
+            message: error.to_string(),
+        })?;
+        let canonical_json = serde_json::to_string(document).map_err(|error| {
+            RegistryError::InvalidPackArtifact {
+                key: document.name.clone(),
+                message: format!("canonical serialization failed: {error}"),
+            }
+        })?;
+        Ok(Self {
+            schema_version: PACK_ARTIFACT_SCHEMA_VERSION,
+            pack_ref: PackRef {
+                key: document.name.clone(),
+                version: document.version,
+                content_hash: ContentHash::digest(canonical_json.as_bytes()),
+            },
+            canonical_json,
+        })
+    }
+}
+
 /// The platform already owns the typed content-addressed program reference;
 /// this alias names its role at the registry boundary.
 pub type ProgramRef = DayProgramRef;
@@ -128,6 +166,17 @@ pub enum ProgramAudience {
 pub struct PackArtifact {
     pub pack_ref: PackRef,
     pub document: Pack,
+    canonical_json: String,
+}
+
+impl PackArtifact {
+    pub fn snapshot(&self) -> PackArtifactSnapshot {
+        PackArtifactSnapshot {
+            schema_version: PACK_ARTIFACT_SCHEMA_VERSION,
+            pack_ref: self.pack_ref.clone(),
+            canonical_json: self.canonical_json.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -235,6 +284,8 @@ pub enum RegistryError {
     },
     #[error("content hash must be 64 lowercase hexadecimal characters")]
     InvalidContentHash,
+    #[error("invalid pack artifact `{key}`: {message}")]
+    InvalidPackArtifact { key: String, message: String },
     #[error("unknown {audience:?} program reference {id}@{version}#{content_hash}")]
     UnknownProgramReference {
         id: String,
@@ -305,6 +356,120 @@ pub fn pack_ref(key: &str) -> Result<&'static PackRef, RegistryError> {
     }
     #[cfg(not(debug_assertions))]
     Err(RegistryError::UnknownPack(key.to_string()))
+}
+
+/// Select the canonical artifact attached to a new game's `GameCreated`
+/// event. This is the registry's only runtime authority: after creation, the
+/// game-owned snapshot and its durable database projection are authoritative.
+pub fn select_pack_artifact(key: &str) -> Result<PackArtifactSnapshot, RegistryError> {
+    if let Ok(artifact) = product_registry()?.pack(key) {
+        return Ok(artifact.snapshot());
+    }
+    #[cfg(debug_assertions)]
+    {
+        let entry = debug_pack_entry(key)?;
+        let document =
+            entry
+                .document
+                .as_ref()
+                .map_err(|message| RegistryError::InvalidDebugPack {
+                    key: key.to_string(),
+                    message: message.clone(),
+                })?;
+        PackArtifactSnapshot::from_document(document)
+    }
+    #[cfg(not(debug_assertions))]
+    Err(RegistryError::UnknownPack(key.to_string()))
+}
+
+type VerifiedPackArtifact = (String, Arc<Pack>);
+type VerifiedPackArtifactCache = BTreeMap<PackRef, VerifiedPackArtifact>;
+
+static VERIFIED_PACK_ARTIFACTS: OnceLock<Mutex<VerifiedPackArtifactCache>> = OnceLock::new();
+
+/// Authenticate, canonically decode, and semantically validate a game-owned
+/// artifact. The cache is content-addressed and compares the exact canonical
+/// bytes before reuse, so registry replacement cannot affect a running or
+/// archived game and a same-reference byte drift fails closed.
+pub fn verify_pack_artifact(artifact: &PackArtifactSnapshot) -> Result<Arc<Pack>, RegistryError> {
+    if artifact.schema_version != PACK_ARTIFACT_SCHEMA_VERSION {
+        return Err(invalid_artifact(
+            artifact,
+            format!("unsupported schema version {}", artifact.schema_version),
+        ));
+    }
+    let actual_hash = ContentHash::digest(artifact.canonical_json.as_bytes());
+    if actual_hash != artifact.pack_ref.content_hash {
+        return Err(invalid_artifact(
+            artifact,
+            format!(
+                "content hash mismatch: reference={}, canonical={actual_hash}",
+                artifact.pack_ref.content_hash
+            ),
+        ));
+    }
+
+    let cache = VERIFIED_PACK_ARTIFACTS.get_or_init(|| Mutex::new(BTreeMap::new()));
+    {
+        let cache = cache.lock().map_err(|_| {
+            invalid_artifact(artifact, "verified-artifact cache is poisoned".to_string())
+        })?;
+        if let Some((canonical_json, document)) = cache.get(&artifact.pack_ref) {
+            if canonical_json != &artifact.canonical_json {
+                return Err(invalid_artifact(
+                    artifact,
+                    "the same PackRef resolved to different canonical bytes".to_string(),
+                ));
+            }
+            return Ok(Arc::clone(document));
+        }
+    }
+
+    let document = domain::load_pack_from_json(&artifact.canonical_json)
+        .map_err(|error| invalid_artifact(artifact, error.to_string()))?;
+    if document.name != artifact.pack_ref.key || document.version != artifact.pack_ref.version {
+        return Err(invalid_artifact(
+            artifact,
+            format!(
+                "identity drift: reference={}@{}, document={}@{}",
+                artifact.pack_ref.key, artifact.pack_ref.version, document.name, document.version
+            ),
+        ));
+    }
+    let canonical = serde_json::to_string(&document)
+        .map_err(|error| invalid_artifact(artifact, error.to_string()))?;
+    if canonical != artifact.canonical_json {
+        return Err(invalid_artifact(
+            artifact,
+            "document bytes are not the canonical typed serialization".to_string(),
+        ));
+    }
+
+    let document = Arc::new(document);
+    let mut cache = cache.lock().map_err(|_| {
+        invalid_artifact(artifact, "verified-artifact cache is poisoned".to_string())
+    })?;
+    if let Some((canonical_json, cached)) = cache.get(&artifact.pack_ref) {
+        if canonical_json != &artifact.canonical_json {
+            return Err(invalid_artifact(
+                artifact,
+                "the same PackRef resolved to different canonical bytes".to_string(),
+            ));
+        }
+        return Ok(Arc::clone(cached));
+    }
+    cache.insert(
+        artifact.pack_ref.clone(),
+        (artifact.canonical_json.clone(), Arc::clone(&document)),
+    );
+    Ok(document)
+}
+
+fn invalid_artifact(artifact: &PackArtifactSnapshot, message: String) -> RegistryError {
+    RegistryError::InvalidPackArtifact {
+        key: artifact.pack_ref.key.clone(),
+        message,
+    }
 }
 
 /// Resolve a previously committed pack identity. Key-only fallback is
@@ -397,15 +562,16 @@ fn build_product_registry() -> Result<ContentRegistry, String> {
                 entry.file, entry.key, document.name
             ));
         }
-        let canonical = serde_json::to_vec(&document)
+        let canonical_json = serde_json::to_string(&document)
             .map_err(|error| format!("canonicalize pack {}: {error}", entry.key))?;
         packs.push(PackArtifact {
             pack_ref: PackRef {
                 key: entry.key,
                 version: document.version,
-                content_hash: ContentHash::digest(&canonical),
+                content_hash: ContentHash::digest(canonical_json.as_bytes()),
             },
             document,
+            canonical_json,
         });
     }
     packs.sort_by(|left, right| left.pack_ref.cmp(&right.pack_ref));
@@ -526,6 +692,13 @@ fn debug_pack_entry(key: &str) -> Result<&'static DebugPackEntry, RegistryError>
                     .as_u64()
                     .and_then(|version| u32::try_from(version).ok())
                     .expect("checked-in debug pack must declare a u32 version");
+                let document = domain::load_pack_from_json(raw).map_err(|error| error.to_string());
+                let content_hash = document
+                    .as_ref()
+                    .ok()
+                    .and_then(|document| serde_json::to_string(document).ok())
+                    .map(|canonical| ContentHash::digest(canonical.as_bytes()))
+                    .unwrap_or_else(|| ContentHash::digest(raw.as_bytes()));
                 (
                     *fixture_key,
                     DebugPackEntry {
@@ -534,10 +707,9 @@ fn debug_pack_entry(key: &str) -> Result<&'static DebugPackEntry, RegistryError>
                             version,
                             // Invalid fixtures still need an immutable identity
                             // so fail-closed runtime validation can be exercised.
-                            content_hash: ContentHash::digest(raw.as_bytes()),
+                            content_hash,
                         },
-                        document: domain::load_pack_from_json(raw)
-                            .map_err(|error| error.to_string()),
+                        document,
                     },
                 )
             })
@@ -688,6 +860,57 @@ mod tests {
         assert!(matches!(
             resolve_pack(&wrong),
             Err(RegistryError::UnknownPackReference { .. })
+        ));
+    }
+
+    #[test]
+    fn canonical_pack_artifact_opens_without_registry_resolution() {
+        let artifact = select_pack_artifact("mafiascum").unwrap();
+        let opened = verify_pack_artifact(&artifact).unwrap();
+        assert_eq!(opened.name, "mafiascum");
+        assert_eq!(opened.version, artifact.pack_ref.version);
+        assert_eq!(
+            ContentHash::digest(artifact.canonical_json.as_bytes()),
+            artifact.pack_ref.content_hash
+        );
+    }
+
+    #[test]
+    fn same_reference_with_drifted_artifact_bytes_fails_closed() {
+        let mut artifact = select_pack_artifact("mafiascum").unwrap();
+        artifact.canonical_json = artifact.canonical_json.replacen(
+            "\"name\":\"mafiascum\"",
+            "\"name\":\"removed_pack\"",
+            1,
+        );
+        assert!(matches!(
+            verify_pack_artifact(&artifact),
+            Err(RegistryError::InvalidPackArtifact { .. })
+        ));
+    }
+
+    #[test]
+    fn recomputed_hash_cannot_hide_key_or_canonical_encoding_drift() {
+        let mut identity_drift = select_pack_artifact("mafiascum").unwrap();
+        identity_drift.canonical_json = identity_drift.canonical_json.replacen(
+            "\"name\":\"mafiascum\"",
+            "\"name\":\"other_pack\"",
+            1,
+        );
+        identity_drift.pack_ref.content_hash =
+            ContentHash::digest(identity_drift.canonical_json.as_bytes());
+        assert!(matches!(
+            verify_pack_artifact(&identity_drift),
+            Err(RegistryError::InvalidPackArtifact { .. })
+        ));
+
+        let mut noncanonical = select_pack_artifact("mafia_universe").unwrap();
+        noncanonical.canonical_json.push(' ');
+        noncanonical.pack_ref.content_hash =
+            ContentHash::digest(noncanonical.canonical_json.as_bytes());
+        assert!(matches!(
+            verify_pack_artifact(&noncanonical),
+            Err(RegistryError::InvalidPackArtifact { .. })
         ));
     }
 

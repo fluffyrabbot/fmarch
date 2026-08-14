@@ -146,8 +146,8 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
         ActorId::User(user) if user == &principal
     ));
 
-    let raw_event: (String, Vec<u8>, Vec<u8>) = sqlx::query_as(
-        "SELECT sealed_kid, sealed_nonce, sealed_body FROM events WHERE stream_id = $1",
+    let raw_event: (i64, Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT stream_key_epoch, sealed_nonce, sealed_body FROM events WHERE stream_id = $1",
     )
     .bind(profile_id)
     .fetch_one(&pool)
@@ -216,6 +216,127 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
         row.get::<String, _>("handle"),
         format!("former-member-{}", profile_id.simple())
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(pool: sqlx::PgPool) {
+    let environment = SubjectKeyEnvironment::isolated();
+    let principal = format!("pending-redaction-{}", Uuid::new_v4().simple());
+    let profile_id = Uuid::new_v4();
+    let game_id = Uuid::new_v4();
+    ensure_principal(&pool, &principal).await;
+    append_profile_and_project(
+        &pool,
+        profile_id,
+        &[EventInput::new(
+            "ProfileCreated",
+            1,
+            serde_json::json!({
+                "principal_user_id": principal,
+                "handle": "pending-private-handle",
+                "display_name": "Pending Private Name",
+                "bio": "pending private biography",
+                "visibility": "members",
+            }),
+            ActorId::User(principal.clone()),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    append_and_project(
+        &pool,
+        game_id,
+        &[EventInput::new(
+            "GamePersonaRegistered",
+            1,
+            serde_json::json!({
+                "persona_id": "pending-persona",
+                "principal_user_id": principal,
+                "public_name": "Pending Persona Name",
+            }),
+            ActorId::User(principal.clone()),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+
+    let pending = identity::request_member_erasure(&pool, &principal, 10)
+        .await
+        .unwrap();
+    let alias = pending.pseudonym.unwrap();
+    assert_eq!(
+        pending.status,
+        identity::MemberLifecycleStatus::ErasureInProgress
+    );
+    let subject_id = SubjectId::from_uuid(
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
+            .bind(&principal)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT lifecycle_state FROM privacy_subject WHERE subject_id = $1",
+        )
+        .bind(subject_id.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "erasure_pending"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM subject_tombstone WHERE subject_id = $1",
+        )
+        .bind(subject_id.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0,
+        "terminal tombstones require verified key destruction"
+    );
+    assert!(environment.store().load(subject_id).await.is_ok());
+
+    rebuild_profile_stream(&pool, profile_id).await.unwrap();
+    rebuild_game(&pool, game_id).await.unwrap();
+    let profile = sqlx::query(
+        "SELECT public.display_name, public.bio, editor.principal_user_id, editor.current_claim_id FROM profile_public AS public JOIN profile_editor AS editor USING (profile_id) WHERE profile_id = $1",
+    )
+    .bind(profile_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(profile.get::<String, _>("display_name"), alias);
+    assert_eq!(profile.get::<String, _>("bio"), "");
+    assert_eq!(profile.get::<String, _>("principal_user_id"), alias);
+    assert_eq!(profile.get::<Option<Uuid>, _>("current_claim_id"), None);
+    let persona = sqlx::query(
+        "SELECT public.current_public_name, private.principal_user_id, private.current_claim_id FROM game_persona_public AS public JOIN game_persona_private AS private USING (game_id, persona_id) WHERE game_id = $1 AND persona_id = 'pending-persona'",
+    )
+    .bind(game_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(persona.get::<String, _>("current_public_name"), alias);
+    assert_eq!(persona.get::<String, _>("principal_user_id"), alias);
+    assert_eq!(persona.get::<Option<Uuid>, _>("current_claim_id"), None);
+
+    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_user_id = $1")
+        .bind(&principal)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let rebuilt = identity::rebuild_member_lifecycle(&pool, &principal)
+        .await
+        .unwrap();
+    assert_eq!(
+        rebuilt.status,
+        identity::MemberLifecycleStatus::ErasureInProgress
+    );
+    assert_eq!(rebuilt.pseudonym.as_deref(), Some(alias.as_str()));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

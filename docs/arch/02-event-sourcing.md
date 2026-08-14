@@ -157,6 +157,7 @@ Examples:
 | `public_search_document` | public-only weighted search documents with canonical links across discussions, profiles, games, and public main-thread posts |
 | `moderation_case` / `moderation_report` / `moderation_case_history` | durable public-content reports, current GlobalMod review state, and append-only reasoned action history |
 | `moderation_target_state` | reversible public visibility overlay for individually moderated discussion and main-thread posts |
+| `pack_artifact` | immutable content-addressed cache of the canonical typed pack attachment carried by `GameCreated`; recreated from the stream and exact-identity-bound to `game_index` |
 | `community_subscription` / `community_subscription_period` | one member/target watch stream, current membership, monotonic read cursor, and historical active intervals |
 | `community_inbox_item` | privacy-safe per-member references to public posts published during active watch intervals |
 | `community_member_mute` | one private member/profile relationship stream, current active state, replay version, and bounded member-owned list cursor |
@@ -256,6 +257,12 @@ failure leaves zero event rows for the target stream. The rebuilt archive uses d
 requires no `privacy_subject`, `subject_private_claim`, or external subject-key material. The current
 archive remains coupled to a trusted event-key ring; cross-custody archive-key wrapping is a separate
 operational boundary, not an implied property.
+
+The sealed `GameCreated` body carries the exact canonical pack artifact once, including its complete
+content address. That authenticated attachment travels with `StreamExport`; import verifies it before
+folding and recreates `pack_artifact` custody in the same transaction. Historical replay therefore
+survives replacement or removal of the corresponding embedded-registry entry and never accepts pack
+bytes supplied outside the authenticated event archive.
 
 ### Update strategy
 

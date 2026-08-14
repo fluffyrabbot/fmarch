@@ -1472,18 +1472,22 @@ async fn deactivate_member_account(
 async fn erase_member_account(
     State(state): State<AuthHttpState>,
     headers: HeaderMap,
-) -> Result<Json<MemberLifecycleResponse>, ApiError> {
+) -> Result<(StatusCode, Json<MemberLifecycleResponse>), ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let identity = authorization_context(&state, token).await?;
     let now = unix_now_seconds();
     require_recent_authentication(&identity, now)?;
-    let erased =
-        identity::erase_member(&state.pool, identity.principal_user_id.as_str(), now).await?;
-    Ok(Json(MemberLifecycleResponse {
-        status: erased.status.as_str().to_string(),
-        principal_user_id: erased.principal_user_id,
-        pseudonym: erased.pseudonym,
-    }))
+    let pending =
+        identity::request_member_erasure(&state.pool, identity.principal_user_id.as_str(), now)
+            .await?;
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(MemberLifecycleResponse {
+            status: pending.status.as_str().to_string(),
+            principal_user_id: pending.principal_user_id,
+            pseudonym: pending.pseudonym,
+        }),
+    ))
 }
 
 async fn list_account_methods(

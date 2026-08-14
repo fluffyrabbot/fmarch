@@ -14,9 +14,8 @@ use axum::{Json, Router};
 use caps::{Capability, Principal};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::sync::OnceLock;
+use std::sync::Arc;
 use uuid::Uuid;
 use wire::{
     DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
@@ -821,9 +820,13 @@ async fn player_command_state(
             error: RejectCode::UnknownSlot,
             message: "actor slot does not exist in this game".to_string(),
         })?;
+    // One verified, content-addressed load feeds every command-state decision.
+    // The artifact is immutable for the game, so refetching it for role, vote,
+    // and action views only adds database transfer and hashing work.
+    let pack = load_pack_for_game(&state, game).await?;
     let role_key = actor.role_key.clone();
     let role = match role_key.as_deref() {
-        Some(key) => player_role_view(&state, game, key).await,
+        Some(key) => player_role_view(&pack, key),
         None => None,
     };
     let game_completed = commands::game_completed(&state.pool, game)
@@ -844,7 +847,7 @@ async fn player_command_state(
                 if !phase.locked
                     && phase_kind_for_id(&phase.phase_id)? == domain::pack::PhaseKind::Day =>
             {
-                available_vote_targets(&state, game, &slots, actor).await?
+                available_vote_targets(&pack, &slots, actor)
             }
             _ => Vec::new(),
         }
@@ -870,15 +873,13 @@ async fn player_command_state(
                     .map(|action| action.template_id.clone())
                     .collect();
                 let actions = available_role_actions(
-                    &state,
-                    game,
+                    &pack,
                     phase,
                     &slots,
                     actor,
                     role_key,
                     &active_templates,
-                )
-                .await?;
+                )?;
                 let current_actions = submitted
                     .into_iter()
                     .map(|action| PlayerCommandCurrentAction {
@@ -1074,15 +1075,10 @@ fn day_event_room_delta(
     })
 }
 
-/// Self-scoped role identity for the requesting SlotOccupant. Reads only the
-/// actor's own pack role; a missing pack or unknown role key degrades to None
-/// rather than failing the whole command-state read.
-async fn player_role_view(
-    state: &GameHttpState,
-    game: Uuid,
-    role_key: &str,
-) -> Option<PlayerCommandRoleView> {
-    let pack = load_pack_for_game(state, game).await.ok()?;
+/// Self-scoped role identity for the requesting SlotOccupant. The caller has
+/// already authenticated the game-owned pack; an unknown role key degrades to
+/// `None` rather than exposing any other slot's role state.
+fn player_role_view(pack: &domain::Pack, role_key: &str) -> Option<PlayerCommandRoleView> {
     let role = pack.roles.get(role_key)?;
     Some(PlayerCommandRoleView {
         key: role_key.to_string(),
@@ -1091,13 +1087,11 @@ async fn player_role_view(
     })
 }
 
-async fn available_vote_targets(
-    state: &GameHttpState,
-    game: Uuid,
+fn available_vote_targets(
+    pack: &domain::Pack,
     slots: &[projections::SlotStateRow],
     actor: &projections::SlotStateRow,
-) -> Result<Vec<PlayerVoteTarget>, ApiError> {
-    let pack = load_pack_for_game(state, game).await?;
+) -> Vec<PlayerVoteTarget> {
     let mut targets: Vec<PlayerVoteTarget> = slots
         .iter()
         .filter(|slot| slot.alive)
@@ -1119,7 +1113,7 @@ async fn available_vote_targets(
             label: "No lynch".to_string(),
         });
     }
-    Ok(targets)
+    targets
 }
 
 async fn current_player_vote(
@@ -1148,16 +1142,14 @@ fn player_vote_target_from_projection_target(target: &str) -> PlayerVoteTarget {
     }
 }
 
-async fn available_role_actions(
-    state: &GameHttpState,
-    game: Uuid,
+fn available_role_actions(
+    pack: &domain::Pack,
     phase: &projections::PhaseStateRow,
     slots: &[projections::SlotStateRow],
     actor: &projections::SlotStateRow,
     role_key: &str,
     active_templates: &std::collections::BTreeSet<String>,
 ) -> Result<Vec<PlayerCommandAction>, ApiError> {
-    let pack = load_pack_for_game(state, game).await?;
     let role = pack.roles.get(role_key).ok_or_else(|| ApiError::Reject {
         status: StatusCode::INTERNAL_SERVER_ERROR,
         error: RejectCode::Internal,
@@ -1538,20 +1530,20 @@ mod tests {
 async fn load_pack_for_game(
     state: &GameHttpState,
     game: Uuid,
-) -> Result<&'static domain::Pack, ApiError> {
-    let pack_ref = pack_ref_for_game(state, game).await?;
-    resolve_pack_ref(&pack_ref)
+) -> Result<Arc<domain::Pack>, ApiError> {
+    let artifact = pack_artifact_for_game(state, game).await?;
+    resolve_pack_artifact(&artifact)
 }
 
-fn resolve_pack_ref(
-    pack_ref: &content_registry::PackRef,
-) -> Result<&'static domain::Pack, ApiError> {
-    content_registry::resolve_pack(pack_ref).map_err(|err| ApiError::Reject {
+fn resolve_pack_artifact(
+    artifact: &content_registry::PackArtifactSnapshot,
+) -> Result<Arc<domain::Pack>, ApiError> {
+    content_registry::verify_pack_artifact(artifact).map_err(|err| ApiError::Reject {
         status: StatusCode::INTERNAL_SERVER_ERROR,
         error: RejectCode::Internal,
         message: format!(
-            "resolve embedded pack {}@{}#{}: {err}",
-            pack_ref.key, pack_ref.version, pack_ref.content_hash
+            "resolve game-owned pack {}@{}#{}: {err}",
+            artifact.pack_ref.key, artifact.pack_ref.version, artifact.pack_ref.content_hash
         ),
     })
 }
@@ -2277,9 +2269,10 @@ async fn load_host_setup_state(
     state: &GameHttpState,
     game: Uuid,
 ) -> Result<HostSetupStateResponse, ApiError> {
-    let pack_ref = pack_ref_for_game(state, game).await?;
-    let pack = resolve_pack_ref(&pack_ref)?;
-    let program_catalog = product_day_program_catalog(pack)?;
+    let pack_artifact = pack_artifact_for_game(state, game).await?;
+    let pack_ref = pack_artifact.pack_ref.clone();
+    let pack = resolve_pack_artifact(&pack_artifact)?;
+    let program_catalog = product_day_program_catalog(&pack)?;
     let attached_programs = projections::day_programs(&state.pool, game)
         .await?
         .into_iter()
@@ -2354,51 +2347,27 @@ async fn load_host_setup_state(
     })
 }
 
-async fn pack_ref_for_game(
+async fn pack_artifact_for_game(
     state: &GameHttpState,
     game: Uuid,
-) -> Result<content_registry::PackRef, ApiError> {
-    projections::game_pack_ref(&state.pool, game)
+) -> Result<content_registry::PackArtifactSnapshot, ApiError> {
+    projections::game_pack_artifact(&state.pool, game)
         .await?
         .ok_or_else(|| ApiError::Reject {
             status: StatusCode::NOT_FOUND,
             error: RejectCode::UnknownGame,
-            message: "game projection has no pack".to_string(),
+            message: "game projection has no canonical pack artifact".to_string(),
         })
 }
 
 fn product_day_program_catalog(
     pack: &domain::Pack,
 ) -> Result<Vec<HostSetupProgramOption>, ApiError> {
-    static CATALOGS: OnceLock<Result<BTreeMap<String, Vec<HostSetupProgramOption>>, String>> =
-        OnceLock::new();
-    let catalogs = CATALOGS.get_or_init(build_product_day_program_catalogs);
-    let catalogs = catalogs.as_ref().map_err(|message| ApiError::Reject {
+    build_product_day_program_catalog(pack).map_err(|message| ApiError::Reject {
         status: StatusCode::INTERNAL_SERVER_ERROR,
         error: RejectCode::Internal,
-        message: message.clone(),
-    })?;
-    catalogs
-        .get(&pack.name)
-        .cloned()
-        .ok_or_else(|| ApiError::Reject {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            error: RejectCode::Internal,
-            message: format!("embedded day-program catalog has no pack `{}`", pack.name),
-        })
-}
-
-fn build_product_day_program_catalogs(
-) -> Result<BTreeMap<String, Vec<HostSetupProgramOption>>, String> {
-    let registry = content_registry::product_registry().map_err(|error| error.to_string())?;
-    registry
-        .packs()
-        .iter()
-        .map(|artifact| {
-            build_product_day_program_catalog(&artifact.document)
-                .map(|catalog| (artifact.pack_ref.key.clone(), catalog))
-        })
-        .collect()
+        message,
+    })
 }
 
 fn build_product_day_program_catalog(
@@ -2539,6 +2508,7 @@ fn build_product_day_program_catalog(
 #[cfg(test)]
 mod day_program_catalog_tests {
     use super::*;
+    use std::collections::BTreeMap;
 
     #[test]
     fn setup_catalog_annotates_compatibility_for_every_product_pack() {

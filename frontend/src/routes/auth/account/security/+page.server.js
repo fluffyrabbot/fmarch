@@ -535,10 +535,10 @@ export const actions = {
       body: JSON.stringify({}),
     });
     const body = await response.json().catch(() => null);
-    if (response.ok && body?.status === "erased") {
+    if (response.status === 202 && body?.status === "erasure_in_progress") {
       evictSessionCacheForToken(sessionToken);
       cookies.delete(SESSION_COOKIE_NAME, { path: "/" });
-      throw redirect(303, "/?accountErased=1");
+      throw redirect(303, "/?accountErasureRequested=1");
     }
     return fail(response.status === 401 || response.status === 403 ? response.status : 502, {
       id: "member-erasure",
@@ -546,7 +546,7 @@ export const actions = {
       message:
         response.status === 403
           ? "Sign in again before requesting erasure"
-          : "Account erasure could not be completed",
+          : "Account erasure could not be accepted",
     });
   },
 };

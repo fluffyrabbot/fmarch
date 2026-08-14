@@ -25,41 +25,41 @@ impl EncryptionEnvGuard {
     fn new() -> Self {
         let lock = ENCRYPTION_ENV_LOCK.lock().unwrap();
         let guard = Self {
-            prior_key: std::env::var("FMARCH_EVENT_ENCRYPTION_KEY").ok(),
-            prior_kid: std::env::var("FMARCH_EVENT_ENCRYPTION_KID").ok(),
-            prior_keys: std::env::var("FMARCH_EVENT_ENCRYPTION_KEYS").ok(),
+            prior_key: std::env::var("FMARCH_EVENT_WRAP_KEY").ok(),
+            prior_kid: std::env::var("FMARCH_EVENT_WRAP_KID").ok(),
+            prior_keys: std::env::var("FMARCH_EVENT_WRAP_KEYS").ok(),
             _lock: lock,
         };
-        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEY");
-        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KID");
-        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS");
+        std::env::remove_var("FMARCH_EVENT_WRAP_KEY");
+        std::env::remove_var("FMARCH_EVENT_WRAP_KID");
+        std::env::remove_var("FMARCH_EVENT_WRAP_KEYS");
         guard
     }
 
     fn set_active(&self, kid: &str, key: &str) {
-        std::env::set_var("FMARCH_EVENT_ENCRYPTION_KID", kid);
-        std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEY", key);
-        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS");
+        std::env::set_var("FMARCH_EVENT_WRAP_KID", kid);
+        std::env::set_var("FMARCH_EVENT_WRAP_KEY", key);
+        std::env::remove_var("FMARCH_EVENT_WRAP_KEYS");
     }
 
     fn trust_prior_key(&self, kid: &str, key: &str) {
-        std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEYS", format!("{kid}={key}"));
+        std::env::set_var("FMARCH_EVENT_WRAP_KEYS", format!("{kid}={key}"));
     }
 }
 
 impl Drop for EncryptionEnvGuard {
     fn drop(&mut self) {
         match &self.prior_key {
-            Some(value) => std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEY", value),
-            None => std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEY"),
+            Some(value) => std::env::set_var("FMARCH_EVENT_WRAP_KEY", value),
+            None => std::env::remove_var("FMARCH_EVENT_WRAP_KEY"),
         }
         match &self.prior_kid {
-            Some(value) => std::env::set_var("FMARCH_EVENT_ENCRYPTION_KID", value),
-            None => std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KID"),
+            Some(value) => std::env::set_var("FMARCH_EVENT_WRAP_KID", value),
+            None => std::env::remove_var("FMARCH_EVENT_WRAP_KID"),
         }
         match &self.prior_keys {
-            Some(value) => std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEYS", value),
-            None => std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS"),
+            Some(value) => std::env::set_var("FMARCH_EVENT_WRAP_KEYS", value),
+            None => std::env::remove_var("FMARCH_EVENT_WRAP_KEYS"),
         }
     }
 }
@@ -111,6 +111,12 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
     .expect("append old-key role assignment through projection boundary");
 
     env.set_active("new-kid", "new private event encryption key");
+    assert_eq!(
+        eventstore::rotate_stream_data_key(&pool, game)
+            .await
+            .unwrap(),
+        2
+    );
     append_and_project(
         &pool,
         game,
@@ -124,7 +130,7 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
     .expect("append new-key private post through projection boundary");
 
     let raw_rows = sqlx::query(
-        "SELECT seq, kind, sealed_version, sealed_kid, sealed_nonce, sealed_body FROM events WHERE stream_id = $1 ORDER BY stream_seq",
+        "SELECT seq, kind, sealed_version, stream_key_epoch, sealed_nonce, sealed_body FROM events WHERE stream_id = $1 ORDER BY stream_seq",
     )
     .bind(game)
     .fetch_all(&pool)
@@ -134,8 +140,8 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
 
     let raw_role: Vec<u8> = raw_rows[0].get("sealed_body");
     assert_eq!(raw_rows[0].get::<String, _>("kind"), "RoleAssigned");
-    assert_eq!(raw_rows[0].get::<i16, _>("sealed_version"), 2);
-    assert_eq!(raw_rows[0].get::<String, _>("sealed_kid"), "old-kid");
+    assert_eq!(raw_rows[0].get::<i16, _>("sealed_version"), 3);
+    assert_eq!(raw_rows[0].get::<i64, _>("stream_key_epoch"), 1);
     assert_eq!(raw_rows[0].get::<Vec<u8>, _>("sealed_nonce").len(), 24);
     assert!(raw_role.len() >= 16);
     let raw_role = String::from_utf8_lossy(&raw_role);
@@ -144,13 +150,25 @@ async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
 
     let raw_post: Vec<u8> = raw_rows[1].get("sealed_body");
     assert_eq!(raw_rows[1].get::<String, _>("kind"), "PostSubmitted");
-    assert_eq!(raw_rows[1].get::<i16, _>("sealed_version"), 2);
-    assert_eq!(raw_rows[1].get::<String, _>("sealed_kid"), "new-kid");
+    assert_eq!(raw_rows[1].get::<i16, _>("sealed_version"), 3);
+    assert_eq!(raw_rows[1].get::<i64, _>("stream_key_epoch"), 2);
     assert_eq!(raw_rows[1].get::<Vec<u8>, _>("sealed_nonce").len(), 24);
     assert!(raw_post.len() >= 16);
     let raw_post = String::from_utf8_lossy(&raw_post);
     assert!(!raw_post.contains("private:mafia_day_chat"));
     assert!(!raw_post.contains("coordinate with the new key"));
+
+    let wrapped_epochs: Vec<(i64, String)> = sqlx::query_as(
+        "SELECT key_epoch, wrap_kid FROM event_stream_keys WHERE stream_id = $1 ORDER BY key_epoch",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .expect("wrapped stream key epochs");
+    assert_eq!(
+        wrapped_epochs,
+        vec![(1, "old-kid".into()), (2, "new-kid".into())]
+    );
 
     let raw_slot: serde_json::Value = sqlx::query_scalar(
         "SELECT private FROM slot_state WHERE game_id = $1 AND slot_id = 'slot_1'",

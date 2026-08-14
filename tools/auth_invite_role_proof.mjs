@@ -33,11 +33,16 @@ const mediaRoot =
     : path.resolve(repoRoot, configuredMediaRoot);
 const evidencePath = path.join(artifactDir, "invite-role-proof.json");
 const databaseUrl = process.env.DATABASE_URL;
-const eventEncryptionKey =
-  process.env.FMARCH_EVENT_ENCRYPTION_KEY ??
+const eventWrapKey =
+  process.env.FMARCH_EVENT_WRAP_KEY ??
   "fmarch-auth-invite-role-proof-event-encryption-key-v1";
-const eventEncryptionKid =
-  process.env.FMARCH_EVENT_ENCRYPTION_KID ?? "auth-invite-role-proof-v1";
+const eventWrapKid =
+  process.env.FMARCH_EVENT_WRAP_KID ?? "auth-invite-role-proof-wrap-v1";
+const eventArchiveKey =
+  process.env.FMARCH_EVENT_ARCHIVE_KEY ??
+  "fmarch-auth-invite-role-proof-archive-key-v1";
+const eventArchiveKid =
+  process.env.FMARCH_EVENT_ARCHIVE_KID ?? "auth-invite-role-proof-archive-v1";
 const authSourceSigningKey =
   process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
   "fmarch-auth-invite-role-proof-auth-source-signing-key-v1";
@@ -2111,7 +2116,7 @@ async function proveMemberLifecycleBrowser({ apiBaseUrl, frontendBaseUrl }) {
 
     await page.getByTestId("member-erasure-confirmation").fill("ERASE");
     await Promise.all([
-      page.waitForURL(`${frontendBaseUrl}/?accountErased=1`, { timeout: 15000 }),
+      page.waitForURL(`${frontendBaseUrl}/?accountErasureRequested=1`, { timeout: 15000 }),
       page.getByTestId("member-erasure-submit").click(),
     ]);
     const remainingCookies = await page.context().cookies(frontendBaseUrl);
@@ -2127,7 +2132,7 @@ async function proveMemberLifecycleBrowser({ apiBaseUrl, frontendBaseUrl }) {
       exportDownloadTestId: "member-personal-export-download",
       exportSchemaVersion: artifact.schema_version,
       erasureConfirmationTestId: "member-erasure-confirmation",
-      erasedRedirect: "/?accountErased=1",
+      erasureRequestedRedirect: "/?accountErasureRequested=1",
       browserCookieCleared: true,
       sessionRevoked: true,
       rawPasswordExported: false,
@@ -3280,8 +3285,8 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.memberLifecycle?.exportSchemaVersion !== 1 ||
     evidence.identityLifecycle?.memberLifecycle?.erasureConfirmationTestId !==
       "member-erasure-confirmation" ||
-    evidence.identityLifecycle?.memberLifecycle?.erasedRedirect !==
-      "/?accountErased=1" ||
+    evidence.identityLifecycle?.memberLifecycle?.erasureRequestedRedirect !==
+      "/?accountErasureRequested=1" ||
     evidence.identityLifecycle?.memberLifecycle?.browserCookieCleared !== true ||
     evidence.identityLifecycle?.memberLifecycle?.sessionRevoked !== true ||
     evidence.identityLifecycle?.memberLifecycle?.rawPasswordExported !== false ||
@@ -3664,8 +3669,10 @@ async function startApi(url) {
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_SUBJECT_KEY_DIR: subjectKeyRoot,
-      FMARCH_EVENT_ENCRYPTION_KEY: eventEncryptionKey,
-      FMARCH_EVENT_ENCRYPTION_KID: eventEncryptionKid,
+      FMARCH_EVENT_WRAP_KEY: eventWrapKey,
+      FMARCH_EVENT_WRAP_KID: eventWrapKid,
+      FMARCH_EVENT_ARCHIVE_KEY: eventArchiveKey,
+      FMARCH_EVENT_ARCHIVE_KID: eventArchiveKid,
       FMARCH_AUTH_SOURCE_SIGNING_KEY: authSourceSigningKey,
       // This scratch-stack lane deliberately exercises the debug-only local
       // delivery adapter. Hosted and release-mode classic auth must provide an

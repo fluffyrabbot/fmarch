@@ -10,11 +10,13 @@ use projections::{
 use sqlx::Row;
 use uuid::Uuid;
 
-fn test_pack_ref(key: &str) -> serde_json::Value {
+fn test_game_created_payload(host: &str, key: &str) -> serde_json::Value {
+    let artifact = content_registry::select_pack_artifact(key)
+        .unwrap_or_else(|error| panic!("select canonical test pack artifact `{key}`: {error}"));
     serde_json::json!({
-        "key": key,
-        "version": 1,
-        "content_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        "host": host,
+        "pack_ref": &artifact.pack_ref,
+        "pack_artifact": artifact,
     })
 }
 
@@ -156,7 +158,7 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
             EventInput::new(
                 "GameCreated",
                 1,
-                serde_json::json!({ "host": "host", "pack_ref": test_pack_ref("mafiascum") }),
+                test_game_created_payload("host", "mafiascum"),
                 ActorId::User("host".into()),
                 1,
             ),

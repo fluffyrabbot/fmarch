@@ -1,7 +1,7 @@
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::middleware;
 use sqlx::postgres::PgPoolOptions;
@@ -32,6 +32,31 @@ enum IdentityDeliveryMode {
     Disabled,
     HttpJson,
     LocalDeterministic,
+}
+
+fn unix_now_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock must be after Unix epoch")
+        .as_secs() as i64
+}
+
+fn spawn_subject_erasure_worker(pool: sqlx::PgPool) -> tokio::task::JoinHandle<()> {
+    let worker_id = format!("subject-erasure-{}", uuid::Uuid::new_v4().simple());
+    tokio::spawn(async move {
+        loop {
+            match identity::process_pending_subject_erasures(&pool, &worker_id, unix_now_seconds())
+                .await
+            {
+                Ok(processed) if processed > 0 => continue,
+                Ok(_) => tokio::time::sleep(Duration::from_secs(5)).await,
+                Err(_error) => {
+                    tracing::error!("subject erasure worker failed; retrying");
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    })
 }
 
 #[derive(Clone)]
@@ -440,8 +465,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     server::ensure_schema_ready(&pool).await?;
-    eventstore::ensure_event_encryption_key_coverage(&pool).await?;
+    eventstore::audit_event_encryption_key_coverage(&pool).await?;
     identity::prepare_subject_authority_for_service(&pool, &subject_authority).await?;
+    let _subject_erasure_worker = spawn_subject_erasure_worker(pool.clone());
     let _day_event_scheduler =
         commands::day_scheduler::spawn_day_event_scheduler(pool.clone(), config.scheduler.clone())?;
 

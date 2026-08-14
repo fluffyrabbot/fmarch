@@ -176,7 +176,7 @@ pub async fn stored_event_count_all_where(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredSealedEvent {
     pub sealed_version: i16,
-    pub kid: String,
+    pub key_epoch: i64,
     pub nonce: Vec<u8>,
     pub body: Vec<u8>,
 }
@@ -194,7 +194,7 @@ impl StoredSealedEvent {
 /// helper in the command corpus that reads the event table's typed seal.
 pub async fn sealed_event_bodies(pool: &PgPool, game: Uuid, kind: &str) -> Vec<StoredSealedEvent> {
     sqlx::query(
-        "SELECT sealed_version, sealed_kid, sealed_nonce, sealed_body FROM events \
+        "SELECT sealed_version, stream_key_epoch, sealed_nonce, sealed_body FROM events \
          WHERE stream_id = $1 AND kind = $2 ORDER BY stream_seq",
     )
     .bind(game)
@@ -205,7 +205,7 @@ pub async fn sealed_event_bodies(pool: &PgPool, game: Uuid, kind: &str) -> Vec<S
     .into_iter()
     .map(|row| StoredSealedEvent {
         sealed_version: row.get("sealed_version"),
-        kid: row.get("sealed_kid"),
+        key_epoch: row.get("stream_key_epoch"),
         nonce: row.get("sealed_nonce"),
         body: row.get("sealed_body"),
     })

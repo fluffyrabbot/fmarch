@@ -475,11 +475,16 @@ async function startApi(url, label) {
       DATABASE_URL: url,
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
-      FMARCH_EVENT_ENCRYPTION_KEY:
-        process.env.FMARCH_EVENT_ENCRYPTION_KEY ??
+      FMARCH_EVENT_WRAP_KEY:
+        process.env.FMARCH_EVENT_WRAP_KEY ??
         "backup-restore-proof-key-at-least-32-bytes",
-      FMARCH_EVENT_ENCRYPTION_KID:
-        process.env.FMARCH_EVENT_ENCRYPTION_KID ?? "backup-restore-proof-v1",
+      FMARCH_EVENT_WRAP_KID:
+        process.env.FMARCH_EVENT_WRAP_KID ?? "backup-restore-proof-wrap-v1",
+      FMARCH_EVENT_ARCHIVE_KEY:
+        process.env.FMARCH_EVENT_ARCHIVE_KEY ??
+        "backup-restore-proof-archive-key-at-least-32-bytes",
+      FMARCH_EVENT_ARCHIVE_KID:
+        process.env.FMARCH_EVENT_ARCHIVE_KID ?? "backup-restore-proof-archive-v1",
       FMARCH_AUTH_SOURCE_SIGNING_KEY:
         process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
         "backup-restore-proof-signing-key-at-least-32-bytes",
