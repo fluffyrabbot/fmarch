@@ -744,8 +744,8 @@ test("two WorkOS login/logout/login cycles do not depend on retained AuthKit sta
   assert.equal(first.headers.get("location"), "/admin");
   assert.equal(cookies.values.get("fmarch_session"), "fmss_cycle-1");
 
-  await assert.rejects(
-    logoutActions.default({
+  assert.deepEqual(
+    await logoutActions.default({
       cookies,
       fetch: async () =>
         jsonResponse({
@@ -756,10 +756,11 @@ test("two WorkOS login/logout/login cycles do not depend on retained AuthKit sta
         }),
       request: formRequest({ returnTo: "/admin" }),
     }),
-    (error) =>
-      error.status === 303 &&
-      error.location ===
+    {
+      state: "provider_logout",
+      providerLogoutUrl:
         "https://api.workos.com/user_management/sessions/logout?session_id=session_one",
+    },
   );
   assert.equal(cookies.values.has("fmarch_session"), false);
 

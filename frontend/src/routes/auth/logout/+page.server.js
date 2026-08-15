@@ -8,7 +8,8 @@ import {
 import { WORKOS_SESSION_COOKIE_NAME } from "../../../lib/server/workos-authkit.mjs";
 import { workosProviderLogoutUrl } from "../../../lib/server/workos-provider-logout.mjs";
 
-export function load({ locals, url }) {
+export function load({ locals, setHeaders, url }) {
+  setHeaders({ "cache-control": "no-store" });
   const returnTo = authReturnPath(url.searchParams.get("returnTo"));
   if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
     throw redirect(303, loginPath(returnTo));
@@ -56,7 +57,13 @@ export const actions = {
     }
 
     discardBrowserSession({ cookies, token });
-    throw redirect(303, providerLogoutUrl ?? loginPath(returnTo));
+    if (providerLogoutUrl !== null) {
+      // Keep the native form POST inside the CSP form-action boundary. The
+      // rendered continuation performs a top-level navigation after this
+      // same-origin response has committed local logout and cookie deletion.
+      return { state: "provider_logout", providerLogoutUrl };
+    }
+    throw redirect(303, loginPath(returnTo));
   },
 };
 

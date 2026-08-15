@@ -1,22 +1,44 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { actions, load } from "./+page.server.js";
 
+const pageSource = readFileSync(new URL("./+page.svelte", import.meta.url), "utf8");
+
 test("logout load exposes the authenticated principal and preserves a local return URL", () => {
+  const observed = { headers: null };
   assert.deepEqual(
     load({
       locals: { principalUserId: "host_h" },
+      setHeaders: (headers) => {
+        observed.headers = headers;
+      },
       url: new URL("http://localhost/auth/logout?returnTo=/g/game-1/host"),
     }),
     { logout: { principalUserId: "host_h", returnTo: "/g/game-1/host" } },
   );
+  assert.deepEqual(observed.headers, { "cache-control": "no-store" });
 });
 
 test("logout load redirects an unauthenticated browser through login", () => {
   assert.throws(
-    () => load({ locals: {}, url: new URL("http://localhost/auth/logout?returnTo=/admin") }),
+    () =>
+      load({
+        locals: {},
+        setHeaders() {},
+        url: new URL("http://localhost/auth/logout?returnTo=/admin"),
+      }),
     (error) => error.status === 303 && error.location === "/auth/login?returnTo=%2Fadmin",
   );
+});
+
+test("provider logout continuation uses top-level navigation with an SSR fallback link", () => {
+  assert.match(pageSource, /form\?\.state === "provider_logout"/u);
+  assert.match(pageSource, /onMount\(\(\) => \{/u);
+  assert.match(pageSource, /window\.location\.replace\(providerLogoutUrl\)/u);
+  assert.match(pageSource, /data-testid="auth-provider-logout-continue"/u);
+  assert.match(pageSource, /href=\{providerLogoutUrl\}/u);
+  assert.doesNotMatch(pageSource, /<form[^>]+action=\{providerLogoutUrl\}/u);
 });
 
 test("logout revokes the presented opaque token before clearing every identity cookie", async () => {
@@ -57,25 +79,24 @@ test("logout preserves the cookie when the auth service is unavailable", async (
   assert.deepEqual(observed.deleted, []);
 });
 
-test("WorkOS logout clears local identity before top-level provider logout", async () => {
+test("WorkOS logout clears local identity before returning an exact continuation", async () => {
   const observed = { deleted: [] };
-  await assert.rejects(
-    actions.default({
-      cookies: cookieJar("active-workos-session", observed),
-      fetch: async () =>
-        jsonResponse({
-          status: "logged_out",
-          principal_user_id: "admin_a",
-          provider_logout_url:
-            "https://api.workos.com/user_management/sessions/logout?session_id=session_a",
-        }),
-      request: formRequest({ returnTo: "/admin" }),
-    }),
-    (error) =>
-      error.status === 303 &&
-      error.location ===
-        "https://api.workos.com/user_management/sessions/logout?session_id=session_a",
-  );
+  const result = await actions.default({
+    cookies: cookieJar("active-workos-session", observed),
+    fetch: async () =>
+      jsonResponse({
+        status: "logged_out",
+        principal_user_id: "admin_a",
+        provider_logout_url:
+          "https://api.workos.com/user_management/sessions/logout?session_id=session_a",
+      }),
+    request: formRequest({ returnTo: "/admin" }),
+  });
+  assert.deepEqual(result, {
+    state: "provider_logout",
+    providerLogoutUrl:
+      "https://api.workos.com/user_management/sessions/logout?session_id=session_a",
+  });
   assert.deepEqual(observed.deleted, [
     { name: "fmarch_session", options: { path: "/" } },
     { name: "wos-session", options: { path: "/" } },
