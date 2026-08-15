@@ -28,6 +28,12 @@
   </section>
 
   <section class="auth-chooser__panel fm-panel" aria-label="Sign-in methods">
+    {#if chooser.workosError}
+      <p class="auth-chooser__error" data-testid="auth-login-workos-error">
+        WorkOS sign-in did not complete ({chooser.workosError.replace("workos_", "").replaceAll("_", " ")}).
+      </p>
+    {/if}
+
     {#if chooser.principalUserId}
       <p class="auth-chooser__status" data-testid="auth-login-current-session">
         Current session: {chooser.principalUserId}
@@ -118,6 +124,18 @@
     border: 1px solid var(--fm-accent-soft);
     border-radius: 8px;
     color: var(--fm-accent-ink);
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.3;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+  }
+
+  .auth-chooser__error {
+    background: var(--fm-danger-wash);
+    border: 1px solid var(--fm-danger-soft);
+    border-radius: 8px;
+    color: var(--fm-danger-ink);
     font-size: 13px;
     font-weight: 800;
     line-height: 1.3;

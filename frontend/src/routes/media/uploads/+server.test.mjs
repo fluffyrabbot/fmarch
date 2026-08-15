@@ -77,6 +77,27 @@ test("media upload proxy rejects missing sessions, unsupported types, and oversi
   assert.equal(fetchCount, 0);
 });
 
+test("media upload proxy never forwards a bearer to an unpinned internal origin", async () => {
+  let fetchCalled = false;
+  await assert.rejects(
+    POST({
+      request: new Request("http://localhost/media/uploads", {
+        method: "POST",
+        headers: { "content-type": "image/png" },
+        body: new Uint8Array([137, 80, 78, 71]),
+      }),
+      cookies: cookieJar("account-session"),
+      env: { FMARCH_API_INTERNAL_URL: "http://attacker.example:8080" },
+      async fetch() {
+        fetchCalled = true;
+        return new Response();
+      },
+    }),
+    /FMARCH_API_INTERNAL_URL must be exactly/u,
+  );
+  assert.equal(fetchCalled, false);
+});
+
 function cookieJar(token) {
   return {
     get(name) {

@@ -19,7 +19,7 @@ use axum::{Json, Router};
 use caps::{Capability, Principal};
 use identity::{AccessTokenVerifier, IdentityError, MemberLifecycleCommand};
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgPool;
+use sqlx::postgres::{PgConnection, PgPool};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Semaphore;
@@ -688,6 +688,16 @@ struct AuthLifecycleResponse {
     principal_user_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LogoutAuthSessionResponse {
+    status: String,
+    principal_user_id: String,
+    /// A browser navigation target generated from the trusted WorkOS `sid`.
+    /// Classic sessions omit it; no provider identifier is exposed directly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_logout_url: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct IdentityLifecycleAuditQuery {
     principal_user_id: Option<String>,
@@ -766,6 +776,7 @@ async fn create_dev_auth_session(
         session_capabilities: &global_capabilities,
         authenticated_via_method_id: None,
         assurance: identity::Assurance::Dev,
+        workos_session_id: None,
         authenticated_at: now,
         expires_at,
         idle_expires_at: state.session_policy.idle_expiry(now, expires_at),
@@ -823,6 +834,7 @@ async fn create_auth_session_grant(
             session_capabilities: &global_capabilities,
             authenticated_via_method_id: None,
             assurance: identity::Assurance::AdminGrant,
+            workos_session_id: None,
             authenticated_at: now,
             expires_at,
             idle_expires_at: state.session_policy.idle_expiry(now, expires_at),
@@ -1006,6 +1018,7 @@ async fn register_auth_account(
             session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
+            workos_session_id: None,
             authenticated_at: now,
             expires_at,
             idle_expires_at: state.session_policy.idle_expiry(now, expires_at),
@@ -1160,6 +1173,7 @@ async fn classic_password_session(
             session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
+            workos_session_id: None,
             authenticated_at: now,
             expires_at,
             idle_expires_at: state
@@ -1209,6 +1223,285 @@ async fn classic_password_session(
     Ok(response)
 }
 
+async fn reject_known_workos_tombstone(
+    pool: &PgPool,
+    verified: &identity::VerifiedIdentity,
+) -> Result<(), ApiError> {
+    let provider_session_hash = verified.session_id.fingerprint();
+    let provider_subject_hash = identity::workos::subject_fingerprint(verified.subject.as_str());
+    let tombstoned: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+                   SELECT 1
+                   FROM workos_provider_session_tombstone
+                   WHERE provider_session_hash = $1
+               )
+            OR EXISTS (
+                   SELECT 1
+                   FROM workos_subject_tombstone
+                   WHERE provider_subject_hash = $2
+               )
+        "#,
+    )
+    .bind(provider_session_hash)
+    .bind(provider_subject_hash)
+    .fetch_one(pool)
+    .await?;
+    if tombstoned {
+        return Err(unauthorized_session());
+    }
+    Ok(())
+}
+
+/// A committed link is the one tombstone state that may be retried: the
+/// authoritative post-lock query below still requires the exact local bearer
+/// and exact provider assertion. Every other permanent deny state fails before
+/// the request can reach identity mutation.
+async fn reject_non_retryable_workos_link_tombstone(
+    pool: &PgPool,
+    verified: &identity::VerifiedIdentity,
+) -> Result<(), ApiError> {
+    let rejected: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+                   SELECT 1
+                   FROM workos_subject_tombstone
+                   WHERE provider_subject_hash = $1
+               )
+            OR EXISTS (
+                   SELECT 1
+                   FROM workos_provider_session_tombstone
+                   WHERE provider_session_hash = $2
+                     AND reason <> 'link_completed'
+               )
+        "#,
+    )
+    .bind(identity::workos::subject_fingerprint(
+        verified.subject.as_str(),
+    ))
+    .bind(verified.session_id.fingerprint())
+    .fetch_one(pool)
+    .await?;
+    if rejected {
+        return Err(unauthorized_session());
+    }
+    Ok(())
+}
+
+async fn completed_workos_link_method(
+    conn: &mut PgConnection,
+    verified: &identity::VerifiedIdentity,
+    provider_assertion: &str,
+    principal_user_id: &str,
+    linking_session_hash: &str,
+    now: i64,
+) -> Result<Option<Uuid>, ApiError> {
+    Ok(sqlx::query_scalar(
+        r#"
+        SELECT provider_session.method_id
+        FROM workos_provider_session AS provider_session
+        JOIN workos_provider_session_tombstone AS tombstone
+          ON tombstone.provider_session_hash = $4
+         AND tombstone.reason = 'link_completed'
+        JOIN workos_session_exchange AS exchange
+          ON exchange.provider_session_id = provider_session.provider_session_id
+         AND exchange.access_token_hash = $5
+         AND exchange.linking_session_hash = $6
+         AND exchange.access_expires_at > $7
+        JOIN external_identity AS external_identity
+          ON external_identity.provider = 'workos'
+         AND external_identity.subject = provider_session.subject
+         AND external_identity.principal_user_id = provider_session.principal_user_id
+         AND external_identity.method_id = provider_session.method_id
+        JOIN authentication_method AS method
+          ON method.method_id = provider_session.method_id
+         AND method.principal_user_id = provider_session.principal_user_id
+         AND method.kind = 'workos'
+         AND method.status = 'active'
+        WHERE provider_session.provider_session_id = $1
+          AND provider_session.subject = $2
+          AND provider_session.principal_user_id = $3
+          AND provider_session.status = 'logged_out'
+        "#,
+    )
+    .bind(verified.session_id.as_str())
+    .bind(verified.subject.as_str())
+    .bind(principal_user_id)
+    .bind(verified.session_id.fingerprint())
+    .bind(identity::token::hash_token(provider_assertion))
+    .bind(linking_session_hash)
+    .bind(now)
+    .fetch_optional(&mut *conn)
+    .await?)
+}
+
+/// Atomically bind one verified WorkOS provider session to its exact platform
+/// identity and consume the exact signed assertion. The caller must already
+/// hold the canonical identity mutation lock through resolve/attach or locked
+/// local-session validation; the second tombstone read is the authoritative
+/// race-closing check after that lock.
+async fn claim_workos_provider_session(
+    conn: &mut PgConnection,
+    verified: &identity::VerifiedIdentity,
+    resolution: &identity::workos::WorkosResolution,
+    provider_assertion: &str,
+    linking_session_hash: Option<&str>,
+    now: i64,
+) -> Result<(), ApiError> {
+    if verified.expires_at <= now {
+        return Err(unauthorized_session());
+    }
+    sqlx::query("DELETE FROM workos_session_exchange WHERE access_expires_at <= $1")
+        .bind(now)
+        .execute(&mut *conn)
+        .await?;
+    let provider_session_hash = verified.session_id.fingerprint();
+    let provider_subject_hash = identity::workos::subject_fingerprint(verified.subject.as_str());
+    let tombstoned: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+                   SELECT 1
+                   FROM workos_provider_session_tombstone
+                   WHERE provider_session_hash = $1
+               )
+            OR EXISTS (
+                   SELECT 1
+                   FROM workos_subject_tombstone
+                   WHERE provider_subject_hash = $2
+               )
+        "#,
+    )
+    .bind(provider_session_hash)
+    .bind(provider_subject_hash)
+    .fetch_one(&mut *conn)
+    .await?;
+    if tombstoned {
+        return Err(unauthorized_session());
+    }
+
+    let provider_session_claimed = sqlx::query_scalar::<_, String>(
+        r#"
+        INSERT INTO workos_provider_session (
+            provider_session_id,
+            subject,
+            principal_user_id,
+            method_id,
+            status,
+            created_at,
+            last_seen_at,
+            access_expires_at,
+            logged_out_at
+        )
+        VALUES ($1, $2, $3, $4, 'active', $5, $5, $6, NULL)
+        ON CONFLICT (provider_session_id) DO UPDATE
+        SET last_seen_at = GREATEST(
+                workos_provider_session.last_seen_at,
+                EXCLUDED.last_seen_at
+            ),
+            access_expires_at = GREATEST(
+                workos_provider_session.access_expires_at,
+                EXCLUDED.access_expires_at
+            )
+        WHERE workos_provider_session.status = 'active'
+          AND workos_provider_session.subject = EXCLUDED.subject
+          AND workos_provider_session.principal_user_id = EXCLUDED.principal_user_id
+          AND workos_provider_session.method_id = EXCLUDED.method_id
+        RETURNING provider_session_id
+        "#,
+    )
+    .bind(verified.session_id.as_str())
+    .bind(verified.subject.as_str())
+    .bind(resolution.principal_user_id.as_str())
+    .bind(resolution.method_id)
+    .bind(now)
+    .bind(verified.expires_at)
+    .fetch_optional(&mut *conn)
+    .await?;
+    if provider_session_claimed.is_none() {
+        return Err(unauthorized_session());
+    }
+
+    let exchanged = sqlx::query(
+        r#"
+        INSERT INTO workos_session_exchange (
+            provider_session_id, access_token_hash,
+            exchanged_at, access_expires_at, linking_session_hash
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(verified.session_id.as_str())
+    .bind(identity::token::hash_token(provider_assertion))
+    .bind(now)
+    .bind(verified.expires_at)
+    .bind(linking_session_hash)
+    .execute(&mut *conn)
+    .await?;
+    if exchanged.rows_affected() != 1 {
+        return Err(ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::NotAuthorized,
+            message: "identity assertion was already exchanged".to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// Seal one observed WorkOS provider session and retain permanent replay-deny
+/// evidence. The caller must hold the canonical principal lock; link flows
+/// additionally hold the provider-subject lock ahead of it.
+async fn end_workos_provider_session(
+    conn: &mut PgConnection,
+    session_id: &identity::WorkosSessionId,
+    principal_user_id: &str,
+    method_id: Uuid,
+    sampled_now: i64,
+    reason: &'static str,
+) -> Result<String, ApiError> {
+    let logged_out_at = sqlx::query_scalar::<_, i64>(
+        r#"
+        UPDATE workos_provider_session
+        SET status = 'logged_out',
+            logged_out_at = GREATEST($1, last_seen_at)
+        WHERE provider_session_id = $2
+          AND principal_user_id = $3
+          AND method_id = $4
+          AND status = 'active'
+        RETURNING logged_out_at
+        "#,
+    )
+    .bind(sampled_now)
+    .bind(session_id.as_str())
+    .bind(principal_user_id)
+    .bind(method_id)
+    .fetch_optional(&mut *conn)
+    .await?;
+    let Some(logged_out_at) = logged_out_at else {
+        return Err(unauthorized_session());
+    };
+    let tombstoned = sqlx::query(
+        r#"
+        INSERT INTO workos_provider_session_tombstone (
+            provider_session_hash,
+            tombstoned_at,
+            reason
+        )
+        VALUES ($1, $2, $3)
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(session_id.fingerprint())
+    .bind(logged_out_at)
+    .bind(reason)
+    .execute(&mut *conn)
+    .await?;
+    if tombstoned.rows_affected() != 1 {
+        return Err(unauthorized_session());
+    }
+    Ok(identity::workos::logout_url(session_id))
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "method", deny_unknown_fields)]
 enum CreateAuthSessionRequest {
@@ -1252,41 +1545,16 @@ async fn create_auth_session(
             if verified.expires_at <= now {
                 return Err(unauthorized_session());
             }
+            reject_known_workos_tombstone(&state.pool, &verified).await?;
             let mut tx = state.pool.begin().await?;
-            sqlx::query("DELETE FROM workos_session_exchange WHERE access_expires_at <= $1")
-                .bind(now)
-                .execute(&mut *tx)
-                .await?;
-            let exchanged = sqlx::query(
-                r#"
-                INSERT INTO workos_session_exchange (
-                    provider_session_id, access_token_hash, subject,
-                    exchanged_at, access_expires_at
-                )
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT DO NOTHING
-                "#,
-            )
-            .bind(verified.session_id.as_str())
-            .bind(identity::token::hash_token(token))
-            .bind(verified.subject.as_str())
-            .bind(now)
-            .bind(verified.expires_at)
-            .execute(&mut *tx)
-            .await?;
-            if exchanged.rows_affected() != 1 {
-                return Err(ApiError::Reject {
-                    status: StatusCode::CONFLICT,
-                    error: RejectCode::NotAuthorized,
-                    message: "identity assertion was already exchanged".to_string(),
-                });
-            }
             let resolution = identity::workos::resolve_subject(&mut tx, &verified, now)
                 .await
                 .map_err(|error| match error {
                     identity::IdentityFlowError::Unauthorized => unauthorized_account(),
                     other => ApiError::from(other),
                 })?;
+            claim_workos_provider_session(&mut tx, &verified, &resolution, token, None, now)
+                .await?;
             let expires_at = state.session_policy.workos_expiry(now);
             let issued = identity::session::issue_session(
                 &mut tx,
@@ -1295,6 +1563,7 @@ async fn create_auth_session(
                     session_capabilities: &[],
                     authenticated_via_method_id: Some(resolution.method_id),
                     assurance: identity::Assurance::ExternalSso,
+                    workos_session_id: Some(&verified.session_id),
                     authenticated_at: now,
                     expires_at,
                     idle_expires_at: state.session_policy.idle_expiry(now, expires_at),
@@ -1630,6 +1899,7 @@ async fn add_classic_method(
             session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
+            workos_session_id: None,
             authenticated_at: now,
             expires_at: session_expires_at,
             idle_expires_at: state.session_policy.idle_expiry(now, session_expires_at),
@@ -1686,6 +1956,7 @@ struct AddWorkosMethodResponse {
     status: String,
     method_id: Uuid,
     principal_user_id: String,
+    provider_logout_url: String,
 }
 
 async fn add_workos_method(
@@ -1703,8 +1974,8 @@ async fn add_workos_method(
         })?;
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let identity = authorization_context(&state, token).await?;
-    let now = unix_now_seconds();
-    require_recent_authentication(&identity, now)?;
+    let verification_now = unix_now_seconds();
+    require_recent_authentication(&identity, verification_now)?;
     let provider_assertion = request.provider_assertion.trim();
     if provider_assertion.is_empty() {
         return Err(ApiError::Reject {
@@ -1717,12 +1988,62 @@ async fn add_workos_method(
         .verify(provider_assertion)
         .await
         .map_err(identity_api_error)?;
+    if verified.expires_at <= verification_now {
+        return Err(unauthorized_session());
+    }
+    reject_non_retryable_workos_link_tombstone(&state.pool, &verified).await?;
     let mut tx = state.pool.begin().await?;
-    let resolution = identity::workos::attach_subject(
+    identity::workos::lock_subject_advisory(&mut tx, verified.subject.as_str()).await?;
+    let locked_identity =
+        identity::session::validate_session_for_update(&mut tx, token, &state.session_policy)
+            .await?;
+    let now = unix_now_seconds();
+    require_recent_authentication(&locked_identity, now)?;
+    if locked_identity.principal_user_id != identity.principal_user_id {
+        return Err(unauthorized_session());
+    }
+    if let Some(method_id) = completed_workos_link_method(
         &mut tx,
         &verified,
-        identity.principal_user_id.as_str(),
+        provider_assertion,
+        locked_identity.principal_user_id.as_str(),
+        locked_identity.session_reference.as_str(),
         now,
+    )
+    .await?
+    {
+        let response = AddWorkosMethodResponse {
+            status: "attached".to_string(),
+            method_id,
+            principal_user_id: locked_identity.principal_user_id,
+            provider_logout_url: identity::workos::logout_url(&verified.session_id),
+        };
+        tx.commit().await?;
+        return Ok(Json(response));
+    }
+    let resolution = identity::workos::attach_subject_under_advisory_lock(
+        &mut tx,
+        &verified,
+        locked_identity.principal_user_id.as_str(),
+        now,
+    )
+    .await?;
+    claim_workos_provider_session(
+        &mut tx,
+        &verified,
+        &resolution,
+        provider_assertion,
+        Some(locked_identity.session_reference.as_str()),
+        now,
+    )
+    .await?;
+    let provider_logout_url = end_workos_provider_session(
+        &mut tx,
+        &verified.session_id,
+        resolution.principal_user_id.as_str(),
+        resolution.method_id,
+        now,
+        "link_completed",
     )
     .await?;
     sqlx::query(
@@ -1735,9 +2056,9 @@ async fn add_workos_method(
         "#,
     )
     .bind(now)
-    .bind(identity.principal_user_id.as_str())
-    .bind(identity.principal_user_id.as_str())
-    .bind(identity.session_reference.as_str())
+    .bind(locked_identity.principal_user_id.as_str())
+    .bind(locked_identity.principal_user_id.as_str())
+    .bind(locked_identity.session_reference.as_str())
     .bind(
         serde_json::json!({
             "method_kind": "workos",
@@ -1752,6 +2073,7 @@ async fn add_workos_method(
         status: "attached".to_string(),
         method_id: resolution.method_id,
         principal_user_id: resolution.principal_user_id,
+        provider_logout_url,
     }))
 }
 
@@ -1770,11 +2092,11 @@ async fn disable_account_method(
     headers: HeaderMap,
 ) -> Result<Json<DisableMethodResponse>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let now = unix_now_seconds();
     let mut tx = state.pool.begin().await?;
     let identity =
         identity::session::validate_session_for_update(&mut tx, token, &state.session_policy)
             .await?;
+    let now = unix_now_seconds();
     require_recent_authentication(&identity, now)?;
     let disabled = identity::methods::disable_method(
         &mut tx,
@@ -2457,6 +2779,7 @@ async fn recover_auth_account(
             session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
+            workos_session_id: None,
             authenticated_at: now,
             expires_at: state.session_policy.classic_expiry(now),
             idle_expires_at: state
@@ -2786,31 +3109,115 @@ async fn rotate_auth_session(
 async fn logout_auth_session(
     State(state): State<AuthHttpState>,
     headers: HeaderMap,
-) -> Result<Json<AuthLifecycleResponse>, ApiError> {
+) -> Result<Json<LogoutAuthSessionResponse>, ApiError> {
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let now = unix_now_seconds();
     let mut tx = state.pool.begin().await?;
-    let authorization = identity::session::validate_session_for_update(
-        &mut tx,
-        caller_token,
-        &state.session_policy,
-    )
-    .await?;
-    let revoked = sqlx::query(
-        r#"
-        UPDATE auth_session
-        SET revoked_at = $1
-        WHERE token_hash = $2
-          AND revoked_at IS NULL
-        "#,
-    )
-    .bind(now)
-    .bind(authorization.session_reference.as_str())
-    .execute(&mut *tx)
-    .await?;
-    if revoked.rows_affected() != 1 {
+    let logout_state =
+        identity::session::lock_session_for_logout(&mut tx, caller_token, &state.session_policy)
+            .await?;
+    let authorization = match logout_state {
+        identity::session::LogoutSessionState::Active(authorization) => authorization,
+        identity::session::LogoutSessionState::CompletedWorkos(completed) => {
+            let completed_provider_logout: bool = sqlx::query_scalar(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM workos_provider_session AS provider_session
+                    JOIN workos_provider_session_tombstone AS tombstone
+                      ON tombstone.provider_session_hash = $4
+                    WHERE provider_session.provider_session_id = $1
+                      AND provider_session.principal_user_id = $2
+                      AND provider_session.method_id = $3
+                      AND provider_session.status = 'logged_out'
+                )
+                "#,
+            )
+            .bind(completed.workos_session_id.as_str())
+            .bind(completed.principal_user_id.as_str())
+            .bind(completed.method_id)
+            .bind(completed.workos_session_id.fingerprint())
+            .fetch_one(&mut *tx)
+            .await?;
+            if !completed_provider_logout {
+                return Err(unauthorized_session());
+            }
+            let response = LogoutAuthSessionResponse {
+                status: "logged_out".to_string(),
+                principal_user_id: completed.principal_user_id,
+                provider_logout_url: Some(identity::workos::logout_url(
+                    &completed.workos_session_id,
+                )),
+            };
+            tx.commit().await?;
+            return Ok(Json(response));
+        }
+    };
+    // Sample after the canonical principal/session lock. A sibling exchange
+    // may have advanced provider last_seen_at while this request waited.
+    let now = unix_now_seconds();
+    let provider_logout_url =
+        if let Some(workos_session_id) = authorization.workos_session_id.as_ref() {
+            let Some((method_id, identity::MethodKind::Workos)) = authorization.method else {
+                return Err(unauthorized_session());
+            };
+            Some(
+                end_workos_provider_session(
+                    &mut tx,
+                    workos_session_id,
+                    authorization.principal_user_id.as_str(),
+                    method_id,
+                    now,
+                    "logout",
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+    let revoked = if let Some(workos_session_id) = authorization.workos_session_id.as_ref() {
+        // One upstream WorkOS session may legitimately mint multiple access
+        // tokens and therefore multiple local app sessions. Logging it out
+        // revokes that complete local provider-session scope atomically.
+        sqlx::query(
+            r#"
+            UPDATE auth_session
+            SET revoked_at = $1
+            WHERE principal_user_id = $2
+              AND workos_session_id = $3
+              AND revoked_at IS NULL
+            "#,
+        )
+        .bind(now)
+        .bind(authorization.principal_user_id.as_str())
+        .bind(workos_session_id.as_str())
+        .execute(&mut *tx)
+        .await?
+    } else {
+        sqlx::query(
+            r#"
+            UPDATE auth_session
+            SET revoked_at = $1
+            WHERE token_hash = $2
+              AND revoked_at IS NULL
+            "#,
+        )
+        .bind(now)
+        .bind(authorization.session_reference.as_str())
+        .execute(&mut *tx)
+        .await?
+    };
+    if revoked.rows_affected() == 0 {
         return Err(unauthorized_session());
     }
+    let audit_metadata = if provider_logout_url.is_some() {
+        serde_json::json!({
+            "provider": "workos",
+            "provider_session_scope": true,
+            "revoked_session_count": revoked.rows_affected()
+        })
+    } else {
+        serde_json::json!({})
+    };
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
@@ -2822,20 +3229,22 @@ async fn logout_auth_session(
             related_token_hash,
             metadata
         )
-        VALUES ($1, 'session_logged_out', $2, $3, $4, NULL, '{}'::JSONB)
+        VALUES ($1, 'session_logged_out', $2, $3, $4, NULL, $5::JSONB)
         "#,
     )
     .bind(now)
     .bind(authorization.principal_user_id.as_str())
     .bind(authorization.principal_user_id.as_str())
-    .bind(authorization.session_reference)
+    .bind(authorization.session_reference.as_str())
+    .bind(audit_metadata.to_string())
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
 
-    Ok(Json(AuthLifecycleResponse {
+    Ok(Json(LogoutAuthSessionResponse {
         status: "logged_out".to_string(),
         principal_user_id: authorization.principal_user_id,
+        provider_logout_url,
     }))
 }
 
@@ -3187,6 +3596,7 @@ async fn redeem_auth_invite(
             session_capabilities: &invite.2,
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
+            workos_session_id: None,
             authenticated_at: now,
             expires_at: session_expires_at,
             idle_expires_at: state.session_policy.idle_expiry(now, session_expires_at),

@@ -1,3 +1,4 @@
+import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 const MAX_ENCODED_BYTES = 12 * 1024 * 1024;
@@ -29,7 +30,7 @@ export async function POST({
   if (body.byteLength === 0 || body.byteLength > MAX_ENCODED_BYTES) {
     return emptyResponse(body.byteLength === 0 ? 422 : 413);
   }
-  const response = await fetchImpl(mediaApiUrl(env, "/media/uploads"), {
+  const response = await fetchImpl(`${serverApiBaseUrl(env)}/media/uploads`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,
@@ -45,13 +46,6 @@ export async function POST({
       "content-type": response.headers.get("content-type") ?? "application/json",
     },
   });
-}
-
-function mediaApiUrl(env, pathname) {
-  const base = String(
-    env?.FMARCH_API_INTERNAL_URL ?? env?.FMARCH_API_BASE_URL ?? "",
-  ).replace(/\/$/u, "");
-  return `${base}${pathname}`;
 }
 
 function emptyResponse(status) {

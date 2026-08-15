@@ -15,7 +15,8 @@
     "vite": "8.0.16"
   },
   "dependencies": {
-    "@workos/authkit-sveltekit": "0.3.0",
+    "@workos-inc/node": "10.8.0",
+    "@workos/authkit-session": "0.5.4",
     "cbor-x": "1.6.0"
   },
   "overrides": {

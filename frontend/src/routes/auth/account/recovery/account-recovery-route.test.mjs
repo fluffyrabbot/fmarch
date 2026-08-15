@@ -20,7 +20,7 @@ test("recovery load preserves account and local role return URL", () => {
 
 test("recovery request is non-enumerating and uses the private API base", async () => {
   const previousInternalBase = process.env.FMARCH_API_INTERNAL_URL;
-  process.env.FMARCH_API_INTERNAL_URL = "http://api.internal:4000/";
+  process.env.FMARCH_API_INTERNAL_URL = "http://fmarch.railway.internal:8080";
   let observed = null;
   try {
     const result = await actions.request({
@@ -47,7 +47,7 @@ test("recovery request is non-enumerating and uses the private API base", async 
       returnTo: "/g/game-1/host",
     });
     assert.deepEqual(observed, {
-      url: "http://api.internal:4000/auth/accounts/recovery-requests",
+      url: "http://fmarch.railway.internal:8080/auth/accounts/recovery-requests",
       source: "2001:db8::44",
       body: { account_id: "host@example.test" },
     });

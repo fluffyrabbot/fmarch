@@ -33,7 +33,7 @@ const server = spawn("node", ["build"], {
     ORIGIN: origin,
     NODE_ENV: "production",
     FMARCH_API_BASE_URL: origin,
-    FMARCH_API_INTERNAL_URL: "http://127.0.0.1:1",
+    FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080",
     FMARCH_SSR_FETCH_TIMEOUT_MS: "50",
   },
   stdio: ["ignore", "pipe", "pipe"],

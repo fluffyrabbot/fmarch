@@ -14,6 +14,7 @@ async function contract() {
       [
         "Dockerfile",
         ".dockerignore",
+        ".env.example",
         "railway.toml",
         "deploy/railway/migrator.railway.toml",
         "Dockerfile.frontend",
@@ -27,6 +28,7 @@ async function contract() {
         "docs/ops/release-secret-custody.json",
         "docs/ops/railway-staging-target.md",
         "tools/production_promotion.mjs",
+        "tools/workos_oidc_preflight.mjs",
         "package.json",
         "crates/server/src/main.rs",
         "crates/server/src/bin/fmarch-migrate.rs",
@@ -218,8 +220,18 @@ async function contract() {
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /^FMARCH_BIND=/m);
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /^RAILWAY_RUN_UID=/m);
   assert.match(source["deploy/railway/api.env.example"], /^WORKOS_CLIENT_ID=/m);
-  assert.match(source["deploy/railway/api.env.example"], /^WORKOS_ISSUER=https:\/\//m);
-  assert.match(source["deploy/railway/api.env.example"], /^WORKOS_JWKS_URL=https:\/\//m);
+  assert.match(
+    source[".env.example"],
+    /^# WORKOS_ISSUER=https:\/\/api\.workos\.com\/user_management\/client_replace_me$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^WORKOS_ISSUER=https:\/\/api\.workos\.com\/user_management\/client_replace_me$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^WORKOS_JWKS_URL=https:\/\/api\.workos\.com\/sso\/jwks\/client_replace_me$/m,
+  );
   assert.match(source["deploy/railway/api.env.example"], /^FMARCH_CLASSIC_AUTH=0$/m);
   assert.match(
     source["deploy/railway/api.env.example"],
@@ -238,11 +250,24 @@ async function contract() {
     /FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN=(?!\$\{\{IDENTITY_DELIVERY_AUTH_TOKEN\}\})\S+/,
   );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /FMARCH_DEV_AUTH/);
-  assert.match(source["deploy/railway/frontend.env.example"], /^ORIGIN=https:\/\//m);
-  assert.match(source["deploy/railway/frontend.env.example"], /^FMARCH_API_BASE_URL=https:\/\//m);
+  assert.match(
+    source["deploy/railway/frontend.env.example"],
+    /^ORIGIN=https:\/\/fmarch-frontend-staging\.up\.railway\.app$/m,
+  );
+  assert.match(
+    source["deploy/railway/frontend.env.example"],
+    /^FMARCH_API_BASE_URL=https:\/\/fmarch-staging\.up\.railway\.app$/m,
+  );
+  assert.match(
+    source["deploy/railway/frontend.env.example"],
+    /^FMARCH_API_INTERNAL_URL=http:\/\/fmarch\.railway\.internal:8080$/m,
+  );
   assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_CLIENT_ID=/m);
   assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_API_KEY=/m);
-  assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_REDIRECT_URI=https:\/\//m);
+  assert.match(
+    source["deploy/railway/frontend.env.example"],
+    /^WORKOS_REDIRECT_URI=https:\/\/fmarch-frontend-staging\.up\.railway\.app\/auth\/callback$/m,
+  );
   assert.match(source["deploy/railway/frontend.env.example"], /^WORKOS_COOKIE_PASSWORD=/m);
   assert.match(
     source["deploy/railway/frontend.env.example"],
@@ -333,6 +358,27 @@ async function contract() {
     source["tools/production_promotion.mjs"],
     /body\.subject_authority === true/,
   );
+  assert.match(source["tools/production_promotion.mjs"], /preflightWorkosOidc/);
+  assert.match(
+    source["tools/production_promotion.mjs"],
+    /frontend must use the canonical private API URL/,
+  );
+  assert.match(
+    source["tools/production_promotion.mjs"],
+    /API and frontend must use the same WorkOS client/,
+  );
+  assert.match(
+    source["tools/workos_oidc_preflight.mjs"],
+    /\/user_management\/\$\{clientId\}\/\.well-known\/openid-configuration/,
+  );
+  assert.match(
+    source["tools/workos_oidc_preflight.mjs"],
+    /WORKOS_ISSUER must exactly match OIDC discovery/,
+  );
+  assert.match(
+    source["tools/workos_oidc_preflight.mjs"],
+    /WORKOS_JWKS_URL must exactly match OIDC discovery/,
+  );
 
   const runbook = source["docs/ops/railway-staging-target.md"];
   for (const requiredText of [
@@ -363,12 +409,18 @@ async function contract() {
     "npm run proof:lanes -- --mode full --run",
     "fmarch-frontend-staging.up.railway.app",
     "fmarch-frontend-production.up.railway.app",
+    "npm run preflight:workos-oidc",
+    "client-scoped discovery document",
   ]) {
     assert.ok(runbook.includes(requiredText), `runbook missing ${requiredText}`);
   }
   assert.match(
     source["package.json"],
     /"promote:production": "node tools\/production_promotion\.mjs"/,
+  );
+  assert.match(
+    source["package.json"],
+    /"preflight:workos-oidc": "node tools\/workos_oidc_preflight\.mjs"/,
   );
   assert.match(source["tools/production_promotion.mjs"], /origin\/production must be an ancestor/);
 }

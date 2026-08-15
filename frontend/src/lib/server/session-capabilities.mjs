@@ -1,5 +1,6 @@
 import { normalizeCapabilities } from "../app/capabilities.mjs";
 import { fetchTimeoutSignal, ssrFetchTimeoutMs } from "../app/cold-load.mjs";
+import { serverApiBaseUrl } from "./api-base.mjs";
 
 export const SESSION_COOKIE_NAME = "fmarch_session";
 export const FIXTURE_SESSION_COOKIE_NAME = "fmarch_fixture_session";
@@ -154,7 +155,7 @@ export async function rotateAuthenticatedBrowserSession({
   let response;
   try {
     const signal = fetchTimeoutSignal(ssrFetchTimeoutMs(env));
-    response = await fetchImpl(`${authApiBaseUrl(env)}/auth/session-rotations`, {
+    response = await fetchImpl(`${serverApiBaseUrl(env)}/auth/session-rotations`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,
@@ -230,22 +231,12 @@ export function resolveFixtureSession({ token, game = "midsummer" } = {}) {
 }
 
 function authSessionUrl({ env, context }) {
-  const baseUrl = authApiBaseUrl(env);
+  const baseUrl = serverApiBaseUrl(env);
   const path =
     context?.kind === "game"
       ? `/auth/session?game=${encodeURIComponent(context.game)}`
       : "/auth/session";
   return `${baseUrl}${path}`;
-}
-
-function authApiBaseUrl(env) {
-  const base =
-    typeof env?.FMARCH_API_INTERNAL_URL === "string" && env.FMARCH_API_INTERNAL_URL.trim() !== ""
-      ? env.FMARCH_API_INTERNAL_URL
-      : typeof env?.FMARCH_API_BASE_URL === "string"
-        ? env.FMARCH_API_BASE_URL
-        : "";
-  return base.replace(/\/$/, "");
 }
 
 function normalizeSessionPayload(payload, context = null) {

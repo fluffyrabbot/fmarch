@@ -102,6 +102,23 @@ test("thread media proxy returns zero bytes for missing and non-member sessions"
   assert.equal(fetchCount, 1);
 });
 
+test("thread media proxy never forwards a bearer to an unpinned internal origin", async () => {
+  let fetchCalled = false;
+  await assert.rejects(
+    GET({
+      params: PARAMS,
+      cookies: cookieJar("member-session"),
+      env: { FMARCH_API_INTERNAL_URL: "http://attacker.example:8080" },
+      async fetch() {
+        fetchCalled = true;
+        return new Response();
+      },
+    }),
+    /FMARCH_API_INTERNAL_URL must be exactly/u,
+  );
+  assert.equal(fetchCalled, false);
+});
+
 function cookieJar(token) {
   return {
     get(name) {

@@ -255,30 +255,22 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     );
 
     let quoting_seq = page.posts[1].source_seq;
-    let off_page = off_page_game_citation_counts(
+    let off_page =
+        off_page_game_citation_counts(&pool, game, "main", &[quoting_seq], &[quoting_seq], None)
+            .await
+            .unwrap();
+    assert_eq!(off_page, vec![(quoted_seq, 1)]);
+    assert!(off_page_game_citation_counts(
         &pool,
         game,
         "main",
         &[quoting_seq],
-        &[quoting_seq],
+        &[quoted_seq, quoting_seq],
         None,
     )
     .await
-    .unwrap();
-    assert_eq!(off_page, vec![(quoted_seq, 1)]);
-    assert!(
-        off_page_game_citation_counts(
-            &pool,
-            game,
-            "main",
-            &[quoting_seq],
-            &[quoted_seq, quoting_seq],
-            None,
-        )
-        .await
-        .unwrap()
-        .is_empty()
-    );
+    .unwrap()
+    .is_empty());
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

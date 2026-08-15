@@ -575,6 +575,30 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
   assert.ok(!frontend.laneIds.includes('test:frontend-role-proof:quick'));
 });
 
+test('WorkOS callback and hosted configuration changes arm identity and deployment contracts', () => {
+  for (const changed of [
+    'frontend/src/routes/auth/callback/+server.js',
+    'deploy/railway/api.env.example',
+    'tools/workos_oidc_preflight.mjs',
+    'docs/arch/06-security.md',
+    'docs/ops/railway-staging-target.md',
+  ]) {
+    const selection = selectLanes({
+      changed: [changed],
+      manifest,
+      crateGraph: FIXTURE_GRAPH,
+      mode: 'inner',
+    });
+    for (const lane of [
+      'test:workos-oidc-preflight',
+      'test:production-promotion',
+      'test:railway-staging-target',
+    ]) {
+      assert.ok(selection.laneIds.includes(lane), `${changed} must arm ${lane}`);
+    }
+  }
+});
+
 test('lane execution preserves selected order and stops at the first failure', () => {
   const calls = [];
   const spawn = (command) => {

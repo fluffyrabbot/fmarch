@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { authReturnPath } from "../../../../lib/server/auth-return-path.mjs";
 import { authSourceHeader } from "../../../../lib/server/auth-source.mjs";
 import {
   browserSessionCookieOptions,
@@ -10,7 +11,7 @@ export function load({ url }) {
   return {
     registration: {
       accountId: optionalField(url.searchParams.get("account")),
-      returnTo: safeReturnTo(url.searchParams.get("returnTo")),
+      returnTo: authReturnPath(url.searchParams.get("returnTo")),
     },
   };
 }
@@ -21,7 +22,7 @@ export const actions = {
     const accountId = optionalField(formData.get("accountId"));
     const password = passwordField(formData.get("password"));
     const confirmPassword = passwordField(formData.get("confirmPassword"));
-    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const returnTo = authReturnPath(formData.get("returnTo"));
     if (accountId === "" || password === null || confirmPassword === null) {
       return fail(400, rejection({
         message: "Account, password, and confirmation are required",
@@ -133,19 +134,4 @@ function optionalField(value) {
 
 function passwordField(value) {
   return typeof value === "string" && value !== "" ? value : null;
-}
-
-function safeReturnTo(value) {
-  if (typeof value !== "string") {
-    return "/";
-  }
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
-    return "/";
-  }
-  return trimmed === "/auth/register" ||
-    trimmed.startsWith("/auth/register?") ||
-    trimmed.startsWith("/auth/register/")
-    ? "/"
-    : trimmed;
 }

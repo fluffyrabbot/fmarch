@@ -10,7 +10,7 @@ use api::{
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
-use identity::{StaticAccessTokenVerifier, VerifiedIdentity};
+use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
 use media::{MediaLimits, MediaStore, VariantLimits};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -393,7 +393,7 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
             "workos-access-token".to_string(),
             VerifiedIdentity {
                 subject: "user_01HWORKOS".to_string(),
-                session_id: "session_01HWORKOS".to_string(),
+                session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
                 expires_at: 4_102_444_800,
                 email: Some("player@example.test".to_string()),
             },
@@ -402,7 +402,16 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
             "workos-access-token-2".to_string(),
             VerifiedIdentity {
                 subject: "user_01HWORKOS".to_string(),
-                session_id: "session_01HWORKOS_2".to_string(),
+                session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+                expires_at: 4_102_444_800,
+                email: Some("player@example.test".to_string()),
+            },
+        ),
+        (
+            "workos-access-token-3".to_string(),
+            VerifiedIdentity {
+                subject: "user_01HWORKOS".to_string(),
+                session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
                 expires_at: 4_102_444_800,
                 email: Some("player@example.test".to_string()),
             },
@@ -450,6 +459,60 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
         .await
         .unwrap();
     assert_eq!(replay.status(), StatusCode::CONFLICT);
+
+    // A second exact assertion minted by the same WorkOS session is distinct
+    // authority and may be exchanged once as well. Replay identity is the
+    // token hash, not the provider `sid`.
+    let second = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/sessions")
+                .header("authorization", "Bearer workos-access-token-2")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "method": "workos" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::OK);
+    let second_body = to_bytes(second.into_body(), usize::MAX).await.unwrap();
+    let second_session: serde_json::Value = serde_json::from_slice(&second_body).unwrap();
+    let second_session_token = second_session["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let second_replay = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/sessions")
+                .header("authorization", "Bearer workos-access-token-2")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "method": "workos" }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(second_replay.status(), StatusCode::CONFLICT);
+    let second_session_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/auth/session")
+                .header("authorization", format!("Bearer {second_session_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(second_session_response.status(), StatusCode::OK);
 
     // The app session is the bearer; the provider JWT is rejected outside the
     // exchange.
@@ -536,7 +599,7 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
             Request::builder()
                 .method("POST")
                 .uri("/auth/sessions")
-                .header("authorization", "Bearer workos-access-token-2")
+                .header("authorization", "Bearer workos-access-token-3")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({ "method": "workos" }).to_string(),
@@ -546,6 +609,218 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_logout_revokes_the_local_provider_session_scope_and_returns_a_constrained_url(
+    pool: sqlx::PgPool,
+) {
+    let session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
+    let verifier = StaticAccessTokenVerifier::new(
+        [
+            "workos-logout-token-a",
+            "workos-logout-token-b",
+            "workos-logout-token-unused",
+        ]
+        .map(|token| {
+            (
+                token.to_string(),
+                VerifiedIdentity {
+                    subject: "user_logout".to_string(),
+                    session_id: session_id.clone(),
+                    expires_at: 4_102_444_800,
+                    email: Some("logout@example.test".to_string()),
+                },
+            )
+        }),
+    );
+    let app = api::router_with_state(
+        test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
+    );
+
+    let mut local_tokens = Vec::new();
+    for provider_token in ["workos-logout-token-a", "workos-logout-token-b"] {
+        let exchange = post_bearer_json(
+            &app,
+            "/auth/sessions",
+            serde_json::json!({ "method": "workos" }),
+            provider_token,
+        )
+        .await;
+        assert_eq!(exchange.status(), StatusCode::OK);
+        let body = to_bytes(exchange.into_body(), usize::MAX).await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        local_tokens.push(body["session_token"].as_str().unwrap().to_string());
+    }
+
+    let logout = post_bearer_json(
+        &app,
+        "/auth/session-logout",
+        serde_json::json!({}),
+        &local_tokens[0],
+    )
+    .await;
+    assert_eq!(logout.status(), StatusCode::OK);
+    let body = to_bytes(logout.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["status"], "logged_out");
+    assert_eq!(
+        body["provider_logout_url"],
+        "https://api.workos.com/user_management/sessions/logout?session_id=session_01HQAG1HENBZMAZD82YRXDFC0B"
+    );
+    // If the first committed response is lost, the exact local bearer remains
+    // non-authorizing but can reproduce the same constrained upstream logout
+    // navigation while it is otherwise unexpired.
+    let retry = post_bearer_json(
+        &app,
+        "/auth/session-logout",
+        serde_json::json!({}),
+        &local_tokens[0],
+    )
+    .await;
+    assert_eq!(retry.status(), StatusCode::OK);
+    let retry = to_bytes(retry.into_body(), usize::MAX).await.unwrap();
+    let retry: serde_json::Value = serde_json::from_slice(&retry).unwrap();
+    assert_eq!(retry, body);
+
+    for local_token in &local_tokens {
+        let rejected = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/auth/session")
+                    .header("authorization", format!("Bearer {local_token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+    }
+    let delayed_assertion = post_bearer_json(
+        &app,
+        "/auth/sessions",
+        serde_json::json!({ "method": "workos" }),
+        "workos-logout-token-unused",
+    )
+    .await;
+    assert_eq!(delayed_assertion.status(), StatusCode::UNAUTHORIZED);
+    let revocation = sqlx::query_as::<_, (i64, i64)>(
+        r#"
+        SELECT COUNT(*), COUNT(*) FILTER (WHERE revoked_at IS NOT NULL)
+        FROM auth_session
+        WHERE workos_session_id = $1
+        "#,
+    )
+    .bind(session_id.as_str())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(revocation, (2, 2));
+    let provider_status: String = sqlx::query_scalar(
+        "SELECT status FROM workos_provider_session WHERE provider_session_id = $1",
+    )
+    .bind(session_id.as_str())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(provider_status, "logged_out");
+    let audit_metadata: serde_json::Value = sqlx::query_scalar(
+        "SELECT metadata FROM identity_lifecycle_audit WHERE event_kind = 'session_logged_out'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audit_metadata["provider"], "workos");
+    assert_eq!(audit_metadata["provider_session_scope"], true);
+    assert_eq!(audit_metadata["revoked_session_count"], 2);
+    assert!(!audit_metadata.to_string().contains(session_id.as_str()));
+    let logout_audits: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM identity_lifecycle_audit WHERE event_kind = 'session_logged_out'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(logout_audits, 1, "a retry is not a second lifecycle event");
+
+    sqlx::query(
+        r#"
+        UPDATE auth_session
+        SET created_at = 1,
+            authenticated_at = 1,
+            idle_expires_at = 2,
+            expires_at = 3
+        WHERE token_hash = $1
+        "#,
+    )
+    .bind(identity::token::hash_token(local_tokens[0].as_str()))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let expired_retry = post_bearer_json(
+        &app,
+        "/auth/session-logout",
+        serde_json::json!({}),
+        &local_tokens[0],
+    )
+    .await;
+    assert_eq!(expired_retry.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_logout_fails_closed_if_persisted_provider_session_custody_is_corrupted(
+    pool: sqlx::PgPool,
+) {
+    let verifier = StaticAccessTokenVerifier::new([(
+        "workos-tamper-token".to_string(),
+        VerifiedIdentity {
+            subject: "user_tamper".to_string(),
+            session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+            expires_at: 4_102_444_800,
+            email: None,
+        },
+    )]);
+    let app = api::router_with_state(
+        test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
+    );
+    let exchange = post_bearer_json(
+        &app,
+        "/auth/sessions",
+        serde_json::json!({ "method": "workos" }),
+        "workos-tamper-token",
+    )
+    .await;
+    assert_eq!(exchange.status(), StatusCode::OK);
+    let exchange_body = to_bytes(exchange.into_body(), usize::MAX).await.unwrap();
+    let exchange_body: serde_json::Value = serde_json::from_slice(&exchange_body).unwrap();
+    let local_token = exchange_body["session_token"].as_str().unwrap();
+
+    // Simulate storage corruption below the catalog invariant. Runtime
+    // validation must still reject it rather than reflecting attacker-chosen
+    // bytes into a provider navigation URL.
+    sqlx::query(
+        "ALTER TABLE auth_session DROP CONSTRAINT auth_session_workos_session_shape_check, DROP CONSTRAINT auth_session_workos_provider_session_fkey",
+    )
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE auth_session SET workos_session_id = 'session_invalid&return_to=https://evil.test'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let logout = post_bearer_json(
+        &app,
+        "/auth/session-logout",
+        serde_json::json!({}),
+        local_token,
+    )
+    .await;
+    assert_eq!(logout.status(), StatusCode::UNAUTHORIZED);
+    let body = to_bytes(logout.into_body(), usize::MAX).await.unwrap();
+    assert!(!body.windows(9).any(|window| window == b"evil.test"));
 }
 
 async fn create_media_upload_account_session(app: &axum::Router, label: &str) -> (String, String) {

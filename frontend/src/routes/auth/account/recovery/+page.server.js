@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { authReturnPath } from "../../../../lib/server/auth-return-path.mjs";
 import { authSourceHeader } from "../../../../lib/server/auth-source.mjs";
 import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
 
@@ -7,7 +8,7 @@ export function load({ url }) {
   return {
     accountRecovery: {
       accountId: optionalField(url.searchParams.get("account")),
-      returnTo: safeReturnTo(url.searchParams.get("returnTo")),
+      returnTo: authReturnPath(url.searchParams.get("returnTo")),
     },
   };
 }
@@ -16,7 +17,7 @@ export const actions = {
   request: async ({ fetch, getClientAddress, request }) => {
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
-    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const returnTo = authReturnPath(formData.get("returnTo"));
     if (accountId === "") {
       return fail(400, {
         id: "request",
@@ -72,7 +73,7 @@ export const actions = {
     const recoveryToken = credentialField(formData.get("recoveryToken"));
     const newPassword = credentialField(formData.get("newPassword"));
     const confirmPassword = credentialField(formData.get("confirmPassword"));
-    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const returnTo = authReturnPath(formData.get("returnTo"));
     if (
       accountId === "" ||
       recoveryToken === null ||
@@ -187,15 +188,4 @@ function credentialField(value) {
 
 function optionalField(value) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function safeReturnTo(value) {
-  if (typeof value !== "string") {
-    return "/";
-  }
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
-    return "/";
-  }
-  return trimmed.startsWith("/auth/") ? "/" : trimmed;
 }

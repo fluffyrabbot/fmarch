@@ -1,28 +1,25 @@
 import { redirect } from "@sveltejs/kit";
-import { loadAuthKit, workosAuthKitConfigured } from "$lib/server/workos-authkit.mjs";
+import { authReturnPath } from "$lib/server/auth-return-path.mjs";
+import {
+  beginWorkosAuthorization,
+  workosAuthKitConfigured,
+} from "$lib/server/workos-authkit.mjs";
 
-export async function GET({ url }) {
+export async function GET({ cookies, url }) {
   if (!workosAuthKitConfigured()) {
     throw redirect(302, "/auth/register");
   }
-  const authKit = await loadAuthKit();
-  const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
+  const returnTo = authReturnPath(url.searchParams.get("returnTo"));
   const loginHint = optionalValue(url.searchParams.get("loginHint"));
-  const signUpUrl = await authKit.getSignUpUrl({
+  const signUpUrl = await beginWorkosAuthorization({
+    cookies,
+    intent: "sign-up",
     returnTo,
-    ...(loginHint === null ? {} : { loginHint }),
+    loginHint,
   });
   throw redirect(302, signUpUrl);
 }
 
 function optionalValue(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
-}
-
-function safeReturnTo(value) {
-  if (typeof value !== "string") return "/";
-  const trimmed = value.trim();
-  return trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.startsWith("/auth/")
-    ? trimmed
-    : "/";
 }

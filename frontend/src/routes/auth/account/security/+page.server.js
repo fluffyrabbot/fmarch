@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { authReturnPath } from "../../../../lib/server/auth-return-path.mjs";
 import {
   browserSessionCookieOptions,
   evictSessionCacheForToken,
@@ -9,7 +10,7 @@ import { workosAuthKitConfigured } from "../../../../lib/server/workos-authkit.m
 
 export async function load({ cookies, fetch, locals, url }) {
   const accountId = optionalField(url.searchParams.get("account"));
-  const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
+  const returnTo = authReturnPath(url.searchParams.get("returnTo"));
   if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
     throw redirect(
       303,
@@ -84,7 +85,7 @@ export const actions = {
     const loginName = optionalField(formData.get("loginName"));
     const password = passwordField(formData.get("password"));
     const confirmPassword = passwordField(formData.get("confirmPassword"));
-    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const returnTo = authReturnPath(formData.get("returnTo"));
     const sessionToken = cookies.get(SESSION_COOKIE_NAME);
     if (
       loginName === "" ||
@@ -188,7 +189,7 @@ export const actions = {
   disableMethod: async ({ cookies, fetch, request }) => {
     const formData = await request.formData();
     const methodId = optionalField(formData.get("methodId"));
-    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const returnTo = authReturnPath(formData.get("returnTo"));
     const sessionToken = cookies.get(SESSION_COOKIE_NAME);
     if (methodId === "" || typeof sessionToken !== "string" || sessionToken.trim() === "") {
       return fail(400, {
@@ -259,7 +260,7 @@ export const actions = {
     const currentPassword = passwordField(formData.get("currentPassword"));
     const newPassword = passwordField(formData.get("newPassword"));
     const confirmPassword = passwordField(formData.get("confirmPassword"));
-    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const returnTo = authReturnPath(formData.get("returnTo"));
     const sessionToken = cookies.get(SESSION_COOKIE_NAME);
 
     if (
@@ -337,7 +338,7 @@ export const actions = {
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
     const currentPassword = passwordField(formData.get("currentPassword"));
-    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const returnTo = authReturnPath(formData.get("returnTo"));
     const sessionToken = cookies.get(SESSION_COOKIE_NAME);
     if (
       accountId === "" ||
@@ -410,7 +411,7 @@ export const actions = {
     const accountId = optionalField(formData.get("accountId"));
     const recoveryId = optionalField(formData.get("recoveryId"));
     const currentPassword = passwordField(formData.get("currentPassword"));
-    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const returnTo = authReturnPath(formData.get("returnTo"));
     const sessionToken = cookies.get(SESSION_COOKIE_NAME);
     if (
       accountId === "" ||
@@ -614,15 +615,4 @@ function passwordField(value) {
 
 function optionalField(value) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function safeReturnTo(value) {
-  if (typeof value !== "string") {
-    return "/";
-  }
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
-    return "/";
-  }
-  return trimmed.startsWith("/auth/") ? "/" : trimmed;
 }

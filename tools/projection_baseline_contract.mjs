@@ -30,6 +30,17 @@ const forbiddenStatements = Object.freeze([
 const privateProjectionEncryptionMigration = "0006_encrypt_private_projections.sql";
 const sealedEventBodyMigration = "0020_sealed_event_body.sql";
 const streamKeyEpochMigration = "0024_event_stream_keys.sql";
+const workosSessionLifecycleMigration = "0027_workos_session_lifecycle.sql";
+// Exact statement hashes make this security cutover auditable without opening
+// a general data-migration escape hatch. The three INSERTs only retire legacy
+// provider authority, and the ALTER removes the raw provider subject after its
+// one-way deny evidence has been installed.
+const allowedWorkosSessionLifecycleStatementSha256 = new Set([
+  "318aab2e1e1c9f053b812b6baf4c8bac2564ad7a967f9d777e1e323f9dd2a91a",
+  "845d95900c3717f29e0d7e970e54eedfce3a4cf19776d1112efe328effba5078",
+  "ae87114dfd0001d7d986c1ebbede15b3a327f0d95e129edea9c155ba0b474a08",
+  "1535cf13d8e5714f6e63a7e9d7d84b0586129a2025d3c7aaa5d56c0df1817e20",
+]);
 const allowedPrivateProjectionErasureStatements = Object.freeze([
   /^TRUNCATE\s+TABLE\s+investigation_memory,\s*player_info_result,\s*player_investigation_result,\s*private_channel_member,\s*slot_state,\s*thread_view$/i,
   /^ALTER\s+TABLE\s+investigation_memory\s+DROP\s+COLUMN\s+result,\s*ADD\s+COLUMN\s+result_private\s+JSONB\s+NOT\s+NULL$/i,
@@ -40,7 +51,12 @@ const allowedPrivateProjectionErasureStatements = Object.freeze([
   /^ALTER\s+TABLE\s+thread_view\s+DROP\s+COLUMN\s+body,\s*ADD\s+COLUMN\s+body\s+TEXT,\s*ADD\s+COLUMN\s+body_private\s+JSONB,\s*ADD\s+CONSTRAINT\s+thread_view_body_storage\s+CHECK\s*\([\s\S]+\)$/i,
 ]);
 
-function isAllowedPrivateProjectionErasure(file, statement) {
+function isAllowedSecurityMigrationStatement(file, statement) {
+  if (file === workosSessionLifecycleMigration) {
+    return allowedWorkosSessionLifecycleStatementSha256.has(
+      createHash("sha256").update(statement).digest("hex"),
+    );
+  }
   if (file === privateProjectionEncryptionMigration) {
     return allowedPrivateProjectionErasureStatements.some((pattern) => pattern.test(statement));
   }
@@ -117,7 +133,7 @@ export async function inspectProjectionBaseline({ root = repoRoot } = {}) {
     statementCount += statements.length;
     for (const statement of statements) {
       for (const [label, pattern] of forbiddenStatements) {
-        if (pattern.test(statement) && !isAllowedPrivateProjectionErasure(file, statement)) {
+        if (pattern.test(statement) && !isAllowedSecurityMigrationStatement(file, statement)) {
           throw new Error(
             `projection migration ${file} contains ${label}: ${statement.slice(0, 120)}`,
           );

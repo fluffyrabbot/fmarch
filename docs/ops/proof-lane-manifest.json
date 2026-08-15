@@ -91,6 +91,7 @@
     },
     "test:proof-lane-contract": { "kind": "npm" },
     "test:production-promotion": { "kind": "npm" },
+    "test:workos-oidc-preflight": { "kind": "npm" },
     "test:railway-staging-target": { "kind": "npm" },
     "test:release-topology": { "kind": "npm" },
     "test:security-release-baseline": { "kind": "npm" },
@@ -334,6 +335,9 @@
       "lanes": [
         "test:frontend-contract",
         "test:auth-invite-role-proof",
+        "test:workos-oidc-preflight",
+        "test:production-promotion",
+        "test:railway-staging-target",
         "test:security-release-baseline",
         "test:frontend-csp-browser"
       ]
@@ -412,6 +416,24 @@
       "lanes": [
         "test:production-promotion",
         "test:railway-staging-target",
+        "test:security-release-baseline"
+      ]
+    },
+    {
+      "id": "ops:workos-oidc",
+      "tier": "active",
+      "paths": [
+        "tools/workos_oidc_preflight.mjs",
+        "tools/workos_oidc_preflight.test.mjs",
+        "docs/arch/06-security.md",
+        "docs/ops/railway-staging-target.md"
+      ],
+      "lanes": [
+        "test:workos-oidc-preflight",
+        "test:production-promotion",
+        "test:railway-staging-target",
+        "test:completeness-scorecard",
+        "test:proof-lane-contract",
         "test:security-release-baseline"
       ]
     },
@@ -511,6 +533,7 @@
         "check:build-posture",
         "test:railway-staging-target",
         "test:production-promotion",
+        "test:workos-oidc-preflight",
         "test:security-release-baseline",
         "test:exact-image-content",
         "test:event-key-rotation-rehearsal",

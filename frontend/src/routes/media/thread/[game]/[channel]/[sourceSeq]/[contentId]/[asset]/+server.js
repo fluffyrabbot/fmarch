@@ -1,3 +1,4 @@
+import { serverApiBaseUrl } from "../../../../../../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../../../../../../lib/server/session-capabilities.mjs";
 
 const FORWARDED_HEADERS = Object.freeze([
@@ -29,9 +30,7 @@ export async function GET({
   )}/${encodeURIComponent(params.sourceSeq)}/${encodeURIComponent(
     params.contentId,
   )}/${encodeURIComponent(params.asset)}`;
-  const base = String(
-    env?.FMARCH_API_INTERNAL_URL ?? env?.FMARCH_API_BASE_URL ?? "",
-  ).replace(/\/$/u, "");
+  const base = serverApiBaseUrl(env);
   const headers = {
     authorization: `Bearer ${token}`,
     accept: "image/avif,image/webp",

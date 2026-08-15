@@ -2106,7 +2106,63 @@ async fn finalize_subject_erasure(
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM workos_session_exchange WHERE subject IN (SELECT subject FROM external_identity WHERE principal_user_id = $1)")
+    sqlx::query(
+        r#"
+        INSERT INTO workos_subject_tombstone (
+            provider_subject_hash,
+            tombstoned_at,
+            reason
+        )
+        SELECT encode(sha256(convert_to(subject, 'UTF8')), 'hex'),
+               $2,
+               'subject_erasure'
+        FROM external_identity
+        WHERE principal_user_id = $1
+          AND provider = 'workos'
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(principal)
+    .bind(record.destroyed_at)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    sqlx::query(
+        r#"
+        INSERT INTO workos_provider_session_tombstone (
+            provider_session_hash,
+            tombstoned_at,
+            reason
+        )
+        SELECT encode(
+                   sha256(convert_to(provider_session_id, 'UTF8')),
+                   'hex'
+               ),
+               $2,
+               'subject_erasure'
+        FROM workos_provider_session
+        WHERE principal_user_id = $1
+        ON CONFLICT DO NOTHING
+        "#,
+    )
+    .bind(principal)
+    .bind(record.destroyed_at)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    sqlx::query("DELETE FROM workos_session_exchange WHERE provider_session_id IN (SELECT provider_session_id FROM workos_provider_session WHERE principal_user_id = $1)")
+        .bind(principal)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    sqlx::query(
+        "DELETE FROM auth_session WHERE principal_user_id = $1 AND workos_session_id IS NOT NULL",
+    )
+    .bind(principal)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    sqlx::query("DELETE FROM workos_provider_session WHERE principal_user_id = $1")
         .bind(principal)
         .execute(&mut *tx)
         .await

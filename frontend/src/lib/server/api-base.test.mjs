@@ -21,6 +21,35 @@ test("serverApiBaseUrl falls back to the public endpoint and strips trailing sla
   assert.equal(serverApiBaseUrl(undefined), "");
 });
 
+test("serverApiBaseUrl admits only an explicit non-production IPv4 loopback port", () => {
+  assert.equal(
+    serverApiBaseUrl({ FMARCH_API_INTERNAL_URL: "http://127.0.0.1:4017" }),
+    "http://127.0.0.1:4017",
+  );
+  for (const value of [
+    "http://localhost:4017",
+    "http://127.0.0.2:4017",
+    "http://127.0.0.1",
+    "http://127.0.0.1:0",
+    "http://127.0.0.1:65536",
+    "http://127.0.0.1:4017/",
+  ]) {
+    assert.throws(
+      () => serverApiBaseUrl({ FMARCH_API_INTERNAL_URL: value }),
+      /must be exactly http:\/\/fmarch\.railway\.internal:8080/u,
+      value,
+    );
+  }
+  assert.throws(
+    () =>
+      serverApiBaseUrl({
+        FMARCH_API_INTERNAL_URL: "http://127.0.0.1:4017",
+        NODE_ENV: "production",
+      }),
+    /must be exactly http:\/\/fmarch\.railway\.internal:8080/u,
+  );
+});
+
 test("publicApiBaseUrl ignores the internal endpoint", () => {
   assert.equal(
     publicApiBaseUrl({
@@ -33,4 +62,39 @@ test("publicApiBaseUrl ignores the internal endpoint", () => {
     publicApiBaseUrl({ FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080" }),
     "",
   );
+});
+
+test("serverApiBaseUrl rejects every near-match for the Railway private host", () => {
+  for (const value of [
+    "http://attacker.example:8080",
+    "http://fmarch.railway.internal:4000",
+    "http://user@fmarch.railway.internal:8080",
+    "http://fmarch.railway.internal:8080/path",
+    "http://fmarch.railway.internal:8080?next=attacker",
+    "http://fmarch.railway.internal:8080#attacker",
+    "http://fmarch.railway.internal:8080/",
+    " http://fmarch.railway.internal:8080",
+    "http://fmarch.railway.internal:8080 ",
+  ]) {
+    assert.throws(
+      () => serverApiBaseUrl({ FMARCH_API_INTERNAL_URL: value }),
+      /must be exactly http:\/\/fmarch\.railway\.internal:8080/u,
+      value,
+    );
+  }
+});
+
+test("public API bases are root origins and production requires HTTPS", () => {
+  assert.equal(
+    serverApiBaseUrl({ FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" }),
+    "http://127.0.0.1:4017",
+  );
+  for (const env of [
+    { FMARCH_API_BASE_URL: "https://user@api.example.test" },
+    { FMARCH_API_BASE_URL: "https://api.example.test/path" },
+    { FMARCH_API_BASE_URL: "https://api.example.test?query=1" },
+    { FMARCH_API_BASE_URL: "http://api.example.test", NODE_ENV: "production" },
+  ]) {
+    assert.throws(() => serverApiBaseUrl(env), /FMARCH_API_BASE_URL must/u);
+  }
 });

@@ -3,6 +3,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { preflightWorkosOidc } from "./workos_oidc_preflight.mjs";
+
 const DEFAULTS = Object.freeze({
   projectId: "9d285d67-c11b-4508-9efb-fad042787b4c",
   apiServiceId: "18b6f450-3739-4f21-8e01-f58c63cec834",
@@ -14,6 +16,7 @@ const DEFAULTS = Object.freeze({
   stagingFrontendUrl: "https://fmarch-frontend-staging.up.railway.app",
   productionApiUrl: "https://fmarch-production.up.railway.app",
   productionFrontendUrl: "https://fmarch-frontend-production.up.railway.app",
+  internalApiUrl: "http://fmarch.railway.internal:8080",
   localDatabaseUrl: "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch",
 });
 
@@ -409,12 +412,16 @@ export function validateHostedVariables({
       "staging frontend",
       stagingFrontend,
       [
+        "FMARCH_API_BASE_URL",
+        "FMARCH_API_INTERNAL_URL",
         "FMARCH_AUTH_SOURCE_SIGNING_KEY",
         "FMARCH_AUTH_SOURCE_SIGNING_KID",
         "FMARCH_WORKOS_CREDENTIAL_KID",
+        "ORIGIN",
         "WORKOS_API_KEY",
         "WORKOS_CLIENT_ID",
         "WORKOS_COOKIE_PASSWORD",
+        "WORKOS_REDIRECT_URI",
       ],
     ],
     [
@@ -481,16 +488,47 @@ export function validateHostedVariables({
   validateHostedIdentityDelivery("staging API", stagingApi);
   validateHostedIdentityDelivery("production API", productionApi);
 
-  assert.equal(productionFrontend.FMARCH_API_BASE_URL, DEFAULTS.productionApiUrl);
-  assert.equal(productionFrontend.ORIGIN, DEFAULTS.productionFrontendUrl);
-  assert.equal(
-    productionFrontend.WORKOS_REDIRECT_URI,
-    `${DEFAULTS.productionFrontendUrl}/auth/callback`,
-  );
-  assertSecretRelation(
-    productionApi.WORKOS_CLIENT_ID === productionFrontend.WORKOS_CLIENT_ID,
-    "production API and frontend must use the same WorkOS client",
-  );
+  for (const [environment, api, frontend, apiUrl, frontendUrl] of [
+    [
+      "staging",
+      stagingApi,
+      stagingFrontend,
+      DEFAULTS.stagingApiUrl,
+      DEFAULTS.stagingFrontendUrl,
+    ],
+    [
+      "production",
+      productionApi,
+      productionFrontend,
+      DEFAULTS.productionApiUrl,
+      DEFAULTS.productionFrontendUrl,
+    ],
+  ]) {
+    assert.equal(
+      frontend.FMARCH_API_BASE_URL,
+      apiUrl,
+      `${environment} frontend must use the canonical public API URL`,
+    );
+    assert.equal(
+      frontend.FMARCH_API_INTERNAL_URL,
+      DEFAULTS.internalApiUrl,
+      `${environment} frontend must use the canonical private API URL`,
+    );
+    assert.equal(
+      frontend.ORIGIN,
+      frontendUrl,
+      `${environment} frontend must use the canonical origin`,
+    );
+    assert.equal(
+      frontend.WORKOS_REDIRECT_URI,
+      `${frontendUrl}/auth/callback`,
+      `${environment} frontend must use the canonical WorkOS callback`,
+    );
+    assertSecretRelation(
+      api.WORKOS_CLIENT_ID === frontend.WORKOS_CLIENT_ID,
+      `${environment} API and frontend must use the same WorkOS client`,
+    );
+  }
   assertSecretRelation(
     stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY ===
       stagingFrontend.FMARCH_AUTH_SOURCE_SIGNING_KEY,
@@ -651,11 +689,18 @@ export function validateHostedVariables({
   for (const [label, value] of [
     ["staging auth-source signing key", stagingApi.FMARCH_AUTH_SOURCE_SIGNING_KEY],
     ["production auth-source signing key", productionApi.FMARCH_AUTH_SOURCE_SIGNING_KEY],
+  ]) {
+    assertSecretRelation(
+      typeof value === "string" && value.length >= 32 && !value.includes("replace_me"),
+      `${label} must be a non-placeholder value of at least 32 characters`,
+    );
+  }
+  for (const [label, value] of [
     ["staging WorkOS cookie password", stagingFrontend.WORKOS_COOKIE_PASSWORD],
     ["production WorkOS cookie password", productionFrontend.WORKOS_COOKIE_PASSWORD],
   ]) {
     assertSecretRelation(
-      typeof value === "string" && value.length >= 32 && !value.includes("replace_me"),
+      isStrongWorkosCookiePassword(value),
       `${label} must be a non-placeholder value of at least 32 characters`,
     );
   }
@@ -670,6 +715,15 @@ export function validateHostedVariables({
       `${label} must be canonical padded base64 encoding exactly 32 bytes`,
     );
   }
+}
+
+function isStrongWorkosCookiePassword(value) {
+  if (typeof value !== "string" || value.length < 32 || value !== value.trim()) {
+    return false;
+  }
+  return !/(?:replace[\s_-]*me|change[\s_-]*me|placeholder|example|cookie[\s_-]*password|at[\s_-]*least[\s_-]*32|\$\{\{?[^}]+\}?\})/iu.test(
+    value,
+  );
 }
 
 function isCanonicalBase64Key(value) {
@@ -856,6 +910,20 @@ async function main() {
     productionMigrator,
     productionFrontend,
   });
+  await Promise.all([
+    preflightWorkosOidc({
+      label: "staging",
+      clientId: stagingApi.WORKOS_CLIENT_ID,
+      issuer: stagingApi.WORKOS_ISSUER,
+      jwksUrl: stagingApi.WORKOS_JWKS_URL,
+    }),
+    preflightWorkosOidc({
+      label: "production",
+      clientId: productionApi.WORKOS_CLIENT_ID,
+      issuer: productionApi.WORKOS_ISSUER,
+      jwksUrl: productionApi.WORKOS_JWKS_URL,
+    }),
+  ]);
 
   await validateEnvironment(config, config.stagingEnvironment, head, {
     apiUrl: config.stagingApiUrl,

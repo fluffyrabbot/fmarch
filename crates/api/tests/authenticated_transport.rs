@@ -2,7 +2,7 @@ use api::{ApiState, MediaUploadResponse, WebsocketTicketResponse};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
-use identity::{StaticAccessTokenVerifier, VerifiedIdentity};
+use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
 use media::{MediaLimits, MediaRepository, MediaStore};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -713,7 +713,7 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
         "workos-token".to_string(),
         VerifiedIdentity {
             subject: "workos-user".to_string(),
-            session_id: "workos-session".to_string(),
+            session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
             expires_at: 4_102_444_800,
             email: Some("host@example.test".to_string()),
         },

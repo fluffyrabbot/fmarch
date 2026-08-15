@@ -23,7 +23,8 @@ pub use member_lifecycle::{
     MemberLifecycleSnapshot, PersonalExport,
 };
 pub use session::{
-    AuthorizationContext, IssuedSession, RotatedSession, SessionPolicy, SessionSpec,
+    AuthorizationContext, CompletedWorkosLogout, IssuedSession, LogoutSessionState, RotatedSession,
+    SessionPolicy, SessionSpec,
 };
 pub use subject_privacy::{
     active_subject_key_store, bootstrap_subject_key_authority_from_environment,
@@ -38,7 +39,7 @@ pub use subject_privacy::{
 };
 pub use workos::{
     AccessTokenVerifier, IdentityError, StaticAccessTokenVerifier, VerifiedIdentity,
-    WorkosAccessTokenVerifier,
+    WorkosAccessTokenVerifier, WorkosSessionId,
 };
 
 /// The two first-class sign-in methods. Wire and storage strings are the

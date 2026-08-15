@@ -1,10 +1,55 @@
-const TRAILING_SLASHES = /\/+$/u;
+const RAILWAY_INTERNAL_API_URL = "http://fmarch.railway.internal:8080";
 
-function normalizedBaseUrl(value) {
+function configuredValue(value) {
   if (typeof value !== "string" || value.trim() === "") {
     return null;
   }
-  return value.trim().replace(TRAILING_SLASHES, "");
+  return value.trim();
+}
+
+function validatedInternalBaseUrl(value, env) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  if (value === RAILWAY_INTERNAL_API_URL) return RAILWAY_INTERNAL_API_URL;
+
+  // Local proof servers bind an ephemeral loopback port while preserving the
+  // same SSR/browser authority split as Railway. This exception is both
+  // loopback-only and unavailable to production builds.
+  const localProof = /^http:\/\/127\.0\.0\.1:([1-9][0-9]{0,4})$/u.exec(value);
+  if (
+    env?.NODE_ENV !== "production" &&
+    localProof !== null &&
+    Number(localProof[1]) <= 65_535
+  ) {
+    return value;
+  }
+  throw new Error(
+    `FMARCH_API_INTERNAL_URL must be exactly ${RAILWAY_INTERNAL_API_URL}`,
+  );
+}
+
+function validatedPublicBaseUrl(value, env) {
+  const configured = configuredValue(value);
+  if (configured === null) return null;
+  let url;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new Error("FMARCH_API_BASE_URL must be an absolute HTTP(S) origin");
+  }
+  const httpAllowed = url.protocol === "http:" && env?.NODE_ENV !== "production";
+  if (
+    (url.protocol !== "https:" && !httpAllowed) ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.pathname !== "/" ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
+    throw new Error(
+      "FMARCH_API_BASE_URL must be an HTTPS origin without credentials, path, query, or fragment",
+    );
+  }
+  return url.origin;
 }
 
 /**
@@ -14,8 +59,8 @@ function normalizedBaseUrl(value) {
  */
 export function serverApiBaseUrl(env = globalThis.process?.env) {
   return (
-    normalizedBaseUrl(env?.FMARCH_API_INTERNAL_URL) ??
-    normalizedBaseUrl(env?.FMARCH_API_BASE_URL) ??
+    validatedInternalBaseUrl(env?.FMARCH_API_INTERNAL_URL, env) ??
+    validatedPublicBaseUrl(env?.FMARCH_API_BASE_URL, env) ??
     ""
   );
 }
@@ -26,5 +71,5 @@ export function serverApiBaseUrl(env = globalThis.process?.env) {
  * from outside the deployment.
  */
 export function publicApiBaseUrl(env = globalThis.process?.env) {
-  return normalizedBaseUrl(env?.FMARCH_API_BASE_URL) ?? "";
+  return validatedPublicBaseUrl(env?.FMARCH_API_BASE_URL, env) ?? "";
 }

@@ -4,11 +4,11 @@ use uuid::Uuid;
 
 use crate::error::IdentityFlowError;
 use crate::token::{generate_session_token, hash_token, APP_SESSION_TOKEN_PREFIX};
-use crate::{Assurance, MethodKind};
+use crate::{Assurance, MethodKind, WorkosSessionId};
 
 /// Backend-owned session lifetimes. Classic and WorkOS sessions share one
-/// storage shape; WorkOS sessions default shorter because provider revocation
-/// only takes effect at local expiry.
+/// storage shape; WorkOS sessions default shorter because upstream revocation
+/// is synchronized on explicit logout, not polled on every local request.
 #[derive(Debug, Clone)]
 pub struct SessionPolicy {
     pub absolute_ttl_seconds: i64,
@@ -71,6 +71,9 @@ pub struct SessionSpec<'a> {
     pub session_capabilities: &'a [String],
     pub authenticated_via_method_id: Option<Uuid>,
     pub assurance: Assurance,
+    /// Present only for WorkOS external-SSO sessions. This is sourced from the
+    /// verified `sid` claim, never from a client request.
+    pub workos_session_id: Option<&'a WorkosSessionId>,
     pub authenticated_at: i64,
     pub expires_at: i64,
     pub idle_expires_at: i64,
@@ -101,6 +104,11 @@ pub async fn issue_session(
                 .to_string(),
         ));
     }
+    if matches!(spec.assurance, Assurance::ExternalSso) != spec.workos_session_id.is_some() {
+        return Err(IdentityFlowError::Invalid(
+            "only WorkOS external-SSO sessions may carry a provider session id".to_string(),
+        ));
+    }
     let session_token = generate_session_token();
     let token_hash = hash_token(session_token.as_str());
     sqlx::query(
@@ -115,9 +123,10 @@ pub async fn issue_session(
             authenticated_via_method_id,
             idle_expires_at,
             assurance,
+            workos_session_id,
             authenticated_at
         )
-        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10)
         "#,
     )
     .bind(&token_hash)
@@ -128,6 +137,7 @@ pub async fn issue_session(
     .bind(spec.authenticated_via_method_id)
     .bind(spec.idle_expires_at)
     .bind(spec.assurance.as_str())
+    .bind(spec.workos_session_id.map(WorkosSessionId::as_str))
     .bind(spec.authenticated_at)
     .execute(&mut *conn)
     .await?;
@@ -148,11 +158,31 @@ pub struct AuthorizationContext {
     pub global_capabilities: Vec<String>,
     pub method: Option<(Uuid, MethodKind)>,
     pub assurance: Assurance,
+    /// The trusted provider session behind a WorkOS local session. This value
+    /// is never serialized directly to clients.
+    pub workos_session_id: Option<WorkosSessionId>,
     pub session_reference: String,
     pub created_at: i64,
     pub authenticated_at: i64,
     pub expires_at: i64,
     pub idle_expires_at: i64,
+}
+
+/// Retry evidence for a WorkOS logout whose local commit already completed
+/// but whose HTTP response may have been lost. This carries no authorization;
+/// callers may only use it to reproduce the constrained provider logout URL
+/// after independently proving the provider row and permanent tombstone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompletedWorkosLogout {
+    pub principal_user_id: String,
+    pub method_id: Uuid,
+    pub workos_session_id: WorkosSessionId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LogoutSessionState {
+    Active(AuthorizationContext),
+    CompletedWorkos(CompletedWorkosLogout),
 }
 
 /// A successful atomic session rotation. Both references are hashes suitable
@@ -211,6 +241,95 @@ pub async fn validate_session_for_update(
             .await?
             .context,
     )
+}
+
+/// Lock a canonical session for logout. An eligible live row returns ordinary
+/// authorization. A still-unexpired WorkOS row already revoked by an earlier
+/// logout returns non-authorizing retry evidence so response loss cannot
+/// strand the browser in an upstream provider session.
+pub async fn lock_session_for_logout(
+    conn: &mut PgConnection,
+    token: &str,
+    policy: &SessionPolicy,
+) -> Result<LogoutSessionState, IdentityFlowError> {
+    if !is_canonical_app_session_token(token) {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let session_reference = hash_token(token);
+    let principal_user_id = discover_session_principal(conn, session_reference.as_str()).await?;
+    let owner = crate::methods::lock_identity_mutation(
+        conn,
+        principal_user_id.as_str(),
+        crate::methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    let revoked_at: Option<i64> =
+        sqlx::query_scalar("SELECT revoked_at FROM auth_session WHERE token_hash = $1 FOR UPDATE")
+            .bind(session_reference.as_str())
+            .fetch_optional(&mut *conn)
+            .await?
+            .ok_or(IdentityFlowError::Unauthorized)?;
+    if revoked_at.is_none() {
+        owner.require_active()?;
+        return Ok(LogoutSessionState::Active(
+            lock_eligible_session(conn, session_reference.as_str(), policy)
+                .await?
+                .context,
+        ));
+    }
+
+    let now = unix_now_seconds();
+    let completed = sqlx::query_as::<
+        _,
+        (
+            String,
+            Option<String>,
+            Option<Uuid>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ),
+    >(
+        r#"
+        SELECT session.principal_user_id,
+               session.assurance,
+               session.authenticated_via_method_id,
+               session.workos_session_id,
+               method.principal_user_id,
+               method.kind
+        FROM auth_session AS session
+        LEFT JOIN authentication_method AS method
+          ON method.method_id = session.authenticated_via_method_id
+        WHERE session.token_hash = $1
+          AND session.revoked_at IS NOT NULL
+          AND session.expires_at > $2
+          AND COALESCE(session.idle_expires_at, session.expires_at) > $2
+        "#,
+    )
+    .bind(session_reference.as_str())
+    .bind(now)
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    let (stored_principal, assurance, method_id, workos_session_id, method_principal, method_kind) =
+        completed;
+    if stored_principal != principal_user_id
+        || assurance.as_deref() != Some(Assurance::ExternalSso.as_str())
+        || method_id.is_none()
+        || method_principal.as_deref() != Some(principal_user_id.as_str())
+        || method_kind.as_deref() != Some(MethodKind::Workos.as_str())
+    {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    let workos_session_id =
+        WorkosSessionId::parse(workos_session_id.ok_or(IdentityFlowError::Unauthorized)?)
+            .map_err(|_| IdentityFlowError::Unauthorized)?;
+    let method_id = method_id.ok_or(IdentityFlowError::Unauthorized)?;
+    Ok(LogoutSessionState::CompletedWorkos(CompletedWorkosLogout {
+        principal_user_id,
+        method_id,
+        workos_session_id,
+    }))
 }
 
 /// Validate a trusted stored session reference, such as one captured by a
@@ -292,9 +411,10 @@ pub async fn rotate_session(
             authenticated_via_method_id,
             idle_expires_at,
             assurance,
+            workos_session_id,
             authenticated_at
         )
-        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10)
         "#,
     )
     .bind(token_hash.as_str())
@@ -305,6 +425,13 @@ pub async fn rotate_session(
     .bind(eligible.context.method.map(|(method_id, _)| method_id))
     .bind(idle_expires_at)
     .bind(eligible.context.assurance.as_str())
+    .bind(
+        eligible
+            .context
+            .workos_session_id
+            .as_ref()
+            .map(WorkosSessionId::as_str),
+    )
     .bind(eligible.context.authenticated_at)
     .execute(&mut *tx)
     .await?;
@@ -414,6 +541,7 @@ async fn load_eligible_session(
             i64,
             Option<i64>,
             Option<String>,
+            Option<String>,
             Option<Uuid>,
             Option<String>,
             Option<String>,
@@ -438,6 +566,7 @@ async fn load_eligible_session(
         expires_at,
         idle_expires_at,
         assurance,
+        workos_session_id,
         method_id,
         method_principal_user_id,
         method_kind,
@@ -455,6 +584,15 @@ async fn load_eligible_session(
         .as_deref()
         .and_then(Assurance::parse)
         .ok_or(IdentityFlowError::Unauthorized)?;
+    let workos_session_id = match (assurance, workos_session_id) {
+        (Assurance::ExternalSso, Some(session_id)) => {
+            Some(WorkosSessionId::parse(session_id).map_err(|_| IdentityFlowError::Unauthorized)?)
+        }
+        (Assurance::ExternalSso, None) | (_, Some(_)) => {
+            return Err(IdentityFlowError::Unauthorized)
+        }
+        (_, None) => None,
+    };
     let method = match method_id {
         Some(method_id) => {
             if method_principal_user_id.as_deref() != Some(principal_user_id.as_str())
@@ -527,6 +665,7 @@ async fn load_eligible_session(
             global_capabilities,
             method,
             assurance,
+            workos_session_id,
             session_reference: session_reference.to_string(),
             created_at,
             authenticated_at,
@@ -544,6 +683,7 @@ const ELIGIBLE_SESSION_SQL: &str = r#"
            session.expires_at,
            session.idle_expires_at,
            session.assurance,
+           session.workos_session_id,
            session.authenticated_via_method_id,
            method.principal_user_id,
            method.kind,

@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use sqlx::PgConnection;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -21,9 +22,61 @@ use crate::methods;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedIdentity {
     pub subject: String,
-    pub session_id: String,
+    pub session_id: WorkosSessionId,
     pub expires_at: i64,
     pub email: Option<String>,
+}
+
+/// A canonical WorkOS session identifier from the signed `sid` access-token
+/// claim. Keeping the representation validated prevents database corruption or
+/// caller input from becoming a provider logout redirect parameter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkosSessionId(String);
+
+impl WorkosSessionId {
+    pub fn parse(value: impl Into<String>) -> Result<Self, IdentityError> {
+        let value = value.into();
+        let suffix = value
+            .strip_prefix("session_")
+            .ok_or(IdentityError::InvalidToken)?;
+        if suffix.len() != 26
+            || !suffix.bytes().all(|byte| {
+                byte.is_ascii_digit()
+                    || matches!(byte, b'A'..=b'H' | b'J'..=b'K' | b'M'..=b'N' | b'P'..=b'T' | b'V'..=b'Z')
+            })
+        {
+            return Err(IdentityError::InvalidToken);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    /// One-way identifier used by permanent replay/logout tombstones after
+    /// subject-linked provider-session data has been erased.
+    pub fn fingerprint(&self) -> String {
+        format!("{:x}", Sha256::digest(self.0.as_bytes()))
+    }
+}
+
+/// One-way identifier retained after erasure so an access token from an
+/// unobserved WorkOS session cannot recreate the erased external identity.
+pub fn subject_fingerprint(subject: &str) -> String {
+    format!("{:x}", Sha256::digest(subject.as_bytes()))
+}
+
+/// Construct the browser navigation target that ends the persisted WorkOS
+/// session. No `return_to` is accepted here: WorkOS applies the application's
+/// configured logout redirect, so callers cannot turn logout into an open
+/// redirect.
+pub fn logout_url(session_id: &WorkosSessionId) -> String {
+    let mut url = reqwest::Url::parse("https://api.workos.com/user_management/sessions/logout")
+        .expect("the fixed WorkOS logout endpoint must be a valid URL");
+    url.query_pairs_mut()
+        .append_pair("session_id", session_id.as_str());
+    url.into()
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -138,8 +191,7 @@ impl WorkosAccessTokenVerifier {
             decode::<Claims>(token, &key, &validation).map_err(|_| IdentityError::InvalidToken)?;
         let subject =
             required(token.claims.sub, "subject").map_err(|_| IdentityError::InvalidToken)?;
-        let session_id =
-            required(token.claims.sid, "session id").map_err(|_| IdentityError::InvalidToken)?;
+        let session_id = WorkosSessionId::parse(token.claims.sid)?;
         if token.claims.client_id.as_deref() != Some(self.client_id.as_ref()) {
             return Err(IdentityError::InvalidToken);
         }
@@ -277,6 +329,51 @@ async fn lock_subject_binding(
     }))
 }
 
+/// Acquire the canonical transaction-scoped WorkOS-subject lock.
+///
+/// Identity mutations that combine a WorkOS assertion with an existing local
+/// session must take this lock before locking the local principal. This keeps
+/// their order identical to first-sight WorkOS resolution:
+/// provider subject -> principal -> authentication details.
+pub async fn lock_subject_advisory(
+    conn: &mut PgConnection,
+    subject: &str,
+) -> Result<(), IdentityFlowError> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("workos:{subject}"))
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+async fn reject_tombstoned_identity(
+    conn: &mut PgConnection,
+    verified: &VerifiedIdentity,
+) -> Result<(), IdentityFlowError> {
+    let tombstoned: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+                   SELECT 1
+                   FROM workos_provider_session_tombstone
+                   WHERE provider_session_hash = $1
+               )
+            OR EXISTS (
+                   SELECT 1
+                   FROM workos_subject_tombstone
+                   WHERE provider_subject_hash = $2
+               )
+        "#,
+    )
+    .bind(verified.session_id.fingerprint())
+    .bind(subject_fingerprint(verified.subject.as_str()))
+    .fetch_one(&mut *conn)
+    .await?;
+    if tombstoned {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    Ok(())
+}
+
 /// Resolve a verified WorkOS assertion onto a platform principal, provisioning
 /// principal, method, and external-identity rows on first sight. The email
 /// claim only ever becomes a display label; identities match by
@@ -290,10 +387,11 @@ pub async fn resolve_subject(
     if verified.expires_at <= now {
         return Err(IdentityFlowError::Unauthorized);
     }
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("workos:{}", verified.subject))
-        .execute(&mut *conn)
-        .await?;
+    lock_subject_advisory(conn, verified.subject.as_str()).await?;
+    // This read is authoritative for the provider-subject lock. The earlier
+    // API precheck prevents known erased identities from reaching provisioning
+    // side effects; this one closes a concurrent erasure race.
+    reject_tombstoned_identity(conn, verified).await?;
     // Discovery must never take the provider-detail lock. The owner gives us
     // the canonical principal -> privacy-subject lock root; the binding is
     // re-read under lock only after its authentication method is locked.
@@ -388,13 +486,24 @@ pub async fn attach_subject(
     principal_user_id: &str,
     now: i64,
 ) -> Result<WorkosResolution, IdentityFlowError> {
+    lock_subject_advisory(conn, verified.subject.as_str()).await?;
+    attach_subject_under_advisory_lock(conn, verified, principal_user_id, now).await
+}
+
+/// Attach a WorkOS subject after the caller acquired
+/// [`lock_subject_advisory`]. This split lets account-linking acquire the
+/// provider lock before it revalidates and locks the caller's local session,
+/// preserving the global provider-subject -> principal lock order.
+pub async fn attach_subject_under_advisory_lock(
+    conn: &mut PgConnection,
+    verified: &VerifiedIdentity,
+    principal_user_id: &str,
+    now: i64,
+) -> Result<WorkosResolution, IdentityFlowError> {
     if verified.expires_at <= now {
         return Err(IdentityFlowError::Unauthorized);
     }
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("workos:{}", verified.subject))
-        .execute(&mut *conn)
-        .await?;
+    reject_tombstoned_identity(conn, verified).await?;
     let discovered = discover_subject(conn, verified.subject.as_str()).await?;
     methods::lock_active_principal_and_subject(conn, principal_user_id, now).await?;
     let owner = methods::lock_identity_mutation(
@@ -482,7 +591,8 @@ pub async fn attach_subject(
 #[cfg(test)]
 mod tests {
     use super::{
-        AccessTokenVerifier, StaticAccessTokenVerifier, VerifiedIdentity, WorkosAccessTokenVerifier,
+        logout_url, subject_fingerprint, AccessTokenVerifier, StaticAccessTokenVerifier,
+        VerifiedIdentity, WorkosAccessTokenVerifier, WorkosSessionId,
     };
 
     #[test]
@@ -502,7 +612,7 @@ mod tests {
     async fn static_verifier_is_a_deterministic_local_proof_boundary() {
         let expected = VerifiedIdentity {
             subject: "user_01".to_string(),
-            session_id: "session_01".to_string(),
+            session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
             expires_at: 4_102_444_800,
             email: Some("player@example.test".to_string()),
         };
@@ -513,5 +623,32 @@ mod tests {
             expected
         );
         assert!(verifier.verify("wrong-token").await.is_err());
+    }
+
+    #[test]
+    fn workos_session_ids_and_logout_urls_are_closed_over_canonical_provider_ids() {
+        let session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
+        assert_eq!(
+            logout_url(&session_id),
+            "https://api.workos.com/user_management/sessions/logout?session_id=session_01HQAG1HENBZMAZD82YRXDFC0B"
+        );
+        assert_eq!(
+            session_id.fingerprint(),
+            "12809d16e8a0869e08f32b449c05398bb6052a3905ea1d5d2506abe8ceb8755e"
+        );
+        assert_eq!(
+            subject_fingerprint("user_01"),
+            "91f494a9228102f44ffa1067a2a9194a7c003b5ef61502e0ee6e5d8fdcdf39f0"
+        );
+
+        for invalid in [
+            "session_01HQAG1HENBZMAZD82YRXDFC0I",
+            "session_01hqag1henbzmazd82yrxdfc0b",
+            "session_short",
+            "session_01HQAG1HENBZMAZD82YRXDFC0B&return_to=https://evil.test",
+            "https://evil.test/",
+        ] {
+            assert!(WorkosSessionId::parse(invalid).is_err(), "{invalid}");
+        }
     }
 }

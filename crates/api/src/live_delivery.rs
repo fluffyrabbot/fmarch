@@ -562,7 +562,8 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                         break;
                     }
                     let sent_to =
-                        send_projection_deltas(&mut socket, next_envelope_id, citation_deltas).await;
+                        send_projection_deltas(&mut socket, next_envelope_id, citation_deltas)
+                            .await;
                     if sent_to == next_envelope_id {
                         break;
                     }

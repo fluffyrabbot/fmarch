@@ -157,7 +157,7 @@ business integrity or plaintext confidentiality after API compromise.
    bucket hostname from Railway's published base endpoint before handing the
    complete endpoint to `object_store`. Do not mount a per-replica media volume
    in staging or production.
-6. Add a second Railway Bucket named `subject-authority`. It is a shared authority for both API replicas, not a mounted volume, and must never be the media bucket or be cloned across staging and production. Bind its five S3 reference variables plus an independently generated authority UUID, wrapping key/KID, journal-authentication key/KID, and revision from `deploy/railway/api.env.example`. Before the first normal API start, run the exact release image once with `fmarch-server --bootstrap-subject-authority`; this create-only command writes and verifies the immutable manifest and refuses an existing authority. Normal startup never creates a manifest: it binds an empty database to that genesis, lists and reconciles revocations, and verifies every active subject key before listeners start. Copy the remaining template values into Railway Variables. Create a WorkOS AuthKit environment and configure its sign-in endpoint as `https://<frontend>/auth/sign-in` and redirect URI as `https://<frontend>/auth/callback`. Fill in the WorkOS client id, issuer, and JWKS URL. The template is explicitly WorkOS-only (`FMARCH_CLASSIC_AUTH=0`). A hosted classic-plus-WorkOS deployment must instead set `FMARCH_CLASSIC_AUTH=1` and configure `FMARCH_IDENTITY_DELIVERY_ENDPOINT`, `FMARCH_IDENTITY_DELIVERY_PROVIDER_ID`, and `FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN` for a real HTTPS provider; startup fails closed when classic is enabled without that transport. For a fresh database, set `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` to the immutable WorkOS user id that should receive the first GlobalAdmin grant; an optional label is display-only. Startup grants it only when no active GlobalAdmin exists. Remove the bootstrap variables after the first successful boot.
+6. Add a second Railway Bucket named `subject-authority`. It is a shared authority for both API replicas, not a mounted volume, and must never be the media bucket or be cloned across staging and production. Bind its five S3 reference variables plus an independently generated authority UUID, wrapping key/KID, journal-authentication key/KID, and revision from `deploy/railway/api.env.example`. Before the first normal API start, run the exact release image once with `fmarch-server --bootstrap-subject-authority`; this create-only command writes and verifies the immutable manifest and refuses an existing authority. Normal startup never creates a manifest: it binds an empty database to that genesis, lists and reconciles revocations, and verifies every active subject key before listeners start. Copy the remaining template values into Railway Variables. Create a WorkOS AuthKit environment and configure its sign-in endpoint as `https://<frontend>/auth/sign-in`, redirect URI as `https://<frontend>/auth/callback`, and default sign-out redirect/application homepage as the exact canonical root `https://<frontend>/`. The application deliberately sends no caller-controlled `return_to`; do not configure a wildcard or alternate sign-out target. Fill in the WorkOS client id, issuer, and JWKS URL. The template is explicitly WorkOS-only (`FMARCH_CLASSIC_AUTH=0`). A hosted classic-plus-WorkOS deployment must instead set `FMARCH_CLASSIC_AUTH=1` and configure `FMARCH_IDENTITY_DELIVERY_ENDPOINT`, `FMARCH_IDENTITY_DELIVERY_PROVIDER_ID`, and `FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN` for a real HTTPS provider; startup fails closed when classic is enabled without that transport. For a fresh database, set `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` to the immutable WorkOS user id that should receive the first GlobalAdmin grant; an optional label is display-only. Startup grants it only when no active GlobalAdmin exists. Remove the bootstrap variables after the first successful boot.
    This closes database-only rollback; Railway Bucket administration is not an object-lock/WORM
    boundary. If coordinated database-plus-authority rollback is in scope, deploy the same adapter
    against storage with enforced object retention and KMS custody before production promotion.
@@ -166,12 +166,12 @@ business integrity or plaintext confidentiality after API compromise.
    prove the migrator-completed schema and authority audit through the
    application credential before Railway admits two replicas. Generate a public Railway domain, verify `GET /healthz` returns dependency-free process liveness, and require `GET /readyz` to return `{ "ok": true, "database_schema": true, "object_storage": true, "subject_authority": true }` while both replicas are present. Readiness revalidates the authority manifest, so bucket or credential loss removes the replica from service. Railway admission and release promotion consume `/readyz`, not `/healthz`.
 9. Add a `frontend` service from the same repository. Leave its root directory at the repository root, then set its Config-as-Code path to `/deploy/railway/frontend.railway.toml`.
-10. Generate the frontend public domain. Replace the example values in `deploy/railway/frontend.env.example` with the two real HTTPS URLs, the same WorkOS client id, a WorkOS API key, the exact callback URI, and a random cookie password of at least 32 characters. Add them as Railway Variables for `frontend`.
+10. Generate the frontend public domain. Copy the canonical environment URLs from `deploy/railway/frontend.env.example`, including the exact environment-scoped private API authority `http://fmarch.railway.internal:8080`; it receives app-session and one-time WorkOS bearers and must never be replaced with a public or third-party URL. Use the same WorkOS client id as the API, add an environment-isolated WorkOS API key, preserve the exact callback URI, and generate an opaque random cookie password of at least 32 characters. Promotion rejects short values and documented, example, variable-reference, or placeholder-shaped values without printing the secret. Add them as Railway Variables for `frontend`.
 11. Record the new migrator service UUID as
     `FMARCH_RAILWAY_MIGRATOR_SERVICE_ID` in the protected release-operator
     environment. It is intentionally not guessed or checked into source until
     the live service exists; promotion fails closed when it is absent.
-12. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
+12. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Log out and require the browser to traverse the constrained WorkOS session-logout endpoint before returning to the canonical frontend root; then complete a fresh WorkOS sign-in. If classic-plus-WorkOS is enabled, also attach WorkOS to a recently authenticated Classic principal, require the link flow to traverse the same provider logout, and prove a fresh WorkOS sign-in succeeds afterward. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
 
 ## Production Promotion
 
@@ -185,7 +185,9 @@ npm run promote:production -- --check
 The preflight requires a clean synchronized `main`, a fast-forwardable
 `origin/production`, successful staging migrator, API, and frontend deployments
 carrying the exact `main` SHA, active canonical domains, healthy staging
-endpoints, and complete production variables. It proves that API uses only
+endpoints, exact canonical frontend origins/callbacks/public and private API URLs, matching
+API/frontend WorkOS client ids, live discovery-aligned WorkOS issuer/JWKS
+metadata in both environments, and complete production variables. It proves that API uses only
 `fmarch_application`, migrator alone has the owner URL/bootstrap passwords,
 no deployed service contains `DATABASE_KEY_ADMIN_URL`, and every database
 credential and identity secret is isolated from staging. It then runs the full proof-lane sweep. When
@@ -233,6 +235,60 @@ stale PostgreSQL parameter ACL: reconciliation prevents future `SET` authority,
 but cannot reset `session_replication_role` in a backend that already changed
 it. The greenfield role cut must run before the first application session; any
 later authority repair requires an explicit session drain before admission.
+
+## WorkOS Verification Metadata
+
+WorkOS verification metadata is public, but it is still an authentication
+boundary. For the default WorkOS domain, each application client has its own
+discovery document and verification paths:
+
+```text
+discovery  https://api.workos.com/user_management/<client_id>/.well-known/openid-configuration
+issuer     https://api.workos.com/user_management/<client_id>
+JWKS       https://api.workos.com/sso/jwks/<client_id>
+```
+
+Do not use the legacy global `https://api.workos.com/` issuer. After replacing
+`client_replace_me` in `deploy/railway/api.env.example`, export its three
+`WORKOS_*` verification values and run:
+
+```sh
+npm run preflight:workos-oidc
+```
+
+The preflight fetches the client-scoped discovery document, requires its
+`issuer` and `jwks_uri` to exactly equal the API configuration, then requires
+the discovered JWKS to contain at least one keyed RS256 signing key compatible
+with the API verifier. It sends no WorkOS API key, cookie password, or user
+data. Production promotion runs the same check
+for both staging and production. If a custom AuthKit domain is introduced,
+configure the exact metadata returned by this same client-scoped discovery
+endpoint rather than deriving a replacement by hand.
+
+### WorkOS Session Cutoff
+
+Each accepted assertion is consumed once by its exact SHA-256
+`workos_session_exchange.access_token_hash`. Its canonical `sid` is bound in
+`workos_provider_session`, and every local session minted from it records the
+same value in `auth_session.workos_session_id`. Logout revokes that entire local
+scope and appends only the `sid` fingerprint to
+`workos_provider_session_tombstone`; method disable does the same for every
+observed `sid` on the method. WorkOS linking consumes its assertion and then
+immediately seals the link-only provider session. The API returns the fixed
+single-`session_id` WorkOS logout URL, and the frontend rejects any alternate
+origin, path, query shape, fragment, or `return_to` before navigating.
+If the first internal link response is lost or unreadable, the frontend repeats
+that byte-identical request once. The API replays the committed URL only when
+both `workos_session_exchange.access_token_hash` and `linking_session_hash`
+match; it performs no second attachment or audit transition.
+
+Subject erasure first appends the SHA-256 WorkOS `sub` fingerprint to
+`workos_subject_tombstone`, so an assertion from an unobserved sibling provider
+session cannot recreate the erased identity after its raw binding is removed.
+The two tombstone tables are append-only denial evidence and contain neither
+raw provider identifiers nor bearer assertions. Configure WorkOS's default
+sign-out redirect/application homepage to the exact canonical frontend root;
+that provider setting, not a caller-supplied return URL, completes the redirect.
 
 Never set `FMARCH_DEV_AUTH=1` or `FMARCH_FRONTEND_FIXTURE_SESSION=1` on any hosted service. They are local proof modes, not hosted-target configuration.
 

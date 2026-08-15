@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use api::ApiState;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
-use identity::{StaticAccessTokenVerifier, VerifiedIdentity};
+use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
 use media::{MediaLimits, MediaStore};
 use tempfile::TempDir;
 use tower::ServiceExt;
@@ -105,6 +105,30 @@ async fn wait_for_owner_lock_waiters(pool: &sqlx::PgPool, expected: i64) {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("expected {expected} canonical owner-lock waiter(s)");
+}
+
+async fn wait_for_workos_subject_lock_waiters(pool: &sqlx::PgPool, expected: i64) {
+    for _ in 0..200 {
+        let waiters: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND pid <> pg_backend_pid()
+              AND wait_event_type = 'Lock'
+              AND query LIKE '%pg_advisory_xact_lock%'
+              AND query LIKE '%hashtextextended%'
+            "#,
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if waiters >= expected {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("expected {expected} WorkOS subject-lock waiter(s)");
 }
 
 async fn assert_erased_without_eligible_sessions(pool: &sqlx::PgPool, principal_user_id: &str) {
@@ -371,7 +395,7 @@ fn workos_verifier(token: &str, subject: &str) -> StaticAccessTokenVerifier {
         token.to_string(),
         VerifiedIdentity {
             subject: subject.to_string(),
-            session_id: format!("{subject}-provider-session"),
+            session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
             expires_at: 4_102_444_800,
             email: Some(format!("{subject}@example.test")),
         },
@@ -399,6 +423,391 @@ async fn get_json(app: &axum::Router, uri: &str, token: &str) -> (StatusCode, se
         serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null)
     };
     (status, body)
+}
+
+fn workos_race_verifier() -> StaticAccessTokenVerifier {
+    let session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
+    StaticAccessTokenVerifier::new(["workos-race-a", "workos-race-b"].map(|token| {
+        (
+            token.to_string(),
+            VerifiedIdentity {
+                subject: "user_workos_race".to_string(),
+                session_id: session_id.clone(),
+                expires_at: 4_102_444_800,
+                email: None,
+            },
+        )
+    }))
+}
+
+async fn seed_workos_race_session(app: &axum::Router) -> (String, String) {
+    let response = post_json(
+        app,
+        "/auth/sessions",
+        Some("workos-race-a"),
+        serde_json::json!({ "method": "workos" }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = json_body(response).await;
+    (
+        body["principal_user_id"].as_str().unwrap().to_string(),
+        body["session_token"].as_str().unwrap().to_string(),
+    )
+}
+
+async fn hold_identity_owner(
+    pool: &sqlx::PgPool,
+    principal_user_id: &str,
+) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    let mut gate = pool.begin().await.unwrap();
+    sqlx::query(
+        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+    )
+    .bind(principal_user_id)
+    .execute(&mut *gate)
+    .await
+    .unwrap();
+    gate
+}
+
+async fn hold_workos_subject(
+    pool: &sqlx::PgPool,
+    subject: &str,
+) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    let mut gate = pool.begin().await.unwrap();
+    identity::workos::lock_subject_advisory(&mut gate, subject)
+        .await
+        .unwrap();
+    gate
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_link_closes_the_provider_session_before_a_queued_login(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(
+        test_state(pool.clone(), &root)
+            .with_access_token_verifier(Arc::new(workos_race_verifier())),
+    );
+    let (principal, local_token) = register_classic_account(
+        &app,
+        "workos-lock-order@example.test",
+        "correct horse battery staple",
+    )
+    .await;
+    let gate = hold_workos_subject(&pool, "user_workos_race").await;
+
+    let link_app = app.clone();
+    let link = tokio::spawn(async move {
+        post_json(
+            &link_app,
+            "/auth/account/methods/workos",
+            Some(&local_token),
+            serde_json::json!({ "provider_assertion": "workos-race-a" }),
+        )
+        .await
+    });
+    wait_for_workos_subject_lock_waiters(&pool, 1).await;
+
+    let login_app = app.clone();
+    let login = tokio::spawn(async move {
+        post_json(
+            &login_app,
+            "/auth/sessions",
+            Some("workos-race-b"),
+            serde_json::json!({ "method": "workos" }),
+        )
+        .await
+    });
+    wait_for_workos_subject_lock_waiters(&pool, 2).await;
+    gate.commit().await.unwrap();
+
+    let (link, login) =
+        tokio::time::timeout(Duration::from_secs(20), async { tokio::join!(link, login) })
+            .await
+            .expect("link then login must serialize without a lock-order deadlock");
+    let link = link.unwrap();
+    let login = login.unwrap();
+    assert_eq!(link.status(), StatusCode::OK);
+    let link = json_body(link).await;
+    assert_eq!(
+        link["provider_logout_url"].as_str(),
+        Some(
+            "https://api.workos.com/user_management/sessions/logout?session_id=session_01HQAG1HENBZMAZD82YRXDFC0B"
+        )
+    );
+    assert_eq!(login.status(), StatusCode::UNAUTHORIZED);
+    let consumed_assertions: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workos_session_exchange WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(consumed_assertions, 1);
+    let linked_principal: String = sqlx::query_scalar(
+        "SELECT principal_user_id FROM external_identity WHERE provider = 'workos' AND subject = 'user_workos_race'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(linked_principal, principal);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_exact_workos_link_retries_share_one_committed_ceremony(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(
+        test_state(pool.clone(), &root)
+            .with_access_token_verifier(Arc::new(workos_race_verifier())),
+    );
+    let (principal, local_token) = register_classic_account(
+        &app,
+        "workos-duplicate-link@example.test",
+        "correct horse battery staple",
+    )
+    .await;
+    let gate = hold_workos_subject(&pool, "user_workos_race").await;
+
+    let first_app = app.clone();
+    let first_local_token = local_token.clone();
+    let first = tokio::spawn(async move {
+        post_json(
+            &first_app,
+            "/auth/account/methods/workos",
+            Some(&first_local_token),
+            serde_json::json!({ "provider_assertion": "workos-race-a" }),
+        )
+        .await
+    });
+    wait_for_workos_subject_lock_waiters(&pool, 1).await;
+    let second_app = app.clone();
+    let second_local_token = local_token.clone();
+    let second = tokio::spawn(async move {
+        post_json(
+            &second_app,
+            "/auth/account/methods/workos",
+            Some(&second_local_token),
+            serde_json::json!({ "provider_assertion": "workos-race-a" }),
+        )
+        .await
+    });
+    wait_for_workos_subject_lock_waiters(&pool, 2).await;
+    gate.commit().await.unwrap();
+
+    let (first, second) = tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(first, second)
+    })
+    .await
+    .expect("exact duplicate links must serialize without deadlock");
+    let first = first.unwrap();
+    let second = second.unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    assert_eq!(second.status(), StatusCode::OK);
+    assert_eq!(json_body(first).await, json_body(second).await);
+
+    let (provider_rows, assertion_rows, attached_audits): (i64, i64, i64) = sqlx::query_as(
+        r#"
+        SELECT (SELECT COUNT(*) FROM workos_provider_session),
+               (SELECT COUNT(*) FROM workos_session_exchange),
+               (SELECT COUNT(*)
+                FROM identity_lifecycle_audit
+                WHERE event_kind = 'method_attached'
+                  AND principal_user_id = $1)
+        "#,
+    )
+    .bind(principal)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!((provider_rows, assertion_rows, attached_audits), (1, 1, 1));
+    let linking_session_hash: String =
+        sqlx::query_scalar("SELECT linking_session_hash FROM workos_session_exchange")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        linking_session_hash,
+        identity::token::hash_token(&local_token)
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_link_revalidates_the_local_session_after_queued_logout(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(
+        test_state(pool.clone(), &root)
+            .with_access_token_verifier(Arc::new(workos_race_verifier())),
+    );
+    let (principal, local_token) = register_classic_account(
+        &app,
+        "workos-stale-link@example.test",
+        "correct horse battery staple",
+    )
+    .await;
+    let gate = hold_identity_owner(&pool, &principal).await;
+
+    let logout_app = app.clone();
+    let logout_token = local_token.clone();
+    let logout = tokio::spawn(async move {
+        post_json(
+            &logout_app,
+            "/auth/session-logout",
+            Some(&logout_token),
+            serde_json::json!({}),
+        )
+        .await
+    });
+    wait_for_owner_lock_waiters(&pool, 1).await;
+
+    let link_app = app.clone();
+    let link = tokio::spawn(async move {
+        post_json(
+            &link_app,
+            "/auth/account/methods/workos",
+            Some(&local_token),
+            serde_json::json!({ "provider_assertion": "workos-race-a" }),
+        )
+        .await
+    });
+    wait_for_owner_lock_waiters(&pool, 2).await;
+    gate.commit().await.unwrap();
+
+    let (logout, link) = tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(logout, link)
+    })
+    .await
+    .expect("logout then link must serialize without a lock-order deadlock");
+    assert_eq!(logout.unwrap().status(), StatusCode::OK);
+    assert_eq!(link.unwrap().status(), StatusCode::UNAUTHORIZED);
+    let linked_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM external_identity WHERE provider = 'workos'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(linked_rows, 0);
+    let provider_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM workos_provider_session")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(provider_rows, 0);
+    let consumed_assertions: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM workos_session_exchange")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(consumed_assertions, 0);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_exchange_queued_before_logout_is_revoked_by_the_following_tombstone(
+    pool: sqlx::PgPool,
+) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(
+        test_state(pool.clone(), &root)
+            .with_access_token_verifier(Arc::new(workos_race_verifier())),
+    );
+    let (principal, first_local_token) = seed_workos_race_session(&app).await;
+    let gate = hold_identity_owner(&pool, &principal).await;
+
+    let exchange_app = app.clone();
+    let exchange = tokio::spawn(async move {
+        post_json(
+            &exchange_app,
+            "/auth/sessions",
+            Some("workos-race-b"),
+            serde_json::json!({ "method": "workos" }),
+        )
+        .await
+    });
+    wait_for_owner_lock_waiters(&pool, 1).await;
+    let logout_app = app.clone();
+    let logout = tokio::spawn(async move {
+        post_json(
+            &logout_app,
+            "/auth/session-logout",
+            Some(&first_local_token),
+            serde_json::json!({}),
+        )
+        .await
+    });
+    wait_for_owner_lock_waiters(&pool, 2).await;
+    gate.commit().await.unwrap();
+
+    let (exchange, logout) = tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(exchange, logout)
+    })
+    .await
+    .expect("exchange then logout must serialize without deadlock");
+    let exchange = exchange.unwrap();
+    let logout = logout.unwrap();
+    assert_eq!(exchange.status(), StatusCode::OK);
+    let second_local_token = json_body(exchange).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(logout.status(), StatusCode::OK);
+    assert_eq!(
+        get_json(&app, "/auth/session", &second_local_token).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    let provider_status: String = sqlx::query_scalar(
+        "SELECT status FROM workos_provider_session WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(provider_status, "logged_out");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let app = api::router_with_state(
+        test_state(pool.clone(), &root)
+            .with_access_token_verifier(Arc::new(workos_race_verifier())),
+    );
+    let (principal, first_local_token) = seed_workos_race_session(&app).await;
+    let gate = hold_identity_owner(&pool, &principal).await;
+
+    let logout_app = app.clone();
+    let logout = tokio::spawn(async move {
+        post_json(
+            &logout_app,
+            "/auth/session-logout",
+            Some(&first_local_token),
+            serde_json::json!({}),
+        )
+        .await
+    });
+    wait_for_owner_lock_waiters(&pool, 1).await;
+    let exchange_app = app.clone();
+    let exchange = tokio::spawn(async move {
+        post_json(
+            &exchange_app,
+            "/auth/sessions",
+            Some("workos-race-b"),
+            serde_json::json!({ "method": "workos" }),
+        )
+        .await
+    });
+    wait_for_owner_lock_waiters(&pool, 2).await;
+    gate.commit().await.unwrap();
+
+    let (logout, exchange) = tokio::time::timeout(Duration::from_secs(20), async {
+        tokio::join!(logout, exchange)
+    })
+    .await
+    .expect("logout then exchange must serialize without deadlock");
+    assert_eq!(logout.unwrap().status(), StatusCode::OK);
+    assert_eq!(exchange.unwrap().status(), StatusCode::UNAUTHORIZED);
+    let local_sessions: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_user_id = $1")
+            .bind(principal)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(local_sessions, 1, "the unused assertion created no session");
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -1150,8 +1559,26 @@ async fn ordinary_sessions_do_not_preserve_revoked_principal_capabilities(pool: 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
-    let state = test_state(pool.clone(), &root)
-        .with_access_token_verifier(Arc::new(workos_verifier("attach-proof", "user_attach")));
+    let first_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
+    let second_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0C").unwrap();
+    let verifier = StaticAccessTokenVerifier::new(
+        [
+            ("attach-proof", second_session_id),
+            ("attach-proof-2", first_session_id),
+        ]
+        .map(|(token, session_id)| {
+            (
+                token.to_string(),
+                VerifiedIdentity {
+                    subject: "user_attach".to_string(),
+                    session_id,
+                    expires_at: 4_102_444_800,
+                    email: Some("user_attach@example.test".to_string()),
+                },
+            )
+        }),
+    );
+    let state = test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier));
     let app = api::router_with_state(state);
 
     let response = post_json(
@@ -1176,7 +1603,7 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
         &app,
         "/auth/account/methods/workos",
         Some(&classic_session),
-        serde_json::json!({ "provider_assertion": "attach-proof" }),
+        serde_json::json!({ "provider_assertion": "attach-proof-2" }),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1186,6 +1613,53 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
         attached["principal_user_id"].as_str(),
         Some(principal.as_str())
     );
+    assert_eq!(
+        attached["provider_logout_url"].as_str(),
+        Some(
+            "https://api.workos.com/user_management/sessions/logout?session_id=session_01HQAG1HENBZMAZD82YRXDFC0B"
+        )
+    );
+
+    let retried = post_json(
+        &app,
+        "/auth/account/methods/workos",
+        Some(&classic_session),
+        serde_json::json!({ "provider_assertion": "attach-proof-2" }),
+    )
+    .await;
+    assert_eq!(retried.status(), StatusCode::OK);
+    assert_eq!(json_body(retried).await, attached);
+    let method_attached_audits: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM identity_lifecycle_audit WHERE event_kind = 'method_attached'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(method_attached_audits, 1);
+
+    let second_classic_session = post_json(
+        &app,
+        "/auth/accounts/login",
+        None,
+        serde_json::json!({
+            "account_id": "classic-first@example.test",
+            "password": "correct horse battery staple"
+        }),
+    )
+    .await;
+    assert_eq!(second_classic_session.status(), StatusCode::OK);
+    let second_classic_session = json_body(second_classic_session).await["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let wrong_local_session_retry = post_json(
+        &app,
+        "/auth/account/methods/workos",
+        Some(&second_classic_session),
+        serde_json::json!({ "provider_assertion": "attach-proof-2" }),
+    )
+    .await;
+    assert_eq!(wrong_local_session_retry.status(), StatusCode::UNAUTHORIZED);
 
     let response = post_json(
         &app,
@@ -1206,6 +1680,12 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
     assert_eq!(response.status(), StatusCode::OK);
     let reattached = json_body(response).await;
     assert_eq!(reattached["method_id"].as_str(), Some(method_id.as_str()));
+    assert_eq!(
+        reattached["provider_logout_url"].as_str(),
+        Some(
+            "https://api.workos.com/user_management/sessions/logout?session_id=session_01HQAG1HENBZMAZD82YRXDFC0C"
+        )
+    );
 
     let (status, methods) = get_json(&app, "/auth/account/methods", &classic_session).await;
     assert_eq!(status, StatusCode::OK);
@@ -1219,6 +1699,274 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
             .unwrap()["status"],
         "active"
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sqlx::PgPool) {
+    let root = TempDir::new().unwrap();
+    let first_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
+    let second_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0C").unwrap();
+    let verifier = StaticAccessTokenVerifier::new(
+        [
+            ("disable-login-a", first_session_id.clone()),
+            ("disable-unused-b", first_session_id),
+            ("disable-relink-c", second_session_id),
+        ]
+        .map(|(token, session_id)| {
+            (
+                token.to_string(),
+                VerifiedIdentity {
+                    subject: "user_disable_replay".to_string(),
+                    session_id,
+                    expires_at: 4_102_444_800,
+                    email: None,
+                },
+            )
+        }),
+    );
+    let app = api::router_with_state(
+        test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier)),
+    );
+
+    let login = post_json(
+        &app,
+        "/auth/sessions",
+        Some("disable-login-a"),
+        serde_json::json!({ "method": "workos" }),
+    )
+    .await;
+    assert_eq!(login.status(), StatusCode::OK);
+    let login = json_body(login).await;
+    let principal = login["principal_user_id"].as_str().unwrap();
+    let workos_local_session = login["session_token"].as_str().unwrap();
+    let workos_method_id: Uuid = sqlx::query_scalar(
+        "SELECT method_id FROM authentication_method WHERE principal_user_id = $1 AND kind = 'workos'",
+    )
+    .bind(principal)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let classic = post_json(
+        &app,
+        "/auth/account/methods/classic",
+        Some(workos_local_session),
+        serde_json::json!({
+            "login_name": "disable-replay@example.test",
+            "password": "correct horse battery staple"
+        }),
+    )
+    .await;
+    assert_eq!(classic.status(), StatusCode::OK);
+    let classic = json_body(classic).await;
+    let classic_session = classic["session_token"].as_str().unwrap();
+
+    let disabled = post_json(
+        &app,
+        format!("/auth/account/methods/{workos_method_id}/disable").as_str(),
+        Some(classic_session),
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(disabled.status(), StatusCode::OK);
+    let old_sibling = post_json(
+        &app,
+        "/auth/sessions",
+        Some("disable-unused-b"),
+        serde_json::json!({ "method": "workos" }),
+    )
+    .await;
+    assert_eq!(old_sibling.status(), StatusCode::UNAUTHORIZED);
+
+    let relinked = post_json(
+        &app,
+        "/auth/account/methods/workos",
+        Some(classic_session),
+        serde_json::json!({ "provider_assertion": "disable-relink-c" }),
+    )
+    .await;
+    assert_eq!(relinked.status(), StatusCode::OK);
+    assert_eq!(
+        json_body(relinked).await["method_id"].as_str(),
+        Some(workos_method_id.to_string().as_str())
+    );
+    let old_sibling_after_reactivation = post_json(
+        &app,
+        "/auth/sessions",
+        Some("disable-unused-b"),
+        serde_json::json!({ "method": "workos" }),
+    )
+    .await;
+    assert_eq!(
+        old_sibling_after_reactivation.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let provider_statuses: Vec<String> = sqlx::query_scalar(
+        "SELECT status FROM workos_provider_session ORDER BY provider_session_id",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(provider_statuses, ["logged_out", "logged_out"]);
+    let tombstones: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM workos_provider_session_tombstone")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(tombstones, 2);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_identity(
+    pool: sqlx::PgPool,
+) {
+    let root = TempDir::new().unwrap();
+    let session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
+    let unseen_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0C").unwrap();
+    let verifier = StaticAccessTokenVerifier::new(
+        [
+            ("link-only-a", session_id.clone()),
+            ("link-only-unused-b", session_id.clone()),
+            ("link-only-unseen-session-c", unseen_session_id),
+        ]
+        .map(|(token, provider_session_id)| {
+            (
+                token.to_string(),
+                VerifiedIdentity {
+                    subject: "user_link_only".to_string(),
+                    session_id: provider_session_id,
+                    expires_at: 4_102_444_800,
+                    email: None,
+                },
+            )
+        }),
+    );
+    let app = api::router_with_state(
+        test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier)),
+    );
+    let registration = post_json(
+        &app,
+        "/auth/accounts/registrations",
+        None,
+        serde_json::json!({
+            "account_id": "link-only-erasure@example.test",
+            "password": "correct horse battery staple"
+        }),
+    )
+    .await;
+    assert_eq!(registration.status(), StatusCode::OK);
+    let registration = json_body(registration).await;
+    let local_token = registration["session_token"].as_str().unwrap();
+    let principal = registration["principal_user_id"].as_str().unwrap();
+
+    let linked = post_json(
+        &app,
+        "/auth/account/methods/workos",
+        Some(local_token),
+        serde_json::json!({ "provider_assertion": "link-only-a" }),
+    )
+    .await;
+    assert_eq!(linked.status(), StatusCode::OK);
+    let linked = json_body(linked).await;
+    assert_eq!(
+        linked["provider_logout_url"].as_str(),
+        Some(
+            "https://api.workos.com/user_management/sessions/logout?session_id=session_01HQAG1HENBZMAZD82YRXDFC0B"
+        )
+    );
+    let exact_link_replay = post_json(
+        &app,
+        "/auth/sessions",
+        Some("link-only-a"),
+        serde_json::json!({ "method": "workos" }),
+    )
+    .await;
+    assert_eq!(exact_link_replay.status(), StatusCode::UNAUTHORIZED);
+    let same_session_sibling = post_json(
+        &app,
+        "/auth/sessions",
+        Some("link-only-unused-b"),
+        serde_json::json!({ "method": "workos" }),
+    )
+    .await;
+    assert_eq!(same_session_sibling.status(), StatusCode::UNAUTHORIZED);
+
+    let erasure = post_json(
+        &app,
+        "/auth/account/erasure",
+        Some(local_token),
+        serde_json::json!({}),
+    )
+    .await;
+    assert_eq!(erasure.status(), StatusCode::ACCEPTED);
+    assert_eq!(
+        identity::process_pending_subject_erasures(
+            &pool,
+            "workos-link-erasure",
+            unix_now_seconds()
+        )
+        .await
+        .unwrap(),
+        1
+    );
+    let provider_rows: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workos_provider_session WHERE principal_user_id = $1",
+    )
+    .bind(principal)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(provider_rows, 0);
+    let tombstone_json: String = sqlx::query_scalar(
+        "SELECT to_jsonb(tombstone)::text FROM workos_provider_session_tombstone AS tombstone",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(tombstone_json.contains(session_id.fingerprint().as_str()));
+    assert!(!tombstone_json.contains(session_id.as_str()));
+    let subject_tombstone_json: String = sqlx::query_scalar(
+        "SELECT to_jsonb(tombstone)::text FROM workos_subject_tombstone AS tombstone",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(subject_tombstone_json
+        .contains(identity::workos::subject_fingerprint("user_link_only").as_str()));
+    assert!(!subject_tombstone_json.contains("user_link_only"));
+
+    let counts_before: (i64, i64, i64) = sqlx::query_as(
+        r#"
+        SELECT (SELECT COUNT(*) FROM platform_principal),
+               (SELECT COUNT(*) FROM privacy_subject),
+               (SELECT COUNT(*) FROM external_identity)
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let sibling_from_unseen_provider_session = post_json(
+        &app,
+        "/auth/sessions",
+        Some("link-only-unseen-session-c"),
+        serde_json::json!({ "method": "workos" }),
+    )
+    .await;
+    assert_eq!(
+        sibling_from_unseen_provider_session.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let counts_after: (i64, i64, i64) = sqlx::query_as(
+        r#"
+        SELECT (SELECT COUNT(*) FROM platform_principal),
+               (SELECT COUNT(*) FROM privacy_subject),
+               (SELECT COUNT(*) FROM external_identity)
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(counts_after, counts_before);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

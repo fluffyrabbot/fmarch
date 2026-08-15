@@ -130,6 +130,42 @@ pub async fn disable_method(
     if other_active == 0 {
         return Err(IdentityFlowError::LastActiveMethod);
     }
+    if kind == MethodKind::Workos {
+        // A disabled method may later be reactivated through a fresh provider
+        // ceremony. Permanently seal every older provider session first so an
+        // unused sibling assertion cannot become valid again after that
+        // reactivation.
+        sqlx::query(
+            r#"
+            WITH sealed AS (
+                UPDATE workos_provider_session
+                SET status = 'logged_out',
+                    logged_out_at = GREATEST($2, last_seen_at)
+                WHERE method_id = $1
+                  AND principal_user_id = $3
+                  AND status = 'active'
+                RETURNING provider_session_id, logged_out_at
+            )
+            INSERT INTO workos_provider_session_tombstone (
+                provider_session_hash,
+                tombstoned_at,
+                reason
+            )
+            SELECT encode(
+                       sha256(convert_to(provider_session_id, 'UTF8')),
+                       'hex'
+                   ),
+                   logged_out_at,
+                   'method_disabled'
+            FROM sealed
+            "#,
+        )
+        .bind(method_id)
+        .bind(now)
+        .bind(principal_user_id)
+        .execute(&mut *conn)
+        .await?;
+    }
     sqlx::query(
         "UPDATE authentication_method SET status = 'disabled', disabled_at = $2 WHERE method_id = $1",
     )

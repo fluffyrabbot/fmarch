@@ -70,6 +70,7 @@ const APPLICATION_UPDATE_TABLES: &[&str] = &[
     "thread_view",
     "visit_history",
     "vote_ballot",
+    "workos_provider_session",
 ];
 
 const APPLICATION_DELETE_TABLES: &[&str] = &[
@@ -130,6 +131,7 @@ const APPLICATION_DELETE_TABLES: &[&str] = &[
     "thread_view",
     "visit_history",
     "vote_ballot",
+    "workos_provider_session",
     "workos_session_exchange",
 ];
 
@@ -299,6 +301,26 @@ const EXPECTED_GUARDS: &[(&str, &str, &str)] = &[
         "thread_view_direct_envelope_guard",
         "event_direct_envelope_write_guard",
     ),
+    (
+        "workos_provider_session",
+        "workos_provider_session_guard",
+        "workos_provider_session_guard_mutation",
+    ),
+    (
+        "workos_provider_session",
+        "workos_provider_session_truncate_guard",
+        "workos_provider_session_guard_mutation",
+    ),
+    (
+        "workos_provider_session_tombstone",
+        "workos_provider_session_tombstone_no_mutation",
+        "subject_privacy_append_only_guard",
+    ),
+    (
+        "workos_subject_tombstone",
+        "workos_subject_tombstone_no_mutation",
+        "subject_privacy_append_only_guard",
+    ),
 ];
 const EXPECTED_GUARD_FUNCTIONS: &[&str] = &[
     "event_direct_envelope_write_guard",
@@ -313,6 +335,7 @@ const EXPECTED_GUARD_FUNCTIONS: &[&str] = &[
     "subject_erasure_state_guard",
     "subject_privacy_append_only_guard",
     "subject_private_claim_reject_tombstoned",
+    "workos_provider_session_guard_mutation",
 ];
 const EXPECTED_TRIGGER_DEFINITION_HASHES: &[(&str, &str)] = &[
     (
@@ -431,6 +454,22 @@ const EXPECTED_TRIGGER_DEFINITION_HASHES: &[(&str, &str)] = &[
         "thread_view_direct_envelope_guard",
         "e6e2e19767d2c2f9954dcec04acb5cf6683e5f4e47210d36bf760cd845bfe127",
     ),
+    (
+        "workos_provider_session_guard",
+        "a8282b251f194020dbc1299efbb397339111310f639b119ade4cb8a51b17233d",
+    ),
+    (
+        "workos_provider_session_truncate_guard",
+        "72beeca1ecb042b90023d192cea8da680388ffa3247e17ff6091cfa03d45b612",
+    ),
+    (
+        "workos_provider_session_tombstone_no_mutation",
+        "2a3e2b7929ec9a1673d273aea70f5f325b5379a5a378fa6b9d9ebe582f0c23ce",
+    ),
+    (
+        "workos_subject_tombstone_no_mutation",
+        "1ae72d853138c1435c99fa598e0a5925377211d40306e24712657a857c89f312",
+    ),
 ];
 const EXPECTED_FUNCTION_SOURCE_HASHES: &[(&str, &str)] = &[
     (
@@ -480,6 +519,10 @@ const EXPECTED_FUNCTION_SOURCE_HASHES: &[(&str, &str)] = &[
     (
         "subject_private_claim_reject_tombstoned",
         "2c29628ab67ca3564e0291bb5480b7758b1e103961d362907be566a496fe2322",
+    ),
+    (
+        "workos_provider_session_guard_mutation",
+        "b9d146558b09e52913c7a86d2706571130d648a44c9677e6ceac54f8b69cbb22",
     ),
 ];
 const EXPECTED_TABLES: &[&str] = &[
@@ -568,7 +611,10 @@ const EXPECTED_TABLES: &[&str] = &[
     "thread_view",
     "visit_history",
     "vote_ballot",
+    "workos_provider_session",
+    "workos_provider_session_tombstone",
     "workos_session_exchange",
+    "workos_subject_tombstone",
 ];
 
 const KEY_ADMIN_COLUMN_UPDATES: &[(&str, &[&str])] = &[

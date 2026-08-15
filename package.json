@@ -8,6 +8,8 @@
     "test:proof-lane-contract": "node --test tools/proof_lane_select.test.mjs",
     "promote:production": "node tools/production_promotion.mjs",
     "test:production-promotion": "node --test tools/production_promotion.test.mjs",
+    "preflight:workos-oidc": "node tools/workos_oidc_preflight.mjs",
+    "test:workos-oidc-preflight": "node --test tools/workos_oidc_preflight.test.mjs",
     "test:security-release-baseline": "node --test tools/security_release_baseline.test.mjs && node tools/security_release_baseline.mjs",
     "test:dependency-policy": "node tools/dependency_policy.mjs && cargo deny check --hide-inclusion-graph advisories licenses sources bans && npm audit --audit-level=moderate && npm --prefix frontend audit --audit-level=moderate",
     "test:frontend-csp-browser": "node tools/frontend_csp_browser_proof.mjs",

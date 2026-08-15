@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
+import { authReturnPath } from "../../../../lib/server/auth-return-path.mjs";
 import { authSourceHeader } from "../../../../lib/server/auth-source.mjs";
 import {
   browserSessionCookieOptions,
@@ -12,7 +13,7 @@ export function load({ locals, url }) {
       principalUserId:
         typeof locals.principalUserId === "string" ? locals.principalUserId : null,
       accountId: optionalToken(url.searchParams.get("account")),
-      returnTo: safeReturnTo(url.searchParams.get("returnTo")),
+      returnTo: authReturnPath(url.searchParams.get("returnTo")),
     },
   };
 }
@@ -22,7 +23,7 @@ export const actions = {
     const formData = await request.formData();
     const accountId = requiredToken(formData, "accountId");
     const password = requiredToken(formData, "password");
-    const returnTo = safeReturnTo(formData.get("returnTo"));
+    const returnTo = authReturnPath(formData.get("returnTo"));
     const authSource = clientAuthSource(getClientAddress);
     if (accountId === null || password === null) {
       return fail(400, {
@@ -137,19 +138,4 @@ function validSessionBody(body) {
     body.session_token.trim() !== "" &&
     Array.isArray(body.capabilities)
   );
-}
-
-function safeReturnTo(value) {
-  if (typeof value !== "string") {
-    return "/";
-  }
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
-    return "/";
-  }
-  return trimmed === "/auth/login" ||
-    trimmed.startsWith("/auth/login?") ||
-    trimmed.startsWith("/auth/login/")
-    ? "/"
-    : trimmed;
 }

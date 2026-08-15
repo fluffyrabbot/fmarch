@@ -1,13 +1,15 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
+import { authReturnPath } from "../../../lib/server/auth-return-path.mjs";
 import {
   evictSessionCacheForToken,
   SESSION_COOKIE_NAME,
 } from "../../../lib/server/session-capabilities.mjs";
 import { WORKOS_SESSION_COOKIE_NAME } from "../../../lib/server/workos-authkit.mjs";
+import { workosProviderLogoutUrl } from "../../../lib/server/workos-provider-logout.mjs";
 
 export function load({ locals, url }) {
-  const returnTo = safeReturnTo(url.searchParams.get("returnTo"));
+  const returnTo = authReturnPath(url.searchParams.get("returnTo"));
   if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
     throw redirect(303, loginPath(returnTo));
   }
@@ -16,7 +18,7 @@ export function load({ locals, url }) {
 
 export const actions = {
   default: async ({ cookies, fetch, request }) => {
-    const returnTo = safeReturnTo((await request.formData()).get("returnTo"));
+    const returnTo = authReturnPath((await request.formData()).get("returnTo"));
     const token = cookies.get(SESSION_COOKIE_NAME);
     if (typeof token !== "string" || token.trim() === "") {
       throw redirect(303, loginPath(returnTo));
@@ -38,7 +40,14 @@ export const actions = {
       });
     }
     const body = await response.json().catch(() => null);
-    if (body?.status !== "logged_out" || typeof body?.principal_user_id !== "string") {
+    const providerLogoutUrl = workosProviderLogoutUrl(body?.provider_logout_url);
+    if (
+      body?.status !== "logged_out" ||
+      typeof body?.principal_user_id !== "string" ||
+      (body?.provider_logout_url !== undefined &&
+        body?.provider_logout_url !== null &&
+        providerLogoutUrl === null)
+    ) {
       return fail(502, {
         state: "reject",
         message: "Auth service returned a malformed sign out result; this browser session remains active",
@@ -47,7 +56,7 @@ export const actions = {
     }
 
     discardBrowserSession({ cookies, token });
-    throw redirect(303, loginPath(returnTo));
+    throw redirect(303, providerLogoutUrl ?? loginPath(returnTo));
   },
 };
 
@@ -65,15 +74,4 @@ function logoutUrl(env) {
 
 function loginPath(returnTo) {
   return `/auth/login?${new URLSearchParams({ returnTo })}`;
-}
-
-function safeReturnTo(value) {
-  if (typeof value !== "string") {
-    return "/";
-  }
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.startsWith("/auth/")) {
-    return "/";
-  }
-  return trimmed;
 }

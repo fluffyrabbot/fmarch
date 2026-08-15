@@ -1,6 +1,6 @@
 //! Exact catalog contract after applying the append-only projection migrations.
 
-use sqlx::PgPool;
+use sqlx::{migrate::Migrator, PgPool};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -89,7 +89,10 @@ const EXPECTED_TABLES: &[&str] = &[
     "thread_view",
     "visit_history",
     "vote_ballot",
+    "workos_provider_session",
+    "workos_provider_session_tombstone",
     "workos_session_exchange",
+    "workos_subject_tombstone",
 ];
 
 const EXPECTED_EVENT_COLUMNS: &[&str] = &[
@@ -103,6 +106,53 @@ const EXPECTED_EVENT_COLUMNS: &[&str] = &[
     "sealed_nonce:bytea",
     "sealed_body:bytea",
     "stream_key_epoch:bigint",
+];
+
+const EXPECTED_AUTH_SESSION_COLUMNS: &[&str] = &[
+    "token_hash:text",
+    "principal_user_id:text",
+    "created_at:bigint",
+    "expires_at:bigint",
+    "revoked_at:bigint",
+    "global_capabilities:ARRAY",
+    "authenticated_via_method_id:uuid",
+    "idle_expires_at:bigint",
+    "assurance:text",
+    "authenticated_at:bigint",
+    "workos_session_id:text",
+];
+
+const EXPECTED_WORKOS_SESSION_EXCHANGE_COLUMNS: &[&str] = &[
+    "provider_session_id:text",
+    "access_token_hash:text",
+    "exchanged_at:bigint",
+    "access_expires_at:bigint",
+    "linking_session_hash:text",
+];
+
+const EXPECTED_WORKOS_PROVIDER_SESSION_COLUMNS: &[&str] = &[
+    "provider_session_id:text",
+    "subject:text",
+    "principal_user_id:text",
+    "method_id:uuid",
+    "status:text",
+    "created_at:bigint",
+    "last_seen_at:bigint",
+    "access_expires_at:bigint",
+    "logged_out_at:bigint",
+    "method_kind:text",
+];
+
+const EXPECTED_WORKOS_PROVIDER_SESSION_TOMBSTONE_COLUMNS: &[&str] = &[
+    "provider_session_hash:text",
+    "tombstoned_at:bigint",
+    "reason:text",
+];
+
+const EXPECTED_WORKOS_SUBJECT_TOMBSTONE_COLUMNS: &[&str] = &[
+    "provider_subject_hash:text",
+    "tombstoned_at:bigint",
+    "reason:text",
 ];
 
 const EXPECTED_GAME_INDEX_COLUMNS: &[&str] = &[
@@ -164,6 +214,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "auth_session_method_idx",
     "auth_session_pkey",
     "auth_session_principal_idx",
+    "auth_session_workos_session_idx",
     "auth_websocket_ticket_expiry_idx",
     "auth_websocket_ticket_pkey",
     "auth_websocket_ticket_principal_idx",
@@ -224,6 +275,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "events_pkey",
     "events_stream_seq_unique",
     "external_identity_method_id_key",
+    "external_identity_method_subject_key",
     "external_identity_pkey",
     "external_identity_principal_idx",
     "game_authority_pkey",
@@ -340,9 +392,14 @@ const EXPECTED_INDEXES: &[&str] = &[
     "visit_history_target_idx",
     "vote_ballot_pkey",
     "vote_ballot_target_idx",
-    "workos_session_exchange_access_token_hash_key",
+    "workos_provider_session_identity_key",
+    "workos_provider_session_pkey",
+    "workos_provider_session_principal_idx",
+    "workos_provider_session_tombstone_pkey",
     "workos_session_exchange_expiry_idx",
     "workos_session_exchange_pkey",
+    "workos_session_exchange_provider_session_idx",
+    "workos_subject_tombstone_pkey",
 ];
 
 const EXPECTED_ERASURE_INDEX_DEFINITIONS: &[&str] = &[
@@ -396,6 +453,8 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "auth_session_method_fkey:f",
     "auth_session_pkey:p",
     "auth_session_principal_user_id_fkey:f",
+    "auth_session_workos_provider_session_fkey:f",
+    "auth_session_workos_session_shape_check:c",
     "auth_websocket_ticket_access_expiry_check:c",
     "auth_websocket_ticket_after_seq_check:c",
     "auth_websocket_ticket_audience_check:c",
@@ -506,6 +565,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "external_identity_method_id_fkey:f",
     "external_identity_method_id_key:u",
     "external_identity_method_identity_fkey:f",
+    "external_identity_method_subject_key:u",
     "external_identity_pkey:p",
     "external_identity_principal_user_id_fkey:f",
     "external_identity_provider_check:c",
@@ -658,9 +718,36 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "thread_view_pkey:p",
     "visit_history_pkey:p",
     "vote_ballot_pkey:p",
-    "workos_session_exchange_access_token_hash_key:u",
+    "workos_provider_session_external_identity_fkey:f",
+    "workos_provider_session_id_check:c",
+    "workos_provider_session_identity_key:u",
+    "workos_provider_session_logout_shape_check:c",
+    "workos_provider_session_method_identity_fkey:f",
+    "workos_provider_session_pkey:p",
+    "workos_provider_session_principal_fkey:f",
+    "workos_provider_session_status_check:c",
+    "workos_provider_session_subject_check:c",
+    "workos_provider_session_time_check:c",
+    "workos_provider_session_tombstone_hash_check:c",
+    "workos_provider_session_tombstone_pkey:p",
+    "workos_provider_session_tombstone_reason_check:c",
+    "workos_session_exchange_assertion_hash_check:c",
     "workos_session_exchange_expiry_check:c",
+    "workos_session_exchange_linking_session_fkey:f",
+    "workos_session_exchange_linking_session_hash_check:c",
     "workos_session_exchange_pkey:p",
+    "workos_session_exchange_provider_session_fkey:f",
+    "workos_session_exchange_provider_session_id_check:c",
+    "workos_subject_tombstone_hash_check:c",
+    "workos_subject_tombstone_pkey:p",
+    "workos_subject_tombstone_reason_check:c",
+];
+
+const EXPECTED_NOT_VALID_CONSTRAINTS: &[&str] = &[
+    "auth_session_workos_provider_session_fkey",
+    "auth_session_workos_session_shape_check",
+    "event_stream_keys_wrap_kid_fkey",
+    "workos_session_exchange_provider_session_fkey",
 ];
 
 fn assert_inventory(kind: &str, actual: &[String], expected: &[&str]) {
@@ -764,6 +851,99 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     .expect("read baseline constraint inventory");
     assert_inventory("constraint", &constraints, EXPECTED_CONSTRAINTS);
 
+    let not_valid_constraints: Vec<String> = sqlx::query_scalar(
+        "SELECT constraint_row.conname \
+         FROM pg_constraint AS constraint_row \
+         JOIN pg_namespace AS namespace_row \
+           ON namespace_row.oid = constraint_row.connamespace \
+         WHERE namespace_row.nspname = 'public' \
+           AND NOT constraint_row.convalidated \
+         ORDER BY constraint_row.conname",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read deliberate NOT VALID constraint inventory");
+    assert_inventory(
+        "NOT VALID constraint",
+        &not_valid_constraints,
+        EXPECTED_NOT_VALID_CONSTRAINTS,
+    );
+
+    let auth_session_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'auth_session' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read auth session column inventory");
+    assert_inventory(
+        "auth session column",
+        &auth_session_columns,
+        EXPECTED_AUTH_SESSION_COLUMNS,
+    );
+
+    let workos_provider_session_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'workos_provider_session' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read WorkOS provider session column inventory");
+    assert_inventory(
+        "WorkOS provider session column",
+        &workos_provider_session_columns,
+        EXPECTED_WORKOS_PROVIDER_SESSION_COLUMNS,
+    );
+
+    let workos_provider_tombstone_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'workos_provider_session_tombstone' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read WorkOS provider tombstone column inventory");
+    assert_inventory(
+        "WorkOS provider tombstone column",
+        &workos_provider_tombstone_columns,
+        EXPECTED_WORKOS_PROVIDER_SESSION_TOMBSTONE_COLUMNS,
+    );
+
+    let workos_subject_tombstone_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'workos_subject_tombstone' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read WorkOS subject tombstone column inventory");
+    assert_inventory(
+        "WorkOS subject tombstone column",
+        &workos_subject_tombstone_columns,
+        EXPECTED_WORKOS_SUBJECT_TOMBSTONE_COLUMNS,
+    );
+
+    let workos_exchange_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'workos_session_exchange' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read WorkOS exchange column inventory");
+    assert_inventory(
+        "WorkOS exchange column",
+        &workos_exchange_columns,
+        EXPECTED_WORKOS_SESSION_EXCHANGE_COLUMNS,
+    );
+
     let event_columns: Vec<String> = sqlx::query_scalar(
         "SELECT column_name || ':' || data_type \
          FROM information_schema.columns \
@@ -807,10 +987,14 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
 }
 
 fn assert_foreign_key_violation(error: sqlx::Error, constraint: &str) {
+    assert_database_constraint(error, "23503", constraint);
+}
+
+fn assert_database_constraint(error: sqlx::Error, code: &str, constraint: &str) {
     let database_error = error
         .as_database_error()
-        .expect("foreign-key rejection must be a database error");
-    assert_eq!(database_error.code().as_deref(), Some("23503"));
+        .expect("constraint rejection must be a database error");
+    assert_eq!(database_error.code().as_deref(), Some(code));
     assert_eq!(database_error.constraint(), Some(constraint));
 }
 
@@ -1171,6 +1355,604 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
             .await
             .expect_err("a referenced principal must not be deleted");
     assert_foreign_key_violation(owner_delete, "auth_session_principal_user_id_fkey");
+}
+
+#[sqlx::test(migrations = false)]
+async fn workos_cutover_preserves_legacy_evidence_without_preserving_authority(pool: PgPool) {
+    let through_identity_cutover = Migrator::with_migrations(
+        projections::MIGRATOR
+            .iter()
+            .filter(|migration| migration.version < 27)
+            .cloned()
+            .collect(),
+    );
+    through_identity_cutover
+        .run(&pool)
+        .await
+        .expect("apply projection migrations through 0026");
+
+    let method_id = Uuid::new_v4();
+    let legacy_token = identity::token::generate_session_token();
+    let legacy_token_hash = identity::token::hash_token(legacy_token.as_str());
+    sqlx::query(
+        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ('legacy-workos-owner', 'active', '{}', 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO authentication_method (method_id, principal_user_id, kind, status, created_at) VALUES ($1, 'legacy-workos-owner', 'workos', 'active', 1)",
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO external_identity (
+            provider, subject, principal_user_id, display_label,
+            created_at, last_seen_at, method_id
+        )
+        VALUES (
+            'workos', 'user_legacy_workos_owner', 'legacy-workos-owner',
+            NULL, 1, 1, $1
+        )
+        "#,
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash, principal_user_id, created_at, expires_at,
+            global_capabilities, authenticated_via_method_id,
+            idle_expires_at, assurance, authenticated_at
+        )
+        VALUES ($1, 'legacy-workos-owner', 10, 10000, '{}', $2, 5000, 'external_sso', 10)
+        "#,
+    )
+    .bind(legacy_token_hash.as_str())
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO workos_session_exchange (
+            provider_session_id, access_token_hash, subject,
+            exchanged_at, access_expires_at
+        )
+        VALUES
+            (
+                'session_01HQAG1HENBZMAZD82YRXDFC0B', repeat('a', 64),
+                'user_legacy_workos_owner', 10, 1000
+            ),
+            (
+                'session_01HQAG1HENBZMAZD82YRXDFC0C', repeat('b', 64),
+                'user_orphaned_workos_identity', 10, 1000
+            )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    projections::MIGRATOR
+        .run(&pool)
+        .await
+        .expect("apply WorkOS provider-session custody migration");
+
+    let legacy_session: (Option<String>, Option<i64>) = sqlx::query_as(
+        "SELECT workos_session_id, revoked_at FROM auth_session WHERE token_hash = $1",
+    )
+    .bind(legacy_token_hash.as_str())
+    .fetch_one(&pool)
+    .await
+    .expect("the cutover must retain the legacy local-session evidence");
+    assert_eq!(legacy_session, (None, None));
+    assert!(matches!(
+        identity::session::validate_session(
+            &pool,
+            legacy_token.as_str(),
+            &identity::SessionPolicy {
+                absolute_ttl_seconds: 10_000,
+                workos_absolute_ttl_seconds: 10_000,
+                idle_ttl_seconds: 10_000,
+            },
+            20,
+        )
+        .await,
+        Err(identity::IdentityFlowError::Unauthorized)
+    ));
+
+    let retained_exchanges: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workos_session_exchange WHERE provider_session_id IN ('session_01HQAG1HENBZMAZD82YRXDFC0B', 'session_01HQAG1HENBZMAZD82YRXDFC0C')",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(retained_exchanges, 2);
+    let retired_provider_sids: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workos_provider_session_tombstone WHERE reason = 'migration_cutover'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(retired_provider_sids, 2);
+
+    sqlx::query("UPDATE auth_session SET revoked_at = 20 WHERE token_hash = $1")
+        .bind(legacy_token_hash.as_str())
+        .execute(&pool)
+        .await
+        .expect("a grandfathered null-sid row must remain revocable");
+    let reactivated =
+        sqlx::query("UPDATE auth_session SET revoked_at = NULL WHERE token_hash = $1")
+            .bind(legacy_token_hash.as_str())
+            .execute(&pool)
+            .await
+            .expect_err("terminal grandfathered rows must not return to authority");
+    assert_database_constraint(
+        reactivated,
+        "23514",
+        "auth_session_workos_session_shape_check",
+    );
+
+    let new_null_sid = sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash, principal_user_id, created_at, expires_at,
+            global_capabilities, authenticated_via_method_id,
+            idle_expires_at, assurance, authenticated_at
+        )
+        VALUES (repeat('c', 64), 'legacy-workos-owner', 20, 10000, '{}', $1, 5000, 'external_sso', 20)
+        "#,
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .expect_err("new active WorkOS rows must carry a canonical provider sid");
+    assert_database_constraint(
+        new_null_sid,
+        "23514",
+        "auth_session_workos_session_shape_check",
+    );
+
+    let new_unbound_exchange = sqlx::query(
+        r#"
+        INSERT INTO workos_session_exchange (
+            provider_session_id, access_token_hash,
+            exchanged_at, access_expires_at
+        )
+        VALUES (
+            'session_01HQAG1HENBZMAZD82YRXDFC0D', repeat('d', 64), 20, 1000
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect_err("NOT VALID must still enforce provider custody on new assertions");
+    assert_foreign_key_violation(
+        new_unbound_exchange,
+        "workos_session_exchange_provider_session_fkey",
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_session_catalog_binds_provider_custody_and_replays_exact_assertions(pool: PgPool) {
+    sqlx::query(
+        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ('workos-owner', 'active', '{}', 1)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let method_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO authentication_method (method_id, principal_user_id, kind, status, created_at) VALUES ($1, 'workos-owner', 'workos', 'active', 1)",
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let missing_provider_session = sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash, principal_user_id, created_at, expires_at,
+            global_capabilities, authenticated_via_method_id,
+            idle_expires_at, assurance, authenticated_at
+        )
+        VALUES (repeat('a', 64), 'workos-owner', 1, 100, '{}', $1, 50, 'external_sso', 1)
+        "#,
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .expect_err("external SSO without provider-session custody must be rejected");
+    assert_database_constraint(
+        missing_provider_session,
+        "23514",
+        "auth_session_workos_session_shape_check",
+    );
+
+    let provider_session_on_other_assurance = sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash, principal_user_id, created_at, expires_at,
+            global_capabilities, idle_expires_at, assurance,
+            authenticated_at, workos_session_id
+        )
+        VALUES (
+            repeat('b', 64), 'workos-owner', 1, 100, '{}', 50,
+            'admin_grant', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B'
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect_err("non-WorkOS assurance must not carry a WorkOS sid");
+    assert_database_constraint(
+        provider_session_on_other_assurance,
+        "23514",
+        "auth_session_workos_session_shape_check",
+    );
+
+    sqlx::query(
+        r#"
+        INSERT INTO external_identity (
+            provider, subject, principal_user_id, display_label,
+            created_at, last_seen_at, method_id
+        )
+        VALUES (
+            'workos', 'user_01HQAG1HENBZMAZD82YRXDFC0B', 'workos-owner',
+            NULL, 1, 1, $1
+        )
+        "#,
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO workos_provider_session (
+            provider_session_id, subject, principal_user_id, method_id,
+            status, created_at, last_seen_at, access_expires_at
+        )
+        VALUES (
+            'session_01HQAG1HENBZMAZD82YRXDFC0B',
+            'user_01HQAG1HENBZMAZD82YRXDFC0B',
+            'workos-owner', $1, 'active', 1, 1, 100
+        )
+        "#,
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash, principal_user_id, created_at, expires_at,
+            global_capabilities, authenticated_via_method_id,
+            idle_expires_at, assurance, authenticated_at, workos_session_id
+        )
+        VALUES (
+            repeat('c', 64), 'workos-owner', 1, 100, '{}', $1, 50,
+            'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B'
+        )
+        "#,
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let stripped_provider_session = sqlx::query(
+        "UPDATE auth_session SET workos_session_id = NULL WHERE token_hash = repeat('c', 64)",
+    )
+    .execute(&pool)
+    .await
+    .expect_err("an active WorkOS session must retain canonical provider custody");
+    assert_database_constraint(
+        stripped_provider_session,
+        "23514",
+        "auth_session_workos_session_shape_check",
+    );
+
+    let unbound_provider_session = sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash, principal_user_id, created_at, expires_at,
+            global_capabilities, authenticated_via_method_id,
+            idle_expires_at, assurance, authenticated_at, workos_session_id
+        )
+        VALUES (
+            repeat('f', 64), 'workos-owner', 1, 100, '{}', $1, 50,
+            'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0C'
+        )
+        "#,
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .expect_err("new WorkOS sessions must bind to exact provider custody");
+    assert_foreign_key_violation(
+        unbound_provider_session,
+        "auth_session_workos_provider_session_fkey",
+    );
+
+    let unbound_exchange = sqlx::query(
+        r#"
+        INSERT INTO workos_session_exchange (
+            provider_session_id, access_token_hash,
+            exchanged_at, access_expires_at
+        )
+        VALUES (
+            'session_01HQAG1HENBZMAZD82YRXDFC0C', repeat('f', 64), 1, 100
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect_err("new assertions must bind to provider-session custody");
+    assert_foreign_key_violation(
+        unbound_exchange,
+        "workos_session_exchange_provider_session_fkey",
+    );
+
+    for assertion_hash in ["d", "e"] {
+        sqlx::query(
+            r#"
+            INSERT INTO workos_session_exchange (
+                provider_session_id, access_token_hash,
+                exchanged_at, access_expires_at
+            )
+            VALUES (
+                'session_01HQAG1HENBZMAZD82YRXDFC0B', repeat($1, 64), 1, 100
+            )
+            "#,
+        )
+        .bind(assertion_hash)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let exact_replay = sqlx::query(
+        r#"
+        INSERT INTO workos_session_exchange (
+            provider_session_id, access_token_hash,
+            exchanged_at, access_expires_at
+        )
+        VALUES (
+            'session_01HQAG1HENBZMAZD82YRXDFC0B', repeat('d', 64), 2, 100
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect_err("the exact assertion hash may be exchanged only once");
+    assert_database_constraint(exact_replay, "23505", "workos_session_exchange_pkey");
+
+    let distinct_assertions: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM workos_session_exchange WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(distinct_assertions, 2);
+
+    sqlx::query(
+        "UPDATE workos_provider_session SET last_seen_at = 2, access_expires_at = 101 WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .execute(&pool)
+    .await
+    .expect("an active provider observation may advance monotonically");
+    for (mutation, expected_message) in [
+        (
+            "UPDATE workos_provider_session SET subject = 'other-user' WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+            "identity is immutable",
+        ),
+        (
+            "UPDATE workos_provider_session SET last_seen_at = 1 WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+            "observation must be monotonic",
+        ),
+    ] {
+        let error = sqlx::query(mutation)
+            .execute(&pool)
+            .await
+            .expect_err("raw provider-session mutation must be rejected");
+        assert!(error.to_string().contains(expected_message), "{error}");
+    }
+    sqlx::query(
+        "UPDATE workos_provider_session SET status = 'logged_out', logged_out_at = 2 WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .execute(&pool)
+    .await
+    .expect("active provider session may become a terminal tombstone");
+    let reactivation = sqlx::query(
+        "UPDATE workos_provider_session SET status = 'active', logged_out_at = NULL WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .execute(&pool)
+    .await
+    .expect_err("a provider-session tombstone must be terminal");
+    assert!(reactivation.to_string().contains("logged-out"));
+    let raw_delete = sqlx::query(
+        "DELETE FROM workos_provider_session WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .execute(&pool)
+    .await
+    .expect_err("provider-session custody deletion requires claimed erasure");
+    assert!(raw_delete.to_string().contains("claimed subject erasure"));
+    let truncate = sqlx::query("TRUNCATE workos_provider_session")
+        .execute(&pool)
+        .await
+        .expect_err("provider-session custody must reject truncation");
+    assert!(truncate.to_string().contains("cannot truncate"));
+
+    let subject_id = Uuid::new_v4();
+    let erasure_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at, lifecycle_state) VALUES ($1, 'workos-owner', 1, 'erasure_pending')",
+    )
+    .bind(subject_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO subject_erasure_outbox (
+            erasure_id, subject_id, principal_user_id, receipt_id,
+            replacement_alias, key_fingerprint_sha256, requested_at
+        )
+        VALUES ($1, $2, 'workos-owner', $3, 'erased-workos-owner', repeat('f', 64), 1)
+        "#,
+    )
+    .bind(erasure_id)
+    .bind(subject_id)
+    .bind(Uuid::new_v4())
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO subject_erasure (
+            erasure_id, state, claim_token, claim_owner,
+            claim_expires_at, attempt_count, last_attempt_at
+        )
+        VALUES ($1, 'pending', $2, 'catalog-proof', 100, 1, 2)
+        "#,
+    )
+    .bind(erasure_id)
+    .bind(Uuid::new_v4())
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO workos_provider_session_tombstone (
+            provider_session_hash, tombstoned_at, reason
+        )
+        VALUES (
+            '12809d16e8a0869e08f32b449c05398bb6052a3905ea1d5d2506abe8ceb8755e',
+            2,
+            'subject_erasure'
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for mutation in [
+        "UPDATE workos_provider_session_tombstone SET reason = 'logout'",
+        "DELETE FROM workos_provider_session_tombstone",
+        "TRUNCATE workos_provider_session_tombstone",
+    ] {
+        let error = sqlx::query(mutation)
+            .execute(&pool)
+            .await
+            .expect_err("permanent sid fingerprints must be append-only");
+        assert!(error.to_string().contains("append-only"), "{error}");
+    }
+    sqlx::query(
+        r#"
+        INSERT INTO workos_subject_tombstone (
+            provider_subject_hash, tombstoned_at, reason
+        )
+        VALUES (repeat('a', 64), 2, 'subject_erasure')
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for mutation in [
+        "UPDATE workos_subject_tombstone SET tombstoned_at = 3",
+        "DELETE FROM workos_subject_tombstone",
+        "TRUNCATE workos_subject_tombstone",
+    ] {
+        let error = sqlx::query(mutation)
+            .execute(&pool)
+            .await
+            .expect_err("permanent provider-subject fingerprints must be append-only");
+        assert!(error.to_string().contains("append-only"), "{error}");
+    }
+    sqlx::query(
+        "DELETE FROM workos_session_exchange WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "DELETE FROM auth_session WHERE workos_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let erased = sqlx::query(
+        "DELETE FROM workos_provider_session WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
+    )
+    .execute(&pool)
+    .await
+    .expect("claimed subject erasure may remove provider-session custody");
+    assert_eq!(erased.rows_affected(), 1);
+
+    let sid_recreated = sqlx::query(
+        r#"
+        INSERT INTO workos_provider_session (
+            provider_session_id, subject, principal_user_id, method_id,
+            status, created_at, last_seen_at, access_expires_at
+        )
+        VALUES (
+            'session_01HQAG1HENBZMAZD82YRXDFC0B',
+            'user_01HQAG1HENBZMAZD82YRXDFC0B',
+            'workos-owner', $1, 'active', 3, 3, 100
+        )
+        "#,
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .expect_err("a permanently tombstoned provider sid cannot be recreated");
+    assert!(sid_recreated.to_string().contains("tombstoned"));
+
+    sqlx::query(
+        r#"
+        INSERT INTO workos_subject_tombstone (
+            provider_subject_hash, tombstoned_at, reason
+        )
+        VALUES (
+            encode(
+                sha256(convert_to('user_01HQAG1HENBZMAZD82YRXDFC0B', 'UTF8')),
+                'hex'
+            ),
+            3,
+            'subject_erasure'
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let subject_recreated = sqlx::query(
+        r#"
+        INSERT INTO workos_provider_session (
+            provider_session_id, subject, principal_user_id, method_id,
+            status, created_at, last_seen_at, access_expires_at
+        )
+        VALUES (
+            'session_01HQAG1HENBZMAZD82YRXDFC0C',
+            'user_01HQAG1HENBZMAZD82YRXDFC0B',
+            'workos-owner', $1, 'active', 3, 3, 100
+        )
+        "#,
+    )
+    .bind(method_id)
+    .execute(&pool)
+    .await
+    .expect_err("an erased provider subject cannot return through an unseen sid");
+    assert!(subject_recreated.to_string().contains("tombstoned"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

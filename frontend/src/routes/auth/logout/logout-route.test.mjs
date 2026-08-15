@@ -57,6 +57,48 @@ test("logout preserves the cookie when the auth service is unavailable", async (
   assert.deepEqual(observed.deleted, []);
 });
 
+test("WorkOS logout clears local identity before top-level provider logout", async () => {
+  const observed = { deleted: [] };
+  await assert.rejects(
+    actions.default({
+      cookies: cookieJar("active-workos-session", observed),
+      fetch: async () =>
+        jsonResponse({
+          status: "logged_out",
+          principal_user_id: "admin_a",
+          provider_logout_url:
+            "https://api.workos.com/user_management/sessions/logout?session_id=session_a",
+        }),
+      request: formRequest({ returnTo: "/admin" }),
+    }),
+    (error) =>
+      error.status === 303 &&
+      error.location ===
+        "https://api.workos.com/user_management/sessions/logout?session_id=session_a",
+  );
+  assert.deepEqual(observed.deleted, [
+    { name: "fmarch_session", options: { path: "/" } },
+    { name: "wos-session", options: { path: "/" } },
+  ]);
+});
+
+test("logout refuses an untrusted provider redirect", async () => {
+  const observed = { deleted: [] };
+  const result = await actions.default({
+    cookies: cookieJar("active-workos-session", observed),
+    fetch: async () =>
+      jsonResponse({
+        status: "logged_out",
+        principal_user_id: "admin_a",
+        provider_logout_url: "https://attacker.example/logout",
+      }),
+    request: formRequest({ returnTo: "/admin" }),
+  });
+  assert.equal(result.status, 502);
+  assert.equal(result.data.state, "reject");
+  assert.deepEqual(observed.deleted, []);
+});
+
 function cookieJar(token, observed) {
   return {
     get(name) {

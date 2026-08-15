@@ -40,13 +40,18 @@ removing a sign-in method never rewrites a principal.
 - **WorkOS — managed sign-in (additive):** AuthKit owns the interactive ceremony (signup,
   email verification, passkeys, MFA, provider-side recovery). The frontend confines AuthKit
   middleware and its sealed cookie to the start and callback routes; after the OAuth
-  callback, the WorkOS access token is exchanged **exactly once** at `POST /auth/sessions`
-  for the same opaque app session, and the AuthKit cookie is discarded. Provider JWTs are
-  never per-request bearers.
+  callback, the exact signed WorkOS access-token assertion is consumed **once** at either
+  `POST /auth/sessions` or `POST /auth/account/methods/workos`, and the AuthKit cookie is
+  discarded. `workos_session_exchange` retains only its SHA-256 `access_token_hash` replay
+  key; provider JWTs are never stored as reusable credentials or accepted as per-request
+  application bearers.
 - **API verification (exchange only):** the Rust `identity::workos` adapter accepts RS256
   only, selects the WorkOS JWKS key by `kid`, refreshes the key set once on an unknown key,
-  validates `exp`, `iss`, and `sub`, and requires a WorkOS session id. The client-specific
-  JWKS URL is configuration, not a token claim. Provider failures fail closed.
+  validates `exp`, `iss`, and `sub`, and requires a WorkOS session id. The issuer and JWKS
+  URL must exactly match the application's client-scoped OIDC discovery document; the JWKS
+  URL is configuration, not a token claim. Promotion rechecks discovery and a nonempty key
+  set for both hosted environments without receiving a WorkOS secret. Provider failures fail
+  closed.
 - **Stable local authority:** the immutable WorkOS `sub` is bound exactly once to a
   generated `platform_principal` through `external_identity` (`(provider, subject)` is the
   identity key; email is display metadata, never a primary key, authorization input, or
@@ -56,6 +61,25 @@ removing a sign-in method never rewrites a principal.
   session-scoped grants, so removing a principal capability takes effect immediately.
   Per-game capabilities are likewise derived from local state. Disabling a principal
   revokes every method and session.
+- **Provider-session cutoff:** every accepted WorkOS assertion must carry one canonical
+  provider session id (`sid`). `workos_provider_session` binds that id to exactly one local
+  subject, principal, and method; `auth_session.workos_session_id` makes all local sessions
+  minted by the same provider session share one cutoff. Logout atomically seals that row,
+  appends its SHA-256 fingerprint to the immutable
+  `workos_provider_session_tombstone`, and revokes every matching local session. A retry
+  with the same just-revoked local credential reproduces the same constrained WorkOS logout
+  URL, so a lost response cannot strand the provider session. Linking consumes the exact
+  assertion and immediately seals and tombstones its link-only `sid`; the frontend accepts
+  only `https://api.workos.com/user_management/sessions/logout?session_id=<canonical sid>`
+  with no caller-controlled `return_to`, then navigates there to end the provider ceremony.
+  On one ambiguous internal response, the frontend repeats the byte-identical link request;
+  the exchange's `access_token_hash` and `linking_session_hash` let the API replay only that
+  already-committed URL for the same assertion and initiating app session, without a second
+  identity mutation.
+  Disabling a WorkOS method seals and tombstones every provider session observed for that
+  method. Subject erasure first appends the SHA-256 `sub` fingerprint to the immutable
+  `workos_subject_tombstone`, preventing a valid assertion from an unobserved sibling
+  provider session from recreating the erased binding.
 - **Method lifecycle:** `GET /auth/account/methods` lists a principal's methods;
   `POST /auth/account/methods/classic` attaches classic sign-in to (for example) a
   WorkOS-only principal, returns one-time recovery codes shown exactly once, and replaces
@@ -68,12 +92,14 @@ removing a sign-in method never rewrites a principal.
   credential ceremony and is preserved by session rotation; rotating an old session cannot
   manufacture step-up authority. An active principal must retain at least one active method,
   at most one classic method exists per principal, and removal revokes the sessions authenticated
-  through that method. A disabled classic identity cannot reactivate itself through a live sibling
-  method; only the GlobalAdmin account-enable lifecycle may restore it. Every transition writes
-  `identity_lifecycle_audit`.
+  through that method; WorkOS removal also seals and tombstones all of that method's observed
+  provider sessions before it can later be reattached. A disabled classic identity cannot reactivate
+  itself through a live sibling method; only the GlobalAdmin account-enable lifecycle may restore
+  it. Every transition writes `identity_lifecycle_audit`.
 - **WorkOS adapter policy (recorded tradeoff):** there is no AuthKit refresh loop and no
-  provider webhook; provider-side revocation takes effect when the local session expires,
-  which is why WorkOS-exchanged sessions default to a shorter absolute TTL
+  provider webhook. App-initiated logout ends the observed provider session immediately as
+  described above, but provider-originated revocation elsewhere is learned only when the
+  local session expires, which is why WorkOS-exchanged sessions default to a shorter absolute TTL
   (`FMARCH_WORKOS_SESSION_TTL_SECONDS`, 24h) than classic ones
   (`FMARCH_SESSION_TTL_SECONDS`, 30d). A signed-out user cannot escape a WorkOS outage
   unless they added classic or recovery credentials beforehand — the security page

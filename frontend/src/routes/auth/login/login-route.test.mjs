@@ -14,6 +14,7 @@ test("login chooser preserves only local return paths", () => {
         accountId: "",
         returnTo: "/admin",
         workosAvailable: false,
+        workosError: "",
       },
     },
   );
@@ -31,6 +32,7 @@ test("login chooser preserves only local return paths", () => {
         accountId: "",
         returnTo: "/",
         workosAvailable: false,
+        workosError: "",
       },
     },
   );
@@ -48,8 +50,26 @@ test("login chooser preserves only local return paths", () => {
         accountId: "host@example.test",
         returnTo: "/g/midsummer/host",
         workosAvailable: false,
+        workosError: "",
       },
     },
+  );
+});
+
+test("login chooser preserves only reason-coded WorkOS errors", () => {
+  assert.equal(
+    load({
+      locals: {},
+      url: new URL("http://localhost/auth/login?error=workos_provider_access_denied"),
+    }).chooser.workosError,
+    "workos_provider_access_denied",
+  );
+  assert.equal(
+    load({
+      locals: {},
+      url: new URL("http://localhost/auth/login?error=private-email%40example.test"),
+    }).chooser.workosError,
+    "",
   );
 });
 

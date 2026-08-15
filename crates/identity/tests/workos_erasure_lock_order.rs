@@ -1,12 +1,12 @@
 use identity::workos::{attach_subject, resolve_subject};
-use identity::{methods, MethodKind, VerifiedIdentity};
+use identity::{methods, MethodKind, VerifiedIdentity, WorkosSessionId};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 fn verified(subject: String) -> VerifiedIdentity {
     VerifiedIdentity {
         subject,
-        session_id: format!("session-{}", Uuid::new_v4().simple()),
+        session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
         expires_at: 4_102_444_800,
         email: Some("workos-proof@example.test".to_string()),
     }

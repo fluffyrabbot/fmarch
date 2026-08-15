@@ -403,7 +403,7 @@ test("session resolution prefers the private-network API base when configured", 
     request: requestFor("/g/game-1/host"),
     env: {
       FMARCH_API_BASE_URL: "https://api.example.test",
-      FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080/",
+      FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080",
     },
     fetchImpl: async (url) => {
       seen.push(url);

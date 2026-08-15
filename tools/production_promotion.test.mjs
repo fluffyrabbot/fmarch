@@ -133,17 +133,23 @@ test("hosted variables require isolated production identity credentials", () => 
     AWS_SECRET_ACCESS_KEY: "staging-secret-key",
     AWS_S3_BUCKET_NAME: "staging-media",
     FMARCH_CLASSIC_AUTH: "0",
-    WORKOS_CLIENT_ID: "staging-client",
-    WORKOS_ISSUER: "https://api.workos.com/user_management/staging",
-    WORKOS_JWKS_URL: "https://api.workos.com/sso/jwks/staging",
+    WORKOS_CLIENT_ID: "client_01STAGING00000000000000000",
+    WORKOS_ISSUER:
+      "https://api.workos.com/user_management/client_01STAGING00000000000000000",
+    WORKOS_JWKS_URL:
+      "https://api.workos.com/sso/jwks/client_01STAGING00000000000000000",
   };
   const stagingFrontend = {
+    FMARCH_API_BASE_URL: "https://fmarch-staging.up.railway.app",
+    FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080",
     FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key-at-least-32-bytes",
     FMARCH_AUTH_SOURCE_SIGNING_KID: "staging-auth-2026-08-04",
     FMARCH_WORKOS_CREDENTIAL_KID: "staging-workos-2026-08-04",
-    WORKOS_CLIENT_ID: "staging-client",
+    ORIGIN: "https://fmarch-frontend-staging.up.railway.app",
+    WORKOS_CLIENT_ID: "client_01STAGING00000000000000000",
     WORKOS_API_KEY: "staging-key",
-    WORKOS_COOKIE_PASSWORD: "staging-cookie-password-at-least-32-bytes",
+    WORKOS_COOKIE_PASSWORD: "rQ7!vM2#xL9@cP4$kN8%tH5&wD3*zF6?",
+    WORKOS_REDIRECT_URI: "https://fmarch-frontend-staging.up.railway.app/auth/callback",
   };
   const stagingMigrator = {
     DATABASE_MIGRATION_URL:
@@ -178,20 +184,22 @@ test("hosted variables require isolated production identity credentials", () => 
     AWS_SECRET_ACCESS_KEY: "production-secret-key",
     AWS_S3_BUCKET_NAME: "production-media",
     FMARCH_CLASSIC_AUTH: "0",
-    WORKOS_CLIENT_ID: "production-client",
-    WORKOS_ISSUER: "https://api.workos.com/user_management/production",
-    WORKOS_JWKS_URL: "https://api.workos.com/sso/jwks/production",
+    WORKOS_CLIENT_ID: "client_01PRODUCTION000000000000000",
+    WORKOS_ISSUER:
+      "https://api.workos.com/user_management/client_01PRODUCTION000000000000000",
+    WORKOS_JWKS_URL:
+      "https://api.workos.com/sso/jwks/client_01PRODUCTION000000000000000",
   };
   const productionFrontend = {
     FMARCH_API_BASE_URL: "https://fmarch-production.up.railway.app",
-    FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:4000",
+    FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080",
     FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key-at-least-32-bytes",
     FMARCH_AUTH_SOURCE_SIGNING_KID: "production-auth-2026-08-04",
     FMARCH_WORKOS_CREDENTIAL_KID: "production-workos-2026-08-04",
     ORIGIN: "https://fmarch-frontend-production.up.railway.app",
     WORKOS_API_KEY: "production-key",
-    WORKOS_CLIENT_ID: "production-client",
-    WORKOS_COOKIE_PASSWORD: "production-cookie-password-at-least-32-bytes",
+    WORKOS_CLIENT_ID: "client_01PRODUCTION000000000000000",
+    WORKOS_COOKIE_PASSWORD: "Z4!mK8#qR2@vT7$hC9%pL5&xN3*wB6?Y",
     WORKOS_REDIRECT_URI:
       "https://fmarch-frontend-production.up.railway.app/auth/callback",
   };
@@ -211,6 +219,15 @@ test("hosted variables require isolated production identity credentials", () => 
     productionFrontend,
   };
   assert.doesNotThrow(() => validateHostedVariables(ready));
+  assert.doesNotThrow(() =>
+    validateHostedVariables({
+      ...ready,
+      stagingFrontend: {
+        ...stagingFrontend,
+        WORKOS_COOKIE_PASSWORD: "A7!pQ2#vN9@xK4$hR8%mT5&cL3*zD6?Y",
+      },
+    }),
+  );
   assert.doesNotThrow(() => validateDatabaseAuthorityVariables(ready));
   assert.doesNotThrow(() =>
     validateDatabaseAuthorityVariables({
@@ -439,6 +456,27 @@ test("hosted variables require isolated production identity credentials", () => 
       }),
     /must not share the WorkOS API key/,
   );
+  for (const [environment, value] of [
+    ["staging", "too-short"],
+    ["staging", "replace_me______________________"],
+    ["staging", "example-cookie-ceremony-secret-000000"],
+    ["production", "CHANGE-ME-WORKOS-COOKIE-SECRET-0000"],
+    ["production", "workos_cookie_password____________"],
+    ["production", "${{WORKOS_COOKIE_PASSWORD}}-000000"],
+  ]) {
+    const frontendKey = `${environment}Frontend`;
+    assert.throws(
+      () =>
+        validateHostedVariables({
+          ...ready,
+          [frontendKey]: {
+            ...ready[frontendKey],
+            WORKOS_COOKIE_PASSWORD: value,
+          },
+        }),
+      new RegExp(`${environment} WorkOS cookie password.*at least 32 characters`),
+    );
+  }
   assert.throws(
     () =>
       validateHostedVariables({
@@ -462,9 +500,53 @@ test("hosted variables require isolated production identity credentials", () => 
     () =>
       validateHostedVariables({
         ...ready,
-        productionApi: { ...productionApi, WORKOS_CLIENT_ID: "different-production-client" },
+        productionApi: {
+          ...productionApi,
+          WORKOS_CLIENT_ID: "client_01DIFFERENTPRODUCTION000000000",
+        },
       }),
     /same WorkOS client/,
+  );
+  for (const [key, value, message] of [
+    ["FMARCH_API_BASE_URL", "https://wrong-api.example.test", /canonical public API URL/],
+    ["FMARCH_API_INTERNAL_URL", "https://attacker.example.test", /canonical private API URL/],
+    ["ORIGIN", "https://wrong-frontend.example.test", /canonical origin/],
+    [
+      "WORKOS_REDIRECT_URI",
+      "https://wrong-frontend.example.test/auth/callback",
+      /canonical WorkOS callback/,
+    ],
+  ]) {
+    assert.throws(
+      () =>
+        validateHostedVariables({
+          ...ready,
+          stagingFrontend: { ...stagingFrontend, [key]: value },
+        }),
+      message,
+    );
+  }
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionFrontend: {
+          ...productionFrontend,
+          FMARCH_API_INTERNAL_URL: "http://staging-api.railway.internal:8080",
+        },
+      }),
+    /production frontend must use the canonical private API URL/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        stagingFrontend: {
+          ...stagingFrontend,
+          WORKOS_CLIENT_ID: "client_01DIFFERENTSTAGING00000000000",
+        },
+      }),
+    /staging API and frontend must use the same WorkOS client/,
   );
   assert.throws(
     () =>

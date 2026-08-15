@@ -1,3 +1,4 @@
+import { authReturnPath } from "../../../lib/server/auth-return-path.mjs";
 import { workosAuthKitConfigured } from "../../../lib/server/workos-authkit.mjs";
 
 export function load({ locals, url }) {
@@ -6,10 +7,17 @@ export function load({ locals, url }) {
       principalUserId:
         typeof locals.principalUserId === "string" ? locals.principalUserId : null,
       accountId: optionalToken(url.searchParams.get("account")),
-      returnTo: safeReturnTo(url.searchParams.get("returnTo")),
+      returnTo: authReturnPath(url.searchParams.get("returnTo")),
       workosAvailable: workosAuthKitConfigured(),
+      workosError: optionalWorkosError(url.searchParams.get("error")),
     },
   };
+}
+
+function optionalWorkosError(value) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim().toLowerCase();
+  return /^workos_[a-z0-9_.-]{1,96}$/u.test(trimmed) ? trimmed : "";
 }
 
 function optionalToken(value) {
@@ -17,19 +25,4 @@ function optionalToken(value) {
     return "";
   }
   return value.trim();
-}
-
-function safeReturnTo(value) {
-  if (typeof value !== "string") {
-    return "/";
-  }
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
-    return "/";
-  }
-  return trimmed === "/auth/login" ||
-    trimmed.startsWith("/auth/login?") ||
-    trimmed.startsWith("/auth/login/")
-    ? "/"
-    : trimmed;
 }
