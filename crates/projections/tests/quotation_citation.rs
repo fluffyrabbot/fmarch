@@ -4,8 +4,8 @@ use community::{PostKind, PostRef};
 use eventstore::{ActorId, EventInput};
 use projections::{
     append_and_project, append_discussion_and_project, append_profile_and_project,
-    discussion_posts, public_thread_view, rebuild, rebuild_discussion_stream,
-    visible_incoming_citations,
+    discussion_posts, off_page_game_citation_counts, public_thread_view, rebuild,
+    rebuild_discussion_stream, visible_incoming_citations,
 };
 use sqlx::Row;
 use uuid::Uuid;
@@ -252,6 +252,32 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     assert_eq!(
         citations.citations[0].quoting.source_seq,
         page.posts[1].source_seq
+    );
+
+    let quoting_seq = page.posts[1].source_seq;
+    let off_page = off_page_game_citation_counts(
+        &pool,
+        game,
+        "main",
+        &[quoting_seq],
+        &[quoting_seq],
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(off_page, vec![(quoted_seq, 1)]);
+    assert!(
+        off_page_game_citation_counts(
+            &pool,
+            game,
+            "main",
+            &[quoting_seq],
+            &[quoted_seq, quoting_seq],
+            None,
+        )
+        .await
+        .unwrap()
+        .is_empty()
     );
 }
 

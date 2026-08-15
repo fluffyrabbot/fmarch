@@ -110,7 +110,8 @@ export function projectionPatchForLiveEnvelope(envelope, previousSnapshot) {
     message.delta.kind !== "VoteCountChanged" &&
     message.delta.kind !== "VoteCountCleared" &&
     message.delta.kind !== "ThreadPostsChanged" &&
-    message.delta.kind !== "ThreadPostRemoved"
+    message.delta.kind !== "ThreadPostRemoved" &&
+    message.delta.kind !== "PostCitationsChanged"
   ) {
     return null;
   }
@@ -122,6 +123,11 @@ export function projectionPatchForLiveEnvelope(envelope, previousSnapshot) {
   if (message.delta.kind === "ThreadPostRemoved") {
     return Object.freeze({
       thread: removeThreadPost(previousSnapshot?.thread, message.delta.body?.source_seq),
+    });
+  }
+  if (message.delta.kind === "PostCitationsChanged") {
+    return Object.freeze({
+      thread: applyPostCitations(previousSnapshot?.thread, message.delta.body),
     });
   }
   return Object.freeze({
@@ -534,6 +540,12 @@ function normalizeProjectionDelta(delta) {
       body: delta.body ?? {},
     });
   }
+  if (delta?.kind === "PostCitationsChanged") {
+    return Object.freeze({
+      kind: "PostCitationsChanged",
+      body: delta.body ?? {},
+    });
+  }
   if (delta?.kind === "HostConsoleStateChanged") {
     return Object.freeze({
       kind: "HostConsoleStateChanged",
@@ -586,6 +598,12 @@ function normalizeProjectionDelta(delta) {
     return Object.freeze({
       kind: "ThreadPostsChanged",
       body: delta.ThreadPostsChanged,
+    });
+  }
+  if (delta?.PostCitationsChanged !== undefined) {
+    return Object.freeze({
+      kind: "PostCitationsChanged",
+      body: delta.PostCitationsChanged,
     });
   }
   if (delta?.HostConsoleStateChanged !== undefined) {
@@ -669,6 +687,36 @@ function upsertThreadPosts(previousThread, posts) {
     posts: Object.freeze(
       [...nextBySeq.values()].sort((left, right) => Number(left.seq) - Number(right.seq)),
     ),
+  });
+}
+
+function applyPostCitations(previousThread, delta) {
+  const previous = previousThread ?? {};
+  const previousPosts = Array.isArray(previous.posts) ? previous.posts : [];
+  const quotedSeq = Number(
+    delta?.quoted?.source_seq ?? delta?.quoted?.sourceSeq,
+  );
+  const citationCount = Number(delta?.citation_count ?? delta?.citationCount);
+  if (!Number.isInteger(quotedSeq) || quotedSeq < 1 || !Number.isFinite(citationCount)) {
+    return previousThread;
+  }
+  let changed = false;
+  const posts = previousPosts.map((post) => {
+    if (Number(post?.seq) !== quotedSeq) {
+      return post;
+    }
+    changed = true;
+    return Object.freeze({
+      ...post,
+      citationCount,
+    });
+  });
+  if (!changed) {
+    return previousThread;
+  }
+  return Object.freeze({
+    ...previous,
+    posts: Object.freeze(posts),
   });
 }
 

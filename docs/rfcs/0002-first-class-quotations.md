@@ -76,9 +76,10 @@ watch fan-out.
 - Parsing `[quote]`, `>`, BBCode, or markdown out of `body`.
 - Writing an event onto the quoted post’s stream when it is cited.
 - Storing `quoted_by` on the quoted post row as if that post changed.
-- Live `PostCitationsChanged` deltas. Same-thread citation badges may refresh
-  on the next cold load or when the quoting post arrives in
-  `ThreadPostsChanged`; a dedicated live delta is a later wire addition.
+- Live citation deltas beyond the game-thread
+  `PostCitationsChanged` badge update. Community topics stay cold-load;
+  incoming citation lists still refresh from loaded posts or the sibling
+  query.
 - Implementing `PostEdited` / `PostRetracted`. The schema mentions them;
   quotation must be compatible with them, but this RFC does not land them.
 - Quote notifications, inbox items, or search ranking by citation count.
@@ -377,11 +378,11 @@ Community `DiscussionPost` grows the same two fields. `citation_count` is
 the number of *visible to this reader* incoming edges, not the raw index
 count.
 
-First slice does not add a new `ProjectionDelta` kind. When a quoting post
-arrives over live delivery, clients already insert that post. Updating the
-original’s badge can wait for the next page load. A later `PostCitationsChanged`
-delta is compatible and should be added only if live citation badges become
-part of the reading contract.
+Game live delivery now emits `PostCitationsChanged { quoted, citation_count }`
+for same-channel quoted posts that are not in the latest thread page. Clients
+apply that count to any already-loaded post. Incoming citation lists still
+come from loaded quoting posts or the sibling query. Community stays
+cold-load.
 
 ## Surfaces
 
@@ -574,8 +575,8 @@ to `main`.
   forks identity from moderation.
 - **Cross-surface quotes in the first slice:** same type, larger
   capability problem; prove same-thread first.
-- **Live citation deltas in the first slice:** optional later; not
-  required to make the fact real.
+- **Live citation deltas in the first slice:** deferred until badges were
+  on the reading contract; game threads now emit `PostCitationsChanged`.
 
 ## Acceptance into the architecture docs
 

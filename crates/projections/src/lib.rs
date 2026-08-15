@@ -8214,6 +8214,88 @@ async fn game_citation_count(
     .await?)
 }
 
+/// Visible citation counts for same-channel quoted posts that a live thread
+/// page will not itself refresh. `quoting_source_seqs` are new or hidden
+/// quoting posts; `present_source_seqs` are posts already in the live page.
+pub async fn off_page_game_citation_counts(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+    quoting_source_seqs: &[i64],
+    present_source_seqs: &[i64],
+    viewer_principal_user_id: Option<&str>,
+) -> Result<Vec<(i64, i64)>, ProjectionError> {
+    if quoting_source_seqs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let public_only = channel_id == "main";
+    let rows = sqlx::query(
+        r#"
+        SELECT quoted.source_seq AS quoted_source_seq,
+               (
+                   SELECT COUNT(*)::bigint
+                   FROM post_citation AS incoming
+                   JOIN thread_view AS quoting
+                     ON quoting.game_id = incoming.quoting_scope_id
+                    AND quoting.source_seq = incoming.quoting_source_seq
+                    AND quoting.channel_id = $2
+                   WHERE incoming.quoted_kind = 'game_post'
+                     AND incoming.quoting_kind = 'game_post'
+                     AND incoming.quoted_scope_id = $1
+                     AND incoming.quoted_source_seq = quoted.source_seq
+                     AND (
+                         NOT $4::BOOLEAN OR NOT EXISTS (
+                             SELECT 1 FROM moderation_target_state AS moderation
+                             WHERE moderation.target_kind = 'game_post'
+                               AND moderation.scope_id = quoting.game_id
+                               AND moderation.source_seq = quoting.source_seq
+                               AND moderation.visibility = 'hidden'
+                         )
+                     )
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM community_member_mute AS mute
+                         JOIN profile_editor AS author
+                           ON author.profile_id = mute.target_profile_id
+                         WHERE $5::text IS NOT NULL
+                           AND mute.principal_user_id = $5
+                           AND mute.active
+                           AND author.principal_user_id = quoting.author_user
+                     )
+               ) AS citation_count
+        FROM post_citation AS citation
+        JOIN thread_view AS quoted
+          ON quoted.game_id = citation.quoted_scope_id
+         AND quoted.source_seq = citation.quoted_source_seq
+         AND quoted.channel_id = $2
+        WHERE citation.quoted_kind = 'game_post'
+          AND citation.quoting_kind = 'game_post'
+          AND citation.quoted_scope_id = $1
+          AND citation.quoting_source_seq = ANY($3)
+          AND NOT (quoted.source_seq = ANY($6))
+        GROUP BY quoted.source_seq
+        ORDER BY quoted.source_seq
+        "#,
+    )
+    .bind(game_id)
+    .bind(channel_id)
+    .bind(quoting_source_seqs)
+    .bind(public_only)
+    .bind(viewer_principal_user_id)
+    .bind(present_source_seqs)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            (
+                row.get::<i64, _>("quoted_source_seq"),
+                row.get::<i64, _>("citation_count"),
+            )
+        })
+        .collect())
+}
+
 async fn discussion_citation_rows(
     pool: &PgPool,
     topic_id: Uuid,

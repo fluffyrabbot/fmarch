@@ -46,6 +46,7 @@ fn game_http_has_one_typed_owner_with_narrow_live_and_media_adapters() {
     for shared_adapter in [
         "pub(super) async fn current_votecount_deltas(",
         "pub(super) async fn current_thread_posts_delta(",
+        "pub(super) async fn current_post_citations_deltas(",
         "pub(super) async fn require_channel_thread_access(",
         "pub(super) async fn player_notifications_for_principal(",
         "pub(super) async fn player_investigation_results_for_principal(",

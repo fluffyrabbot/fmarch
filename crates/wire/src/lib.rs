@@ -885,6 +885,7 @@ pub enum ProjectionDelta {
     VoteCountCleared(VoteCountClearedDelta),
     ThreadPostsChanged(ThreadPostsDelta),
     ThreadPostRemoved(ThreadPostRemovedDelta),
+    PostCitationsChanged(PostCitationsChangedDelta),
     HostConsoleStateChanged(HostConsoleStateDelta),
     HostPromptsChanged(HostPromptsDelta),
     PlayerNotificationsChanged(PlayerNotificationsDelta),
@@ -939,6 +940,12 @@ pub struct ThreadPostsDelta {
 pub struct ThreadPostRemovedDelta {
     pub game: Uuid,
     pub source_seq: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PostCitationsChangedDelta {
+    pub quoted: PostRef,
+    pub citation_count: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -2297,6 +2304,7 @@ pub mod typescript {
         ItaSessionControlKind, MemberMutePage, MemberMuteState, ModerationCase,
         ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
         ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, PostCitation,
+        PostCitationsChangedDelta,
         PostCitationPage, PostKind, PostRef, ProfileEditor, ProjectionDelta, PublicGameThreadPage,
         PublicProfile, PublicSearchPage, PublicSearchResult, Quotation, RejectCode, RejectMsg,
         ResolutionTraceDecisionRow, ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow,
@@ -2380,6 +2388,7 @@ pub mod typescript {
         push::<VoteCountDelta>(&mut out, &config);
         push::<VoteCountClearedDelta>(&mut out, &config);
         push::<ThreadPostsDelta>(&mut out, &config);
+        push::<PostCitationsChangedDelta>(&mut out, &config);
         push::<DayVoteOutcomeDelta>(&mut out, &config);
         push::<HostConsoleAuthorityKind>(&mut out, &config);
         push::<HostConsoleAuthorityDelta>(&mut out, &config);

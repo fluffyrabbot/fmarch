@@ -58,7 +58,9 @@ The action dock remains reachable while reading:
 The composer, action detail, and player context follow the thread in document
 order. This keeps automation, keyboard access, and no-JavaScript behavior honest
 while the dock provides one-tap navigation from any scroll position. Wider
-screens add whitespace rather than a permanently open command inspector.
+screens add whitespace rather than a permanently open command inspector. A live
+`PostCitationsChanged` delta updates “Quoted N times” on an already-loaded post
+when a later quoting post arrives or is hidden.
 
 Successful command feedback is brief. Interrupted and rejected commands remain
 persistent because they require a decision. Technical command traces stay in the

@@ -507,6 +507,11 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                 let delivered_visibility_change_id = visibility_changes
                     .last()
                     .map_or(observed_visibility_change_id, |change| change.id);
+                let hidden_quoting_seqs = visibility_changes
+                    .iter()
+                    .filter(|change| change.visibility == "hidden")
+                    .map(|change| change.source_seq)
+                    .collect::<Vec<_>>();
                 let tombstones = visibility_changes
                     .into_iter()
                     .filter(|change| change.visibility == "hidden")
@@ -544,6 +549,25 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                     break;
                 }
                 next_envelope_id = sent_to;
+                let citation_deltas = post_citations_deltas_for_ws(
+                    &state,
+                    game,
+                    Some(claim.principal_user_id.as_str()),
+                    claim.channel.as_str(),
+                    &hidden_quoting_seqs,
+                )
+                .await;
+                if !citation_deltas.is_empty() {
+                    if !websocket_session_active(&state, &claim).await {
+                        break;
+                    }
+                    let sent_to =
+                        send_projection_deltas(&mut socket, next_envelope_id, citation_deltas).await;
+                    if sent_to == next_envelope_id {
+                        break;
+                    }
+                    next_envelope_id = sent_to;
+                }
                 if let Some(delta) =
                     host_console_state_delta_for_ws(&state, &claim, claim.slot_id.as_deref()).await
                 {
@@ -647,6 +671,25 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                 break;
             }
             next_envelope_id = sent_to;
+            let citation_deltas = post_citations_deltas_for_ws(
+                &state,
+                game,
+                Some(claim.principal_user_id.as_str()),
+                claim.channel.as_str(),
+                &[],
+            )
+            .await;
+            if !citation_deltas.is_empty() {
+                if !websocket_session_active(&state, &claim).await {
+                    break;
+                }
+                let sent_to =
+                    send_projection_deltas(&mut socket, next_envelope_id, citation_deltas).await;
+                if sent_to == next_envelope_id {
+                    break;
+                }
+                next_envelope_id = sent_to;
+            }
         }
         if update.host_console_dirty {
             if let Some(delta) =
@@ -853,6 +896,40 @@ async fn thread_posts_delta_for_ws(
     game_http::current_thread_posts_delta(&state.pool, game, channel, principal_user_id)
         .await
         .ok()
+}
+
+async fn post_citations_deltas_for_ws(
+    state: &LiveDeliveryState,
+    game: Uuid,
+    principal_user_id: Option<&str>,
+    channel: &str,
+    extra_quoting_seqs: &[i64],
+) -> Vec<ProjectionDelta> {
+    if channel != "main" {
+        let Some(principal_user_id) = principal_user_id else {
+            return Vec::new();
+        };
+        if game_http::require_channel_thread_access(
+            &state.pool,
+            game,
+            channel,
+            Some(principal_user_id),
+        )
+        .await
+        .is_err()
+        {
+            return Vec::new();
+        }
+    }
+    game_http::current_post_citations_deltas(
+        &state.pool,
+        game,
+        channel,
+        principal_user_id,
+        extra_quoting_seqs,
+    )
+    .await
+    .unwrap_or_default()
 }
 
 async fn host_console_state_delta_for_ws(

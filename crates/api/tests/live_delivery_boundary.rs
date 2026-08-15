@@ -34,6 +34,7 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
         "async fn current_hidden_thread_post_deltas(",
         "async fn send_current_projection_snapshot(",
         "async fn thread_posts_delta_for_ws(",
+        "async fn post_citations_deltas_for_ws(",
         "async fn host_console_state_delta_for_ws(",
         "async fn host_prompts_delta_for_ws(",
         "async fn player_private_deltas_for_ws(",
@@ -54,6 +55,7 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
     for shared_adapter in [
         "game_http::current_votecount_deltas(&state.pool",
         "game_http::current_thread_posts_delta(&state.pool",
+        "game_http::current_post_citations_deltas(",
         "game_http::require_channel_thread_access(",
         "game_http::resolve_host_console_authority(",
         "game_http::load_host_console_state(&state.pool",

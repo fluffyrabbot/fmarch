@@ -23,8 +23,9 @@ use wire::{
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostTaskAllowedCommand,
     HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
-    PlayerInvestigationResult, PlayerNotification, PostCitationPage, ProjectionDelta,
-    PublicGameThreadPage, Quotation, RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
+    PlayerInvestigationResult, PlayerNotification, PostCitationPage, PostCitationsChangedDelta,
+    PostKind, PostRef, ProjectionDelta, PublicGameThreadPage, Quotation, RejectCode, ThreadPage,
+    ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -554,6 +555,52 @@ pub(super) async fn current_thread_posts_delta(
         game,
         posts: page.posts.into_iter().map(ThreadPost::from).collect(),
     }))
+}
+
+pub(super) async fn current_post_citations_deltas(
+    pool: &PgPool,
+    game: Uuid,
+    channel: &str,
+    viewer_principal_user_id: Option<&str>,
+    extra_quoting_seqs: &[i64],
+) -> Result<Vec<ProjectionDelta>, projections::ProjectionError> {
+    let page = if channel == "main" {
+        projections::public_thread_view(pool, game, None, 50, viewer_principal_user_id).await?
+    } else {
+        projections::thread_view_for_viewer(pool, game, channel, None, 50, viewer_principal_user_id)
+            .await?
+    };
+    let present_source_seqs: Vec<i64> = page.posts.iter().map(|post| post.source_seq).collect();
+    let mut quoting_source_seqs = extra_quoting_seqs.to_vec();
+    for post in &page.posts {
+        if !post.quotations.is_empty() {
+            quoting_source_seqs.push(post.source_seq);
+        }
+    }
+    quoting_source_seqs.sort_unstable();
+    quoting_source_seqs.dedup();
+    let counts = projections::off_page_game_citation_counts(
+        pool,
+        game,
+        channel,
+        &quoting_source_seqs,
+        &present_source_seqs,
+        viewer_principal_user_id,
+    )
+    .await?;
+    Ok(counts
+        .into_iter()
+        .map(|(source_seq, citation_count)| {
+            ProjectionDelta::PostCitationsChanged(PostCitationsChangedDelta {
+                quoted: PostRef {
+                    kind: PostKind::GamePost,
+                    scope_id: game,
+                    source_seq,
+                },
+                citation_count,
+            })
+        })
+        .collect())
 }
 
 pub(super) async fn require_channel_thread_access(

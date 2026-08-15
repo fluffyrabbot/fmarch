@@ -137,6 +137,8 @@ export type VoteCountClearedDelta = { game: string, phase_id: string, candidate_
 
 export type ThreadPostsDelta = { game: string, posts: Array<ThreadPost>, };
 
+export type PostCitationsChangedDelta = { quoted: PostRef, citation_count: bigint, };
+
 export type DayVoteOutcomeDelta = { game: string, phase_id: string, source_seq: bigint, event_index: number, status: string, winner_slot: string | null, contenders: unknown, tallies: unknown, votes: unknown, weights: unknown, majority: number | null, thresholds: unknown, total_weight: number, tiebreak: string | null, reason: string | null, };
 
 export type HostConsoleAuthorityKind = "HostOf" | "CohostOf" | "GlobalOperator";
@@ -284,7 +286,7 @@ export type ResolutionTraceInspectionRun = { phase_id: string, run_id: string, a
 
 export type ResolutionTraceInspectionReport = { game: string, traces: Array<ResolutionTraceInspectionRun>, };
 
-export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "VoteCountCleared", "body": VoteCountClearedDelta } | { "kind": "ThreadPostsChanged", "body": ThreadPostsDelta } | { "kind": "ThreadPostRemoved", "body": ThreadPostRemovedDelta } | { "kind": "HostConsoleStateChanged", "body": HostConsoleStateDelta } | { "kind": "HostPromptsChanged", "body": HostPromptsDelta } | { "kind": "PlayerNotificationsChanged", "body": PlayerNotificationsDelta } | { "kind": "PlayerInvestigationResultsChanged", "body": PlayerInvestigationResultsDelta } | { "kind": "DayVoteOutcomeApplied", "body": DayVoteOutcomeDelta } | { "kind": "ResyncRequired", "body": { from_seq: bigint, } };
+export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "VoteCountCleared", "body": VoteCountClearedDelta } | { "kind": "ThreadPostsChanged", "body": ThreadPostsDelta } | { "kind": "ThreadPostRemoved", "body": ThreadPostRemovedDelta } | { "kind": "PostCitationsChanged", "body": PostCitationsChangedDelta } | { "kind": "HostConsoleStateChanged", "body": HostConsoleStateDelta } | { "kind": "HostPromptsChanged", "body": HostPromptsDelta } | { "kind": "PlayerNotificationsChanged", "body": PlayerNotificationsDelta } | { "kind": "PlayerInvestigationResultsChanged", "body": PlayerInvestigationResultsDelta } | { "kind": "DayVoteOutcomeApplied", "body": DayVoteOutcomeDelta } | { "kind": "ResyncRequired", "body": { from_seq: bigint, } };
 
 export type CapabilityGrant = { "kind": "GlobalAdmin" } | { "kind": "GlobalMod" } | { "kind": "HostOf", "body": { game: string, } } | { "kind": "CohostOf", "body": { game: string, } } | { "kind": "SlotOccupant", "body": { slot: string, } } | { "kind": "ChannelMember", "body": { channel: string, } } | { "kind": "DeadViewer", "body": { game: string, } } | { "kind": "SpectatorOf", "body": { game: string, } };
 

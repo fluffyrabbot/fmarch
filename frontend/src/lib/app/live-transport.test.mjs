@@ -362,6 +362,64 @@ test("creates thread patches from live thread post delta envelopes", () => {
   );
 });
 
+test("updates an off-page citation badge without replacing the thread page", () => {
+  const patch = projectionPatchForLiveEnvelope(
+    {
+      v: 1,
+      id: 5,
+      body: {
+        kind: "Delta",
+        body: {
+          kind: "PostCitationsChanged",
+          body: {
+            quoted: { kind: "game_post", scope_id: "midsummer", source_seq: 12 },
+            citation_count: 2,
+          },
+        },
+      },
+    },
+    {
+      thread: {
+        nextBeforeSeq: 10,
+        posts: [
+          { seq: 12, body: "Alpha signal", citationCount: 0 },
+          { seq: 80, body: "later page", citationCount: 0 },
+        ],
+      },
+    },
+  );
+
+  assert.equal(patch.thread.nextBeforeSeq, 10);
+  assert.equal(patch.thread.posts[0].citationCount, 2);
+  assert.equal(patch.thread.posts[0].body, "Alpha signal");
+  assert.equal(patch.thread.posts[1].citationCount, 0);
+});
+
+test("ignores citation deltas for posts the client has not loaded", () => {
+  const thread = {
+    nextBeforeSeq: 10,
+    posts: [{ seq: 80, body: "later page", citationCount: 0 }],
+  };
+  const patch = projectionPatchForLiveEnvelope(
+    {
+      v: 1,
+      id: 6,
+      body: {
+        kind: "Delta",
+        body: {
+          kind: "PostCitationsChanged",
+          body: {
+            quoted: { kind: "game_post", scope_id: "midsummer", source_seq: 12 },
+            citation_count: 1,
+          },
+        },
+      },
+    },
+    { thread },
+  );
+  assert.equal(patch.thread, thread);
+});
+
 test("purges a moderated post from an already hydrated live thread", () => {
   const patch = projectionPatchForLiveEnvelope(
     {
