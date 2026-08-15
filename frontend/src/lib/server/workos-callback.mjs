@@ -18,6 +18,8 @@ import { workosProviderLogoutUrl } from "./workos-provider-logout.mjs";
 
 const SAFE_PROVIDER_ERROR = /^[a-z][a-z0-9_.-]{0,63}$/u;
 const WORKOS_LINK_CALLBACK_PATH = "/auth/account/security";
+const WORKOS_PROVIDER_SESSION_LOGOUT_REQUIRED =
+  "WorkosProviderSessionLogoutRequired";
 
 export function createWorkosCallbackHandler({
   env = process.env,
@@ -104,6 +106,11 @@ async function completeWorkosLogin({ event, accessToken, callbackTarget, env, lo
     return loginFailure("api_unavailable");
   }
   if (!response.ok) {
+    const providerLogoutUrl = await workosProviderSessionRecoveryUrl(response);
+    if (providerLogoutUrl !== null) {
+      logOutcome(logger, "rejected", "provider_session_logout_required");
+      return redirectResponse(providerLogoutUrl);
+    }
     logOutcome(logger, "rejected", `api_rejected_${safeStatus(response.status)}`);
     return loginFailure("api_rejected");
   }
@@ -121,6 +128,34 @@ async function completeWorkosLogin({ event, accessToken, callbackTarget, env, lo
   );
   logOutcome(logger, "accepted", "session_created");
   return redirectResponse(authReturnPath(callbackTarget));
+}
+
+async function workosProviderSessionRecoveryUrl(response) {
+  if (response.status !== 409) return null;
+
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    return null;
+  }
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return null;
+
+  let keys;
+  try {
+    keys = Object.keys(body).sort();
+  } catch {
+    return null;
+  }
+  if (
+    keys.length !== 2 ||
+    keys[0] !== "error" ||
+    keys[1] !== "provider_logout_url" ||
+    body.error !== WORKOS_PROVIDER_SESSION_LOGOUT_REQUIRED
+  ) {
+    return null;
+  }
+  return workosProviderLogoutUrl(body.provider_logout_url);
 }
 
 async function completeWorkosLink({ event, accessToken, link, env, logger }) {
@@ -166,6 +201,10 @@ async function completeWorkosLink({ event, accessToken, link, env, logger }) {
     logOutcome(logger, "rejected", `link_api_${reason}`);
     return redirectResponse(withQuery(link.securityPath, "workosError", reason));
   }
+  if (outcome.kind === "provider_session_logout_required") {
+    logOutcome(logger, "rejected", "link_provider_session_logout_required");
+    return redirectResponse(outcome.providerLogoutUrl);
+  }
   if (outcome.kind === "malformed_response") {
     logOutcome(logger, "rejected", "link_api_response_malformed");
     return redirectResponse(withQuery(link.securityPath, "workosError", "malformed_response"));
@@ -196,6 +235,10 @@ async function attemptWorkosLink(fetchImpl, endpoint, request) {
     return { kind: "malformed_response" };
   }
   if (!ok) {
+    const providerLogoutUrl = await workosProviderSessionRecoveryUrl(response);
+    if (providerLogoutUrl !== null) {
+      return { kind: "provider_session_logout_required", providerLogoutUrl };
+    }
     return { kind: "http_rejection", status: response.status };
   }
 

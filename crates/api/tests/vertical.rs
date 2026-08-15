@@ -384,6 +384,227 @@ async fn fresh_database_bootstraps_exactly_one_global_admin(pool: sqlx::PgPool) 
     );
 }
 
+async fn post_workos_session_exchange(
+    app: &axum::Router,
+    provider_assertion: Option<&str>,
+) -> axum::response::Response {
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/auth/sessions")
+        .header("content-type", "application/json");
+    if let Some(provider_assertion) = provider_assertion {
+        request = request.header("authorization", format!("Bearer {provider_assertion}"));
+    }
+    app.clone()
+        .oneshot(request.body(Body::from(r#"{"method":"workos"}"#)).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn response_json(response: axum::response::Response) -> serde_json::Value {
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn verified_workos_sid_tombstones_return_the_exact_provider_logout_recovery_contract(
+    pool: sqlx::PgPool,
+) {
+    let cases = [
+        (
+            "workos-recover-migration-cutover",
+            "session_01HQAG1HENBZMAZD82YRXDFC0B",
+            "migration_cutover",
+        ),
+        (
+            "workos-recover-logout",
+            "session_01HQAG1HENBZMAZD82YRXDFC0C",
+            "logout",
+        ),
+        (
+            "workos-recover-link",
+            "session_01HQAG1HENBZMAZD82YRXDFC0D",
+            "link_completed",
+        ),
+        (
+            "workos-recover-method-disabled",
+            "session_01HQAG1HENBZMAZD82YRXDFC0E",
+            "method_disabled",
+        ),
+    ];
+    let verifier = StaticAccessTokenVerifier::new(cases.map(|(token, session_id, _)| {
+        (
+            token.to_string(),
+            VerifiedIdentity {
+                subject: format!("user_{token}"),
+                session_id: WorkosSessionId::parse(session_id).unwrap(),
+                expires_at: 4_102_444_800,
+                email: None,
+            },
+        )
+    }));
+    for (_, session_id, reason) in cases {
+        sqlx::query(
+            r#"
+            INSERT INTO workos_provider_session_tombstone (
+                provider_session_hash, tombstoned_at, reason
+            )
+            VALUES ($1, 1, $2)
+            "#,
+        )
+        .bind(WorkosSessionId::parse(session_id).unwrap().fingerprint())
+        .bind(reason)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let app = api::router_with_state(
+        test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
+    );
+
+    for (token, session_id, _) in cases {
+        let response = post_workos_session_exchange(&app, Some(token)).await;
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = response_json(response).await;
+        assert_eq!(body.as_object().unwrap().len(), 2, "body: {body}");
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "error": "WorkosProviderSessionLogoutRequired",
+                "provider_logout_url": format!(
+                    "https://api.workos.com/user_management/sessions/logout?session_id={session_id}"
+                )
+            })
+        );
+    }
+
+    let mutation_counts: (i64, i64, i64, i64) = sqlx::query_as(
+        r#"
+        SELECT (SELECT COUNT(*) FROM platform_principal),
+               (SELECT COUNT(*) FROM external_identity),
+               (SELECT COUNT(*) FROM workos_provider_session),
+               (SELECT COUNT(*) FROM workos_session_exchange)
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(mutation_counts, (0, 0, 0, 0));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn workos_subject_erasure_tombstone_never_discloses_provider_logout_recovery(
+    pool: sqlx::PgPool,
+) {
+    let subject = "user_erased_workos_recovery";
+    let subject_only_sid = "session_01HQAG1HENBZMAZD82YRXDFC0F";
+    let subject_and_sid = "session_01HQAG1HENBZMAZD82YRXDFC0G";
+    let verifier = StaticAccessTokenVerifier::new([
+        (
+            "workos-erased-subject-only".to_string(),
+            VerifiedIdentity {
+                subject: subject.to_string(),
+                session_id: WorkosSessionId::parse(subject_only_sid).unwrap(),
+                expires_at: 4_102_444_800,
+                email: None,
+            },
+        ),
+        (
+            "workos-erased-subject-and-sid".to_string(),
+            VerifiedIdentity {
+                subject: subject.to_string(),
+                session_id: WorkosSessionId::parse(subject_and_sid).unwrap(),
+                expires_at: 4_102_444_800,
+                email: None,
+            },
+        ),
+    ]);
+    sqlx::query(
+        r#"
+        INSERT INTO workos_subject_tombstone (
+            provider_subject_hash, tombstoned_at, reason
+        )
+        VALUES ($1, 1, 'subject_erasure')
+        "#,
+    )
+    .bind(identity::workos::subject_fingerprint(subject))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO workos_provider_session_tombstone (
+            provider_session_hash, tombstoned_at, reason
+        )
+        VALUES ($1, 1, 'logout')
+        "#,
+    )
+    .bind(
+        WorkosSessionId::parse(subject_and_sid)
+            .unwrap()
+            .fingerprint(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let app =
+        api::router_with_state(test_api_state(pool).with_access_token_verifier(Arc::new(verifier)));
+
+    for token in [
+        "workos-erased-subject-only",
+        "workos-erased-subject-and-sid",
+    ] {
+        let response = post_workos_session_exchange(&app, Some(token)).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let body = response_json(response).await;
+        assert_eq!(body["error"], "NotAuthorized");
+        assert!(body.get("provider_logout_url").is_none(), "body: {body}");
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn unverified_malformed_and_expired_workos_assertions_never_receive_logout_recovery(
+    pool: sqlx::PgPool,
+) {
+    let expired_sid = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0H").unwrap();
+    let verifier = StaticAccessTokenVerifier::new([(
+        "workos-expired-verified-token".to_string(),
+        VerifiedIdentity {
+            subject: "user_expired_workos_recovery".to_string(),
+            session_id: expired_sid.clone(),
+            expires_at: 1,
+            email: None,
+        },
+    )]);
+    sqlx::query(
+        r#"
+        INSERT INTO workos_provider_session_tombstone (
+            provider_session_hash, tombstoned_at, reason
+        )
+        VALUES ($1, 1, 'logout')
+        "#,
+    )
+    .bind(expired_sid.fingerprint())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let app =
+        api::router_with_state(test_api_state(pool).with_access_token_verifier(Arc::new(verifier)));
+
+    for token in [
+        Some("not.a.valid.jwt"),
+        Some("unverified-workos-token"),
+        Some("workos-expired-verified-token"),
+        None,
+    ] {
+        let response = post_workos_session_exchange(&app, token).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let body = response_json(response).await;
+        assert_eq!(body["error"], "NotAuthorized");
+        assert!(body.get("provider_logout_url").is_none(), "body: {body}");
+    }
+}
+
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classic(
     pool: sqlx::PgPool,
@@ -704,7 +925,14 @@ async fn workos_logout_revokes_the_local_provider_session_scope_and_returns_a_co
         "workos-logout-token-unused",
     )
     .await;
-    assert_eq!(delayed_assertion.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(delayed_assertion.status(), StatusCode::CONFLICT);
+    assert_eq!(
+        response_json(delayed_assertion).await,
+        serde_json::json!({
+            "error": "WorkosProviderSessionLogoutRequired",
+            "provider_logout_url": "https://api.workos.com/user_management/sessions/logout?session_id=session_01HQAG1HENBZMAZD82YRXDFC0B"
+        })
+    );
     let revocation = sqlx::query_as::<_, (i64, i64)>(
         r#"
         SELECT COUNT(*), COUNT(*) FILTER (WHERE revoked_at IS NOT NULL)

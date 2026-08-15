@@ -20,6 +20,7 @@ use caps::{Capability, Principal};
 use identity::{AccessTokenVerifier, IdentityError, MemberLifecycleCommand};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgConnection, PgPool};
+use sqlx::{Executor, Postgres};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Semaphore;
@@ -1223,56 +1224,65 @@ async fn classic_password_session(
     Ok(response)
 }
 
-async fn reject_known_workos_tombstone(
-    pool: &PgPool,
+/// Resolve permanent WorkOS deny evidence only after the assertion verifier
+/// has supplied both identity fingerprints. Subject erasure always wins over
+/// provider-session recovery; it must never disclose even a constrained URL.
+async fn enforce_workos_tombstone_recovery_boundary<'e, E>(
+    executor: E,
     verified: &identity::VerifiedIdentity,
-) -> Result<(), ApiError> {
+) -> Result<(), ApiError>
+where
+    E: Executor<'e, Database = Postgres>,
+{
     let provider_session_hash = verified.session_id.fingerprint();
     let provider_subject_hash = identity::workos::subject_fingerprint(verified.subject.as_str());
-    let tombstoned: bool = sqlx::query_scalar(
-        r#"
-        SELECT EXISTS (
-                   SELECT 1
-                   FROM workos_provider_session_tombstone
-                   WHERE provider_session_hash = $1
-               )
-            OR EXISTS (
-                   SELECT 1
-                   FROM workos_subject_tombstone
-                   WHERE provider_subject_hash = $2
-               )
-        "#,
-    )
-    .bind(provider_session_hash)
-    .bind(provider_subject_hash)
-    .fetch_one(pool)
-    .await?;
-    if tombstoned {
-        return Err(unauthorized_session());
-    }
-    Ok(())
-}
-
-/// A committed link is the one tombstone state that may be retried: the
-/// authoritative post-lock query below still requires the exact local bearer
-/// and exact provider assertion. Every other permanent deny state fails before
-/// the request can reach identity mutation.
-async fn reject_non_retryable_workos_link_tombstone(
-    pool: &PgPool,
-    verified: &identity::VerifiedIdentity,
-) -> Result<(), ApiError> {
-    let rejected: bool = sqlx::query_scalar(
+    let (subject_tombstoned, provider_session_tombstoned): (bool, bool) = sqlx::query_as(
         r#"
         SELECT EXISTS (
                    SELECT 1
                    FROM workos_subject_tombstone
                    WHERE provider_subject_hash = $1
-               )
-            OR EXISTS (
+               ),
+               EXISTS (
                    SELECT 1
                    FROM workos_provider_session_tombstone
                    WHERE provider_session_hash = $2
-                     AND reason <> 'link_completed'
+               )
+        "#,
+    )
+    .bind(provider_subject_hash)
+    .bind(provider_session_hash)
+    .fetch_one(executor)
+    .await?;
+    if subject_tombstoned {
+        return Err(unauthorized_session());
+    }
+    if provider_session_tombstoned {
+        return Err(ApiError::WorkosProviderSessionLogoutRequired {
+            session_id: verified.session_id.clone(),
+        });
+    }
+    Ok(())
+}
+
+/// A committed link may proceed to the exact idempotency proof below. Every
+/// other provider-session tombstone is recoverable only by clearing the
+/// verifier-derived upstream session; subject erasure remains opaque.
+async fn enforce_workos_link_tombstone_precheck(
+    pool: &PgPool,
+    verified: &identity::VerifiedIdentity,
+) -> Result<(), ApiError> {
+    let (subject_tombstoned, provider_tombstone_reason): (bool, Option<String>) = sqlx::query_as(
+        r#"
+        SELECT EXISTS (
+                   SELECT 1
+                   FROM workos_subject_tombstone
+                   WHERE provider_subject_hash = $1
+               ),
+               (
+                   SELECT reason
+                   FROM workos_provider_session_tombstone
+                   WHERE provider_session_hash = $2
                )
         "#,
     )
@@ -1282,8 +1292,16 @@ async fn reject_non_retryable_workos_link_tombstone(
     .bind(verified.session_id.fingerprint())
     .fetch_one(pool)
     .await?;
-    if rejected {
+    if subject_tombstoned {
         return Err(unauthorized_session());
+    }
+    match provider_tombstone_reason.as_deref() {
+        None | Some("link_completed") => {}
+        Some(_) => {
+            return Err(ApiError::WorkosProviderSessionLogoutRequired {
+                session_id: verified.session_id.clone(),
+            })
+        }
     }
     Ok(())
 }
@@ -1355,29 +1373,7 @@ async fn claim_workos_provider_session(
         .bind(now)
         .execute(&mut *conn)
         .await?;
-    let provider_session_hash = verified.session_id.fingerprint();
-    let provider_subject_hash = identity::workos::subject_fingerprint(verified.subject.as_str());
-    let tombstoned: bool = sqlx::query_scalar(
-        r#"
-        SELECT EXISTS (
-                   SELECT 1
-                   FROM workos_provider_session_tombstone
-                   WHERE provider_session_hash = $1
-               )
-            OR EXISTS (
-                   SELECT 1
-                   FROM workos_subject_tombstone
-                   WHERE provider_subject_hash = $2
-               )
-        "#,
-    )
-    .bind(provider_session_hash)
-    .bind(provider_subject_hash)
-    .fetch_one(&mut *conn)
-    .await?;
-    if tombstoned {
-        return Err(unauthorized_session());
-    }
+    enforce_workos_tombstone_recovery_boundary(&mut *conn, verified).await?;
 
     let provider_session_claimed = sqlx::query_scalar::<_, String>(
         r#"
@@ -1545,14 +1541,21 @@ async fn create_auth_session(
             if verified.expires_at <= now {
                 return Err(unauthorized_session());
             }
-            reject_known_workos_tombstone(&state.pool, &verified).await?;
+            enforce_workos_tombstone_recovery_boundary(&state.pool, &verified).await?;
             let mut tx = state.pool.begin().await?;
-            let resolution = identity::workos::resolve_subject(&mut tx, &verified, now)
-                .await
-                .map_err(|error| match error {
-                    identity::IdentityFlowError::Unauthorized => unauthorized_account(),
-                    other => ApiError::from(other),
-                })?;
+            let resolution = match identity::workos::resolve_subject(&mut tx, &verified, now).await
+            {
+                Ok(resolution) => resolution,
+                Err(identity::IdentityFlowError::Unauthorized) => {
+                    // `resolve_subject` performs its own post-advisory-lock
+                    // tombstone read. Reclassify that failure while the same
+                    // transaction is still open so a concurrent provider
+                    // logout cannot collapse into an unrecoverable generic 401.
+                    enforce_workos_tombstone_recovery_boundary(&mut *tx, &verified).await?;
+                    return Err(unauthorized_account());
+                }
+                Err(other) => return Err(ApiError::from(other)),
+            };
             claim_workos_provider_session(&mut tx, &verified, &resolution, token, None, now)
                 .await?;
             let expires_at = state.session_policy.workos_expiry(now);
@@ -1991,7 +1994,7 @@ async fn add_workos_method(
     if verified.expires_at <= verification_now {
         return Err(unauthorized_session());
     }
-    reject_non_retryable_workos_link_tombstone(&state.pool, &verified).await?;
+    enforce_workos_link_tombstone_precheck(&state.pool, &verified).await?;
     let mut tx = state.pool.begin().await?;
     identity::workos::lock_subject_advisory(&mut tx, verified.subject.as_str()).await?;
     let locked_identity =
@@ -2021,13 +2024,25 @@ async fn add_workos_method(
         tx.commit().await?;
         return Ok(Json(response));
     }
-    let resolution = identity::workos::attach_subject_under_advisory_lock(
+    // An exact committed-link retry returned above. Any remaining sid
+    // tombstone, including a non-exact assertion for `link_completed`, now
+    // requires upstream logout before another linking ceremony.
+    enforce_workos_tombstone_recovery_boundary(&mut *tx, &verified).await?;
+    let resolution = match identity::workos::attach_subject_under_advisory_lock(
         &mut tx,
         &verified,
         locked_identity.principal_user_id.as_str(),
         now,
     )
-    .await?;
+    .await
+    {
+        Ok(resolution) => resolution,
+        Err(identity::IdentityFlowError::Unauthorized) => {
+            enforce_workos_tombstone_recovery_boundary(&mut *tx, &verified).await?;
+            return Err(unauthorized_session());
+        }
+        Err(other) => return Err(ApiError::from(other)),
+    };
     claim_workos_provider_session(
         &mut tx,
         &verified,

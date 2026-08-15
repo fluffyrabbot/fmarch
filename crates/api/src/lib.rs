@@ -345,6 +345,9 @@ pub enum ApiError {
     Projection(projections::ProjectionError),
     Capability(caps::CapError),
     Db(sqlx::Error),
+    WorkosProviderSessionLogoutRequired {
+        session_id: identity::WorkosSessionId,
+    },
     Reject {
         status: StatusCode,
         error: RejectCode,
@@ -358,6 +361,12 @@ pub enum ApiError {
         retry_after_seconds: i64,
         message: String,
     },
+}
+
+#[derive(Debug, Serialize)]
+struct WorkosProviderSessionLogoutRequiredResponse {
+    error: &'static str,
+    provider_logout_url: String,
 }
 
 impl From<projections::ProjectionError> for ApiError {
@@ -445,6 +454,16 @@ impl IntoResponse for ApiError {
                     1,
                 );
             }
+            ApiError::WorkosProviderSessionLogoutRequired { session_id } => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(WorkosProviderSessionLogoutRequiredResponse {
+                        error: "WorkosProviderSessionLogoutRequired",
+                        provider_logout_url: identity::workos::logout_url(&session_id),
+                    }),
+                )
+                    .into_response();
+            }
             ApiError::RateLimited {
                 retry_after_seconds,
                 message,
@@ -492,6 +511,7 @@ impl IntoResponse for ApiError {
             ApiError::Projection(err) => opaque_internal_error("projection", err),
             ApiError::Capability(err) => opaque_internal_error("capability", err),
             ApiError::Db(err) => opaque_internal_error("database", err),
+            ApiError::WorkosProviderSessionLogoutRequired { .. } => unreachable!(),
             ApiError::Reject {
                 status,
                 error,

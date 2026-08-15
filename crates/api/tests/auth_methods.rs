@@ -25,6 +25,24 @@ async fn json_body(response: axum::response::Response) -> serde_json::Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
+async fn assert_workos_provider_logout_recovery(
+    response: axum::response::Response,
+    session_id: &str,
+) {
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = json_body(response).await;
+    assert_eq!(body.as_object().unwrap().len(), 2, "body: {body}");
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "error": "WorkosProviderSessionLogoutRequired",
+            "provider_logout_url": format!(
+                "https://api.workos.com/user_management/sessions/logout?session_id={session_id}"
+            )
+        })
+    );
+}
+
 async fn post_json(
     app: &axum::Router,
     uri: &str,
@@ -536,7 +554,7 @@ async fn workos_link_closes_the_provider_session_before_a_queued_login(pool: sql
             "https://api.workos.com/user_management/sessions/logout?session_id=session_01HQAG1HENBZMAZD82YRXDFC0B"
         )
     );
-    assert_eq!(login.status(), StatusCode::UNAUTHORIZED);
+    assert_workos_provider_logout_recovery(login, "session_01HQAG1HENBZMAZD82YRXDFC0B").await;
     let consumed_assertions: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM workos_session_exchange WHERE provider_session_id = 'session_01HQAG1HENBZMAZD82YRXDFC0B'",
     )
@@ -800,7 +818,8 @@ async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(po
     .await
     .expect("logout then exchange must serialize without deadlock");
     assert_eq!(logout.unwrap().status(), StatusCode::OK);
-    assert_eq!(exchange.unwrap().status(), StatusCode::UNAUTHORIZED);
+    assert_workos_provider_logout_recovery(exchange.unwrap(), "session_01HQAG1HENBZMAZD82YRXDFC0B")
+        .await;
     let local_sessions: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_user_id = $1")
             .bind(principal)
@@ -1557,6 +1576,143 @@ async fn ordinary_sessions_do_not_preserve_revoked_principal_capabilities(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn classic_to_workos_link_recovers_verified_stale_provider_sessions_without_mutation(
+    pool: sqlx::PgPool,
+) {
+    let root = TempDir::new().unwrap();
+    let recovery_cases = [
+        (
+            "link-recover-migration-cutover",
+            "session_01HQAG1HENBZMAZD82YRXDFC0B",
+            "migration_cutover",
+        ),
+        (
+            "link-recover-logout",
+            "session_01HQAG1HENBZMAZD82YRXDFC0C",
+            "logout",
+        ),
+        (
+            "link-recover-method-disabled",
+            "session_01HQAG1HENBZMAZD82YRXDFC0D",
+            "method_disabled",
+        ),
+    ];
+    let erased_subject = "user_link_recovery_erased";
+    let erased_sid = "session_01HQAG1HENBZMAZD82YRXDFC0E";
+    let mut identities = recovery_cases
+        .iter()
+        .map(|(token, session_id, _)| {
+            (
+                (*token).to_string(),
+                VerifiedIdentity {
+                    subject: format!("user_{token}"),
+                    session_id: WorkosSessionId::parse(*session_id).unwrap(),
+                    expires_at: 4_102_444_800,
+                    email: None,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    identities.push((
+        "link-recover-erased-subject".to_string(),
+        VerifiedIdentity {
+            subject: erased_subject.to_string(),
+            session_id: WorkosSessionId::parse(erased_sid).unwrap(),
+            expires_at: 4_102_444_800,
+            email: None,
+        },
+    ));
+    let verifier = StaticAccessTokenVerifier::new(identities);
+    let app = api::router_with_state(
+        test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier)),
+    );
+    let (_, local_session) = register_classic_account(
+        &app,
+        "link-recovery@example.test",
+        "correct horse battery staple",
+    )
+    .await;
+
+    for (_, session_id, reason) in recovery_cases {
+        sqlx::query(
+            r#"
+            INSERT INTO workos_provider_session_tombstone (
+                provider_session_hash, tombstoned_at, reason
+            )
+            VALUES ($1, 1, $2)
+            "#,
+        )
+        .bind(WorkosSessionId::parse(session_id).unwrap().fingerprint())
+        .bind(reason)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query(
+        r#"
+        INSERT INTO workos_subject_tombstone (
+            provider_subject_hash, tombstoned_at, reason
+        )
+        VALUES ($1, 1, 'subject_erasure')
+        "#,
+    )
+    .bind(identity::workos::subject_fingerprint(erased_subject))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO workos_provider_session_tombstone (
+            provider_session_hash, tombstoned_at, reason
+        )
+        VALUES ($1, 1, 'logout')
+        "#,
+    )
+    .bind(WorkosSessionId::parse(erased_sid).unwrap().fingerprint())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    for (provider_assertion, session_id, _) in recovery_cases {
+        let response = post_json(
+            &app,
+            "/auth/account/methods/workos",
+            Some(local_session.as_str()),
+            serde_json::json!({ "provider_assertion": provider_assertion }),
+        )
+        .await;
+        assert_workos_provider_logout_recovery(response, session_id).await;
+    }
+
+    for provider_assertion in ["link-recover-erased-subject", "not-a-verified-assertion"] {
+        let response = post_json(
+            &app,
+            "/auth/account/methods/workos",
+            Some(local_session.as_str()),
+            serde_json::json!({ "provider_assertion": provider_assertion }),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let body = json_body(response).await;
+        assert_eq!(body["error"], "NotAuthorized");
+        assert!(body.get("provider_logout_url").is_none(), "body: {body}");
+    }
+
+    let workos_mutations: (i64, i64, i64, i64) = sqlx::query_as(
+        r#"
+        SELECT (SELECT COUNT(*) FROM authentication_method WHERE kind = 'workos'),
+               (SELECT COUNT(*) FROM external_identity),
+               (SELECT COUNT(*) FROM workos_provider_session),
+               (SELECT COUNT(*) FROM workos_session_exchange)
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(workos_mutations, (0, 0, 0, 0));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let first_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
@@ -1564,7 +1720,8 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
     let verifier = StaticAccessTokenVerifier::new(
         [
             ("attach-proof", second_session_id),
-            ("attach-proof-2", first_session_id),
+            ("attach-proof-2", first_session_id.clone()),
+            ("attach-proof-2-sibling", first_session_id),
         ]
         .map(|(token, session_id)| {
             (
@@ -1629,6 +1786,15 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
     .await;
     assert_eq!(retried.status(), StatusCode::OK);
     assert_eq!(json_body(retried).await, attached);
+    let sibling_retry = post_json(
+        &app,
+        "/auth/account/methods/workos",
+        Some(&classic_session),
+        serde_json::json!({ "provider_assertion": "attach-proof-2-sibling" }),
+    )
+    .await;
+    assert_workos_provider_logout_recovery(sibling_retry, "session_01HQAG1HENBZMAZD82YRXDFC0B")
+        .await;
     let method_attached_audits: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM identity_lifecycle_audit WHERE event_kind = 'method_attached'",
     )
@@ -1659,7 +1825,11 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
         serde_json::json!({ "provider_assertion": "attach-proof-2" }),
     )
     .await;
-    assert_eq!(wrong_local_session_retry.status(), StatusCode::UNAUTHORIZED);
+    assert_workos_provider_logout_recovery(
+        wrong_local_session_retry,
+        "session_01HQAG1HENBZMAZD82YRXDFC0B",
+    )
+    .await;
 
     let response = post_json(
         &app,
@@ -1776,7 +1946,7 @@ async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sq
         serde_json::json!({ "method": "workos" }),
     )
     .await;
-    assert_eq!(old_sibling.status(), StatusCode::UNAUTHORIZED);
+    assert_workos_provider_logout_recovery(old_sibling, "session_01HQAG1HENBZMAZD82YRXDFC0B").await;
 
     let relinked = post_json(
         &app,
@@ -1797,10 +1967,11 @@ async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sq
         serde_json::json!({ "method": "workos" }),
     )
     .await;
-    assert_eq!(
-        old_sibling_after_reactivation.status(),
-        StatusCode::UNAUTHORIZED
-    );
+    assert_workos_provider_logout_recovery(
+        old_sibling_after_reactivation,
+        "session_01HQAG1HENBZMAZD82YRXDFC0B",
+    )
+    .await;
     let provider_statuses: Vec<String> = sqlx::query_scalar(
         "SELECT status FROM workos_provider_session ORDER BY provider_session_id",
     )
@@ -1881,7 +2052,8 @@ async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_i
         serde_json::json!({ "method": "workos" }),
     )
     .await;
-    assert_eq!(exact_link_replay.status(), StatusCode::UNAUTHORIZED);
+    assert_workos_provider_logout_recovery(exact_link_replay, "session_01HQAG1HENBZMAZD82YRXDFC0B")
+        .await;
     let same_session_sibling = post_json(
         &app,
         "/auth/sessions",
@@ -1889,7 +2061,11 @@ async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_i
         serde_json::json!({ "method": "workos" }),
     )
     .await;
-    assert_eq!(same_session_sibling.status(), StatusCode::UNAUTHORIZED);
+    assert_workos_provider_logout_recovery(
+        same_session_sibling,
+        "session_01HQAG1HENBZMAZD82YRXDFC0B",
+    )
+    .await;
 
     let erasure = post_json(
         &app,

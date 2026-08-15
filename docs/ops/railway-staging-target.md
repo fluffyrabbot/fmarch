@@ -282,6 +282,14 @@ that byte-identical request once. The API replays the committed URL only when
 both `workos_session_exchange.access_token_hash` and `linking_session_hash`
 match; it performs no second attachment or audit transition.
 
+An AuthKit browser can retain an assertion for a provider `sid` already sealed
+by logout, linking, method disable, or migration cutover. The API verifies the
+assertion, proves that the provider-session fingerprint—not its subject—is the
+deny reason, and returns HTTP 409 with exactly the fixed WorkOS logout URL. The
+login and link callbacks reject every near-match and navigate through that URL
+before a new ceremony. Subject-erasure fingerprints never receive this recovery
+response and remain an opaque authorization failure.
+
 Subject erasure first appends the SHA-256 WorkOS `sub` fingerprint to
 `workos_subject_tombstone`, so an assertion from an unobserved sibling provider
 session cannot recreate the erased identity after its raw binding is removed.

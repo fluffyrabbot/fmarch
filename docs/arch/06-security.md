@@ -75,7 +75,12 @@ removing a sign-in method never rewrites a principal.
   On one ambiguous internal response, the frontend repeats the byte-identical link request;
   the exchange's `access_token_hash` and `linking_session_hash` let the API replay only that
   already-committed URL for the same assertion and initiating app session, without a second
-  identity mutation.
+  identity mutation. A browser may still present a provider assertion from a `sid` retired
+  by logout, linking, method disable, or migration cutover. After verifying that assertion,
+  the API returns HTTP 409 with exactly a verifier-derived constrained logout URL; login and
+  link callbacks accept only that exact two-field recovery shape and navigate through WorkOS
+  before another ceremony. A subject-erasure tombstone always wins and remains an opaque 401
+  with no recovery URL.
   Disabling a WorkOS method seals and tombstones every provider session observed for that
   method. Subject erasure first appends the SHA-256 `sub` fingerprint to the immutable
   `workos_subject_tombstone`, preventing a valid assertion from an unobserved sibling

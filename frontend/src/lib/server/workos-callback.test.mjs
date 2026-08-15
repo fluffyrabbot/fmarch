@@ -147,6 +147,125 @@ test("callback gives API network, rejection, and malformed responses distinct re
   }
 });
 
+test("callback closes an exactly typed tombstoned provider session at WorkOS", async () => {
+  const cookies = cookieJar({ "wos-session": "transient-provider-session" });
+  const logs = [];
+  const providerLogoutUrl =
+    "https://api.workos.com/user_management/sessions/logout?session_id=session_recovery_a";
+  const response = await callbackHandler(
+    callbackService({ accessToken: "provider-token" }),
+    logs,
+  )(
+    callbackEvent({
+      cookies,
+      fetchImpl: async () =>
+        jsonResponse(
+          {
+            error: "WorkosProviderSessionLogoutRequired",
+            provider_logout_url: providerLogoutUrl,
+          },
+          { ok: false, status: 409 },
+        ),
+    }),
+  );
+
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), providerLogoutUrl);
+  assert.equal(cookies.values.has("wos-session"), false);
+  assert.equal(cookies.values.has("fmarch_session"), false);
+  assert.equal(logReason(logs), "provider_session_logout_required");
+  assert.equal(logs.join(" ").includes("provider-token"), false);
+});
+
+test("callback never treats a near-match tombstone rejection as provider navigation", async (t) => {
+  const providerLogoutUrl =
+    "https://api.workos.com/user_management/sessions/logout?session_id=session_recovery_a";
+  const exactBody = {
+    error: "WorkosProviderSessionLogoutRequired",
+    provider_logout_url: providerLogoutUrl,
+  };
+  const cases = [
+    {
+      name: "wrong status",
+      status: 401,
+      body: exactBody,
+    },
+    {
+      name: "wrong error",
+      status: 409,
+      body: { ...exactBody, error: "NotAuthorized" },
+    },
+    {
+      name: "missing URL",
+      status: 409,
+      body: { error: exactBody.error },
+    },
+    {
+      name: "extra key",
+      status: 409,
+      body: { ...exactBody, reason: "logout" },
+    },
+    {
+      name: "untrusted URL",
+      status: 409,
+      body: { ...exactBody, provider_logout_url: "https://attacker.example/logout" },
+    },
+    {
+      name: "non-canonical URL",
+      status: 409,
+      body: { ...exactBody, provider_logout_url: `${providerLogoutUrl}&return_to=/admin` },
+    },
+    {
+      name: "subject erasure remains generic",
+      status: 401,
+      body: { error: "NotAuthorized", retryable: false, message: "unauthorized session" },
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      const logs = [];
+      const response = await callbackHandler(callbackService(), logs)(
+        callbackEvent({
+          fetchImpl: async () =>
+            jsonResponse(item.body, { ok: false, status: item.status }),
+        }),
+      );
+
+      assert.equal(response.headers.get("location"), "/auth/login?error=workos_api_rejected");
+      assert.equal(logReason(logs), `api_rejected_${item.status}`);
+    });
+  }
+});
+
+test("callback keeps malformed 409 recovery bodies local", async (t) => {
+  const cases = [
+    {
+      name: "unreadable JSON",
+      response: {
+        ok: false,
+        status: 409,
+        async json() {
+          throw new Error("truncated body");
+        },
+      },
+    },
+    { name: "null JSON", response: jsonResponse(null, { ok: false, status: 409 }) },
+    { name: "array JSON", response: jsonResponse([], { ok: false, status: 409 }) },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      const logs = [];
+      const response = await callbackHandler(callbackService(), logs)(
+        callbackEvent({ fetchImpl: async () => item.response }),
+      );
+      assert.equal(response.headers.get("location"), "/auth/login?error=workos_api_rejected");
+      assert.equal(logReason(logs), "api_rejected_409");
+    });
+  }
+});
+
 test("callback never sends a provider assertion to an unpinned internal API origin", async () => {
   const logs = [];
   let fetchCalled = false;
@@ -212,6 +331,114 @@ test("callback links WorkOS to an authenticated principal without replacing its 
   assert.equal(cookies.values.get("fmarch_session"), "fmss_classic");
   assert.equal(cookies.values.has("wos-session"), false);
   assert.equal(logReason(logs), "method_linked");
+});
+
+test("link callback closes an exactly typed tombstoned provider session at WorkOS", async () => {
+  const cookies = cookieJar({
+    fmarch_session: "fmss_classic",
+    "wos-session": "transient-provider-session",
+  });
+  const logs = [];
+  let attempts = 0;
+  const providerLogoutUrl =
+    "https://api.workos.com/user_management/sessions/logout?session_id=session_link_recovery_a";
+  const response = await callbackHandler(
+    callbackService({
+      accessToken: "link-assertion",
+      returnPathname:
+        "/auth/account/security?fmarchWorkosFlow=link&returnTo=%2Fadmin",
+    }),
+    logs,
+  )(
+    callbackEvent({
+      cookies,
+      fetchImpl: async () => {
+        attempts += 1;
+        return jsonResponse(
+          {
+            error: "WorkosProviderSessionLogoutRequired",
+            provider_logout_url: providerLogoutUrl,
+          },
+          { ok: false, status: 409 },
+        );
+      },
+    }),
+  );
+
+  assert.equal(attempts, 1);
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), providerLogoutUrl);
+  assert.equal(cookies.values.get("fmarch_session"), "fmss_classic");
+  assert.equal(cookies.values.has("wos-session"), false);
+  assert.equal(logReason(logs), "link_provider_session_logout_required");
+  assert.equal(logs.join(" ").includes("link-assertion"), false);
+});
+
+test("link callback keeps nonexact provider-session recovery responses local", async (t) => {
+  const providerLogoutUrl =
+    "https://api.workos.com/user_management/sessions/logout?session_id=session_link_recovery_a";
+  const exactBody = {
+    error: "WorkosProviderSessionLogoutRequired",
+    provider_logout_url: providerLogoutUrl,
+  };
+  const cases = [
+    {
+      name: "wrong status",
+      status: 401,
+      body: exactBody,
+    },
+    {
+      name: "wrong error",
+      status: 409,
+      body: { ...exactBody, error: "NotAuthorized" },
+    },
+    {
+      name: "extra key",
+      status: 409,
+      body: { ...exactBody, message: "logout required" },
+    },
+    {
+      name: "attacker URL",
+      status: 409,
+      body: {
+        ...exactBody,
+        provider_logout_url:
+          "https://attacker.example/user_management/sessions/logout?session_id=session_link_recovery_a",
+      },
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      const cookies = cookieJar({ fmarch_session: "fmss_classic" });
+      const logs = [];
+      let attempts = 0;
+      const response = await callbackHandler(
+        callbackService({
+          accessToken: "link-assertion",
+          returnPathname:
+            "/auth/account/security?fmarchWorkosFlow=link&returnTo=%2Fadmin",
+        }),
+        logs,
+      )(
+        callbackEvent({
+          cookies,
+          fetchImpl: async () => {
+            attempts += 1;
+            return jsonResponse(item.body, { ok: false, status: item.status });
+          },
+        }),
+      );
+
+      assert.equal(attempts, 1);
+      assert.equal(
+        response.headers.get("location"),
+        "/auth/account/security?returnTo=%2Fadmin&workosError=rejected",
+      );
+      assert.equal(cookies.values.get("fmarch_session"), "fmss_classic");
+      assert.equal(logReason(logs), "link_api_rejected");
+    });
+  }
 });
 
 test("link callback retries once with the identical request after response loss", async () => {
