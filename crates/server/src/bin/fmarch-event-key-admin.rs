@@ -190,6 +190,12 @@ impl From<projections::ProjectionError> for AdminError {
     }
 }
 
+impl From<server::DatabaseAuthorityError> for AdminError {
+    fn from(error: server::DatabaseAuthorityError) -> Self {
+        Self(error.to_string())
+    }
+}
+
 impl From<api::identity_delivery::IdentityDeliveryError> for AdminError {
     fn from(error: api::identity_delivery::IdentityDeliveryError) -> Self {
         Self(error.to_string())
@@ -211,8 +217,22 @@ async fn run() -> Result<Value, AdminError> {
     let cli = Cli::parse(env::args().skip(1))?;
     verify_expected_active_kid(&cli)?;
     eventstore::require_secure_event_encryption_configuration()?;
-    let database_url =
-        env::var("DATABASE_URL").map_err(|_| AdminError("DATABASE_URL is required".to_string()))?;
+    if env::var_os("DATABASE_URL").is_some()
+        || env::var_os("DATABASE_MIGRATION_URL").is_some()
+        || env::var_os("FMARCH_DATABASE_APPLICATION_PASSWORD").is_some()
+        || env::var_os("FMARCH_DATABASE_KEY_ADMIN_PASSWORD").is_some()
+    {
+        return Err(AdminError(
+            "fmarch-event-key-admin accepts only DATABASE_KEY_ADMIN_URL; application and migration credentials must not enter its environment"
+                .to_string(),
+        ));
+    }
+    server::reject_ambient_postgres_environment("fmarch-event-key-admin", "DATABASE_KEY_ADMIN_URL")
+        .map_err(AdminError)?;
+    let database_url = env::var("DATABASE_KEY_ADMIN_URL")
+        .map_err(|_| AdminError("DATABASE_KEY_ADMIN_URL is required".to_string()))?;
+    server::validate_database_transport(&database_url, "DATABASE_KEY_ADMIN_URL")
+        .map_err(AdminError)?;
     let acquire_timeout = bounded_env_ms("FMARCH_DB_ACQUIRE_TIMEOUT_MS", 250, 1, 60_000)?;
     let statement_timeout = format!(
         "{}ms",
@@ -252,6 +272,7 @@ async fn run() -> Result<Value, AdminError> {
         .connect(&database_url)
         .await?;
     server::ensure_schema_ready(&pool).await?;
+    server::verify_database_principal(&pool, server::DatabasePrincipal::KeyAdmin).await?;
     if matches!(cli.command, Command::Plan | Command::Migrate) {
         eventstore::audit_event_encryption_key_coverage(&pool).await?;
     }

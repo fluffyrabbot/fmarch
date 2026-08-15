@@ -20,7 +20,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(1)
         .connect(&database_url)
         .await?;
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    projections::ensure_schema_ready(&pool).await?;
+    projections::verify_database_principal(&pool, projections::DatabasePrincipal::Application)
+        .await?;
 
     let report = audit_rebuild(&pool, game_id).await?;
     println!("{}", serde_json::to_string_pretty(&report)?);

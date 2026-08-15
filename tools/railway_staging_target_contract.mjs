@@ -15,11 +15,14 @@ async function contract() {
         "Dockerfile",
         ".dockerignore",
         "railway.toml",
+        "deploy/railway/migrator.railway.toml",
         "Dockerfile.frontend",
         "deploy/railway/frontend.railway.toml",
         "frontend/package.json",
         "frontend/svelte.config.js",
         "deploy/railway/api.env.example",
+        "deploy/railway/migrator.env.example",
+        "deploy/railway/key-admin.env.example",
         "deploy/railway/frontend.env.example",
         "docs/ops/release-secret-custody.json",
         "docs/ops/railway-staging-target.md",
@@ -27,6 +30,7 @@ async function contract() {
         "package.json",
         "crates/server/src/main.rs",
         "crates/server/src/bin/fmarch-migrate.rs",
+        "crates/server/src/bin/fmarch-schema-gate.rs",
         "crates/server/src/bin/fmarch-event-key-admin.rs",
         "crates/api/src/lib.rs",
         "crates/media/src/repository.rs",
@@ -43,14 +47,31 @@ async function contract() {
   assert.doesNotMatch(source.Dockerfile, /\/var\/lib\/fmarch\/media/);
   assert.match(source.Dockerfile, /apt-get install --yes --no-install-recommends ca-certificates/);
   assert.match(source.Dockerfile, /COPY --from=builder \/app\/target\/release\/fmarch-migrate \/usr\/local\/bin\/fmarch-migrate/);
+  assert.match(source.Dockerfile, /COPY --from=builder \/app\/target\/release\/fmarch-schema-gate \/usr\/local\/bin\/fmarch-schema-gate/);
   assert.match(source.Dockerfile, /COPY --from=builder \/app\/target\/release\/fmarch-event-key-admin \/usr\/local\/bin\/fmarch-event-key-admin/);
   assert.match(source.Dockerfile, /USER fmarch/);
   assert.match(source.Dockerfile, /CMD \["fmarch-server"\]/);
   assert.match(source[".dockerignore"], /^target$/m);
   assert.match(source["railway.toml"], /healthcheckPath = "\/readyz"/);
-  assert.match(source["railway.toml"], /preDeployCommand = "fmarch-migrate"/);
+  assert.match(source["railway.toml"], /preDeployCommand = "fmarch-schema-gate"/);
+  assert.doesNotMatch(source["railway.toml"], /fmarch-migrate/);
   assert.match(source["railway.toml"], /numReplicas = 2/);
   assert.doesNotMatch(source["railway.toml"], /watchPatterns/);
+  assert.match(
+    source["deploy/railway/migrator.railway.toml"],
+    /dockerfilePath = "Dockerfile"/,
+  );
+  assert.match(
+    source["deploy/railway/migrator.railway.toml"],
+    /startCommand = "fmarch-migrate"/,
+  );
+  assert.match(source["deploy/railway/migrator.railway.toml"], /numReplicas = 1/);
+  assert.match(
+    source["deploy/railway/migrator.railway.toml"],
+    /restartPolicyType = "NEVER"/,
+  );
+  assert.doesNotMatch(source["deploy/railway/migrator.railway.toml"], /healthcheckPath/);
+  assert.doesNotMatch(source["deploy/railway/migrator.railway.toml"], /watchPatterns/);
 
   assert.match(source["frontend/svelte.config.js"], /@sveltejs\/adapter-node/);
   assert.match(source["frontend/svelte.config.js"], /mode:\s*"nonce"/);
@@ -73,7 +94,82 @@ async function contract() {
   assert.match(source["deploy/railway/frontend.railway.toml"], /healthcheckPath = "\/healthz"/);
   assert.doesNotMatch(source["deploy/railway/frontend.railway.toml"], /watchPatterns/);
 
-  assert.match(source["deploy/railway/api.env.example"], /DATABASE_URL=\$\{\{Postgres\.DATABASE_URL\}\}/);
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^DATABASE_URL=<required-postgresql-url-for-fmarch_application-with-sslmode=require>$/m,
+  );
+  for (const forbidden of [
+    "DATABASE_MIGRATION_URL",
+    "DATABASE_KEY_ADMIN_URL",
+    "FMARCH_DATABASE_APPLICATION_PASSWORD",
+    "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
+  ]) {
+    assert.doesNotMatch(
+      source["deploy/railway/api.env.example"],
+      new RegExp(`^${forbidden}=`, "m"),
+    );
+  }
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_SCHEMA_GATE_TIMEOUT_MS=180000$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_SCHEMA_GATE_INTERVAL_MS=1000$/m,
+  );
+  assert.match(
+    source["deploy/railway/migrator.env.example"],
+    /^DATABASE_MIGRATION_URL=\$\{\{Postgres\.DATABASE_URL\}\}\?sslmode=require$/m,
+  );
+  assert.match(
+    source["deploy/railway/migrator.env.example"],
+    /^FMARCH_DATABASE_APPLICATION_PASSWORD=/m,
+  );
+  assert.match(
+    source["deploy/railway/migrator.env.example"],
+    /^FMARCH_DATABASE_KEY_ADMIN_PASSWORD=/m,
+  );
+  assert.match(
+    source["deploy/railway/migrator.env.example"],
+    /^FMARCH_DATABASE_AUTHORITY_REVISION=/m,
+  );
+  for (const forbidden of [
+    "DATABASE_URL",
+    "DATABASE_KEY_ADMIN_URL",
+    "FMARCH_AUTH_SOURCE_SIGNING_KEY",
+    "FMARCH_EVENT_WRAP_KEY",
+    "FMARCH_EVENT_WRAP_KEYS",
+    "FMARCH_EVENT_ARCHIVE_KEY",
+    "FMARCH_EVENT_ARCHIVE_KEYS",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID",
+    "FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY",
+    "FMARCH_SUBJECT_AUTHORITY_WRAP_KEY",
+    "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY",
+    "WORKOS_API_KEY",
+    "WORKOS_COOKIE_PASSWORD",
+    "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN",
+  ]) {
+    assert.doesNotMatch(
+      source["deploy/railway/migrator.env.example"],
+      new RegExp(`^${forbidden}=`, "m"),
+    );
+  }
+  assert.match(
+    source["deploy/railway/key-admin.env.example"],
+    /^DATABASE_KEY_ADMIN_URL=<required-postgresql-url-for-fmarch_key_admin-with-sslmode=require>$/m,
+  );
+  assert.match(source["deploy/railway/key-admin.env.example"], /^FMARCH_EVENT_WRAP_KEY=/m);
+  assert.match(source["deploy/railway/key-admin.env.example"], /^FMARCH_EVENT_ARCHIVE_KEY=/m);
+  assert.doesNotMatch(
+    source["deploy/railway/key-admin.env.example"],
+    /^(?:DATABASE_URL|DATABASE_MIGRATION_URL|FMARCH_DATABASE_APPLICATION_PASSWORD|FMARCH_DATABASE_KEY_ADMIN_PASSWORD)=/m,
+  );
+  assert.doesNotMatch(
+    source["deploy/railway/frontend.env.example"],
+    /^(?:DATABASE_URL|DATABASE_MIGRATION_URL|DATABASE_KEY_ADMIN_URL|FMARCH_DATABASE_APPLICATION_PASSWORD|FMARCH_DATABASE_KEY_ADMIN_PASSWORD)=/m,
+  );
   assert.match(source["deploy/railway/api.env.example"], /AWS_ENDPOINT_URL=\$\{\{media\.ENDPOINT\}\}/);
   assert.match(source["deploy/railway/api.env.example"], /AWS_ACCESS_KEY_ID=\$\{\{media\.ACCESS_KEY_ID\}\}/);
   assert.match(source["deploy/railway/api.env.example"], /AWS_SECRET_ACCESS_KEY=\$\{\{media\.SECRET_ACCESS_KEY\}\}/);
@@ -162,6 +258,7 @@ async function contract() {
   assert.deepEqual(
     custody.families.map((family) => family.id),
     [
+      "database-authority",
       "auth-source-signing",
       "event-runtime-wrap",
       "event-archive",
@@ -181,6 +278,14 @@ async function contract() {
   );
   assert.match(source["crates/server/src/main.rs"], /dev_auth_enabled && debug_build/);
   assert.match(source["crates/server/src/bin/fmarch-migrate.rs"], /MIGRATOR\.run\(&pool\)\.await/);
+  assert.match(
+    source["crates/server/src/bin/fmarch-migrate.rs"],
+    /DATABASE_MIGRATION_URL/,
+  );
+  assert.match(
+    source["crates/server/src/bin/fmarch-schema-gate.rs"],
+    /DATABASE_URL/,
+  );
   assert.match(source["crates/api/src/lib.rs"], /route\("\/readyz", get\(readyz\)\)/);
   assert.match(
     source["crates/api/src/lib.rs"],
@@ -200,6 +305,22 @@ async function contract() {
   );
   assert.match(source["crates/projections/src/schema.rs"], /pub static MIGRATOR/);
   assert.match(source["tools/production_promotion.mjs"], /\$\{urls\.apiUrl\}\/readyz/);
+  assert.match(
+    source["tools/production_promotion.mjs"],
+    /FMARCH_RAILWAY_MIGRATOR_SERVICE_ID/,
+  );
+  assert.match(source["tools/production_promotion.mjs"], /migratorDeployment/);
+  assert.match(source["tools/production_promotion.mjs"], /DATABASE_MIGRATION_URL/);
+  assert.match(source["tools/production_promotion.mjs"], /DATABASE_KEY_ADMIN_URL/);
+  assert.match(source["tools/production_promotion.mjs"], /fmarch_application/);
+  assert.match(
+    source["tools/production_promotion.mjs"],
+    /separate PostgreSQL server endpoints because fixed database roles are cluster-global/,
+  );
+  assert.match(
+    source["tools/production_promotion.mjs"],
+    /sslmode must be require, verify-ca, or verify-full/,
+  );
   assert.match(
     source["tools/production_promotion.mjs"],
     /body\.database_schema === true/,
@@ -225,7 +346,18 @@ async function contract() {
     "`production` branch is a release pointer",
     "production services must watch `production`, never `main`.",
     "separate Postgres service instances",
+    "different database name on the same PostgreSQL server is not isolation",
+    "reconciler governs the current database only",
+    "shared clusters are unsupported",
+    "`sslmode=require`, `sslmode=verify-ca`, or `sslmode=verify-full`",
     "subject-authority buckets",
+    "fmarch_application",
+    "fmarch_key_admin",
+    "DATABASE_MIGRATION_URL",
+    "DATABASE_KEY_ADMIN_URL",
+    "fmarch-schema-gate",
+    "FMARCH_RAILWAY_MIGRATOR_SERVICE_ID",
+    "migrator, API, and frontend",
     "--bootstrap-subject-authority",
     "npm run promote:production -- --check",
     "npm run proof:lanes -- --mode full --run",

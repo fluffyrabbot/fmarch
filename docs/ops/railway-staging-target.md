@@ -4,27 +4,35 @@ This is the repeatable bootstrap for fmarch's first externally reachable staging
 
 ## Target Shape
 
-Create one Railway project in one region with two application services, one
-managed database, and one shared object store:
+Create one Railway project in one region with three repo-backed services, one
+managed database, and two purpose-separated object stores:
 
 | Service | Repository root | Public | Persistent state |
 | --- | --- | --- | --- |
 | `api` | repository root | yes | Railway Postgres, shared media Bucket, plus a dedicated shared subject-authority Bucket |
+| `migrator` | repository root | no | none; one-shot schema/ACL authority |
 | `frontend` | repository root | yes | none |
 | `Postgres` | Railway managed database | no | Railway managed database storage/backups |
 | `media` | Railway Bucket | no | S3-compatible canonical media and variants |
+| `subject-authority` | Railway Bucket | no | immutable authority genesis, wrapped subject keys, and revocation journal |
 
-Both application services retain the repository root as their Railway root
+All repo-backed services retain the repository root as their Railway root
 directory because frontend server routes import shared root-level `tools/`
-modules. The `api` service uses the root `Dockerfile`. Configure the `frontend` service's
-Config-as-Code path as `/deploy/railway/frontend.railway.toml`; that file selects
-`Dockerfile.frontend` for the frontend service only.
+modules. The `api` service uses the root `Dockerfile`. Configure `migrator` with
+`/deploy/railway/migrator.railway.toml` and `frontend` with
+`/deploy/railway/frontend.railway.toml`. The former runs the exact image's
+`fmarch-migrate` binary once; the latter selects `Dockerfile.frontend`.
 
 Run the API at two replicas. Both use the same S3-compatible `media` bucket and
-never apply migrations during ordinary startup. The API deployment's
-`preDeployCommand` runs the exact image's explicit `fmarch-migrate` binary to
-completion once before the corresponding replicas are admitted. This shape is required by the canonical hosted
-multi-node race gate; a one-replica mounted-volume bootstrap cannot close 1.0.
+never receive schema-owner or key-admin authority. The separate one-shot
+`migrator` receives `DATABASE_MIGRATION_URL` plus the two role-bootstrap
+passwords, applies migrations through the schema-owner connection, reconciles exact ACLs, and
+audits the authority catalog. The API receives only an application
+`DATABASE_URL` whose login is `fmarch_application`; its bounded, read-only
+`fmarch-schema-gate` pre-deploy command waits for the corresponding schema/ACL
+state and fails closed before a new replica is admitted. This shape is required
+by the canonical hosted multi-node race gate; a one-replica mounted-volume or
+database-owner API cannot close 1.0.
 
 ## Branch And Environment Model
 
@@ -34,8 +42,8 @@ own the release boundary:
 
 | Railway environment | Git source | Deployment rule |
 | --- | --- | --- |
-| `staging` | `main` | Deploy both API and frontend after every push so both attest the exact same `main` SHA. |
-| `production` | `production` | Deploy only when the release pointer is explicitly advanced to a verified `main` commit. |
+| `staging` | `main` | Deploy migrator, API, and frontend after every push so all three attest the exact same `main` SHA. |
+| `production` | `production` | Deploy all three only when the release pointer is explicitly advanced to a verified `main` commit. |
 
 The canonical Railway domains are:
 
@@ -46,25 +54,102 @@ The canonical Railway domains are:
 
 The `production` branch is a release pointer, not a place to work. It may only
 identify a commit already reachable from `origin/main`. Production promotion
-requires a clean worktree, the required local proof, successful staging API and
-frontend health checks, and Railway deployment metadata showing that both
-staging services run the same commit.
+requires a clean worktree, the required local proof, successful staging
+migrator/API/frontend deployments, API and frontend health checks, and Railway
+deployment metadata showing that all three services run the same commit.
 
-Do not configure service watch paths on either application service. Skipping an
-API or frontend build for an apparently unrelated commit breaks the paired-SHA
+Do not configure service watch paths on any repo-backed service. Skipping a
+migrator, API, or frontend build for an apparently unrelated commit breaks the exact-SHA
 release invariant and makes that `main` commit intentionally unpromotable.
 
+Railway GitHub-push deployments are independent: reference-variable ordering
+does not order multiple services triggered by the same push. The bounded API
+schema gate therefore tolerates normal migrator progress but never migrates. If
+the migrator cannot finish within the checked 180-second bound, Railway must leave the prior API
+deployment serving; after the migrator reaches `SUCCESS`, redeploy the API at
+that exact SHA. Do not lengthen the gate into an unbounded availability wait.
+See Railway's
+[deployment dependency boundary](https://docs.railway.com/deployments/deployment-actions#when-ordering-does-not-apply).
+
 Staging and production must have separate Postgres service instances, media
-buckets, subject-authority buckets, public domains, variables, and WorkOS environments. Never duplicate a
+buckets, subject-authority buckets, public domains, variables, and WorkOS environments. A
+different database name on the same PostgreSQL server is not isolation: the
+fixed `fmarch_application` and `fmarch_key_admin` roles are cluster-global.
+Each environment therefore needs a dedicated server endpoint. The authority
+reconciler governs the current database only; it does not revoke `PUBLIC
+CONNECT` across arbitrary databases on a shared cluster, so
+shared clusters are unsupported rather than partially isolated. Promotion normalizes hostname and
+effective port and rejects a shared server even when database paths and
+passwords differ. Never duplicate a
 resolved database URL or runtime secret across those boundaries. Railway
-template references such as `${{Postgres.DATABASE_URL}}` are safe because they
-resolve inside the selected environment.
+template references such as `${{Postgres.DATABASE_URL}}` are safe only on the
+environment-local migrator; that owner URL must never appear on API, frontend,
+or in a key-admin shell.
+
+The database authority split is fixed, not operator-selectable:
+
+| Process | Credential | Role/authority |
+| --- | --- | --- |
+| `migrator` | `DATABASE_MIGRATION_URL` | Railway schema-owner login; the binary migrates, reconciles ACLs, audits both restricted roles, and exits |
+| `api` and `fmarch-schema-gate` | `DATABASE_URL` | `fmarch_application`, long-lived exact application DML only |
+| protected one-shot operator shell | `DATABASE_KEY_ADMIN_URL` | `fmarch_key_admin`, only the registered runtime-KEK lifecycle/reseal surface |
+
+The API and frontend receive neither role-bootstrap password. The migrator
+receives both bootstrap passwords but never a key-admin URL or event KEK. The
+key-admin URL and event KEKs exist together only in a protected ephemeral shell
+using `deploy/railway/key-admin.env.example`; they are not Railway service
+variables.
+
+The schema owner is confined to the one-shot migrator and owns the application
+schema, tables, sequences, functions, and `_sqlx_migrations`. ACL reconciliation
+revokes prior grants before applying the checked manifest. The application and key-admin roles are
+LOGIN roles with `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION
+NOBYPASSRLS`; neither inherits or can assume the owner. `PUBLIC` has no database
+`CREATE`/`TEMP`, schema access, table/sequence access, or default function
+`EXECUTE`. Every connection proves its expected `current_user`/`session_user`
+and fixed `search_path`; do not place a transaction-pooling proxy between these
+processes and Postgres. Do not set ambient `PG*` connection variables such as
+`PGOPTIONS`, `PGSERVICE`, or `PGSSLMODE`; each process-specific URL is the sole
+authority for endpoint, database, user, TLS mode, and session options. Every
+hosted API, migrator, and protected key-admin URL must contain exactly one explicit
+`sslmode=require`, `sslmode=verify-ca`, or `sslmode=verify-full`; promotion
+rejects an omitted mode and `disable`, `allow`, or `prefer` for API/migrator,
+and the key-admin operator contract applies the same rule. Process startup rejects ownership, dangerous role
+attributes or memberships, missing or extra object privileges, unsafe PUBLIC
+authority, disabled lifecycle triggers, and an unsafe session/search path.
+
+This is an authority reduction, not complete application-compromise containment.
+The API keeps broad business DML and active runtime KEKs, so a compromised API
+can corrupt the business state its role may mutate and expose plaintext it may
+normally decrypt. The split protects DDL, migration history, database guards,
+and KEK lifecycle operations from that process; it does not guarantee all
+business integrity or plaintext confidentiality after API compromise.
 
 ## Provisioning
 
 1. Create a Railway project and add a managed PostgreSQL service named `Postgres`.
-2. Add an `api` service from this repository. Leave its root directory at the repository root and use the default `/railway.toml` config path.
-3. Add a Railway Bucket named `media`. Bind its S3 endpoint, bucket, region,
+2. Add a private `migrator` service from this repository. Leave its root at the
+   repository root, set its Config-as-Code path to
+   `/deploy/railway/migrator.railway.toml`, and copy
+   `deploy/railway/migrator.env.example`. Generate distinct, URI-safe
+   application and key-admin passwords in each environment. Only this service
+   receives the environment-local `${{Postgres.DATABASE_URL}}` composed as
+   `DATABASE_MIGRATION_URL` with exactly one secure `sslmode` and both password
+   values. It has no public domain, TCP proxy, event keys, bucket
+   credentials, or identity credentials. Its `NEVER` restart policy preserves
+   one-shot semantics.
+3. Deploy `migrator` once. It must create/reconcile the fixed
+   `fmarch_application` and `fmarch_key_admin` login roles, apply migrations
+   through the schema-owner connection, reconcile exact privileges/default
+   ACLs, and exit successfully. Repeat this reconciliation after every restore;
+   migration history alone is not ACL evidence.
+4. Add an `api` service from this repository. Leave its root directory at the
+   repository root and use `/railway.toml`. Construct its only database secret,
+   `DATABASE_URL`, with username `fmarch_application` and the application
+   password held by the migrator; percent-encode the password when composing
+   the URL and include exactly one secure `sslmode`. Do not copy the owner URL
+   or either standalone password onto API.
+5. Add a Railway Bucket named `media`. Bind its S3 endpoint, bucket, region,
    access key, and secret key to both API replicas through Railway reference
    variables. Use the bucket's globally unique `BUCKET` value rather than its
    display-only `RAILWAY_BUCKET_NAME`, and declare the credential's URL style;
@@ -72,16 +157,21 @@ resolve inside the selected environment.
    bucket hostname from Railway's published base endpoint before handing the
    complete endpoint to `object_store`. Do not mount a per-replica media volume
    in staging or production.
-4. Add a second Railway Bucket named `subject-authority`. It is a shared authority for both API replicas, not a mounted volume, and must never be the media bucket or be cloned across staging and production. Bind its five S3 reference variables plus an independently generated authority UUID, wrapping key/KID, journal-authentication key/KID, and revision from `deploy/railway/api.env.example`. Before the first normal API start, run the exact release image once with `fmarch-server --bootstrap-subject-authority`; this create-only command writes and verifies the immutable manifest and refuses an existing authority. Normal startup never creates a manifest: it binds an empty database to that genesis, lists and reconciles revocations, and verifies every active subject key before listeners start. Copy the remaining template values into Railway Variables. Create a WorkOS AuthKit environment and configure its sign-in endpoint as `https://<frontend>/auth/sign-in` and redirect URI as `https://<frontend>/auth/callback`. Set `DATABASE_URL` as the reference to `Postgres.DATABASE_URL`, and fill in the WorkOS client id, issuer, and JWKS URL. The template is explicitly WorkOS-only (`FMARCH_CLASSIC_AUTH=0`). A hosted classic-plus-WorkOS deployment must instead set `FMARCH_CLASSIC_AUTH=1` and configure `FMARCH_IDENTITY_DELIVERY_ENDPOINT`, `FMARCH_IDENTITY_DELIVERY_PROVIDER_ID`, and `FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN` for a real HTTPS provider; startup fails closed when classic is enabled without that transport. For a fresh database, set `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` to the immutable WorkOS user id that should receive the first GlobalAdmin grant; an optional label is display-only. Startup grants it only when no active GlobalAdmin exists. Remove the bootstrap variables after the first successful boot.
+6. Add a second Railway Bucket named `subject-authority`. It is a shared authority for both API replicas, not a mounted volume, and must never be the media bucket or be cloned across staging and production. Bind its five S3 reference variables plus an independently generated authority UUID, wrapping key/KID, journal-authentication key/KID, and revision from `deploy/railway/api.env.example`. Before the first normal API start, run the exact release image once with `fmarch-server --bootstrap-subject-authority`; this create-only command writes and verifies the immutable manifest and refuses an existing authority. Normal startup never creates a manifest: it binds an empty database to that genesis, lists and reconciles revocations, and verifies every active subject key before listeners start. Copy the remaining template values into Railway Variables. Create a WorkOS AuthKit environment and configure its sign-in endpoint as `https://<frontend>/auth/sign-in` and redirect URI as `https://<frontend>/auth/callback`. Fill in the WorkOS client id, issuer, and JWKS URL. The template is explicitly WorkOS-only (`FMARCH_CLASSIC_AUTH=0`). A hosted classic-plus-WorkOS deployment must instead set `FMARCH_CLASSIC_AUTH=1` and configure `FMARCH_IDENTITY_DELIVERY_ENDPOINT`, `FMARCH_IDENTITY_DELIVERY_PROVIDER_ID`, and `FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN` for a real HTTPS provider; startup fails closed when classic is enabled without that transport. For a fresh database, set `FMARCH_BOOTSTRAP_ADMIN_WORKOS_USER_ID` to the immutable WorkOS user id that should receive the first GlobalAdmin grant; an optional label is display-only. Startup grants it only when no active GlobalAdmin exists. Remove the bootstrap variables after the first successful boot.
    This closes database-only rollback; Railway Bucket administration is not an object-lock/WORM
    boundary. If coordinated database-plus-authority rollback is in scope, deploy the same adapter
    against storage with enforced object retention and KMS custody before production promotion.
-5. Do not set `FMARCH_BIND`. When a platform supplies `PORT`, the server binds `[::]:$PORT` for public IPv4 and private-network IPv6 reachability; local development still defaults to `127.0.0.1:4000`, and an explicit `FMARCH_BIND` overrides either behavior.
-6. Deploy `api`; require its `fmarch-migrate` pre-deploy command to finish
-   successfully before Railway admits two replicas. Generate a public Railway domain, verify `GET /healthz` returns dependency-free process liveness, and require `GET /readyz` to return `{ "ok": true, "database_schema": true, "object_storage": true, "subject_authority": true }` while both replicas are present. Readiness revalidates the authority manifest, so bucket or credential loss removes the replica from service. Railway admission and release promotion consume `/readyz`, not `/healthz`.
-7. Add a `frontend` service from the same repository. Leave its root directory at the repository root, then set its Config-as-Code path to `/deploy/railway/frontend.railway.toml`.
-8. Generate the frontend public domain. Replace the example values in `deploy/railway/frontend.env.example` with the two real HTTPS URLs, the same WorkOS client id, a WorkOS API key, the exact callback URI, and a random cookie password of at least 32 characters. Add them as Railway Variables for `frontend`.
-9. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
+7. Do not set `FMARCH_BIND`. When a platform supplies `PORT`, the server binds `[::]:$PORT` for public IPv4 and private-network IPv6 reachability; local development still defaults to `127.0.0.1:4000`, and an explicit `FMARCH_BIND` overrides either behavior.
+8. Deploy `api`; require its bounded `fmarch-schema-gate` pre-deploy command to
+   prove the migrator-completed schema and authority audit through the
+   application credential before Railway admits two replicas. Generate a public Railway domain, verify `GET /healthz` returns dependency-free process liveness, and require `GET /readyz` to return `{ "ok": true, "database_schema": true, "object_storage": true, "subject_authority": true }` while both replicas are present. Readiness revalidates the authority manifest, so bucket or credential loss removes the replica from service. Railway admission and release promotion consume `/readyz`, not `/healthz`.
+9. Add a `frontend` service from the same repository. Leave its root directory at the repository root, then set its Config-as-Code path to `/deploy/railway/frontend.railway.toml`.
+10. Generate the frontend public domain. Replace the example values in `deploy/railway/frontend.env.example` with the two real HTTPS URLs, the same WorkOS client id, a WorkOS API key, the exact callback URI, and a random cookie password of at least 32 characters. Add them as Railway Variables for `frontend`.
+11. Record the new migrator service UUID as
+    `FMARCH_RAILWAY_MIGRATOR_SERVICE_ID` in the protected release-operator
+    environment. It is intentionally not guessed or checked into source until
+    the live service exists; promotion fails closed when it is absent.
+12. Redeploy `frontend`, sign in as the bootstrapped GlobalAdmin, create the first game from `/admin`, choose a pack, and complete `/g/<game>/setup`. Verify a player follows the host-issued WorkOS sign-in link, start the game, refresh the setup and host surfaces, and confirm the started game appears on the board. Browser commands and one-time WebSocket tickets are bound to the verified WorkOS session and local principal rather than caller-supplied identifiers.
 
 ## Production Promotion
 
@@ -93,10 +183,12 @@ npm run promote:production -- --check
 ```
 
 The preflight requires a clean synchronized `main`, a fast-forwardable
-`origin/production`, successful staging API and frontend deployments carrying
-the exact `main` SHA, active canonical domains, healthy staging endpoints, and
-complete production variables whose WorkOS client, API key, and cookie secret
-are distinct from staging. It then runs the full proof-lane sweep. When
+`origin/production`, successful staging migrator, API, and frontend deployments
+carrying the exact `main` SHA, active canonical domains, healthy staging
+endpoints, and complete production variables. It proves that API uses only
+`fmarch_application`, migrator alone has the owner URL/bootstrap passwords,
+no deployed service contains `DATABASE_KEY_ADMIN_URL`, and every database
+credential and identity secret is isolated from staging. It then runs the full proof-lane sweep. When
 `DATABASE_URL` is unset, the command starts the repo-local Postgres and supplies
 its canonical URL to every selected proof lane.
 
@@ -106,8 +198,8 @@ Promote the verified commit with:
 npm run promote:production
 ```
 
-The command advances the release pointer, observes terminal `SUCCESS` for both
-production services at that SHA, and verifies both production health endpoints.
+The command advances the release pointer, observes terminal `SUCCESS` for the
+migrator, API, and frontend at that SHA, and verifies both production health endpoints.
 It does not offer a force flag or a proof bypass.
 
 The underlying sequence is:
@@ -117,23 +209,41 @@ The underlying sequence is:
    promotion is a sprint boundary, so it deliberately pays the full validation
    cost rather than selecting only the current diff's push lanes.
 3. Verify staging API dependency readiness, frontend health, and confirm the
-   latest successful API and frontend Railway deployments carry the same
+   latest successful migrator, API, and frontend Railway deployments carry the same
    `main` commit SHA.
 4. Fast-forward the remote `production` branch to that exact SHA. Railway
    production services must watch `production`, never `main`.
-5. Observe terminal `SUCCESS` for both production services and verify their
+5. Observe terminal `SUCCESS` for all three production services and verify their
    deployment metadata carries the promoted SHA before calling the release
    complete.
 
-If either service fails, leave the last successful deployment running, diagnose
-the failed deployment, and do not move the release pointer again until the pair
+If any service fails, leave the last successful API/frontend deployment running, diagnose
+the failed deployment, and do not move the release pointer again until the trio
 can be proven together. Do not deploy a dirty local directory to production.
+
+After a database restore, run the exact-commit migrator before exposing the
+restored API. The restore path omits archived ownership/ACL state, so an existing
+`_sqlx_migrations` row does not prove current grants. Restore authenticated
+archives as the schema owner without disabling triggers, reconcile ACLs, pass
+the catalog audit and application schema gate, then admit network traffic.
+Credential rotation must drain or terminate old sessions before revocation is
+considered effective; changing a password or revoking `CONNECT` does not kill
+an already-established connection. The same rule applies when repairing a
+stale PostgreSQL parameter ACL: reconciliation prevents future `SET` authority,
+but cannot reset `session_replication_role` in a backend that already changed
+it. The greenfield role cut must run before the first application session; any
+later authority repair requires an explicit session drain before admission.
 
 Never set `FMARCH_DEV_AUTH=1` or `FMARCH_FRONTEND_FIXTURE_SESSION=1` on any hosted service. They are local proof modes, not hosted-target configuration.
 
 ## Secrets And Evidence
 
-Only Railway receives runtime secrets such as the resolved `DATABASE_URL`, WorkOS API key, and AuthKit cookie password. The repository has examples and variable names, not secret values. The Rust API receives public verification metadata, never the WorkOS API key.
+Railway receives deployed runtime secrets such as the resolved application
+`DATABASE_URL`, WorkOS API key, and AuthKit cookie password. The protected
+operator environment alone receives `DATABASE_KEY_ADMIN_URL`; it is never a
+Railway service variable. The repository has examples and variable names, not
+secret values. The Rust API receives public WorkOS verification metadata, never
+the WorkOS API key, schema-owner URL, role-bootstrap passwords, or key-admin URL.
 
 Keep the following evidence packets in a private operator-controlled location outside this repository:
 
@@ -166,4 +276,11 @@ The exact hosted-matrix packet schema and its no-secret boundary remain in `tool
 
 ## Boundary
 
-Passing the local Railway configuration contract proves that this repository carries a repeatable Railway staging bootstrap. It does not prove a Railway account exists, that a deployment succeeded, that either URL is externally reachable, or that any hosted identity, operations, release, or production requirement has been met.
+Passing the local Railway configuration contract proves that this repository
+carries a repeatable Railway staging bootstrap. This round does not mutate live
+Railway state. In particular, the migrator service has not yet been provisioned,
+so its unknown live UUID must be supplied later as
+`FMARCH_RAILWAY_MIGRATOR_SERVICE_ID`; promotion intentionally refuses to guess
+it. The contract does not prove a Railway account exists, that a deployment
+succeeded, that either URL is externally reachable, or that any hosted
+identity, operations, release, or production requirement has been met.

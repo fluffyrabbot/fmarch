@@ -4,10 +4,13 @@ import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 
 const root = process.cwd();
-const databaseUrl = process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
 const port = process.env.FMARCH_BROWSER_SMOKE_PORT
   ? Number(process.env.FMARCH_BROWSER_SMOKE_PORT)
@@ -72,8 +75,8 @@ const fixtureHostSessionToken = `fmss_operator-browser-fixture-host-${process.pi
 const seedSessionTokens = new Map();
 const issuedSessionTokens = new Map();
 
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch");
+if (!migrationUrl) {
+  throw new Error("DATABASE_MIGRATION_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch");
 }
 
 if (!Number.isInteger(port) || port <= 0 || port > 65535) {
@@ -1238,13 +1241,12 @@ async function main() {
   await requireProofArtifacts();
   await writeSmokeProgress({ stage: "write-local-report-bootstraps" });
   await writeLocalReportBootstraps();
-  await runFmarchMigrations({ cwd: root, databaseUrl });
+  const authority = await runFmarchMigrations({ cwd: root, migrationUrl });
   await writeSmokeProgress({ stage: "start-server", port });
   const server = spawn("cargo", ["run", "-p", "server"], {
     cwd: root,
     env: {
-      ...process.env,
-      DATABASE_URL: databaseUrl,
+      ...applicationDatabaseEnvironment({ applicationUrl: authority.applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_DEV_AUTH: "1",

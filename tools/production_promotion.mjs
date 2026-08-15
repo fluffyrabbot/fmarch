@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const DEFAULTS = Object.freeze({
   projectId: "9d285d67-c11b-4508-9efb-fad042787b4c",
   apiServiceId: "18b6f450-3739-4f21-8e01-f58c63cec834",
+  migratorServiceId: undefined,
   frontendServiceId: "23787c98-db56-4ccc-869a-42dca74d7bc7",
   stagingEnvironment: "staging",
   productionEnvironment: "production",
@@ -52,7 +53,12 @@ export function validateRepositoryState({
 
 export function validateServiceBranches(config, expectedBranch, serviceIds = DEFAULTS) {
   const services = config.services ?? config;
-  for (const serviceId of [serviceIds.apiServiceId, serviceIds.frontendServiceId]) {
+  for (const [label, serviceId] of [
+    ["migrator", serviceIds.migratorServiceId],
+    ["API", serviceIds.apiServiceId],
+    ["frontend", serviceIds.frontendServiceId],
+  ]) {
+    assert.ok(serviceId, `Railway ${label} service id is required`);
     assert.equal(
       services[serviceId]?.source?.branch,
       expectedBranch,
@@ -62,7 +68,7 @@ export function validateServiceBranches(config, expectedBranch, serviceIds = DEF
 }
 
 export function validateSecretCustodyPolicy(policy) {
-  assert.equal(policy?.version, 1, "secret custody policy version must be 1");
+  assert.equal(policy?.version, 2, "secret custody policy version must be 2");
   assert.deepEqual(policy.environments, ["staging", "production"]);
   assert.equal(policy.rules?.environment_isolation_required, true);
   assert.equal(policy.rules?.repository_secret_values_forbidden, true);
@@ -71,6 +77,7 @@ export function validateSecretCustodyPolicy(policy) {
   assert.deepEqual(
     policy.families?.map((family) => family.id),
     [
+      "database-authority",
       "auth-source-signing",
       "event-runtime-wrap",
       "event-archive",
@@ -97,12 +104,279 @@ export function validateSecretCustodyPolicy(policy) {
   }
 }
 
-export function validateHostedVariables({ stagingApi, stagingFrontend, productionApi, productionFrontend }) {
+export function validateDatabaseAuthorityVariables({
+  stagingApi,
+  stagingMigrator,
+  stagingFrontend,
+  productionApi,
+  productionMigrator,
+  productionFrontend,
+}) {
+  for (const [environment, api, migrator, frontend] of [
+    ["staging", stagingApi, stagingMigrator, stagingFrontend],
+    ["production", productionApi, productionMigrator, productionFrontend],
+  ]) {
+    for (const [process, variables] of [
+      ["API", api],
+      ["migrator", migrator],
+      ["frontend", frontend],
+    ]) {
+      for (const key of Object.keys(variables)) {
+        assertSecretRelation(
+          !key.startsWith("PG"),
+          `${environment} ${process} must not receive ambient ${key}; the process-specific URL is authoritative`,
+        );
+      }
+    }
+
+    for (const key of [
+      "DATABASE_URL",
+      "DATABASE_MIGRATION_URL",
+      "DATABASE_KEY_ADMIN_URL",
+      "FMARCH_DATABASE_APPLICATION_PASSWORD",
+      "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
+    ]) {
+      assertSecretRelation(
+        frontend[key] === undefined,
+        `${environment} frontend must not receive ${key}`,
+      );
+    }
+
+    assert.ok(api.DATABASE_URL, `${environment} API is missing DATABASE_URL`);
+    for (const key of [
+      "DATABASE_MIGRATION_URL",
+      "DATABASE_KEY_ADMIN_URL",
+      "FMARCH_DATABASE_APPLICATION_PASSWORD",
+      "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
+    ]) {
+      assertSecretRelation(
+        api[key] === undefined,
+        `${environment} API must not receive ${key}`,
+      );
+    }
+
+    for (const key of [
+      "DATABASE_MIGRATION_URL",
+      "FMARCH_DATABASE_APPLICATION_PASSWORD",
+      "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
+      "FMARCH_DATABASE_AUTHORITY_REVISION",
+    ]) {
+      assert.ok(migrator[key], `${environment} migrator is missing ${key}`);
+    }
+    for (const key of [
+      "DATABASE_URL",
+      "DATABASE_KEY_ADMIN_URL",
+      "FMARCH_AUTH_SOURCE_SIGNING_KEY",
+      "FMARCH_EVENT_WRAP_KEY",
+      "FMARCH_EVENT_WRAP_KEYS",
+      "FMARCH_EVENT_ARCHIVE_KEY",
+      "FMARCH_EVENT_ARCHIVE_KEYS",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID",
+      "FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY",
+      "FMARCH_SUBJECT_AUTHORITY_WRAP_KEY",
+      "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY",
+      "WORKOS_API_KEY",
+      "WORKOS_COOKIE_PASSWORD",
+      "FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN",
+    ]) {
+      assertSecretRelation(
+        migrator[key] === undefined,
+        `${environment} migrator must not receive ${key}`,
+      );
+    }
+
+    const application = postgresCredential(
+      api.DATABASE_URL,
+      `${environment} API DATABASE_URL`,
+    );
+    const migration = postgresCredential(
+      migrator.DATABASE_MIGRATION_URL,
+      `${environment} migrator DATABASE_MIGRATION_URL`,
+    );
+    assertSecretRelation(
+      application.username === "fmarch_application",
+      `${environment} API DATABASE_URL must use fmarch_application`,
+    );
+    assertSecretRelation(
+      application.password === migrator.FMARCH_DATABASE_APPLICATION_PASSWORD,
+      `${environment} API DATABASE_URL must derive from the migrator-held application password`,
+    );
+    assertSecretRelation(
+      migration.username !== "fmarch_application" &&
+        migration.username !== "fmarch_key_admin",
+      `${environment} migrator DATABASE_MIGRATION_URL must use the schema owner`,
+    );
+    assertSecretRelation(
+      migration.password !== migrator.FMARCH_DATABASE_APPLICATION_PASSWORD,
+      `${environment} schema-owner and application roles must use distinct passwords`,
+    );
+    assertSecretRelation(
+      migration.password !== migrator.FMARCH_DATABASE_KEY_ADMIN_PASSWORD,
+      `${environment} schema-owner and key-admin roles must use distinct passwords`,
+    );
+    assertSecretRelation(
+      api.DATABASE_URL !== migrator.DATABASE_MIGRATION_URL,
+      `${environment} application and migration URLs must be distinct`,
+    );
+    assertSecretRelation(
+      application.databaseTarget === migration.databaseTarget,
+      `${environment} application and migration URLs must target the same database`,
+    );
+    assertSecretRelation(
+      application.tlsMode === migration.tlsMode,
+      `${environment} application and migration URLs must use the same TLS mode`,
+    );
+    assertSecretRelation(
+      migrator.FMARCH_DATABASE_APPLICATION_PASSWORD !==
+        migrator.FMARCH_DATABASE_KEY_ADMIN_PASSWORD,
+      `${environment} application and key-admin roles must use distinct passwords`,
+    );
+    for (const [label, value] of [
+      ["application", migrator.FMARCH_DATABASE_APPLICATION_PASSWORD],
+      ["key-admin", migrator.FMARCH_DATABASE_KEY_ADMIN_PASSWORD],
+    ]) {
+      assertSecretRelation(
+        typeof value === "string" &&
+          value.length >= 32 &&
+          !value.includes("replace_me"),
+        `${environment} ${label} database password must be a non-placeholder value of at least 32 characters`,
+      );
+    }
+  }
+
+  for (const [label, staging, production] of [
+    ["application database URL", stagingApi.DATABASE_URL, productionApi.DATABASE_URL],
+    [
+      "migration database URL",
+      stagingMigrator.DATABASE_MIGRATION_URL,
+      productionMigrator.DATABASE_MIGRATION_URL,
+    ],
+    [
+      "application database password",
+      stagingMigrator.FMARCH_DATABASE_APPLICATION_PASSWORD,
+      productionMigrator.FMARCH_DATABASE_APPLICATION_PASSWORD,
+    ],
+    [
+      "key-admin database password",
+      stagingMigrator.FMARCH_DATABASE_KEY_ADMIN_PASSWORD,
+      productionMigrator.FMARCH_DATABASE_KEY_ADMIN_PASSWORD,
+    ],
+    [
+      "database authority revision",
+      stagingMigrator.FMARCH_DATABASE_AUTHORITY_REVISION,
+      productionMigrator.FMARCH_DATABASE_AUTHORITY_REVISION,
+    ],
+  ]) {
+    assertSecretRelation(
+      staging !== production,
+      `staging and production must not share ${label}`,
+    );
+  }
+
+  const stagingServer = postgresCredential(
+    stagingMigrator.DATABASE_MIGRATION_URL,
+    "staging migrator DATABASE_MIGRATION_URL",
+  ).serverEndpoint;
+  const productionServer = postgresCredential(
+    productionMigrator.DATABASE_MIGRATION_URL,
+    "production migrator DATABASE_MIGRATION_URL",
+  ).serverEndpoint;
+  assertSecretRelation(
+    stagingServer !== productionServer,
+    "staging and production must use separate PostgreSQL server endpoints because fixed database roles are cluster-global",
+  );
+}
+
+function postgresCredential(value, label) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    assert.fail(`${label} must be a valid PostgreSQL URL`);
+  }
+  assertSecretRelation(
+    url.protocol === "postgres:" || url.protocol === "postgresql:",
+    `${label} must use PostgreSQL`,
+  );
+  assertSecretRelation(url.hash === "", `${label} must not contain a URL fragment`);
+  const queryNames = [...new Set(url.searchParams.keys())];
+  assertSecretRelation(
+    queryNames.every((name) => name === "sslmode") &&
+      url.searchParams.getAll("sslmode").length <= 1,
+    `${label} may contain only one sslmode query option`,
+  );
+  assertSecretRelation(
+    url.searchParams.getAll("sslmode").length === 1,
+    `${label} must set exactly one explicit sslmode`,
+  );
+  const tlsMode = url.searchParams.get("sslmode");
+  assertSecretRelation(
+    ["require", "verify-ca", "verify-full"].includes(tlsMode),
+    `${label} sslmode must be require, verify-ca, or verify-full`,
+  );
+  let password;
+  let database;
+  try {
+    password = decodeURIComponent(url.password);
+    database = decodeURIComponent(url.pathname);
+  } catch {
+    assert.fail(`${label} credentials and database name must be URI encoded`);
+  }
+  assertSecretRelation(
+    url.hostname.length > 0 &&
+      url.username.length > 0 &&
+      password.length > 0 &&
+      /^\/[^/]+$/.test(database),
+    `${label} needs credentials`,
+  );
+  const serverEndpoint = normalizedPostgresServerEndpoint(url, label);
+  return {
+    username: url.username,
+    password,
+    serverEndpoint,
+    databaseTarget: `${serverEndpoint}${database}`,
+    tlsMode,
+  };
+}
+
+function normalizedPostgresServerEndpoint(url, label) {
+  let hostname;
+  try {
+    // PostgreSQL is not a WHATWG "special" scheme, so its URL parser preserves
+    // DNS case and non-canonical IP spelling. Canonicalize syntactically through
+    // a special-scheme parser without resolving DNS or conflating distinct names.
+    hostname = new URL(`http://${url.hostname}`).hostname.replace(/\.$/u, "");
+  } catch {
+    assert.fail(`${label} has an invalid hostname`);
+  }
+  assertSecretRelation(hostname.length > 0, `${label} has an invalid hostname`);
+  return `${hostname}:${url.port || "5432"}`;
+}
+
+export function validateHostedVariables({
+  stagingApi,
+  stagingMigrator,
+  stagingFrontend,
+  productionApi,
+  productionMigrator,
+  productionFrontend,
+}) {
+  validateDatabaseAuthorityVariables({
+    stagingApi,
+    stagingMigrator,
+    stagingFrontend,
+    productionApi,
+    productionMigrator,
+    productionFrontend,
+  });
   for (const [name, variables, required] of [
     [
       "staging API",
       stagingApi,
       [
+        "DATABASE_URL",
         "FMARCH_AUTH_SOURCE_SIGNING_KEY",
         "FMARCH_AUTH_SOURCE_SIGNING_KID",
         "FMARCH_EVENT_WRAP_KEY",
@@ -478,13 +752,30 @@ export function validateDomainList(result, expectedDomain, label) {
 }
 
 export function localProofRuntime(env) {
-  if (env.DATABASE_URL) {
-    return { startLocalPostgres: false, env: { ...env } };
+  const proofEnv = scrubPrivilegedDatabaseEnvironment(env);
+  if (proofEnv.DATABASE_URL) {
+    return { startLocalPostgres: false, env: proofEnv };
   }
   return {
     startLocalPostgres: true,
-    env: { ...env, DATABASE_URL: DEFAULTS.localDatabaseUrl },
+    env: { ...proofEnv, DATABASE_URL: DEFAULTS.localDatabaseUrl },
   };
+}
+
+function scrubPrivilegedDatabaseEnvironment(env) {
+  const scrubbed = { ...env };
+  for (const key of Object.keys(scrubbed)) {
+    if (key.startsWith("PG")) delete scrubbed[key];
+  }
+  for (const key of [
+    "DATABASE_MIGRATION_URL",
+    "DATABASE_KEY_ADMIN_URL",
+    "FMARCH_DATABASE_APPLICATION_PASSWORD",
+    "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
+  ]) {
+    delete scrubbed[key];
+  }
+  return scrubbed;
 }
 
 export function railwayArguments(projectId, args, { linked = false } = {}) {
@@ -508,14 +799,18 @@ async function main() {
     productionIsAncestor,
   });
 
-  run("railway", [
-    "link",
-    "--project",
-    config.projectId,
-    "--environment",
-    config.stagingEnvironment,
-    "--json",
-  ]);
+  run(
+    "railway",
+    [
+      "link",
+      "--project",
+      config.projectId,
+      "--environment",
+      config.stagingEnvironment,
+      "--json",
+    ],
+    { env: scrubPrivilegedDatabaseEnvironment(process.env) },
+  );
 
   const [stagingConfig, productionConfig] = await Promise.all([
     railwayJson(
@@ -538,13 +833,29 @@ async function main() {
   validateServiceBranches(stagingConfig, "main", config);
   validateServiceBranches(productionConfig, "production", config);
 
-  const [stagingApi, stagingFrontend, productionApi, productionFrontend] = await Promise.all([
+  const [
+    stagingApi,
+    stagingMigrator,
+    stagingFrontend,
+    productionApi,
+    productionMigrator,
+    productionFrontend,
+  ] = await Promise.all([
     variables(config, config.stagingEnvironment, config.apiServiceId),
+    variables(config, config.stagingEnvironment, config.migratorServiceId),
     variables(config, config.stagingEnvironment, config.frontendServiceId),
     variables(config, config.productionEnvironment, config.apiServiceId),
+    variables(config, config.productionEnvironment, config.migratorServiceId),
     variables(config, config.productionEnvironment, config.frontendServiceId),
   ]);
-  validateHostedVariables({ stagingApi, stagingFrontend, productionApi, productionFrontend });
+  validateHostedVariables({
+    stagingApi,
+    stagingMigrator,
+    stagingFrontend,
+    productionApi,
+    productionMigrator,
+    productionFrontend,
+  });
 
   await validateEnvironment(config, config.stagingEnvironment, head, {
     apiUrl: config.stagingApiUrl,
@@ -553,7 +864,10 @@ async function main() {
 
   const proof = localProofRuntime(process.env);
   if (proof.startLocalPostgres) {
-    run("npm", ["run", "dev:postgres", "--", "start"], { stdio: "inherit" });
+    run("npm", ["run", "dev:postgres", "--", "start"], {
+      env: proof.env,
+      stdio: "inherit",
+    });
   }
   run("npm", ["run", "proof:lanes", "--", "--mode", "full", "--run"], {
     env: proof.env,
@@ -574,24 +888,39 @@ async function main() {
   console.log(`production promotion completed for ${head}`);
 }
 
-function runtimeConfig() {
+export function runtimeConfig(env = process.env) {
+  const migratorServiceId = env.FMARCH_RAILWAY_MIGRATOR_SERVICE_ID;
+  assert.match(
+    migratorServiceId ?? "",
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    "FMARCH_RAILWAY_MIGRATOR_SERVICE_ID must name the provisioned Railway migrator service UUID",
+  );
   return {
     ...DEFAULTS,
-    projectId: process.env.FMARCH_RAILWAY_PROJECT_ID ?? DEFAULTS.projectId,
+    migratorServiceId,
+    projectId: env.FMARCH_RAILWAY_PROJECT_ID ?? DEFAULTS.projectId,
     stagingEnvironment:
-      process.env.FMARCH_RAILWAY_STAGING_ENVIRONMENT ?? DEFAULTS.stagingEnvironment,
+      env.FMARCH_RAILWAY_STAGING_ENVIRONMENT ?? DEFAULTS.stagingEnvironment,
     productionEnvironment:
-      process.env.FMARCH_RAILWAY_PRODUCTION_ENVIRONMENT ?? DEFAULTS.productionEnvironment,
+      env.FMARCH_RAILWAY_PRODUCTION_ENVIRONMENT ?? DEFAULTS.productionEnvironment,
   };
 }
 
 async function validateEnvironment(config, environment, commit, urls) {
-  const [apiDeployment, frontendDeployment, apiDomains, frontendDomains] = await Promise.all([
+  const [
+    migratorDeployment,
+    apiDeployment,
+    frontendDeployment,
+    apiDomains,
+    frontendDomains,
+  ] = await Promise.all([
+    latestDeployment(config, environment, config.migratorServiceId),
     latestDeployment(config, environment, config.apiServiceId),
     latestDeployment(config, environment, config.frontendServiceId),
     domains(config, environment, config.apiServiceId),
     domains(config, environment, config.frontendServiceId),
   ]);
+  validateDeployment(migratorDeployment, commit, `${environment} migrator`);
   validateDeployment(apiDeployment, commit, `${environment} API`);
   validateDeployment(frontendDeployment, commit, `${environment} frontend`);
   validateDomainList(apiDomains, new URL(urls.apiUrl).host, `${environment} API`);
@@ -617,6 +946,7 @@ async function validateEnvironment(config, environment, commit, urls) {
 async function waitForProduction(config, commit) {
   const deadline = Date.now() + 15 * 60 * 1000;
   const services = [
+    [config.migratorServiceId, "production migrator"],
     [config.apiServiceId, "production API"],
     [config.frontendServiceId, "production frontend"],
   ];
@@ -689,6 +1019,7 @@ async function latestDeployment(config, environment, service) {
 async function railwayJson(config, args, options) {
   const output = execFileSync("railway", railwayArguments(config.projectId, args, options), {
     encoding: "utf8",
+    env: scrubPrivilegedDatabaseEnvironment(process.env),
     stdio: ["ignore", "pipe", "pipe"],
   });
   return JSON.parse(output);

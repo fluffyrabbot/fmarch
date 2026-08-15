@@ -5,7 +5,7 @@ import {
   buildDevTestGamePaths,
   completeDevTestGameConfiguration,
   defaultApiStartupTimeoutMs,
-  defaultDatabaseUrl,
+  defaultMigrationUrl,
   defaultGameName,
   devTestGameHelp,
   liveProjectionProofConfig,
@@ -35,7 +35,7 @@ test("CLI parsing preserves every flag, normalization rule, and immutable result
     "900000",
     "--frontend-base-url",
     "https://app.example.test/",
-    "--database-url",
+    "--migration-url",
     "postgres://db/fmarch",
     "--frontend-port",
     "4102",
@@ -55,7 +55,7 @@ test("CLI parsing preserves every flag, normalization rule, and immutable result
     apiPort: 4101,
     apiStartupTimeoutMs: 900000,
     frontendBaseUrl: "https://app.example.test",
-    databaseUrl: "postgres://db/fmarch",
+    migrationUrl: "postgres://db/fmarch",
     frontendPort: 4102,
     game: "game-a",
     name: "morning",
@@ -87,7 +87,7 @@ test("normalization resolves CLI over environment over defaults and one verifica
     env: {},
     repoRoot,
   });
-  assert.equal(defaults.databaseUrl, defaultDatabaseUrl);
+  assert.equal(defaults.migrationUrl, defaultMigrationUrl);
   assert.equal(defaults.gameName, defaultGameName);
   assert.equal(defaults.apiStartupTimeoutMs, defaultApiStartupTimeoutMs);
   assert.equal(defaults.apiBaseUrl, undefined);
@@ -97,19 +97,19 @@ test("normalization resolves CLI over environment over defaults and one verifica
   const fromEnvironment = normalizeDevTestGameConfiguration({
     rawArgs: ["--verify-host-decides-only"],
     env: {
-      DATABASE_URL: "postgres://environment/fmarch",
+      DATABASE_MIGRATION_URL: "postgres://environment/fmarch",
       FMARCH_DEV_TEST_GAME_NAME: "environment-name",
       FMARCH_LIVE_PROJECTION_CAPACITY: "3",
     },
     repoRoot,
   });
-  assert.equal(fromEnvironment.databaseUrl, "postgres://environment/fmarch");
+  assert.equal(fromEnvironment.migrationUrl, "postgres://environment/fmarch");
   assert.equal(fromEnvironment.gameName, "environment-name");
   assert.equal(fromEnvironment.verificationMode, "host-decides");
 
   const fromCli = normalizeDevTestGameConfiguration({
     rawArgs: [
-      "--database-url",
+      "--migration-url",
       "postgres://cli/fmarch",
       "--name",
       "cli-name",
@@ -118,12 +118,12 @@ test("normalization resolves CLI over environment over defaults and one verifica
       "--verify",
     ],
     env: {
-      DATABASE_URL: "postgres://environment/fmarch",
+      DATABASE_MIGRATION_URL: "postgres://environment/fmarch",
       FMARCH_DEV_TEST_GAME_NAME: "environment-name",
     },
     repoRoot,
   });
-  assert.equal(fromCli.databaseUrl, "postgres://cli/fmarch");
+  assert.equal(fromCli.migrationUrl, "postgres://cli/fmarch");
   assert.equal(fromCli.gameName, "cli-name");
   assert.equal(fromCli.apiStartupTimeoutMs, 1234);
   assert.equal(fromCli.verificationMode, "full");
@@ -273,14 +273,14 @@ test("live projection lag configuration and help defaults remain exact", () => {
   const help = devTestGameHelp();
   assert.match(help, /^Usage: npm run dev:test-game -- \[options\]/);
   assert.match(help, new RegExp(`default: ${defaultApiStartupTimeoutMs}`));
-  assert.match(help, new RegExp(`default: ${defaultDatabaseUrl.replaceAll("/", "\\/")}`));
+  assert.match(help, new RegExp(`default: ${defaultMigrationUrl.replaceAll("/", "\\/")}`));
   assert.match(help, new RegExp(`default: ${defaultGameName}`));
   for (const flag of [
     "--api-base-url",
     "--api-port",
     "--api-startup-timeout-ms",
     "--frontend-base-url",
-    "--database-url",
+    "--migration-url",
     "--frontend-port",
     "--name",
     "--game",

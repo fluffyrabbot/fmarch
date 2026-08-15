@@ -20,8 +20,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(1)
         .connect(&database_url)
         .await?;
-    sqlx::migrate!("../projections/migrations")
-        .run(&pool)
+    projections::ensure_schema_ready(&pool).await?;
+    projections::verify_database_principal(&pool, projections::DatabasePrincipal::Application)
         .await?;
 
     let report = audit_resolution_envelopes(&pool, game_id).await?;

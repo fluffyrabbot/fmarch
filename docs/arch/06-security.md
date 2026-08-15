@@ -275,6 +275,38 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   startup/readiness. Retired KIDs cannot be recreated or reused. The full operator
   sequence and backup-custody requirement are in
   [`runtime-kek-rotation.md`](../ops/runtime-kek-rotation.md).
+- Database authority is process-specific. The Railway `migrator` is the only
+  service with `DATABASE_MIGRATION_URL`; that direct schema-owner connection
+  applies migrations, reconciles exact ACLs/default ACLs, audits both restricted
+  roles, and exits. API and `fmarch-schema-gate` receive only `DATABASE_URL` for
+  `fmarch_application`. `fmarch-event-key-admin` receives only
+  `DATABASE_KEY_ADMIN_URL` for `fmarch_key_admin` in a protected ephemeral
+  shell. The application and key-admin logins are non-owner, non-inheriting,
+  `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` roles;
+  neither can disable triggers, alter the schema, assume the owner, or set
+  `session_replication_role`. The catalog audit rejects missing and extra
+  grants, PostgreSQL parameter authority, ownership drift, owner membership,
+  unsafe `search_path`, and any
+  residual database/schema/table/function authority for `PUBLIC`. The audit and
+  ACL reconciliation run after restore even when `_sqlx_migrations` is current,
+  because archive restore deliberately does not trust stored owners or ACLs.
+  Staging and production use dedicated PostgreSQL server instances—not merely
+  distinct database names on one server—because the two fixed login roles are
+  cluster-global. Reconciliation governs the current database only; it does not
+  revoke `PUBLIC CONNECT` across arbitrary databases on a shared cluster, so a
+  dedicated instance is the containment boundary and shared clusters are
+  unsupported.
+  ACL repair governs new sessions: it cannot undo a privileged setting already
+  executed in an established backend, so the initial greenfield cut precedes
+  all application sessions and any later drift repair requires draining those
+  sessions before admission.
+  This split deliberately does not make a compromised application harmless:
+  `fmarch_application` retains broad business DML and the API retains active
+  runtime KEKs, so an application-process compromise can corrupt permitted
+  business state and expose plaintext available to that process. The authority
+  split protects schema/DDL, migration history, lifecycle guards, and the KEK
+  administration lifecycle; it is not a guarantee of all business integrity or
+  plaintext confidentiality after API compromise.
 - Event envelope rotation is application-managed rather than KMS-backed or automatically retired. The external
   subject-key authority has an immutable genesis/revision manifest bound to the database, and normal
   startup refuses an unbootstrapped, wrong, unreachable, or incomplete authority. Its wrapping and
@@ -286,7 +318,10 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   authority credentials, is outside that deployment guarantee. A threat model that includes those
   actors must use an authority with object lock/version governance and KMS-backed custody rather
   than representing the Railway adapter as stronger than it is.
-- Transport is TLS end-to-end; the at-rest layer is in addition to, not instead of, TLS.
+- Transport is TLS end-to-end; the at-rest layer is in addition to, not instead
+  of, TLS. Hosted application, migrator, and protected key-admin PostgreSQL URLs
+  carry exactly one explicit `sslmode` in `require`, `verify-ca`, or
+  `verify-full`; omitted or opportunistic/downgrade modes are forbidden.
 
 ## Operational hygiene
 

@@ -5,6 +5,8 @@ import {
   parseArguments,
   localProofRuntime,
   railwayArguments,
+  runtimeConfig,
+  validateDatabaseAuthorityVariables,
   validateDeployment,
   validateDomainList,
   validateHostedVariables,
@@ -14,8 +16,9 @@ import {
 } from "./production_promotion.mjs";
 
 const apiServiceId = "api";
+const migratorServiceId = "migrator";
 const frontendServiceId = "frontend";
-const serviceIds = { apiServiceId, frontendServiceId };
+const serviceIds = { apiServiceId, migratorServiceId, frontendServiceId };
 
 test("promotion arguments are fail closed", () => {
   assert.deepEqual(parseArguments([]), { checkOnly: false });
@@ -24,10 +27,23 @@ test("promotion arguments are fail closed", () => {
 });
 
 test("promotion proof preserves an explicit database or provisions the repo-local default", () => {
-  const explicit = localProofRuntime({ DATABASE_URL: "postgres://explicit/db", KEEP: "yes" });
+  const privileged = {
+    DATABASE_MIGRATION_URL: "postgres://owner/private",
+    DATABASE_KEY_ADMIN_URL: "postgres://key-admin/private",
+    FMARCH_DATABASE_APPLICATION_PASSWORD: "application-secret",
+    FMARCH_DATABASE_KEY_ADMIN_PASSWORD: "key-admin-secret",
+    PGCONNECT_TIMEOUT: "1",
+    PGOPTIONS: "-c search_path=attacker,public",
+  };
+  const explicit = localProofRuntime({
+    DATABASE_URL: "postgres://explicit/db",
+    KEEP: "yes",
+    ...privileged,
+  });
   assert.equal(explicit.startLocalPostgres, false);
   assert.equal(explicit.env.DATABASE_URL, "postgres://explicit/db");
   assert.equal(explicit.env.KEEP, "yes");
+  for (const key of Object.keys(privileged)) assert.equal(explicit.env[key], undefined);
 
   const local = localProofRuntime({ KEEP: "yes" });
   assert.equal(local.startLocalPostgres, true);
@@ -46,6 +62,17 @@ test("Railway commands use explicit project flags except after an explicit link"
   assert.deepEqual(
     railwayArguments("project-id", ["environment", "config", "--json"], { linked: true }),
     ["environment", "config", "--json"],
+  );
+});
+
+test("promotion requires the live migrator service UUID explicitly", () => {
+  assert.throws(() => runtimeConfig({}), /FMARCH_RAILWAY_MIGRATOR_SERVICE_ID/);
+  const configured = runtimeConfig({
+    FMARCH_RAILWAY_MIGRATOR_SERVICE_ID: "11111111-2222-4333-8444-555555555555",
+  });
+  assert.equal(
+    configured.migratorServiceId,
+    "11111111-2222-4333-8444-555555555555",
   );
 });
 
@@ -70,6 +97,7 @@ test("Railway services must watch the environment's canonical branch", () => {
   const config = {
     services: {
       [apiServiceId]: { source: { branch: "production" } },
+      [migratorServiceId]: { source: { branch: "production" } },
       [frontendServiceId]: { source: { branch: "production" } },
     },
   };
@@ -80,6 +108,8 @@ test("Railway services must watch the environment's canonical branch", () => {
 
 test("hosted variables require isolated production identity credentials", () => {
   const stagingApi = {
+    DATABASE_URL:
+      "postgres://fmarch_application:staging-application-password-32-bytes@staging-db/fmarch?sslmode=require",
     FMARCH_AUTH_SOURCE_SIGNING_KEY: "staging-auth-source-key-at-least-32-bytes",
     FMARCH_AUTH_SOURCE_SIGNING_KID: "staging-auth-2026-08-04",
     FMARCH_EVENT_WRAP_KEY: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
@@ -115,8 +145,16 @@ test("hosted variables require isolated production identity credentials", () => 
     WORKOS_API_KEY: "staging-key",
     WORKOS_COOKIE_PASSWORD: "staging-cookie-password-at-least-32-bytes",
   };
+  const stagingMigrator = {
+    DATABASE_MIGRATION_URL:
+      "postgres://postgres:staging-owner-password@staging-db/fmarch?sslmode=require",
+    FMARCH_DATABASE_APPLICATION_PASSWORD: "staging-application-password-32-bytes",
+    FMARCH_DATABASE_KEY_ADMIN_PASSWORD: "staging-key-admin-password-32-bytes-ok",
+    FMARCH_DATABASE_AUTHORITY_REVISION: "staging-db-2026-08-14",
+  };
   const productionApi = {
-    DATABASE_URL: "postgres://postgres.railway.internal/db",
+    DATABASE_URL:
+      "postgres://fmarch_application:production-application-password-32-bytes@production-db/fmarch?sslmode=require",
     FMARCH_AUTH_SOURCE_SIGNING_KEY: "production-auth-source-key-at-least-32-bytes",
     FMARCH_AUTH_SOURCE_SIGNING_KID: "production-auth-2026-08-04",
     FMARCH_EVENT_WRAP_KEY: "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",
@@ -157,8 +195,242 @@ test("hosted variables require isolated production identity credentials", () => 
     WORKOS_REDIRECT_URI:
       "https://fmarch-frontend-production.up.railway.app/auth/callback",
   };
-  const ready = { stagingApi, stagingFrontend, productionApi, productionFrontend };
+  const productionMigrator = {
+    DATABASE_MIGRATION_URL:
+      "postgres://postgres:production-owner-password@production-db/fmarch?sslmode=require",
+    FMARCH_DATABASE_APPLICATION_PASSWORD: "production-application-password-32-bytes",
+    FMARCH_DATABASE_KEY_ADMIN_PASSWORD: "production-key-admin-password-32-bytes-ok",
+    FMARCH_DATABASE_AUTHORITY_REVISION: "production-db-2026-08-14",
+  };
+  const ready = {
+    stagingApi,
+    stagingMigrator,
+    stagingFrontend,
+    productionApi,
+    productionMigrator,
+    productionFrontend,
+  };
   assert.doesNotThrow(() => validateHostedVariables(ready));
+  assert.doesNotThrow(() => validateDatabaseAuthorityVariables(ready));
+  assert.doesNotThrow(() =>
+    validateDatabaseAuthorityVariables({
+      ...ready,
+      stagingApi: {
+        ...stagingApi,
+        DATABASE_URL:
+          "postgres://fmarch_application:staging-application-password-32-bytes@staging-db:5432/fmarch?sslmode=require",
+      },
+    }),
+  );
+  for (const secureMode of ["verify-ca", "verify-full"]) {
+    assert.doesNotThrow(() =>
+      validateDatabaseAuthorityVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          DATABASE_URL: productionApi.DATABASE_URL.replace(
+            "sslmode=require",
+            `sslmode=${secureMode}`,
+          ),
+        },
+        productionMigrator: {
+          ...productionMigrator,
+          DATABASE_MIGRATION_URL:
+            productionMigrator.DATABASE_MIGRATION_URL.replace(
+              "sslmode=require",
+              `sslmode=${secureMode}`,
+            ),
+        },
+      }),
+    );
+  }
+  for (const process of ["API", "migrator"]) {
+    for (const insecureMode of [undefined, "prefer", "allow", "disable"]) {
+      const sourceUrl =
+        process === "API"
+          ? productionApi.DATABASE_URL
+          : productionMigrator.DATABASE_MIGRATION_URL;
+      const rejectedUrl = sourceUrl.replace(
+        /\?sslmode=require$/u,
+        insecureMode === undefined ? "" : `?sslmode=${insecureMode}`,
+      );
+      const override =
+        process === "API"
+          ? {
+              productionApi: { ...productionApi, DATABASE_URL: rejectedUrl },
+            }
+          : {
+              productionMigrator: {
+                ...productionMigrator,
+                DATABASE_MIGRATION_URL: rejectedUrl,
+              },
+            };
+      assert.throws(
+        () => validateDatabaseAuthorityVariables({ ...ready, ...override }),
+        insecureMode === undefined
+          ? /must set exactly one explicit sslmode/
+          : /sslmode must be require, verify-ca, or verify-full/,
+        `${process} must reject sslmode=${insecureMode ?? "omitted"}`,
+      );
+    }
+  }
+  assert.throws(
+    () =>
+      validateDatabaseAuthorityVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          DATABASE_URL:
+            "postgres://fmarch_application:production-application-password-32-bytes@STAGING-DB:5432/fmarch_production?sslmode=require",
+        },
+        productionMigrator: {
+          ...productionMigrator,
+          DATABASE_MIGRATION_URL:
+            "postgres://postgres:production-owner-password@STAGING-DB:5432/fmarch_production?sslmode=require",
+        },
+      }),
+    /separate PostgreSQL server endpoints because fixed database roles are cluster-global/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          DATABASE_MIGRATION_URL: productionMigrator.DATABASE_MIGRATION_URL,
+        },
+      }),
+    /API must not receive DATABASE_MIGRATION_URL/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionMigrator: {
+          ...productionMigrator,
+          DATABASE_KEY_ADMIN_URL:
+            "postgres://fmarch_key_admin:private@production-db/fmarch",
+        },
+      }),
+    /migrator must not receive DATABASE_KEY_ADMIN_URL/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          DATABASE_URL:
+            "postgres://postgres:owner@production-db/fmarch?sslmode=require",
+        },
+      }),
+    /must use fmarch_application/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionMigrator: {
+          ...productionMigrator,
+          DATABASE_MIGRATION_URL:
+            "postgres://postgres:production-application-password-32-bytes@production-db/fmarch?sslmode=require",
+        },
+      }),
+    /schema-owner and application roles must use distinct passwords/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionMigrator: {
+          ...productionMigrator,
+          DATABASE_MIGRATION_URL:
+            "postgres://postgres:production-key-admin-password-32-bytes-ok@production-db/fmarch?sslmode=require",
+        },
+      }),
+    /schema-owner and key-admin roles must use distinct passwords/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          DATABASE_URL:
+            "postgres://fmarch_application:production-application-password-32-bytes@wrong-db/fmarch?sslmode=require",
+        },
+      }),
+    /must target the same database/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          DATABASE_URL: `${productionApi.DATABASE_URL}&options=-csearch_path%3Dpublic`,
+        },
+      }),
+    /only one sslmode query option/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          DATABASE_URL: productionApi.DATABASE_URL.replace(
+            "sslmode=require",
+            "sslmode=verify-full",
+          ),
+        },
+      }),
+    /must use the same TLS mode/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          DATABASE_URL: `${productionApi.DATABASE_URL}#alternate-authority`,
+        },
+      }),
+    /must not contain a URL fragment/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionMigrator: {
+          ...productionMigrator,
+          FMARCH_AUTH_SOURCE_SIGNING_KEY: "must-not-enter-migrator",
+        },
+      }),
+    /migrator must not receive FMARCH_AUTH_SOURCE_SIGNING_KEY/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          PGOPTIONS: "-c search_path=attacker,public",
+        },
+      }),
+    /must not receive ambient PGOPTIONS/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionMigrator: {
+          ...productionMigrator,
+          PGCONNECT_TIMEOUT: "1",
+        },
+      }),
+    /must not receive ambient PGCONNECT_TIMEOUT/,
+  );
   assert.throws(
     () =>
       validateHostedVariables({
@@ -266,7 +538,7 @@ test("hosted variables require isolated production identity credentials", () => 
 
 test("secret custody policy names owners, consumers, rotation, and retirement", () => {
   const policy = {
-    version: 1,
+    version: 2,
     environments: ["staging", "production"],
     rules: {
       environment_isolation_required: true,
@@ -275,6 +547,11 @@ test("secret custody policy names owners, consumers, rotation, and retirement", 
       retirement_requires_successful_redeploy: true,
     },
     families: [
+      [
+        "database-authority",
+        "FMARCH_DATABASE_APPLICATION_PASSWORD",
+        "FMARCH_DATABASE_AUTHORITY_REVISION",
+      ],
       ["auth-source-signing", "FMARCH_AUTH_SOURCE_SIGNING_KEY", "FMARCH_AUTH_SOURCE_SIGNING_KID"],
       ["event-runtime-wrap", "FMARCH_EVENT_WRAP_KEY", "FMARCH_EVENT_WRAP_KID"],
       ["event-archive", "FMARCH_EVENT_ARCHIVE_KEY", "FMARCH_EVENT_ARCHIVE_KID"],

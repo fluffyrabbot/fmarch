@@ -11,21 +11,24 @@ import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const artifactDir = path.join(repoRoot, "target", "game-index-role-proof");
 const evidencePath = path.join(artifactDir, "game-index-proof.json");
-const databaseUrl = process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
 const pageSize = 12;
 const seedSessionTokens = new Map();
 
-if (!databaseUrl) {
+if (!migrationUrl) {
   throw new Error(
-    "DATABASE_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch",
+    "DATABASE_MIGRATION_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch",
   );
 }
 
@@ -46,8 +49,12 @@ const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
 
 try {
   await mkdir(artifactDir, { recursive: true });
-  proofDatabase = await createScratchDatabase(databaseUrl);
-  const apiBaseUrl = await startApi(proofDatabase.url);
+  proofDatabase = await createScratchDatabase(migrationUrl);
+  const authority = await runFmarchMigrations({
+    cwd: repoRoot,
+    migrationUrl: proofDatabase.migrationUrl,
+  });
+  const apiBaseUrl = await startApi(authority.applicationUrl);
   const frontendBaseUrl = await startFrontend(apiBaseUrl);
   browser = await chromium.launch();
 
@@ -294,7 +301,7 @@ async function createScratchDatabase(sourceDatabaseUrl) {
     "-c",
     `CREATE DATABASE "${name}"`,
   ]);
-  return { name, adminUrl: admin.toString(), url: scratch.toString() };
+  return { name, adminUrl: admin.toString(), migrationUrl: scratch.toString() };
 }
 
 async function dropScratchDatabase({ adminUrl, name }) {
@@ -314,8 +321,7 @@ async function dropScratchDatabase({ adminUrl, name }) {
   ]);
 }
 
-async function startApi(url) {
-  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: url });
+async function startApi(applicationUrl) {
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media-store");
@@ -323,8 +329,7 @@ async function startApi(url) {
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...process.env,
-      DATABASE_URL: url,
+      ...applicationDatabaseEnvironment({ applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_DEV_AUTH: "1",

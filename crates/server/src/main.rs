@@ -388,7 +388,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    if env::var_os("DATABASE_MIGRATION_URL").is_some()
+        || env::var_os("DATABASE_KEY_ADMIN_URL").is_some()
+        || env::var_os("FMARCH_DATABASE_APPLICATION_PASSWORD").is_some()
+        || env::var_os("FMARCH_DATABASE_KEY_ADMIN_PASSWORD").is_some()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "fmarch-server accepts only the application DATABASE_URL; migration/key-admin credentials and role passwords must not enter the runtime environment",
+        )
+        .into());
+    }
+    server::reject_ambient_postgres_environment("fmarch-server", "DATABASE_URL")
+        .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))?;
+
     let config = Config::from_env()?;
+    server::validate_database_transport(&config.database_url, "DATABASE_URL")
+        .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))?;
     // Validate the external erasure authority before opening a database
     // connection. `--check-content` intentionally exits above this requirement.
     let subject_authority = identity::configured_subject_key_authority().await?;
@@ -465,6 +481,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     server::ensure_schema_ready(&pool).await?;
+    server::verify_database_principal(&pool, server::DatabasePrincipal::Application).await?;
     eventstore::attest_active_runtime_kek(&pool).await?;
     eventstore::audit_event_encryption_key_coverage(&pool).await?;
     identity::prepare_subject_authority_for_service(&pool, &subject_authority).await?;

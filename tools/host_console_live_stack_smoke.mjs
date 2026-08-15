@@ -5,7 +5,10 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
@@ -69,7 +72,7 @@ const mediaRoot =
 const evidencePath = path.join(artifactDir, "live-stack-proof.json");
 const summaryPath = path.join(artifactDir, "live-stack-summary.json");
 const summaryMarkdownPath = path.join(artifactDir, "live-stack-summary.md");
-const databaseUrl = process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
 const {
   createScratchDatabase,
@@ -233,9 +236,9 @@ const apiPort = await freePort();
 const apiBaseUrl = `http://${host}:${apiPort}`;
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
-if (!databaseUrl) {
+if (!migrationUrl) {
   throw new Error(
-    "DATABASE_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch",
+    "DATABASE_MIGRATION_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch",
   );
 }
 
@@ -291,15 +294,18 @@ try {
   subjectKeyRoot = await mkdtemp(path.join(artifactDir, "subject-authority-"));
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   await writeProgress({ stage: "create-temp-database" });
-  smokeDatabase = await createScratchDatabase(databaseUrl);
-  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: smokeDatabase.url });
+  smokeDatabase = await createScratchDatabase(migrationUrl);
+  const authority = await runFmarchMigrations({
+    cwd: repoRoot,
+    migrationUrl: smokeDatabase.url,
+  });
+  smokeDatabase.applicationUrl = authority.applicationUrl;
 
   await writeProgress({ stage: "start-rust-server", apiPort });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...process.env,
-      DATABASE_URL: smokeDatabase.url,
+      ...applicationDatabaseEnvironment({ applicationUrl: smokeDatabase.applicationUrl }),
       FMARCH_BIND: `${host}:${apiPort}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_SUBJECT_KEY_DIR: subjectKeyRoot,
@@ -871,7 +877,7 @@ async function seedAdditionalRoomsGame() {
   );
 
   const memberRows = await runSql(
-    smokeDatabase.url,
+    smokeDatabase.applicationUrl,
     `SELECT channel_id, kind, slot_id, source
      FROM private_channel_member
      WHERE game_id = '${additionalRoomsGame}'
@@ -975,7 +981,7 @@ async function seedSpectatorGame() {
 
 async function seedFactionDayChatFixture() {
   const memberRows = await runSql(
-    smokeDatabase.url,
+    smokeDatabase.applicationUrl,
     `SELECT channel_id, kind, slot_id, source
      FROM private_channel_member
      WHERE game_id = '${game}' AND channel_id = '${factionDayChatChannel}'
@@ -1001,13 +1007,13 @@ async function seedFactionDayChatFixture() {
 }
 
 async function seedRootAdminSession() {
-  await runSql(smokeDatabase.url, `
+  await runSql(smokeDatabase.applicationUrl, `
     INSERT INTO platform_principal (
       principal_user_id, status, global_capabilities, created_at, disabled_at
     ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
     ON CONFLICT (principal_user_id) DO NOTHING;
   `);
-  await runSql(smokeDatabase.url, `
+  await runSql(smokeDatabase.applicationUrl, `
     INSERT INTO auth_account (
       account_id,
       principal_user_id,
@@ -1026,7 +1032,7 @@ async function seedRootAdminSession() {
     )
     ON CONFLICT (account_id) DO NOTHING;
   `);
-  await runSql(smokeDatabase.url, `
+  await runSql(smokeDatabase.applicationUrl, `
     INSERT INTO auth_session (
       token_hash,
       principal_user_id,
@@ -2898,7 +2904,7 @@ async function privateThreadLiveDelta(page, body) {
 
 async function seedRolePmHistory(contentId) {
   const membership = await runSql(
-    smokeDatabase.url,
+    smokeDatabase.applicationUrl,
     `SELECT channel_id, kind, slot_id, source
      FROM private_channel_member
      WHERE game_id = '${game}' AND channel_id = '${rolePmChannel}'`,
@@ -3710,7 +3716,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       ),
     );
     concurrentVoteRows = await runSql(
-      smokeDatabase.url,
+      smokeDatabase.applicationUrl,
       `SELECT 'VoteSubmitted' AS acknowledged_command,
               actor_slot AS actor,
               target,
@@ -3741,7 +3747,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       expectedCount: 3,
     });
     duplicateVoteRows = await runSql(
-      smokeDatabase.url,
+      smokeDatabase.applicationUrl,
       `SELECT 'VoteSubmitted' AS acknowledged_command,
               actor_slot AS actor,
               target,
@@ -3752,7 +3758,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     );
     assertSinglePlayerVoteSubmittedRow(duplicateVoteRows);
     duplicateVoteReceiptRows = await runSql(
-      smokeDatabase.url,
+      smokeDatabase.applicationUrl,
       `SELECT principal_user_id, command_id::text, stream_seqs
        FROM command_receipt
        WHERE principal_user_id = 'player-mira'
@@ -4395,7 +4401,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   });
 
   const duplicateReceiptRows = await runSql(
-    smokeDatabase.url,
+    smokeDatabase.applicationUrl,
     `SELECT 'ActionSubmitted' AS acknowledged_command,
             principal_user_id,
             command_id::text,
@@ -5082,7 +5088,7 @@ async function driveHostStreamConflictBrowser(page) {
 
 async function installDeadlineStreamConflictTrigger() {
   await runSql(
-    smokeDatabase.url,
+    smokeDatabase.applicationUrl,
     `
     CREATE OR REPLACE FUNCTION test_force_deadline_stream_conflict() RETURNS trigger AS $$
     BEGIN
@@ -5107,7 +5113,7 @@ async function installDeadlineStreamConflictTrigger() {
 
 async function dropDeadlineStreamConflictTrigger() {
   await runSql(
-    smokeDatabase.url,
+    smokeDatabase.applicationUrl,
     `
     DROP TRIGGER IF EXISTS test_force_deadline_stream_conflict ON events;
     DROP FUNCTION IF EXISTS test_force_deadline_stream_conflict();
@@ -5117,7 +5123,7 @@ async function dropDeadlineStreamConflictTrigger() {
 
 async function installVoteInsertDelayTrigger() {
   await runSql(
-    smokeDatabase.url,
+    smokeDatabase.applicationUrl,
     `
     CREATE OR REPLACE FUNCTION test_delay_vote_insert() RETURNS trigger AS $$
     BEGIN
@@ -5138,7 +5144,7 @@ async function installVoteInsertDelayTrigger() {
 
 async function dropVoteInsertDelayTrigger() {
   await runSql(
-    smokeDatabase.url,
+    smokeDatabase.applicationUrl,
     `
     DROP TRIGGER IF EXISTS test_delay_vote_insert ON events;
     DROP FUNCTION IF EXISTS test_delay_vote_insert();
@@ -5910,7 +5916,7 @@ async function proveSealedPostStorage({
     )
     .join(" OR ");
   const rawCheck = await runSqlScalar(
-    smokeDatabase.url,
+    smokeDatabase.applicationUrl,
     `SELECT concat(
        count(*)::text, '|',
        (SELECT count(*)::text

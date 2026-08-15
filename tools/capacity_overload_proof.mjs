@@ -14,10 +14,13 @@ import {
 } from "./capacity_overload_contract.mjs";
 import { seedSetupCommandPlanForGame } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { decodeServerEnvelopeFrame } from "../frontend/src/lib/app/live-transport.mjs";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultDatabaseUrl =
+const defaultMigrationUrl =
   "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch_capacity_overload";
 const defaultOutput = path.join(
   repoRoot,
@@ -45,7 +48,8 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     printUsage();
     return 0;
   }
-  const databaseUrl = args.databaseUrl ?? env.DATABASE_URL ?? defaultDatabaseUrl;
+  const migrationUrl =
+    args.migrationUrl ?? env.DATABASE_MIGRATION_URL ?? defaultMigrationUrl;
   const outputPath = path.resolve(args.output ?? defaultOutput);
   const psql = findPsql(env);
   if (!existsSync(serverBinary)) {
@@ -56,6 +60,8 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
 
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
+  const authority = await runFmarchMigrations({ cwd: repoRoot, migrationUrl, env });
+  const databaseUrl = authority.applicationUrl;
   try {
     await startServer({ baseUrl, port, databaseUrl, env });
     await seedPostBurstGame(baseUrl);
@@ -121,8 +127,8 @@ function parseArgs(argv) {
     const value = argv[index];
     if (value === "--help" || value === "-h") {
       args.help = true;
-    } else if (value === "--database-url") {
-      args.databaseUrl = requireValue(argv, ++index, value);
+    } else if (value === "--migration-url") {
+      args.migrationUrl = requireValue(argv, ++index, value);
     } else if (value === "--output") {
       args.output = requireValue(argv, ++index, value);
     } else {
@@ -133,12 +139,10 @@ function parseArgs(argv) {
 }
 
 async function startServer({ baseUrl, port, databaseUrl, env }) {
-  await runFmarchMigrations({ cwd: repoRoot, databaseUrl, env });
   server = spawn(serverBinary, [], {
     cwd: repoRoot,
     env: {
-      ...env,
-      DATABASE_URL: databaseUrl,
+      ...applicationDatabaseEnvironment({ applicationUrl: databaseUrl, env }),
       FMARCH_BIND: `127.0.0.1:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_DB_MAX_CONNECTIONS: "10",
@@ -897,7 +901,7 @@ function printUsage() {
   console.log(`Usage: node tools/capacity_overload_proof.mjs [options]
 
 Options:
-  --database-url URL  Postgres database URL (default: DATABASE_URL)
+  --migration-url URL  Owner Postgres URL (default: DATABASE_MIGRATION_URL)
   --output PATH       Proof artifact path (default: target/capacity-overload/report.json)
   --help              Show this help
 `);

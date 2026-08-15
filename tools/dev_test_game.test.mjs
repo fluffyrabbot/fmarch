@@ -383,8 +383,8 @@ import {
   proofGraphHandoffPhaseOutputArtifactTestId,
 } from "./dev_test_game_handoff_phase_outputs.mjs";
 import {
-  localSpineDatabaseUrl,
-  localSpineDatabaseUrlFor,
+  localSpineMigrationUrl,
+  localSpineMigrationUrlFor,
   localSpineProofEnvironment,
   parseArgs as parseLocalSpineArgs,
 } from "./dev_test_game_local_spine.mjs";
@@ -1273,7 +1273,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert.equal(
     packageJson.scripts["test:dev-test-game-host-decides-proof"],
-    "node tools/dev_test_game.mjs --name host-decides-proof --reset --verify-host-decides-only --no-keepalive",
+    "DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/dev_test_game.mjs --name host-decides-proof --reset --verify-host-decides-only --no-keepalive",
   );
   assert.equal(
     packageJson.scripts[selectedOperatorHandoffReceiptAdminProofCommand],
@@ -1371,15 +1371,15 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     },
   );
   assert.equal(
-    localSpineDatabaseUrl,
+    localSpineMigrationUrl,
     "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch",
   );
   assert.equal(
-    localSpineDatabaseUrlFor({}),
+    localSpineMigrationUrlFor({}),
     "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch",
   );
   assert.equal(
-    localSpineDatabaseUrlFor({ FMARCH_DEV_POSTGRES_PORT: "5545" }),
+    localSpineMigrationUrlFor({ FMARCH_DEV_POSTGRES_PORT: "5545" }),
     "postgres://fmarch:fmarch@127.0.0.1:5545/fmarch",
   );
   assert.deepEqual(localSpineProofEnvironment({}), { FMARCH_DEV_AUTH: "1" });

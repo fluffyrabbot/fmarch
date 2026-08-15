@@ -1,0 +1,8 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "fmarch-migrate"
+numReplicas = 1
+restartPolicyType = "NEVER"

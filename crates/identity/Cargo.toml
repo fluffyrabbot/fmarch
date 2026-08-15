@@ -19,9 +19,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-sqlx = { version = "0.9", default-features = false, features = [
-    "runtime-tokio",
-    "postgres",
+sqlx = { workspace = true, features = [
     "uuid",
     "json",
 ] }
@@ -32,9 +30,7 @@ url = "2"
 
 [dev-dependencies]
 serde_json = "1"
-sqlx = { version = "0.9", default-features = false, features = [
-    "runtime-tokio",
-    "postgres",
+sqlx = { workspace = true, features = [
     "uuid",
     "json",
     "macros",

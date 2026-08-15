@@ -6,7 +6,11 @@ import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  localDatabaseAuthority,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 import {
   completeDevTestGameConfiguration,
   defaultDevTestGamePaths,
@@ -137,7 +141,9 @@ let apiServer;
 let vite;
 let configuration;
 let args;
+let migrationUrl;
 let databaseUrl;
+let runtimeEnvironment;
 let game;
 let gameName;
 let tokenPrefix;
@@ -167,7 +173,8 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     configuration,
     registry,
   });
-  databaseUrl = configuration.databaseUrl;
+  migrationUrl = configuration.migrationUrl;
+  runtimeEnvironment = env;
   gameName = configuration.gameName;
   game = configuration.game;
   seedMode = configuration.seedMode;
@@ -186,9 +193,10 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
 
   await mkdir(configuration.paths.artifactDir, { recursive: true });
   if (apiBaseUrl === undefined) {
-    await assertPostgresReachable(databaseUrl);
     apiBaseUrl = await startApi();
   } else {
+    databaseUrl = localDatabaseAuthority({ migrationUrl, env }).applicationUrl;
+    await assertPostgresReachable(databaseUrl);
     await waitForHealth(apiBaseUrl);
   }
 
@@ -317,17 +325,21 @@ async function startApi() {
     await assertPortAvailable(port, "API");
   }
   await mkdir(configuration.paths.mediaRoot, { recursive: true, mode: 0o700 });
-  await runFmarchMigrations({
+  const authority = await runFmarchMigrations({
     cwd: configuration.paths.repoRoot,
-    databaseUrl,
+    migrationUrl,
+    env: runtimeEnvironment,
   });
+  databaseUrl = authority.applicationUrl;
   const baseUrl = `http://${host}:${port}`;
   console.log(`starting Rust API on ${baseUrl} with cargo run -p server`);
   apiServer = spawn("cargo", ["run", "-p", "server"], {
     cwd: configuration.paths.repoRoot,
     env: {
-      ...process.env,
-      DATABASE_URL: databaseUrl,
+      ...applicationDatabaseEnvironment({
+        applicationUrl: databaseUrl,
+        env: runtimeEnvironment,
+      }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: configuration.paths.mediaRoot,
       FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY:

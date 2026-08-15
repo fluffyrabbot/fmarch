@@ -2208,7 +2208,7 @@ pub async fn verify_or_bind_database_authority(
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     let existing = sqlx::query(
-        "SELECT authority_id, authority_revision, manifest_sha256 FROM subject_authority_binding WHERE singleton = TRUE FOR UPDATE",
+        "SELECT authority_id, authority_revision, manifest_sha256 FROM subject_authority_binding WHERE singleton = TRUE",
     )
     .fetch_optional(&mut *tx)
     .await

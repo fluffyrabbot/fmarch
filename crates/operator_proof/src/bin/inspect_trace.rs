@@ -21,8 +21,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(1)
         .connect(&database_url)
         .await?;
-    sqlx::migrate!("../projections/migrations")
-        .run(&pool)
+    projections::ensure_schema_ready(&pool).await?;
+    projections::verify_database_principal(&pool, projections::DatabasePrincipal::Application)
         .await?;
 
     let report = inspect_resolution_traces(&pool, game_id, run_id.as_deref()).await?;

@@ -3,7 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-preDeployCommand = "fmarch-migrate"
+preDeployCommand = "fmarch-schema-gate"
 healthcheckPath = "/readyz"
 healthcheckTimeout = 120
 numReplicas = 2

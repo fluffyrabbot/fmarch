@@ -8,23 +8,23 @@ import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright";
 import { handleLocalhostBindFailure, preflightLocalhostBindOrExit } from "./frontend_smoke_bind_preflight.mjs";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import { applicationDatabaseEnvironment, runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(root, "frontend");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const artifactDir = path.join(root, "target", "completed-game-export-role-proof");
 const evidencePath = path.join(artifactDir, "completed-game-export-proof.json");
-const databaseUrl = process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
-if (!databaseUrl) throw new Error("DATABASE_URL is required for completed-game export proof");
+if (!migrationUrl) throw new Error("DATABASE_MIGRATION_URL is required for completed-game export proof");
 await preflightLocalhostBindOrExit({ host, repoRoot: root, artifactDir, evidencePath, smokeName: "completed-game-export-role-proof" });
 let database; let server; let vite; let browser; let output = ""; const priorApi = process.env.FMARCH_API_BASE_URL;
 try {
   await mkdir(artifactDir, { recursive: true });
-  database = await scratch(databaseUrl);
-  await runFmarchMigrations({ cwd: root, databaseUrl: database.url });
-  const api = await startApi(database.url);
+  database = await scratch(migrationUrl);
+  const authority = await runFmarchMigrations({ cwd: root, migrationUrl: database.migrationUrl });
+  const api = await startApi(authority.applicationUrl);
   const frontend = await startFrontend(api);
   const game = randomUUID(); const hostUser = "export_role_host";
   const token = requiredSessionToken(await request(`${api}/auth/dev-session`, { method: "POST", headers: headers(), body: JSON.stringify({ principal_user_id: hostUser, expires_at: 4102444800, global_capabilities: [] }) }));
@@ -50,9 +50,9 @@ async function command(api, id, sessionToken, commandValue) { const result = awa
 function requiredSessionToken(session) { if (typeof session?.session_token !== "string" || session.session_token === "") throw new Error("dev session response omitted its backend-issued token"); return session.session_token; }
 function headers(sessionToken) { return { ...(sessionToken ? { authorization: `Bearer ${sessionToken}` } : {}), "content-type": "application/json", accept: "application/json" }; }
 async function request(url, options) { const response = await fetch(url, options); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(`${url} ${response.status}: ${JSON.stringify(body)}`); return body; }
-async function scratch(url) { const admin = new URL(url); admin.pathname = "/postgres"; const target = new URL(url); const name = `fmarch_export_proof_${process.pid}_${Date.now()}`; target.pathname = `/${name}`; await run("psql", [admin.toString(), "-v", "ON_ERROR_STOP=1", "-c", `CREATE DATABASE "${name}"`]); return { name, adminUrl: admin.toString(), url: target.toString() }; }
+async function scratch(url) { const admin = new URL(url); admin.pathname = "/postgres"; const target = new URL(url); const name = `fmarch_export_proof_${process.pid}_${Date.now()}`; target.pathname = `/${name}`; await run("psql", [admin.toString(), "-v", "ON_ERROR_STOP=1", "-c", `CREATE DATABASE "${name}"`]); return { name, adminUrl: admin.toString(), migrationUrl: target.toString() }; }
 async function drop({ adminUrl, name }) { await run("psql", [adminUrl, "-v", "ON_ERROR_STOP=1", "-c", `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${name}'`]); await run("psql", [adminUrl, "-v", "ON_ERROR_STOP=1", "-c", `DROP DATABASE IF EXISTS "${name}"`]); }
-async function startApi(url) { const port = await freePort(); const api = `http://${host}:${port}`; const mediaRoot = path.join(artifactDir, "media"); await mkdir(mediaRoot, { recursive: true }); server = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...process.env, DATABASE_URL: url, FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] }); server.stdout.on("data", chunk => output += chunk); server.stderr.on("data", chunk => output += chunk); for (let until = Date.now() + 30000; Date.now() < until; await delay(100)) { try { if ((await fetch(`${api}/healthz`)).ok) return api; } catch {} } throw new Error("export proof API did not become healthy"); }
+async function startApi(applicationUrl) { const port = await freePort(); const api = `http://${host}:${port}`; const mediaRoot = path.join(artifactDir, "media"); await mkdir(mediaRoot, { recursive: true }); server = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...applicationDatabaseEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] }); server.stdout.on("data", chunk => output += chunk); server.stderr.on("data", chunk => output += chunk); for (let until = Date.now() + 30000; Date.now() < until; await delay(100)) { try { if ((await fetch(`${api}/healthz`)).ok) return api; } catch {} } throw new Error("export proof API did not become healthy"); }
 async function startFrontend(api) { process.env.FMARCH_API_BASE_URL = api; const cwd = process.cwd(); process.chdir(frontendRoot); try { const { createServer } = await import(frontendRequire.resolve("vite")); vite = await createServer({ root: frontendRoot, server: { host, port: 0 }, logLevel: "error" }); } finally { process.chdir(cwd); } await vite.listen(); const address = vite.httpServer?.address(); if (!address || typeof address !== "object") throw new Error("export proof frontend did not bind"); return `http://${host}:${address.port}`; }
 async function freePort() { return new Promise((resolve, reject) => { const listener = net.createServer(); listener.once("error", reject); listener.listen(0, host, () => { const address = listener.address(); listener.close(error => error ? reject(error) : resolve(address.port)); }); }); }
 async function stop(child) { if (child.exitCode !== null) return; child.kill("SIGTERM"); await new Promise(resolve => child.once("exit", resolve)); }

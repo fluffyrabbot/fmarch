@@ -7,16 +7,19 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(root, "frontend");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const artifactDir = path.join(root, "target", "community-moderation-role-proof");
 const evidencePath = path.join(artifactDir, "community-moderation-proof.json");
-const databaseUrl = process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
-if (!databaseUrl) throw new Error("DATABASE_URL is required");
+if (!migrationUrl) throw new Error("DATABASE_MIGRATION_URL is required");
 
 let database;
 let apiProcess;
@@ -25,8 +28,9 @@ let browser;
 let apiOutput = "";
 try {
   await mkdir(artifactDir, { recursive: true });
-  database = await scratchDatabase(databaseUrl);
-  const apiBase = await startApi(database.url);
+  database = await scratchDatabase(migrationUrl);
+  const authority = await runFmarchMigrations({ cwd: root, migrationUrl: database.migrationUrl });
+  const apiBase = await startApi(authority.applicationUrl);
   const frontendBase = await startFrontend(apiBase);
   const seeded = await seed(apiBase);
   browser = await chromium.launch();
@@ -184,19 +188,18 @@ async function scratchDatabase(url) {
   const scratch = new URL(url);
   scratch.pathname = `/${name}`;
   await processRun("psql", [admin.toString(), "-v", "ON_ERROR_STOP=1", "-c", `CREATE DATABASE "${name}"`]);
-  return { name, admin: admin.toString(), url: scratch.toString() };
+  return { name, admin: admin.toString(), migrationUrl: scratch.toString() };
 }
 async function dropDatabase(database) {
   await processRun("psql", [database.admin, "-v", "ON_ERROR_STOP=1", "-c", `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${database.name}'`]);
   await processRun("psql", [database.admin, "-v", "ON_ERROR_STOP=1", "-c", `DROP DATABASE IF EXISTS "${database.name}"`]);
 }
-async function startApi(url) {
-  await runFmarchMigrations({ cwd: root, databaseUrl: url });
+async function startApi(applicationUrl) {
   const port = await freePort();
   const base = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media");
   await mkdir(mediaRoot, { recursive: true });
-  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...process.env, DATABASE_URL: url, FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] });
+  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...applicationDatabaseEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] });
   apiProcess.stdout.on("data", (chunk) => { apiOutput += chunk; });
   apiProcess.stderr.on("data", (chunk) => { apiOutput += chunk; });
   const deadline = Date.now() + 240_000;

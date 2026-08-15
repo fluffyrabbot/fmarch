@@ -10,7 +10,7 @@ import {
   devTestGameHostDecidesRaceProofPath,
 } from "./dev_test_game_host_decides_race_proof_contract.mjs";
 
-export const defaultDatabaseUrl =
+export const defaultMigrationUrl =
   "postgres://fmarch:fmarch@localhost:5544/fmarch";
 export const defaultGameName = "local";
 export const defaultApiStartupTimeoutMs = 15 * 60 * 1000;
@@ -97,7 +97,8 @@ export function normalizeDevTestGameConfiguration({
   return Object.freeze({
     args,
     paths,
-    databaseUrl: args.databaseUrl ?? env.DATABASE_URL ?? defaultDatabaseUrl,
+    migrationUrl:
+      args.migrationUrl ?? env.DATABASE_MIGRATION_URL ?? defaultMigrationUrl,
     gameName: args.name ?? env.FMARCH_DEV_TEST_GAME_NAME ?? defaultGameName,
     apiBaseUrl: args.apiBaseUrl,
     frontendBaseUrl: args.frontendBaseUrl,
@@ -210,8 +211,8 @@ export function parseArgs(values) {
           "",
         );
         break;
-      case "--database-url":
-        parsed.databaseUrl = requireValue(values, ++index, value);
+      case "--migration-url":
+        parsed.migrationUrl = requireValue(values, ++index, value);
         break;
       case "--frontend-port":
         parsed.frontendPort = parsePositiveInt(
@@ -272,7 +273,7 @@ Options:
   --api-port PORT          Port for a started API
   --api-startup-timeout-ms Milliseconds to wait for a started API (default: ${defaultApiStartupTimeoutMs})
   --frontend-base-url URL  Use an existing frontend instead of starting Vite
-  --database-url URL       DATABASE_URL for a started API (default: ${defaultDatabaseUrl})
+  --migration-url URL      DATABASE_MIGRATION_URL for the local migrator (default: ${defaultMigrationUrl})
   --frontend-port PORT     Port for a started frontend
   --name NAME              Friendly named game slot (default: ${defaultGameName})
   --game UUID              Use a specific game id

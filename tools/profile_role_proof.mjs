@@ -7,25 +7,25 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { handleLocalhostBindFailure, preflightLocalhostBindOrExit } from "./frontend_smoke_bind_preflight.mjs";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import { applicationDatabaseEnvironment, runFmarchMigrations } from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const artifactDir = path.join(repoRoot, "target", "profile-role-proof");
 const evidencePath = path.join(artifactDir, "profile-proof.json");
-const databaseUrl = process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
-if (!databaseUrl) throw new Error("DATABASE_URL is required for the local profile role proof");
+if (!migrationUrl) throw new Error("DATABASE_MIGRATION_URL is required for the local profile role proof");
 await preflightLocalhostBindOrExit({ host, repoRoot, artifactDir, evidencePath, smokeName: "profile-role-proof" });
 
 let database; let server; let vite; let browser; let serverOutput = "";
 const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
 try {
   await mkdir(artifactDir, { recursive: true });
-  database = await scratchDatabase(databaseUrl);
-  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: database.url });
-  const api = await startApi(database.url);
+  database = await scratchDatabase(migrationUrl);
+  const authority = await runFmarchMigrations({ cwd: repoRoot, migrationUrl: database.migrationUrl });
+  const api = await startApi(authority.applicationUrl);
   const frontend = await startFrontend(api);
   browser = await chromium.launch();
   const sessions = await createAccountSessions(api);
@@ -113,9 +113,9 @@ async function makeMembersOnly(owner, anonymous, frontend) {
 }
 function jsonHeaders() { return { "content-type": "application/json", accept: "application/json" }; }
 async function json(url, options) { const response = await fetch(url, options); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(`${url} ${response.status}: ${JSON.stringify(body)}`); return body; }
-async function scratchDatabase(sourceUrl) { const admin = new URL(sourceUrl); admin.pathname = "/postgres"; const scratch = new URL(sourceUrl); const name = `fmarch_profile_${process.pid}_${Date.now()}`; scratch.pathname = `/${name}`; await command("psql", [admin.toString(), "-v", "ON_ERROR_STOP=1", "-c", `CREATE DATABASE "${name}"`]); return { name, adminUrl: admin.toString(), url: scratch.toString() }; }
+async function scratchDatabase(sourceUrl) { const admin = new URL(sourceUrl); admin.pathname = "/postgres"; const scratch = new URL(sourceUrl); const name = `fmarch_profile_${process.pid}_${Date.now()}`; scratch.pathname = `/${name}`; await command("psql", [admin.toString(), "-v", "ON_ERROR_STOP=1", "-c", `CREATE DATABASE "${name}"`]); return { name, adminUrl: admin.toString(), migrationUrl: scratch.toString() }; }
 async function dropDatabase({ adminUrl, name }) { await command("psql", [adminUrl, "-v", "ON_ERROR_STOP=1", "-c", `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${name}'`]); await command("psql", [adminUrl, "-v", "ON_ERROR_STOP=1", "-c", `DROP DATABASE IF EXISTS "${name}"`]); }
-async function startApi(url) { const port = await portNumber(); const base = `http://${host}:${port}`; const mediaRoot = path.join(artifactDir, "media-store"); await mkdir(mediaRoot, { recursive: true, mode: 0o700 }); server = spawn("cargo", ["run", "-p", "server"], { cwd: repoRoot, env: { ...process.env, DATABASE_URL: url, FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] }); server.stdout.on("data", c => { serverOutput += c; }); server.stderr.on("data", c => { serverOutput += c; }); const until = Date.now() + 30000; while (Date.now() < until) { try { if ((await fetch(`${base}/healthz`)).ok) return base; } catch {} await delay(100); } throw new Error("profile API did not become healthy"); }
+async function startApi(applicationUrl) { const port = await portNumber(); const base = `http://${host}:${port}`; const mediaRoot = path.join(artifactDir, "media-store"); await mkdir(mediaRoot, { recursive: true, mode: 0o700 }); server = spawn("cargo", ["run", "-p", "server"], { cwd: repoRoot, env: { ...applicationDatabaseEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] }); server.stdout.on("data", c => { serverOutput += c; }); server.stderr.on("data", c => { serverOutput += c; }); const until = Date.now() + 30000; while (Date.now() < until) { try { if ((await fetch(`${base}/healthz`)).ok) return base; } catch {} await delay(100); } throw new Error("profile API did not become healthy"); }
 async function startFrontend(api) { process.env.FMARCH_API_BASE_URL = api; const cwd = process.cwd(); process.chdir(frontendRoot); try { const { createServer } = await import(frontendRequire.resolve("vite")); vite = await createServer({ root: frontendRoot, server: { host, port: 0 }, logLevel: "error" }); } finally { process.chdir(cwd); } await vite.listen(); const address = vite.httpServer?.address(); if (!address || typeof address !== "object") throw new Error("profile frontend did not bind"); return `http://${host}:${address.port}`; }
 async function portNumber() { return new Promise((resolve, reject) => { const listener = net.createServer(); listener.once("error", reject); listener.listen(0, host, () => { const address = listener.address(); listener.close(error => error ? reject(error) : resolve(address.port)); }); }); }
 async function stop(child) { if (child.exitCode !== null) return; child.kill("SIGTERM"); await new Promise(resolve => child.once("exit", resolve)); }

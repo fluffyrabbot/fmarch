@@ -6,7 +6,10 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { seedCommandPlanForGame } from "./dev_test_game.mjs";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "live-stack-backup-restore-drill");
@@ -16,7 +19,7 @@ if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
 }
 const proofPath = path.join(artifactDir, "local-backup-restore-proof.json");
 const dumpPath = path.join(artifactDir, "local-live-stack.dump");
-const databaseUrl = process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
 const game = randomUUID();
 const rootAdminSessionToken = canonicalSessionToken(`backup-restore-root-admin-${game}`);
@@ -27,9 +30,9 @@ const privateChannelId = "private:mafia_day_chat";
 const privatePostBody = "Backup restore private-channel proof post";
 const seedSessionTokens = new Map();
 
-if (!databaseUrl) {
+if (!migrationUrl) {
   throw new Error(
-    "DATABASE_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch",
+    "DATABASE_MIGRATION_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch",
   );
 }
 
@@ -42,10 +45,15 @@ try {
   await mkdir(artifactDir, { recursive: true });
   await rm(dumpPath, { force: true });
 
-  sourceDatabase = await createScratchDatabase(databaseUrl, "source");
-  const sourceApi = await startApi(sourceDatabase.url, "source");
+  sourceDatabase = await createScratchDatabase(migrationUrl, "source");
+  const sourceAuthority = await runFmarchMigrations({
+    cwd: repoRoot,
+    migrationUrl: sourceDatabase.migrationUrl,
+  });
+  sourceDatabase.applicationUrl = sourceAuthority.applicationUrl;
+  const sourceApi = await startApi(sourceAuthority.applicationUrl, "source");
   const seedEvidence = await seedSourceGame(sourceApi);
-  const sourceFingerprint = await databaseFingerprint(sourceDatabase.url);
+  const sourceFingerprint = await databaseFingerprint(sourceAuthority.applicationUrl);
 
   await runProcess("pg_dump", [
     "--format=custom",
@@ -53,21 +61,30 @@ try {
     "--no-acl",
     "--file",
     dumpPath,
-    sourceDatabase.url,
+    sourceAuthority.migrationUrl,
   ]);
 
-  restoredDatabase = await createScratchDatabase(databaseUrl, "restored");
+  restoredDatabase = await createScratchDatabase(migrationUrl, "restored");
   await runProcess("pg_restore", [
     "--dbname",
-    restoredDatabase.url,
+    restoredDatabase.migrationUrl,
     "--no-owner",
     "--no-acl",
     dumpPath,
   ]);
-  const restoredFingerprint = await databaseFingerprint(restoredDatabase.url);
+  const restoredAuthority = await runFmarchMigrations({
+    cwd: repoRoot,
+    migrationUrl: restoredDatabase.migrationUrl,
+  });
+  restoredDatabase.applicationUrl = restoredAuthority.applicationUrl;
+  const applicationAuthority = await assertRestoredApplicationAuthority(
+    restoredAuthority.applicationUrl,
+    restoredAuthority.roleNames.application,
+  );
+  const restoredFingerprint = await databaseFingerprint(restoredAuthority.applicationUrl);
   assertDeepEqual(restoredFingerprint, sourceFingerprint, "restored database fingerprint");
 
-  const restoredApi = await startApi(restoredDatabase.url, "restored");
+  const restoredApi = await startApi(restoredAuthority.applicationUrl, "restored");
   const restoredApiEvidence = await assertRestoredApi(restoredApi);
 
   const proof = buildProof({
@@ -79,6 +96,12 @@ try {
     restoredApi,
     seedEvidence,
     restoredApiEvidence,
+    applicationAuthority,
+    databaseRoles: {
+      migration: new URL(restoredAuthority.migrationUrl).username,
+      application: restoredAuthority.roleNames.application,
+      keyAdmin: restoredAuthority.roleNames.keyAdmin,
+    },
   });
   await writeFile(proofPath, `${JSON.stringify(proof, null, 2)}\n`);
   console.log(`wrote ${path.relative(repoRoot, proofPath)}`);
@@ -100,13 +123,13 @@ try {
 async function seedSourceGame(apiBaseUrl) {
   // The root GlobalAdmin session must exist before the seed loop: every seed
   // command now authenticates through a session granted by this root token.
-  await runSql(sourceDatabase.url, `
+  await runSql(sourceDatabase.applicationUrl, `
     INSERT INTO platform_principal (
       principal_user_id, status, global_capabilities, created_at, disabled_at
     ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
     ON CONFLICT (principal_user_id) DO NOTHING;
   `);
-  await runSql(sourceDatabase.url, `
+  await runSql(sourceDatabase.applicationUrl, `
     INSERT INTO auth_account (
       account_id,
       principal_user_id,
@@ -125,7 +148,7 @@ async function seedSourceGame(apiBaseUrl) {
     )
     ON CONFLICT (account_id) DO NOTHING;
   `);
-  await runSql(sourceDatabase.url, `
+  await runSql(sourceDatabase.applicationUrl, `
     INSERT INTO auth_session (
       token_hash,
       principal_user_id,
@@ -155,8 +178,7 @@ async function seedSourceGame(apiBaseUrl) {
       global_capabilities = EXCLUDED.global_capabilities;
   `);
 
-  const seedCommands = [];
-  for (const [principalUserId, command] of [
+  const seedPlan = [
     ...seedCommandPlanForGame(game),
     ["host_h", { LockThread: { game } }],
     ["host_h", { UnlockThread: { game } }],
@@ -171,7 +193,20 @@ async function seedSourceGame(apiBaseUrl) {
         },
       },
     ],
-  ]) {
+  ];
+  const authenticatedPrincipals = new Set(seedPlan.map(([principalUserId]) => principalUserId));
+  for (const [, command] of seedPlan) {
+    const seatedPrincipal = command.SeatPersona?.principal_user_id;
+    if (typeof seatedPrincipal === "string" && seatedPrincipal !== "") {
+      authenticatedPrincipals.add(seatedPrincipal);
+    }
+  }
+  for (const principalUserId of authenticatedPrincipals) {
+    await seedSessionToken(apiBaseUrl, principalUserId);
+  }
+
+  const seedCommands = [];
+  for (const [principalUserId, command] of seedPlan) {
     seedCommands.push(
       await sendCommand(apiBaseUrl, seedCommands.length + 1, principalUserId, command),
     );
@@ -305,6 +340,8 @@ function buildProof({
   restoredApi,
   seedEvidence,
   restoredApiEvidence,
+  applicationAuthority,
+  databaseRoles,
 }) {
   const checks = [
     ["dump-created", sourceFingerprint.events.total > 0],
@@ -319,6 +356,15 @@ function buildProof({
       restoredFingerprint.authSessions.total === sourceFingerprint.authSessions.total,
     ],
     ["restored-api-capabilities", restoredApiEvidence.status === "passed"],
+    ["restored-application-ddl-denied", applicationAuthority.ddl.status === "passed"],
+    [
+      "restored-application-trigger-disable-denied",
+      applicationAuthority.triggerDisable.status === "passed",
+    ],
+    [
+      "restored-application-sqlx-mutation-denied",
+      applicationAuthority.sqlxMutation.status === "passed",
+    ],
   ].map(([id, passed]) => ({ id, status: passed ? "passed" : "failed" }));
   const status = checks.every((check) => check.status === "passed") ? "passed" : "failed";
 
@@ -328,7 +374,7 @@ function buildProof({
     scope: "local-live-stack-backup-restore-drill",
     productionReady: false,
     proofBoundary:
-      "Local disposable Postgres databases only. Proves pg_dump/pg_restore preserves a seeded live-stack event log, rebuildable projection rows, and local opaque session capability lookup for one scratch game. It does not prove hosted backups, point-in-time recovery, encryption-key escrow, cross-region restore, multi-node failover, beta release readiness, or human runbook execution.",
+      "Local disposable Postgres databases only. Proves pg_dump/pg_restore preserves a seeded live-stack event log, rebuildable projection rows, and local opaque session capability lookup for one scratch game; owner-only restore reconciliation re-establishes an application role that cannot perform DDL, disable triggers, or mutate SQLx history. It does not prove hosted backups, point-in-time recovery, encryption-key escrow, cross-region restore, multi-node failover, beta release readiness, or human runbook execution.",
     game,
     artifact: {
       proof: path.relative(repoRoot, proofPath),
@@ -338,6 +384,7 @@ function buildProof({
       source: sourceDatabase.name,
       restored: restoredDatabase.name,
       lifecycle: "created-and-dropped-per-drill-run",
+      roles: databaseRoles,
     },
     api: {
       source: sourceApi,
@@ -345,6 +392,7 @@ function buildProof({
     },
     seed: seedEvidence,
     restoredApiEvidence,
+    applicationAuthority,
     checks,
     fingerprints: {
       source: sourceFingerprint,
@@ -422,6 +470,65 @@ async function databaseFingerprint(url) {
   `);
 }
 
+async function assertRestoredApplicationAuthority(applicationUrl, expectedRole) {
+  const actualRole = await queryJson(
+    applicationUrl,
+    "SELECT to_jsonb(current_user) AS current_user",
+  );
+  if (actualRole !== expectedRole) {
+    throw new Error(
+      `restored application connection used ${JSON.stringify(actualRole)}, expected ${expectedRole}`,
+    );
+  }
+
+  const ddl = await expectSqlDenied({
+    applicationUrl,
+    id: "ddl",
+    sql: "CREATE TABLE public.fmarch_application_ddl_probe (id BIGINT)",
+    expected: /permission denied for schema public/u,
+  });
+  const triggerDisable = await expectSqlDenied({
+    applicationUrl,
+    id: "trigger-disable",
+    sql: "ALTER TABLE public.events DISABLE TRIGGER ALL",
+    expected: /(?:must be owner of table events|permission denied for table events)/u,
+  });
+  const sqlxMutation = await expectSqlDenied({
+    applicationUrl,
+    id: "sqlx-mutation",
+    sql: "UPDATE public._sqlx_migrations SET success = success WHERE FALSE",
+    expected: /permission denied for table _sqlx_migrations/u,
+  });
+
+  return {
+    status: "passed",
+    role: expectedRole,
+    ddl,
+    triggerDisable,
+    sqlxMutation,
+  };
+}
+
+async function expectSqlDenied({ applicationUrl, id, sql, expected }) {
+  const result = await runProcessResult("psql", [
+    applicationUrl,
+    "-X",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    sql,
+  ]);
+  if (result.code === 0) {
+    throw new Error(`restored application authority unexpectedly allowed ${id}`);
+  }
+  if (!expected.test(result.output)) {
+    throw new Error(
+      `restored application ${id} failed for the wrong reason:\n${result.output}`,
+    );
+  }
+  return { status: "passed", denial: "insufficient_privilege" };
+}
+
 async function createScratchDatabase(sourceDatabaseUrl, label) {
   const source = new URL(sourceDatabaseUrl);
   const admin = new URL(sourceDatabaseUrl);
@@ -439,7 +546,7 @@ async function createScratchDatabase(sourceDatabaseUrl, label) {
     `CREATE DATABASE "${name}"`,
   ]);
 
-  return { name, adminUrl: admin.toString(), url: scratch.toString() };
+  return { name, adminUrl: admin.toString(), migrationUrl: scratch.toString() };
 }
 
 async function dropScratchDatabase({ adminUrl, name }) {
@@ -459,8 +566,7 @@ async function dropScratchDatabase({ adminUrl, name }) {
   ]);
 }
 
-async function startApi(url, label) {
-  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: url });
+async function startApi(applicationUrl, label) {
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
   const mediaRoot =
@@ -471,8 +577,7 @@ async function startApi(url, label) {
   const child = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...process.env,
-      DATABASE_URL: url,
+      ...applicationDatabaseEnvironment({ applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_EVENT_WRAP_KEY:
@@ -639,6 +744,14 @@ async function runSql(url, sql) {
 }
 
 async function runProcess(command, args) {
+  const result = await runProcessResult(command, args);
+  if (result.code !== 0) {
+    throw new Error(`${command} failed with exit ${result.code}:\n${result.output}`);
+  }
+  return result.output;
+}
+
+async function runProcessResult(command, args) {
   const child = spawn(command, args, {
     cwd: repoRoot,
     stdio: ["ignore", "pipe", "pipe"],
@@ -654,10 +767,7 @@ async function runProcess(command, args) {
     child.on("error", reject);
     child.on("exit", resolve);
   });
-  if (code !== 0) {
-    throw new Error(`${command} ${args[0]} failed with exit ${code}:\n${output}`);
-  }
-  return output;
+  return { code, output };
 }
 
 async function fetchJson(url, options = {}, timeoutMs = 15000) {

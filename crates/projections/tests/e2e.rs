@@ -7,6 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::process::Command as ProcessCommand;
+use std::str::FromStr;
 
 use domain::events::{IndexedEvent, ResolutionCounts};
 use domain::pack::{GrantKind, Pack, PhaseKind};
@@ -20,13 +21,16 @@ use projections::{
     discussion_topics, game_index, host_phase_controls, host_prompts, operator_game_index,
     phase_state, player_notifications, profile_editor_by_handle, public_profile_by_handle,
     public_search, rebuild, rebuild_discussion_stream, rebuild_moderation_stream,
-    rebuild_profile_stream, slot_effects, slot_state, votecount, ProjectionError,
-    PublicSearchFilter,
+    rebuild_profile_stream, reconcile_database_authority, slot_effects, slot_state, votecount,
+    ProjectionError, PublicSearchFilter, APPLICATION_DATABASE_ROLE,
 };
 use sha2::{Digest, Sha256};
-use sqlx::postgres::PgPoolOptions;
-use sqlx::{PgPool, Row};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{ConnectOptions, PgPool, Row};
 use uuid::Uuid;
+
+const LOCAL_APPLICATION_DATABASE_PASSWORD: &str = "fmarch-local-application-password";
+const LOCAL_KEY_ADMIN_DATABASE_PASSWORD: &str = "fmarch-local-key-admin-password";
 
 fn test_pack_artifact(key: &str) -> content_registry::PackArtifactSnapshot {
     let mut pack = load_pack();
@@ -954,6 +958,14 @@ async fn rebuild_is_deterministic(pool: sqlx::PgPool) {
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn audit_rebuild_cli_exits_zero_for_match_and_nonzero_for_drift(pool: sqlx::PgPool) {
+    reconcile_database_authority(
+        &pool,
+        LOCAL_APPLICATION_DATABASE_PASSWORD,
+        LOCAL_KEY_ADMIN_DATABASE_PASSWORD,
+    )
+    .await
+    .expect("reconcile least-privilege roles for projection audit CLI");
+
     let pack = load_pack();
     let matched_game = Uuid::new_v4();
     append_and_project(&pool, matched_game, &scenario_events(&pack))
@@ -1037,7 +1049,7 @@ async fn audit_rebuild_cli_exits_zero_for_match_and_nonzero_for_drift(pool: sqlx
 }
 
 async fn run_audit_rebuild_cli(pool: &PgPool, game: Uuid) -> std::process::Output {
-    let database_url = database_url_for_pool(pool).await;
+    let database_url = application_database_url_for_pool(pool).await;
     let bin = std::env::var("CARGO_BIN_EXE_audit_rebuild")
         .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_rebuild").to_string());
     ProcessCommand::new(bin)
@@ -1076,25 +1088,19 @@ async fn tamper_slot_state_role(pool: &PgPool, game: Uuid, slot: &str, role_key:
     assert_eq!(update.rows_affected(), 1, "one slot_state row tampered");
 }
 
-async fn database_url_for_pool(pool: &PgPool) -> String {
+async fn application_database_url_for_pool(pool: &PgPool) -> String {
     let database: String = sqlx::query_scalar("SELECT current_database()")
         .fetch_one(pool)
         .await
         .expect("query current test database");
     let base = std::env::var("DATABASE_URL").expect("DATABASE_URL for sqlx test");
-    let (without_query, query) = base
-        .split_once('?')
-        .map(|(left, right)| (left, Some(right)))
-        .unwrap_or((base.as_str(), None));
-    let slash = without_query
-        .rfind('/')
-        .expect("DATABASE_URL includes database path");
-    let mut url = format!("{}/{}", &without_query[..slash], database);
-    if let Some(query) = query {
-        url.push('?');
-        url.push_str(query);
-    }
-    url
+    PgConnectOptions::from_str(&base)
+        .expect("DATABASE_URL is valid Postgres")
+        .database(&database)
+        .username(APPLICATION_DATABASE_ROLE)
+        .password(LOCAL_APPLICATION_DATABASE_PASSWORD)
+        .to_url_lossy()
+        .to_string()
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

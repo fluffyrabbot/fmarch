@@ -3,13 +3,13 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const localDatabaseUrl = "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch";
+const localMigrationUrl = "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch";
 
 let currentChild;
 let stopping = false;
 
 export async function main(args = process.argv.slice(2), env = process.env) {
-  const databaseUrl = env.DATABASE_URL ?? localDatabaseUrl;
+  const migrationUrl = env.DATABASE_MIGRATION_URL ?? localMigrationUrl;
   installSignalHandler("SIGINT", 130);
   installSignalHandler("SIGTERM", 143);
 
@@ -22,7 +22,7 @@ export async function main(args = process.argv.slice(2), env = process.env) {
       {
         env: {
           ...env,
-          DATABASE_URL: databaseUrl,
+          DATABASE_MIGRATION_URL: migrationUrl,
         },
         allowFailure: true,
       },

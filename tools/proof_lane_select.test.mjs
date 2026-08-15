@@ -315,13 +315,18 @@ test('regeneration writes then checks one declared artifact lane', () => {
   );
 });
 
-test('Postgres-backed npm lanes own a repo-local database default', () => {
-  const localDatabase =
+test('Postgres-backed npm lanes own a role-appropriate repo-local database default', () => {
+  const localRuntimeDatabase =
     /DATABASE_URL=\$\{DATABASE_URL:-postgres:\/\/fmarch:fmarch@127\.0\.0\.1:5544\/fmarch\}/;
-  assert.match(packageScripts['test:mash-scale-acceptance'], localDatabase);
-  assert.match(packageScripts['test:release-topology'], localDatabase);
-  assert.match(packageScripts['test:auth-invite-role-proof'], localDatabase);
-  assert.match(packageScripts['test:host-console-day-event-room-live-stack'], localDatabase);
+  const localMigrationDatabase =
+    /DATABASE_MIGRATION_URL=\$\{DATABASE_MIGRATION_URL:-postgres:\/\/fmarch:fmarch@127\.0\.0\.1:5544\/fmarch\}/;
+  assert.match(packageScripts['test:mash-scale-acceptance'], localMigrationDatabase);
+  assert.match(packageScripts['test:release-topology'], localRuntimeDatabase);
+  assert.match(packageScripts['test:auth-invite-role-proof'], localMigrationDatabase);
+  assert.match(
+    packageScripts['test:host-console-day-event-room-live-stack'],
+    localMigrationDatabase,
+  );
 });
 
 test('manifest lanes are executable leaves, while human aggregate aliases stay outside the graph', () => {

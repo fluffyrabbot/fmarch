@@ -7,7 +7,10 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -27,8 +30,8 @@ const hostPrincipal = "host_h";
 let sessionToken;
 let bootstrapSessionToken;
 const commandSessionTokens = {};
-const databaseUrl =
-  process.env.DATABASE_URL ?? "postgres://fmarch:fmarch@localhost:5544/fmarch";
+const migrationUrl =
+  process.env.DATABASE_MIGRATION_URL ?? "postgres://fmarch:fmarch@localhost:5544/fmarch";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const criticalActions = Object.freeze([
   Object.freeze({
@@ -77,8 +80,12 @@ let serverOutput = "";
 try {
   await mkdir(artifactDir, { recursive: true });
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
-  smokeDatabase = await createSmokeDatabase(databaseUrl);
-  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: smokeDatabase.url });
+  smokeDatabase = await createSmokeDatabase(migrationUrl);
+  const authority = await runFmarchMigrations({
+    cwd: repoRoot,
+    migrationUrl: smokeDatabase.migrationUrl,
+  });
+  smokeDatabase.applicationUrl = authority.applicationUrl;
   rustServer = startRustServer(apiPort);
   await waitForHealth(`${apiBaseUrl}/healthz`);
   await seedLiveHostGame();
@@ -414,8 +421,7 @@ function startRustServer(port) {
   const child = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...process.env,
-      DATABASE_URL: smokeDatabase.url,
+      ...applicationDatabaseEnvironment({ applicationUrl: smokeDatabase.applicationUrl }),
       FMARCH_BIND: `127.0.0.1:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_DEV_AUTH: "1",
@@ -450,7 +456,7 @@ async function createSmokeDatabase(sourceDatabaseUrl) {
     `CREATE DATABASE "${name}"`,
   ]);
 
-  return { name, adminUrl: admin.toString(), url: smoke.toString() };
+  return { name, adminUrl: admin.toString(), migrationUrl: smoke.toString() };
 }
 
 async function dropSmokeDatabase({ adminUrl, name }) {

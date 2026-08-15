@@ -73,6 +73,7 @@
     "test:auth-invite-role-proof": { "kind": "npm" },
     "test:projection-baseline:static": { "kind": "npm" },
     "test:event-key-rotation-rehearsal": { "kind": "npm" },
+    "test:database-tls-boundary": { "kind": "npm" },
     "test:dev-test-game-contract": { "kind": "npm" },
     "test:dev-postgres-contract": { "kind": "npm" },
     "test:host-console-live-stack-contract": { "kind": "npm" },
@@ -127,7 +128,14 @@
       "tier": "frozen",
       "paths": ["crates/projections/"],
       "crate": "projections",
-      "lanes": ["cargo:projections", "cargo:clippy-workspace", "test:projection-baseline:static", "test:event-key-rotation-rehearsal"],
+      "lanes": [
+        "cargo:projections",
+        "cargo:clippy-workspace",
+        "test:projection-baseline:static",
+        "test:event-key-rotation-rehearsal",
+        "test:railway-staging-target",
+        "test:production-promotion"
+      ],
       "capabilities": [
         "foundation.event-store-projections",
         "product.mash.day-event-runtime",
@@ -283,7 +291,17 @@
       "tier": "active",
       "paths": ["crates/server/"],
       "crate": "server",
-      "lanes": ["cargo:server", "cargo:clippy-workspace", "test:release-topology", "test:security-release-baseline", "test:exact-image-content", "test:event-key-rotation-rehearsal"]
+      "lanes": [
+        "cargo:server",
+        "cargo:clippy-workspace",
+        "test:release-topology",
+        "test:security-release-baseline",
+        "test:exact-image-content",
+        "test:event-key-rotation-rehearsal",
+        "test:database-tls-boundary",
+        "test:railway-staging-target",
+        "test:production-promotion"
+      ]
     },
     {
       "id": "packs",
@@ -440,6 +458,12 @@
       "capabilities": ["foundation.security-release-baseline"]
     },
     {
+      "id": "proof:database-tls-boundary",
+      "tier": "active",
+      "paths": ["tools/database_tls_boundary.mjs"],
+      "lanes": ["test:database-tls-boundary"]
+    },
+    {
       "id": "proof:exact-image-content",
       "tier": "active",
       "paths": ["tools/exact_image_content_smoke.mjs"],
@@ -486,9 +510,11 @@
       "lanes": [
         "check:build-posture",
         "test:railway-staging-target",
+        "test:production-promotion",
         "test:security-release-baseline",
         "test:exact-image-content",
-        "test:event-key-rotation-rehearsal"
+        "test:event-key-rotation-rehearsal",
+        "test:database-tls-boundary"
       ]
     },
     {
@@ -504,7 +530,9 @@
         "cargo:commands-pg",
         "cargo:commands-concurrency",
         "cargo:projections",
-        "test:dependency-policy"
+        "test:dev-test-game-contract",
+        "test:dependency-policy",
+        "test:database-tls-boundary"
       ]
     }
   ]

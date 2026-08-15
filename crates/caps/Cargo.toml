@@ -7,9 +7,7 @@ publish.workspace = true
 [dependencies]
 projections = { path = "../projections", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
-sqlx = { version = "0.9", default-features = false, features = [
-    "runtime-tokio",
-    "postgres",
+sqlx = { workspace = true, features = [
     "uuid",
 ] }
 uuid = { version = "1", features = ["v4", "serde"] }

@@ -4,21 +4,30 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { assertMashScaleAcceptance } from "./mash_scale_acceptance_contract.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "mash-scale-acceptance");
 const artifactPath = path.join(artifactDir, "report.json");
-const sourceDatabaseUrl = process.env.DATABASE_URL;
+const sourceDatabaseUrl = process.env.DATABASE_MIGRATION_URL;
 
 if (!sourceDatabaseUrl) {
   throw new Error(
-    "DATABASE_URL is required, e.g. postgres://fmarch:fmarch@127.0.0.1:5544/fmarch",
+    "DATABASE_MIGRATION_URL is required, e.g. postgres://fmarch:fmarch@127.0.0.1:5544/fmarch",
   );
 }
 
 await mkdir(artifactDir, { recursive: true });
 const scratch = await createScratchDatabase(sourceDatabaseUrl);
 try {
+  const authority = await runFmarchMigrations({
+    cwd: repoRoot,
+    migrationUrl: scratch.url,
+    env: process.env,
+  });
   await run("cargo", [
     "run",
     "-q",
@@ -30,8 +39,10 @@ try {
     "--output",
     artifactPath,
   ], {
-    ...process.env,
-    DATABASE_URL: scratch.url,
+    ...applicationDatabaseEnvironment({
+      applicationUrl: authority.applicationUrl,
+      env: process.env,
+    }),
   });
   const report = assertMashScaleAcceptance(
     JSON.parse(await readFile(artifactPath, "utf8")),

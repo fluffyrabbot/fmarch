@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const localSpineDatabaseUrl =
+export const localSpineMigrationUrl =
   "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch";
 const defaultScript = "test:dev-test-game-identity:operator";
 
@@ -44,9 +44,12 @@ export function parseArgs(argv = []) {
   return args;
 }
 
-export function localSpineDatabaseUrlFor(env = process.env) {
-  if (typeof env.DATABASE_URL === "string" && env.DATABASE_URL !== "") {
-    return env.DATABASE_URL;
+export function localSpineMigrationUrlFor(env = process.env) {
+  if (
+    typeof env.DATABASE_MIGRATION_URL === "string" &&
+    env.DATABASE_MIGRATION_URL !== ""
+  ) {
+    return env.DATABASE_MIGRATION_URL;
   }
   const port = String(env.FMARCH_DEV_POSTGRES_PORT ?? "5544");
   return `postgres://fmarch:fmarch@127.0.0.1:${port}/fmarch`;
@@ -68,7 +71,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     return 0;
   }
   const localEnv = localSpineProofEnvironment(env);
-  const databaseUrl = localSpineDatabaseUrlFor(localEnv);
+  const migrationUrl = localSpineMigrationUrlFor(localEnv);
   installSignalHandler("SIGINT", 130);
   installSignalHandler("SIGTERM", 143);
 
@@ -83,7 +86,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       {
         env: {
           ...localEnv,
-          DATABASE_URL: databaseUrl,
+          DATABASE_MIGRATION_URL: migrationUrl,
         },
         allowFailure: true,
       },

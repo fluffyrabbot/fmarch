@@ -79,6 +79,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use uuid::Uuid;
 
 mod community_writes;
+mod database_authority;
 mod effect_projection;
 mod private_channel_projection;
 mod schema;
@@ -87,9 +88,13 @@ pub use community_writes::{
     submit_moderation_report, subscribe_to_public_target, unmute_public_profile,
     unsubscribe_from_public_target,
 };
+pub use database_authority::{
+    reconcile_database_authority, verify_database_principal, verify_migration_authority,
+    DatabaseAuthorityError, DatabasePrincipal, APPLICATION_DATABASE_ROLE, KEY_ADMIN_DATABASE_ROLE,
+};
 pub use effect_projection::{slot_effects, SlotEffectRow};
 pub use private_channel_projection::{private_channel_members, PrivateChannelMemberRow};
-pub use schema::{ensure_schema_ready, MIGRATOR};
+pub use schema::{ensure_schema_ready, inspect_schema_readiness, SchemaReadiness, MIGRATOR};
 
 /// A row of the `votecount` running tally: the COUNT of current ballots cast at
 /// `candidate_slot` in `phase_id` (unweighted; Phase-3 ruling).

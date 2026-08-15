@@ -355,8 +355,8 @@ where
         .max_connections(4)
         .connect(&database_url)
         .await?;
-    sqlx::migrate!("../projections/migrations")
-        .run(&pool)
+    projections::ensure_schema_ready(&pool).await?;
+    projections::verify_database_principal(&pool, projections::DatabasePrincipal::Application)
         .await?;
 
     let artifacts = minimize_fixture_json(

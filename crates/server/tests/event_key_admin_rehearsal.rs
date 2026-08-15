@@ -8,6 +8,8 @@ use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 static ENCRYPTION_ENV_LOCK: Mutex<()> = Mutex::new(());
+const APPLICATION_DATABASE_PASSWORD: &str = "event-key-admin-application-proof";
+const KEY_ADMIN_DATABASE_PASSWORD: &str = "event-key-admin-key-authority-proof";
 
 struct EncryptionEnvGuard {
     prior_key: Option<String>,
@@ -73,7 +75,9 @@ fn run_admin(
             "--batch-size",
             "1",
         ])
-        .env("DATABASE_URL", database_url)
+        .env("DATABASE_KEY_ADMIN_URL", database_url)
+        .env_remove("DATABASE_URL")
+        .env_remove("DATABASE_MIGRATION_URL")
         .env("FMARCH_EVENT_WRAP_KID", "rehearsal-new")
         .env(
             "FMARCH_EVENT_WRAP_KEY",
@@ -124,6 +128,8 @@ fn rejected_admin_configuration(
         .env_remove("FMARCH_DEV_AUTH")
         .env_remove("FMARCH_ALLOW_INSECURE_DEV_EVENT_KEY")
         .env_remove("DATABASE_URL")
+        .env_remove("DATABASE_KEY_ADMIN_URL")
+        .env_remove("DATABASE_MIGRATION_URL")
         .output()
         .expect("run rejected event-key admin configuration");
     assert!(!output.status.success());
@@ -139,7 +145,7 @@ fn admin_rejects_non_deployable_key_configuration_before_database_access() {
         "distinct archive material",
     );
     assert!(local_dev.contains("local-dev event wrapping kids are banned"));
-    assert!(!local_dev.contains("DATABASE_URL"));
+    assert!(!local_dev.contains("DATABASE_KEY_ADMIN_URL"));
 
     let reused = rejected_admin_configuration(
         "runtime-v2",
@@ -148,7 +154,7 @@ fn admin_rejects_non_deployable_key_configuration_before_database_access() {
         "accidentally reused custody material",
     );
     assert!(reused.contains("must not reuse runtime wrapping key material"));
-    assert!(!reused.contains("DATABASE_URL"));
+    assert!(!reused.contains("DATABASE_KEY_ADMIN_URL"));
 }
 
 async fn ephemeral_database_url(pool: &PgPool) -> String {
@@ -161,6 +167,19 @@ async fn ephemeral_database_url(pool: &PgPool) -> String {
         .rsplit_once('/')
         .expect("DATABASE_URL must contain a database path");
     format!("{server}/{database}")
+}
+
+async fn key_admin_database_url(pool: &PgPool) -> String {
+    let owner = ephemeral_database_url(pool).await;
+    let mut url = url::Url::parse(&owner).expect("DATABASE_URL must be a URL");
+    url.set_username(server::KEY_ADMIN_DATABASE_ROLE)
+        .expect("PostgreSQL URL accepts a username");
+    url.set_password(Some(KEY_ADMIN_DATABASE_PASSWORD))
+        .expect("PostgreSQL URL accepts a password");
+    if url.query().is_none() {
+        url.query_pairs_mut().append_pair("sslmode", "disable");
+    }
+    url.to_string()
 }
 
 async fn seed_direct_surfaces(pool: &PgPool, game: Uuid, delivery: Uuid) {
@@ -254,8 +273,15 @@ async fn deployed_admin_rehearses_old_key_removal_before_retirement(pool: PgPool
     seed_direct_surfaces(&pool, game, delivery).await;
     env.set_active("rehearsal-new", "new rehearsal runtime key material");
     eventstore::attest_active_runtime_kek(&pool).await.unwrap();
+    server::reconcile_database_authority(
+        &pool,
+        APPLICATION_DATABASE_PASSWORD,
+        KEY_ADMIN_DATABASE_PASSWORD,
+    )
+    .await
+    .unwrap();
 
-    let database_url = ephemeral_database_url(&pool).await;
+    let database_url = key_admin_database_url(&pool).await;
     let mut held_registry = pool.begin().await.unwrap();
     sqlx::query("SELECT kid FROM event_direct_key_sentinel WHERE kid = 'rehearsal-old' FOR UPDATE")
         .fetch_one(&mut *held_registry)
@@ -271,7 +297,9 @@ async fn deployed_admin_rehearses_old_key_removal_before_retirement(pool: PgPool
             "rehearsal-new",
             "--execute",
         ])
-        .env("DATABASE_URL", &database_url)
+        .env("DATABASE_KEY_ADMIN_URL", &database_url)
+        .env_remove("DATABASE_URL")
+        .env_remove("DATABASE_MIGRATION_URL")
         .env("FMARCH_EVENT_WRAP_KID", "rehearsal-new")
         .env(
             "FMARCH_EVENT_WRAP_KEY",

@@ -10,19 +10,22 @@ import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const artifactDir = path.join(repoRoot, "target", "discussion-role-proof");
 const evidencePath = path.join(artifactDir, "discussion-proof.json");
-const databaseUrl = process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
 const pageSize = 12;
 
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required for the local discussion role proof");
+if (!migrationUrl) {
+  throw new Error("DATABASE_MIGRATION_URL is required for the local discussion role proof");
 }
 
 await preflightLocalhostBindOrExit({
@@ -42,8 +45,12 @@ const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
 
 try {
   await mkdir(artifactDir, { recursive: true });
-  proofDatabase = await createScratchDatabase(databaseUrl);
-  const apiBaseUrl = await startApi(proofDatabase.url);
+  proofDatabase = await createScratchDatabase(migrationUrl);
+  const authority = await runFmarchMigrations({
+    cwd: repoRoot,
+    migrationUrl: proofDatabase.migrationUrl,
+  });
+  const apiBaseUrl = await startApi(authority.applicationUrl);
   const frontendBaseUrl = await startFrontend(apiBaseUrl);
   browser = await chromium.launch();
 
@@ -475,7 +482,7 @@ async function createScratchDatabase(sourceDatabaseUrl) {
   const name = `${sourceName.replace(/[^a-zA-Z0-9_]/g, "_")}_discussion_${process.pid}_${Date.now()}`;
   scratch.pathname = `/${name}`;
   await runProcess("psql", [admin.toString(), "-v", "ON_ERROR_STOP=1", "-c", `CREATE DATABASE "${name}"`]);
-  return { name, adminUrl: admin.toString(), url: scratch.toString() };
+  return { name, adminUrl: admin.toString(), migrationUrl: scratch.toString() };
 }
 
 async function dropScratchDatabase({ adminUrl, name }) {
@@ -483,15 +490,14 @@ async function dropScratchDatabase({ adminUrl, name }) {
   await runProcess("psql", [adminUrl, "-v", "ON_ERROR_STOP=1", "-c", `DROP DATABASE IF EXISTS "${name}"`]);
 }
 
-async function startApi(url) {
-  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: url });
+async function startApi(applicationUrl) {
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media-store");
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
-    env: { ...process.env, DATABASE_URL: url, FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: process.env.RUST_LOG ?? "warn" },
+    env: { ...applicationDatabaseEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: process.env.RUST_LOG ?? "warn" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (chunk) => { serverOutput += chunk.toString(); });

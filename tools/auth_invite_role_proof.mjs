@@ -8,7 +8,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { seedCommandPlanForGame } from "./dev_test_game.mjs";
-import { runFmarchMigrations } from "./run_fmarch_migrations.mjs";
+import {
+  applicationDatabaseEnvironment,
+  runFmarchMigrations,
+} from "./run_fmarch_migrations.mjs";
 import {
   assertDevTestGameIdentityAdapterContractPacket,
   buildDevTestGameIdentityAdapterContractPacket,
@@ -32,7 +35,7 @@ const mediaRoot =
     ? path.join(artifactDir, "media-store")
     : path.resolve(repoRoot, configuredMediaRoot);
 const evidencePath = path.join(artifactDir, "invite-role-proof.json");
-const databaseUrl = process.env.DATABASE_URL;
+const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const eventWrapKey =
   process.env.FMARCH_EVENT_WRAP_KEY ??
   "fmarch-auth-invite-role-proof-event-encryption-key-v1";
@@ -82,9 +85,9 @@ const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const deliveryIntentPollTimeoutMs = 5000;
 const deliveryIntentPollIntervalMs = 100;
 
-if (!databaseUrl) {
+if (!migrationUrl) {
   throw new Error(
-    "DATABASE_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch",
+    "DATABASE_MIGRATION_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch",
   );
 }
 
@@ -108,9 +111,14 @@ const previousAuthSourceSigningKey = process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY;
 try {
   await mkdir(artifactDir, { recursive: true });
   subjectKeyRoot = await mkdtemp(path.join(artifactDir, "subject-authority-"));
-  proofDatabase = await createScratchDatabase(databaseUrl);
-  const apiBaseUrl = await startApi(proofDatabase.url);
-  await seedRootAdminSession(proofDatabase.url);
+  proofDatabase = await createScratchDatabase(migrationUrl);
+  const authority = await runFmarchMigrations({
+    cwd: repoRoot,
+    migrationUrl: proofDatabase.migrationUrl,
+  });
+  proofDatabase.applicationUrl = authority.applicationUrl;
+  const apiBaseUrl = await startApi(authority.applicationUrl);
+  await seedRootAdminSession(authority.applicationUrl);
   const accounts = await createAccounts(apiBaseUrl);
   const seedTargetAccounts = await provisionSeedTargetAccounts({
     apiBaseUrl,
@@ -2601,7 +2609,7 @@ async function storedInviteRecord(inviteToken) {
     throw new Error("proof database is not available");
   }
   const output = await runProcess("psql", [
-    proofDatabase.url,
+    proofDatabase.applicationUrl,
     "-v",
     "ON_ERROR_STOP=1",
     "-t",
@@ -2631,7 +2639,7 @@ async function storedRecoveryCredentialRecords() {
     throw new Error("proof database is not available");
   }
   const output = await runProcess("psql", [
-    proofDatabase.url,
+    proofDatabase.applicationUrl,
     "-v",
     "ON_ERROR_STOP=1",
     "-t",
@@ -2662,7 +2670,7 @@ async function storedAuthAttemptRecords() {
     throw new Error("proof database is not available");
   }
   const output = await runProcess("psql", [
-    proofDatabase.url,
+    proofDatabase.applicationUrl,
     "-v",
     "ON_ERROR_STOP=1",
     "-t",
@@ -2691,7 +2699,7 @@ async function storedRegistrationAttemptRecords() {
     throw new Error("proof database is not available");
   }
   const output = await runProcess("psql", [
-    proofDatabase.url,
+    proofDatabase.applicationUrl,
     "-v",
     "ON_ERROR_STOP=1",
     "-t",
@@ -2720,7 +2728,7 @@ async function storedDeliveryIntent(credentialHash) {
     throw new Error("proof database is not available");
   }
   const output = await runProcess("psql", [
-    proofDatabase.url,
+    proofDatabase.applicationUrl,
     "-v",
     "ON_ERROR_STOP=1",
     "-t",
@@ -2753,7 +2761,7 @@ async function insertStaleAuthAttemptRecord() {
     throw new Error("proof database is not available");
   }
   await runProcess("psql", [
-    proofDatabase.url,
+    proofDatabase.applicationUrl,
     "-v",
     "ON_ERROR_STOP=1",
     "-c",
@@ -3065,7 +3073,7 @@ async function driveOverdueBrowserSessionRotation({
   }
   const maxAgeSeconds = 86_400;
   await runSql(
-    proofDatabase.url,
+    proofDatabase.applicationUrl,
     `
       UPDATE auth_session
       SET created_at = 0,
@@ -3636,7 +3644,7 @@ async function createScratchDatabase(sourceDatabaseUrl) {
     "-c",
     `CREATE DATABASE "${name}"`,
   ]);
-  return { name, adminUrl: admin.toString(), url: scratch.toString() };
+  return { name, adminUrl: admin.toString(), migrationUrl: scratch.toString() };
 }
 
 async function dropScratchDatabase({ adminUrl, name }) {
@@ -3656,16 +3664,14 @@ async function dropScratchDatabase({ adminUrl, name }) {
   ]);
 }
 
-async function startApi(url) {
-  await runFmarchMigrations({ cwd: repoRoot, databaseUrl: url });
+async function startApi(applicationUrl) {
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...process.env,
-      DATABASE_URL: url,
+      ...applicationDatabaseEnvironment({ applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_SUBJECT_KEY_DIR: subjectKeyRoot,

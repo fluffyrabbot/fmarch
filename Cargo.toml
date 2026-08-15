@@ -21,3 +21,10 @@ members = [
 [workspace.package]
 edition = "2021"
 publish = false
+
+[workspace.dependencies]
+sqlx = { version = "0.9", default-features = false, features = [
+    "runtime-tokio",
+    "postgres",
+    "tls-rustls-ring-native-roots",
+] }

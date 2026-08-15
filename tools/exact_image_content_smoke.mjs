@@ -43,6 +43,7 @@ const checkScript = [
   'test "$(id -u)" = "10001"',
   'test -x /usr/local/bin/fmarch-server',
   'test -x /usr/local/bin/fmarch-migrate',
+  'test -x /usr/local/bin/fmarch-schema-gate',
   'test -x /usr/local/bin/fmarch-event-key-admin',
   'test ! -e /packs',
   'test ! -e /programs',

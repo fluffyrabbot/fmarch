@@ -31,8 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(5)
         .connect(&database_url)
         .await?;
-    sqlx::migrate!("../projections/migrations")
-        .run(&pool)
+    projections::ensure_schema_ready(&pool).await?;
+    projections::verify_database_principal(&pool, projections::DatabasePrincipal::Application)
         .await?;
 
     let proof = run_large_action_graph_performance_proof(
