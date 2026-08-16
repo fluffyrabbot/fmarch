@@ -160,8 +160,12 @@ The remaining resource work is isolation and scheduling on this machine, not a
 host swap. Mesh ratified fluffycachy as its remote verification default because
 closure-heavy `cargo check` was pathologically slow on Darwin and because Linux
 gtk/webkit is a required Mesh surface. fmarch's expensive leaves are serial
-Postgres suites and Chromium; `scripts/check-build-posture.sh` already pins
-`target/` to `/Volumes/rabbitx10/build/fmarch/target`.
+Postgres suites and Chromium. `scripts/check-build-posture.sh` keeps `target/`
+as a symlink onto an external writable root: `FMARCH_EXTERNAL_BUILD_ROOT` if
+set, otherwise `/Volumes/rabbitx10/build/fmarch` when that volume is writable,
+otherwise fail closed. `--apply` creates the destination and symlink when
+missing. The Darwin volume is the preferred location on this machine, not the
+invariant.
 
 Do not make fluffycachy the canonical fmarch proof host:
 
@@ -179,9 +183,10 @@ Do not make fluffycachy the canonical fmarch proof host:
 
 Optional later overflow, not authority: a dedicated `fmarch-verify` checkout
 on fluffycachy may run isolated platform-neutral Cargo/Postgres leaves
-(`cargo:commands-audit`, maybe `cargo:api` / `cargo:commands-pg`) after it has
-its own target root, repo-local Postgres, and no shared writable database with
-another run. That is extra evidence beside Darwin push/sprint/full.
+(`cargo:commands-audit`, maybe `cargo:api` / `cargo:commands-pg`) after it sets
+`FMARCH_EXTERNAL_BUILD_ROOT`, runs `bash scripts/check-build-posture.sh --apply`,
+has repo-local Postgres, and shares no writable database with another run.
+That is extra evidence beside Darwin push/sprint/full.
 
 ## Acceptance Criteria
 
@@ -218,5 +223,5 @@ another run. That is extra evidence beside Darwin push/sprint/full.
 This refactor does not move proof authority to GitHub or fluffycachy, introduce
 a pre-production development branch, or weaken full-mode coverage. `main`
 remains the development trunk; the `production` branch remains only an explicit
-release pointer. Ordinary `--run` stays on the Darwin checkout whose `target/`
-lives on `/Volumes/rabbitx10/build/fmarch/target`.
+release pointer. Ordinary `--run` stays on the Darwin checkout. Artifact root
+discovery does not change that host rule.

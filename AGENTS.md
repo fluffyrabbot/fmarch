@@ -49,8 +49,7 @@ direct `main` work, and atomic history over PR ceremony.
   SQLx-heavy tests serially when needed.
 - If podman is unavailable, a repo-local Postgres under `target/` is an
   acceptable local proof substitute.
-- Canonical `--run` stays on this Darwin checkout (`target/` →
-  `/Volumes/rabbitx10/build/fmarch/target`). fluffycachy is Mesh's remote
+- Canonical `--run` stays on this Darwin checkout. fluffycachy is Mesh's remote
   verification lane, not fmarch's proof host. A Linux green result does not
   cover Darwin browser, visual, CSP, tablet, live-stack, or auth-invite lanes,
   and remote wall-clocks must not be `--record`ed into
@@ -58,6 +57,14 @@ direct `main` work, and atomic history over PR ceremony.
   Cargo/Postgres leaves is allowed only from a dedicated verify checkout that
   does not share Mesh's `mesh-verify` tree or a writable database with another
   run. See `docs/ops/proof-lane-refactor-scope.md`.
+- Cargo `target/` must be a symlink onto an external writable build root, never
+  a real directory in the checkout. Discovery is
+  `FMARCH_EXTERNAL_BUILD_ROOT` if set, otherwise
+  `/Volumes/rabbitx10/build/fmarch` when that volume is writable, otherwise
+  fail closed. `bash scripts/check-build-posture.sh --apply` creates the
+  destination and symlink when missing. A fluffycachy `fmarch-verify` tree sets
+  `FMARCH_EXTERNAL_BUILD_ROOT` and applies posture; that does not move proof
+  authority.
 
 ## Publishing
 
