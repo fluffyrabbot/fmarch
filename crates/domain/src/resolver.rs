@@ -70,7 +70,7 @@ use trigger::{
 };
 
 /// Resolver contract version (doc 10 `result_version`).
-pub const RESULT_VERSION: u16 = 20;
+pub const RESULT_VERSION: u16 = 21;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -4992,12 +4992,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: InvestigationResultBody::fields(
-                                        InvestigationResultFields {
-                                            visited: Some(visited),
-                                            ..InvestigationResultFields::default()
-                                        },
-                                    ),
+                                    result: InvestigationResultBody::track(visited),
                                 });
                             }
                             InvestigateMode::Watch => {

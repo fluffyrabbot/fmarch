@@ -652,18 +652,30 @@ pub struct HostPromptMetadata {
     pub role: Option<String>,
 }
 
-/// Player-facing investigation payload. Parity is a string label; every other
-/// mode is a closed field bag matching the result-contract keys.
+/// Player-facing investigation payload. Parity is a string label; Track is a
+/// closed `{ visited }` list; every other mode is the shared field bag.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum InvestigationResultBody {
     Label(String),
+    Track(TrackInvestigationResult),
     Fields(Box<InvestigationResultFields>),
+}
+
+/// Canonical Track investigation body. Persist JSON stays `{ "visited": [...] }`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrackInvestigationResult {
+    pub visited: Vec<SlotId>,
 }
 
 impl InvestigationResultBody {
     pub fn label(value: impl Into<String>) -> Self {
         Self::Label(value.into())
+    }
+
+    pub fn track(visited: Vec<SlotId>) -> Self {
+        Self::Track(TrackInvestigationResult { visited })
     }
 
     pub fn fields(fields: InvestigationResultFields) -> Self {
@@ -673,14 +685,21 @@ impl InvestigationResultBody {
     pub fn as_label(&self) -> Option<&str> {
         match self {
             Self::Label(value) => Some(value),
-            Self::Fields(_) => None,
+            Self::Track(_) | Self::Fields(_) => None,
+        }
+    }
+
+    pub fn as_track(&self) -> Option<&[SlotId]> {
+        match self {
+            Self::Track(track) => Some(&track.visited),
+            Self::Label(_) | Self::Fields(_) => None,
         }
     }
 
     pub fn as_fields(&self) -> Option<&InvestigationResultFields> {
         match self {
             Self::Fields(fields) => Some(fields),
-            Self::Label(_) => None,
+            Self::Label(_) | Self::Track(_) => None,
         }
     }
 }
@@ -1186,6 +1205,7 @@ fn apply_resolution_applied_upcast_step(
 ) -> Result<serde_json::Value, ResultValidationError> {
     match from_version {
         19 => upcast_resolution_applied_v19_to_v20(payload),
+        20 => upcast_resolution_applied_v20_to_v21(payload),
         _ => Err(ResultValidationError::UnsupportedResultVersion {
             expected: current_version,
             actual: from_version,
@@ -1261,6 +1281,62 @@ fn closed_trigger_payload(
         }
     }
     Ok(serde_json::Value::Object(closed))
+}
+
+fn upcast_resolution_applied_v20_to_v21(
+    mut payload: serde_json::Value,
+) -> Result<serde_json::Value, ResultValidationError> {
+    let events = payload
+        .get_mut("events")
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| {
+            ResultValidationError::MalformedJson(
+                "ResolutionApplied.events must be an array".to_string(),
+            )
+        })?;
+    for event in events {
+        let kind = event.get("kind").and_then(serde_json::Value::as_str);
+        if kind != Some("InvestigationResult") && kind != Some("InvestigationMemoryRecorded") {
+            continue;
+        }
+        let inner = event
+            .get_mut("payload")
+            .and_then(serde_json::Value::as_object_mut);
+        let Some(inner) = inner else {
+            return Err(ResultValidationError::MalformedJson(
+                "investigation event payload must be an object".to_string(),
+            ));
+        };
+        if inner.get("mode").and_then(serde_json::Value::as_str) != Some("Track") {
+            continue;
+        }
+        let Some(result) = inner.get_mut("result") else {
+            return Err(ResultValidationError::MalformedJson(
+                "Track result is required".to_string(),
+            ));
+        };
+        *result = closed_track_result(result)?;
+    }
+    Ok(payload)
+}
+
+fn closed_track_result(
+    value: &serde_json::Value,
+) -> Result<serde_json::Value, ResultValidationError> {
+    let object = value.as_object().ok_or_else(|| {
+        ResultValidationError::MalformedJson("Track result must be an object".to_string())
+    })?;
+    let Some(visited) = object.get("visited") else {
+        return Err(ResultValidationError::MalformedJson(
+            "Track result missing `visited`".to_string(),
+        ));
+    };
+    if visited.is_null() || !visited.is_array() {
+        return Err(ResultValidationError::MalformedJson(
+            "Track result `visited` must be an array".to_string(),
+        ));
+    }
+    Ok(serde_json::json!({ "visited": visited }))
 }
 
 /// Validate a raw `ResolutionApplied` JSON payload before it crosses a storage
@@ -1354,6 +1430,19 @@ fn validate_investigation_result_invariant(
         let InnerEvent::InvestigationResult { mode, result, .. } = &indexed.event else {
             continue;
         };
+        if matches!(mode, crate::ir::InvestigateMode::Track) {
+            match result {
+                InvestigationResultBody::Track(_) => continue,
+                InvestigationResultBody::Label(_) | InvestigationResultBody::Fields(_) => {
+                    return Err(ResultValidationError::InvestigationResultInvariant(
+                        format!(
+                            "event {} mode Track result must be a visited list",
+                            indexed.index
+                        ),
+                    ));
+                }
+            }
+        }
         if matches!(mode, crate::ir::InvestigateMode::Parity) {
             match result {
                 InvestigationResultBody::Label(_) => continue,
@@ -1373,6 +1462,14 @@ fn validate_investigation_result_invariant(
                         ));
                     }
                     continue;
+                }
+                InvestigationResultBody::Track(_) => {
+                    return Err(ResultValidationError::InvestigationResultInvariant(
+                        format!(
+                            "event {} mode {mode:?} result must be a string or comparison object",
+                            indexed.index
+                        ),
+                    ));
                 }
             }
         }

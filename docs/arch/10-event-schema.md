@@ -329,6 +329,10 @@ source_cause, produced_actor, produced_target, actor_filter? }`. The state fold 
 ignores it. `RESULT_VERSION` 19 stored the same keys as an open JSON object; the
 `19 → 20` upcast copies those keys (plus optional `actor_filter`) and drops extras.
 
+`InvestigationResult` Track results are a closed [`TrackInvestigationResult`]:
+`{ visited }`. Other modes stay on the shared field bag. `RESULT_VERSION` 20 stored
+Track as that bag; the `20 → 21` upcast copies `visited` and drops extras.
+
 `DayVoteOutcome` carries the full tally so projections and disputes have everything:
 
 ```rust

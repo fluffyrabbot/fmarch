@@ -226,6 +226,97 @@ fn v19_trigger_payload_missing_required_key_fails_closed() {
     );
 }
 
+fn resolution_with_track(extra: Option<(&str, serde_json::Value)>) -> serde_json::Value {
+    let mut result = json!({
+        "visited": ["slot_3"]
+    });
+    if let Some((key, value)) = extra {
+        result[key] = value;
+    }
+    let mut payload = valid_resolution();
+    let events = payload["events"].as_array_mut().unwrap();
+    events.insert(
+        0,
+        json!({
+            "index": 0,
+            "kind": "InvestigationResult",
+            "payload": {
+                "mode": "Track",
+                "investigator": "slot_1",
+                "target": "slot_2",
+                "result": result
+            }
+        }),
+    );
+    for (index, event) in events.iter_mut().enumerate() {
+        event["index"] = json!(index);
+    }
+    payload["counts"]["events"] = json!(events.len());
+    payload
+}
+
+#[test]
+fn track_result_passes_contract_validation() {
+    let applied = validate_resolution_json(&resolution_with_track(None), RESULT_VERSION)
+        .expect("closed track result should pass");
+    match &applied.events[0].event {
+        domain::InnerEvent::InvestigationResult { mode, result, .. } => {
+            assert_eq!(*mode, domain::InvestigateMode::Track);
+            assert_eq!(result.as_track(), Some(["slot_3".to_string()].as_slice()));
+        }
+        other => panic!("expected InvestigationResult, got {other:?}"),
+    }
+}
+
+#[test]
+fn track_result_unknown_key_fails_contract_validation() {
+    let err = validate_resolution_json(
+        &resolution_with_track(Some(("vanilla", json!(true)))),
+        RESULT_VERSION,
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("visited list")
+            || err.to_string().contains("unknown field")
+            || err.to_string().contains("Track"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn v20_track_result_strips_unknown_keys_on_upcast() {
+    let mut payload = resolution_with_track(Some(("vanilla", json!(true))));
+    payload["result_version"] = json!(20);
+    let upcast = upcast_resolution_applied(payload, 20).expect("v20 track should upcast");
+    assert_eq!(upcast["result_version"], json!(RESULT_VERSION));
+    assert!(upcast["events"][0]["payload"]["result"]
+        .get("vanilla")
+        .is_none());
+    let applied =
+        validate_resolution_json(&upcast, RESULT_VERSION).expect("upcasted track should validate");
+    match &applied.events[0].event {
+        domain::InnerEvent::InvestigationResult { result, .. } => {
+            assert_eq!(result.as_track(), Some(["slot_3".to_string()].as_slice()));
+        }
+        other => panic!("expected InvestigationResult, got {other:?}"),
+    }
+}
+
+#[test]
+fn v20_track_result_missing_visited_fails_closed() {
+    let mut payload = resolution_with_track(None);
+    payload["result_version"] = json!(20);
+    payload["events"][0]["payload"]["result"]
+        .as_object_mut()
+        .unwrap()
+        .remove("visited");
+    let err = upcast_resolution_applied(payload, 20).unwrap_err();
+    assert!(
+        err.to_string().contains("missing `visited`"),
+        "unexpected error: {err}"
+    );
+}
+
 #[test]
 fn valid_resolution_payload_passes_contract_validation() {
     let applied = validate_resolution_json(&valid_resolution(), RESULT_VERSION)

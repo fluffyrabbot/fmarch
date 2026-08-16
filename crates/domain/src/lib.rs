@@ -21,7 +21,8 @@ pub use events::{
     HostPromptPublicResolution, InnerEvent, InvestigationResultBody, InvestigationResultFields,
     ItaCounters, ItaShotOutcome, LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement,
     ResolutionApplied, ResolutionTrace, ResultValidationError, SurvivalWinAward, TraceEdge,
-    TriggerPayload, VisibilityTrace, VoteStatus, WinReachedMetadata, TRACE_VERSION,
+    TrackInvestigationResult, TriggerPayload, VisibilityTrace, VoteStatus, WinReachedMetadata,
+    TRACE_VERSION,
 };
 pub use golden::{
     golden_events_from_input_value, golden_pack_json_with_overrides, normalize_golden_event,
