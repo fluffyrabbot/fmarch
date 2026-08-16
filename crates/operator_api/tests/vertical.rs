@@ -32,8 +32,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
-    AckMsg, ClientEnvelope, ClientMsg, Command, HostPromptDecision, RejectCode, RejectMsg,
-    ResolutionTraceInspectionReport, ServerEnvelope, ServerMsg, VoteTarget,
+    AckMsg, ClientEnvelope, ClientMsg, Command, HostPromptDecision, JsonAtom, RejectCode,
+    RejectMsg, ResolutionTraceInspectionReport, ServerEnvelope, ServerMsg, VoteTarget,
 };
 
 macro_rules! seat_persona {
@@ -3855,7 +3855,10 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
         .expect("redirect edge should be visible in JSON trace report");
     assert_eq!(edge.from, "mafia_kill_n01:target:0:slot_1");
     assert_eq!(edge.to, "mafia_kill_n01:target:0:slot_2");
-    assert_eq!(edge.detail["action_id"], "mafia_kill_n01");
+    assert_eq!(
+        edge.detail.get("action_id"),
+        Some(&JsonAtom::String("mafia_kill_n01".into()))
+    );
 
     let response = app
         .clone()

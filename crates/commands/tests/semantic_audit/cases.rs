@@ -12163,7 +12163,7 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
                 && prompt.kind == "skip_next_day"
                 && prompt.subject.as_deref() == Some("slot_1")
                 && prompt.reason == "beloved_princess_death"
-                && prompt.metadata["policy"] == "beloved_princess"
+                && prompt.metadata.policy.as_deref() == Some("beloved_princess")
     )));
     assert!(matches!(
         applied.events.last().map(|indexed| &indexed.event),
@@ -12462,9 +12462,9 @@ async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool
                 && prompt.kind == "skip_next_day"
                 && prompt.subject.as_deref() == Some("slot_2")
                 && prompt.reason == "beloved_princess_death"
-                && prompt.metadata["policy"] == "beloved_princess"
-                && prompt.metadata["death_cause"] == "factional_kill"
-                && prompt.metadata["role"] == "virgin"
+                && prompt.metadata.policy.as_deref() == Some("beloved_princess")
+                && prompt.metadata.death_cause.as_deref() == Some("factional_kill")
+                && prompt.metadata.role.as_deref() == Some("virgin")
     )));
     assert!(matches!(
         applied.events.last().map(|indexed| &indexed.event),
@@ -13668,9 +13668,9 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt(pool
                     && prompt.kind == "revote"
                     && prompt.subject.is_none()
                     && prompt.reason == "no_majority"
-                    && prompt.metadata["policy"] == "no_majority_revote"
-                    && prompt.metadata["status"] == "NoMajority"
-                    && prompt.metadata["contenders"] == serde_json::json!(["slot_1"])
+                    && prompt.metadata.policy.as_deref() == Some("no_majority_revote")
+                    && prompt.metadata.status.as_deref() == Some("NoMajority")
+                    && prompt.metadata.contenders == ["slot_1"]
         )),
         "dynamic NoMajority must emit the configured revote prompt"
     );
@@ -13895,8 +13895,8 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
                 && prompt.kind == "revote"
                 && prompt.subject.is_none()
                 && prompt.reason == "no_majority"
-                && prompt.metadata["policy"] == "no_majority_revote"
-                && prompt.metadata["status"] == "NoMajority"
+                && prompt.metadata.policy.as_deref() == Some("no_majority_revote")
+                && prompt.metadata.status.as_deref() == Some("NoMajority")
     )));
     let loved_trace_payload = stored_payload(&pool, loved_game, "ResolutionTrace").await;
     let loved_trace = domain::validate_trace_json(&loved_trace_payload, domain::TRACE_VERSION)
@@ -14342,9 +14342,9 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
                 && prompt.kind == "pk"
                 && prompt.subject.is_none()
                 && prompt.reason == "host_decides_tie"
-                && prompt.metadata["policy"] == "pk_host_decides_tie"
-                && prompt.metadata["status"] == "Tie"
-                && prompt.metadata["tiebreak"] == "HostDecides"
+                && prompt.metadata.policy.as_deref() == Some("pk_host_decides_tie")
+                && prompt.metadata.status.as_deref() == Some("Tie")
+                && prompt.metadata.tiebreak.as_deref() == Some("HostDecides")
     )));
 
     let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
@@ -14725,10 +14725,10 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
                     && prompt.kind == "pk"
                     && prompt.subject.is_none()
                     && prompt.reason == "host_decides_tie"
-                    && prompt.metadata["policy"] == "pk_host_decides_tie"
-                    && prompt.metadata["status"] == "Tie"
-                    && prompt.metadata["tiebreak"] == "HostDecides"
-                    && prompt.metadata["contenders"] == serde_json::json!(["slot_2", "slot_3"])
+                    && prompt.metadata.policy.as_deref() == Some("pk_host_decides_tie")
+                    && prompt.metadata.status.as_deref() == Some("Tie")
+                    && prompt.metadata.tiebreak.as_deref() == Some("HostDecides")
+                    && prompt.metadata.contenders == ["slot_2", "slot_3"]
         )),
         "dynamic weighted tie must emit the configured PK prompt"
     );

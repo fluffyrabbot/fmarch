@@ -2242,6 +2242,61 @@ pub struct PlayerNotificationsDelta {
     pub notifications: Vec<PlayerNotification>,
 }
 
+/// Player-facing investigation payload. Parity is a string label; every other
+/// mode is a closed field bag matching the result-contract keys.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+pub enum InvestigationResultBody {
+    Label(String),
+    Fields(Box<InvestigationResultFields>),
+}
+
+impl Default for InvestigationResultBody {
+    fn default() -> Self {
+        Self::Fields(Box::default())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, Default)]
+pub struct InvestigationResultFields {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vanilla: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vanilla_town: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_gun: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub killer: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub specialist: Option<bool>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pt_access: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alignment: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visited: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visitors: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visitor_roles: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub action_types: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub motion: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prior_motion: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changed: Option<bool>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PlayerInvestigationResult {
     pub game: Uuid,
@@ -2250,8 +2305,7 @@ pub struct PlayerInvestigationResult {
     pub audience_slot: String,
     pub mode: String,
     pub target_slot: String,
-    #[ts(type = "unknown")]
-    pub result: serde_json::Value,
+    pub result: InvestigationResultBody,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2297,6 +2351,21 @@ impl From<projections::HostPhaseControlRow> for HostPhaseControl {
     }
 }
 
+/// Closed JSON atom used by resolution-trace detail maps.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+pub enum JsonAtom {
+    #[default]
+    Null,
+    Bool(bool),
+    Number(f64),
+    String(String),
+    Array(Vec<JsonAtom>),
+    Object(BTreeMap<String, JsonAtom>),
+}
+
+pub type ResolutionTraceDetail = BTreeMap<String, JsonAtom>;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ResolutionTraceInspectionReport {
     pub game: Uuid,
@@ -2326,8 +2395,7 @@ pub struct ResolutionTraceDecisionRow {
     pub stage: String,
     pub source: String,
     pub outcome: String,
-    #[ts(type = "unknown")]
-    pub detail: serde_json::Value,
+    pub detail: ResolutionTraceDetail,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -2337,8 +2405,7 @@ pub struct ResolutionTraceEdgeRow {
     pub from: String,
     pub to: String,
     pub kind: String,
-    #[ts(type = "unknown")]
-    pub detail: serde_json::Value,
+    pub detail: ResolutionTraceDetail,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -2349,8 +2416,7 @@ pub struct ResolutionTraceGeneratedRow {
     pub source: String,
     pub actor: String,
     pub targets: Vec<String>,
-    #[ts(type = "unknown")]
-    pub detail: serde_json::Value,
+    pub detail: ResolutionTraceDetail,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -2360,8 +2426,7 @@ pub struct ResolutionTraceEffectChangeRow {
     pub effect: String,
     pub target: String,
     pub operation: String,
-    #[ts(type = "unknown")]
-    pub detail: serde_json::Value,
+    pub detail: ResolutionTraceDetail,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -2371,8 +2436,7 @@ pub struct ResolutionTraceVisibilityRow {
     pub event_index: usize,
     pub audience: Vec<String>,
     pub policy: String,
-    #[ts(type = "unknown")]
-    pub detail: serde_json::Value,
+    pub detail: ResolutionTraceDetail,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -2418,7 +2482,7 @@ impl From<commands::ResolutionTraceDecisionRow> for ResolutionTraceDecisionRow {
             stage: row.stage,
             source: row.source,
             outcome: row.outcome,
-            detail: row.detail,
+            detail: json_value(row.detail),
         }
     }
 }
@@ -2431,7 +2495,7 @@ impl From<commands::ResolutionTraceEdgeRow> for ResolutionTraceEdgeRow {
             from: row.from,
             to: row.to,
             kind: row.kind,
-            detail: row.detail,
+            detail: json_value(row.detail),
         }
     }
 }
@@ -2445,7 +2509,7 @@ impl From<commands::ResolutionTraceGeneratedRow> for ResolutionTraceGeneratedRow
             source: row.source,
             actor: row.actor,
             targets: row.targets,
-            detail: row.detail,
+            detail: json_value(row.detail),
         }
     }
 }
@@ -2458,7 +2522,7 @@ impl From<commands::ResolutionTraceEffectChangeRow> for ResolutionTraceEffectCha
             effect: row.effect,
             target: row.target,
             operation: row.operation,
-            detail: row.detail,
+            detail: json_value(row.detail),
         }
     }
 }
@@ -2471,7 +2535,7 @@ impl From<commands::ResolutionTraceVisibilityRow> for ResolutionTraceVisibilityR
             event_index: row.event_index,
             audience: row.audience,
             policy: row.policy,
-            detail: row.detail,
+            detail: json_value(row.detail),
         }
     }
 }
@@ -2508,7 +2572,7 @@ impl From<projections::PlayerInvestigationResultRow> for PlayerInvestigationResu
             audience_slot: row.audience_slot,
             mode: row.mode,
             target_slot: row.target_slot,
-            result: row.result,
+            result: json_value(row.result),
         }
     }
 }
@@ -2553,13 +2617,14 @@ pub mod typescript {
         HostDayEventDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta,
         HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
         HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind,
-        HostTaskState, HostTaskUrgency, ItaSessionControlKind, MemberMutePage, MemberMuteState,
-        ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationHistory,
-        ModerationReport, ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification,
-        PostCitation, PostCitationPage, PostCitationsChangedDelta, PostKind, PostRef,
-        ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage,
-        PublicSearchResult, Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
-        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        HostTaskState, HostTaskUrgency, InvestigationResultBody, InvestigationResultFields,
+        ItaSessionControlKind, JsonAtom, MemberMutePage, MemberMuteState, ModerationCase,
+        ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
+        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, PostCitation,
+        PostCitationPage, PostCitationsChangedDelta, PostKind, PostRef, ProfileEditor,
+        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
+        Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
@@ -2699,7 +2764,10 @@ pub mod typescript {
         push::<PublicProfile>(&mut out, &config);
         push::<ProfileEditor>(&mut out, &config);
         push::<PlayerNotification>(&mut out, &config);
+        push::<InvestigationResultFields>(&mut out, &config);
+        push::<InvestigationResultBody>(&mut out, &config);
         push::<PlayerInvestigationResult>(&mut out, &config);
+        push::<JsonAtom>(&mut out, &config);
         push::<HostPhaseControl>(&mut out, &config);
         push::<ResolutionTraceDecisionRow>(&mut out, &config);
         push::<ResolutionTraceEdgeRow>(&mut out, &config);
@@ -2951,5 +3019,61 @@ mod live_json_map_tests {
                 reason: "host_decides_tie".into(),
             })
         );
+    }
+
+    #[test]
+    fn investigation_result_row_becomes_typed_label_or_fields() {
+        let game = Uuid::new_v4();
+        let label = PlayerInvestigationResult::from(projections::PlayerInvestigationResultRow {
+            game_id: game,
+            phase_id: "N01".into(),
+            event_index: 0,
+            audience_slot: "slot-1".into(),
+            mode: "Parity".into(),
+            target_slot: "slot-2".into(),
+            result: json!("town"),
+        });
+        assert_eq!(label.result, InvestigationResultBody::Label("town".into()));
+
+        let fields = PlayerInvestigationResult::from(projections::PlayerInvestigationResultRow {
+            game_id: game,
+            phase_id: "N01".into(),
+            event_index: 1,
+            audience_slot: "slot-1".into(),
+            mode: "Track".into(),
+            target_slot: "slot-3".into(),
+            result: json!({ "visited": ["slot-4"] }),
+        });
+        match fields.result {
+            InvestigationResultBody::Fields(body) => {
+                assert_eq!(body.visited, vec!["slot-4".to_string()]);
+            }
+            other => panic!("expected fields, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolution_trace_detail_becomes_a_typed_atom_map() {
+        let row = ResolutionTraceDecisionRow::from(commands::ResolutionTraceDecisionRow {
+            row_index: 0,
+            applied_stream_seq: Some(12),
+            event_index: Some(3),
+            stage: "result_contract".into(),
+            source: "domain::resolve/result_version:19".into(),
+            outcome: "2 inner events validated".into(),
+            detail: json!({ "kills": 1, "saves": 0 }),
+        });
+        assert_eq!(row.detail.get("kills"), Some(&JsonAtom::Number(1.0)));
+        assert_eq!(row.detail.get("saves"), Some(&JsonAtom::Number(0.0)));
+        let empty = ResolutionTraceDecisionRow::from(commands::ResolutionTraceDecisionRow {
+            row_index: 1,
+            applied_stream_seq: None,
+            event_index: None,
+            stage: "inner_event".into(),
+            source: "event_index:0".into(),
+            outcome: "phase_announcement".into(),
+            detail: json!(null),
+        });
+        assert!(empty.detail.is_empty());
     }
 }

@@ -20,11 +20,12 @@ use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, CommunityInboxPage, DiscussionThreadPage,
-    DiscussionTopic, DiscussionTopicPage, GameIndexPage, MemberMutePage, MemberMuteState,
-    ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
-    PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
-    PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle,
-    SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget, PROTOCOL_VERSION,
+    DiscussionTopic, DiscussionTopicPage, GameIndexPage, InvestigationResultBody, MemberMutePage,
+    MemberMuteState, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
+    PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta,
+    PublicGameThreadPage, PublicProfile, PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope,
+    ServerMsg, SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget,
+    PROTOCOL_VERSION,
 };
 
 fn test_pack_artifact(key: &str) -> content_registry::PackArtifactSnapshot {
@@ -11273,7 +11274,10 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
     assert_eq!(user_one[0].audience_slot, "slot_1");
     assert_eq!(user_one[0].mode, "Parity");
     assert_eq!(user_one[0].target_slot, "slot_4");
-    assert_eq!(user_one[0].result, serde_json::json!("town"));
+    assert_eq!(
+        user_one[0].result,
+        InvestigationResultBody::Label("town".into())
+    );
 
     let response = get_as_dev_principal(
         &app,
@@ -11287,7 +11291,10 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
     assert_eq!(user_six.len(), 1);
     assert_eq!(user_six[0].audience_slot, "slot_6");
     assert_eq!(user_six[0].target_slot, "slot_5");
-    assert_eq!(user_six[0].result, serde_json::json!("scum"));
+    assert_eq!(
+        user_six[0].result,
+        InvestigationResultBody::Label("scum".into())
+    );
 
     let response = get_as_dev_principal(
         &app,
@@ -11301,7 +11308,10 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
     assert_eq!(user_seven.len(), 1);
     assert_eq!(user_seven[0].audience_slot, "slot_7");
     assert_eq!(user_seven[0].target_slot, "slot_3");
-    assert_eq!(user_seven[0].result, serde_json::json!("scum"));
+    assert_eq!(
+        user_seven[0].result,
+        InvestigationResultBody::Label("scum".into())
+    );
 
     let response = get_as_dev_principal(
         &app,
@@ -11329,13 +11339,13 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
     assert_eq!(host.len(), 3);
     assert!(host.iter().any(|result| result.audience_slot == "slot_1"
         && result.target_slot == "slot_4"
-        && result.result == serde_json::json!("town")));
+        && result.result == InvestigationResultBody::Label("town".into())));
     assert!(host.iter().any(|result| result.audience_slot == "slot_6"
         && result.target_slot == "slot_5"
-        && result.result == serde_json::json!("scum")));
+        && result.result == InvestigationResultBody::Label("scum".into())));
     assert!(host.iter().any(|result| result.audience_slot == "slot_7"
         && result.target_slot == "slot_3"
-        && result.result == serde_json::json!("scum")));
+        && result.result == InvestigationResultBody::Label("scum".into())));
 
     let response = get_as_dev_principal(
         &app,

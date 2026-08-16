@@ -72,7 +72,6 @@
             "slot_2",
             "slot_3"
           ],
-          "outcome_reason": null,
           "policy": "pk_host_decides_tie",
           "status": "Tie",
           "tiebreak": "HostDecides"

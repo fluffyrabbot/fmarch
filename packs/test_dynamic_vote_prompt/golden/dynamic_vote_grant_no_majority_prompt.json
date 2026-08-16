@@ -61,10 +61,8 @@
           "contenders": [
             "slot_1"
           ],
-          "outcome_reason": null,
           "policy": "no_majority_revote",
-          "status": "NoMajority",
-          "tiebreak": null
+          "status": "NoMajority"
         },
         "phase_id": "D01",
         "phase_kind": "Day",

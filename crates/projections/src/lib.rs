@@ -2604,6 +2604,12 @@ async fn fold_inner(
             if let Some(subject) = &note.subject {
                 ensure_slot(tx, game_id, subject).await?;
             }
+            let metadata = serde_json::to_value(&note.metadata).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: "HostPromptIssued".to_string(),
+                    source,
+                }
+            })?;
             sqlx::query(
                 "INSERT INTO host_prompt \
                  (game_id, phase_id, event_index, prompt_id, kind, subject_slot, reason, phase_kind, phase_number, metadata, status) \
@@ -2631,7 +2637,7 @@ async fn fold_inner(
             .bind(&note.reason)
             .bind(format!("{:?}", note.phase_kind))
             .bind(note.phase_number as i32)
-            .bind(&note.metadata)
+            .bind(metadata)
             .execute(&mut **tx)
             .await?;
         }

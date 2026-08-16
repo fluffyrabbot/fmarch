@@ -732,13 +732,14 @@ fn resolve_day_vote_prompts(
             phase_id: input.phase_id.clone(),
             phase_kind: input.state.phase_kind,
             phase_number: input.state.phase_number,
-            metadata: serde_json::json!({
-                "policy": policy.id,
-                "status": status_name,
-                "contenders": outcome.contenders,
-                "tiebreak": outcome.tiebreak,
-                "outcome_reason": outcome.reason,
-            }),
+            metadata: HostPromptMetadata {
+                policy: Some(policy.id.clone()),
+                status: Some(status_name),
+                contenders: outcome.contenders.clone(),
+                tiebreak: outcome.tiebreak.clone(),
+                outcome_reason: outcome.reason.clone(),
+                ..HostPromptMetadata::default()
+            },
         }));
     }
 }

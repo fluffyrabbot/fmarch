@@ -5927,9 +5927,7 @@ fn mafiascum_no_majority_revote_prompt_fixture_json() -> String {
                         "metadata": {
                             "policy": "no_majority_revote",
                             "status": "NoMajority",
-                            "contenders": ["slot_1"],
-                            "tiebreak": null,
-                            "outcome_reason": null
+                            "contenders": ["slot_1"]
                         }
                     }
                 },
@@ -6309,9 +6307,7 @@ fn dynamic_vote_no_majority_revote_prompt_fixture_json() -> String {
                         "metadata": {
                             "policy": "no_majority_revote",
                             "status": "NoMajority",
-                            "contenders": ["slot_1"],
-                            "tiebreak": null,
-                            "outcome_reason": null
+                            "contenders": ["slot_1"]
                         }
                     }
                 },
@@ -6445,8 +6441,7 @@ fn dynamic_vote_pk_prompt_fixture_json() -> String {
                             "policy": "pk_host_decides_tie",
                             "status": "Tie",
                             "contenders": ["slot_2", "slot_3"],
-                            "tiebreak": "HostDecides",
-                            "outcome_reason": null
+                            "tiebreak": "HostDecides"
                         }
                     }
                 },
@@ -6636,8 +6631,7 @@ fn generated_epicmafia_pk_expectations_json(case: &GeneratedEpicmafiaPkCase) -> 
                         "policy": "pk_host_decides_tie",
                         "status": "Tie",
                         "contenders": case.contenders,
-                        "tiebreak": "HostDecides",
-                        "outcome_reason": null,
+                        "tiebreak": "HostDecides"
                     },
                 }
             },

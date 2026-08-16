@@ -615,6 +615,26 @@ pub struct LastWordsVoteSummary {
     pub total_weight: f64,
 }
 
+/// Closed metadata bag carried on [`HostPromptIssued`]. Extra historical keys
+/// are ignored; absent keys stay `None`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct HostPromptMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contenders: Vec<SlotId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tiebreak: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub death_cause: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostPromptIssued {
@@ -625,7 +645,7 @@ pub struct HostPromptIssued {
     pub phase_id: PhaseId,
     pub phase_kind: crate::pack::PhaseKind,
     pub phase_number: u32,
-    pub metadata: serde_json::Value,
+    pub metadata: HostPromptMetadata,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

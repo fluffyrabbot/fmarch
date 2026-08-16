@@ -275,7 +275,9 @@ fn host_prompt_from_stream(
                 reason: prompt.reason,
                 phase_kind: format!("{:?}", prompt.phase_kind),
                 phase_number: prompt.phase_number as i32,
-                metadata: prompt.metadata,
+                metadata: serde_json::to_value(&prompt.metadata).map_err(|error| {
+                    Reject::Internal(format!("serialize HostPromptIssued metadata: {error}"))
+                })?,
                 status: "resolved".to_string(),
                 decision: None,
                 public_resolution: None,

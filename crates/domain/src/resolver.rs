@@ -12,8 +12,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::events::{
     day_death_announcement_metadata, DayAnnouncement, DayVoteOutcome, Death, DecisionTrace,
-    DuelResult, HostPromptIssued, IndexedEvent, InnerEvent, ItaCounters, ItaShotOutcome,
-    LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement, ResolutionApplied,
+    DuelResult, HostPromptIssued, HostPromptMetadata, IndexedEvent, InnerEvent, ItaCounters,
+    ItaShotOutcome, LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement, ResolutionApplied,
     ResolutionCounts, ResolutionTrace, TraceEdge, VoteStatus,
 };
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
@@ -6353,11 +6353,12 @@ fn resolve_beloved_princess_prompt(
         phase_id: input.phase_id.clone(),
         phase_kind: input.state.phase_kind,
         phase_number: input.state.phase_number,
-        metadata: serde_json::json!({
-            "policy": "beloved_princess",
-            "death_cause": cause,
-            "role": slot.role_key,
-        }),
+        metadata: HostPromptMetadata {
+            policy: Some("beloved_princess".to_string()),
+            death_cause: Some(cause.to_string()),
+            role: Some(slot.role_key.clone()),
+            ..HostPromptMetadata::default()
+        },
     }));
 }
 

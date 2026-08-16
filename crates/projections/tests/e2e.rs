@@ -629,11 +629,12 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                     phase_id: "D01".into(),
                     phase_kind: PhaseKind::Day,
                     phase_number: 1,
-                    metadata: serde_json::json!({
-                        "policy": "beloved_princess",
-                        "death_cause": "lynch",
-                        "role": "beloved_princess"
-                    }),
+                    metadata: domain::HostPromptMetadata {
+                        policy: Some("beloved_princess".into()),
+                        death_cause: Some("lynch".into()),
+                        role: Some("beloved_princess".into()),
+                        ..domain::HostPromptMetadata::default()
+                    },
                 }),
             },
             empty_phase_announcement(1, "D01"),

@@ -286,19 +286,25 @@ export type ProfileEditor = { handle: string, display_name: string, bio: string,
 
 export type PlayerNotification = { game: string, phase_id: string, event_index: number, audience_slot: string, effect: string, status: string, };
 
-export type PlayerInvestigationResult = { game: string, phase_id: string, event_index: number, audience_slot: string, mode: string, target_slot: string, result: unknown, };
+export type InvestigationResultFields = { vanilla?: boolean | null, vanilla_town?: boolean | null, has_gun?: boolean | null, killer?: boolean | null, specialist?: boolean | null, pt_access?: Array<string>, role?: string | null, alignment?: string | null, visited?: Array<string>, visitors?: Array<string>, visitor_roles?: Array<string>, actions?: Array<string>, action_types?: Array<string>, motion?: boolean | null, prior_motion?: boolean | null, previous?: string | null, current?: string | null, changed?: boolean | null, };
+
+export type InvestigationResultBody = string | InvestigationResultFields;
+
+export type PlayerInvestigationResult = { game: string, phase_id: string, event_index: number, audience_slot: string, mode: string, target_slot: string, result: InvestigationResultBody, };
+
+export type JsonAtom = null | boolean | number | string | Array<JsonAtom> | { [key in string]: JsonAtom };
 
 export type HostPhaseControl = { game: string, source_seq: bigint, stream_seq: bigint, prompt_id: string, prompt_kind: string | null, prompt_reason: string | null, source_phase_id: string, target_phase_id: string, reason: string, skipped_phase_id: string | null, resolved_by: string | null, resolved_at: bigint | null, occurred_at: bigint, };
 
-export type ResolutionTraceDecisionRow = { row_index: number, applied_stream_seq: bigint | null, event_index: number | null, stage: string, source: string, outcome: string, detail: unknown, };
+export type ResolutionTraceDecisionRow = { row_index: number, applied_stream_seq: bigint | null, event_index: number | null, stage: string, source: string, outcome: string, detail: { [key in string]: JsonAtom }, };
 
-export type ResolutionTraceEdgeRow = { row_index: number, applied_stream_seq: bigint | null, from: string, to: string, kind: string, detail: unknown, };
+export type ResolutionTraceEdgeRow = { row_index: number, applied_stream_seq: bigint | null, from: string, to: string, kind: string, detail: { [key in string]: JsonAtom }, };
 
-export type ResolutionTraceGeneratedRow = { row_index: number, applied_stream_seq: bigint | null, action_id: string, source: string, actor: string, targets: Array<string>, detail: unknown, };
+export type ResolutionTraceGeneratedRow = { row_index: number, applied_stream_seq: bigint | null, action_id: string, source: string, actor: string, targets: Array<string>, detail: { [key in string]: JsonAtom }, };
 
-export type ResolutionTraceEffectChangeRow = { row_index: number, applied_stream_seq: bigint | null, effect: string, target: string, operation: string, detail: unknown, };
+export type ResolutionTraceEffectChangeRow = { row_index: number, applied_stream_seq: bigint | null, effect: string, target: string, operation: string, detail: { [key in string]: JsonAtom }, };
 
-export type ResolutionTraceVisibilityRow = { row_index: number, applied_stream_seq: bigint | null, event_index: number, audience: Array<string>, policy: string, detail: unknown, };
+export type ResolutionTraceVisibilityRow = { row_index: number, applied_stream_seq: bigint | null, event_index: number, audience: Array<string>, policy: string, detail: { [key in string]: JsonAtom }, };
 
 export type ResolutionTraceNoteRow = { row_index: number, applied_stream_seq: bigint | null, note: string, };
 
