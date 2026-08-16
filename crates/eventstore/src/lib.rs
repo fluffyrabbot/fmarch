@@ -80,6 +80,32 @@ impl EventInput {
             meta: serde_json::json!({}),
         }
     }
+
+    /// Persist a resolver envelope. Header version tracks [`domain::RESULT_VERSION`].
+    pub fn resolution_applied(
+        payload: serde_json::Value,
+        actor: ActorId,
+        occurred_at: i64,
+    ) -> Self {
+        Self::new(
+            "ResolutionApplied",
+            i16::try_from(domain::RESULT_VERSION).expect("RESULT_VERSION fits event header"),
+            payload,
+            actor,
+            occurred_at,
+        )
+    }
+
+    /// Persist a resolver trace. Header version tracks [`domain::TRACE_VERSION`].
+    pub fn resolution_trace(payload: serde_json::Value, actor: ActorId, occurred_at: i64) -> Self {
+        Self::new(
+            "ResolutionTrace",
+            i16::try_from(domain::TRACE_VERSION).expect("TRACE_VERSION fits event header"),
+            payload,
+            actor,
+            occurred_at,
+        )
+    }
 }
 
 /// A persisted event row, loaded back from the log (ordered by `stream_seq`).

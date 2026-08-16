@@ -31,8 +31,32 @@ pub fn upcast(ev: StoredEvent) -> StoredEvent {
             ev.version = 2;
             ev
         }
+        ("ResolutionApplied", header_version) => upcast_resolution_applied(ev, header_version),
         _ => ev,
     }
+}
+
+fn upcast_resolution_applied(mut ev: StoredEvent, header_version: i16) -> StoredEvent {
+    let from_version = resolution_applied_from_version(header_version, &ev.payload);
+    match domain::upcast_resolution_applied(ev.payload.clone(), from_version) {
+        Ok(payload) => {
+            ev.payload = payload;
+            ev.version = i16::try_from(domain::RESULT_VERSION).expect("RESULT_VERSION fits header");
+            ev
+        }
+        Err(_) => ev,
+    }
+}
+
+fn resolution_applied_from_version(header_version: i16, payload: &serde_json::Value) -> u16 {
+    if header_version == 1 {
+        return payload
+            .get("result_version")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|version| u16::try_from(version).ok())
+            .unwrap_or(1);
+    }
+    u16::try_from(header_version).unwrap_or(1)
 }
 
 #[cfg(test)]
@@ -88,5 +112,50 @@ mod tests {
         let expected = input.clone();
         let out = upcast(input);
         assert_eq!(out, expected);
+    }
+
+    fn current_resolution() -> serde_json::Value {
+        json!({
+            "phase_id": "D01",
+            "phase_kind": "Day",
+            "phase_number": 1,
+            "run_id": "resolution:test:D01:1",
+            "result_version": domain::RESULT_VERSION,
+            "seed": 7,
+            "counts": { "events": 0, "kills": 0, "saves": 0 },
+            "events": [],
+            "started_at": 1,
+            "finished_at": 1
+        })
+    }
+
+    #[test]
+    fn resolution_applied_legacy_header_tracks_result_version() {
+        let input = sample("ResolutionApplied", 1, current_resolution());
+        let out = upcast(input);
+        assert_eq!(out.version, domain::RESULT_VERSION as i16);
+        assert_eq!(out.payload["result_version"], json!(domain::RESULT_VERSION));
+    }
+
+    #[test]
+    fn resolution_applied_current_header_is_identity() {
+        let input = sample(
+            "ResolutionApplied",
+            domain::RESULT_VERSION as i16,
+            current_resolution(),
+        );
+        let expected = input.clone();
+        let out = upcast(input);
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn resolution_applied_unknown_contract_stays_unreadable() {
+        let mut payload = current_resolution();
+        payload["result_version"] = json!(domain::RESULT_VERSION - 1);
+        let input = sample("ResolutionApplied", 1, payload.clone());
+        let out = upcast(input);
+        assert_eq!(out.version, 1);
+        assert_eq!(out.payload, payload);
     }
 }

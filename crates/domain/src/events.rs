@@ -908,6 +908,63 @@ impl fmt::Display for ResultValidationError {
 
 impl std::error::Error for ResultValidationError {}
 
+/// Rewrite a stored `ResolutionApplied` payload from `from_version` to `current_version`.
+///
+/// The version ladder is the place a later `RESULT_VERSION` bump registers
+/// `N → N+1` payload rewrites. A payload that already carries `current_version`
+/// is identity (legacy `events.version = 1` rows used this field as the real
+/// contract version). Missing steps fail closed.
+pub fn upcast_resolution_applied_payload(
+    mut payload: serde_json::Value,
+    from_version: u16,
+    current_version: u16,
+) -> Result<serde_json::Value, ResultValidationError> {
+    if from_version > current_version {
+        return Err(ResultValidationError::UnsupportedResultVersion {
+            expected: current_version,
+            actual: from_version,
+        });
+    }
+    if from_version == current_version || payload_result_version(&payload) == Some(current_version)
+    {
+        stamp_result_version(&mut payload, current_version);
+        return Ok(payload);
+    }
+    let mut version = from_version;
+    while version < current_version {
+        payload = apply_resolution_applied_upcast_step(payload, version, current_version)?;
+        version += 1;
+    }
+    stamp_result_version(&mut payload, current_version);
+    Ok(payload)
+}
+
+fn payload_result_version(payload: &serde_json::Value) -> Option<u16> {
+    payload
+        .get("result_version")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|version| u16::try_from(version).ok())
+}
+
+fn stamp_result_version(payload: &mut serde_json::Value, version: u16) {
+    if let Some(object) = payload.as_object_mut() {
+        object.insert("result_version".into(), serde_json::json!(version));
+    }
+}
+
+fn apply_resolution_applied_upcast_step(
+    _payload: serde_json::Value,
+    from_version: u16,
+    current_version: u16,
+) -> Result<serde_json::Value, ResultValidationError> {
+    // Next inner-event change: add `from_version => rewrite` here, then bump
+    // `RESULT_VERSION`. Until then, unreadable historical contracts stay errors.
+    Err(ResultValidationError::UnsupportedResultVersion {
+        expected: current_version,
+        actual: from_version,
+    })
+}
+
 /// Validate a raw `ResolutionApplied` JSON payload before it crosses a storage
 /// boundary. Unknown inner event kinds, missing payload fields, and unknown
 /// extra fields fail during strict serde decoding; aggregate and ordering

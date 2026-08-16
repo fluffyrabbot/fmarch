@@ -612,8 +612,12 @@ Ported discipline from im-human's `V4_RESULT_CONTRACT.md`:
    The live registry is `eventstore::upcast` (`crates/eventstore/src/upcaster.rs`):
    every loaded row passes through it. Superseded `(kind, version)` pairs branch
    there and rewrite payload/version to the current shape; everything else is
-   identity. The synthetic kind `UpcastExample` documents the pattern (version
-   1 → 2: ensure object payload has `"note"`, defaulting missing to `""`).
+   identity. `ResolutionApplied` stamps `events.version` from `RESULT_VERSION`
+   (legacy header `1` is interpreted via payload `result_version`). Register the
+   next `N → N+1` rewrite in `domain::upcast_resolution_applied` before bumping
+   the constant. The synthetic kind `UpcastExample` still documents the registry
+   shape (version 1 → 2: ensure object payload has `"note"`, defaulting missing
+   to `""`).
 3. **Validation at the boundary.** A resolver result and its trace are validated before they
    are appended; failure aborts the append with a typed, path-pointing error — never a
    silent partial write.
@@ -627,7 +631,8 @@ Ported discipline from im-human's `V4_RESULT_CONTRACT.md`:
    ([04](04-wire-protocol.md)).
 3. Add the projection fold(s) it affects.
 4. Add a golden-trace / parity test ([09](09-engine-and-packs.md)).
-5. Bump `result_version` if it's an inner (resolution) event.
+5. Bump `result_version` if it's an inner (resolution) event, add the
+   `N → N+1` upcast step first, then persist the new header version.
 
 ---
 

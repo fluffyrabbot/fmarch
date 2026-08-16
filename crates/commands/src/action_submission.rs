@@ -163,17 +163,13 @@ pub(super) async fn submit_action(
         domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION).map_err(
             |error| Reject::Internal(format!("invalid instant resolution trace: {error}")),
         )?;
-        events.push(EventInput::new(
-            "ResolutionApplied",
-            1,
+        events.push(EventInput::resolution_applied(
             serde_json::to_value(&output.applied)
                 .map_err(|error| Reject::Internal(error.to_string()))?,
             ActorId::System,
             phase_input.next_stream_seq + 1,
         ));
-        events.push(EventInput::new(
-            "ResolutionTrace",
-            1,
+        events.push(EventInput::resolution_trace(
             serde_json::to_value(&output.trace)
                 .map_err(|error| Reject::Internal(error.to_string()))?,
             ActorId::System,

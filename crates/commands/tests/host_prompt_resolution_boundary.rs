@@ -47,8 +47,8 @@ fn host_prompt_resolution_has_one_typed_owner_without_admission_or_persistence_d
         "host_prompt_effect(",
         "host_prompt_public_resolution(",
         "public_resolution does not match rebuilt prompt effect",
-        "\"ResolutionApplied\"",
-        "\"ResolutionTrace\"",
+        "EventInput::resolution_applied(",
+        "EventInput::resolution_trace(",
         "\"PhaseAdvanced\"",
         "persist(tx, game, &events).await",
     ] {

@@ -155,17 +155,13 @@ pub(super) async fn resolve_host_prompt(
                 prompt_resolved_seq: next_seq,
             })?;
 
-            events.push(EventInput::new(
-                "ResolutionApplied",
-                1,
+            events.push(EventInput::resolution_applied(
                 serde_json::to_value(rebuilt.applied)
                     .map_err(|error| Reject::Internal(error.to_string()))?,
                 ActorId::System,
                 next_seq + 1,
             ));
-            events.push(EventInput::new(
-                "ResolutionTrace",
-                1,
+            events.push(EventInput::resolution_trace(
                 serde_json::to_value(rebuilt.trace)
                     .map_err(|error| Reject::Internal(error.to_string()))?,
                 ActorId::System,

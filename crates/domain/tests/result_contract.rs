@@ -1,6 +1,9 @@
 use std::{fs, path::Path};
 
-use domain::{validate_resolution_json, validate_trace_json, RESULT_VERSION, TRACE_VERSION};
+use domain::{
+    upcast_resolution_applied, validate_resolution_json, validate_trace_json, RESULT_VERSION,
+    TRACE_VERSION,
+};
 use serde_json::json;
 
 fn valid_resolution() -> serde_json::Value {
@@ -85,6 +88,42 @@ fn with_phase_announcement(mut payload: serde_json::Value) -> serde_json::Value 
     }
     payload["counts"]["events"] = json!(events.len());
     payload
+}
+
+#[test]
+fn current_resolution_payload_upcast_is_identity() {
+    let payload = valid_resolution();
+    let upcast = upcast_resolution_applied(payload.clone(), RESULT_VERSION)
+        .expect("current contract should not rewrite");
+    assert_eq!(upcast, payload);
+}
+
+#[test]
+fn legacy_header_payload_already_at_current_contract_upcasts() {
+    let payload = valid_resolution();
+    let upcast = upcast_resolution_applied(payload.clone(), 1)
+        .expect("legacy header with current payload is readable");
+    assert_eq!(upcast["result_version"], json!(RESULT_VERSION));
+    let applied = validate_resolution_json(&upcast, RESULT_VERSION)
+        .expect("upcasted current payload should still validate");
+    assert_eq!(applied.result_version, RESULT_VERSION);
+}
+
+#[test]
+fn missing_resolution_upcast_step_fails_closed() {
+    let mut payload = valid_resolution();
+    payload["result_version"] = json!(RESULT_VERSION - 1);
+    let err = upcast_resolution_applied(payload, RESULT_VERSION - 1).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            domain::ResultValidationError::UnsupportedResultVersion {
+                expected: RESULT_VERSION,
+                actual,
+            } if actual == RESULT_VERSION - 1
+        ),
+        "unexpected upcast error: {err}"
+    );
 }
 
 #[test]

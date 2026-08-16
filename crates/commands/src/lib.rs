@@ -235,14 +235,8 @@ impl<'a> EngineInputBuilder<'a> {
             phase_number,
         )?;
         let submissions = current_submissions(self.stream, self.phase_id);
-        let day_phase_inputs = current_day_phase_inputs(
-            self.stream,
-            &state,
-            phase_kind,
-            phase_number,
-            None,
-            0,
-        )?;
+        let day_phase_inputs =
+            current_day_phase_inputs(self.stream, &state, phase_kind, phase_number, None, 0)?;
         let next_stream_seq = self.stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1);
 
         Ok(EnginePhaseInput {
@@ -325,7 +319,9 @@ fn official_resolution_applied(
                 .is_some_and(|run_id| run_id.starts_with("resolution:"))
     };
     last_resolution.is_some_and(payload_matches)
-        || tail.iter().any(|ev| ev.kind == "ResolutionApplied" && payload_matches(&ev.payload))
+        || tail
+            .iter()
+            .any(|ev| ev.kind == "ResolutionApplied" && payload_matches(&ev.payload))
 }
 
 /// Persist a discardable `StateSnapshot` after an official phase resolve.
@@ -2832,16 +2828,12 @@ async fn resolve_phase(
         .map_err(|e| Reject::Internal(format!("invalid resolution trace: {e}")))?;
     let applied_json =
         serde_json::to_value(&output.applied).map_err(|e| Reject::Internal(e.to_string()))?;
-    let applied_ev = EventInput::new(
-        "ResolutionApplied",
-        1,
+    let applied_ev = EventInput::resolution_applied(
         applied_json.clone(),
         ActorId::System,
         phase_input.next_stream_seq,
     );
-    let trace_ev = EventInput::new(
-        "ResolutionTrace",
-        1,
+    let trace_ev = EventInput::resolution_trace(
         serde_json::to_value(&output.trace).map_err(|e| Reject::Internal(e.to_string()))?,
         ActorId::System,
         phase_input.next_stream_seq,
@@ -4940,8 +4932,10 @@ fn current_day_phase_inputs(
     let mut night_victims = Vec::new();
     let mut ita_session_controls = Vec::new();
     if let Some(value) = last_resolution {
-        let applied = domain::validate_resolution_json(value, domain::RESULT_VERSION)
-            .map_err(|e| Reject::Internal(format!("malformed checkpoint ResolutionApplied: {e}")))?;
+        let applied =
+            domain::validate_resolution_json(value, domain::RESULT_VERSION).map_err(|e| {
+                Reject::Internal(format!("malformed checkpoint ResolutionApplied: {e}"))
+            })?;
         collect_night_victims_from_applied(
             &applied,
             state,

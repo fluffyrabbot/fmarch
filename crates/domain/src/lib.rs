@@ -12,12 +12,13 @@ pub mod resolver;
 pub mod state;
 
 pub use events::{
-    day_death_announcement_metadata, validate_resolution_applied, validate_resolution_json,
-    validate_resolution_trace, validate_trace_json, DayAnnouncement, DayVoteOutcome, Death,
-    DecisionTrace, DuelResult, EffectDeltaTrace, GeneratedActionTrace, HostPromptIssued,
-    HostPromptPublicResolution, InnerEvent, ItaCounters, ItaShotOutcome, LastWordsRecorded,
-    LastWordsVoteSummary, PhaseAnnouncement, ResolutionApplied, ResolutionTrace,
-    ResultValidationError, TraceEdge, VisibilityTrace, VoteStatus, TRACE_VERSION,
+    day_death_announcement_metadata, upcast_resolution_applied_payload,
+    validate_resolution_applied, validate_resolution_json, validate_resolution_trace,
+    validate_trace_json, DayAnnouncement, DayVoteOutcome, Death, DecisionTrace, DuelResult,
+    EffectDeltaTrace, GeneratedActionTrace, HostPromptIssued, HostPromptPublicResolution,
+    InnerEvent, ItaCounters, ItaShotOutcome, LastWordsRecorded, LastWordsVoteSummary,
+    PhaseAnnouncement, ResolutionApplied, ResolutionTrace, ResultValidationError, TraceEdge,
+    VisibilityTrace, VoteStatus, TRACE_VERSION,
 };
 pub use golden::{
     golden_events_from_input_value, golden_pack_json_with_overrides, normalize_golden_event,
@@ -40,6 +41,14 @@ pub use resolver::{
     check_win, resolve, resolve_instant, DayAnnouncementInput, DayPhaseInputs,
     ItaSessionControlInput, ResolutionInput, ResolutionOutput, RESULT_VERSION,
 };
+
+/// Walk a stored `ResolutionApplied` payload to [`RESULT_VERSION`].
+pub fn upcast_resolution_applied(
+    payload: serde_json::Value,
+    from_version: u16,
+) -> Result<serde_json::Value, events::ResultValidationError> {
+    events::upcast_resolution_applied_payload(payload, from_version, RESULT_VERSION)
+}
 pub use state::{
     apply_events, role_pm_channel_id, ActionCounterRecord, ActionGrantRecord, BackupTargetRecord,
     BufferedItaShotRecord, ConversionOriginRecord, DelayedDeathRecord, EffectRecord,
