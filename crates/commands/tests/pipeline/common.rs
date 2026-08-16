@@ -586,7 +586,7 @@ pub fn assert_decision_trace(
                 && expected.detail.iter().all(|(key, value)| {
                     decision
                         .detail
-                        .get(*key)
+                        .get(key)
                         .is_some_and(|actual| actual == value)
                 })
         })
@@ -616,7 +616,7 @@ pub fn assert_no_decision_trace(
             && expected.detail.iter().all(|(key, value)| {
                 decision
                     .detail
-                    .get(*key)
+                    .get(key)
                     .is_some_and(|actual| actual == value)
             })
     });

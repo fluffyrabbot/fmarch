@@ -12,8 +12,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::events::{
     day_death_announcement_metadata, DayAnnouncement, DayVoteOutcome, Death, DecisionTrace,
-    DuelResult, HostPromptIssued, HostPromptMetadata, IndexedEvent, InnerEvent, ItaCounters,
-    ItaShotOutcome, LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement, ResolutionApplied,
+    DuelResult, HostPromptIssued, HostPromptMetadata, IndexedEvent, InnerEvent,
+    InvestigationResultBody, InvestigationResultFields, ItaCounters, ItaShotOutcome,
+    LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement, ResolutionApplied,
     ResolutionCounts, ResolutionTrace, TraceEdge, VoteStatus,
 };
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
@@ -282,7 +283,7 @@ fn apply_lover_suicides(
                     stage: "death:cascade".to_string(),
                     source: format!("link:{}", link.link_id),
                     outcome: "lover_suicide".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "link_id": link.link_id.clone(),
                         "link_source": link.source.clone(),
                         "linked_slots": link.slots.clone(),
@@ -376,7 +377,7 @@ fn apply_wolf_beauty_drag_triggers(
             stage: "death:cascade".to_string(),
             source: format!("action:{}", mark.source_action),
             outcome: "wolf_beauty_dragged".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "beauty_id": record.target.clone(),
                 "dragged_id": mark.target_id.clone(),
                 "mark_effect": mark.effect.clone(),
@@ -478,7 +479,7 @@ fn alignment_failback_victim(
         stage: trace_stage.to_string(),
         source: format!("action:{action_id}"),
         outcome: "alignment_failback_self_kill".to_string(),
-        detail: serde_json::json!({
+        detail: crate::json_atom!({
             "action_id": action_id,
             "template_id": template.id,
             "actor": actor,
@@ -2884,7 +2885,7 @@ fn apply_treestump_policy(
                     stage: "death:status".to_string(),
                     source: format!("cause:{cause}"),
                     outcome: "treestump_status_tagged".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "slot_id": slot_id,
                         "status_tag": policy.status_tag,
                     }),
@@ -3008,7 +3009,7 @@ fn invalid_submission_ingest_halts(
             stage: "submission_ingest".to_string(),
             source: format!("action:{}", sub.action_id),
             outcome: "submission_template_rejected".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "action_id": sub.action_id,
                 "actor": sub.actor,
                 "actor_role": actor_role,
@@ -3044,7 +3045,7 @@ fn phase_window_mismatch_halts(input: &ResolutionInput) -> (Vec<InnerEvent>, Vec
             stage: "submission_ingest".to_string(),
             source: format!("action:{}", sub.action_id),
             outcome: "phase_window_rejected".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "action_id": sub.action_id,
                 "actor": sub.actor,
                 "template_id": sub.template_id,
@@ -3288,7 +3289,10 @@ fn is_survival_award_slot(pack: &Pack, slot: &SlotState) -> bool {
     })
 }
 
-fn survival_win_metadata(state: &StateSnapshot, pack: &Pack) -> serde_json::Value {
+fn survival_win_metadata(
+    state: &StateSnapshot,
+    pack: &Pack,
+) -> Option<crate::events::WinReachedMetadata> {
     let mut awards = Vec::new();
     for award in &pack.win.survival_awards {
         let source_event = award
@@ -3302,19 +3306,22 @@ fn survival_win_metadata(state: &StateSnapshot, pack: &Pack) -> serde_json::Valu
                     .iter()
                     .any(|role| role == &slot.role_key)
         }) {
-            awards.push(serde_json::json!({
-                "policy": award.id,
-                "winner": award.winner,
-                "slot_id": slot.slot_id,
-                "role": slot.role_key,
-                "source_event": source_event,
-            }));
+            awards.push(crate::events::SurvivalWinAward {
+                policy: award.id.clone(),
+                winner: award.winner.clone(),
+                slot_id: slot.slot_id.clone(),
+                role: slot.role_key.clone(),
+                source_event: source_event.clone(),
+            });
         }
     }
     if awards.is_empty() {
-        serde_json::Value::Null
+        None
     } else {
-        serde_json::json!({ "survival_awards": awards })
+        Some(crate::events::WinReachedMetadata {
+            survival_awards: awards,
+            ..crate::events::WinReachedMetadata::default()
+        })
     }
 }
 
@@ -3373,7 +3380,7 @@ fn apply_pending_poison(
                 stage: "night:pending_effect".to_string(),
                 source: format!("delayed_death:{}", queued.queue_id),
                 outcome: "pending_poison_target_already_dead".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "target": queued.target,
                     "effect": queued.effect,
                     "cause": queued.cause,
@@ -3400,7 +3407,7 @@ fn apply_pending_poison(
                 stage: "night:pending_effect".to_string(),
                 source: format!("delayed_death:{}", queued.queue_id),
                 outcome: "pending_poison_preempted_by_clear".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "target": slot.slot_id,
                     "effect": "poisoned",
                     "cause": queued.cause,
@@ -3424,7 +3431,7 @@ fn apply_pending_poison(
             stage: "night:pending_effect".to_string(),
             source: format!("delayed_death:{}", queued.queue_id),
             outcome: "pending_poison_applied".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "target": slot.slot_id,
                 "effect": "poisoned",
                 "cause": queued.cause,
@@ -3566,7 +3573,7 @@ fn apply_backup_inheritance(
             stage: "night:backup".to_string(),
             source: format!("slot:{source}"),
             outcome: "backup_inherited_role".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "backup": backup.slot_id,
                 "source_target": source,
                 "policy": policy,
@@ -3661,7 +3668,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
         stage: "night:stage_order".to_string(),
         source: "pack.precedence".to_string(),
         outcome: "pack_derived_stage_order".to_string(),
-        detail: serde_json::json!({
+        detail: crate::json_atom!({
             "order": stage_order
                 .iter()
                 .map(|stage| format!("{stage:?}"))
@@ -3747,7 +3754,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             stage: "night:block".to_string(),
                             source: "night_resolution.empower_effects".to_string(),
                             outcome: "action_suppression_bypassed".to_string(),
-                            detail: serde_json::json!({
+                            detail: crate::json_atom!({
                                 "actor": actions[idx].sub.actor,
                                 "action_id": actions[idx].sub.action_id,
                                 "template_id": actions[idx].template.id,
@@ -3773,7 +3780,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                         stage: "night:block".to_string(),
                         source: "IrAbility::Block".to_string(),
                         outcome: "action_suppressed".to_string(),
-                        detail: serde_json::json!({
+                        detail: crate::json_atom!({
                             "actor": actor,
                             "action_id": action_id,
                             "template_id": template_id,
@@ -4172,7 +4179,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             target,
                             kind: info.kind.clone(),
                             audience,
-                            result: serde_json::Value::Object(result),
+                            result: crate::json::JsonAtom::from(serde_json::Value::Object(result)),
                             source_action: actions[idx].sub.action_id.clone(),
                             template_id: actions[idx].template.id.clone(),
                             phase_id: input.phase_id.clone(),
@@ -4320,7 +4327,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         source: format!("action:{}", actions[idx].sub.action_id),
                                         outcome: "read_effect_target_preempted_by_clear"
                                             .to_string(),
-                                        detail: serde_json::json!({
+                                        detail: crate::json_atom!({
                                             "action_id": actions[idx].sub.action_id,
                                             "template_id": actions[idx].template.id,
                                             "actor": attacker,
@@ -4393,7 +4400,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                 stage: "kill_resolution".to_string(),
                                 source: format!("cause:{cause}"),
                                 outcome: "kill_skipped_by_target_state".to_string(),
-                                detail: serde_json::json!({
+                                detail: crate::json_atom!({
                                     "action_id": actions[idx].sub.action_id,
                                     "template_id": actions[idx].template.id,
                                     "actor": attacker,
@@ -4449,7 +4456,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                 stage: "kill_resolution".to_string(),
                                 source: format!("cause:{}", input.pack.wolf_carry.cause),
                                 outcome: "kill_skipped_by_target_state".to_string(),
-                                detail: serde_json::json!({
+                                detail: crate::json_atom!({
                                     "action_id": source_action_id,
                                     "template_id": input.pack.wolf_carry.cause,
                                     "actor": token.owner_id,
@@ -4519,7 +4526,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                 stage: "night:conversion".to_string(),
                                 source: format!("action:{action_id}"),
                                 outcome: "conversion_blocked".to_string(),
-                                detail: serde_json::json!({
+                                detail: crate::json_atom!({
                                     "action_id": action_id,
                                     "template_id": template_id,
                                     "actor": source,
@@ -4545,7 +4552,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         stage: "night:conversion".to_string(),
                                         source: format!("action:{action_id}"),
                                         outcome: "conversion_blocked".to_string(),
-                                        detail: serde_json::json!({
+                                        detail: crate::json_atom!({
                                             "action_id": action_id,
                                             "template_id": template_id,
                                             "actor": source.clone(),
@@ -4577,7 +4584,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         stage: "night:conversion".to_string(),
                                         source: format!("action:{action_id}"),
                                         outcome: "conversion_blocked".to_string(),
-                                        detail: serde_json::json!({
+                                        detail: crate::json_atom!({
                                             "action_id": action_id,
                                             "template_id": template_id,
                                             "actor": source.clone(),
@@ -4609,7 +4616,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                 stage: "night:conversion".to_string(),
                                 source: format!("action:{action_id}"),
                                 outcome: "conversion_blocked".to_string(),
-                                detail: serde_json::json!({
+                                detail: crate::json_atom!({
                                     "action_id": action_id,
                                     "template_id": template_id,
                                     "actor": source,
@@ -4635,7 +4642,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         stage: "night:conversion".to_string(),
                                         source: format!("action:{action_id}"),
                                         outcome: "conversion_blocked".to_string(),
-                                        detail: serde_json::json!({
+                                        detail: crate::json_atom!({
                                             "action_id": action_id,
                                             "template_id": template_id,
                                             "actor": source,
@@ -4672,7 +4679,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             stage: "night:conversion".to_string(),
                             source: format!("action:{action_id}"),
                             outcome: outcome.to_string(),
-                            detail: serde_json::json!({
+                            detail: crate::json_atom!({
                                 "action_id": action_id,
                                 "template_id": template_id,
                                 "actor": source,
@@ -4752,32 +4759,34 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                             .map(|memory| memory.scope)
                                             .unwrap_or(ResultMemoryScope::Target),
                                     );
-                                    let changed = previous
-                                        .as_ref()
-                                        .map(|previous| {
-                                            previous != &serde_json::Value::String(result.clone())
-                                        })
-                                        .unwrap_or(false);
+                                    let changed = previous.as_ref().is_some_and(|previous| {
+                                        previous != &InvestigationResultBody::label(result.clone())
+                                    });
                                     if memory.is_some_and(|memory| {
                                         memory.output == ResultMemoryOutput::SameDifferent
                                     }) {
                                         if previous.is_some() {
-                                            serde_json::Value::String(
-                                                if changed { "different" } else { "same" }
-                                                    .to_string(),
-                                            )
+                                            InvestigationResultBody::label(if changed {
+                                                "different"
+                                            } else {
+                                                "same"
+                                            })
                                         } else {
-                                            serde_json::Value::String(visible_result)
+                                            InvestigationResultBody::label(visible_result)
                                         }
                                     } else {
-                                        serde_json::json!({
-                                            "previous": previous,
-                                            "current": visible_result,
-                                            "changed": changed,
+                                        InvestigationResultBody::fields(InvestigationResultFields {
+                                            previous: previous
+                                                .as_ref()
+                                                .and_then(InvestigationResultBody::as_label)
+                                                .map(str::to_string),
+                                            current: Some(visible_result),
+                                            changed: Some(changed),
+                                            ..InvestigationResultFields::default()
                                         })
                                     }
                                 } else {
-                                    serde_json::Value::String(visible_result)
+                                    InvestigationResultBody::label(visible_result)
                                 };
                                 events.push(InnerEvent::InvestigationResult {
                                     mode,
@@ -4793,7 +4802,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         scope: memory
                                             .map(|memory| memory.scope)
                                             .unwrap_or(ResultMemoryScope::Target),
-                                        result: serde_json::Value::String(result.clone()),
+                                        result: InvestigationResultBody::label(result.clone()),
                                         source_action: actions[idx].sub.action_id.clone(),
                                         template_id: actions[idx].template.id.clone(),
                                         phase_id: input.phase_id.clone(),
@@ -4829,13 +4838,20 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target: target.clone(),
-                                    result: serde_json::json!({
-                                        "vanilla": role_set_contains(
-                                            &input.pack.investigation_results.role_sets.vanilla_roles,
-                                            input,
-                                            &target,
-                                        ),
-                                    }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            vanilla: Some(role_set_contains(
+                                                &input
+                                                    .pack
+                                                    .investigation_results
+                                                    .role_sets
+                                                    .vanilla_roles,
+                                                input,
+                                                &target,
+                                            )),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::Neapolitan => {
@@ -4843,16 +4859,25 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target: target.clone(),
-                                    result: serde_json::json!({
-                                        "vanilla_town": role_set_contains(
-                                            &input.pack.investigation_results.role_sets.vanilla_roles,
-                                            input,
-                                            &target,
-                                        ) && matches!(
-                                            slot_alignment(input, &target),
-                                            Some(alignment) if alignment == "town"
-                                        ),
-                                    }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            vanilla_town: Some(
+                                                role_set_contains(
+                                                    &input
+                                                        .pack
+                                                        .investigation_results
+                                                        .role_sets
+                                                        .vanilla_roles,
+                                                    input,
+                                                    &target,
+                                                ) && matches!(
+                                                    slot_alignment(input, &target),
+                                                    Some(alignment) if alignment == "town"
+                                                ),
+                                            ),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::Gunsmith => {
@@ -4860,13 +4885,20 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target: target.clone(),
-                                    result: serde_json::json!({
-                                        "has_gun": role_set_contains(
-                                            &input.pack.investigation_results.role_sets.gun_bearing_roles,
-                                            input,
-                                            &target,
-                                        ),
-                                    }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            has_gun: Some(role_set_contains(
+                                                &input
+                                                    .pack
+                                                    .investigation_results
+                                                    .role_sets
+                                                    .gun_bearing_roles,
+                                                input,
+                                                &target,
+                                            )),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::Killer => {
@@ -4874,13 +4906,20 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target: target.clone(),
-                                    result: serde_json::json!({
-                                        "killer": role_set_contains(
-                                            &input.pack.investigation_results.role_sets.killer_roles,
-                                            input,
-                                            &target,
-                                        ),
-                                    }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            killer: Some(role_set_contains(
+                                                &input
+                                                    .pack
+                                                    .investigation_results
+                                                    .role_sets
+                                                    .killer_roles,
+                                                input,
+                                                &target,
+                                            )),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::Specialist => {
@@ -4888,13 +4927,20 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target: target.clone(),
-                                    result: serde_json::json!({
-                                        "specialist": role_set_contains(
-                                            &input.pack.investigation_results.role_sets.specialist_roles,
-                                            input,
-                                            &target,
-                                        ),
-                                    }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            specialist: Some(role_set_contains(
+                                                &input
+                                                    .pack
+                                                    .investigation_results
+                                                    .role_sets
+                                                    .specialist_roles,
+                                                input,
+                                                &target,
+                                            )),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::PtAccess => {
@@ -4902,9 +4948,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target: target.clone(),
-                                    result: serde_json::json!({
-                                        "pt_access": private_topic_access(input, &target),
-                                    }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            pt_access: Some(private_topic_access(input, &target)),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::Role => {
@@ -4913,9 +4962,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target: target.clone(),
-                                    result: serde_json::json!({
-                                        "role": role,
-                                    }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            role: Some(role.to_string()),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::FullRole => {
@@ -4925,10 +4977,13 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target: target.clone(),
-                                    result: serde_json::json!({
-                                        "role": role,
-                                        "alignment": alignment,
-                                    }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            role: Some(role.to_string()),
+                                            alignment: Some(alignment.to_string()),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::Track => {
@@ -4937,7 +4992,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: serde_json::json!({ "visited": visited }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            visited: Some(visited),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::Watch => {
@@ -4946,7 +5006,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: serde_json::json!({ "visitors": visitors }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            visitors: Some(visitors),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::RoleWatcher => {
@@ -4956,7 +5021,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: serde_json::json!({ "visitor_roles": visitor_roles }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            visitor_roles: Some(visitor_roles),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::RoleGuard => {
@@ -4966,7 +5036,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: serde_json::json!({ "visitor_roles": visitor_roles }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            visitor_roles: Some(visitor_roles),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::SecurityGuard => {
@@ -4975,7 +5050,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: serde_json::json!({ "visitors": visitors }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            visitors: Some(visitors),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::Voyeur => {
@@ -4984,7 +5064,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: serde_json::json!({ "actions": actions_seen }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            actions: Some(actions_seen),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::ActionType => {
@@ -4994,7 +5079,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: serde_json::json!({ "action_types": action_types }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            action_types: Some(action_types),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::Motion => {
@@ -5003,7 +5093,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: serde_json::json!({ "motion": active }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            motion: Some(active),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                             InvestigateMode::PriorMotion => {
@@ -5012,7 +5107,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     mode,
                                     investigator: investigator.clone(),
                                     target,
-                                    result: serde_json::json!({ "prior_motion": active }),
+                                    result: InvestigationResultBody::fields(
+                                        InvestigationResultFields {
+                                            prior_motion: Some(active),
+                                            ..InvestigationResultFields::default()
+                                        },
+                                    ),
                                 });
                             }
                         }
@@ -5432,7 +5532,7 @@ fn prior_investigation_result(
     target: &SlotId,
     mode: InvestigateMode,
     scope: ResultMemoryScope,
-) -> Option<serde_json::Value> {
+) -> Option<InvestigationResultBody> {
     input
         .state
         .investigation_memory
@@ -5533,7 +5633,7 @@ fn action_chance_allows(
             "action_chance_failed"
         }
         .to_string(),
-        detail: serde_json::json!({
+        detail: crate::json_atom!({
             "action_id": action.sub.action_id,
             "template_id": action.template.id,
             "actor": action.sub.actor,
@@ -6101,7 +6201,7 @@ fn apply_effect_source_death_reveals(
                     stage: "source_death_reveal".to_string(),
                     source: format!("effect:{}", record.effect),
                     outcome: "alignment_revealed".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "policy": policy.id,
                         "effect": record.effect,
                         "source": record.source,
@@ -6142,7 +6242,7 @@ fn apply_effect_source_death_reveals(
                     stage: "source_death_reveal".to_string(),
                     source: format!("effect:{}", record.effect),
                     outcome: "role_revealed".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "policy": policy.id,
                         "effect": record.effect,
                         "source": record.source,
@@ -6267,7 +6367,7 @@ fn resolve_day_kill_actions(
                     stage: "day:kill_resolution".to_string(),
                     source: format!("action:{}", sub.action_id),
                     outcome: "kill_skipped_by_target_state".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "action_id": sub.action_id,
                         "template_id": template.id,
                         "actor": sub.actor,
@@ -6335,7 +6435,7 @@ fn resolve_beloved_princess_prompt(
         stage: "death:trigger".to_string(),
         source: format!("slot:{slot_id}"),
         outcome: "host_prompt_issued".to_string(),
-        detail: serde_json::json!({
+        detail: crate::json_atom!({
             "policy": "beloved_princess",
             "prompt_id": prompt_id,
             "kind": policy.prompt_kind,
@@ -7063,7 +7163,7 @@ fn resolve_ita_lifecycle_controls(
                 stage: "ita_session_lifecycle".to_string(),
                 source: control.session_id.clone(),
                 outcome: "ignored_unknown_session".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "control": control.control,
                     "recorded_at": control.recorded_at,
                 }),
@@ -7075,7 +7175,7 @@ fn resolve_ita_lifecycle_controls(
                 stage: "ita_session_lifecycle".to_string(),
                 source: control.session_id.clone(),
                 outcome: "ignored_pack_policy".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "control": control.control,
                     "recorded_at": control.recorded_at,
                 }),
@@ -7157,7 +7257,7 @@ fn resolve_ita_lifecycle_controls(
             stage: "ita_session_lifecycle".to_string(),
             source: control.session_id.clone(),
             outcome: to_status,
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "control": control.control,
                 "from_status": from_status,
                 "message": control.message.clone(),

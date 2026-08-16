@@ -3290,7 +3290,7 @@ fn trace_inspection_run(
                 stage: decision.stage,
                 source: decision.source,
                 outcome: decision.outcome,
-                detail: decision.detail,
+                detail: serde_json::to_value(decision.detail).unwrap_or(serde_json::Value::Null),
             })
             .collect(),
         edges: trace
@@ -3303,7 +3303,7 @@ fn trace_inspection_run(
                 from: edge.from,
                 to: edge.to,
                 kind: edge.kind,
-                detail: edge.detail,
+                detail: serde_json::to_value(edge.detail).unwrap_or(serde_json::Value::Null),
             })
             .collect(),
         generated: trace
@@ -3317,7 +3317,7 @@ fn trace_inspection_run(
                 source: generated.source,
                 actor: generated.actor,
                 targets: generated.targets,
-                detail: generated.detail,
+                detail: serde_json::to_value(generated.detail).unwrap_or(serde_json::Value::Null),
             })
             .collect(),
         effect_changes: trace
@@ -3330,7 +3330,7 @@ fn trace_inspection_run(
                 effect: effect.effect,
                 target: effect.target,
                 operation: effect.operation,
-                detail: effect.detail,
+                detail: serde_json::to_value(effect.detail).unwrap_or(serde_json::Value::Null),
             })
             .collect(),
         visibility: trace
@@ -3343,7 +3343,7 @@ fn trace_inspection_run(
                 event_index: visibility.event_index,
                 audience: visibility.audience,
                 policy: visibility.policy,
-                detail: visibility.detail,
+                detail: serde_json::to_value(visibility.detail).unwrap_or(serde_json::Value::Null),
             })
             .collect(),
         notes: trace

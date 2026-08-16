@@ -177,7 +177,7 @@ pub struct InvestigationMemoryRecord {
     pub mode: InvestigateMode,
     #[serde(default)]
     pub scope: ResultMemoryScope,
-    pub result: serde_json::Value,
+    pub result: crate::events::InvestigationResultBody,
     pub source_action: String,
     pub template_id: String,
     pub phase_id: PhaseId,

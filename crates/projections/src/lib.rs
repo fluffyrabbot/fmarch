@@ -2576,6 +2576,11 @@ async fn fold_inner(
             .bind(game_id)
             .execute(&mut **tx)
             .await?;
+            let metadata =
+                serde_json::to_value(metadata).map_err(|source| ProjectionError::Payload {
+                    kind: "WinReached".to_string(),
+                    source,
+                })?;
             // Terminal winner fact → game_result (one row per game; rebuild
             // converges on the same trailing WinReached).
             sqlx::query(

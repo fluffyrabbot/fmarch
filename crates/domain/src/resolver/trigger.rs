@@ -350,7 +350,7 @@ pub(super) fn apply_trigger_fixpoint(
                         stage: "kill_resolution".to_string(),
                         source: format!("cause:{}", trig.id),
                         outcome: "kill_skipped_by_target_state".to_string(),
-                        detail: serde_json::json!({
+                        detail: crate::json_atom!({
                             "action_id": trig.id,
                             "template_id": trig.id,
                             "actor": produced_actor,

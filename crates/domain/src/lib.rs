@@ -7,6 +7,7 @@
 pub mod events;
 pub mod golden;
 pub mod ir;
+pub mod json;
 pub mod pack;
 pub mod resolver;
 pub mod state;
@@ -16,15 +17,17 @@ pub use events::{
     validate_resolution_applied, validate_resolution_json, validate_resolution_trace,
     validate_trace_json, DayAnnouncement, DayVoteOutcome, Death, DecisionTrace, DuelResult,
     EffectDeltaTrace, GeneratedActionTrace, HostPromptIssued, HostPromptMetadata,
-    HostPromptPublicResolution, InnerEvent, ItaCounters, ItaShotOutcome, LastWordsRecorded,
-    LastWordsVoteSummary, PhaseAnnouncement, ResolutionApplied, ResolutionTrace,
-    ResultValidationError, TraceEdge, VisibilityTrace, VoteStatus, TRACE_VERSION,
+    HostPromptPublicResolution, InnerEvent, InvestigationResultBody, InvestigationResultFields,
+    ItaCounters, ItaShotOutcome, LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement,
+    ResolutionApplied, ResolutionTrace, ResultValidationError, SurvivalWinAward, TraceEdge,
+    VisibilityTrace, VoteStatus, WinReachedMetadata, TRACE_VERSION,
 };
 pub use golden::{
     golden_events_from_input_value, golden_pack_json_with_overrides, normalize_golden_event,
     normalize_golden_events, GoldenFixtureError,
 };
 pub use ir::{InvestigateMode, IrAbility, Modifier};
+pub use json::JsonAtom;
 pub use pack::{
     load_pack_from_json, night_ability_order, validate_pack, BackupPolicy, BelovedPrincessPolicy,
     DayAnnouncementPolicy, DayDeathAnnouncementPolicy, DayDeathCauseTemplate, DayNotePolicy,

@@ -22,7 +22,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
         stage: "result_contract".to_string(),
         source: format!("domain::resolve/result_version:{}", applied.result_version),
         outcome: format!("{} inner events validated", applied.counts.events),
-        detail: serde_json::json!({
+        detail: crate::json_atom!({
             "kills": applied.counts.kills,
             "saves": applied.counts.saves,
         }),
@@ -69,7 +69,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     effect: tag.clone(),
                     target: slot_id.clone(),
                     operation: "status_tag".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "source": source,
                         "event_index": indexed.index,
                     }),
@@ -94,7 +94,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     effect: effect.clone(),
                     target: target.clone(),
                     operation: "mark".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "actor": actor,
                         "event_index": indexed.index,
                         "source_action": source_action,
@@ -118,7 +118,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                         effect: effect.clone(),
                         target: target.clone(),
                         operation: "clear".to_string(),
-                        detail: serde_json::json!({
+                        detail: crate::json_atom!({
                             "actor": actor,
                             "event_index": indexed.index
                         }),
@@ -144,7 +144,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ActionGranted".to_string(),
                     actor: actor.clone(),
                     targets: vec![target.clone()],
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "kind": kind,
                         "grant_option": grant_option,
                         "source_action": source_action,
@@ -173,7 +173,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ActionGrantConsumed".to_string(),
                     actor: actor.clone(),
                     targets: Vec::new(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "grant_id": grant_id,
                         "source_action": source_action,
                         "phase_id": phase_id,
@@ -205,7 +205,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "BadgeChanged".to_string(),
                     actor: actor.clone(),
                     targets: owner.clone().into_iter().collect(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "badge_id": badge_id,
                         "previous_owner": previous_owner,
                         "vote_weight": vote_weight,
@@ -235,7 +235,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "DuelResolved".to_string(),
                     actor: knight.clone(),
                     targets: vec![target.clone()],
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "result": result,
                         "killed": killed,
                         "phase_id": phase_id,
@@ -265,7 +265,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "WolfSelfDestructed".to_string(),
                     actor: wolf_id.clone(),
                     targets: vec![target_id.clone()],
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "cause": cause,
                         "unstoppable": unstoppable,
                         "phase_id": phase_id,
@@ -294,7 +294,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "WolfCarryQueued".to_string(),
                     actor: owner_id.clone(),
                     targets: Vec::new(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "cause": cause,
                         "role_key": role_key,
                         "phase_id": phase_id,
@@ -324,7 +324,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "WolfCarryUsed".to_string(),
                     actor: owner_id.clone(),
                     targets: vec![target_id.clone()],
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "effect_id": effect_id,
                         "role_key": role_key,
                         "phase_id": phase_id,
@@ -353,7 +353,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "WolfBeautyMarked".to_string(),
                     actor: beauty_id.clone(),
                     targets: vec![target_id.clone()],
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "effect": effect,
                         "phase_id": phase_id,
                         "phase_kind": phase_kind,
@@ -380,7 +380,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "WolfBeautyDragged".to_string(),
                     actor: beauty_id.clone(),
                     targets: dragged_ids.clone(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "cause": cause,
                         "phase_id": phase_id,
                         "phase_kind": phase_kind,
@@ -407,7 +407,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ItaSessionOpened".to_string(),
                     actor: session_id.clone(),
                     targets: Vec::new(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "label": label,
                         "day": day,
                         "window": window,
@@ -435,7 +435,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ItaSessionLifecycleChanged".to_string(),
                     actor: session_id.clone(),
                     targets: Vec::new(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "control": control,
                         "from_status": from_status,
                         "to_status": to_status,
@@ -462,7 +462,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ItaSessionAnnouncement".to_string(),
                     actor: session_id.clone(),
                     targets: Vec::new(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "status": status,
                         "message": message,
                         "recorded_at": recorded_at,
@@ -485,7 +485,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ItaShotQueued".to_string(),
                     actor: actor.clone(),
                     targets: targets.clone(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "session_id": session_id,
                         "queue_position": queue_position,
                         "queue_length": queue_length,
@@ -509,7 +509,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ItaShotBuffered".to_string(),
                     actor: actor_id.clone(),
                     targets: targets.clone(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "session_id": session_id,
                         "template_id": template_id,
                         "submitted_at": submitted_at,
@@ -535,7 +535,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ItaShotInvalidated".to_string(),
                     actor: actor_id.clone(),
                     targets: vec![target_id.clone()],
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "session_id": session_id,
                         "reason": reason,
                         "invalidated_by": invalidated_by,
@@ -563,7 +563,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 protection_path,
                 ..
             } => {
-                let mut detail = serde_json::json!({
+                let mut detail = crate::json_atom!({
                     "session_id": session_id,
                     "outcome": outcome,
                     "hit_chance": hit_chance,
@@ -572,15 +572,15 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     "event_index": indexed.index,
                 });
                 if shield_before.is_some() || shield_after.is_some() || *shield_spent {
-                    detail["shield_before"] = serde_json::json!(shield_before);
-                    detail["shield_after"] = serde_json::json!(shield_after);
-                    detail["shield_spent"] = serde_json::json!(shield_spent);
-                    detail["protection_path"] = serde_json::json!(protection_path);
+                    detail["shield_before"] = crate::json_atom!(shield_before);
+                    detail["shield_after"] = crate::json_atom!(shield_after);
+                    detail["shield_spent"] = crate::json_atom!(shield_spent);
+                    detail["protection_path"] = crate::json_atom!(protection_path);
                 }
                 if hp_before.is_some() || hp_after.is_some() {
-                    detail["hp_before"] = serde_json::json!(hp_before);
-                    detail["hp_after"] = serde_json::json!(hp_after);
-                    detail["protection_path"] = serde_json::json!(protection_path);
+                    detail["hp_before"] = crate::json_atom!(hp_before);
+                    detail["hp_after"] = crate::json_atom!(hp_after);
+                    detail["protection_path"] = crate::json_atom!(protection_path);
                 }
                 generated.push(GeneratedActionTrace {
                     action_id: action_id.clone(),
@@ -612,7 +612,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ItaShotRefunded".to_string(),
                     actor: actor_id.clone(),
                     targets: vec![target_id.clone()],
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "session_id": session_id,
                         "reason": reason,
                         "policy": policy,
@@ -645,7 +645,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ItaSessionUpdated".to_string(),
                     actor: session_id.clone(),
                     targets: Vec::new(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "queue_length": queue_length,
                         "shots_resolved": shots_resolved,
                         "global_shots_fired": global_shots_fired,
@@ -668,7 +668,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "ItaSessionClosed".to_string(),
                     actor: session_id.clone(),
                     targets: Vec::new(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "last_status": last_status,
                         "event_index": indexed.index,
                     }),
@@ -696,7 +696,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "VoteVetoed".to_string(),
                     actor: governor.clone(),
                     targets: vec![target.clone()],
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "event_index": indexed.index,
                     }),
                 });
@@ -736,7 +736,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     source: "Trigger".to_string(),
                     actor,
                     targets,
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "on": payload.get("on").cloned().unwrap_or(serde_json::Value::Null),
                         "source_target": payload.get("source_target").cloned().unwrap_or(serde_json::Value::Null),
                         "source_actor": payload.get("source_actor").cloned().unwrap_or(serde_json::Value::Null),
@@ -750,21 +750,19 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 "trigger"
             }
             InnerEvent::WinReached { metadata, .. } => {
-                if let Some(awards) = metadata
-                    .get("survival_awards")
-                    .and_then(|value| value.as_array())
-                {
-                    for award in awards {
-                        let source = award
-                            .get("slot_id")
-                            .and_then(|value| value.as_str())
-                            .map(|slot_id| format!("slot:{slot_id}"))
-                            .unwrap_or_else(|| format!("event_index:{}", indexed.index));
+                if let Some(metadata) = metadata {
+                    for award in &metadata.survival_awards {
                         decisions.push(DecisionTrace {
                             stage: "win:survival".to_string(),
-                            source,
+                            source: format!("slot:{}", award.slot_id),
                             outcome: "survival_win_awarded".to_string(),
-                            detail: award.clone(),
+                            detail: crate::json_atom!({
+                                "policy": award.policy,
+                                "winner": award.winner,
+                                "slot_id": award.slot_id,
+                                "role": award.role,
+                                "source_event": award.source_event,
+                            }),
                         });
                     }
                 }
@@ -778,7 +776,7 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
             stage: "inner_event".to_string(),
             source: format!("event_index:{}", indexed.index),
             outcome: outcome.to_string(),
-            detail: serde_json::Value::Null,
+            detail: crate::json::JsonAtom::Null,
         });
     }
     notes.extend(trace_notes);

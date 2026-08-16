@@ -253,7 +253,7 @@ pub(super) fn resolve_day_vote(context: DayVoteResolutionContext<'_>) {
                 stage: "day:veto".to_string(),
                 source: format!("slot:{w}"),
                 outcome: "lynch_vetoed".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "phase_id": input.phase_id,
                     "target": w,
                 }),
@@ -281,7 +281,7 @@ pub(super) fn resolve_day_vote(context: DayVoteResolutionContext<'_>) {
                     stage: "day:lynch_trigger".to_string(),
                     source: format!("slot:{w}"),
                     outcome: "saulus_alignment_flipped".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "target": w,
                         "role": role_key,
                         "original_alignment": original_alignment,
@@ -660,7 +660,7 @@ fn resolve_target_lynch_wins(
             stage: "day:lynch_trigger".to_string(),
             source: format!("action:{}", record.source_action),
             outcome: "target_lynch_win_reached".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "policy": policy.id,
                 "owner": record.owner,
                 "target": record.target,
@@ -678,15 +678,16 @@ fn resolve_target_lynch_wins(
                 "{} {} target {} lynched",
                 policy.id, record.owner, record.target
             ),
-            metadata: serde_json::json!({
-                "policy": policy.id,
-                "owner": record.owner,
-                "target": record.target,
-                "effect": record.effect,
-                "source_action": record.source_action,
-                "target_phase_id": record.phase_id,
-                "target_phase_kind": record.phase_kind,
-                "target_phase_number": record.phase_number,
+            metadata: Some(crate::events::WinReachedMetadata {
+                policy: Some(policy.id.clone()),
+                owner: Some(record.owner.clone()),
+                target: Some(record.target.clone()),
+                effect: Some(record.effect.clone()),
+                source_action: Some(record.source_action.clone()),
+                target_phase_id: Some(record.phase_id.clone()),
+                target_phase_kind: Some(format!("{:?}", record.phase_kind)),
+                target_phase_number: Some(record.phase_number),
+                ..crate::events::WinReachedMetadata::default()
             }),
         });
     }
@@ -712,7 +713,7 @@ fn resolve_day_vote_prompts(
             stage: "day:vote_prompt".to_string(),
             source: "day_vote".to_string(),
             outcome: "host_prompt_issued".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "policy": policy.id,
                 "prompt_id": prompt_id,
                 "kind": policy.prompt_kind,
@@ -898,7 +899,7 @@ fn resolve_self_lynch_wins(
         stage: "day:lynch_trigger".to_string(),
         source: format!("slot:{lynched}"),
         outcome: "self_lynch_win_reached".to_string(),
-        detail: serde_json::json!({
+        detail: crate::json_atom!({
             "policy": policy.id,
             "winner": policy.winner,
             "target": lynched,
@@ -909,11 +910,12 @@ fn resolve_self_lynch_wins(
     events.push(InnerEvent::WinReached {
         winner: policy.winner.clone(),
         reason: format!("{} {} lynched", policy.id, lynched),
-        metadata: serde_json::json!({
-            "policy": policy.id,
-            "target": lynched,
-            "role": slot.role_key,
-            "source_event": source_event,
+        metadata: Some(crate::events::WinReachedMetadata {
+            policy: Some(policy.id.clone()),
+            target: Some(lynched.clone()),
+            role: Some(slot.role_key.clone()),
+            source_event: Some(source_event),
+            ..crate::events::WinReachedMetadata::default()
         }),
     });
 }
@@ -998,7 +1000,7 @@ fn resolve_wolf_beauty_drag(
         stage: "death:cascade".to_string(),
         source: format!("action:{}", mark.source_action),
         outcome: "wolf_beauty_dragged".to_string(),
-        detail: serde_json::json!({
+        detail: crate::json_atom!({
             "beauty_id": beauty_id.clone(),
             "dragged_id": mark.target_id.clone(),
             "mark_effect": mark.effect.clone(),
@@ -1163,7 +1165,7 @@ pub(super) fn resolve_duel_actions(
                 stage: "duel_resolution".to_string(),
                 source: format!("trigger:{}", record.cause),
                 outcome: "generated_kill_after_duel".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "source_action": sub.action_id.clone(),
                     "template_id": template.id.clone(),
                     "duel_killed": killed.clone(),

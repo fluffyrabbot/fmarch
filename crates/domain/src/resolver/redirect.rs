@@ -92,7 +92,7 @@ pub(super) fn resolve_redirects(context: RedirectResolutionContext<'_, '_>) {
                     stage: "night:redirect".to_string(),
                     source: "night_resolution.empower_effects".to_string(),
                     outcome: "action_redirect_bypassed".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "actor": actor,
                         "action_id": action_id,
                         "template_id": template_id,
@@ -316,7 +316,7 @@ fn redirect_trace_edge(
         from: format!("{action_id}:target:{target_index}:{original}"),
         to: format!("{}:target:{target_index}:{}", action_id, applied.target),
         kind: "redirect".to_string(),
-        detail: serde_json::json!({
+        detail: crate::json_atom!({
             "action_id": action_id,
             "template_id": template_id,
             "actor": actor,

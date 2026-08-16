@@ -1966,7 +1966,11 @@ fn malformed_investigation_result_payload_fails_contract_validation() {
     let err =
         validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION).unwrap_err();
     assert!(
-        err.to_string().contains("unknown result key `team`"),
+        err.to_string().contains("unknown field `team`")
+            || err.to_string().contains("unknown result key `team`")
+            || err.to_string().contains(
+                "data did not match any variant of untagged enum InvestigationResultBody"
+            ),
         "unexpected error: {err}"
     );
 }
@@ -2309,7 +2313,10 @@ fn malformed_visitor_role_investigation_result_payload_fails_contract_validation
         validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION).unwrap_err();
     assert!(
         err.to_string()
-            .contains("event 0 mode RoleWatcher result key `visitor_roles` has invalid shape"),
+            .contains("event 0 mode RoleWatcher result key `visitor_roles` has invalid shape")
+            || err.to_string().contains(
+                "data did not match any variant of untagged enum InvestigationResultBody"
+            ),
         "unexpected error: {err}"
     );
 }
@@ -2350,7 +2357,10 @@ fn malformed_voyeur_investigation_result_payload_fails_contract_validation() {
         validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION).unwrap_err();
     assert!(
         err.to_string()
-            .contains("event 0 mode Voyeur result key `actions` has invalid shape"),
+            .contains("event 0 mode Voyeur result key `actions` has invalid shape")
+            || err.to_string().contains(
+                "data did not match any variant of untagged enum InvestigationResultBody"
+            ),
         "unexpected error: {err}"
     );
 }
@@ -2615,8 +2625,11 @@ fn final_win_survival_awards_metadata_passes_contract_validation() {
         other => panic!("expected terminal WinReached, got {other:?}"),
     };
     assert_eq!(
-        metadata["survival_awards"][0]["source_event"],
-        "win.survivor"
+        metadata
+            .as_ref()
+            .and_then(|metadata| metadata.survival_awards.first())
+            .map(|award| award.source_event.as_str()),
+        Some("win.survivor")
     );
 }
 

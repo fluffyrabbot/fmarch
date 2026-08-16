@@ -6,6 +6,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::ir::InvestigateMode;
+use crate::json::JsonAtom;
 use crate::pack::{
     default_death_reveal_mode, is_default_death_reveal_mode, DeathRevealMode, EffectDuration,
     EffectVisibility, GrantKind, PhaseKind, RoleKey, Tag,
@@ -415,14 +416,14 @@ pub enum InnerEvent {
         mode: InvestigateMode,
         investigator: SlotId,
         target: SlotId,
-        result: serde_json::Value,
+        result: InvestigationResultBody,
     },
     InfoResult {
         actor: SlotId,
         target: SlotId,
         kind: String,
         audience: Vec<SlotId>,
-        result: serde_json::Value,
+        result: JsonAtom,
         source_action: String,
         template_id: String,
         phase_id: PhaseId,
@@ -438,7 +439,7 @@ pub enum InnerEvent {
             skip_serializing_if = "crate::pack::ResultMemoryScope::is_default"
         )]
         scope: crate::pack::ResultMemoryScope,
-        result: serde_json::Value,
+        result: InvestigationResultBody,
         source_action: String,
         template_id: String,
         phase_id: PhaseId,
@@ -516,7 +517,8 @@ pub enum InnerEvent {
     WinReached {
         winner: String,
         reason: String,
-        metadata: serde_json::Value,
+        #[serde(default)]
+        metadata: Option<WinReachedMetadata>,
     },
 }
 
@@ -633,6 +635,196 @@ pub struct HostPromptMetadata {
     pub death_cause: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+}
+
+/// Player-facing investigation payload. Parity is a string label; every other
+/// mode is a closed field bag matching the result-contract keys.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum InvestigationResultBody {
+    Label(String),
+    Fields(Box<InvestigationResultFields>),
+}
+
+impl InvestigationResultBody {
+    pub fn label(value: impl Into<String>) -> Self {
+        Self::Label(value.into())
+    }
+
+    pub fn fields(fields: InvestigationResultFields) -> Self {
+        Self::Fields(Box::new(fields))
+    }
+
+    pub fn as_label(&self) -> Option<&str> {
+        match self {
+            Self::Label(value) => Some(value),
+            Self::Fields(_) => None,
+        }
+    }
+
+    pub fn as_fields(&self) -> Option<&InvestigationResultFields> {
+        match self {
+            Self::Fields(fields) => Some(fields),
+            Self::Label(_) => None,
+        }
+    }
+}
+
+impl PartialEq<serde_json::Value> for InvestigationResultBody {
+    fn eq(&self, other: &serde_json::Value) -> bool {
+        serde_json::to_value(self).ok().as_ref() == Some(other)
+    }
+}
+
+impl PartialEq<str> for InvestigationResultBody {
+    fn eq(&self, other: &str) -> bool {
+        self.as_label() == Some(other)
+    }
+}
+
+impl PartialEq<&str> for InvestigationResultBody {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_label() == Some(*other)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct InvestigationResultFields {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vanilla: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vanilla_town: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_gun: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub killer: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub specialist: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pt_access: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alignment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visited: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visitors: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visitor_roles: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actions: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action_types: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub motion: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prior_motion: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changed: Option<bool>,
+}
+
+impl InvestigationResultFields {
+    fn occupied_keys(&self) -> Vec<&'static str> {
+        let mut keys = Vec::new();
+        if self.vanilla.is_some() {
+            keys.push("vanilla");
+        }
+        if self.vanilla_town.is_some() {
+            keys.push("vanilla_town");
+        }
+        if self.has_gun.is_some() {
+            keys.push("has_gun");
+        }
+        if self.killer.is_some() {
+            keys.push("killer");
+        }
+        if self.specialist.is_some() {
+            keys.push("specialist");
+        }
+        if self.pt_access.is_some() {
+            keys.push("pt_access");
+        }
+        if self.role.is_some() {
+            keys.push("role");
+        }
+        if self.alignment.is_some() {
+            keys.push("alignment");
+        }
+        if self.visited.is_some() {
+            keys.push("visited");
+        }
+        if self.visitors.is_some() {
+            keys.push("visitors");
+        }
+        if self.visitor_roles.is_some() {
+            keys.push("visitor_roles");
+        }
+        if self.actions.is_some() {
+            keys.push("actions");
+        }
+        if self.action_types.is_some() {
+            keys.push("action_types");
+        }
+        if self.motion.is_some() {
+            keys.push("motion");
+        }
+        if self.prior_motion.is_some() {
+            keys.push("prior_motion");
+        }
+        if self.previous.is_some() {
+            keys.push("previous");
+        }
+        if self.current.is_some() {
+            keys.push("current");
+        }
+        if self.changed.is_some() {
+            keys.push("changed");
+        }
+        keys
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct WinReachedMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub winner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_event: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_phase_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_phase_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_phase_number: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub survival_awards: Vec<SurvivalWinAward>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SurvivalWinAward {
+    pub policy: String,
+    pub winner: String,
+    pub slot_id: String,
+    pub role: String,
+    pub source_event: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -804,8 +996,8 @@ pub struct TraceEdge {
     pub from: String,
     pub to: String,
     pub kind: String,
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
-    pub detail: serde_json::Value,
+    #[serde(default, skip_serializing_if = "JsonAtom::is_null")]
+    pub detail: JsonAtom,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -815,8 +1007,8 @@ pub struct GeneratedActionTrace {
     pub source: String,
     pub actor: SlotId,
     pub targets: Vec<SlotId>,
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
-    pub detail: serde_json::Value,
+    #[serde(default, skip_serializing_if = "JsonAtom::is_null")]
+    pub detail: JsonAtom,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -825,8 +1017,8 @@ pub struct EffectDeltaTrace {
     pub effect: Tag,
     pub target: SlotId,
     pub operation: String,
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
-    pub detail: serde_json::Value,
+    #[serde(default, skip_serializing_if = "JsonAtom::is_null")]
+    pub detail: JsonAtom,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -835,8 +1027,8 @@ pub struct VisibilityTrace {
     pub audience: Vec<SlotId>,
     pub event_index: usize,
     pub policy: String,
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
-    pub detail: serde_json::Value,
+    #[serde(default, skip_serializing_if = "JsonAtom::is_null")]
+    pub detail: JsonAtom,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -845,8 +1037,8 @@ pub struct DecisionTrace {
     pub stage: String,
     pub source: String,
     pub outcome: String,
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
-    pub detail: serde_json::Value,
+    #[serde(default, skip_serializing_if = "JsonAtom::is_null")]
+    pub detail: JsonAtom,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1077,34 +1269,35 @@ fn validate_investigation_result_invariant(
             continue;
         };
         if matches!(mode, crate::ir::InvestigateMode::Parity) {
-            if result.as_str().is_some() {
-                continue;
+            match result {
+                InvestigationResultBody::Label(_) => continue,
+                InvestigationResultBody::Fields(fields) => {
+                    validate_investigation_result_fields(
+                        indexed.index,
+                        *mode,
+                        fields,
+                        &["changed", "current", "previous"],
+                    )?;
+                    if fields.current.is_none() || fields.changed.is_none() {
+                        return Err(ResultValidationError::InvestigationResultInvariant(
+                            format!(
+                                "event {} mode {mode:?} result must be a string or comparison object",
+                                indexed.index
+                            ),
+                        ));
+                    }
+                    continue;
+                }
             }
-            if let Some(object) = result.as_object() {
-                validate_investigation_result_object(
-                    indexed.index,
-                    *mode,
-                    object,
-                    &["changed", "current", "previous"],
-                )?;
-                continue;
-            }
-            if result.as_str().is_none() {
-                return Err(ResultValidationError::InvestigationResultInvariant(
-                    format!(
-                        "event {} mode {mode:?} result must be a string or comparison object",
-                        indexed.index
-                    ),
-                ));
-            }
-            continue;
         }
-        let object = result.as_object().ok_or_else(|| {
-            ResultValidationError::InvestigationResultInvariant(format!(
-                "event {} mode {mode:?} result must be an object",
-                indexed.index
-            ))
-        })?;
+        let InvestigationResultBody::Fields(fields) = result else {
+            return Err(ResultValidationError::InvestigationResultInvariant(
+                format!(
+                    "event {} mode {mode:?} result must be an object",
+                    indexed.index
+                ),
+            ));
+        };
         let expected_keys: &[&str] = match mode {
             crate::ir::InvestigateMode::Vanilla => &["vanilla"],
             crate::ir::InvestigateMode::Neapolitan => &["vanilla_town"],
@@ -1126,45 +1319,31 @@ fn validate_investigation_result_invariant(
             crate::ir::InvestigateMode::PriorMotion => &["prior_motion"],
             crate::ir::InvestigateMode::Parity => unreachable!("Parity handled above"),
         };
-        validate_investigation_result_object(indexed.index, *mode, object, expected_keys)?;
+        validate_investigation_result_fields(indexed.index, *mode, fields, expected_keys)?;
     }
     Ok(())
 }
 
-fn validate_investigation_result_object(
+fn validate_investigation_result_fields(
     event_index: usize,
     mode: crate::ir::InvestigateMode,
-    object: &serde_json::Map<String, serde_json::Value>,
+    fields: &InvestigationResultFields,
     expected_keys: &[&str],
 ) -> Result<(), ResultValidationError> {
-    for key in object.keys() {
-        if !expected_keys.contains(&key.as_str()) {
+    for key in fields.occupied_keys() {
+        if !expected_keys.contains(&key) {
             return Err(ResultValidationError::InvestigationResultInvariant(
                 format!("event {event_index} mode {mode:?} has unknown result key `{key}`"),
             ));
         }
     }
     for key in expected_keys {
-        let Some(value) = object.get(*key) else {
+        if *key == "previous" {
+            continue;
+        }
+        if !fields.occupied_keys().contains(key) {
             return Err(ResultValidationError::InvestigationResultInvariant(
                 format!("event {event_index} mode {mode:?} missing result key `{key}`"),
-            ));
-        };
-        let valid = match *key {
-            "alignment" | "role" | "current" => value.as_str().is_some(),
-            "previous" => value.is_null() || value.as_str().is_some(),
-            "changed" | "vanilla" | "vanilla_town" | "has_gun" | "killer" | "specialist"
-            | "motion" | "prior_motion" => value.as_bool().is_some(),
-            "action_types" | "actions" | "pt_access" | "visited" | "visitors" | "visitor_roles" => {
-                value
-                    .as_array()
-                    .is_some_and(|items| items.iter().all(|item| item.as_str().is_some()))
-            }
-            _ => false,
-        };
-        if !valid {
-            return Err(ResultValidationError::InvestigationResultInvariant(
-                format!("event {event_index} mode {mode:?} result key `{key}` has invalid shape"),
             ));
         }
     }

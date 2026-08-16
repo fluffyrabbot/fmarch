@@ -7508,10 +7508,12 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
         &indexed.event,
         domain::InnerEvent::WinReached { winner, metadata, .. }
             if winner == case.policy
-                && metadata["policy"] == case.policy
-                && metadata["owner"] == "slot_1"
-                && metadata["target"] == "slot_2"
-                && metadata["source_action"] == case.action_id
+                && metadata.as_ref().is_some_and(|metadata| {
+                    metadata.policy.as_deref() == Some(case.policy)
+                        && metadata.owner.as_deref() == Some("slot_1")
+                        && metadata.target.as_deref() == Some("slot_2")
+                        && metadata.source_action.as_deref() == Some(case.action_id)
+                })
     )));
 
     let d01_trace_payload =

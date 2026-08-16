@@ -201,7 +201,7 @@ pub(super) fn resolve_one_kill(context: ActionResolutionContext<'_>, action: Kil
             stage: "kill_resolution".to_string(),
             source: format!("cause:{cause}"),
             outcome: "kill_prevented_by_protection".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "target": target,
                 "attacker": attacker,
                 "cause": cause,
@@ -290,7 +290,7 @@ pub(super) fn resolve_one_kill(context: ActionResolutionContext<'_>, action: Kil
                     stage: "kill_resolution".to_string(),
                     source: format!("cause:{retaliation_cause}"),
                     outcome: "guard_retaliation_prevented_by_protection".to_string(),
-                    detail: serde_json::json!({
+                    detail: crate::json_atom!({
                         "protected_target": target,
                         "protector": source.protector,
                         "attacker": attacker,
@@ -321,7 +321,7 @@ pub(super) fn resolve_one_kill(context: ActionResolutionContext<'_>, action: Kil
                 stage: "kill_resolution".to_string(),
                 source: format!("cause:{retaliation_cause}"),
                 outcome: "guard_retaliation_killed_attacker".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "protected_target": target,
                     "protector": source.protector,
                     "attacker": attacker,
@@ -381,7 +381,7 @@ pub(super) fn resolve_one_kill(context: ActionResolutionContext<'_>, action: Kil
                 stage: "kill_resolution".to_string(),
                 source: format!("cause:{cause}"),
                 outcome: "protection_bypassed_by_unstoppable_kill".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "target": target,
                     "attacker": attacker,
                     "cause": cause,
@@ -451,7 +451,7 @@ pub(super) fn merge_stacked_kill_attribution(
         stage: "kill_resolution".to_string(),
         source: format!("cause:{cause}"),
         outcome: "kill_stacked_on_existing_death".to_string(),
-        detail: serde_json::json!({
+        detail: crate::json_atom!({
             "target": target,
             "attacker": attacker,
             "cause": cause,
@@ -485,7 +485,7 @@ pub(super) fn apply_chosen_retaliations(
                 stage: "death:cascade".to_string(),
                 source: format!("retaliation:{}", retaliation.retaliation_id),
                 outcome: "chosen_retaliation_suppressed".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "policy": "death_retaliation",
                     "timing": "ImmediateBeforePhaseAnnouncement",
                     "reason": reason,
@@ -517,7 +517,7 @@ pub(super) fn apply_chosen_retaliations(
             stage: "death:cascade".to_string(),
             source: format!("retaliation:{}", retaliation.retaliation_id),
             outcome: "chosen_retaliation".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "retaliation_id": retaliation.retaliation_id.clone(),
                 "actor": retaliation.actor.clone(),
                 "target": retaliation.target.clone(),
@@ -588,7 +588,7 @@ pub(super) fn apply_cpr_harms(
                 stage: "night:cpr".to_string(),
                 source: format!("action:{}", source.action_id),
                 outcome: "cpr_harm_applied".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "action_id": source.action_id,
                     "template_id": source.template_id,
                     "protector": source.protector,
@@ -709,7 +709,7 @@ pub(super) fn apply_guard_dependency_deaths(
             stage: "night:dependency_death".to_string(),
             source: format!("action:{}", dependency.source_action_id),
             outcome: "babysitter_dependency_death".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "action_id": dependency.source_action_id.clone(),
                 "template_id": dependency.template_id.clone(),
                 "protector": dependency.guard.clone(),
@@ -782,7 +782,7 @@ pub(super) fn apply_hide_dependency_deaths(
             stage: "night:dependency_death".to_string(),
             source: format!("action:{}", dependency.source_action_id),
             outcome: "hider_dependency_death".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "action_id": dependency.source_action_id.clone(),
                 "template_id": dependency.template_id.clone(),
                 "host": dependency.host.clone(),
@@ -847,7 +847,7 @@ pub(super) fn emit_action_interfered_by_target_state(
         reason,
         target_tags,
     } = interference;
-    let mut detail = serde_json::json!({
+    let mut detail = crate::json_atom!({
         "action_id": action.sub.action_id,
         "template_id": action.template.id,
         "actor": action.sub.actor,
@@ -857,7 +857,7 @@ pub(super) fn emit_action_interfered_by_target_state(
         "target_tags": target_tags,
     });
     if let Some(mode) = mode {
-        detail["mode"] = serde_json::json!(mode);
+        detail["mode"] = crate::json_atom!(mode);
     }
     trace_decisions.push(DecisionTrace {
         stage: "night:target_state".to_string(),
@@ -970,7 +970,7 @@ pub(super) fn apply_guard_witch_same_target_policy(context: ProtectionResolution
             stage: "night:guard_policy".to_string(),
             source: "guard_policy.same_target_witch".to_string(),
             outcome: "guard_witch_same_target_killed".to_string(),
-            detail: serde_json::json!({
+            detail: crate::json_atom!({
                 "target": target,
                 "cause": cause,
                 "policy": "KillTarget",

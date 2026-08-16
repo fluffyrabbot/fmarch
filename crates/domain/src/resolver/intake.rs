@@ -545,7 +545,7 @@ fn apply_action_constraints(
                 stage: "night:action_constraints".to_string(),
                 source: format!("action:{}", action.sub.action_id),
                 outcome: "action_suppressed".to_string(),
-                detail: serde_json::json!({
+                detail: crate::json_atom!({
                     "action_id": action.sub.action_id.clone(),
                     "template_id": action.template.id.clone(),
                     "actor": action.sub.actor.clone(),

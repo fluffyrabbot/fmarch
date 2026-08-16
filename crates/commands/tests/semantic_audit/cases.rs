@@ -31655,7 +31655,10 @@ async fn host_resolve_phase_projects_mafiascum_action_investigation_guards(pool:
                     result,
                 } if investigator == "slot_1"
                     && target == "slot_5"
-                    && result["visitor_roles"] == serde_json::json!(["doctor", "friendly_neighbor"])
+                    && result.as_fields().is_some_and(|fields| {
+                        fields.visitor_roles.as_deref()
+                            == Some(["doctor".to_string(), "friendly_neighbor".to_string()].as_slice())
+                    })
             )
         }),
         "Role Watcher should learn visible visitor roles and exclude Ninja: {applied:?}"
@@ -31671,7 +31674,10 @@ async fn host_resolve_phase_projects_mafiascum_action_investigation_guards(pool:
                     result,
                 } if investigator == "slot_3"
                     && target == "slot_5"
-                    && result["visitors"] == serde_json::json!(["slot_4", "slot_6"])
+                    && result.as_fields().is_some_and(|fields| {
+                        fields.visitors.as_deref()
+                            == Some(["slot_4".to_string(), "slot_6".to_string()].as_slice())
+                    })
             )
         }),
         "Security Guard should learn visible visitor identities and exclude Ninja: {applied:?}"
@@ -31885,9 +31891,11 @@ async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
                     ..
                 } if investigator == "slot_1"
                     && target == "slot_2"
-                    && result["previous"] == "town"
-                    && result["current"] == "scum"
-                    && result["changed"] == true
+                    && result.as_fields().is_some_and(|fields| {
+                        fields.previous.as_deref() == Some("town")
+                            && fields.current.as_deref() == Some("scum")
+                            && fields.changed == Some(true)
+                    })
             )
         }),
         "ResolvePhase reports the prior/current comparison result"
@@ -32097,7 +32105,7 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
                     result,
                 } if investigator == "slot_2"
                     && target == "slot_1"
-                    && result["prior_motion"] == true
+                    && result.as_fields().is_some_and(|fields| fields.prior_motion == Some(true))
             )
         }),
         "N02 ResolvePhase reads rebuilt visit_history through PriorMotion"
@@ -36093,10 +36101,12 @@ async fn host_resolve_phase_carries_jester_self_lynch_win(pool: PgPool) {
         &indexed.event,
         domain::InnerEvent::WinReached { winner, metadata, .. }
             if winner == "jester"
-                && metadata["policy"] == "jester"
-                && metadata["target"] == "slot_1"
-                && metadata["role"] == "jester"
-                && metadata["source_event"] == "win.jester"
+                && metadata.as_ref().is_some_and(|metadata| {
+                    metadata.policy.as_deref() == Some("jester")
+                        && metadata.target.as_deref() == Some("slot_1")
+                        && metadata.role.as_deref() == Some("jester")
+                        && metadata.source_event.as_deref() == Some("win.jester")
+                })
     )));
     assert!(
         !d01.events.iter().any(|indexed| matches!(
@@ -36440,16 +36450,17 @@ async fn host_resolve_phase_awards_survivor_alive_at_end(pool: PgPool) {
         })
         .expect("town win should be reached with Survivor alive");
     assert_eq!(
-        win_metadata["survival_awards"],
-        serde_json::json!([
-            {
-                "policy": "survivor",
-                "winner": "survivor",
-                "slot_id": "slot_3",
-                "role": "survivor",
-                "source_event": "win.survivor"
-            }
-        ])
+        win_metadata
+            .as_ref()
+            .map(|metadata| metadata.survival_awards.clone())
+            .unwrap_or_default(),
+        vec![domain::SurvivalWinAward {
+            policy: "survivor".into(),
+            winner: "survivor".into(),
+            slot_id: "slot_3".into(),
+            role: "survivor".into(),
+            source_event: "win.survivor".into(),
+        }]
     );
 
     let d01_trace_payload =
@@ -36834,10 +36845,12 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
     assert!(
         wins.iter().any(|(winner, metadata)| {
             *winner == "jester"
-                && metadata["policy"] == "jester"
-                && metadata["target"] == "slot_1"
-                && metadata["role"] == "jester"
-                && metadata["source_event"] == "win.jester"
+                && metadata.as_ref().is_some_and(|metadata| {
+                    metadata.policy.as_deref() == Some("jester")
+                        && metadata.target.as_deref() == Some("slot_1")
+                        && metadata.role.as_deref() == Some("jester")
+                        && metadata.source_event.as_deref() == Some("win.jester")
+                })
         }),
         "Jester self-lynch should be the sole terminal win: {wins:?}"
     );
