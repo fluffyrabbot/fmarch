@@ -154,6 +154,35 @@ only for the same commit and manifest digest.
 - Keep hosted evidence and production promotion outside local proof; local full
   proof may validate their contracts but must not perform hosted mutations.
 
+### 7. Keep canonical `--run` on the Darwin checkout
+
+The remaining resource work is isolation and scheduling on this machine, not a
+host swap. Mesh ratified fluffycachy as its remote verification default because
+closure-heavy `cargo check` was pathologically slow on Darwin and because Linux
+gtk/webkit is a required Mesh surface. fmarch's expensive leaves are serial
+Postgres suites and Chromium; `scripts/check-build-posture.sh` already pins
+`target/` to `/Volumes/rabbitx10/build/fmarch/target`.
+
+Do not make fluffycachy the canonical fmarch proof host:
+
+- Browser, visual-regression, CSP, tablet, live-stack, and auth-invite lanes
+  are Darwin evidence. A green Linux result is not a substitute.
+- Both machines are in the same RAM class (~24–27 GiB). fluffycachy already
+  owns Mesh `mesh-verify` and Neoretro x86_64 evidence; parking the fmarch
+  spine there creates cross-repo contention without fixing shared `DATABASE_URL`.
+- The `~/apps/fmarch` tree on fluffycachy is not a proof environment (no
+  `target/`, no `node_modules`, no Postgres on 5544).
+- Tracked timings are host-dependent. The 2026-08-06 host measured
+  `cargo:commands-audit` at ~408–414s; the recorded 2026-08-08/09 baseline is
+  552.2s. Remote wall-clocks must not be `--record`ed into
+  `docs/ops/proof-lane-timings.json`.
+
+Optional later overflow, not authority: a dedicated `fmarch-verify` checkout
+on fluffycachy may run isolated platform-neutral Cargo/Postgres leaves
+(`cargo:commands-audit`, maybe `cargo:api` / `cargo:commands-pg`) after it has
+its own target root, repo-local Postgres, and no shared writable database with
+another run. That is extra evidence beside Darwin push/sprint/full.
+
 ## Acceptance Criteria
 
 - Full selection contains only leaf work and executes no test body twice.
@@ -186,6 +215,8 @@ only for the same commit and manifest digest.
 
 ## Non-Goals
 
-This refactor does not move proof authority to GitHub, introduce a pre-production
-development branch, or weaken full-mode coverage. `main` remains the development
-trunk; the `production` branch remains only an explicit release pointer.
+This refactor does not move proof authority to GitHub or fluffycachy, introduce
+a pre-production development branch, or weaken full-mode coverage. `main`
+remains the development trunk; the `production` branch remains only an explicit
+release pointer. Ordinary `--run` stays on the Darwin checkout whose `target/`
+lives on `/Volumes/rabbitx10/build/fmarch/target`.

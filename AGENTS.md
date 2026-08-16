@@ -49,6 +49,15 @@ direct `main` work, and atomic history over PR ceremony.
   SQLx-heavy tests serially when needed.
 - If podman is unavailable, a repo-local Postgres under `target/` is an
   acceptable local proof substitute.
+- Canonical `--run` stays on this Darwin checkout (`target/` →
+  `/Volumes/rabbitx10/build/fmarch/target`). fluffycachy is Mesh's remote
+  verification lane, not fmarch's proof host. A Linux green result does not
+  cover Darwin browser, visual, CSP, tablet, live-stack, or auth-invite lanes,
+  and remote wall-clocks must not be `--record`ed into
+  `docs/ops/proof-lane-timings.json`. Isolated overflow of platform-neutral
+  Cargo/Postgres leaves is allowed only from a dedicated verify checkout that
+  does not share Mesh's `mesh-verify` tree or a writable database with another
+  run. See `docs/ops/proof-lane-refactor-scope.md`.
 
 ## Publishing
 
