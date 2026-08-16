@@ -92,7 +92,7 @@ pub use database_authority::{
     reconcile_database_authority, verify_database_principal, verify_migration_authority,
     DatabaseAuthorityError, DatabasePrincipal, APPLICATION_DATABASE_ROLE, KEY_ADMIN_DATABASE_ROLE,
 };
-pub use effect_projection::{slot_effects, SlotEffectRow};
+pub use effect_projection::{slot_effects, slot_effects_for_slot, SlotEffectRow};
 pub use private_channel_projection::{private_channel_members, PrivateChannelMemberRow};
 pub use schema::{ensure_schema_ready, inspect_schema_readiness, SchemaReadiness, MIGRATOR};
 
@@ -7148,15 +7148,51 @@ pub async fn public_thread_view(
     limit: i64,
     viewer_principal_user_id: Option<&str>,
 ) -> Result<ThreadViewPage, ProjectionError> {
-    thread_view_for_channel_with_visibility(
+    thread_view_for_channel_with_visibility(ThreadViewQuery {
         pool,
         game_id,
-        "main",
+        channel_id: "main",
         before_seq,
+        after_seq: None,
         limit,
-        true,
+        public_only: true,
         viewer_principal_user_id,
+    })
+    .await
+}
+
+/// Highest `source_seq` already projected for a game, or 0 when the thread is empty.
+pub async fn thread_high_water_seq(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<i64, ProjectionError> {
+    let seq = sqlx::query_scalar::<_, i64>(
+        "SELECT COALESCE(MAX(source_seq), 0) FROM thread_view WHERE game_id = $1",
     )
+    .bind(game_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(seq)
+}
+
+/// Public main-thread posts newer than `after_seq`, oldest first.
+pub async fn public_thread_view_after(
+    pool: &PgPool,
+    game_id: Uuid,
+    after_seq: i64,
+    limit: i64,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<ThreadViewPage, ProjectionError> {
+    thread_view_for_channel_with_visibility(ThreadViewQuery {
+        pool,
+        game_id,
+        channel_id: "main",
+        before_seq: None,
+        after_seq: Some(after_seq),
+        limit,
+        public_only: true,
+        viewer_principal_user_id,
+    })
     .await
 }
 
@@ -9005,6 +9041,28 @@ pub async fn thread_view_for_channel(
     thread_view_for_viewer(pool, game_id, channel_id, before_seq, limit, None).await
 }
 
+/// Channel thread posts newer than `after_seq`, oldest first.
+pub async fn thread_view_for_viewer_after(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+    after_seq: i64,
+    limit: i64,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<ThreadViewPage, ProjectionError> {
+    thread_view_for_channel_with_visibility(ThreadViewQuery {
+        pool,
+        game_id,
+        channel_id,
+        before_seq: None,
+        after_seq: Some(after_seq),
+        limit,
+        public_only: false,
+        viewer_principal_user_id,
+    })
+    .await
+}
+
 /// Channel thread read with the viewer's mute overlay applied to citation counts.
 pub async fn thread_view_for_viewer(
     pool: &PgPool,
@@ -9014,29 +9072,46 @@ pub async fn thread_view_for_viewer(
     limit: i64,
     viewer_principal_user_id: Option<&str>,
 ) -> Result<ThreadViewPage, ProjectionError> {
-    thread_view_for_channel_with_visibility(
+    thread_view_for_channel_with_visibility(ThreadViewQuery {
         pool,
         game_id,
         channel_id,
         before_seq,
+        after_seq: None,
         limit,
-        false,
+        public_only: false,
         viewer_principal_user_id,
-    )
+    })
     .await
 }
 
-async fn thread_view_for_channel_with_visibility(
-    pool: &PgPool,
+struct ThreadViewQuery<'a> {
+    pool: &'a PgPool,
     game_id: Uuid,
-    channel_id: &str,
+    channel_id: &'a str,
     before_seq: Option<i64>,
+    after_seq: Option<i64>,
     limit: i64,
     public_only: bool,
-    viewer_principal_user_id: Option<&str>,
+    viewer_principal_user_id: Option<&'a str>,
+}
+
+async fn thread_view_for_channel_with_visibility(
+    query: ThreadViewQuery<'_>,
 ) -> Result<ThreadViewPage, ProjectionError> {
+    let ThreadViewQuery {
+        pool,
+        game_id,
+        channel_id,
+        before_seq,
+        after_seq,
+        limit,
+        public_only,
+        viewer_principal_user_id,
+    } = query;
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
+    let newest_first = after_seq.is_none();
     let rows = sqlx::query(
         r#"
         SELECT game_id, source_seq, stream_seq, channel_id, author_slot,
@@ -9076,6 +9151,7 @@ async fn thread_view_for_channel_with_visibility(
         WHERE game_id = $1
           AND channel_id = $2
           AND ($3::BIGINT IS NULL OR source_seq < $3)
+          AND ($7::BIGINT IS NULL OR source_seq > $7)
           AND (
               NOT $5::BOOLEAN OR NOT EXISTS (
                   SELECT 1 FROM moderation_target_state AS moderation
@@ -9095,7 +9171,9 @@ async fn thread_view_for_channel_with_visibility(
                 AND mute.active
                 AND author.principal_user_id = thread_view.author_user
           )
-        ORDER BY source_seq DESC
+        ORDER BY
+          CASE WHEN $8::BOOLEAN THEN source_seq END DESC,
+          CASE WHEN NOT $8::BOOLEAN THEN source_seq END ASC
         LIMIT $4
         "#,
     )
@@ -9105,6 +9183,8 @@ async fn thread_view_for_channel_with_visibility(
     .bind(fetch_limit)
     .bind(public_only)
     .bind(viewer_principal_user_id)
+    .bind(after_seq)
+    .bind(newest_first)
     .fetch_all(pool)
     .await?;
 

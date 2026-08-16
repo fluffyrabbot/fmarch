@@ -209,10 +209,18 @@ async fn command(
     let player_private_dirty = command_affects_player_private(&msg.command);
     let player_command_state_dirty = command_affects_player_command_state(&msg.command);
     let previous_votecount = match game {
-        Some(game) => live_projection::vote_count_rows(&state.pool, game)
+        Some(game) if command_affects_votecount(&msg.command) => {
+            live_projection::vote_count_rows(&state.pool, game)
+                .await
+                .ok()
+        }
+        _ => None,
+    };
+    let thread_after_seq = match game {
+        Some(game) if thread_dirty => live_projection::thread_high_water_seq(&state.pool, game)
             .await
             .ok(),
-        None => None,
+        _ => None,
     };
     let principal = Principal::user(principal_user_id);
     let prepared_command = prepare_wire_command(&state, msg.command).await;
@@ -231,6 +239,7 @@ async fn command(
                                 LiveProjectionChangeSet {
                                     game,
                                     previous_vote_counts: previous_votecount,
+                                    thread_after_seq,
                                     thread_dirty,
                                     host_console_dirty,
                                     host_prompts_dirty,
@@ -361,7 +370,6 @@ fn command_affects_host_console(command: &wire::Command) -> bool {
             | wire::Command::ResolveHostPrompt { .. }
             | wire::Command::SetPostPolicy { .. }
             | wire::Command::ControlItaSession { .. }
-            | wire::Command::SubmitPost { .. }
             | wire::Command::ExtendDeadline { .. }
             | wire::Command::ApplyEffectPlan { .. }
             | wire::Command::AttachDayProgram { .. }
@@ -427,18 +435,24 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::CompleteGame { .. }
             | wire::Command::SetPostPolicy { .. }
             | wire::Command::ControlItaSession { .. }
-            | wire::Command::SubmitVote { .. }
-            | wire::Command::WithdrawVote { .. }
             | wire::Command::ApplyEffectPlan { .. }
             | wire::Command::AttachDayProgram { .. }
             | wire::Command::ScheduleDayEvent { .. }
             | wire::Command::OpenDayEvent { .. }
             | wire::Command::LockDayEvent { .. }
             | wire::Command::CancelDayEvent { .. }
-            | wire::Command::SubmitDayEventParticipation { .. }
-            | wire::Command::WithdrawDayEventParticipation { .. }
             | wire::Command::ResolveDayEvent { .. }
             | wire::Command::ProcessReplacement { .. }
+    )
+}
+
+fn command_affects_votecount(command: &wire::Command) -> bool {
+    matches!(
+        command,
+        wire::Command::SubmitVote { .. }
+            | wire::Command::WithdrawVote { .. }
+            | wire::Command::ResolvePhase { .. }
+            | wire::Command::ApplyEffectPlan { .. }
     )
 }
 
@@ -477,7 +491,7 @@ mod tests {
     use super::{
         command_affects_host_console, command_affects_host_prompts,
         command_affects_player_command_state, command_affects_player_private,
-        command_affects_thread, command_game,
+        command_affects_thread, command_affects_votecount, command_game,
     };
     use uuid::Uuid;
 
@@ -509,5 +523,31 @@ mod tests {
         assert!(command_affects_player_private(&command));
         assert!(command_affects_player_command_state(&command));
         assert!(!command_affects_thread(&command));
+        assert!(command_affects_votecount(&command));
+    }
+
+    #[test]
+    fn vote_and_participation_do_not_force_full_resync() {
+        let game = Uuid::new_v4();
+        assert!(command_affects_votecount(&wire::Command::SubmitVote {
+            game,
+            actor_slot: "slot-1".to_string(),
+            target: wire::VoteTarget::NoLynch,
+        }));
+        assert!(!command_affects_player_command_state(
+            &wire::Command::SubmitVote {
+                game,
+                actor_slot: "slot-1".to_string(),
+                target: wire::VoteTarget::NoLynch,
+            }
+        ));
+        assert!(!command_affects_host_console(&wire::Command::SubmitPost {
+            game,
+            channel_id: "main".to_string(),
+            actor_slot: "slot-1".to_string(),
+            body: "hi".to_string(),
+            media: None,
+            quotations: None,
+        }));
     }
 }

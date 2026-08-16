@@ -2364,9 +2364,9 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
                     if delta.game == game
-                        && delta.posts.len() == 2
-                        && delta.posts.iter().all(|post| post.channel_id == "dead")
-                        && delta.posts[1].body == "incoming dead-chat live delta"
+                        && delta.posts.len() == 1
+                        && delta.posts[0].channel_id == "dead"
+                        && delta.posts[0].body == "incoming dead-chat live delta"
             ) {
                 return envelope;
             }
@@ -2693,9 +2693,9 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
                     if delta.game == game
-                        && delta.posts.len() == 2
-                        && delta.posts.iter().all(|post| post.channel_id == "spectator")
-                        && delta.posts[1].body == "Live spectator notice"
+                        && delta.posts.len() == 1
+                        && delta.posts[0].channel_id == "spectator"
+                        && delta.posts[0].body == "Live spectator notice"
             ) {
                 return envelope;
             }

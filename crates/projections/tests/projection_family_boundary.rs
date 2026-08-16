@@ -10,7 +10,9 @@ fn effect_and_private_channel_families_have_bounded_typed_owners() {
 
     assert!(composition_root.contains("mod effect_projection;"));
     assert!(composition_root.contains("mod private_channel_projection;"));
-    assert!(composition_root.contains("pub use effect_projection::{slot_effects, SlotEffectRow};"));
+    assert!(composition_root.contains(
+        "pub use effect_projection::{slot_effects, slot_effects_for_slot, SlotEffectRow};"
+    ));
     assert!(composition_root.contains(
         "pub use private_channel_projection::{private_channel_members, PrivateChannelMemberRow};"
     ));
@@ -21,6 +23,7 @@ fn effect_and_private_channel_families_have_bounded_typed_owners() {
         "async fn upsert_effect(",
         "async fn delete_effect(",
         "pub async fn slot_effects(",
+        "pub async fn slot_effects_for_slot<'e, E>(",
     ] {
         assert!(
             effects.contains(owned_symbol),

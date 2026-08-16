@@ -1,5 +1,5 @@
 use sqlx::PgPool;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 use wire::{ProjectionDelta, VoteCountClearedDelta, VoteCountDelta};
@@ -8,6 +8,7 @@ use wire::{ProjectionDelta, VoteCountClearedDelta, VoteCountDelta};
 pub(super) struct LiveProjectionChangeSet {
     pub(super) game: Uuid,
     pub(super) previous_vote_counts: Option<Vec<VoteCountDelta>>,
+    pub(super) thread_after_seq: Option<i64>,
     pub(super) thread_dirty: bool,
     pub(super) host_console_dirty: bool,
     pub(super) host_prompts_dirty: bool,
@@ -19,6 +20,7 @@ pub(super) struct LiveProjectionChangeSet {
 pub(super) struct LiveProjectionUpdate {
     pub(super) game: Uuid,
     pub(super) deltas: Vec<ProjectionDelta>,
+    pub(super) thread_after_seq: Option<i64>,
     pub(super) thread_dirty: bool,
     pub(super) host_console_dirty: bool,
     pub(super) host_prompts_dirty: bool,
@@ -42,13 +44,25 @@ impl LiveProjectionPublisher {
     }
 
     pub(super) async fn publish(&self, pool: &PgPool, change: LiveProjectionChangeSet) {
-        let Ok(current) = vote_count_rows(pool, change.game).await else {
-            return;
+        let current = if change.previous_vote_counts.is_some() {
+            let Ok(current) = vote_count_rows(pool, change.game).await else {
+                return;
+            };
+            current
+        } else {
+            Vec::new()
         };
         if let Some(update) = assemble_update(change, current) {
             let _ = self.sender.send(update);
         }
     }
+}
+
+pub(super) async fn thread_high_water_seq(
+    pool: &PgPool,
+    game: Uuid,
+) -> Result<i64, projections::ProjectionError> {
+    projections::thread_high_water_seq(pool, game).await
 }
 
 pub(super) async fn vote_count_rows(
@@ -74,30 +88,44 @@ fn assemble_update(
     change: LiveProjectionChangeSet,
     current: Vec<VoteCountDelta>,
 ) -> Option<LiveProjectionUpdate> {
-    let mut deltas: Vec<_> = current
-        .iter()
-        .cloned()
-        .map(ProjectionDelta::VoteCountChanged)
-        .collect();
-
+    let mut deltas = Vec::new();
     if let Some(previous) = change.previous_vote_counts {
-        let current_keys: HashSet<_> = current
+        let current_keys: HashSet<(String, String)> = current
             .iter()
-            .map(|delta| (delta.phase_id.as_str(), delta.candidate_slot.as_str()))
+            .map(|delta| (delta.phase_id.clone(), delta.candidate_slot.clone()))
             .collect();
+        let previous_counts: HashMap<(String, String), i64> = previous
+            .iter()
+            .map(|delta| {
+                (
+                    (delta.phase_id.clone(), delta.candidate_slot.clone()),
+                    delta.count,
+                )
+            })
+            .collect();
+        let vanished = previous
+            .into_iter()
+            .filter(|delta| {
+                !current_keys.contains(&(delta.phase_id.clone(), delta.candidate_slot.clone()))
+            })
+            .collect::<Vec<_>>();
+        deltas.extend(current.into_iter().filter_map(|delta| {
+            let key = (delta.phase_id.clone(), delta.candidate_slot.clone());
+            match previous_counts.get(&key) {
+                Some(&count) if count == delta.count => None,
+                _ => Some(ProjectionDelta::VoteCountChanged(delta)),
+            }
+        }));
         deltas.extend(
-            previous
+            vanished
                 .into_iter()
-                .filter(|delta| {
-                    !current_keys
-                        .contains(&(delta.phase_id.as_str(), delta.candidate_slot.as_str()))
-                })
                 .map(VoteCountClearedDelta::from)
                 .map(ProjectionDelta::VoteCountCleared),
         );
     }
 
     if deltas.is_empty()
+        && change.thread_after_seq.is_none()
         && !change.thread_dirty
         && !change.host_console_dirty
         && !change.host_prompts_dirty
@@ -110,6 +138,7 @@ fn assemble_update(
     Some(LiveProjectionUpdate {
         game: change.game,
         deltas,
+        thread_after_seq: change.thread_after_seq,
         thread_dirty: change.thread_dirty,
         host_console_dirty: change.host_console_dirty,
         host_prompts_dirty: change.host_prompts_dirty,
@@ -153,6 +182,7 @@ mod tests {
         LiveProjectionChangeSet {
             game,
             previous_vote_counts: None,
+            thread_after_seq: None,
             thread_dirty: false,
             host_console_dirty: false,
             host_prompts_dirty: false,
@@ -183,6 +213,34 @@ mod tests {
     }
 
     #[test]
+    fn update_assembly_omits_unchanged_vote_counts() {
+        let game = Uuid::new_v4();
+        let mut change = change(game);
+        change.previous_vote_counts = Some(vec![vote(game, "slot-1", 1), vote(game, "slot-2", 2)]);
+
+        let update = assemble_update(
+            change,
+            vec![vote(game, "slot-1", 1), vote(game, "slot-2", 3)],
+        )
+        .unwrap();
+
+        assert_eq!(
+            update.deltas,
+            vec![ProjectionDelta::VoteCountChanged(vote(game, "slot-2", 3))]
+        );
+    }
+
+    #[test]
+    fn update_assembly_skips_vote_io_without_a_previous_snapshot() {
+        let game = Uuid::new_v4();
+        let mut change = change(game);
+        change.thread_dirty = true;
+        let update = assemble_update(change, vec![vote(game, "slot-1", 4)]).unwrap();
+        assert!(update.deltas.is_empty());
+        assert!(update.thread_dirty);
+    }
+
+    #[test]
     fn update_assembly_suppresses_empty_clean_publications() {
         assert!(assemble_update(change(Uuid::new_v4()), Vec::new()).is_none());
     }
@@ -195,6 +253,7 @@ mod tests {
         let update = LiveProjectionUpdate {
             game,
             deltas: Vec::new(),
+            thread_after_seq: None,
             thread_dirty: true,
             host_console_dirty: false,
             host_prompts_dirty: false,

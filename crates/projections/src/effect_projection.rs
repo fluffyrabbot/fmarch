@@ -1,6 +1,6 @@
 use eventstore::StoredEvent;
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgPool;
+use sqlx::postgres::{PgPool, PgRow};
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -168,6 +168,28 @@ pub(super) async fn project_inner_event(
     Ok(())
 }
 
+/// Persistent engine effects for one slot. Command admission uses this instead
+/// of reconstructing a full `StateSnapshot` from the sealed stream.
+pub async fn slot_effects_for_slot<'e, E>(
+    executor: E,
+    game_id: Uuid,
+    slot_id: &str,
+) -> Result<Vec<SlotEffectRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows = sqlx::query(
+        "SELECT game_id, slot_id, effect, source_slot, source_action, phase_id, phase_kind, \
+         phase_number, duration, visibility FROM slot_effect \
+         WHERE game_id = $1 AND slot_id = $2 ORDER BY effect",
+    )
+    .bind(game_id)
+    .bind(slot_id)
+    .fetch_all(executor)
+    .await?;
+    Ok(rows.into_iter().map(slot_effect_row).collect())
+}
+
 /// Read persistent engine effects, ordered deterministically.
 pub async fn slot_effects(
     pool: &PgPool,
@@ -181,21 +203,22 @@ pub async fn slot_effects(
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| SlotEffectRow {
-            game_id: row.get("game_id"),
-            slot_id: row.get("slot_id"),
-            effect: row.get("effect"),
-            source_slot: row.get("source_slot"),
-            source_action: row.get("source_action"),
-            phase_id: row.get("phase_id"),
-            phase_kind: row.get("phase_kind"),
-            phase_number: row.get("phase_number"),
-            duration: row.get("duration"),
-            visibility: row.get("visibility"),
-        })
-        .collect())
+    Ok(rows.into_iter().map(slot_effect_row).collect())
+}
+
+fn slot_effect_row(row: PgRow) -> SlotEffectRow {
+    SlotEffectRow {
+        game_id: row.get("game_id"),
+        slot_id: row.get("slot_id"),
+        effect: row.get("effect"),
+        source_slot: row.get("source_slot"),
+        source_action: row.get("source_action"),
+        phase_id: row.get("phase_id"),
+        phase_kind: row.get("phase_kind"),
+        phase_number: row.get("phase_number"),
+        duration: row.get("duration"),
+        visibility: row.get("visibility"),
+    }
 }
 
 async fn upsert_effect(

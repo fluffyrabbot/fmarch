@@ -48,6 +48,7 @@ fn command_http_has_one_typed_owner_without_decision_or_publication_drift() {
         "fn command_affects_host_prompts(",
         "fn command_affects_player_private(",
         "fn command_affects_player_command_state(",
+        "fn command_affects_votecount(",
         "fn protocol_reject(",
         "pub(super) fn command_reject_api_error(",
     ] {

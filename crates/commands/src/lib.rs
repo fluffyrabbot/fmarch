@@ -2187,15 +2187,13 @@ async fn submit_vote(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_slot_occupant(tx, game, &actor_slot, &caps).await?;
 
-    // 2. validate domain rules.
+    // 2. validate domain rules from projections. Only hammer-on packs still
+    // need the sealed tape, and only for the preview resolve.
     let phase = require_open_day_phase(tx, game).await?;
     require_slot_alive(tx, game, &actor_slot).await?;
-    let stream = eventstore::load_stream_in_tx(tx, game)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    let phase_input = EngineInputBuilder::new(game, &stream, &phase).build()?;
-    validate_vote_actor_policy(&phase_input.pack, &phase_input.state, &actor_slot)?;
-    validate_vote_policy_target(&phase_input.pack.vote, &actor_slot, &target)?;
+    let pack = current_pack(tx, game).await?;
+    validate_vote_actor_from_projections(tx, game, &pack, &actor_slot).await?;
+    validate_vote_policy_target(&pack.vote, &actor_slot, &target)?;
     let target_str = validate_target(tx, game, &target).await?;
 
     // 3. produce events.
@@ -2207,8 +2205,15 @@ async fn submit_vote(
         0,
     );
     let mut events = vec![ev];
-    if let Some(lock_ev) = hammer_lock_event(&phase_input, &actor_slot, &target_str)? {
-        events.push(lock_ev);
+    if pack.vote.hammer {
+        let stream = eventstore::load_stream_in_tx(tx, game)
+            .await
+            .map_err(|e| Reject::Internal(e.to_string()))?;
+        let phase_input = EngineInputBuilder::new(game, &stream, &phase).build()?;
+        validate_vote_actor_policy(&phase_input.pack, &phase_input.state, &actor_slot)?;
+        if let Some(lock_ev) = hammer_lock_event(&phase_input, &actor_slot, &target_str)? {
+            events.push(lock_ev);
+        }
     }
 
     // 4. persist (one tx; Conflict → StreamConflict).
@@ -2288,10 +2293,9 @@ async fn set_post_policy(
     }
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
-    let stream = eventstore::load_stream_in_tx(tx, game)
+    let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let occurred_at = next_stream_logical_time(&stream);
     let ev = EventInput::new(
         "PostPolicyChanged",
         1,
@@ -2437,10 +2441,9 @@ async fn submit_post(
     // slot, not the user). `slot_or_user` carries the slot id so authorship
     // survives a replacement. Phase id is recorded for partitioning.
     let phase = current_phase(tx, game).await?.unwrap_or_default();
-    let stream = eventstore::load_stream_in_tx(tx, game)
+    let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let occurred_at = next_stream_logical_time(&stream);
     let mut payload = serde_json::json!({
         "channel_id": channel_id,
         "slot_or_user": { "slot": actor_slot.clone() },
@@ -2474,10 +2477,9 @@ async fn publish_spectator_post(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::Narrative).await?;
     let phase = current_phase(tx, game).await?.unwrap_or_default();
-    let stream = eventstore::load_stream_in_tx(tx, game)
+    let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let occurred_at = next_stream_logical_time(&stream);
     let notice = build_host_notice(HostNoticeSpec {
         channel_id: "spectator".to_string(),
         body,
@@ -5239,6 +5241,25 @@ fn validate_vote_actor_policy(
             .effects
             .iter()
             .any(|effect| effect == &pack.idiot_policy.vote_loss_effect)
+    {
+        return Err(Reject::VoteNotAllowed);
+    }
+    Ok(())
+}
+
+async fn validate_vote_actor_from_projections(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    pack: &domain::Pack,
+    actor_slot: &str,
+) -> Result<(), Reject> {
+    if !pack.idiot_policy.enabled {
+        return Ok(());
+    }
+    let effects = projections::slot_effects_for_slot(&mut **tx, game, actor_slot).await?;
+    if effects
+        .iter()
+        .any(|effect| effect.effect == pack.idiot_policy.vote_loss_effect)
     {
         return Err(Reject::VoteNotAllowed);
     }

@@ -322,6 +322,16 @@ where
     row.try_get::<i64, _>("max_seq")
 }
 
+/// Next stream sequence / logical time to stamp on an append: `MAX+1`, or 1
+/// when the stream is empty. Command handlers that only need a timestamp must
+/// use this instead of decrypting the sealed tape.
+pub async fn next_stream_seq_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+) -> Result<i64, StoreError> {
+    Ok(current_stream_seq(&mut **tx, stream_id).await? + 1)
+}
+
 /// Append `events` to `stream_id` at `current_max + 1..`, inside `tx`.
 ///
 /// The stream is guarded by a transaction-scoped advisory lock before reading

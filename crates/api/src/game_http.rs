@@ -557,6 +557,38 @@ pub(super) async fn current_thread_posts_delta(
     }))
 }
 
+pub(super) async fn current_thread_posts_after_delta(
+    pool: &PgPool,
+    game: Uuid,
+    channel: &str,
+    after_seq: i64,
+    viewer_principal_user_id: Option<&str>,
+) -> Result<Option<ProjectionDelta>, projections::ProjectionError> {
+    let page = if channel == "main" {
+        projections::public_thread_view_after(pool, game, after_seq, 50, viewer_principal_user_id)
+            .await?
+    } else {
+        projections::thread_view_for_viewer_after(
+            pool,
+            game,
+            channel,
+            after_seq,
+            50,
+            viewer_principal_user_id,
+        )
+        .await?
+    };
+    if page.posts.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(ProjectionDelta::ThreadPostsChanged(
+        ThreadPostsDelta {
+            game,
+            posts: page.posts.into_iter().map(ThreadPost::from).collect(),
+        },
+    )))
+}
+
 pub(super) async fn current_post_citations_deltas(
     pool: &PgPool,
     game: Uuid,
@@ -1986,6 +2018,7 @@ pub(super) async fn load_host_console_state(
         });
 
     let slot_states = projections::slot_state(pool, game).await?;
+    let assigned_principals = projections::slot_occupants(pool, game).await?;
     let mut slots = Vec::new();
     for row in projections::slot_occupancy(pool, game).await? {
         if slot_id.is_some_and(|slot_id| row.slot_id != slot_id) {
@@ -1994,8 +2027,9 @@ pub(super) async fn load_host_console_state(
         let slot_state = slot_states
             .iter()
             .find(|state| state.slot_id == row.slot_id);
-        let assigned_principal_user_id = projections::slot_occupant(pool, game, &row.slot_id)
-            .await?
+        let assigned_principal_user_id = assigned_principals
+            .get(&row.slot_id)
+            .cloned()
             .unwrap_or_default();
         slots.push(HostConsoleSlotOccupancy {
             slot_id: row.slot_id,
