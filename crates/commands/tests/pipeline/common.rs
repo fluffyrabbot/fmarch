@@ -531,34 +531,39 @@ pub fn assert_trigger_generated_trace(
         vec![expected.produced_target.to_string()],
         "generated targets"
     );
-    assert_eq!(generated.detail["on"], expected.on, "trigger on");
+    assert_eq!(generated.detail.at("on"), expected.on, "trigger on");
     assert_eq!(
-        generated.detail["source_target"], expected.source_target,
+        generated.detail.at("source_target"),
+        expected.source_target,
         "trigger source_target"
     );
     assert_eq!(
-        generated.detail["source_actor"], expected.source_actor,
+        generated.detail.at("source_actor"),
+        expected.source_actor,
         "trigger source_actor"
     );
     assert_eq!(
-        generated.detail["source_cause"], expected.source_cause,
+        generated.detail.at("source_cause"),
+        expected.source_cause,
         "trigger source_cause"
     );
     assert_eq!(
-        generated.detail["produced_actor"], expected.produced_actor,
+        generated.detail.at("produced_actor"),
+        expected.produced_actor,
         "trigger produced_actor"
     );
     assert_eq!(
-        generated.detail["produced_target"], expected.produced_target,
+        generated.detail.at("produced_target"),
+        expected.produced_target,
         "trigger produced_target"
     );
     assert_eq!(
-        generated.detail["actor_filter"],
+        generated.detail.at("actor_filter"),
         expected.actor_filter.unwrap_or(serde_json::Value::Null),
         "trigger actor_filter"
     );
     assert_eq!(
-        generated.detail["event_index"],
+        generated.detail.at("event_index"),
         serde_json::json!(expected.event_index),
         "trigger event_index"
     );
@@ -598,7 +603,8 @@ pub fn assert_decision_trace(
         });
     for (key, value) in expected.detail {
         assert_eq!(
-            decision.detail[key], value,
+            decision.detail.at(key),
+            value,
             "decision {} detail {key}",
             expected.outcome
         );

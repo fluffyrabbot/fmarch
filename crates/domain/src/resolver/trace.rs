@@ -572,15 +572,15 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     "event_index": indexed.index,
                 });
                 if shield_before.is_some() || shield_after.is_some() || *shield_spent {
-                    detail["shield_before"] = crate::json_atom!(shield_before);
-                    detail["shield_after"] = crate::json_atom!(shield_after);
-                    detail["shield_spent"] = crate::json_atom!(shield_spent);
-                    detail["protection_path"] = crate::json_atom!(protection_path);
+                    detail.insert("shield_before", crate::json_atom!(shield_before));
+                    detail.insert("shield_after", crate::json_atom!(shield_after));
+                    detail.insert("shield_spent", crate::json_atom!(shield_spent));
+                    detail.insert("protection_path", crate::json_atom!(protection_path));
                 }
                 if hp_before.is_some() || hp_after.is_some() {
-                    detail["hp_before"] = crate::json_atom!(hp_before);
-                    detail["hp_after"] = crate::json_atom!(hp_after);
-                    detail["protection_path"] = crate::json_atom!(protection_path);
+                    detail.insert("hp_before", crate::json_atom!(hp_before));
+                    detail.insert("hp_after", crate::json_atom!(hp_after));
+                    detail.insert("protection_path", crate::json_atom!(protection_path));
                 }
                 generated.push(GeneratedActionTrace {
                     action_id: action_id.clone(),

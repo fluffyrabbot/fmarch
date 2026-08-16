@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::ops::{Index, IndexMut};
+
+const JSON_NULL: JsonAtom = JsonAtom::Null;
 
 /// Recursive JSON value used by traces, info results, and similar persist maps.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -68,6 +69,27 @@ impl JsonAtom {
     pub fn get(&self, key: &str) -> Option<&JsonAtom> {
         self.as_object().and_then(|values| values.get(key))
     }
+
+    /// Look up an object key. Missing keys are [`JsonAtom::Null`].
+    pub fn at(&self, key: impl AsRef<str>) -> &JsonAtom {
+        self.get(key.as_ref()).unwrap_or(&JSON_NULL)
+    }
+
+    /// Look up an array index. Out-of-range indexes are [`JsonAtom::Null`].
+    pub fn nth(&self, index: usize) -> &JsonAtom {
+        self.as_array()
+            .and_then(|values| values.get(index))
+            .unwrap_or(&JSON_NULL)
+    }
+
+    pub(crate) fn insert(&mut self, key: impl Into<String>, value: Self) {
+        match self {
+            Self::Object(values) => {
+                values.insert(key.into(), value);
+            }
+            other => panic!("cannot insert into {other:?}"),
+        }
+    }
 }
 
 impl From<Value> for JsonAtom {
@@ -102,39 +124,6 @@ impl From<JsonAtom> for Value {
                     .map(|(key, value)| (key, Value::from(value)))
                     .collect(),
             ),
-        }
-    }
-}
-
-impl Index<&str> for JsonAtom {
-    type Output = JsonAtom;
-
-    fn index(&self, key: &str) -> &Self::Output {
-        match self {
-            Self::Object(values) => values
-                .get(key)
-                .unwrap_or_else(|| panic!("missing json key `{key}`")),
-            other => panic!("cannot index {other:?} with `{key}`"),
-        }
-    }
-}
-
-impl Index<usize> for JsonAtom {
-    type Output = JsonAtom;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        match self {
-            Self::Array(values) => &values[index],
-            other => panic!("cannot index {other:?} with {index}"),
-        }
-    }
-}
-
-impl IndexMut<&str> for JsonAtom {
-    fn index_mut(&mut self, key: &str) -> &mut Self::Output {
-        match self {
-            Self::Object(values) => values.entry(key.to_string()).or_insert(JsonAtom::Null),
-            other => panic!("cannot mutably index {other:?} with `{key}`"),
         }
     }
 }
@@ -193,6 +182,20 @@ impl PartialEq<f64> for JsonAtom {
     }
 }
 
+macro_rules! impl_ref_partial_eq {
+    ($($ty:ty),+ $(,)?) => {
+        $(
+            impl PartialEq<$ty> for &JsonAtom {
+                fn eq(&self, other: &$ty) -> bool {
+                    (*self).eq(other)
+                }
+            }
+        )+
+    };
+}
+
+impl_ref_partial_eq!(str, String, bool, i32, i64, u32, usize, f64, Value);
+
 impl PartialEq<Value> for JsonAtom {
     fn eq(&self, other: &Value) -> bool {
         match (self, other) {
@@ -216,9 +219,10 @@ impl PartialEq<Value> for JsonAtom {
 }
 
 /// Build a persist JSON atom from a `serde_json::json!` literal.
-#[macro_export]
 macro_rules! json_atom {
     ($($token:tt)*) => {
         $crate::json::JsonAtom::from(::serde_json::json!($($token)*))
     };
 }
+
+pub(crate) use json_atom;

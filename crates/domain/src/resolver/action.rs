@@ -857,7 +857,7 @@ pub(super) fn emit_action_interfered_by_target_state(
         "target_tags": target_tags,
     });
     if let Some(mode) = mode {
-        detail["mode"] = crate::json_atom!(mode);
+        detail.insert("mode", crate::json_atom!(mode));
     }
     trace_decisions.push(DecisionTrace {
         stage: "night:target_state".to_string(),

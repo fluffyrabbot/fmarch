@@ -6,7 +6,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::ir::InvestigateMode;
-use crate::json::JsonAtom;
+pub use crate::json::JsonAtom;
 use crate::pack::{
     default_death_reveal_mode, is_default_death_reveal_mode, DeathRevealMode, EffectDuration,
     EffectVisibility, GrantKind, PhaseKind, RoleKey, Tag,

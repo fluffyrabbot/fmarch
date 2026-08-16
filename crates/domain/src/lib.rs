@@ -7,7 +7,8 @@
 pub mod events;
 pub mod golden;
 pub mod ir;
-pub mod json;
+pub(crate) mod json;
+pub(crate) use json::json_atom;
 pub mod pack;
 pub mod resolver;
 pub mod state;
@@ -27,7 +28,6 @@ pub use golden::{
     normalize_golden_events, GoldenFixtureError,
 };
 pub use ir::{InvestigateMode, IrAbility, Modifier};
-pub use json::JsonAtom;
 pub use pack::{
     load_pack_from_json, night_ability_order, validate_pack, BackupPolicy, BelovedPrincessPolicy,
     DayAnnouncementPolicy, DayDeathAnnouncementPolicy, DayDeathCauseTemplate, DayNotePolicy,

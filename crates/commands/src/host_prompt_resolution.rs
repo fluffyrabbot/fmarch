@@ -369,7 +369,7 @@ fn build_pk_prompt_resolution(
             stage: "host_prompt:resolve".to_string(),
             source: prompt.prompt_id.clone(),
             outcome: "pk_selected".to_string(),
-            detail: domain::JsonAtom::from(serde_json::json!({
+            detail: serde_json::json!({
                 "prompt_id": prompt.prompt_id,
                 "kind": prompt.kind,
                 "reason": prompt.reason,
@@ -377,7 +377,8 @@ fn build_pk_prompt_resolution(
                 "contenders": contenders,
                 "decision": decision_json,
                 "resolved_by": resolved_by,
-            })),
+            })
+            .into(),
         }],
         notes: Vec::new(),
     };

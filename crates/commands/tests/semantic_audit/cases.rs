@@ -18324,11 +18324,11 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
         .expect("trace records invalidated ITA shot");
     assert_eq!(invalidated_trace.targets, vec!["slot_4".to_string()]);
     assert_eq!(
-        invalidated_trace.detail["invalidated_by"],
+        invalidated_trace.detail.at("invalidated_by"),
         serde_json::json!("ita_kill_001")
     );
     assert_eq!(
-        invalidated_trace.detail["reason"],
+        invalidated_trace.detail.at("reason"),
         serde_json::json!("target_dead")
     );
 
@@ -18657,15 +18657,15 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
         .expect("trace records refunded ITA shot");
     assert_eq!(refunded_trace.targets, vec!["slot_4".to_string()]);
     assert_eq!(
-        refunded_trace.detail["reason"],
+        refunded_trace.detail.at("reason"),
         serde_json::json!("target_dead")
     );
     assert_eq!(
-        refunded_trace.detail["policy"],
+        refunded_trace.detail.at("policy"),
         serde_json::json!("REFUND_SHOT")
     );
     assert_eq!(
-        refunded_trace.detail["counters"]["shots_refunded"],
+        refunded_trace.detail.at("counters").at("shots_refunded"),
         serde_json::json!(1)
     );
 
@@ -18884,10 +18884,10 @@ async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: 
         .expect("trace records buffered ITA shot");
     assert_eq!(buffered_trace.targets, vec!["slot_3".to_string()]);
     assert_eq!(
-        buffered_trace.detail["template_id"],
+        buffered_trace.detail.at("template_id"),
         serde_json::json!("ita_shot")
     );
-    assert_eq!(buffered_trace.detail["delay_ms"], serde_json::json!(1));
+    assert_eq!(buffered_trace.detail.at("delay_ms"), serde_json::json!(1));
 
     let slots = slot_state(&pool, game).await.unwrap();
     assert!(
@@ -19104,7 +19104,7 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
         generated.source == "ItaShotResolved"
             && generated.action_id == "ita_buffered_001"
             && generated.actor == "slot_1"
-            && generated.detail["kill"] == serde_json::json!(true)
+            && generated.detail.at("kill") == serde_json::json!(true)
     }));
 
     let post_release_snapshot = load_engine_snapshot(&pool, game, "D01R1")
@@ -19363,11 +19363,11 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
         .expect("trace records released invalidated ITA shot");
     assert_eq!(invalidated_trace.targets, vec!["slot_4".to_string()]);
     assert_eq!(
-        invalidated_trace.detail["invalidated_by"],
+        invalidated_trace.detail.at("invalidated_by"),
         serde_json::json!("ita_buffered_kill_001")
     );
     assert_eq!(
-        invalidated_trace.detail["reason"],
+        invalidated_trace.detail.at("reason"),
         serde_json::json!("target_dead")
     );
 
@@ -19673,11 +19673,11 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
         .expect("trace records released refunded ITA shot");
     assert_eq!(refunded_trace.targets, vec!["slot_4".to_string()]);
     assert_eq!(
-        refunded_trace.detail["policy"],
+        refunded_trace.detail.at("policy"),
         serde_json::json!("REFUND_SHOT")
     );
     assert_eq!(
-        refunded_trace.detail["counters"]["shots_refunded"],
+        refunded_trace.detail.at("counters").at("shots_refunded"),
         serde_json::json!(1)
     );
 
@@ -20096,16 +20096,16 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
     assert!(trace.generated.iter().any(|generated| {
         generated.source == "ItaShotResolved"
             && generated.action_id == "ita_buffer_hybrid_shield_003"
-            && generated.detail["shield_spent"] == serde_json::json!(true)
-            && generated.detail["hp_before"] == serde_json::json!(2)
-            && generated.detail["hp_after"] == serde_json::json!(2)
+            && generated.detail.at("shield_spent") == serde_json::json!(true)
+            && generated.detail.at("hp_before") == serde_json::json!(2)
+            && generated.detail.at("hp_after") == serde_json::json!(2)
     }));
     assert!(trace.generated.iter().any(|generated| {
         generated.source == "ItaShotResolved"
             && generated.action_id == "ita_buffer_hybrid_hp_004"
-            && generated.detail["hp_before"] == serde_json::json!(2)
-            && generated.detail["hp_after"] == serde_json::json!(1)
-            && generated.detail["protection_path"] == serde_json::json!("hp")
+            && generated.detail.at("hp_before") == serde_json::json!(2)
+            && generated.detail.at("hp_after") == serde_json::json!(1)
+            && generated.detail.at("protection_path") == serde_json::json!("hp")
     }));
 
     let post_release_snapshot = load_engine_snapshot(&pool, game, "D01R1")
@@ -20390,19 +20390,19 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
         })
         .expect("trace records shielded ITA resolution");
     assert_eq!(
-        blocked_trace.detail["outcome"],
+        blocked_trace.detail.at("outcome"),
         serde_json::json!("Blocked")
     );
-    assert_eq!(blocked_trace.detail["hit_chance"], serde_json::json!(0.75));
-    assert_eq!(blocked_trace.detail["kill"], serde_json::json!(false));
-    assert_eq!(blocked_trace.detail["shield_before"], serde_json::json!(1));
-    assert_eq!(blocked_trace.detail["shield_after"], serde_json::json!(0));
+    assert_eq!(blocked_trace.detail.at("hit_chance"), serde_json::json!(0.75));
+    assert_eq!(blocked_trace.detail.at("kill"), serde_json::json!(false));
+    assert_eq!(blocked_trace.detail.at("shield_before"), serde_json::json!(1));
+    assert_eq!(blocked_trace.detail.at("shield_after"), serde_json::json!(0));
     assert_eq!(
-        blocked_trace.detail["shield_spent"],
+        blocked_trace.detail.at("shield_spent"),
         serde_json::json!(true)
     );
     assert_eq!(
-        blocked_trace.detail["protection_path"],
+        blocked_trace.detail.at("protection_path"),
         serde_json::json!("shield")
     );
     let composed_trace = trace
@@ -20413,15 +20413,15 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
         })
         .expect("trace records composed ITA modifier resolution");
     assert_eq!(
-        composed_trace.detail["outcome"],
+        composed_trace.detail.at("outcome"),
         serde_json::json!("Blocked")
     );
-    assert_eq!(composed_trace.detail["hit_chance"], serde_json::json!(0.5));
-    assert_eq!(composed_trace.detail["kill"], serde_json::json!(false));
-    assert_eq!(composed_trace.detail["shield_before"], serde_json::json!(1));
-    assert_eq!(composed_trace.detail["shield_after"], serde_json::json!(0));
+    assert_eq!(composed_trace.detail.at("hit_chance"), serde_json::json!(0.5));
+    assert_eq!(composed_trace.detail.at("kill"), serde_json::json!(false));
+    assert_eq!(composed_trace.detail.at("shield_before"), serde_json::json!(1));
+    assert_eq!(composed_trace.detail.at("shield_after"), serde_json::json!(0));
     assert_eq!(
-        composed_trace.detail["shield_spent"],
+        composed_trace.detail.at("shield_spent"),
         serde_json::json!(true)
     );
 
@@ -21893,10 +21893,10 @@ async fn host_resolve_phase_carries_mafia_universe_night_desperado_kills(pool: P
             decision.stage == "night:kill_resolution"
                 && decision.source == "action:mu_mafia_night_desperado_n01"
                 && decision.outcome == "alignment_failback_self_kill"
-                && decision.detail["actor"] == "slot_2"
-                && decision.detail["submitted_target"] == "slot_6"
-                && decision.detail["target_alignment"] == "mafia"
-                && decision.detail["hostile_alignments"] == serde_json::json!(["town"])
+                && decision.detail.at("actor") == "slot_2"
+                && decision.detail.at("submitted_target") == "slot_6"
+                && decision.detail.at("target_alignment") == "mafia"
+                && decision.detail.at("hostile_alignments") == serde_json::json!(["town"])
         }),
         "MU Night Desperado failback should be present in the resolution trace"
     );
@@ -22528,10 +22528,10 @@ async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: 
             decision.stage == "day:kill_resolution"
                 && decision.source == "action:mu_mafia_day_desperado_failback_d01"
                 && decision.outcome == "alignment_failback_self_kill"
-                && decision.detail["actor"] == "slot_2"
-                && decision.detail["submitted_target"] == "slot_6"
-                && decision.detail["target_alignment"] == "mafia"
-                && decision.detail["hostile_alignments"] == serde_json::json!(["town"])
+                && decision.detail.at("actor") == "slot_2"
+                && decision.detail.at("submitted_target") == "slot_6"
+                && decision.detail.at("target_alignment") == "mafia"
+                && decision.detail.at("hostile_alignments") == serde_json::json!(["town"])
         }),
         "ResolutionTrace should persist MU Day Desperado alignment-failback decision: {trace:?}"
     );
@@ -31259,7 +31259,7 @@ async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
                 && kind.as_str() == "mailman"
                 && template_id.as_str() == "mailman"
                 && audience.as_slice() == ["slot_4".to_string()]
-                && result["message"] == serde_json::json!("anonymous")
+                && result.at("message") == serde_json::json!("anonymous")
         }));
     assert!(info_events
         .iter()
@@ -38201,23 +38201,23 @@ async fn host_resolve_phase_persists_martyr_intercept_policy(pool: PgPool) {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("trace should persist Martyr protection");
     assert_eq!(protect.stage, "kill_resolution");
-    assert_eq!(protect.detail["attacker"], "slot_1");
-    assert_eq!(protect.detail["protectors"][0]["protector"], "slot_2");
+    assert_eq!(protect.detail.at("attacker"), "slot_1");
+    assert_eq!(protect.detail.at("protectors").nth(0).at("protector"), "slot_2");
     assert_eq!(
-        protect.detail["protectors"][0]["action_id"],
+        protect.detail.at("protectors").nth(0).at("action_id"),
         "martyr_save_townie_n01"
     );
     assert_eq!(
-        protect.detail["protectors"][0]["template_id"],
+        protect.detail.at("protectors").nth(0).at("template_id"),
         "martyr_protect"
     );
-    assert_eq!(protect.detail["protectors"][0]["intercepts"], true);
+    assert_eq!(protect.detail.at("protectors").nth(0).at("intercepts"), true);
     assert_eq!(
-        protect.detail["protectors"][0]["intercept_cause"],
+        protect.detail.at("protectors").nth(0).at("intercept_cause"),
         "martyr_intercept"
     );
 
@@ -38374,10 +38374,10 @@ async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
         .expect("trace should persist CPR harm");
     assert_eq!(harm.stage, "night:cpr");
     assert_eq!(harm.source, "action:cpr_unneeded_townie_n01");
-    assert_eq!(harm.detail["template_id"], "cpr_protect");
-    assert_eq!(harm.detail["protector"], "slot_2");
-    assert_eq!(harm.detail["target"], "slot_3");
-    assert_eq!(harm.detail["cause"], "cpr_protect");
+    assert_eq!(harm.detail.at("template_id"), "cpr_protect");
+    assert_eq!(harm.detail.at("protector"), "slot_2");
+    assert_eq!(harm.detail.at("target"), "slot_3");
+    assert_eq!(harm.detail.at("cause"), "cpr_protect");
 
     let slots = slot_state(&pool, game).await.unwrap();
     assert!(
@@ -40010,10 +40010,10 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
     assert_eq!(edges[2].to, "watch_rotate_n01:target:0:slot_2");
     for edge in edges {
         assert_eq!(
-            edge.detail["steps"][0]["redirect_action_id"],
+            edge.detail.at("steps").nth(0).at("redirect_action_id"),
             "rotate_targets_n01"
         );
-        assert_eq!(edge.detail["steps"][0]["redirect_kind"], "Rotate");
+        assert_eq!(edge.detail.at("steps").nth(0).at("redirect_kind"), "Rotate");
     }
 
     let applied_payload =
@@ -40564,7 +40564,7 @@ async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
         .expect("valid StrongWilled trace");
     assert!(
         trace.decisions.iter().all(|decision| {
-            decision.outcome != "action_suppressed" || decision.detail["actor"] != "slot_2"
+            decision.outcome != "action_suppressed" || decision.detail.at("actor") != "slot_2"
         }),
         "Strong-Willed action must bypass explicit night-resolution suppression trace decisions"
     );
@@ -40738,18 +40738,18 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
         .iter()
         .find(|decision| {
             decision.outcome == "action_suppressed"
-                && decision.detail["actor"] == "slot_2"
-                && decision.detail["action_id"] == "cop_check_n01"
+                && decision.detail.at("actor") == "slot_2"
+                && decision.detail.at("action_id") == "cop_check_n01"
         })
         .expect("trace should persist Cop suppression");
-    assert_eq!(suppression.detail["block_sources"][0]["actor"], "slot_3");
+    assert_eq!(suppression.detail.at("block_sources").nth(0).at("actor"), "slot_3");
     assert_eq!(
-        suppression.detail["block_sources"][0]["action_id"],
+        suppression.detail.at("block_sources").nth(0).at("action_id"),
         "block_cop_n01"
     );
     assert!(
         trace.decisions.iter().all(|decision| {
-            decision.outcome != "action_suppressed" || decision.detail["actor"] != "slot_3"
+            decision.outcome != "action_suppressed" || decision.detail.at("actor") != "slot_3"
         }),
         "roleblocker_block must bypass explicit night-resolution suppression"
     );
@@ -40922,18 +40922,18 @@ async fn host_resolve_phase_persists_jailkeeper_block_plus_protect_policy(pool: 
         .iter()
         .find(|decision| {
             decision.outcome == "action_suppressed"
-                && decision.detail["action_id"] == "cop_check_n01"
+                && decision.detail.at("action_id") == "cop_check_n01"
         })
         .expect("trace should persist Jailkeeper suppression");
     assert_eq!(suppression.stage, "night:block");
-    assert_eq!(suppression.detail["actor"], "slot_3");
-    assert_eq!(suppression.detail["block_sources"][0]["actor"], "slot_2");
+    assert_eq!(suppression.detail.at("actor"), "slot_3");
+    assert_eq!(suppression.detail.at("block_sources").nth(0).at("actor"), "slot_2");
     assert_eq!(
-        suppression.detail["block_sources"][0]["action_id"],
+        suppression.detail.at("block_sources").nth(0).at("action_id"),
         "jail_cop_n01"
     );
     assert_eq!(
-        suppression.detail["block_sources"][0]["template_id"],
+        suppression.detail.at("block_sources").nth(0).at("template_id"),
         "jail"
     );
 
@@ -40942,14 +40942,14 @@ async fn host_resolve_phase_persists_jailkeeper_block_plus_protect_policy(pool: 
         .iter()
         .find(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("trace should persist Jailkeeper protection");
     assert_eq!(protect.stage, "kill_resolution");
-    assert_eq!(protect.detail["attacker"], "slot_1");
-    assert_eq!(protect.detail["protectors"][0]["protector"], "slot_2");
-    assert_eq!(protect.detail["protectors"][0]["action_id"], "jail_cop_n01");
-    assert_eq!(protect.detail["protectors"][0]["template_id"], "jail");
+    assert_eq!(protect.detail.at("attacker"), "slot_1");
+    assert_eq!(protect.detail.at("protectors").nth(0).at("protector"), "slot_2");
+    assert_eq!(protect.detail.at("protectors").nth(0).at("action_id"), "jail_cop_n01");
+    assert_eq!(protect.detail.at("protectors").nth(0).at("template_id"), "jail");
 
     let slots = slot_state(&pool, game).await.unwrap();
     assert!(
@@ -41122,15 +41122,15 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
         .iter()
         .filter(|decision| {
             decision.outcome == "action_suppressed"
-                && decision.detail["reason"] == "roleblocked"
-                && decision.detail["actor"] == "slot_2"
+                && decision.detail.at("reason") == "roleblocked"
+                && decision.detail.at("actor") == "slot_2"
         })
         .map(|decision| {
             assert_eq!(
-                decision.detail["block_sources"][0]["action_id"],
+                decision.detail.at("block_sources").nth(0).at("action_id"),
                 "catastrophic_block_n01"
             );
-            decision.detail["template_id"].as_str().unwrap().to_string()
+            decision.detail.at("template_id").as_str().unwrap().to_string()
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -41305,20 +41305,20 @@ async fn host_resolve_phase_preserves_protected_multi_attacker_no_death(pool: Pg
         .iter()
         .filter(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .map(|decision| {
             assert_eq!(decision.stage, "kill_resolution");
             assert_eq!(decision.source, "cause:factional_kill");
-            assert_eq!(decision.detail["cause"], "factional_kill");
-            assert_eq!(decision.detail["unstoppable"], false);
-            assert_eq!(decision.detail["protectors"][0]["protector"], "slot_2");
-            assert_eq!(decision.detail["protectors"][0]["action_id"], "protect_001");
+            assert_eq!(decision.detail.at("cause"), "factional_kill");
+            assert_eq!(decision.detail.at("unstoppable"), false);
+            assert_eq!(decision.detail.at("protectors").nth(0).at("protector"), "slot_2");
+            assert_eq!(decision.detail.at("protectors").nth(0).at("action_id"), "protect_001");
             assert_eq!(
-                decision.detail["protectors"][0]["template_id"],
+                decision.detail.at("protectors").nth(0).at("template_id"),
                 "doctor_protect"
             );
-            decision.detail["attacker"].as_str().unwrap().to_string()
+            decision.detail.at("attacker").as_str().unwrap().to_string()
         })
         .collect();
     attackers.sort();

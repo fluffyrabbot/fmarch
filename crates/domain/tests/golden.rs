@@ -940,8 +940,8 @@ fn golden_faith_healer_chance_protect_saves() {
     assert!(output.trace.decisions.iter().any(|decision| {
         decision.stage == "night:action_chance"
             && decision.outcome == "action_chance_succeeded"
-            && decision.detail["template_id"] == "faith_healer_protect"
-            && decision.detail["chance"] == 0.5
+            && decision.detail.at("template_id") == "faith_healer_protect"
+            && decision.detail.at("chance") == 0.5
     }));
 }
 
@@ -958,8 +958,8 @@ fn golden_faith_healer_chance_protect_misses() {
     assert!(output.trace.decisions.iter().any(|decision| {
         decision.stage == "night:action_chance"
             && decision.outcome == "action_chance_failed"
-            && decision.detail["template_id"] == "faith_healer_protect"
-            && decision.detail["chance"] == 0.5
+            && decision.detail.at("template_id") == "faith_healer_protect"
+            && decision.detail.at("chance") == 0.5
     }));
 }
 
@@ -1801,7 +1801,7 @@ fn trace_records_pack_derived_night_stage_order() {
     assert_eq!(decision.stage, "night:stage_order");
     assert_eq!(decision.source, "pack.precedence");
     assert_eq!(
-        decision.detail["order"],
+        decision.detail.at("order"),
         serde_json::json!([
             "Block",
             "Redirect",
@@ -1833,12 +1833,18 @@ fn trace_records_protect_vs_kill_decision() {
         .expect("doctor save should emit a protect-vs-kill trace decision");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:factional_kill");
-    assert_eq!(decision.detail["target"], "slot_3");
-    assert_eq!(decision.detail["attacker"], "slot_1");
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_2");
-    assert_eq!(decision.detail["protectors"][0]["action_id"], "sub_002");
+    assert_eq!(decision.detail.at("target"), "slot_3");
+    assert_eq!(decision.detail.at("attacker"), "slot_1");
     assert_eq!(
-        decision.detail["protectors"][0]["template_id"],
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_2"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("action_id"),
+        "sub_002"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("template_id"),
         "doctor_protect"
     );
 }
@@ -1885,20 +1891,26 @@ fn trace_records_protected_multi_attacker_no_death() {
         .iter()
         .filter(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .map(|decision| {
             assert_eq!(decision.stage, "kill_resolution");
             assert_eq!(decision.source, "cause:factional_kill");
-            assert_eq!(decision.detail["cause"], "factional_kill");
-            assert_eq!(decision.detail["unstoppable"], false);
-            assert_eq!(decision.detail["protectors"][0]["protector"], "slot_2");
-            assert_eq!(decision.detail["protectors"][0]["action_id"], "protect_001");
+            assert_eq!(decision.detail.at("cause"), "factional_kill");
+            assert_eq!(decision.detail.at("unstoppable"), false);
             assert_eq!(
-                decision.detail["protectors"][0]["template_id"],
+                decision.detail.at("protectors").nth(0).at("protector"),
+                "slot_2"
+            );
+            assert_eq!(
+                decision.detail.at("protectors").nth(0).at("action_id"),
+                "protect_001"
+            );
+            assert_eq!(
+                decision.detail.at("protectors").nth(0).at("template_id"),
                 "doctor_protect"
             );
-            decision.detail["attacker"].as_str().unwrap().to_string()
+            decision.detail.at("attacker").as_str().unwrap().to_string()
         })
         .collect();
     attackers.sort();
@@ -1933,10 +1945,13 @@ fn trace_records_strongman_bypassing_protection() {
         .expect("strongman kill should emit a bypass trace decision");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:strongman_kill");
-    assert_eq!(decision.detail["target"], "slot_3");
-    assert_eq!(decision.detail["attacker"], "slot_1");
-    assert_eq!(decision.detail["unstoppable"], true);
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_2");
+    assert_eq!(decision.detail.at("target"), "slot_3");
+    assert_eq!(decision.detail.at("attacker"), "slot_1");
+    assert_eq!(decision.detail.at("unstoppable"), true);
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_2"
+    );
 }
 
 #[test]
@@ -2152,13 +2167,16 @@ fn trace_records_redirect_edge_for_busdriver() {
         .expect("bus driver should emit a redirect trace edge");
     assert_eq!(edge.from, "sub_002:target:0:slot_1");
     assert_eq!(edge.to, "sub_002:target:0:slot_2");
-    assert_eq!(edge.detail["action_id"], "sub_002");
-    assert_eq!(edge.detail["template_id"], "factional_kill");
-    assert_eq!(edge.detail["actor"], "slot_3");
-    assert_eq!(edge.detail["original_target"], "slot_1");
-    assert_eq!(edge.detail["final_target"], "slot_2");
-    assert_eq!(edge.detail["steps"][0]["redirect_action_id"], "sub_001");
-    assert_eq!(edge.detail["steps"][0]["redirect_kind"], "Swap");
+    assert_eq!(edge.detail.at("action_id"), "sub_002");
+    assert_eq!(edge.detail.at("template_id"), "factional_kill");
+    assert_eq!(edge.detail.at("actor"), "slot_3");
+    assert_eq!(edge.detail.at("original_target"), "slot_1");
+    assert_eq!(edge.detail.at("final_target"), "slot_2");
+    assert_eq!(
+        edge.detail.at("steps").nth(0).at("redirect_action_id"),
+        "sub_001"
+    );
+    assert_eq!(edge.detail.at("steps").nth(0).at("redirect_kind"), "Swap");
 }
 
 #[test]
@@ -2198,10 +2216,10 @@ fn trace_records_mass_redirect_rotate_edges() {
     assert_eq!(edges[2].to, "watch_rotate_n01:target:0:slot_2");
     for edge in edges {
         assert_eq!(
-            edge.detail["steps"][0]["redirect_action_id"],
+            edge.detail.at("steps").nth(0).at("redirect_action_id"),
             "rotate_targets_n01"
         );
-        assert_eq!(edge.detail["steps"][0]["redirect_kind"], "Rotate");
+        assert_eq!(edge.detail.at("steps").nth(0).at("redirect_kind"), "Rotate");
     }
 }
 
@@ -2234,8 +2252,8 @@ fn trace_records_redirect_loop_cap_truncation() {
     assert!(
         output.trace.edges.iter().any(|edge| {
             edge.kind == "redirect"
-                && edge.detail["original_target"] == "slot_1"
-                && edge.detail["final_target"] == "slot_2"
+                && edge.detail.at("original_target") == "slot_1"
+                && edge.detail.at("final_target") == "slot_2"
         }),
         "truncated graph should still trace applied redirect edges"
     );
@@ -2274,20 +2292,23 @@ fn trace_records_non_roleblockable_roleblocker_surviving_block() {
         .iter()
         .find(|decision| {
             decision.outcome == "action_suppressed"
-                && decision.detail["reason"] == "roleblocked"
-                && decision.detail["actor"] == "slot_2"
+                && decision.detail.at("reason") == "roleblocked"
+                && decision.detail.at("actor") == "slot_2"
         })
         .expect("roleblocked cop should emit a suppression trace decision");
     assert_eq!(decision.stage, "night:block");
-    assert_eq!(decision.detail["template_id"], "cop_investigate");
-    assert_eq!(decision.detail["block_sources"][0]["actor"], "slot_4");
+    assert_eq!(decision.detail.at("template_id"), "cop_investigate");
     assert_eq!(
-        decision.detail["block_sources"][0]["template_id"],
+        decision.detail.at("block_sources").nth(0).at("actor"),
+        "slot_4"
+    );
+    assert_eq!(
+        decision.detail.at("block_sources").nth(0).at("template_id"),
         "roleblocker_block"
     );
     assert!(
         output.trace.decisions.iter().all(|decision| {
-            decision.outcome != "action_suppressed" || decision.detail["actor"] != "slot_4"
+            decision.outcome != "action_suppressed" || decision.detail.at("actor") != "slot_4"
         }),
         "non-roleblockable roleblocker_block should survive a roleblock"
     );
@@ -2632,7 +2653,7 @@ fn trace_records_strong_willed_roleblock_bypass() {
     }));
     assert!(
         output.trace.decisions.iter().all(|decision| {
-            decision.outcome != "action_suppressed" || decision.detail["actor"] != "slot_2"
+            decision.outcome != "action_suppressed" || decision.detail.at("actor") != "slot_2"
         }),
         "StrongWilled action must bypass explicit night-resolution suppression"
     );
@@ -2675,8 +2696,8 @@ fn trace_records_ordinary_roleblocker_suppressing_one_of_multiple_actions() {
         .iter()
         .filter(|decision| {
             decision.outcome == "action_suppressed"
-                && decision.detail["reason"] == "roleblocked"
-                && decision.detail["actor"] == "slot_2"
+                && decision.detail.at("reason") == "roleblocked"
+                && decision.detail.at("actor") == "slot_2"
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -2684,9 +2705,13 @@ fn trace_records_ordinary_roleblocker_suppressing_one_of_multiple_actions() {
         1,
         "ordinary Roleblocker should suppress only the first matching action"
     );
-    assert_eq!(suppressed[0].detail["template_id"], "grant_item");
+    assert_eq!(suppressed[0].detail.at("template_id"), "grant_item");
     assert_eq!(
-        suppressed[0].detail["block_sources"][0]["template_id"],
+        suppressed[0]
+            .detail
+            .at("block_sources")
+            .nth(0)
+            .at("template_id"),
         "roleblocker_block"
     );
     assert!(output.applied.events.iter().any(|event| {
@@ -2724,10 +2749,10 @@ fn trace_records_catastrophic_roleblock_suppressing_multiple_actions() {
         .iter()
         .filter(|decision| {
             decision.outcome == "action_suppressed"
-                && decision.detail["reason"] == "roleblocked"
-                && decision.detail["actor"] == "slot_2"
+                && decision.detail.at("reason") == "roleblocked"
+                && decision.detail.at("actor") == "slot_2"
         })
-        .map(|decision| decision.detail["template_id"].as_str().unwrap())
+        .map(|decision| decision.detail.at("template_id").as_str().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(suppressed_templates, vec!["grant_item", "grant_vest_item"]);
     assert!(
@@ -2808,15 +2833,18 @@ fn trace_records_roleblock_suppression_decision() {
         .iter()
         .find(|decision| {
             decision.outcome == "action_suppressed"
-                && decision.detail["reason"] == "roleblocked"
-                && decision.detail["actor"] == "slot_2"
+                && decision.detail.at("reason") == "roleblocked"
+                && decision.detail.at("actor") == "slot_2"
         })
         .expect("roleblocked doctor should emit a suppression trace decision");
     assert_eq!(decision.stage, "night:block");
-    assert_eq!(decision.detail["template_id"], "doctor_protect");
-    assert_eq!(decision.detail["block_sources"][0]["actor"], "slot_4");
+    assert_eq!(decision.detail.at("template_id"), "doctor_protect");
     assert_eq!(
-        decision.detail["block_sources"][0]["template_id"],
+        decision.detail.at("block_sources").nth(0).at("actor"),
+        "slot_4"
+    );
+    assert_eq!(
+        decision.detail.at("block_sources").nth(0).at("template_id"),
         "roleblocker_block"
     );
 }
@@ -2874,21 +2902,34 @@ fn trace_records_martyr_intercept() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("Martyr protect should emit protect-vs-kill trace detail");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:factional_kill");
-    assert_eq!(decision.detail["attacker"], "slot_1");
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_2");
-    assert_eq!(decision.detail["protectors"][0]["action_id"], "sub_002");
+    assert_eq!(decision.detail.at("attacker"), "slot_1");
     assert_eq!(
-        decision.detail["protectors"][0]["template_id"],
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_2"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("action_id"),
+        "sub_002"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("template_id"),
         "martyr_protect"
     );
-    assert_eq!(decision.detail["protectors"][0]["intercepts"], true);
     assert_eq!(
-        decision.detail["protectors"][0]["intercept_cause"],
+        decision.detail.at("protectors").nth(0).at("intercepts"),
+        true
+    );
+    assert_eq!(
+        decision
+            .detail
+            .at("protectors")
+            .nth(0)
+            .at("intercept_cause"),
         "martyr_intercept"
     );
 }
@@ -2962,7 +3003,7 @@ fn night_resolution_cpr_harm_cause_is_pack_owned() {
         .iter()
         .find(|decision| decision.outcome == "cpr_harm_applied")
         .expect("unneeded CPR should emit harm trace detail");
-    assert_eq!(decision.detail["cause"], "pack_named_cpr_harm");
+    assert_eq!(decision.detail.at("cause"), "pack_named_cpr_harm");
 }
 
 #[test]
@@ -3106,19 +3147,25 @@ fn trace_records_cpr_save_without_harm() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("CPR save should emit protect-vs-kill trace detail");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:factional_kill");
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_2");
-    assert_eq!(decision.detail["protectors"][0]["action_id"], "sub_002");
     assert_eq!(
-        decision.detail["protectors"][0]["template_id"],
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_2"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("action_id"),
+        "sub_002"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("template_id"),
         "cpr_protect"
     );
     assert_eq!(
-        decision.detail["protectors"][0]["cpr_harm_cause"],
+        decision.detail.at("protectors").nth(0).at("cpr_harm_cause"),
         "cpr_protect"
     );
     assert!(
@@ -3144,9 +3191,9 @@ fn trace_records_cpr_harm() {
         .expect("unneeded CPR should emit harm trace detail");
     assert_eq!(decision.stage, "night:cpr");
     assert_eq!(decision.source, "action:sub_001");
-    assert_eq!(decision.detail["protector"], "slot_2");
-    assert_eq!(decision.detail["target"], "slot_3");
-    assert_eq!(decision.detail["cause"], "cpr_protect");
+    assert_eq!(decision.detail.at("protector"), "slot_2");
+    assert_eq!(decision.detail.at("target"), "slot_3");
+    assert_eq!(decision.detail.at("cause"), "cpr_protect");
 }
 
 #[test]
@@ -3160,17 +3207,17 @@ fn trace_records_cpr_strongman_bypass_without_extra_harm() {
         .iter()
         .find(|decision| {
             decision.outcome == "protection_bypassed_by_unstoppable_kill"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("Strongman bypass should emit protect bypass trace detail");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:strongman_kill");
     assert_eq!(
-        decision.detail["protectors"][0]["template_id"],
+        decision.detail.at("protectors").nth(0).at("template_id"),
         "cpr_protect"
     );
     assert_eq!(
-        decision.detail["protectors"][0]["cpr_harm_cause"],
+        decision.detail.at("protectors").nth(0).at("cpr_harm_cause"),
         "cpr_protect"
     );
     assert!(
@@ -3230,8 +3277,11 @@ fn night_resolution_babysitter_dependency_cause_is_pack_owned() {
         .iter()
         .find(|decision| decision.outcome == "babysitter_dependency_death")
         .expect("babysitter dependency should emit a death attribution trace decision");
-    assert_eq!(decision.detail["template_id"], "babysit");
-    assert_eq!(decision.detail["cause"], "pack_named_babysitter_dependency");
+    assert_eq!(decision.detail.at("template_id"), "babysit");
+    assert_eq!(
+        decision.detail.at("cause"),
+        "pack_named_babysitter_dependency"
+    );
 }
 
 #[test]
@@ -3384,12 +3434,12 @@ fn trace_records_babysitter_dependency_death() {
         .expect("babysitter dependency should emit a death attribution trace decision");
     assert_eq!(decision.stage, "night:dependency_death");
     assert_eq!(decision.source, "action:babysit_001");
-    assert_eq!(decision.detail["action_id"], "babysit_001");
-    assert_eq!(decision.detail["template_id"], "babysit");
-    assert_eq!(decision.detail["protector"], "slot_2");
-    assert_eq!(decision.detail["ward"], "slot_3");
-    assert_eq!(decision.detail["cause"], "babysit");
-    assert_eq!(decision.detail["attackers"][0], "slot_2");
+    assert_eq!(decision.detail.at("action_id"), "babysit_001");
+    assert_eq!(decision.detail.at("template_id"), "babysit");
+    assert_eq!(decision.detail.at("protector"), "slot_2");
+    assert_eq!(decision.detail.at("ward"), "slot_3");
+    assert_eq!(decision.detail.at("cause"), "babysit");
+    assert_eq!(decision.detail.at("attackers").nth(0), "slot_2");
 }
 
 #[test]
@@ -3409,12 +3459,12 @@ fn trace_records_babysitter_dependency_stack_with_direct_ward_death() {
         .expect("raced babysitter dependency should still emit dependency attribution");
     assert_eq!(dependency.stage, "night:dependency_death");
     assert_eq!(dependency.source, "action:babysit_001");
-    assert_eq!(dependency.detail["action_id"], "babysit_001");
-    assert_eq!(dependency.detail["template_id"], "babysit");
-    assert_eq!(dependency.detail["protector"], "slot_2");
-    assert_eq!(dependency.detail["ward"], "slot_3");
-    assert_eq!(dependency.detail["cause"], "babysit");
-    assert_eq!(dependency.detail["attackers"][0], "slot_2");
+    assert_eq!(dependency.detail.at("action_id"), "babysit_001");
+    assert_eq!(dependency.detail.at("template_id"), "babysit");
+    assert_eq!(dependency.detail.at("protector"), "slot_2");
+    assert_eq!(dependency.detail.at("ward"), "slot_3");
+    assert_eq!(dependency.detail.at("cause"), "babysit");
+    assert_eq!(dependency.detail.at("attackers").nth(0), "slot_2");
 
     let stacked = output
         .trace
@@ -3422,17 +3472,17 @@ fn trace_records_babysitter_dependency_stack_with_direct_ward_death() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_stacked_on_existing_death"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("babysitter dependency should merge into the direct ward death");
     assert_eq!(stacked.stage, "kill_resolution");
     assert_eq!(stacked.source, "cause:babysit");
-    assert_eq!(stacked.detail["attacker"], "slot_2");
-    assert_eq!(stacked.detail["cause"], "babysit");
-    assert_eq!(stacked.detail["existing_cause"], "strongman_kill");
-    assert_eq!(stacked.detail["unstoppable"], true);
+    assert_eq!(stacked.detail.at("attacker"), "slot_2");
+    assert_eq!(stacked.detail.at("cause"), "babysit");
+    assert_eq!(stacked.detail.at("existing_cause"), "strongman_kill");
+    assert_eq!(stacked.detail.at("unstoppable"), true);
     assert_eq!(
-        stacked.detail["merged_attackers"],
+        stacked.detail.at("merged_attackers"),
         serde_json::json!(["slot_1", "slot_2"])
     );
 }
@@ -3501,20 +3551,31 @@ fn trace_records_jailkeeper_block_plus_protect_policy() {
         .decisions
         .iter()
         .find(|decision| {
-            decision.outcome == "action_suppressed" && decision.detail["action_id"] == "sub_003"
+            decision.outcome == "action_suppressed" && decision.detail.at("action_id") == "sub_003"
         })
         .expect("Jailkeeper should suppress the jailed Cop action");
     assert_eq!(suppression.stage, "night:block");
-    assert_eq!(suppression.detail["actor"], "slot_3");
-    assert_eq!(suppression.detail["reason"], "roleblocked");
-    assert_eq!(suppression.detail["template_id"], "cop_investigate");
-    assert_eq!(suppression.detail["block_sources"][0]["actor"], "slot_2");
+    assert_eq!(suppression.detail.at("actor"), "slot_3");
+    assert_eq!(suppression.detail.at("reason"), "roleblocked");
+    assert_eq!(suppression.detail.at("template_id"), "cop_investigate");
     assert_eq!(
-        suppression.detail["block_sources"][0]["action_id"],
+        suppression.detail.at("block_sources").nth(0).at("actor"),
+        "slot_2"
+    );
+    assert_eq!(
+        suppression
+            .detail
+            .at("block_sources")
+            .nth(0)
+            .at("action_id"),
         "sub_002"
     );
     assert_eq!(
-        suppression.detail["block_sources"][0]["template_id"],
+        suppression
+            .detail
+            .at("block_sources")
+            .nth(0)
+            .at("template_id"),
         "jail"
     );
 
@@ -3524,17 +3585,26 @@ fn trace_records_jailkeeper_block_plus_protect_policy() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("Jailkeeper should protect the jailed target from normal kill");
     assert_eq!(protect.stage, "kill_resolution");
     assert_eq!(protect.source, "cause:factional_kill");
-    assert_eq!(protect.detail["attacker"], "slot_1");
-    assert_eq!(protect.detail["cause"], "factional_kill");
-    assert_eq!(protect.detail["unstoppable"], false);
-    assert_eq!(protect.detail["protectors"][0]["protector"], "slot_2");
-    assert_eq!(protect.detail["protectors"][0]["action_id"], "sub_002");
-    assert_eq!(protect.detail["protectors"][0]["template_id"], "jail");
+    assert_eq!(protect.detail.at("attacker"), "slot_1");
+    assert_eq!(protect.detail.at("cause"), "factional_kill");
+    assert_eq!(protect.detail.at("unstoppable"), false);
+    assert_eq!(
+        protect.detail.at("protectors").nth(0).at("protector"),
+        "slot_2"
+    );
+    assert_eq!(
+        protect.detail.at("protectors").nth(0).at("action_id"),
+        "sub_002"
+    );
+    assert_eq!(
+        protect.detail.at("protectors").nth(0).at("template_id"),
+        "jail"
+    );
 }
 
 #[test]
@@ -3584,15 +3654,15 @@ fn night_resolution_commute_gate_uses_target_state_gate_policy() {
     assert!(
         !output.trace.decisions.iter().any(|decision| {
             decision.outcome == "kill_skipped_by_target_state"
-                && decision.detail["reason"] == "commuted"
+                && decision.detail.at("reason") == "commuted"
         }),
         "Kill must not be gated by commuted when the night_resolution table omits Kill"
     );
     assert!(
         output.trace.decisions.iter().any(|decision| {
             decision.outcome == "action_interfered_by_target_state"
-                && decision.detail["reason"] == "commuted"
-                && decision.detail["ability"] == "Investigate"
+                && decision.detail.at("reason") == "commuted"
+                && decision.detail.at("ability") == "Investigate"
         }),
         "Investigate should remain gated by commuted after the policy mutation"
     );
@@ -3751,15 +3821,17 @@ fn trace_records_commuter_target_state_gate() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_skipped_by_target_state"
-                && decision.detail["reason"] == "commuted"
+                && decision.detail.at("reason") == "commuted"
         })
         .expect("commuted kill target should emit a skipped-kill trace decision");
     assert_eq!(skipped_kill.stage, "kill_resolution");
     assert_eq!(skipped_kill.source, "cause:factional_kill");
-    assert_eq!(skipped_kill.detail["action_id"], "sub_002");
-    assert_eq!(skipped_kill.detail["actor"], "slot_1");
-    assert_eq!(skipped_kill.detail["target"], "slot_2");
-    assert!(skipped_kill.detail["target_tags"]
+    assert_eq!(skipped_kill.detail.at("action_id"), "sub_002");
+    assert_eq!(skipped_kill.detail.at("actor"), "slot_1");
+    assert_eq!(skipped_kill.detail.at("target"), "slot_2");
+    assert!(skipped_kill
+        .detail
+        .at("target_tags")
         .as_array()
         .unwrap()
         .iter()
@@ -3771,13 +3843,13 @@ fn trace_records_commuter_target_state_gate() {
         .iter()
         .find(|decision| {
             decision.outcome == "action_interfered_by_target_state"
-                && decision.detail["reason"] == "commuted"
+                && decision.detail.at("reason") == "commuted"
         })
         .expect("commuted investigation target should emit an interference trace decision");
     assert_eq!(interfered_investigation.stage, "night:target_state");
-    assert_eq!(interfered_investigation.detail["action_id"], "sub_003");
-    assert_eq!(interfered_investigation.detail["actor"], "slot_3");
-    assert_eq!(interfered_investigation.detail["target"], "slot_2");
+    assert_eq!(interfered_investigation.detail.at("action_id"), "sub_003");
+    assert_eq!(interfered_investigation.detail.at("actor"), "slot_3");
+    assert_eq!(interfered_investigation.detail.at("target"), "slot_2");
 }
 
 #[test]
@@ -3817,12 +3889,12 @@ fn trace_records_rolestop_and_shield_target_state_gate() {
         .iter()
         .filter(|decision| {
             decision.outcome == "kill_skipped_by_target_state"
-                && decision.detail["reason"] == "untargetable"
+                && decision.detail.at("reason") == "untargetable"
         })
         .map(|decision| {
             assert_eq!(decision.stage, "kill_resolution");
-            assert_eq!(decision.detail["target_tags"][0], "untargetable");
-            decision.detail["target"].as_str().unwrap().to_string()
+            assert_eq!(decision.detail.at("target_tags").nth(0), "untargetable");
+            decision.detail.at("target").as_str().unwrap().to_string()
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -3836,15 +3908,15 @@ fn trace_records_rolestop_and_shield_target_state_gate() {
         .iter()
         .find(|decision| {
             decision.outcome == "action_interfered_by_target_state"
-                && decision.detail["reason"] == "untargetable"
+                && decision.detail.at("reason") == "untargetable"
         })
         .expect("shielded investigation target should emit an interference trace decision");
     assert_eq!(
-        interfered_investigation.detail["action_id"],
+        interfered_investigation.detail.at("action_id"),
         "cop_check_shielded_n01"
     );
-    assert_eq!(interfered_investigation.detail["actor"], "slot_6");
-    assert_eq!(interfered_investigation.detail["target"], "slot_4");
+    assert_eq!(interfered_investigation.detail.at("actor"), "slot_6");
+    assert_eq!(interfered_investigation.detail.at("target"), "slot_4");
 }
 
 #[test]
@@ -3862,12 +3934,12 @@ fn trace_records_passive_untargetable_target_state_gate() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_skipped_by_target_state"
-                && decision.detail["reason"] == "untargetable"
+                && decision.detail.at("reason") == "untargetable"
         })
         .expect("untargetable kill target should emit a skipped-kill trace decision");
-    assert_eq!(skipped_kill.detail["action_id"], "sub_001");
-    assert_eq!(skipped_kill.detail["actor"], "slot_1");
-    assert_eq!(skipped_kill.detail["target"], "slot_2");
+    assert_eq!(skipped_kill.detail.at("action_id"), "sub_001");
+    assert_eq!(skipped_kill.detail.at("actor"), "slot_1");
+    assert_eq!(skipped_kill.detail.at("target"), "slot_2");
 
     let interfered_investigation = output
         .trace
@@ -3875,12 +3947,12 @@ fn trace_records_passive_untargetable_target_state_gate() {
         .iter()
         .find(|decision| {
             decision.outcome == "action_interfered_by_target_state"
-                && decision.detail["reason"] == "untargetable"
+                && decision.detail.at("reason") == "untargetable"
         })
         .expect("untargetable investigation target should emit an interference trace decision");
-    assert_eq!(interfered_investigation.detail["action_id"], "sub_002");
-    assert_eq!(interfered_investigation.detail["actor"], "slot_3");
-    assert_eq!(interfered_investigation.detail["target"], "slot_2");
+    assert_eq!(interfered_investigation.detail.at("action_id"), "sub_002");
+    assert_eq!(interfered_investigation.detail.at("actor"), "slot_3");
+    assert_eq!(interfered_investigation.detail.at("target"), "slot_2");
 }
 
 #[test]
@@ -4247,25 +4319,28 @@ fn trace_records_ascetic_non_lethal_target_state_gate() {
         .iter()
         .find(|decision| {
             decision.outcome == "action_interfered_by_target_state"
-                && decision.detail["reason"] == "ascetic"
-                && decision.detail["ability"] == "Mark"
+                && decision.detail.at("reason") == "ascetic"
+                && decision.detail.at("ability") == "Mark"
         })
         .expect("ascetic poison target should emit a Mark interference trace decision");
-    assert_eq!(poison.detail["target_tags"], serde_json::json!(["ascetic"]));
+    assert_eq!(
+        poison.detail.at("target_tags"),
+        serde_json::json!(["ascetic"])
+    );
     let investigation = output
         .trace
         .decisions
         .iter()
         .find(|decision| {
             decision.outcome == "action_interfered_by_target_state"
-                && decision.detail["reason"] == "ascetic"
-                && decision.detail["ability"] == "Investigate"
+                && decision.detail.at("reason") == "ascetic"
+                && decision.detail.at("ability") == "Investigate"
         })
         .expect(
             "ascetic investigation target should emit an Investigate interference trace decision",
         );
     assert_eq!(
-        investigation.detail["target_tags"],
+        investigation.detail.at("target_tags"),
         serde_json::json!(["ascetic"])
     );
 }
@@ -4295,12 +4370,12 @@ fn trace_records_ascetic_protect_and_convert_target_state_gate() {
         .iter()
         .find(|decision| {
             decision.outcome == "action_interfered_by_target_state"
-                && decision.detail["reason"] == "ascetic"
-                && decision.detail["ability"] == "Protect"
+                && decision.detail.at("reason") == "ascetic"
+                && decision.detail.at("ability") == "Protect"
         })
         .expect("ascetic protect target should emit a Protect interference trace decision");
     assert_eq!(
-        protect.detail["target_tags"],
+        protect.detail.at("target_tags"),
         serde_json::json!(["ascetic"])
     );
     let conversion = output
@@ -4309,11 +4384,11 @@ fn trace_records_ascetic_protect_and_convert_target_state_gate() {
         .iter()
         .find(|decision| {
             decision.outcome == "conversion_blocked"
-                && decision.detail["reason"] == "ascetic"
-                && decision.detail["target_tags"] == serde_json::json!(["ascetic"])
+                && decision.detail.at("reason") == "ascetic"
+                && decision.detail.at("target_tags") == serde_json::json!(["ascetic"])
         })
         .expect("ascetic conversion target should emit a conversion_blocked trace decision");
-    assert_eq!(conversion.detail["target_role"], "ascetic");
+    assert_eq!(conversion.detail.at("target_role"), "ascetic");
 }
 
 #[test]
@@ -4692,11 +4767,11 @@ fn trace_records_pending_poison_applied() {
         .expect("pending poison death should emit a trace decision");
     assert_eq!(decision.stage, "night:pending_effect");
     assert_eq!(decision.source, "delayed_death:poisoned:slot_2:sub_prev");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["effect"], "poisoned");
-    assert_eq!(decision.detail["cause"], "poison");
-    assert_eq!(decision.detail["source"], "slot_1");
-    assert_eq!(decision.detail["source_action"], "sub_prev");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("effect"), "poisoned");
+    assert_eq!(decision.detail.at("cause"), "poison");
+    assert_eq!(decision.detail.at("source"), "slot_1");
+    assert_eq!(decision.detail.at("source_action"), "sub_prev");
 }
 
 #[test]
@@ -4727,11 +4802,11 @@ fn trace_records_pending_poison_target_already_dead() {
         .expect("already-dead pending poison target should emit a trace decision");
     assert_eq!(decision.stage, "night:pending_effect");
     assert_eq!(decision.source, "delayed_death:poisoned:slot_2:sub_prev");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["effect"], "poisoned");
-    assert_eq!(decision.detail["cause"], "poison");
-    assert_eq!(decision.detail["source"], "slot_1");
-    assert_eq!(decision.detail["source_action"], "sub_prev");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("effect"), "poisoned");
+    assert_eq!(decision.detail.at("cause"), "poison");
+    assert_eq!(decision.detail.at("source"), "slot_1");
+    assert_eq!(decision.detail.at("source_action"), "sub_prev");
 }
 
 #[test]
@@ -4758,10 +4833,10 @@ fn trace_records_cure_poison_preempting_pending_death() {
         .expect("cured pending poison should emit a preemption trace decision");
     assert_eq!(decision.stage, "night:pending_effect");
     assert_eq!(decision.source, "delayed_death:poisoned:slot_2:sub_prev");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["effect"], "poisoned");
-    assert_eq!(decision.detail["source"], "slot_3");
-    assert_eq!(decision.detail["source_action"], "sub_prev");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("effect"), "poisoned");
+    assert_eq!(decision.detail.at("source"), "slot_3");
+    assert_eq!(decision.detail.at("source_action"), "sub_prev");
 }
 
 #[test]
@@ -4791,11 +4866,11 @@ fn trace_records_cleanse_preempting_ignite_read_effect() {
         .expect("cleansed douse should emit a read-effect preemption trace decision");
     assert_eq!(decision.stage, "night:read_effect");
     assert_eq!(decision.source, "action:sub_002");
-    assert_eq!(decision.detail["action_id"], "sub_002");
-    assert_eq!(decision.detail["template_id"], "ignite");
-    assert_eq!(decision.detail["actor"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_3");
-    assert_eq!(decision.detail["reads_effect"], "doused");
+    assert_eq!(decision.detail.at("action_id"), "sub_002");
+    assert_eq!(decision.detail.at("template_id"), "ignite");
+    assert_eq!(decision.detail.at("actor"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_3");
+    assert_eq!(decision.detail.at("reads_effect"), "doused");
 }
 
 #[test]
@@ -4895,16 +4970,16 @@ fn trace_records_deprogram_restore_original() {
         .expect("deprogram should emit a restore-original trace decision");
     assert_eq!(decision.stage, "night:conversion");
     assert_eq!(decision.source, "action:sub_001");
-    assert_eq!(decision.detail["action_id"], "sub_001");
-    assert_eq!(decision.detail["template_id"], "deprogram");
-    assert_eq!(decision.detail["actor"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["mode"], "RestoreOriginal");
-    assert_eq!(decision.detail["new_role"], "cop");
-    assert_eq!(decision.detail["new_alignment"], "town");
-    assert_eq!(decision.detail["original_role"], "cultist");
-    assert_eq!(decision.detail["original_alignment"], "cult");
-    assert_eq!(decision.detail["origin_source"], "slot_5");
+    assert_eq!(decision.detail.at("action_id"), "sub_001");
+    assert_eq!(decision.detail.at("template_id"), "deprogram");
+    assert_eq!(decision.detail.at("actor"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("mode"), "RestoreOriginal");
+    assert_eq!(decision.detail.at("new_role"), "cop");
+    assert_eq!(decision.detail.at("new_alignment"), "town");
+    assert_eq!(decision.detail.at("original_role"), "cultist");
+    assert_eq!(decision.detail.at("original_alignment"), "cult");
+    assert_eq!(decision.detail.at("origin_source"), "slot_5");
 }
 
 #[test]
@@ -4917,21 +4992,21 @@ fn trace_records_disloyal_action_suppression() {
         .decisions
         .iter()
         .find(|decision| {
-            decision.outcome == "action_suppressed" && decision.detail["reason"] == "disloyal"
+            decision.outcome == "action_suppressed" && decision.detail.at("reason") == "disloyal"
         })
         .expect("same-alignment disloyal recruit should emit a suppression trace decision");
     assert_eq!(decision.stage, "night:action_constraints");
     assert_eq!(decision.source, "action:disloyal_recruit_same_alignment");
     assert_eq!(
-        decision.detail["action_id"],
+        decision.detail.at("action_id"),
         "disloyal_recruit_same_alignment"
     );
-    assert_eq!(decision.detail["template_id"], "disloyal_cult_recruit");
-    assert_eq!(decision.detail["actor"], "slot_1");
-    assert_eq!(decision.detail["actor_alignment"], "cult");
-    assert_eq!(decision.detail["targets"], serde_json::json!(["slot_6"]));
+    assert_eq!(decision.detail.at("template_id"), "disloyal_cult_recruit");
+    assert_eq!(decision.detail.at("actor"), "slot_1");
+    assert_eq!(decision.detail.at("actor_alignment"), "cult");
+    assert_eq!(decision.detail.at("targets"), serde_json::json!(["slot_6"]));
     assert_eq!(
-        decision.detail["target_alignments"],
+        decision.detail.at("target_alignments"),
         serde_json::json!([{"target": "slot_6", "alignment": "cult"}])
     );
 
@@ -4941,12 +5016,12 @@ fn trace_records_disloyal_action_suppression() {
         .iter()
         .find(|decision| {
             decision.outcome == "conversion_assigned_role"
-                && decision.detail["action_id"] == "disloyal_recruit_cross_alignment"
+                && decision.detail.at("action_id") == "disloyal_recruit_cross_alignment"
         })
         .expect("cross-alignment disloyal recruit should convert normally");
-    assert_eq!(converted.detail["actor"], "slot_3");
-    assert_eq!(converted.detail["target"], "slot_2");
-    assert_eq!(converted.detail["new_role"], "cultist");
+    assert_eq!(converted.detail.at("actor"), "slot_3");
+    assert_eq!(converted.detail.at("target"), "slot_2");
+    assert_eq!(converted.detail.at("new_role"), "cultist");
 }
 
 #[test]
@@ -4986,18 +5061,19 @@ fn trace_records_conversion_dead_target_policy() {
         .decisions
         .iter()
         .find(|decision| {
-            decision.outcome == "conversion_blocked" && decision.detail["reason"] == "dead_target"
+            decision.outcome == "conversion_blocked"
+                && decision.detail.at("reason") == "dead_target"
         })
         .expect("dead conversion target should emit a conversion-block trace decision");
     assert_eq!(decision.stage, "night:conversion");
     assert_eq!(decision.source, "action:convert_001");
-    assert_eq!(decision.detail["action_id"], "convert_001");
-    assert_eq!(decision.detail["template_id"], "vanillaize");
-    assert_eq!(decision.detail["actor"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["target_role"], "cop");
-    assert_eq!(decision.detail["target_alignment"], "town");
-    assert_eq!(decision.detail["mode"], "AssignRole");
+    assert_eq!(decision.detail.at("action_id"), "convert_001");
+    assert_eq!(decision.detail.at("template_id"), "vanillaize");
+    assert_eq!(decision.detail.at("actor"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("target_role"), "cop");
+    assert_eq!(decision.detail.at("target_alignment"), "town");
+    assert_eq!(decision.detail.at("mode"), "AssignRole");
 }
 
 #[test]
@@ -5025,22 +5101,26 @@ fn trace_records_conversion_pending_death_policy() {
         .decisions
         .iter()
         .find(|decision| {
-            decision.outcome == "conversion_blocked" && decision.detail["reason"] == "pending_death"
+            decision.outcome == "conversion_blocked"
+                && decision.detail.at("reason") == "pending_death"
         })
         .expect("pending-death conversion target should emit a conversion-block trace decision");
     assert_eq!(decision.stage, "night:conversion");
     assert_eq!(decision.source, "action:convert_001");
-    assert_eq!(decision.detail["action_id"], "convert_001");
-    assert_eq!(decision.detail["template_id"], "vanillaize");
-    assert_eq!(decision.detail["actor"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["target_role"], "cop");
-    assert_eq!(decision.detail["target_alignment"], "town");
-    assert_eq!(decision.detail["mode"], "AssignRole");
-    assert_eq!(decision.detail["queue_id"], "poisoned:slot_2:poison_prev");
-    assert_eq!(decision.detail["cause"], "poison");
-    assert_eq!(decision.detail["effect"], "poisoned");
-    assert_eq!(decision.detail["source_action"], "poison_prev");
+    assert_eq!(decision.detail.at("action_id"), "convert_001");
+    assert_eq!(decision.detail.at("template_id"), "vanillaize");
+    assert_eq!(decision.detail.at("actor"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("target_role"), "cop");
+    assert_eq!(decision.detail.at("target_alignment"), "town");
+    assert_eq!(decision.detail.at("mode"), "AssignRole");
+    assert_eq!(
+        decision.detail.at("queue_id"),
+        "poisoned:slot_2:poison_prev"
+    );
+    assert_eq!(decision.detail.at("cause"), "poison");
+    assert_eq!(decision.detail.at("effect"), "poisoned");
+    assert_eq!(decision.detail.at("source_action"), "poison_prev");
 }
 
 #[test]
@@ -5102,15 +5182,15 @@ fn trace_records_vanillaize_assignment() {
         .expect("vanillaize should emit an assigned-role conversion trace decision");
     assert_eq!(decision.stage, "night:conversion");
     assert_eq!(decision.source, "action:sub_001");
-    assert_eq!(decision.detail["action_id"], "sub_001");
-    assert_eq!(decision.detail["template_id"], "vanillaize");
-    assert_eq!(decision.detail["actor"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["mode"], "AssignRole");
-    assert_eq!(decision.detail["new_role"], "vanilla_townie");
-    assert_eq!(decision.detail["new_alignment"], "town");
-    assert_eq!(decision.detail["original_role"], "cop");
-    assert_eq!(decision.detail["original_alignment"], "town");
+    assert_eq!(decision.detail.at("action_id"), "sub_001");
+    assert_eq!(decision.detail.at("template_id"), "vanillaize");
+    assert_eq!(decision.detail.at("actor"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("mode"), "AssignRole");
+    assert_eq!(decision.detail.at("new_role"), "vanilla_townie");
+    assert_eq!(decision.detail.at("new_alignment"), "town");
+    assert_eq!(decision.detail.at("original_role"), "cop");
+    assert_eq!(decision.detail.at("original_alignment"), "town");
 }
 
 #[test]
@@ -5141,14 +5221,17 @@ fn trace_records_passive_backup_inheritance() {
         .expect("passive backup should emit an inheritance trace decision");
     assert_eq!(decision.stage, "night:backup");
     assert_eq!(decision.source, "slot:slot_2");
-    assert_eq!(decision.detail["backup"], "slot_3");
-    assert_eq!(decision.detail["source_target"], "slot_2");
-    assert_eq!(decision.detail["policy"], "passive");
-    assert_eq!(decision.detail["policy_detail"]["effect"], "backup:cop");
-    assert_eq!(decision.detail["new_role"], "cop");
-    assert_eq!(decision.detail["new_alignment"], "town");
-    assert_eq!(decision.detail["original_role"], "backup_cop");
-    assert_eq!(decision.detail["original_alignment"], "town");
+    assert_eq!(decision.detail.at("backup"), "slot_3");
+    assert_eq!(decision.detail.at("source_target"), "slot_2");
+    assert_eq!(decision.detail.at("policy"), "passive");
+    assert_eq!(
+        decision.detail.at("policy_detail").at("effect"),
+        "backup:cop"
+    );
+    assert_eq!(decision.detail.at("new_role"), "cop");
+    assert_eq!(decision.detail.at("new_alignment"), "town");
+    assert_eq!(decision.detail.at("original_role"), "backup_cop");
+    assert_eq!(decision.detail.at("original_alignment"), "town");
 }
 
 #[test]
@@ -5190,27 +5273,39 @@ fn trace_records_targeted_backup_inheritance() {
         .expect("targeted backup should emit an inheritance trace decision");
     assert_eq!(decision.stage, "night:backup");
     assert_eq!(decision.source, "slot:slot_2");
-    assert_eq!(decision.detail["backup"], "slot_1");
-    assert_eq!(decision.detail["source_target"], "slot_2");
-    assert_eq!(decision.detail["policy"], "targeted");
+    assert_eq!(decision.detail.at("backup"), "slot_1");
+    assert_eq!(decision.detail.at("source_target"), "slot_2");
+    assert_eq!(decision.detail.at("policy"), "targeted");
     assert_eq!(
-        decision.detail["policy_detail"]["source_action"],
+        decision.detail.at("policy_detail").at("source_action"),
         "target_backup_n01"
     );
     assert_eq!(
-        decision.detail["policy_detail"]["declared_source_role"],
+        decision
+            .detail
+            .at("policy_detail")
+            .at("declared_source_role"),
         "cop"
     );
-    assert_eq!(decision.detail["policy_detail"]["target_phase_id"], "N01");
     assert_eq!(
-        decision.detail["policy_detail"]["target_phase_kind"],
+        decision.detail.at("policy_detail").at("target_phase_id"),
+        "N01"
+    );
+    assert_eq!(
+        decision.detail.at("policy_detail").at("target_phase_kind"),
         "Night"
     );
-    assert_eq!(decision.detail["policy_detail"]["target_phase_number"], 1);
-    assert_eq!(decision.detail["new_role"], "cop");
-    assert_eq!(decision.detail["new_alignment"], "town");
-    assert_eq!(decision.detail["original_role"], "universal_backup");
-    assert_eq!(decision.detail["original_alignment"], "town");
+    assert_eq!(
+        decision
+            .detail
+            .at("policy_detail")
+            .at("target_phase_number"),
+        1
+    );
+    assert_eq!(decision.detail.at("new_role"), "cop");
+    assert_eq!(decision.detail.at("new_alignment"), "town");
+    assert_eq!(decision.detail.at("original_role"), "universal_backup");
+    assert_eq!(decision.detail.at("original_alignment"), "town");
 }
 
 #[test]
@@ -5241,19 +5336,22 @@ fn trace_records_targeted_backup_priority_over_passive() {
         .expect("targeted-over-passive backup should emit an inheritance trace decision");
     assert_eq!(decision.stage, "night:backup");
     assert_eq!(decision.source, "slot:slot_2");
-    assert_eq!(decision.detail["backup"], "slot_1");
-    assert_eq!(decision.detail["source_target"], "slot_2");
-    assert_eq!(decision.detail["policy"], "targeted");
+    assert_eq!(decision.detail.at("backup"), "slot_1");
+    assert_eq!(decision.detail.at("source_target"), "slot_2");
+    assert_eq!(decision.detail.at("policy"), "targeted");
     assert_eq!(
-        decision.detail["policy_detail"]["source_action"],
+        decision.detail.at("policy_detail").at("source_action"),
         "target_backup_n01"
     );
     assert_eq!(
-        decision.detail["policy_detail"]["declared_source_role"],
+        decision
+            .detail
+            .at("policy_detail")
+            .at("declared_source_role"),
         "cop"
     );
-    assert_eq!(decision.detail["new_role"], "cop");
-    assert_eq!(decision.detail["original_role"], "universal_backup");
+    assert_eq!(decision.detail.at("new_role"), "cop");
+    assert_eq!(decision.detail.at("original_role"), "universal_backup");
 }
 
 #[test]
@@ -5293,12 +5391,15 @@ fn backup_priority_can_prefer_passive_over_targeted() {
         .expect("passive-over-targeted backup should emit an inheritance trace decision");
     assert_eq!(decision.stage, "night:backup");
     assert_eq!(decision.source, "slot:slot_4");
-    assert_eq!(decision.detail["backup"], "slot_1");
-    assert_eq!(decision.detail["source_target"], "slot_4");
-    assert_eq!(decision.detail["policy"], "passive");
-    assert_eq!(decision.detail["policy_detail"]["effect"], "backup:doctor");
-    assert_eq!(decision.detail["new_role"], "doctor");
-    assert_eq!(decision.detail["original_role"], "universal_backup");
+    assert_eq!(decision.detail.at("backup"), "slot_1");
+    assert_eq!(decision.detail.at("source_target"), "slot_4");
+    assert_eq!(decision.detail.at("policy"), "passive");
+    assert_eq!(
+        decision.detail.at("policy_detail").at("effect"),
+        "backup:doctor"
+    );
+    assert_eq!(decision.detail.at("new_role"), "doctor");
+    assert_eq!(decision.detail.at("original_role"), "universal_backup");
 }
 
 #[test]
@@ -5398,14 +5499,14 @@ fn trace_records_executioner_target_lynch_win() {
         .expect("executioner target lynch should emit an independent-win trace decision");
     assert_eq!(decision.stage, "day:lynch_trigger");
     assert_eq!(decision.source, "action:executioner_target_n01");
-    assert_eq!(decision.detail["policy"], "executioner");
-    assert_eq!(decision.detail["owner"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["effect"], "execution_target");
-    assert_eq!(decision.detail["winner"], "executioner");
-    assert_eq!(decision.detail["target_phase_id"], "N01");
-    assert_eq!(decision.detail["target_phase_kind"], "Night");
-    assert_eq!(decision.detail["target_phase_number"], 1);
+    assert_eq!(decision.detail.at("policy"), "executioner");
+    assert_eq!(decision.detail.at("owner"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("effect"), "execution_target");
+    assert_eq!(decision.detail.at("winner"), "executioner");
+    assert_eq!(decision.detail.at("target_phase_id"), "N01");
+    assert_eq!(decision.detail.at("target_phase_kind"), "Night");
+    assert_eq!(decision.detail.at("target_phase_number"), 1);
 }
 
 #[test]
@@ -5425,14 +5526,14 @@ fn trace_records_condemner_target_lynch_win() {
         .expect("condemner target lynch should emit an independent-win trace decision");
     assert_eq!(decision.stage, "day:lynch_trigger");
     assert_eq!(decision.source, "action:condemner_target_n01");
-    assert_eq!(decision.detail["policy"], "condemner");
-    assert_eq!(decision.detail["owner"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["effect"], "condemner_target");
-    assert_eq!(decision.detail["winner"], "condemner");
-    assert_eq!(decision.detail["target_phase_id"], "N01");
-    assert_eq!(decision.detail["target_phase_kind"], "Night");
-    assert_eq!(decision.detail["target_phase_number"], 1);
+    assert_eq!(decision.detail.at("policy"), "condemner");
+    assert_eq!(decision.detail.at("owner"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("effect"), "condemner_target");
+    assert_eq!(decision.detail.at("winner"), "condemner");
+    assert_eq!(decision.detail.at("target_phase_id"), "N01");
+    assert_eq!(decision.detail.at("target_phase_kind"), "Night");
+    assert_eq!(decision.detail.at("target_phase_number"), 1);
 }
 
 #[test]
@@ -5452,11 +5553,11 @@ fn trace_records_jester_self_lynch_win() {
         .expect("Jester self-lynch should emit an independent-win trace decision");
     assert_eq!(decision.stage, "day:lynch_trigger");
     assert_eq!(decision.source, "slot:slot_1");
-    assert_eq!(decision.detail["policy"], "jester");
-    assert_eq!(decision.detail["target"], "slot_1");
-    assert_eq!(decision.detail["role"], "jester");
-    assert_eq!(decision.detail["winner"], "jester");
-    assert_eq!(decision.detail["source_event"], "win.jester");
+    assert_eq!(decision.detail.at("policy"), "jester");
+    assert_eq!(decision.detail.at("target"), "slot_1");
+    assert_eq!(decision.detail.at("role"), "jester");
+    assert_eq!(decision.detail.at("winner"), "jester");
+    assert_eq!(decision.detail.at("source_event"), "win.jester");
 }
 
 #[test]
@@ -5476,11 +5577,11 @@ fn trace_records_survivor_alive_at_end_award() {
         .expect("Survivor alive at end should emit a survival-award trace decision");
     assert_eq!(decision.stage, "win:survival");
     assert_eq!(decision.source, "slot:slot_3");
-    assert_eq!(decision.detail["policy"], "survivor");
-    assert_eq!(decision.detail["winner"], "survivor");
-    assert_eq!(decision.detail["slot_id"], "slot_3");
-    assert_eq!(decision.detail["role"], "survivor");
-    assert_eq!(decision.detail["source_event"], "win.survivor");
+    assert_eq!(decision.detail.at("policy"), "survivor");
+    assert_eq!(decision.detail.at("winner"), "survivor");
+    assert_eq!(decision.detail.at("slot_id"), "slot_3");
+    assert_eq!(decision.detail.at("role"), "survivor");
+    assert_eq!(decision.detail.at("source_event"), "win.survivor");
 }
 
 #[test]
@@ -5500,11 +5601,11 @@ fn trace_records_saulus_alignment_flip() {
         .expect("Saulus lynch should emit an alignment-flip trace decision");
     assert_eq!(decision.stage, "day:lynch_trigger");
     assert_eq!(decision.source, "slot:slot_1");
-    assert_eq!(decision.detail["target"], "slot_1");
-    assert_eq!(decision.detail["role"], "saulus");
-    assert_eq!(decision.detail["original_alignment"], "mafia");
-    assert_eq!(decision.detail["new_alignment"], "town");
-    assert_eq!(decision.detail["reason"], "saulus_conversion");
+    assert_eq!(decision.detail.at("target"), "slot_1");
+    assert_eq!(decision.detail.at("role"), "saulus");
+    assert_eq!(decision.detail.at("original_alignment"), "mafia");
+    assert_eq!(decision.detail.at("new_alignment"), "town");
+    assert_eq!(decision.detail.at("reason"), "saulus_conversion");
 }
 
 #[test]
@@ -5546,13 +5647,13 @@ fn trace_records_beloved_princess_host_prompt() {
         .expect("Beloved Princess lynch should emit a host-prompt trace decision");
     assert_eq!(decision.stage, "death:trigger");
     assert_eq!(decision.source, "slot:slot_1");
-    assert_eq!(decision.detail["policy"], "beloved_princess");
-    assert_eq!(decision.detail["prompt_id"], "D01:skip_next_day:slot_1");
-    assert_eq!(decision.detail["kind"], "skip_next_day");
-    assert_eq!(decision.detail["subject"], "slot_1");
-    assert_eq!(decision.detail["reason"], "beloved_princess_death");
-    assert_eq!(decision.detail["death_cause"], "lynch");
-    assert_eq!(decision.detail["role"], "beloved_princess");
+    assert_eq!(decision.detail.at("policy"), "beloved_princess");
+    assert_eq!(decision.detail.at("prompt_id"), "D01:skip_next_day:slot_1");
+    assert_eq!(decision.detail.at("kind"), "skip_next_day");
+    assert_eq!(decision.detail.at("subject"), "slot_1");
+    assert_eq!(decision.detail.at("reason"), "beloved_princess_death");
+    assert_eq!(decision.detail.at("death_cause"), "lynch");
+    assert_eq!(decision.detail.at("role"), "beloved_princess");
 }
 
 #[test]
@@ -5815,7 +5916,7 @@ fn trigger_generated_trace_rows_mirror_trigger_payloads() {
                 .find(|generated| {
                     generated.source == "Trigger"
                         && generated.action_id == *trigger_id
-                        && generated.detail["event_index"] == serde_json::json!(event_index)
+                        && generated.detail.at("event_index") == serde_json::json!(event_index)
                 })
                 .unwrap_or_else(|| {
                     panic!(
@@ -5840,12 +5941,13 @@ fn trigger_generated_trace_rows_mirror_trigger_payloads() {
                 "produced_target",
             ] {
                 assert_eq!(
-                    generated.detail[key], payload[key],
+                    generated.detail.at(key),
+                    payload[key],
                     "{pack_name}/{golden_name}:{trigger_id}:{key}"
                 );
             }
             assert_eq!(
-                generated.detail["actor_filter"],
+                generated.detail.at("actor_filter"),
                 payload.get("actor_filter").cloned().unwrap_or(Value::Null),
                 "{pack_name}/{golden_name}:{trigger_id}:actor_filter"
             );
@@ -5905,18 +6007,24 @@ fn trace_records_protected_vengeful_generated_kill() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["cause"] == "vengeful_retaliates"
+                && decision.detail.at("cause") == "vengeful_retaliates"
         })
         .expect("protected vengeful trigger kill should emit normal protect trace detail");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:vengeful_retaliates");
-    assert_eq!(decision.detail["target"], "slot_1");
-    assert_eq!(decision.detail["attacker"], "slot_2");
-    assert_eq!(decision.detail["unstoppable"], false);
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_3");
-    assert_eq!(decision.detail["protectors"][0]["action_id"], "protect_001");
+    assert_eq!(decision.detail.at("target"), "slot_1");
+    assert_eq!(decision.detail.at("attacker"), "slot_2");
+    assert_eq!(decision.detail.at("unstoppable"), false);
     assert_eq!(
-        decision.detail["protectors"][0]["template_id"],
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_3"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("action_id"),
+        "protect_001"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("template_id"),
         "doctor_protect"
     );
     assert!(
@@ -5974,18 +6082,24 @@ fn trace_records_unstoppable_trigger_generated_kill() {
         .iter()
         .find(|decision| {
             decision.outcome == "protection_bypassed_by_unstoppable_kill"
-                && decision.detail["cause"] == "unstoppable_vengeful_retaliates"
+                && decision.detail.at("cause") == "unstoppable_vengeful_retaliates"
         })
         .expect("pack-declared Strongman trigger kill should emit a bypass trace decision");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:unstoppable_vengeful_retaliates");
-    assert_eq!(decision.detail["target"], "slot_1");
-    assert_eq!(decision.detail["attacker"], "slot_2");
-    assert_eq!(decision.detail["unstoppable"], true);
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_3");
-    assert_eq!(decision.detail["protectors"][0]["action_id"], "protect_001");
+    assert_eq!(decision.detail.at("target"), "slot_1");
+    assert_eq!(decision.detail.at("attacker"), "slot_2");
+    assert_eq!(decision.detail.at("unstoppable"), true);
     assert_eq!(
-        decision.detail["protectors"][0]["template_id"],
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_3"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("action_id"),
+        "protect_001"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("template_id"),
         "doctor_protect"
     );
 }
@@ -6056,21 +6170,30 @@ fn trace_records_unstoppable_trigger_bypassing_bodyguard() {
         .iter()
         .find(|decision| {
             decision.outcome == "protection_bypassed_by_unstoppable_kill"
-                && decision.detail["cause"] == "unstoppable_vengeful_retaliates"
+                && decision.detail.at("cause") == "unstoppable_vengeful_retaliates"
         })
         .expect("Strongman trigger kill should emit a bypass decision for Bodyguard protection");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:unstoppable_vengeful_retaliates");
-    assert_eq!(decision.detail["target"], "slot_1");
-    assert_eq!(decision.detail["attacker"], "slot_2");
-    assert_eq!(decision.detail["unstoppable"], true);
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_3");
+    assert_eq!(decision.detail.at("target"), "slot_1");
+    assert_eq!(decision.detail.at("attacker"), "slot_2");
+    assert_eq!(decision.detail.at("unstoppable"), true);
     assert_eq!(
-        decision.detail["protectors"][0]["action_id"],
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_3"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("action_id"),
         "bodyguard_001"
     );
-    assert_eq!(decision.detail["protectors"][0]["template_id"], "bodyguard");
-    assert_eq!(decision.detail["protectors"][0]["intercepts"], true);
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("template_id"),
+        "bodyguard"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("intercepts"),
+        true
+    );
 }
 
 #[test]
@@ -6117,23 +6240,36 @@ fn trace_records_unstoppable_trigger_bypassing_martyr() {
         .iter()
         .find(|decision| {
             decision.outcome == "protection_bypassed_by_unstoppable_kill"
-                && decision.detail["cause"] == "unstoppable_vengeful_retaliates"
+                && decision.detail.at("cause") == "unstoppable_vengeful_retaliates"
         })
         .expect("Strongman trigger kill should emit a bypass decision for Martyr protection");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:unstoppable_vengeful_retaliates");
-    assert_eq!(decision.detail["target"], "slot_1");
-    assert_eq!(decision.detail["attacker"], "slot_2");
-    assert_eq!(decision.detail["unstoppable"], true);
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_3");
-    assert_eq!(decision.detail["protectors"][0]["action_id"], "martyr_001");
+    assert_eq!(decision.detail.at("target"), "slot_1");
+    assert_eq!(decision.detail.at("attacker"), "slot_2");
+    assert_eq!(decision.detail.at("unstoppable"), true);
     assert_eq!(
-        decision.detail["protectors"][0]["template_id"],
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_3"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("action_id"),
+        "martyr_001"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("template_id"),
         "martyr_protect"
     );
-    assert_eq!(decision.detail["protectors"][0]["intercepts"], true);
     assert_eq!(
-        decision.detail["protectors"][0]["intercept_cause"],
+        decision.detail.at("protectors").nth(0).at("intercepts"),
+        true
+    );
+    assert_eq!(
+        decision
+            .detail
+            .at("protectors")
+            .nth(0)
+            .at("intercept_cause"),
         "martyr_intercept"
     );
 }
@@ -6232,11 +6368,11 @@ fn trace_records_super_saint_lynch_trigger() {
                 && generated.source == "Trigger"
                 && generated.actor == "slot_1"
                 && generated.targets == vec!["slot_2".to_string()]
-                && generated.detail["on"] == "Lynch"
-                && generated.detail["source_target"] == "slot_1"
-                && generated.detail["source_actor"] == "slot_2"
-                && generated.detail["source_cause"] == "lynch"
-                && generated.detail["event_index"] == serde_json::json!(trigger_event_index)
+                && generated.detail.at("on") == "Lynch"
+                && generated.detail.at("source_target") == "slot_1"
+                && generated.detail.at("source_actor") == "slot_2"
+                && generated.detail.at("source_cause") == "lynch"
+                && generated.detail.at("event_index") == serde_json::json!(trigger_event_index)
         }),
         "Super-Saint lynch trigger should be represented as a generated trace row"
     );
@@ -6688,21 +6824,24 @@ fn trace_records_protected_trigger_generated_kill() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["cause"] == "pgo_shoots_visitor"
+                && decision.detail.at("cause") == "pgo_shoots_visitor"
         })
         .expect("protected generated trigger kill should emit normal protect trace detail");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:pgo_shoots_visitor");
-    assert_eq!(decision.detail["target"], "slot_1");
-    assert_eq!(decision.detail["attacker"], "slot_2");
-    assert_eq!(decision.detail["unstoppable"], false);
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_6");
+    assert_eq!(decision.detail.at("target"), "slot_1");
+    assert_eq!(decision.detail.at("attacker"), "slot_2");
+    assert_eq!(decision.detail.at("unstoppable"), false);
     assert_eq!(
-        decision.detail["protectors"][0]["action_id"],
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_6"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("action_id"),
         "doctor_protect_visitor"
     );
     assert_eq!(
-        decision.detail["protectors"][0]["template_id"],
+        decision.detail.at("protectors").nth(0).at("template_id"),
         "doctor_protect"
     );
     let generated = output
@@ -6715,12 +6854,12 @@ fn trace_records_protected_trigger_generated_kill() {
         .expect("PGO trigger should emit a generated trace row");
     assert_eq!(generated.actor, "slot_2");
     assert_eq!(generated.targets, vec!["slot_1".to_string()]);
-    assert_eq!(generated.detail["on"], "Visit");
-    assert_eq!(generated.detail["source_target"], "slot_2");
-    assert_eq!(generated.detail["source_actor"], "slot_1");
-    assert_eq!(generated.detail["source_cause"], "roleblocker_block");
-    assert_eq!(generated.detail["produced_actor"], "slot_2");
-    assert_eq!(generated.detail["produced_target"], "slot_1");
+    assert_eq!(generated.detail.at("on"), "Visit");
+    assert_eq!(generated.detail.at("source_target"), "slot_2");
+    assert_eq!(generated.detail.at("source_actor"), "slot_1");
+    assert_eq!(generated.detail.at("source_cause"), "roleblocker_block");
+    assert_eq!(generated.detail.at("produced_actor"), "slot_2");
+    assert_eq!(generated.detail.at("produced_target"), "slot_1");
 }
 
 #[test]
@@ -6755,11 +6894,15 @@ fn night_resolution_bodyguard_intercept_cause_is_pack_owned() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["cause"] == "pgo_shoots_visitor"
+                && decision.detail.at("cause") == "pgo_shoots_visitor"
         })
         .expect("bodyguard-intercepted generated trigger kill should emit protect trace detail");
     assert_eq!(
-        decision.detail["protectors"][0]["intercept_cause"],
+        decision
+            .detail
+            .at("protectors")
+            .nth(0)
+            .at("intercept_cause"),
         "pack_named_bodyguard_intercept"
     );
     let stacked = output
@@ -6768,12 +6911,12 @@ fn night_resolution_bodyguard_intercept_cause_is_pack_owned() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_stacked_on_existing_death"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("pack-owned Bodyguard intercept cause should be preserved in stacked kill trace");
     assert_eq!(stacked.source, "cause:pack_named_bodyguard_intercept");
-    assert_eq!(stacked.detail["cause"], "pack_named_bodyguard_intercept");
-    assert_eq!(stacked.detail["existing_cause"], "factional_kill");
+    assert_eq!(stacked.detail.at("cause"), "pack_named_bodyguard_intercept");
+    assert_eq!(stacked.detail.at("existing_cause"), "factional_kill");
 }
 
 #[test]
@@ -6929,21 +7072,30 @@ fn trace_records_bodyguard_intercepting_trigger_generated_kill() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["cause"] == "pgo_shoots_visitor"
+                && decision.detail.at("cause") == "pgo_shoots_visitor"
         })
         .expect("bodyguard-intercepted generated trigger kill should emit protect trace detail");
     assert_eq!(decision.stage, "kill_resolution");
     assert_eq!(decision.source, "cause:pgo_shoots_visitor");
-    assert_eq!(decision.detail["target"], "slot_1");
-    assert_eq!(decision.detail["attacker"], "slot_2");
-    assert_eq!(decision.detail["unstoppable"], false);
-    assert_eq!(decision.detail["protectors"][0]["protector"], "slot_3");
+    assert_eq!(decision.detail.at("target"), "slot_1");
+    assert_eq!(decision.detail.at("attacker"), "slot_2");
+    assert_eq!(decision.detail.at("unstoppable"), false);
     assert_eq!(
-        decision.detail["protectors"][0]["action_id"],
+        decision.detail.at("protectors").nth(0).at("protector"),
+        "slot_3"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("action_id"),
         "bodyguard_001"
     );
-    assert_eq!(decision.detail["protectors"][0]["template_id"], "bodyguard");
-    assert_eq!(decision.detail["protectors"][0]["intercepts"], true);
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("template_id"),
+        "bodyguard"
+    );
+    assert_eq!(
+        decision.detail.at("protectors").nth(0).at("intercepts"),
+        true
+    );
 
     let stacked = output
         .trace
@@ -6951,16 +7103,16 @@ fn trace_records_bodyguard_intercepting_trigger_generated_kill() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_stacked_on_existing_death"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("bodyguard intercept should merge into the bodyguard's existing death");
     assert_eq!(stacked.stage, "kill_resolution");
     assert_eq!(stacked.source, "cause:bodyguard_intercept");
-    assert_eq!(stacked.detail["attacker"], "slot_2");
-    assert_eq!(stacked.detail["cause"], "bodyguard_intercept");
-    assert_eq!(stacked.detail["existing_cause"], "factional_kill");
+    assert_eq!(stacked.detail.at("attacker"), "slot_2");
+    assert_eq!(stacked.detail.at("cause"), "bodyguard_intercept");
+    assert_eq!(stacked.detail.at("existing_cause"), "factional_kill");
     assert_eq!(
-        stacked.detail["merged_attackers"],
+        stacked.detail.at("merged_attackers"),
         serde_json::json!(["slot_5", "slot_2"])
     );
 }
@@ -7007,13 +7159,13 @@ fn trace_records_lover_suicide_cascade() {
         .expect("lover suicide should emit generated-death trace attribution");
     assert_eq!(decision.stage, "death:cascade");
     assert_eq!(decision.source, "link:link_001");
-    assert_eq!(decision.detail["link_id"], "link_001");
-    assert_eq!(decision.detail["link_source"], "slot_6");
-    assert_eq!(decision.detail["source_dead"], "slot_2");
-    assert_eq!(decision.detail["target"], "slot_3");
-    assert_eq!(decision.detail["cause"], "lover_suicide");
-    assert_eq!(decision.detail["linked_slots"][0], "slot_2");
-    assert_eq!(decision.detail["linked_slots"][1], "slot_3");
+    assert_eq!(decision.detail.at("link_id"), "link_001");
+    assert_eq!(decision.detail.at("link_source"), "slot_6");
+    assert_eq!(decision.detail.at("source_dead"), "slot_2");
+    assert_eq!(decision.detail.at("target"), "slot_3");
+    assert_eq!(decision.detail.at("cause"), "lover_suicide");
+    assert_eq!(decision.detail.at("linked_slots").nth(0), "slot_2");
+    assert_eq!(decision.detail.at("linked_slots").nth(1), "slot_3");
 }
 
 #[test]
@@ -7055,11 +7207,11 @@ fn trace_records_lover_suicide_stack_with_direct_death() {
         .expect("lover suicide should still emit cascade trace attribution");
     assert_eq!(cascade.stage, "death:cascade");
     assert_eq!(cascade.source, "link:link_002");
-    assert_eq!(cascade.detail["link_id"], "link_002");
-    assert_eq!(cascade.detail["link_source"], "slot_6");
-    assert_eq!(cascade.detail["source_dead"], "slot_2");
-    assert_eq!(cascade.detail["target"], "slot_3");
-    assert_eq!(cascade.detail["cause"], "lover_suicide");
+    assert_eq!(cascade.detail.at("link_id"), "link_002");
+    assert_eq!(cascade.detail.at("link_source"), "slot_6");
+    assert_eq!(cascade.detail.at("source_dead"), "slot_2");
+    assert_eq!(cascade.detail.at("target"), "slot_3");
+    assert_eq!(cascade.detail.at("cause"), "lover_suicide");
 
     let stacked = output
         .trace
@@ -7067,17 +7219,17 @@ fn trace_records_lover_suicide_stack_with_direct_death() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_stacked_on_existing_death"
-                && decision.detail["target"] == "slot_3"
+                && decision.detail.at("target") == "slot_3"
         })
         .expect("lover suicide should merge into the existing direct death");
     assert_eq!(stacked.stage, "kill_resolution");
     assert_eq!(stacked.source, "cause:lover_suicide");
-    assert_eq!(stacked.detail["attacker"], "slot_2");
-    assert_eq!(stacked.detail["cause"], "lover_suicide");
-    assert_eq!(stacked.detail["existing_cause"], "factional_kill");
-    assert_eq!(stacked.detail["unstoppable"], true);
+    assert_eq!(stacked.detail.at("attacker"), "slot_2");
+    assert_eq!(stacked.detail.at("cause"), "lover_suicide");
+    assert_eq!(stacked.detail.at("existing_cause"), "factional_kill");
+    assert_eq!(stacked.detail.at("unstoppable"), true);
     assert_eq!(
-        stacked.detail["merged_attackers"],
+        stacked.detail.at("merged_attackers"),
         serde_json::json!(["slot_5", "slot_2"])
     );
 }
@@ -7246,8 +7398,8 @@ fn night_resolution_hider_dependency_cause_is_pack_owned() {
         .iter()
         .find(|decision| decision.outcome == "hider_dependency_death")
         .expect("hider dependency should emit a death attribution trace decision");
-    assert_eq!(decision.detail["template_id"], "hide");
-    assert_eq!(decision.detail["cause"], "pack_named_hider_dependency");
+    assert_eq!(decision.detail.at("template_id"), "hide");
+    assert_eq!(decision.detail.at("cause"), "pack_named_hider_dependency");
 }
 
 #[test]
@@ -7369,12 +7521,12 @@ fn trace_records_hider_dependency_death() {
         .expect("hider dependency should emit a death attribution trace decision");
     assert_eq!(decision.stage, "night:dependency_death");
     assert_eq!(decision.source, "action:hide_001");
-    assert_eq!(decision.detail["action_id"], "hide_001");
-    assert_eq!(decision.detail["template_id"], "hide");
-    assert_eq!(decision.detail["host"], "slot_3");
-    assert_eq!(decision.detail["hider"], "slot_2");
-    assert_eq!(decision.detail["cause"], "hide");
-    assert_eq!(decision.detail["attackers"][0], "slot_3");
+    assert_eq!(decision.detail.at("action_id"), "hide_001");
+    assert_eq!(decision.detail.at("template_id"), "hide");
+    assert_eq!(decision.detail.at("host"), "slot_3");
+    assert_eq!(decision.detail.at("hider"), "slot_2");
+    assert_eq!(decision.detail.at("cause"), "hide");
+    assert_eq!(decision.detail.at("attackers").nth(0), "slot_3");
 }
 
 #[test]
@@ -7394,12 +7546,12 @@ fn trace_records_hider_dependency_stack_with_direct_death() {
         .expect("raced hider dependency should still emit dependency attribution");
     assert_eq!(dependency.stage, "night:dependency_death");
     assert_eq!(dependency.source, "action:hide_behind_mafia_001");
-    assert_eq!(dependency.detail["action_id"], "hide_behind_mafia_001");
-    assert_eq!(dependency.detail["template_id"], "hide");
-    assert_eq!(dependency.detail["host"], "slot_3");
-    assert_eq!(dependency.detail["hider"], "slot_2");
-    assert_eq!(dependency.detail["cause"], "hide");
-    assert_eq!(dependency.detail["attackers"][0], "slot_3");
+    assert_eq!(dependency.detail.at("action_id"), "hide_behind_mafia_001");
+    assert_eq!(dependency.detail.at("template_id"), "hide");
+    assert_eq!(dependency.detail.at("host"), "slot_3");
+    assert_eq!(dependency.detail.at("hider"), "slot_2");
+    assert_eq!(dependency.detail.at("cause"), "hide");
+    assert_eq!(dependency.detail.at("attackers").nth(0), "slot_3");
 
     let stacked = output
         .trace
@@ -7407,17 +7559,17 @@ fn trace_records_hider_dependency_stack_with_direct_death() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_stacked_on_existing_death"
-                && decision.detail["target"] == "slot_2"
+                && decision.detail.at("target") == "slot_2"
         })
         .expect("hider dependency should merge into the direct hider death");
     assert_eq!(stacked.stage, "kill_resolution");
     assert_eq!(stacked.source, "cause:hide");
-    assert_eq!(stacked.detail["attacker"], "slot_3");
-    assert_eq!(stacked.detail["cause"], "hide");
-    assert_eq!(stacked.detail["existing_cause"], "factional_kill");
-    assert_eq!(stacked.detail["unstoppable"], true);
+    assert_eq!(stacked.detail.at("attacker"), "slot_3");
+    assert_eq!(stacked.detail.at("cause"), "hide");
+    assert_eq!(stacked.detail.at("existing_cause"), "factional_kill");
+    assert_eq!(stacked.detail.at("unstoppable"), true);
     assert_eq!(
-        stacked.detail["merged_attackers"],
+        stacked.detail.at("merged_attackers"),
         serde_json::json!(["slot_1", "slot_3"])
     );
 }
@@ -7703,18 +7855,18 @@ fn trace_records_no_majority_revote_prompt() {
         .iter()
         .find(|decision| {
             decision.outcome == "host_prompt_issued"
-                && decision.detail["policy"] == "no_majority_revote"
+                && decision.detail.at("policy") == "no_majority_revote"
         })
         .expect("NoMajority should emit a revote host-prompt trace decision");
     assert_eq!(decision.stage, "day:vote_prompt");
     assert_eq!(decision.source, "day_vote");
-    assert_eq!(decision.detail["prompt_id"], "D01:revote:NoMajority");
-    assert_eq!(decision.detail["kind"], "revote");
-    assert_eq!(decision.detail["subject"], serde_json::Value::Null);
-    assert_eq!(decision.detail["reason"], "no_majority");
-    assert_eq!(decision.detail["status"], "NoMajority");
+    assert_eq!(decision.detail.at("prompt_id"), "D01:revote:NoMajority");
+    assert_eq!(decision.detail.at("kind"), "revote");
+    assert_eq!(decision.detail.at("subject"), serde_json::Value::Null);
+    assert_eq!(decision.detail.at("reason"), "no_majority");
+    assert_eq!(decision.detail.at("status"), "NoMajority");
     assert_eq!(
-        decision.detail["contenders"],
+        decision.detail.at("contenders"),
         serde_json::json!(["slot_2", "slot_3"])
     );
 }
@@ -8348,13 +8500,13 @@ fn trace_records_day_wolf_beauty_drag() {
         .expect("day Wolf Beauty drag should emit generated-death trace attribution");
     assert_eq!(decision.stage, "death:cascade");
     assert_eq!(decision.source, "action:beauty_001");
-    assert_eq!(decision.detail["beauty_id"], "slot_1");
-    assert_eq!(decision.detail["dragged_id"], "slot_2");
-    assert_eq!(decision.detail["mark_effect"], "wolf_beauty_mark");
-    assert_eq!(decision.detail["mark_source_action"], "beauty_001");
-    assert_eq!(decision.detail["mark_phase_id"], "N01");
-    assert_eq!(decision.detail["trigger_cause"], "lynch");
-    assert_eq!(decision.detail["cause"], "trigger:wolf_beauty_drag");
+    assert_eq!(decision.detail.at("beauty_id"), "slot_1");
+    assert_eq!(decision.detail.at("dragged_id"), "slot_2");
+    assert_eq!(decision.detail.at("mark_effect"), "wolf_beauty_mark");
+    assert_eq!(decision.detail.at("mark_source_action"), "beauty_001");
+    assert_eq!(decision.detail.at("mark_phase_id"), "N01");
+    assert_eq!(decision.detail.at("trigger_cause"), "lynch");
+    assert_eq!(decision.detail.at("cause"), "trigger:wolf_beauty_drag");
 }
 
 #[test]
@@ -8405,13 +8557,13 @@ fn trace_records_night_wolf_beauty_drag() {
         .expect("night Wolf Beauty drag should emit generated-death trace attribution");
     assert_eq!(decision.stage, "death:cascade");
     assert_eq!(decision.source, "action:beauty_001");
-    assert_eq!(decision.detail["beauty_id"], "slot_1");
-    assert_eq!(decision.detail["dragged_id"], "slot_2");
-    assert_eq!(decision.detail["mark_effect"], "wolf_beauty_mark");
-    assert_eq!(decision.detail["mark_source_action"], "beauty_001");
-    assert_eq!(decision.detail["mark_phase_id"], "N01");
-    assert_eq!(decision.detail["trigger_cause"], "poison_potion");
-    assert_eq!(decision.detail["cause"], "trigger:wolf_beauty_drag");
+    assert_eq!(decision.detail.at("beauty_id"), "slot_1");
+    assert_eq!(decision.detail.at("dragged_id"), "slot_2");
+    assert_eq!(decision.detail.at("mark_effect"), "wolf_beauty_mark");
+    assert_eq!(decision.detail.at("mark_source_action"), "beauty_001");
+    assert_eq!(decision.detail.at("mark_phase_id"), "N01");
+    assert_eq!(decision.detail.at("trigger_cause"), "poison_potion");
+    assert_eq!(decision.detail.at("cause"), "trigger:wolf_beauty_drag");
 }
 
 #[test]
@@ -8467,13 +8619,13 @@ fn trace_records_wolf_beauty_drag_stack_with_direct_death() {
         .expect("Wolf Beauty drag should still emit cascade trace attribution");
     assert_eq!(drag.stage, "death:cascade");
     assert_eq!(drag.source, "action:beauty_001");
-    assert_eq!(drag.detail["beauty_id"], "slot_1");
-    assert_eq!(drag.detail["dragged_id"], "slot_2");
-    assert_eq!(drag.detail["mark_effect"], "wolf_beauty_mark");
-    assert_eq!(drag.detail["mark_source_action"], "beauty_001");
-    assert_eq!(drag.detail["mark_phase_id"], "N01");
-    assert_eq!(drag.detail["trigger_cause"], "poison_potion");
-    assert_eq!(drag.detail["cause"], "trigger:wolf_beauty_drag");
+    assert_eq!(drag.detail.at("beauty_id"), "slot_1");
+    assert_eq!(drag.detail.at("dragged_id"), "slot_2");
+    assert_eq!(drag.detail.at("mark_effect"), "wolf_beauty_mark");
+    assert_eq!(drag.detail.at("mark_source_action"), "beauty_001");
+    assert_eq!(drag.detail.at("mark_phase_id"), "N01");
+    assert_eq!(drag.detail.at("trigger_cause"), "poison_potion");
+    assert_eq!(drag.detail.at("cause"), "trigger:wolf_beauty_drag");
 
     let stacked = output
         .trace
@@ -8481,17 +8633,17 @@ fn trace_records_wolf_beauty_drag_stack_with_direct_death() {
         .iter()
         .find(|decision| {
             decision.outcome == "kill_stacked_on_existing_death"
-                && decision.detail["target"] == "slot_2"
+                && decision.detail.at("target") == "slot_2"
         })
         .expect("Wolf Beauty drag should merge into the existing direct death");
     assert_eq!(stacked.stage, "kill_resolution");
     assert_eq!(stacked.source, "cause:trigger:wolf_beauty_drag");
-    assert_eq!(stacked.detail["attacker"], "slot_1");
-    assert_eq!(stacked.detail["cause"], "trigger:wolf_beauty_drag");
-    assert_eq!(stacked.detail["existing_cause"], "wolf_night_kill");
-    assert_eq!(stacked.detail["unstoppable"], true);
+    assert_eq!(stacked.detail.at("attacker"), "slot_1");
+    assert_eq!(stacked.detail.at("cause"), "trigger:wolf_beauty_drag");
+    assert_eq!(stacked.detail.at("existing_cause"), "wolf_night_kill");
+    assert_eq!(stacked.detail.at("unstoppable"), true);
     assert_eq!(
-        stacked.detail["merged_attackers"],
+        stacked.detail.at("merged_attackers"),
         serde_json::json!(["slot_4", "slot_1"])
     );
 }
@@ -8567,14 +8719,14 @@ fn trace_records_guard_blocking_witch_poison_policy() {
             decision.stage == "kill_resolution"
                 && decision.source == "cause:poison_potion"
                 && decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["target"] == "slot_3"
-                && decision.detail["attacker"] == "slot_4"
+                && decision.detail.at("target") == "slot_3"
+                && decision.detail.at("attacker") == "slot_4"
         })
         .expect("Guard-blocked Witch poison should emit a protection trace decision");
-    assert_eq!(decision.detail["cause"], "poison_potion");
-    assert_eq!(decision.detail["unstoppable"], false);
+    assert_eq!(decision.detail.at("cause"), "poison_potion");
+    assert_eq!(decision.detail.at("unstoppable"), false);
     assert_eq!(
-        decision.detail["protectors"],
+        decision.detail.at("protectors"),
         serde_json::json!([{
             "protector": "slot_1",
             "action_id": "guard_001",
@@ -8634,14 +8786,14 @@ fn trace_records_guard_witch_double_save_policy() {
             decision.stage == "kill_resolution"
                 && decision.source == "cause:wolf_night_kill"
                 && decision.outcome == "kill_prevented_by_protection"
-                && decision.detail["target"] == "slot_3"
-                && decision.detail["attacker"] == "slot_4"
+                && decision.detail.at("target") == "slot_3"
+                && decision.detail.at("attacker") == "slot_4"
         })
         .expect("Guard/Witch double-save should emit a protection trace decision");
-    assert_eq!(decision.detail["cause"], "wolf_night_kill");
-    assert_eq!(decision.detail["unstoppable"], false);
+    assert_eq!(decision.detail.at("cause"), "wolf_night_kill");
+    assert_eq!(decision.detail.at("unstoppable"), false);
     assert_eq!(
-        decision.detail["protectors"],
+        decision.detail.at("protectors"),
         serde_json::json!([
             {
                 "protector": "slot_1",
@@ -8695,14 +8847,17 @@ fn trace_records_guard_witch_same_target_kill_policy() {
         .expect("Guard/Witch KillTarget policy should emit a trace decision");
     assert_eq!(decision.stage, "night:guard_policy");
     assert_eq!(decision.source, "guard_policy.same_target_witch");
-    assert_eq!(decision.detail["target"], "slot_3");
-    assert_eq!(decision.detail["cause"], "guard_witch_same_target");
-    assert_eq!(decision.detail["policy"], "KillTarget");
+    assert_eq!(decision.detail.at("target"), "slot_3");
+    assert_eq!(decision.detail.at("cause"), "guard_witch_same_target");
+    assert_eq!(decision.detail.at("policy"), "KillTarget");
     assert_eq!(
-        decision.detail["guard_sources"][0]["action_id"],
+        decision.detail.at("guard_sources").nth(0).at("action_id"),
         "guard_001"
     );
-    assert_eq!(decision.detail["witch_sources"][0]["action_id"], "heal_001");
+    assert_eq!(
+        decision.detail.at("witch_sources").nth(0).at("action_id"),
+        "heal_001"
+    );
 }
 
 #[test]
@@ -8768,10 +8923,10 @@ fn trace_records_chinese_hunter_immediate_retaliation_timing() {
     assert_eq!(decision.stage, "death:cascade");
     assert_eq!(decision.source, "retaliation:hunt_001");
     assert_eq!(
-        decision.detail["timing"],
+        decision.detail.at("timing"),
         "ImmediateBeforePhaseAnnouncement"
     );
-    assert_eq!(decision.detail["source_death_cause"], "wolf_night_kill");
+    assert_eq!(decision.detail.at("source_death_cause"), "wolf_night_kill");
 }
 
 #[test]
@@ -8808,17 +8963,17 @@ fn trace_records_chinese_hunter_poison_suppresses_retaliation() {
         .expect("poison-suppressed Hunter retaliation should emit a trace decision");
     assert_eq!(decision.stage, "death:cascade");
     assert_eq!(decision.source, "retaliation:hunt_001");
-    assert_eq!(decision.detail["policy"], "death_retaliation");
-    assert_eq!(decision.detail["reason"], "suppressed_death_cause");
+    assert_eq!(decision.detail.at("policy"), "death_retaliation");
+    assert_eq!(decision.detail.at("reason"), "suppressed_death_cause");
     assert_eq!(
-        decision.detail["timing"],
+        decision.detail.at("timing"),
         "ImmediateBeforePhaseAnnouncement"
     );
-    assert_eq!(decision.detail["retaliation_id"], "hunt_001");
-    assert_eq!(decision.detail["actor"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["source_action"], "hunter_retaliate");
-    assert_eq!(decision.detail["source_death_cause"], "poison_potion");
+    assert_eq!(decision.detail.at("retaliation_id"), "hunt_001");
+    assert_eq!(decision.detail.at("actor"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("source_action"), "hunter_retaliate");
+    assert_eq!(decision.detail.at("source_death_cause"), "poison_potion");
 }
 
 #[test]
@@ -10477,17 +10632,17 @@ fn trace_records_epicmafia_pk_host_decides_prompt() {
             decision.stage == "day:vote_prompt"
                 && decision.source == "day_vote"
                 && decision.outcome == "host_prompt_issued"
-                && decision.detail["policy"] == "pk_host_decides_tie"
+                && decision.detail.at("policy") == "pk_host_decides_tie"
         })
         .expect("HostDecides Tie should emit a PK host-prompt trace decision");
-    assert_eq!(decision.detail["prompt_id"], "D01:pk:Tie");
-    assert_eq!(decision.detail["kind"], "pk");
-    assert_eq!(decision.detail["subject"], Value::Null);
-    assert_eq!(decision.detail["reason"], "host_decides_tie");
-    assert_eq!(decision.detail["status"], "Tie");
-    assert_eq!(decision.detail["tiebreak"], "HostDecides");
+    assert_eq!(decision.detail.at("prompt_id"), "D01:pk:Tie");
+    assert_eq!(decision.detail.at("kind"), "pk");
+    assert_eq!(decision.detail.at("subject"), Value::Null);
+    assert_eq!(decision.detail.at("reason"), "host_decides_tie");
+    assert_eq!(decision.detail.at("status"), "Tie");
+    assert_eq!(decision.detail.at("tiebreak"), "HostDecides");
     assert_eq!(
-        decision.detail["contenders"],
+        decision.detail.at("contenders"),
         serde_json::json!(["slot_2", "slot_4"])
     );
 }
@@ -10509,15 +10664,15 @@ fn trace_records_cult_conversion_assignment() {
         .expect("cult recruit should emit an assigned-role conversion trace decision");
     assert_eq!(decision.stage, "night:conversion");
     assert_eq!(decision.source, "action:sub_001");
-    assert_eq!(decision.detail["action_id"], "sub_001");
-    assert_eq!(decision.detail["template_id"], "cult_recruit");
-    assert_eq!(decision.detail["actor"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["mode"], "AssignRole");
-    assert_eq!(decision.detail["new_role"], "cultist");
-    assert_eq!(decision.detail["new_alignment"], "cult");
-    assert_eq!(decision.detail["original_role"], "villager");
-    assert_eq!(decision.detail["original_alignment"], "town");
+    assert_eq!(decision.detail.at("action_id"), "sub_001");
+    assert_eq!(decision.detail.at("template_id"), "cult_recruit");
+    assert_eq!(decision.detail.at("actor"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("mode"), "AssignRole");
+    assert_eq!(decision.detail.at("new_role"), "cultist");
+    assert_eq!(decision.detail.at("new_alignment"), "cult");
+    assert_eq!(decision.detail.at("original_role"), "villager");
+    assert_eq!(decision.detail.at("original_alignment"), "town");
 }
 
 #[test]
@@ -10559,18 +10714,18 @@ fn trace_records_loyal_conversion_block() {
         .decisions
         .iter()
         .find(|decision| {
-            decision.outcome == "conversion_blocked" && decision.detail["reason"] == "loyal"
+            decision.outcome == "conversion_blocked" && decision.detail.at("reason") == "loyal"
         })
         .expect("loyal recruit target should emit a conversion-block trace decision");
     assert_eq!(decision.stage, "night:conversion");
     assert_eq!(decision.source, "action:sub_001");
-    assert_eq!(decision.detail["action_id"], "sub_001");
-    assert_eq!(decision.detail["template_id"], "cult_recruit");
-    assert_eq!(decision.detail["actor"], "slot_1");
-    assert_eq!(decision.detail["target"], "slot_2");
-    assert_eq!(decision.detail["target_role"], "loyal_villager");
-    assert_eq!(decision.detail["target_alignment"], "town");
-    assert_eq!(decision.detail["mode"], "AssignRole");
+    assert_eq!(decision.detail.at("action_id"), "sub_001");
+    assert_eq!(decision.detail.at("template_id"), "cult_recruit");
+    assert_eq!(decision.detail.at("actor"), "slot_1");
+    assert_eq!(decision.detail.at("target"), "slot_2");
+    assert_eq!(decision.detail.at("target_role"), "loyal_villager");
+    assert_eq!(decision.detail.at("target_alignment"), "town");
+    assert_eq!(decision.detail.at("mode"), "AssignRole");
 }
 
 #[test]

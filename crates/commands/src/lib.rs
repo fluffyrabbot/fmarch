@@ -3361,11 +3361,12 @@ fn trace_inspection_run(
 
 /// Persist traces omit null detail. Inspection maps that to an empty object so
 /// the fail-closed wire adapter never sees `null` as a stand-in for a map.
-fn inspection_detail(detail: domain::JsonAtom) -> serde_json::Value {
-    if detail.is_null() {
+fn inspection_detail(detail: impl Into<serde_json::Value>) -> serde_json::Value {
+    let value = detail.into();
+    if value.is_null() {
         serde_json::json!({})
     } else {
-        serde_json::Value::from(detail)
+        value
     }
 }
 
