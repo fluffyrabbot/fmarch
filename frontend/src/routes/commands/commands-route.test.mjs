@@ -6,7 +6,7 @@ test("command proxy binds browser commands to the opaque session cookie", async 
   const previous = process.env.FMARCH_API_BASE_URL;
   process.env.FMARCH_API_BASE_URL = "http://api.internal";
   try {
-    const envelope = { v: 1, id: 7, body: { kind: "Command", body: { command_id: "00000000-0000-0000-0000-000000000007", command: { AddSlot: { game: "00000000-0000-0000-0000-000000000001", slot: "slot_1" } } } } };
+    const envelope = { v: 2, id: 7, body: { kind: "Command", body: { command_id: "00000000-0000-0000-0000-000000000007", command: { AddSlot: { game: "00000000-0000-0000-0000-000000000001", slot: "slot_1" } } } } };
     const observed = {};
     const response = await POST({
       cookies: { get: () => "opaque-host-session" },
@@ -15,7 +15,7 @@ test("command proxy binds browser commands to the opaque session cookie", async 
         observed.url = url;
         observed.authorization = init.headers.authorization;
         observed.body = JSON.parse(new TextDecoder().decode(init.body));
-        return Response.json({ v: 1, id: 7, body: { kind: "Ack", body: { stream_seqs: [2] } } });
+        return Response.json({ v: 2, id: 7, body: { kind: "Ack", body: { stream_seqs: [2] } } });
       },
     });
     assert.equal(observed.url, "http://api.internal/commands");

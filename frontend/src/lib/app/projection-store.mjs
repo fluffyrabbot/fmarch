@@ -1,4 +1,8 @@
 import {
+  applyHostConsoleLiveDelta,
+  HOST_CONSOLE_LIVE_DELTA_KINDS,
+} from "../components/host-action/host-command-boundary.mjs";
+import {
   COLD_LOAD_TRANSPORT_BOUNDARY,
   LIVE_TRANSPORT_BOUNDARY,
   normalizeServerEnvelopeMessage,
@@ -108,8 +112,16 @@ export function createProjectionStore({
 
   function applyLiveEnvelope(envelope) {
     const message = normalizeServerEnvelopeMessage(envelope);
-    if (message?.kind === "delta" && message.delta.kind === "HostConsoleStateChanged") {
-      return applyPayload("host", message.delta.body);
+    if (
+      message?.kind === "delta" &&
+      HOST_CONSOLE_LIVE_DELTA_KINDS.includes(message.delta.kind)
+    ) {
+      if (message.delta.kind === "HostConsoleStateChanged") {
+        return applyPayload("host", message.delta.body);
+      }
+      return applySnapshot({
+        host: applyHostConsoleLiveDelta(snapshot.host, message.delta),
+      });
     }
     if (
       message?.kind === "delta" &&

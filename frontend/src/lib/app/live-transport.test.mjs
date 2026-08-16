@@ -48,15 +48,15 @@ test("builds websocket URLs from API bases and relative app origins", () => {
 test("normalizes tagged server envelopes", () => {
   assert.deepEqual(
     normalizeServerEnvelopeMessage({
-      v: 1,
+      v: 2,
       id: 0,
-      body: { kind: "Hello", body: { protocol_v: 1, caps: [] } },
+      body: { kind: "Hello", body: { protocol_v: 2, caps: [] } },
     }),
-    { kind: "hello", body: { protocol_v: 1, caps: [] } },
+    { kind: "hello", body: { protocol_v: 2, caps: [] } },
   );
   assert.deepEqual(
     normalizeServerEnvelopeMessage({
-      v: 1,
+      v: 2,
       id: 1,
       body: {
         kind: "Delta",
@@ -79,7 +79,7 @@ test("normalizes tagged server envelopes", () => {
   );
   assert.deepEqual(
     normalizeServerEnvelopeMessage({
-      v: 1,
+      v: 2,
       id: 2,
       body: {
         kind: "Delta",
@@ -93,7 +93,7 @@ test("normalizes tagged server envelopes", () => {
   );
   assert.deepEqual(
     normalizeServerEnvelopeMessage({
-      v: 1,
+      v: 2,
       id: 3,
       body: {
         kind: "Delta",
@@ -121,7 +121,7 @@ test("normalizes tagged server envelopes", () => {
   );
   assert.deepEqual(
     normalizeServerEnvelopeMessage({
-      v: 1,
+      v: 2,
       id: 4,
       body: {
         kind: "Delta",
@@ -147,7 +147,7 @@ test("normalizes tagged server envelopes", () => {
   );
   assert.deepEqual(
     normalizeServerEnvelopeMessage({
-      v: 1,
+      v: 2,
       id: 5,
       body: {
         kind: "Delta",
@@ -173,7 +173,7 @@ test("normalizes tagged server envelopes", () => {
   );
   assert.deepEqual(
     normalizeServerEnvelopeMessage({
-      v: 1,
+      v: 2,
       id: 6,
       body: {
         kind: "Delta",
@@ -203,7 +203,7 @@ test("normalizes tagged server envelopes", () => {
 
 test("encodes and decodes the versioned binary CBOR live envelope", async () => {
   const envelope = {
-    v: 1,
+    v: 2,
     id: 9,
     body: {
       kind: "Delta",
@@ -226,7 +226,7 @@ test("encodes and decodes the versioned binary CBOR live envelope", async () => 
 test("creates votecount patches from live delta envelopes", () => {
   const patch = projectionPatchForLiveEnvelope(
     {
-      v: 1,
+      v: 2,
       id: 1,
       body: {
         kind: "Delta",
@@ -252,7 +252,7 @@ test("creates votecount patches from live delta envelopes", () => {
 test("creates votecount removal patches from live clear envelopes", () => {
   const patch = projectionPatchForLiveEnvelope(
     {
-      v: 1,
+      v: 2,
       id: 2,
       body: {
         kind: "Delta",
@@ -280,7 +280,7 @@ test("creates votecount removal patches from live clear envelopes", () => {
 test("creates thread patches from live thread post delta envelopes", () => {
   const patch = projectionPatchForLiveEnvelope(
     {
-      v: 1,
+      v: 2,
       id: 3,
       body: {
         kind: "Delta",
@@ -365,7 +365,7 @@ test("creates thread patches from live thread post delta envelopes", () => {
 test("updates an off-page citation badge without replacing the thread page", () => {
   const patch = projectionPatchForLiveEnvelope(
     {
-      v: 1,
+      v: 2,
       id: 5,
       body: {
         kind: "Delta",
@@ -402,7 +402,7 @@ test("ignores citation deltas for posts the client has not loaded", () => {
   };
   const patch = projectionPatchForLiveEnvelope(
     {
-      v: 1,
+      v: 2,
       id: 6,
       body: {
         kind: "Delta",
@@ -423,7 +423,7 @@ test("ignores citation deltas for posts the client has not loaded", () => {
 test("purges a moderated post from an already hydrated live thread", () => {
   const patch = projectionPatchForLiveEnvelope(
     {
-      v: 1,
+      v: 2,
       id: 4,
       body: {
         kind: "Delta",
@@ -629,7 +629,7 @@ test("websocket resync frames refresh the projection store", async () => {
 
   await FakeWebSocket.last.emit("message", {
     data: encodeServerEnvelopeFrame({
-      v: 1,
+      v: 2,
       id: 9,
       body: {
         kind: "Delta",
@@ -794,7 +794,7 @@ test("websocket delta frames can refresh dependent cold-load keys", async () => 
 
   await FakeWebSocket.last.emit("message", {
     data: encodeServerEnvelopeFrame({
-      v: 1,
+      v: 2,
       id: 7,
       body: {
         kind: "Delta",
@@ -1025,7 +1025,7 @@ test("transport drop ignores late messages from the invalidated socket", async (
   connection.drop();
   await droppedSocket.emit("message", {
     data: encodeServerEnvelopeFrame({
-      v: 1,
+      v: 2,
       id: 30,
       body: {
         kind: "Delta",
@@ -1190,7 +1190,7 @@ async function waitFor(predicate) {
 
 function resyncEnvelope(fromSeq, id) {
   return {
-    v: 1,
+    v: 2,
     id,
     body: {
       kind: "Delta",

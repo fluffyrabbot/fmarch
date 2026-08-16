@@ -792,7 +792,7 @@ export function completedHostStaleCommandProofFixture({
       ok: false,
       status: 409,
       body: {
-        v: 1,
+        v: 2,
         id: commandId,
         body: {
           kind: "Reject",
@@ -953,7 +953,7 @@ export function completedDeadPlayerStaleVoteRecoveryProofFixture({
       ok: false,
       status: 409,
       body: {
-        v: 1,
+        v: 2,
         id: "completed-dead-player-stale-vote",
         body: {
           kind: "Reject",

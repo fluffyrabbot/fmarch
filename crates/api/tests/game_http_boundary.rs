@@ -61,7 +61,7 @@ fn game_http_has_one_typed_owner_with_narrow_live_and_media_adapters() {
         );
     }
     assert!(live_delivery.contains("game_http::current_votecount_deltas(&state.pool"));
-    assert!(live_delivery.contains("game_http::load_host_console_state(&state.pool"));
+    assert!(live_delivery.contains("game_http::load_host_console_state("));
     assert!(media_http.contains("use super::game_http::require_channel_thread_access;"));
 
     for command_owned in [

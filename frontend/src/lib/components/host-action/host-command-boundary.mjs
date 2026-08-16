@@ -1,7 +1,7 @@
 import { normalizeDayEventRoom } from "../../app/day-event-room.mjs";
 
 export const HOST_COMMAND_ENDPOINT = "/commands";
-export const WIRE_PROTOCOL_VERSION = 1;
+export const WIRE_PROTOCOL_VERSION = 2;
 
 export function buildHostCommandEnvelope({
   actionEvent,
@@ -380,7 +380,203 @@ export function projectHostConsoleState(state, fallback) {
         : fallback.replacement.historyLabel,
     }),
     slots: Object.freeze(slots),
+    threadPosts: Object.freeze(posts),
   });
+}
+
+export const HOST_CONSOLE_LIVE_DELTA_KINDS = Object.freeze([
+  "HostConsoleStateChanged",
+  "HostConsoleHeaderChanged",
+  "HostConsoleSlotsChanged",
+  "HostConsoleThreadPostsChanged",
+  "HostConsoleThreadPostRemoved",
+  "HostConsoleDayEventsChanged",
+  "HostConsoleSchedulerChanged",
+  "HostConsoleTasksChanged",
+]);
+
+export function applyHostConsoleLiveDelta(previous, delta) {
+  const kind = delta?.kind;
+  const body = delta?.body ?? {};
+  const fallback = previous !== null && typeof previous === "object" ? previous : {};
+  if (kind === "HostConsoleStateChanged") {
+    return projectHostConsoleState(body, fallback);
+  }
+
+  if (kind === "HostConsoleHeaderChanged") {
+    const next = projectHostConsoleState(
+      {
+        authority: body.authority,
+        completed: body.completed,
+        phase: body.phase,
+        slots: fallback.slots ?? [],
+        thread_posts: fallback.threadPosts ?? [],
+      },
+      fallback,
+    );
+    return Object.freeze({
+      ...fallback,
+      authority: next.authority,
+      completed: next.completed,
+      phase: next.phase,
+      replacement: next.replacement,
+      threadPosts: next.threadPosts,
+    });
+  }
+
+  if (kind === "HostConsoleSlotsChanged") {
+    const removed = new Set(body.removed_slot_ids ?? body.removedSlotIds ?? []);
+    const upserts = new Map(
+      (Array.isArray(body.slots) ? body.slots : []).map((slot) => {
+        const normalized = normalizeHostConsoleSlot(slot);
+        return [normalized.slot_id, normalized];
+      }),
+    );
+    const slots = upsertKeyedList({
+      previous: Array.isArray(fallback.slots) ? fallback.slots : [],
+      upserts,
+      key: "slot_id",
+      removed,
+    });
+    const next = projectHostConsoleState(
+      {
+        slots,
+        thread_posts: fallback.threadPosts ?? [],
+        completed: fallback.completed,
+        phase: projectedPhaseToWire(fallback.phase),
+      },
+      fallback,
+    );
+    return Object.freeze({
+      ...fallback,
+      slots: next.slots,
+      replacement: next.replacement,
+      threadPosts: next.threadPosts,
+    });
+  }
+
+  if (kind === "HostConsoleThreadPostsChanged") {
+    const upserts = new Map(
+      (Array.isArray(body.posts) ? body.posts : []).map((post) => [
+        Number(post.stream_seq ?? post.streamSeq),
+        post,
+      ]),
+    );
+    const threadPosts = upsertKeyedList({
+      previous: Array.isArray(fallback.threadPosts) ? fallback.threadPosts : [],
+      upserts,
+      keyOf: (post) => Number(post.stream_seq ?? post.streamSeq),
+    });
+    const next = projectHostConsoleState(
+      {
+        slots: fallback.slots ?? [],
+        thread_posts: threadPosts,
+        completed: fallback.completed,
+        phase: projectedPhaseToWire(fallback.phase),
+      },
+      fallback,
+    );
+    return Object.freeze({
+      ...fallback,
+      replacement: next.replacement,
+      threadPosts: next.threadPosts,
+    });
+  }
+
+  if (kind === "HostConsoleThreadPostRemoved") {
+    const streamSeq = Number(body.stream_seq ?? body.streamSeq);
+    const threadPosts = (
+      Array.isArray(fallback.threadPosts) ? fallback.threadPosts : []
+    ).filter((post) => Number(post.stream_seq ?? post.streamSeq) !== streamSeq);
+    const next = projectHostConsoleState(
+      {
+        slots: fallback.slots ?? [],
+        thread_posts: threadPosts,
+        completed: fallback.completed,
+        phase: projectedPhaseToWire(fallback.phase),
+      },
+      fallback,
+    );
+    return Object.freeze({
+      ...fallback,
+      replacement: next.replacement,
+      threadPosts: next.threadPosts,
+    });
+  }
+
+  if (kind === "HostConsoleDayEventsChanged") {
+    const removed = new Set(body.removed_event_ids ?? body.removedEventIds ?? []);
+    const upserts = new Map();
+    for (const event of Array.isArray(body.day_events) ? body.day_events : []) {
+      const normalized = normalizeHostDayEvent(event);
+      if (normalized !== null) {
+        upserts.set(normalized.eventId, normalized);
+      }
+    }
+    const dayEvents = upsertKeyedList({
+      previous: Array.isArray(fallback.dayEvents) ? fallback.dayEvents : [],
+      upserts,
+      key: "eventId",
+      removed,
+    });
+    return Object.freeze({
+      ...fallback,
+      dayEvents: Object.freeze(dayEvents),
+    });
+  }
+
+  if (kind === "HostConsoleSchedulerChanged") {
+    return Object.freeze({
+      ...fallback,
+      dayEventScheduler: normalizeDayEventScheduler(
+        body.day_event_scheduler ?? body.dayEventScheduler,
+        fallback.dayEventScheduler ?? null,
+      ),
+    });
+  }
+
+  if (kind === "HostConsoleTasksChanged") {
+    return Object.freeze({
+      ...fallback,
+      tasks: normalizeHostTasks(body.tasks),
+    });
+  }
+
+  return fallback;
+}
+
+function upsertKeyedList({ previous, upserts, key, keyOf, removed = new Set() }) {
+  const seen = new Set();
+  const next = [];
+  for (const item of previous) {
+    const id = keyOf ? keyOf(item) : item[key];
+    if (removed.has(id)) {
+      continue;
+    }
+    if (upserts.has(id)) {
+      next.push(upserts.get(id));
+      seen.add(id);
+      continue;
+    }
+    next.push(item);
+  }
+  for (const [id, item] of upserts) {
+    if (!seen.has(id) && !removed.has(id)) {
+      next.push(item);
+    }
+  }
+  return next;
+}
+
+function projectedPhaseToWire(phase) {
+  if (phase === null || typeof phase !== "object") {
+    return null;
+  }
+  return {
+    phase_id: phase.id ?? phase.phase_id ?? null,
+    locked: phase.locked === true,
+    deadline: typeof phase.deadline === "number" ? phase.deadline : null,
+  };
 }
 
 export function normalizeHostDayEvents(dayEvents, fallback = []) {

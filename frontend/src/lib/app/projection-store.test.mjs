@@ -153,7 +153,7 @@ test("projection store applies live votecount clear envelopes", () => {
   });
 
   const snapshot = store.applyLiveEnvelope({
-    v: 1,
+    v: 2,
     id: 2,
     body: {
       kind: "Delta",
@@ -175,7 +175,7 @@ test("projection store applies live projection delta envelopes", () => {
   });
 
   const snapshot = store.applyLiveEnvelope({
-    v: 1,
+    v: 2,
     id: 1,
     body: {
       kind: "Delta",
@@ -200,7 +200,7 @@ test("projection store applies live thread post envelopes into the player thread
   });
 
   const snapshot = store.applyLiveEnvelope({
-    v: 1,
+    v: 2,
     id: 7,
     body: {
       kind: "Delta",
@@ -273,7 +273,7 @@ test("projection store applies live host-console state envelopes through the hos
   });
 
   const snapshot = store.applyLiveEnvelope({
-    v: 1,
+    v: 2,
     id: 3,
     body: {
       kind: "Delta",
@@ -312,7 +312,7 @@ test("projection store applies live host-prompt envelopes through the prompt nor
   });
 
   const snapshot = store.applyLiveEnvelope({
-    v: 1,
+    v: 2,
     id: 4,
     body: {
       kind: "Delta",
@@ -356,7 +356,7 @@ test("projection store applies live day-vote outcome envelopes through the outco
   });
 
   const snapshot = store.applyLiveEnvelope({
-    v: 1,
+    v: 2,
     id: 5,
     body: {
       kind: "Delta",
@@ -394,7 +394,7 @@ test("projection store applies live player-private envelopes through scoped norm
   });
 
   store.applyLiveEnvelope({
-    v: 1,
+    v: 2,
     id: 5,
     body: {
       kind: "Delta",
@@ -408,7 +408,7 @@ test("projection store applies live player-private envelopes through scoped norm
     },
   });
   const snapshot = store.applyLiveEnvelope({
-    v: 1,
+    v: 2,
     id: 6,
     body: {
       kind: "Delta",

@@ -1971,7 +1971,7 @@ async function proveAdditionalRoomDenial({
   }
   const postResponse = await context.request.post(`${frontendBaseUrl}/commands`, {
     data: {
-      v: 1,
+      v: 2,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -2621,7 +2621,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
 
   const postAttempt = await context.request.post(`${frontendBaseUrl}/commands`, {
     data: {
-      v: 1,
+      v: 2,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -2697,7 +2697,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
   }
   const revokedPostAttempt = await context.request.post(`${frontendBaseUrl}/commands`, {
     data: {
-      v: 1,
+      v: 2,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -2820,7 +2820,7 @@ async function proveDeadChatDenial({
   }
   const postResponse = await context.request.post(`${frontendBaseUrl}/commands`, {
     data: {
-      v: 1,
+      v: 2,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -3234,7 +3234,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
     `${frontendBaseUrl}/commands`,
     {
       data: {
-        v: 1,
+        v: 2,
         id: commandEnvelopeId++,
         body: {
           kind: "Command",
@@ -5616,7 +5616,7 @@ async function waitForHostConsoleSlotStatusDelta(page, { slotId, status }) {
     ({ expectedSlotId, expectedStatus }) =>
       (window.__fmarchHostLiveProjectionEvents ?? []).some(
         (event) =>
-          event?.delta?.kind === "HostConsoleStateChanged" &&
+          event?.delta?.kind === "HostConsoleSlotsChanged" &&
           event.delta.body?.slots?.some(
             (slot) =>
               slot.slot_id === expectedSlotId &&
@@ -5634,7 +5634,7 @@ async function waitForHostConsolePhaseLocked(page, locked) {
       window.__fmarchHostProjection?.phase?.locked === expectedLocked &&
       (window.__fmarchHostLiveProjectionEvents ?? []).some(
         (event) =>
-          event?.delta?.kind === "HostConsoleStateChanged" &&
+          event?.delta?.kind === "HostConsoleHeaderChanged" &&
           event.delta.body?.phase?.locked === expectedLocked,
       ),
     locked,
@@ -5826,7 +5826,7 @@ async function waitForHostConsoleDeadlineDelta(page, deadline) {
     (expectedDeadline) =>
       (window.__fmarchHostLiveProjectionEvents ?? []).some(
         (event) =>
-          event?.delta?.kind === "HostConsoleStateChanged" &&
+          event?.delta?.kind === "HostConsoleHeaderChanged" &&
           event.delta.body?.phase?.deadline === expectedDeadline,
       ),
     deadline,
@@ -5838,7 +5838,7 @@ async function waitForHostConsoleReplacementDelta(page, principalUserId) {
     (expectedOccupant) =>
       (window.__fmarchHostLiveProjectionEvents ?? []).some(
         (event) =>
-          event?.delta?.kind === "HostConsoleStateChanged" &&
+          event?.delta?.kind === "HostConsoleSlotsChanged" &&
           event.delta.body?.slots?.some(
             (slot) => slot.assigned_principal_user_id === expectedOccupant,
           ),

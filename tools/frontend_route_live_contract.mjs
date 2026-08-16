@@ -258,7 +258,7 @@ async function provePlayerLiveRuntime() {
   assert.notEqual(connection, null);
   await waitForFakeSocket();
   await FakeWebSocket.last.emit("open");
-  await FakeWebSocket.last.emit("message", liveEnvelope("Hello", { protocol_v: 1 }));
+  await FakeWebSocket.last.emit("message", liveEnvelope("Hello", { protocol_v: 2 }));
   await FakeWebSocket.last.emit(
     "message",
     liveEnvelope("Delta", {
@@ -385,7 +385,7 @@ async function proveModeratorLiveRuntime() {
   assert.notEqual(connection, null);
   await waitForFakeSocket();
   await FakeWebSocket.last.emit("open");
-  await FakeWebSocket.last.emit("message", liveEnvelope("Hello", { protocol_v: 1 }));
+  await FakeWebSocket.last.emit("message", liveEnvelope("Hello", { protocol_v: 2 }));
   await FakeWebSocket.last.emit(
     "message",
     liveEnvelope("Delta", {
@@ -460,7 +460,7 @@ async function waitForFakeSocket() {
 function liveEnvelope(kind, body) {
   return {
     data: encodeServerEnvelopeFrame({
-      v: 1,
+      v: 2,
       id: 1,
       body: {
         kind,

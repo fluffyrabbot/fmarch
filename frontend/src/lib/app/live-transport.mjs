@@ -1,7 +1,7 @@
 import { normalizeThreadPost as normalizeProjectionThreadPost } from "./cold-load.mjs";
 import { decode, encode } from "cbor-x";
 
-export const LIVE_PROTOCOL_VERSION = 1;
+export const LIVE_PROTOCOL_VERSION = 2;
 
 export const COLD_LOAD_TRANSPORT_BOUNDARY = Object.freeze({
   status: "cold-load-refresh-only",
@@ -552,6 +552,48 @@ function normalizeProjectionDelta(delta) {
       body: delta.body ?? {},
     });
   }
+  if (delta?.kind === "HostConsoleHeaderChanged") {
+    return Object.freeze({
+      kind: "HostConsoleHeaderChanged",
+      body: delta.body ?? {},
+    });
+  }
+  if (delta?.kind === "HostConsoleSlotsChanged") {
+    return Object.freeze({
+      kind: "HostConsoleSlotsChanged",
+      body: delta.body ?? {},
+    });
+  }
+  if (delta?.kind === "HostConsoleThreadPostsChanged") {
+    return Object.freeze({
+      kind: "HostConsoleThreadPostsChanged",
+      body: delta.body ?? {},
+    });
+  }
+  if (delta?.kind === "HostConsoleThreadPostRemoved") {
+    return Object.freeze({
+      kind: "HostConsoleThreadPostRemoved",
+      body: delta.body ?? {},
+    });
+  }
+  if (delta?.kind === "HostConsoleDayEventsChanged") {
+    return Object.freeze({
+      kind: "HostConsoleDayEventsChanged",
+      body: delta.body ?? {},
+    });
+  }
+  if (delta?.kind === "HostConsoleSchedulerChanged") {
+    return Object.freeze({
+      kind: "HostConsoleSchedulerChanged",
+      body: delta.body ?? {},
+    });
+  }
+  if (delta?.kind === "HostConsoleTasksChanged") {
+    return Object.freeze({
+      kind: "HostConsoleTasksChanged",
+      body: delta.body ?? {},
+    });
+  }
   if (delta?.kind === "HostPromptsChanged") {
     return Object.freeze({
       kind: "HostPromptsChanged",
@@ -610,6 +652,48 @@ function normalizeProjectionDelta(delta) {
     return Object.freeze({
       kind: "HostConsoleStateChanged",
       body: delta.HostConsoleStateChanged,
+    });
+  }
+  if (delta?.HostConsoleHeaderChanged !== undefined) {
+    return Object.freeze({
+      kind: "HostConsoleHeaderChanged",
+      body: delta.HostConsoleHeaderChanged,
+    });
+  }
+  if (delta?.HostConsoleSlotsChanged !== undefined) {
+    return Object.freeze({
+      kind: "HostConsoleSlotsChanged",
+      body: delta.HostConsoleSlotsChanged,
+    });
+  }
+  if (delta?.HostConsoleThreadPostsChanged !== undefined) {
+    return Object.freeze({
+      kind: "HostConsoleThreadPostsChanged",
+      body: delta.HostConsoleThreadPostsChanged,
+    });
+  }
+  if (delta?.HostConsoleThreadPostRemoved !== undefined) {
+    return Object.freeze({
+      kind: "HostConsoleThreadPostRemoved",
+      body: delta.HostConsoleThreadPostRemoved,
+    });
+  }
+  if (delta?.HostConsoleDayEventsChanged !== undefined) {
+    return Object.freeze({
+      kind: "HostConsoleDayEventsChanged",
+      body: delta.HostConsoleDayEventsChanged,
+    });
+  }
+  if (delta?.HostConsoleSchedulerChanged !== undefined) {
+    return Object.freeze({
+      kind: "HostConsoleSchedulerChanged",
+      body: delta.HostConsoleSchedulerChanged,
+    });
+  }
+  if (delta?.HostConsoleTasksChanged !== undefined) {
+    return Object.freeze({
+      kind: "HostConsoleTasksChanged",
+      body: delta.HostConsoleTasksChanged,
     });
   }
   if (delta?.HostPromptsChanged !== undefined) {

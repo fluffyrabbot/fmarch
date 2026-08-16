@@ -27,9 +27,9 @@ use std::time::Duration;
 use tokio::sync::{Mutex, Semaphore};
 use uuid::Uuid;
 use wire::{
-    CapabilityGrant, Hello, HostConsoleStateDelta, HostPromptDelta, HostPromptsDelta,
-    PlayerInvestigationResultsDelta, PlayerNotificationsDelta, ProjectionDelta, RejectCode,
-    ServerEnvelope, ServerMsg, PROTOCOL_VERSION,
+    host_console_patches, CapabilityGrant, Hello, HostConsoleStateDelta, HostPromptDelta,
+    HostPromptsDelta, PlayerInvestigationResultsDelta, PlayerNotificationsDelta, ProjectionDelta,
+    RejectCode, ServerEnvelope, ServerMsg, PROTOCOL_VERSION,
 };
 
 /// Wake source for the durable cross-instance event poll in the live session loop.
@@ -455,6 +455,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
         0
     };
     let mut next_envelope_id = 1;
+    let mut last_host_console: Option<HostConsoleStateDelta> = None;
     if claim.channel == "main" {
         let hidden_posts = current_hidden_thread_post_deltas(&state, game)
             .await
@@ -490,14 +491,14 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
     }
     if host_console_interested {
-        if let Some(delta) =
-            host_console_state_delta_for_ws(&state, &claim, claim.slot_id.as_deref()).await
+        if let Some((deltas, current)) =
+            host_console_deltas_for_ws(&state, &claim, last_host_console.as_ref(), true).await
         {
+            last_host_console = Some(current);
             if !session.active(&state, &claim).await {
                 return;
             }
-            next_envelope_id =
-                send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
+            next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, deltas).await;
         }
     }
     if let Some(delta) = host_prompts_delta_for_ws(&state, &claim).await {
@@ -605,26 +606,26 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                     next_envelope_id = sent_to;
                 }
                 if host_console_interested {
-                    if let Some(delta) = host_console_state_delta_for_ws(
+                    if let Some((deltas, current)) = host_console_deltas_for_ws(
                         &state,
                         &claim,
-                        claim.slot_id.as_deref(),
+                        last_host_console.as_ref(),
+                        false,
                     )
                     .await
                     {
-                        if !session.active(&state, &claim).await {
-                            break;
+                        last_host_console = Some(current);
+                        if !deltas.is_empty() {
+                            if !session.active(&state, &claim).await {
+                                break;
+                            }
+                            let sent_to =
+                                send_projection_deltas(&mut socket, next_envelope_id, deltas).await;
+                            if sent_to == next_envelope_id {
+                                break;
+                            }
+                            next_envelope_id = sent_to;
                         }
-                        let sent_to = send_projection_deltas(
-                            &mut socket,
-                            next_envelope_id,
-                            vec![delta],
-                        )
-                        .await;
-                        if sent_to == next_envelope_id {
-                            break;
-                        }
-                        next_envelope_id = sent_to;
                     }
                 }
                 observed_visibility_change_id = delivered_visibility_change_id;
@@ -651,6 +652,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                 &claim,
                 next_envelope_id,
                 host_console_interested,
+                &mut last_host_console,
             )
             .await;
             continue;
@@ -754,18 +756,21 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
             }
         }
         if update.host_console_dirty && host_console_interested {
-            if let Some(delta) =
-                host_console_state_delta_for_ws(&state, &claim, claim.slot_id.as_deref()).await
+            if let Some((deltas, current)) =
+                host_console_deltas_for_ws(&state, &claim, last_host_console.as_ref(), false).await
             {
-                if !session.active(&state, &claim).await {
-                    break;
+                last_host_console = Some(current);
+                if !deltas.is_empty() {
+                    if !session.active(&state, &claim).await {
+                        break;
+                    }
+                    let sent_to =
+                        send_projection_deltas(&mut socket, next_envelope_id, deltas).await;
+                    if sent_to == next_envelope_id {
+                        break;
+                    }
+                    next_envelope_id = sent_to;
                 }
-                let sent_to =
-                    send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
-                if sent_to == next_envelope_id {
-                    break;
-                }
-                next_envelope_id = sent_to;
             }
         }
         if update.host_prompts_dirty {
@@ -896,6 +901,7 @@ async fn send_current_projection_snapshot(
     claim: &WebsocketTicketClaim,
     mut next_envelope_id: u64,
     host_console_interested: bool,
+    last_host_console: &mut Option<HostConsoleStateDelta>,
 ) -> u64 {
     if let Ok(deltas) = game_http::current_votecount_deltas(&state.pool, claim.game).await {
         if !websocket_session_active(state, claim).await {
@@ -917,13 +923,14 @@ async fn send_current_projection_snapshot(
         next_envelope_id = send_projection_deltas(socket, next_envelope_id, vec![delta]).await;
     }
     if host_console_interested {
-        if let Some(delta) =
-            host_console_state_delta_for_ws(state, claim, claim.slot_id.as_deref()).await
+        if let Some((deltas, current)) =
+            host_console_deltas_for_ws(state, claim, last_host_console.as_ref(), true).await
         {
+            *last_host_console = Some(current);
             if !websocket_session_active(state, claim).await {
                 return next_envelope_id;
             }
-            next_envelope_id = send_projection_deltas(socket, next_envelope_id, vec![delta]).await;
+            next_envelope_id = send_projection_deltas(socket, next_envelope_id, deltas).await;
         }
     }
     if let Some(delta) = host_prompts_delta_for_ws(state, claim).await {
@@ -1042,22 +1049,31 @@ async fn socket_has_host_console_interest(
         .is_some()
 }
 
-async fn host_console_state_delta_for_ws(
+async fn host_console_deltas_for_ws(
     state: &LiveDeliveryState,
     claim: &WebsocketTicketClaim,
-    slot_id: Option<&str>,
-) -> Option<ProjectionDelta> {
+    previous: Option<&HostConsoleStateDelta>,
+    full_snapshot: bool,
+) -> Option<(Vec<ProjectionDelta>, HostConsoleStateDelta)> {
     let authorization = websocket_authorization_context(state, claim).await?;
     let game_authorization = game_http::GameAuthorization::from_context(&authorization);
     let authority =
         game_http::resolve_host_console_authority(&state.pool, claim.game, &game_authorization)
             .await
             .ok()??;
-    game_http::load_host_console_state(&state.pool, claim.game, authority, slot_id, Some(25))
+    let current = HostConsoleStateDelta::from(
+        game_http::load_host_console_state(
+            &state.pool,
+            claim.game,
+            authority,
+            claim.slot_id.as_deref(),
+            Some(25),
+        )
         .await
-        .ok()
-        .map(HostConsoleStateDelta::from)
-        .map(ProjectionDelta::HostConsoleStateChanged)
+        .ok()?,
+    );
+    let previous = if full_snapshot { None } else { previous };
+    Some((host_console_patches(previous, &current), current))
 }
 
 async fn host_prompts_delta_for_ws(

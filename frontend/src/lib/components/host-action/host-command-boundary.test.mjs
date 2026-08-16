@@ -5,6 +5,7 @@ import {
   readGeneratedCommandTags,
 } from "../../wire/generated-command-tags.mjs";
 import {
+  applyHostConsoleLiveDelta,
   buildHostCommandEnvelope,
   buildHostConsoleStateEndpoint,
   mapHostActionToWireCommand,
@@ -296,7 +297,7 @@ test("host command envelope uses the Rust wire ClientEnvelope shape", () => {
   });
 
   assert.deepEqual(envelope, {
-    v: 1,
+    v: 2,
     id: 7,
     body: {
       kind: "Command",
@@ -325,7 +326,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     fetchImpl: async (url, init) => {
       sent.push({ url, envelope: JSON.parse(init.body) });
       return jsonResponse({
-        v: 1,
+        v: 2,
         id: 7,
         body: { kind: "Ack", body: { stream_seqs: [101, 102] } },
       });
@@ -345,7 +346,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 8,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 8,
         body: {
           kind: "Reject",
@@ -369,7 +370,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 10,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 10,
         body: {
           kind: "Reject",
@@ -395,7 +396,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 15,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 15,
         body: {
           kind: "Reject",
@@ -422,7 +423,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 16,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 16,
         body: {
           kind: "Reject",
@@ -449,7 +450,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 17,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 17,
         body: {
           kind: "Reject",
@@ -476,7 +477,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 11,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 11,
         body: {
           kind: "Reject",
@@ -502,7 +503,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 12,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 12,
         body: {
           kind: "Reject",
@@ -528,7 +529,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 13,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 13,
         body: {
           kind: "Reject",
@@ -555,7 +556,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 9,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 9,
         body: {
           kind: "Reject",
@@ -581,7 +582,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     envelopeIdFactory: () => 10,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 10,
         body: {
           kind: "Reject",
@@ -615,7 +616,7 @@ test("host command sender can refresh projected host console state after ack", a
       sent.push({ url, init });
       if (url === "/commands") {
         return jsonResponse({
-          v: 1,
+          v: 2,
           id: 9,
           body: { kind: "Ack", body: { stream_seqs: [201] } },
         });
@@ -900,6 +901,77 @@ test("host console projection preserves fallback labels for unchanged phase ids"
 
   assert.equal(projection.phase.id, "D01");
   assert.equal(projection.phase.label, "Day 2");
+});
+
+test("host console live cells patch the Hello snapshot instead of replacing it", () => {
+  const snapshot = projectHostConsoleState(
+    {
+      completed: false,
+      phase: { phase_id: "D01", locked: false, deadline: null },
+      slots: [
+        {
+          slot_id: "slot-7",
+          public_name: "Rowan",
+          assigned_principal_user_id: "player-rowan",
+          alive: true,
+          status: "alive",
+        },
+        {
+          slot_id: "slot-8",
+          public_name: "Mira",
+          assigned_principal_user_id: "player-mira",
+          alive: true,
+          status: "alive",
+        },
+      ],
+      thread_posts: [{ stream_seq: 10, author_slot: "slot-7", body: "hello" }],
+      tasks: [],
+    },
+    {
+      phase: { id: "D01", lockedLabel: "Thread open" },
+      replacement: { slotId: "slot-7", occupantLabel: "Rowan" },
+    },
+  );
+
+  const afterLock = applyHostConsoleLiveDelta(snapshot, {
+    kind: "HostConsoleHeaderChanged",
+    body: {
+      completed: false,
+      phase: { phase_id: "D01", locked: true, deadline: 1781928000 },
+    },
+  });
+  assert.equal(afterLock.phase.locked, true);
+  assert.equal(afterLock.phase.deadline, 1781928000);
+  assert.equal(afterLock.slots.length, 2);
+  assert.equal(afterLock.slots[1].public_name, "Mira");
+
+  const afterModkill = applyHostConsoleLiveDelta(afterLock, {
+    kind: "HostConsoleSlotsChanged",
+    body: {
+      slots: [
+        {
+          slot_id: "slot-7",
+          public_name: "Rowan",
+          assigned_principal_user_id: "player-rowan",
+          alive: false,
+          status: "modkilled",
+        },
+      ],
+      removed_slot_ids: [],
+    },
+  });
+  assert.equal(afterModkill.slots.length, 2);
+  assert.equal(afterModkill.replacement.lifecycleLabel, "Modkilled");
+  assert.equal(
+    afterModkill.slots.find((slot) => slot.slot_id === "slot-8").status,
+    "alive",
+  );
+
+  const afterHide = applyHostConsoleLiveDelta(afterModkill, {
+    kind: "HostConsoleThreadPostRemoved",
+    body: { stream_seq: 10 },
+  });
+  assert.equal(afterHide.threadPosts.length, 0);
 });
 
 test("host console state endpoint is session-authenticated and scoped by slot", () => {

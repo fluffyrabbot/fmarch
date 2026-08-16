@@ -167,7 +167,7 @@ function post(body, token) {
   return { method: "POST", headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), "content-type": "application/json" }, body: JSON.stringify(body) };
 }
 async function command(api, id, sessionToken, commandBody) {
-  const result = await json(`${api}/commands`, post({ v: 1, id, body: { kind: "Command", body: { command_id: randomUUID(), command: commandBody } } }, sessionToken));
+  const result = await json(`${api}/commands`, post({ v: 2, id, body: { kind: "Command", body: { command_id: randomUUID(), command: commandBody } } }, sessionToken));
   if (result.body?.kind !== "Ack") throw new Error(`seed command rejected: ${JSON.stringify(result)}`);
 }
 async function cookie(context, base, value) {

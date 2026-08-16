@@ -4698,7 +4698,7 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
                     {
                         prompt_delta_id = Some(envelope.id);
                     }
-                    ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(delta))
+                    ServerMsg::Delta(ProjectionDelta::HostConsoleTasksChanged(delta))
                         if delta.game == game
                             && delta.tasks.iter().any(|task| {
                                 task.id == "engine-host-prompt:D01:skip_next_day:slot_1"
@@ -6696,13 +6696,10 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         loop {
             let envelope = decode_server_envelope(moderator_socket.next().await.unwrap().unwrap());
-            if let ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(delta)) = envelope.body
+            if let ServerMsg::Delta(ProjectionDelta::HostConsoleThreadPostRemoved(delta)) =
+                envelope.body
             {
-                if delta.game == game {
-                    assert!(delta
-                        .thread_posts
-                        .iter()
-                        .all(|post| post.stream_seq != public_source_seq));
+                if delta.game == game && delta.stream_seq == public_source_seq {
                     return;
                 }
             }

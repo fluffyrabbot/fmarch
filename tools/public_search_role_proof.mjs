@@ -320,7 +320,7 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      v: 1,
+      v: 2,
       id,
       body: {
         kind: "Command",

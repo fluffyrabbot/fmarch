@@ -875,7 +875,7 @@ async function sendCommandResult(principalUserId, command) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      v: 1,
+      v: 2,
       id: commandEnvelopeId++,
       body: {
         kind: "Command",
@@ -26470,7 +26470,7 @@ async function sendBrowserCommand(page, { command, commandId }) {
   return await page.evaluate(
     async ({ command: browserCommand, commandId: browserCommandId, envelopeId: browserEnvelopeId }) => {
       const requestEnvelope = {
-        v: 1,
+        v: 2,
         id: browserEnvelopeId,
         body: {
           kind: "Command",

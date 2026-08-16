@@ -312,7 +312,7 @@ test("generic command envelope uses the Rust ClientEnvelope shape", () => {
   });
 
   assert.deepEqual(envelope, {
-    v: 1,
+    v: 2,
     id: 10,
     body: {
       kind: "Command",
@@ -472,7 +472,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 11,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 11,
         body: { kind: "Ack", body: { stream_seqs: [44] } },
       }),
@@ -491,7 +491,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 12,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 12,
         body: {
           kind: "Reject",
@@ -525,7 +525,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 13,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 13,
         body: {
           kind: "Reject",
@@ -558,7 +558,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 16,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 16,
         body: {
           kind: "Reject",
@@ -592,7 +592,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 18,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 18,
         body: {
           kind: "Reject",
@@ -621,7 +621,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 17,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 17,
         body: {
           kind: "Reject",
@@ -649,7 +649,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 14,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 14,
         body: {
           kind: "Reject",
@@ -678,7 +678,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 15,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 15,
         body: {
           kind: "Reject",
@@ -706,7 +706,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 13,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 13,
         body: {
           kind: "Reject",
@@ -735,7 +735,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     envelopeIdFactory: () => 14,
     fetchImpl: async () =>
       jsonResponse({
-        v: 1,
+        v: 2,
         id: 14,
         body: {
           kind: "Reject",

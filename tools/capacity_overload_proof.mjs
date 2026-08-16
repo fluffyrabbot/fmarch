@@ -599,7 +599,7 @@ async function sendCommand(
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      v: 1,
+      v: 2,
       id: Date.now(),
       body: {
         kind: "Command",

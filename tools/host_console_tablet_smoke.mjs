@@ -610,7 +610,7 @@ async function postCommand(
     throw new Error(`seed command actor has no session: ${principalUserId}`);
   }
   const envelope = {
-    v: 1,
+    v: 2,
     id,
     body: {
       kind: "Command",
@@ -679,7 +679,7 @@ function assertHitTarget(box, label) {
 }
 
 function assertCommandEnvelope(envelope, expectedAction) {
-  if (envelope.v !== 1) {
+  if (envelope.v !== 2) {
     throw new Error(`${expectedAction.id} command used protocol ${envelope.v}`);
   }
   if (envelope.body?.kind !== "Command") {

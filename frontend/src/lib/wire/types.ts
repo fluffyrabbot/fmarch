@@ -149,7 +149,21 @@ export type HostConsolePhaseStateDelta = { phase_id: string, locked: boolean, de
 
 export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupancy_id: string, persona_id: string, public_name: string, assigned_principal_user_id: string, alive: boolean, status: string, status_tags: Array<string>, role_key: string | null, alignment: string | null, role_revealed: boolean, alignment_revealed: boolean, };
 
+export type HostConsoleSlotsDelta = { game: string, slots: Array<HostConsoleSlotOccupancyDelta>, removed_slot_ids: Array<string>, };
+
 export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, quotations: Array<Quotation>, };
+
+export type HostConsoleThreadPostsDelta = { game: string, posts: Array<HostConsoleThreadPostDelta>, };
+
+export type HostConsoleThreadPostRemovedDelta = { game: string, stream_seq: bigint, };
+
+export type HostConsoleHeaderDelta = { game: string, authority: HostConsoleAuthorityDelta, completed: boolean, phase: HostConsolePhaseStateDelta | null, };
+
+export type HostConsoleSchedulerDelta = { game: string, day_event_scheduler: DayEventSchedulerDelta | null, };
+
+export type HostConsoleDayEventsDelta = { game: string, day_events: Array<HostDayEventDelta>, removed_event_ids: Array<string>, };
+
+export type HostConsoleTasksDelta = { game: string, tasks: Array<HostTaskDelta>, };
 
 export type DayEventSchedulerDelta = { pending: boolean, next_due_at: bigint | null, auto_resolve_pending: boolean, narrative_pending: boolean, wake_seq: bigint, last_observed_wake_seq: bigint, lease_until: bigint | null, retry_not_before: bigint | null, last_attempt_at: bigint | null, last_success_at: bigint | null, last_failure_at: bigint | null, consecutive_failures: number, total_attempts: bigint, total_successes: bigint, last_error: string | null, };
 
@@ -286,7 +300,7 @@ export type ResolutionTraceInspectionRun = { phase_id: string, run_id: string, a
 
 export type ResolutionTraceInspectionReport = { game: string, traces: Array<ResolutionTraceInspectionRun>, };
 
-export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "VoteCountCleared", "body": VoteCountClearedDelta } | { "kind": "ThreadPostsChanged", "body": ThreadPostsDelta } | { "kind": "ThreadPostRemoved", "body": ThreadPostRemovedDelta } | { "kind": "PostCitationsChanged", "body": PostCitationsChangedDelta } | { "kind": "HostConsoleStateChanged", "body": HostConsoleStateDelta } | { "kind": "HostPromptsChanged", "body": HostPromptsDelta } | { "kind": "PlayerNotificationsChanged", "body": PlayerNotificationsDelta } | { "kind": "PlayerInvestigationResultsChanged", "body": PlayerInvestigationResultsDelta } | { "kind": "DayVoteOutcomeApplied", "body": DayVoteOutcomeDelta } | { "kind": "ResyncRequired", "body": { from_seq: bigint, } };
+export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "VoteCountCleared", "body": VoteCountClearedDelta } | { "kind": "ThreadPostsChanged", "body": ThreadPostsDelta } | { "kind": "ThreadPostRemoved", "body": ThreadPostRemovedDelta } | { "kind": "PostCitationsChanged", "body": PostCitationsChangedDelta } | { "kind": "HostConsoleStateChanged", "body": HostConsoleStateDelta } | { "kind": "HostConsoleHeaderChanged", "body": HostConsoleHeaderDelta } | { "kind": "HostConsoleSlotsChanged", "body": HostConsoleSlotsDelta } | { "kind": "HostConsoleThreadPostsChanged", "body": HostConsoleThreadPostsDelta } | { "kind": "HostConsoleThreadPostRemoved", "body": HostConsoleThreadPostRemovedDelta } | { "kind": "HostConsoleDayEventsChanged", "body": HostConsoleDayEventsDelta } | { "kind": "HostConsoleSchedulerChanged", "body": HostConsoleSchedulerDelta } | { "kind": "HostConsoleTasksChanged", "body": HostConsoleTasksDelta } | { "kind": "HostPromptsChanged", "body": HostPromptsDelta } | { "kind": "PlayerNotificationsChanged", "body": PlayerNotificationsDelta } | { "kind": "PlayerInvestigationResultsChanged", "body": PlayerInvestigationResultsDelta } | { "kind": "DayVoteOutcomeApplied", "body": DayVoteOutcomeDelta } | { "kind": "ResyncRequired", "body": { from_seq: bigint, } };
 
 export type CapabilityGrant = { "kind": "GlobalAdmin" } | { "kind": "GlobalMod" } | { "kind": "HostOf", "body": { game: string, } } | { "kind": "CohostOf", "body": { game: string, } } | { "kind": "SlotOccupant", "body": { slot: string, } } | { "kind": "ChannelMember", "body": { channel: string, } } | { "kind": "DeadViewer", "body": { game: string, } } | { "kind": "SpectatorOf", "body": { game: string, } };
 

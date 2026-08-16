@@ -25,7 +25,7 @@ macro_rules! seat_persona {
     }};
 }
 
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Envelope<T> {
@@ -887,6 +887,13 @@ pub enum ProjectionDelta {
     ThreadPostRemoved(ThreadPostRemovedDelta),
     PostCitationsChanged(PostCitationsChangedDelta),
     HostConsoleStateChanged(HostConsoleStateDelta),
+    HostConsoleHeaderChanged(HostConsoleHeaderDelta),
+    HostConsoleSlotsChanged(HostConsoleSlotsDelta),
+    HostConsoleThreadPostsChanged(HostConsoleThreadPostsDelta),
+    HostConsoleThreadPostRemoved(HostConsoleThreadPostRemovedDelta),
+    HostConsoleDayEventsChanged(HostConsoleDayEventsDelta),
+    HostConsoleSchedulerChanged(HostConsoleSchedulerDelta),
+    HostConsoleTasksChanged(HostConsoleTasksDelta),
     HostPromptsChanged(HostPromptsDelta),
     PlayerNotificationsChanged(PlayerNotificationsDelta),
     PlayerInvestigationResultsChanged(PlayerInvestigationResultsDelta),
@@ -990,6 +997,199 @@ pub struct HostConsoleStateDelta {
     /// projections. A task id identifies one decision instance; `kind` only
     /// identifies the family that knows how to render it.
     pub tasks: Vec<HostTaskDelta>,
+}
+
+/// Hello/resync keep [`HostConsoleStateChanged`]. Live ticks emit the cells below.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostConsoleHeaderDelta {
+    pub game: Uuid,
+    pub authority: HostConsoleAuthorityDelta,
+    pub completed: bool,
+    pub phase: Option<HostConsolePhaseStateDelta>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostConsoleSlotsDelta {
+    pub game: Uuid,
+    pub slots: Vec<HostConsoleSlotOccupancyDelta>,
+    pub removed_slot_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostConsoleThreadPostsDelta {
+    pub game: Uuid,
+    pub posts: Vec<HostConsoleThreadPostDelta>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostConsoleThreadPostRemovedDelta {
+    pub game: Uuid,
+    pub stream_seq: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostConsoleDayEventsDelta {
+    pub game: Uuid,
+    pub day_events: Vec<HostDayEventDelta>,
+    pub removed_event_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostConsoleSchedulerDelta {
+    pub game: Uuid,
+    pub day_event_scheduler: Option<DayEventSchedulerDelta>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostConsoleTasksDelta {
+    pub game: Uuid,
+    pub tasks: Vec<HostTaskDelta>,
+}
+
+/// Diff two host-console snapshots into live cells. `None` previous is Hello/resync.
+pub fn host_console_patches(
+    previous: Option<&HostConsoleStateDelta>,
+    current: &HostConsoleStateDelta,
+) -> Vec<ProjectionDelta> {
+    let Some(previous) = previous.filter(|previous| previous.game == current.game) else {
+        return vec![ProjectionDelta::HostConsoleStateChanged(current.clone())];
+    };
+
+    let mut deltas = Vec::new();
+    if previous.authority != current.authority
+        || previous.completed != current.completed
+        || previous.phase != current.phase
+    {
+        deltas.push(ProjectionDelta::HostConsoleHeaderChanged(
+            HostConsoleHeaderDelta {
+                game: current.game,
+                authority: current.authority.clone(),
+                completed: current.completed,
+                phase: current.phase.clone(),
+            },
+        ));
+    }
+
+    let previous_slots = previous
+        .slots
+        .iter()
+        .map(|slot| (slot.slot_id.as_str(), slot))
+        .collect::<BTreeMap<_, _>>();
+    let current_slots = current
+        .slots
+        .iter()
+        .map(|slot| (slot.slot_id.as_str(), slot))
+        .collect::<BTreeMap<_, _>>();
+    let changed_slots = current
+        .slots
+        .iter()
+        .filter(|slot| previous_slots.get(slot.slot_id.as_str()) != Some(slot))
+        .cloned()
+        .collect::<Vec<_>>();
+    let removed_slot_ids = previous
+        .slots
+        .iter()
+        .filter(|slot| !current_slots.contains_key(slot.slot_id.as_str()))
+        .map(|slot| slot.slot_id.clone())
+        .collect::<Vec<_>>();
+    if !changed_slots.is_empty() || !removed_slot_ids.is_empty() {
+        deltas.push(ProjectionDelta::HostConsoleSlotsChanged(
+            HostConsoleSlotsDelta {
+                game: current.game,
+                slots: changed_slots,
+                removed_slot_ids,
+            },
+        ));
+    }
+
+    let previous_posts = previous
+        .thread_posts
+        .iter()
+        .map(|post| (post.stream_seq, post))
+        .collect::<BTreeMap<_, _>>();
+    let current_posts = current
+        .thread_posts
+        .iter()
+        .map(|post| (post.stream_seq, post))
+        .collect::<BTreeMap<_, _>>();
+    let changed_posts = current
+        .thread_posts
+        .iter()
+        .filter(|post| previous_posts.get(&post.stream_seq) != Some(post))
+        .cloned()
+        .collect::<Vec<_>>();
+    if !changed_posts.is_empty() {
+        deltas.push(ProjectionDelta::HostConsoleThreadPostsChanged(
+            HostConsoleThreadPostsDelta {
+                game: current.game,
+                posts: changed_posts,
+            },
+        ));
+    }
+    deltas.extend(
+        previous
+            .thread_posts
+            .iter()
+            .filter(|post| !current_posts.contains_key(&post.stream_seq))
+            .map(|post| {
+                ProjectionDelta::HostConsoleThreadPostRemoved(HostConsoleThreadPostRemovedDelta {
+                    game: current.game,
+                    stream_seq: post.stream_seq,
+                })
+            }),
+    );
+
+    if previous.day_event_scheduler != current.day_event_scheduler {
+        deltas.push(ProjectionDelta::HostConsoleSchedulerChanged(
+            HostConsoleSchedulerDelta {
+                game: current.game,
+                day_event_scheduler: current.day_event_scheduler.clone(),
+            },
+        ));
+    }
+
+    let previous_events = previous
+        .day_events
+        .iter()
+        .map(|event| (event.event_id.as_str(), event))
+        .collect::<BTreeMap<_, _>>();
+    let current_events = current
+        .day_events
+        .iter()
+        .map(|event| (event.event_id.as_str(), event))
+        .collect::<BTreeMap<_, _>>();
+    let changed_events = current
+        .day_events
+        .iter()
+        .filter(|event| previous_events.get(event.event_id.as_str()) != Some(event))
+        .cloned()
+        .collect::<Vec<_>>();
+    let removed_event_ids = previous
+        .day_events
+        .iter()
+        .filter(|event| !current_events.contains_key(event.event_id.as_str()))
+        .map(|event| event.event_id.clone())
+        .collect::<Vec<_>>();
+    if !changed_events.is_empty() || !removed_event_ids.is_empty() {
+        deltas.push(ProjectionDelta::HostConsoleDayEventsChanged(
+            HostConsoleDayEventsDelta {
+                game: current.game,
+                day_events: changed_events,
+                removed_event_ids,
+            },
+        ));
+    }
+
+    if previous.tasks != current.tasks {
+        deltas.push(ProjectionDelta::HostConsoleTasksChanged(
+            HostConsoleTasksDelta {
+                game: current.game,
+                tasks: current.tasks.clone(),
+            },
+        ));
+    }
+
+    deltas
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -2297,11 +2497,13 @@ pub mod typescript {
         DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
         DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
         DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsoleAuthorityDelta,
-        HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
-        HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
-        HostPromptDecision, HostPromptDelta, HostPromptsDelta, HostTaskAllowedCommand,
-        HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
-        ItaSessionControlKind, MemberMutePage, MemberMuteState, ModerationCase,
+        HostConsoleAuthorityKind, HostConsoleDayEventsDelta, HostConsoleHeaderDelta,
+        HostConsolePhaseStateDelta, HostConsoleSchedulerDelta, HostConsoleSlotOccupancyDelta,
+        HostConsoleSlotsDelta, HostConsoleStateDelta, HostConsoleTasksDelta,
+        HostConsoleThreadPostDelta, HostConsoleThreadPostRemovedDelta, HostConsoleThreadPostsDelta,
+        HostDayEventDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta,
+        HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
+        HostTaskUrgency, ItaSessionControlKind, MemberMutePage, MemberMuteState, ModerationCase,
         ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
         ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, PostCitation,
         PostCitationPage, PostCitationsChangedDelta, PostKind, PostRef, ProfileEditor,
@@ -2393,7 +2595,14 @@ pub mod typescript {
         push::<HostConsoleAuthorityDelta>(&mut out, &config);
         push::<HostConsolePhaseStateDelta>(&mut out, &config);
         push::<HostConsoleSlotOccupancyDelta>(&mut out, &config);
+        push::<HostConsoleSlotsDelta>(&mut out, &config);
         push::<HostConsoleThreadPostDelta>(&mut out, &config);
+        push::<HostConsoleThreadPostsDelta>(&mut out, &config);
+        push::<HostConsoleThreadPostRemovedDelta>(&mut out, &config);
+        push::<HostConsoleHeaderDelta>(&mut out, &config);
+        push::<HostConsoleSchedulerDelta>(&mut out, &config);
+        push::<HostConsoleDayEventsDelta>(&mut out, &config);
+        push::<HostConsoleTasksDelta>(&mut out, &config);
         push::<DayEventSchedulerDelta>(&mut out, &config);
         push::<DayEventRoomDelta>(&mut out, &config);
         push::<DayEventNarrativeDelta>(&mut out, &config);
@@ -2487,5 +2696,117 @@ impl From<&caps::Capability> for CapabilityGrant {
             caps::Capability::DeadViewer(game) => CapabilityGrant::DeadViewer { game: *game },
             caps::Capability::SpectatorOf(game) => CapabilityGrant::SpectatorOf { game: *game },
         }
+    }
+}
+
+#[cfg(test)]
+mod host_console_patch_tests {
+    use super::*;
+
+    fn snapshot(game: Uuid) -> HostConsoleStateDelta {
+        HostConsoleStateDelta {
+            game,
+            authority: HostConsoleAuthorityDelta {
+                principal_user_id: "host".into(),
+                capability: HostConsoleAuthorityKind::HostOf,
+                allowed_classes: Vec::new(),
+                denied_classes: Vec::new(),
+            },
+            completed: false,
+            phase: Some(HostConsolePhaseStateDelta {
+                phase_id: "D01".into(),
+                locked: false,
+                deadline: None,
+            }),
+            slots: vec![slot("slot-1", "alive", true)],
+            thread_posts: vec![post(10, "hello")],
+            day_event_scheduler: None,
+            day_events: Vec::new(),
+            tasks: Vec::new(),
+        }
+    }
+
+    fn slot(slot_id: &str, status: &str, alive: bool) -> HostConsoleSlotOccupancyDelta {
+        HostConsoleSlotOccupancyDelta {
+            slot_id: slot_id.into(),
+            occupancy_id: format!("{slot_id}-occ"),
+            persona_id: format!("{slot_id}-persona"),
+            public_name: slot_id.into(),
+            assigned_principal_user_id: "player".into(),
+            alive,
+            status: status.into(),
+            status_tags: Vec::new(),
+            role_key: None,
+            alignment: None,
+            role_revealed: false,
+            alignment_revealed: false,
+        }
+    }
+
+    fn post(stream_seq: i64, body: &str) -> HostConsoleThreadPostDelta {
+        HostConsoleThreadPostDelta {
+            stream_seq,
+            author_slot: Some("slot-1".into()),
+            author_user: Some("player".into()),
+            phase_id: "D01".into(),
+            body: body.into(),
+            quotations: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn missing_previous_snapshot_is_the_full_hello_frame() {
+        let game = Uuid::new_v4();
+        let current = snapshot(game);
+        assert_eq!(
+            host_console_patches(None, &current),
+            vec![ProjectionDelta::HostConsoleStateChanged(current)]
+        );
+    }
+
+    #[test]
+    fn unchanged_snapshot_emits_no_live_cells() {
+        let current = snapshot(Uuid::new_v4());
+        assert_eq!(host_console_patches(Some(&current), &current), Vec::new());
+    }
+
+    #[test]
+    fn dirty_cells_are_the_only_live_frames() {
+        let game = Uuid::new_v4();
+        let previous = snapshot(game);
+        let mut current = previous.clone();
+        current.phase = Some(HostConsolePhaseStateDelta {
+            phase_id: "D01".into(),
+            locked: true,
+            deadline: None,
+        });
+        current.slots = vec![slot("slot-1", "modkilled", false)];
+        current.thread_posts = vec![post(11, "next")];
+        current.completed = true;
+
+        assert_eq!(
+            host_console_patches(Some(&previous), &current),
+            vec![
+                ProjectionDelta::HostConsoleHeaderChanged(HostConsoleHeaderDelta {
+                    game,
+                    authority: current.authority.clone(),
+                    completed: true,
+                    phase: current.phase.clone(),
+                }),
+                ProjectionDelta::HostConsoleSlotsChanged(HostConsoleSlotsDelta {
+                    game,
+                    slots: vec![slot("slot-1", "modkilled", false)],
+                    removed_slot_ids: Vec::new(),
+                }),
+                ProjectionDelta::HostConsoleThreadPostsChanged(HostConsoleThreadPostsDelta {
+                    game,
+                    posts: vec![post(11, "next")],
+                }),
+                ProjectionDelta::HostConsoleThreadPostRemoved(HostConsoleThreadPostRemovedDelta {
+                    game,
+                    stream_seq: 10,
+                }),
+            ]
+        );
     }
 }

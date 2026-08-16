@@ -125,7 +125,7 @@ export function createLiveStackCommandSender({
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        v: 1,
+        v: 2,
         id: nextEnvelopeId(),
         body: {
           kind: "Command",

@@ -2594,7 +2594,7 @@ async function installCommandMock(
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: scenario.respond,
         }),
@@ -2605,7 +2605,7 @@ async function installCommandMock(
       status: fallback.status,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 1,
+        v: 2,
         id: fallback.id.fromEnvelope
           ? commandEnvelope?.id ?? fallback.id.fallback
           : fallback.id.literal,
@@ -3182,11 +3182,11 @@ async function assertUrlAddressedPrivateReview(page, { viewport, detailId, revie
 
 async function installLiveProjectionHarness(page) {
   const helloFrame = [...encodeServerEnvelopeFrame({
-    v: 1,
+    v: 2,
     id: 0,
     body: {
       kind: "Hello",
-      body: { protocol_v: 1, server: "smoke", caps: [] },
+      body: { protocol_v: 2, server: "smoke", caps: [] },
     },
   })];
   await page.addInitScript((helloFrameBytes) => {
@@ -3262,7 +3262,7 @@ async function installLiveProjectionHarness(page) {
 async function emitPlayerOfficialThreadPost(page) {
   await page.waitForFunction(() => typeof window.__fmarchEmitLiveProjection === "function");
   const frame = [...encodeServerEnvelopeFrame({
-    v: 1,
+    v: 2,
     id: 44,
     body: {
       kind: "Delta",

@@ -20,7 +20,7 @@ test("GlobalAdmin creates the first game through the authenticated command bound
           observed.authorization = init.headers.authorization;
           observed.envelope = JSON.parse(init.body);
           return Response.json({
-            v: 1,
+            v: 2,
             id: observed.envelope.id,
             body: { kind: "Ack", body: { stream_seqs: [1] } },
           });

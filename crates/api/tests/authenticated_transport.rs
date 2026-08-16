@@ -31,6 +31,20 @@ fn decode_server_envelope(message: Message) -> ServerEnvelope {
     ciborium::from_reader(bytes.as_ref()).expect("decode server CBOR envelope")
 }
 
+fn host_console_slot_assigned(body: &ServerMsg, principal_user_id: &str) -> bool {
+    match body {
+        ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(delta)) => delta
+            .slots
+            .iter()
+            .any(|slot| slot.assigned_principal_user_id == principal_user_id),
+        ServerMsg::Delta(wire::ProjectionDelta::HostConsoleSlotsChanged(delta)) => delta
+            .slots
+            .iter()
+            .any(|slot| slot.assigned_principal_user_id == principal_user_id),
+        _ => false,
+    }
+}
+
 fn test_state(pool: sqlx::PgPool, root: &TempDir) -> ApiState {
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     ApiState::new(pool, store)
@@ -359,7 +373,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
     );
 
     let forged_identity = serde_json::json!({
-        "v": 1,
+        "v": 2,
         "id": 7,
         "body": {
             "kind": "Command",
@@ -917,14 +931,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         loop {
             let message = socket.next().await.unwrap().unwrap();
             let envelope = decode_server_envelope(message);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(ref delta))
-                    if delta
-                        .slots
-                        .iter()
-                        .any(|slot| slot.assigned_principal_user_id == "player_a")
-            ) {
+            if host_console_slot_assigned(&envelope.body, "player_a") {
                 break envelope;
             }
         }

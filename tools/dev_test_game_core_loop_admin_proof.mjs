@@ -756,7 +756,7 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Ack",
@@ -774,7 +774,7 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Ack",
@@ -792,7 +792,7 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Ack",
@@ -809,7 +809,7 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
       status: 409,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "host-lifecycle-control-reject",
         body: {
           kind: "Reject",
@@ -1190,7 +1190,7 @@ async function installHostLifecycleStaleRejectBrowserRoutes(
         status: 409,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -1209,7 +1209,7 @@ async function installHostLifecycleStaleRejectBrowserRoutes(
       status: 409,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "host-lifecycle-stale-reject",
         body: {
           kind: "Reject",
@@ -3123,7 +3123,7 @@ async function proveCompletedHostStaleCommandRecovery({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          v: 1,
+          v: 2,
           id: scenario.commandId,
           body: {
             kind: "IssueCommand",
@@ -3464,7 +3464,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
         await fulfillJson(
           route,
           {
-            v: 1,
+            v: 2,
             id: commandEnvelope.id,
             body: {
               kind: "Reject",
@@ -3483,7 +3483,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id:
             commandEnvelope?.id ??
             "completed-dead-player-stale-vote-recovery-reject",
@@ -3548,7 +3548,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            v: 1,
+            v: 2,
             id: "completed-dead-player-stale-vote",
             body: {
               kind: "IssueCommand",
@@ -4469,7 +4469,7 @@ async function installHostStaleAdvanceBrowserRoutes(page, { commandRequests }) {
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -4488,7 +4488,7 @@ async function installHostStaleAdvanceBrowserRoutes(page, { commandRequests }) {
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "host-stale-advance-reject",
         body: {
           kind: "Reject",
@@ -4535,7 +4535,7 @@ async function installHostPhaseTransitionBrowserRoutes(page, { commandRequests }
     if (command?.ResolvePhase !== undefined) {
       hostPhaseState = "resolved";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -4549,7 +4549,7 @@ async function installHostPhaseTransitionBrowserRoutes(page, { commandRequests }
     if (command?.AdvancePhase !== undefined) {
       hostPhaseState = "advanced";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -4564,7 +4564,7 @@ async function installHostPhaseTransitionBrowserRoutes(page, { commandRequests }
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "host-phase-transition-reject",
         body: {
           kind: "Reject",
@@ -4614,7 +4614,7 @@ async function installHostNightActionTransitionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       hostPhaseState = "resolved";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -4628,7 +4628,7 @@ async function installHostNightActionTransitionBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       hostPhaseState = "advanced";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -4643,7 +4643,7 @@ async function installHostNightActionTransitionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "host-night-action-transition-reject",
         body: {
           kind: "Reject",
@@ -5100,7 +5100,7 @@ async function installPlayerPhaseTransitionObservationRoutes(
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -5120,7 +5120,7 @@ async function installPlayerPhaseTransitionObservationRoutes(
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -5139,7 +5139,7 @@ async function installPlayerPhaseTransitionObservationRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "player-stale-action-transition-reject",
         body: {
           kind: "Reject",
@@ -5305,7 +5305,7 @@ async function installPlayerActionSubmissionBrowserRoutes(page, { commandRequest
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Ack",
@@ -5322,7 +5322,7 @@ async function installPlayerActionSubmissionBrowserRoutes(page, { commandRequest
       status: 409,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "player-action-submission-reject",
         body: {
           kind: "Reject",
@@ -5467,7 +5467,7 @@ async function installPlayerActionInvalidRecoveryBrowserRoutes(
         status: 409,
         contentType: "application/json",
         body: JSON.stringify({
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -5486,7 +5486,7 @@ async function installPlayerActionInvalidRecoveryBrowserRoutes(
       status: 409,
       contentType: "application/json",
       body: JSON.stringify({
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "player-invalid-action-reject",
         body: {
           kind: "Reject",
@@ -6789,7 +6789,7 @@ async function installDayThreeVoteSubmissionBrowserRoutes(
     if (command?.SubmitVote !== undefined) {
       voteSubmitted = true;
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -6804,7 +6804,7 @@ async function installDayThreeVoteSubmissionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "day-three-vote-submission-reject",
         body: {
           kind: "Reject",
@@ -6878,7 +6878,7 @@ async function installDayFourNoLynchVoteSubmissionBrowserRoutes(
     if (command?.SubmitVote !== undefined) {
       voteSubmitted = true;
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -6893,7 +6893,7 @@ async function installDayFourNoLynchVoteSubmissionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "day-four-no-lynch-vote-reject",
         body: {
           kind: "Reject",
@@ -6970,7 +6970,7 @@ async function installDayThreeHostVoteResolutionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       resolved = true;
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -6985,7 +6985,7 @@ async function installDayThreeHostVoteResolutionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "day-three-host-resolution-reject",
         body: {
           kind: "Reject",
@@ -7040,7 +7040,7 @@ async function installDayFourNoLynchHostTransitionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       phaseState = "locked-d04";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7054,7 +7054,7 @@ async function installDayFourNoLynchHostTransitionBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       phaseState = "open-n04";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7069,7 +7069,7 @@ async function installDayFourNoLynchHostTransitionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "day-four-no-lynch-host-transition-reject",
         body: {
           kind: "Reject",
@@ -7137,7 +7137,7 @@ async function installDayFiveNoLynchVoteSubmissionBrowserRoutes(
     if (command?.SubmitVote !== undefined) {
       voteSubmitted = true;
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7152,7 +7152,7 @@ async function installDayFiveNoLynchVoteSubmissionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "day-five-no-lynch-vote-reject",
         body: {
           kind: "Reject",
@@ -7230,7 +7230,7 @@ async function installDayFiveNoLynchHostTransitionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       phaseState = "locked-d05";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7244,7 +7244,7 @@ async function installDayFiveNoLynchHostTransitionBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       phaseState = "open-n05";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7259,7 +7259,7 @@ async function installDayFiveNoLynchHostTransitionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "day-five-no-lynch-host-transition-reject",
         body: {
           kind: "Reject",
@@ -7331,7 +7331,7 @@ async function installNightFourNoActionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "night-four-no-action-surface-reject",
         body: {
           kind: "Reject",
@@ -7406,7 +7406,7 @@ async function installNightFourHostResolutionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       resolved = true;
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7421,7 +7421,7 @@ async function installNightFourHostResolutionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "night-four-host-resolution-reject",
         body: {
           kind: "Reject",
@@ -7475,7 +7475,7 @@ async function installPostNightFourHostAdvanceBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       advanced = true;
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7490,7 +7490,7 @@ async function installPostNightFourHostAdvanceBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "post-night-four-host-advance-reject",
         body: {
           kind: "Reject",
@@ -7546,7 +7546,7 @@ async function installStaleNightFourActionRecoveryBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -7566,7 +7566,7 @@ async function installStaleNightFourActionRecoveryBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "stale-night-four-action-recovery-reject",
         body: {
           kind: "Reject",
@@ -7650,7 +7650,7 @@ async function installStaleDayFiveVoteRecoveryBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -7670,7 +7670,7 @@ async function installStaleDayFiveVoteRecoveryBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "stale-day-five-vote-recovery-reject",
         body: {
           kind: "Reject",
@@ -7761,7 +7761,7 @@ async function installHostCompleteGameFromNightFiveBrowserRoutes(
     if (command?.CompleteGame !== undefined) {
       completed = true;
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -7776,7 +7776,7 @@ async function installHostCompleteGameFromNightFiveBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "host-complete-game-reject",
         body: {
           kind: "Reject",
@@ -7826,7 +7826,7 @@ async function installCompletedHostRoleReloadBrowserRoutes(page) {
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "completed-host-reload-reject",
         body: {
           kind: "Reject",
@@ -7881,7 +7881,7 @@ async function installCompletedHostStaleCommandRecoveryBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -7900,7 +7900,7 @@ async function installCompletedHostStaleCommandRecoveryBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? `${scenario.commandId}-reject`,
         body: {
           kind: "Reject",
@@ -7956,7 +7956,7 @@ async function installStaleCompletedGamePlayerCommandRecoveryBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -7975,7 +7975,7 @@ async function installStaleCompletedGamePlayerCommandRecoveryBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? `stale-completed-game-${scenario.commandKind}-reject`,
         body: {
           kind: "Reject",
@@ -8151,7 +8151,7 @@ async function installPostDayThreeHostAdvanceBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       advanced = true;
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -8166,7 +8166,7 @@ async function installPostDayThreeHostAdvanceBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "post-day-three-host-advance-reject",
         body: {
           kind: "Reject",
@@ -8216,7 +8216,7 @@ async function installNightThreeEmptyHostTransitionBrowserRoutes(
     if (command?.ResolvePhase !== undefined) {
       phaseState = "locked-n03";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -8230,7 +8230,7 @@ async function installNightThreeEmptyHostTransitionBrowserRoutes(
     if (command?.AdvancePhase !== undefined) {
       phaseState = "open-d04";
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -8245,7 +8245,7 @@ async function installNightThreeEmptyHostTransitionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "night-three-empty-host-transition-reject",
         body: {
           kind: "Reject",
@@ -9100,7 +9100,7 @@ async function installPrivateChannelBrowserRoutes(
     commandRequests.push(command);
     if (command?.SubmitPost !== undefined) {
       await fulfillJson(route, {
-        v: 1,
+        v: 2,
         id: commandEnvelope.id,
         body: {
           kind: "Ack",
@@ -9115,7 +9115,7 @@ async function installPrivateChannelBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "private-channel-role-reject",
         body: {
           kind: "Reject",
@@ -9173,7 +9173,7 @@ async function installPrivateChannelStalePostBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -9192,7 +9192,7 @@ async function installPrivateChannelStalePostBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "private-channel-stale-post-reject",
         body: {
           kind: "Reject",
@@ -9268,7 +9268,7 @@ async function installPrivateChannelInvalidActionBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -9287,7 +9287,7 @@ async function installPrivateChannelInvalidActionBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "private-channel-invalid-action-reject",
         body: {
           kind: "Reject",
@@ -9343,7 +9343,7 @@ async function installCompletedPrivateChannelBrowserRoutes(page, { roleUrl }) {
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "completed-private-channel-reject",
         body: {
           kind: "Reject",
@@ -9375,7 +9375,7 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
       await fulfillJson(
         route,
         {
-          v: 1,
+          v: 2,
           id: commandEnvelope.id,
           body: {
             kind: "Reject",
@@ -9394,7 +9394,7 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
     await fulfillJson(
       route,
       {
-        v: 1,
+        v: 2,
         id: commandEnvelope?.id ?? "completed-private-channel-stale-reject",
         body: {
           kind: "Reject",
