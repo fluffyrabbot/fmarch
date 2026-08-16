@@ -5731,12 +5731,12 @@ fn trace_records_win_trigger_observation() {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "win_witness_observes"
-                && payload["on"] == "Win"
-                && payload["source_target"] == "slot_1"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "win:town"
-                && payload["produced_actor"] == "slot_1"
-                && payload["produced_target"] == "slot_1"
+                && payload.on == "Win"
+                && payload.source_target == "slot_1"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "win:town"
+                && payload.produced_actor == "slot_1"
+                && payload.produced_target == "slot_1"
     )));
     assert!(matches!(
         output.applied.events.last().map(|indexed| &indexed.event),
@@ -5761,12 +5761,12 @@ fn trace_records_phase_end_trigger_observation() {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "phase_end_doom_claims"
-                && payload["on"] == "PhaseEnd"
-                && payload["source_target"] == "slot_1"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "phase_end:N01"
-                && payload["produced_actor"] == "slot_1"
-                && payload["produced_target"] == "slot_1"
+                && payload.on == "PhaseEnd"
+                && payload.source_target == "slot_1"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "phase_end:N01"
+                && payload.produced_actor == "slot_1"
+                && payload.produced_target == "slot_1"
     )));
     assert!(output.applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -5799,12 +5799,12 @@ fn trace_records_effect_marked_trigger_observation() {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "death_mark_detonates"
-                && payload["on"] == "EffectMarked"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "death_mark_001"
-                && payload["produced_actor"] == "slot_1"
-                && payload["produced_target"] == "slot_2"
+                && payload.on == "EffectMarked"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "death_mark_001"
+                && payload.produced_actor == "slot_1"
+                && payload.produced_target == "slot_2"
     )));
     assert!(output.applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -5837,12 +5837,12 @@ fn trace_records_death_trigger_observation() {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "death_curse_retaliates"
-                && payload["on"] == "Death"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "factional_kill"
-                && payload["produced_actor"] == "slot_2"
-                && payload["produced_target"] == "slot_1"
+                && payload.on == "Death"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "factional_kill"
+                && payload.produced_actor == "slot_2"
+                && payload.produced_target == "slot_1"
     )));
     assert!(output.applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -5903,12 +5903,6 @@ fn trigger_generated_trace_rows_mirror_trigger_payloads() {
         );
 
         for (event_index, trigger_id, payload) in triggers {
-            let produced_actor = payload["produced_actor"]
-                .as_str()
-                .unwrap_or_else(|| panic!("{pack_name}/{golden_name}:{trigger_id} produced_actor"));
-            let produced_target = payload["produced_target"].as_str().unwrap_or_else(|| {
-                panic!("{pack_name}/{golden_name}:{trigger_id} produced_target")
-            });
             let generated = output
                 .trace
                 .generated
@@ -5924,31 +5918,42 @@ fn trigger_generated_trace_rows_mirror_trigger_payloads() {
                     )
                 });
             assert_eq!(
-                generated.actor, produced_actor,
+                generated.actor, payload.produced_actor,
                 "{pack_name}/{golden_name}:{trigger_id}"
             );
             assert_eq!(
                 generated.targets,
-                vec![produced_target.to_string()],
+                vec![payload.produced_target.clone()],
                 "{pack_name}/{golden_name}:{trigger_id}"
             );
-            for key in [
-                "on",
-                "source_target",
-                "source_actor",
-                "source_cause",
-                "produced_actor",
-                "produced_target",
-            ] {
-                assert_eq!(
-                    generated.detail.at(key),
-                    payload[key],
-                    "{pack_name}/{golden_name}:{trigger_id}:{key}"
-                );
-            }
+            assert_eq!(generated.detail.at("on"), payload.on.as_str());
+            assert_eq!(
+                generated.detail.at("source_target"),
+                payload.source_target.as_str()
+            );
+            assert_eq!(
+                generated.detail.at("source_actor"),
+                payload.source_actor.as_str()
+            );
+            assert_eq!(
+                generated.detail.at("source_cause"),
+                payload.source_cause.as_str()
+            );
+            assert_eq!(
+                generated.detail.at("produced_actor"),
+                payload.produced_actor.as_str()
+            );
+            assert_eq!(
+                generated.detail.at("produced_target"),
+                payload.produced_target.as_str()
+            );
             assert_eq!(
                 generated.detail.at("actor_filter"),
-                payload.get("actor_filter").cloned().unwrap_or(Value::Null),
+                if payload.actor_filter.is_empty() {
+                    Value::Null
+                } else {
+                    serde_json::json!(payload.actor_filter)
+                },
                 "{pack_name}/{golden_name}:{trigger_id}:actor_filter"
             );
         }
@@ -5979,11 +5984,11 @@ fn trace_records_protected_vengeful_generated_kill() {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "vengeful_retaliates"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "factional_kill"
-                && payload["produced_actor"] == "slot_2"
-                && payload["produced_target"] == "slot_1"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "factional_kill"
+                && payload.produced_actor == "slot_2"
+                && payload.produced_target == "slot_1"
     )));
     assert!(output.applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -6332,17 +6337,13 @@ fn trace_records_super_saint_lynch_trigger() {
             _ => None,
         })
         .expect("Super-Saint lynch should emit a typed trigger event");
-    assert_eq!(
-        trigger_payload,
-        &serde_json::json!({
-            "on": "Lynch",
-            "source_target": "slot_1",
-            "source_actor": "slot_2",
-            "source_cause": "lynch",
-            "produced_actor": "slot_1",
-            "produced_target": "slot_2"
-        })
-    );
+    assert_eq!(trigger_payload.on, "Lynch");
+    assert_eq!(trigger_payload.source_target, "slot_1");
+    assert_eq!(trigger_payload.source_actor, "slot_2");
+    assert_eq!(trigger_payload.source_cause, "lynch");
+    assert_eq!(trigger_payload.produced_actor, "slot_1");
+    assert_eq!(trigger_payload.produced_target, "slot_2");
+    assert!(trigger_payload.actor_filter.is_empty());
     assert!(output.applied.events.iter().any(|indexed| matches!(
         &indexed.event,
         domain::InnerEvent::PlayerKilled {
@@ -6452,9 +6453,9 @@ fn trace_records_visitor_kill_actor_filter() {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "visitor_kill_marked_visitor"
-                && payload["actor_filter"] == serde_json::json!(["visitor_kill_target"])
-                && payload["source_actor"] == "slot_3"
-                && payload["source_target"] == "slot_2"
+                && payload.actor_filter == ["visitor_kill_target".to_string()]
+                && payload.source_actor == "slot_3"
+                && payload.source_target == "slot_2"
     )));
     assert!(output.applied.events.iter().any(|indexed| matches!(
         &indexed.event,

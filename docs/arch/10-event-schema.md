@@ -222,7 +222,7 @@ enum InnerEvent {
     ActionRecorded,         // { actor, template_id, targets, phase_id, phase_kind, phase_number, status }  cadence/audit history
 
     // ── Reactive ──
-    Trigger,                // { trigger_id, payload }  (bomb/vengeful/PGO retaliation)
+    Trigger,                // { trigger_id, payload: TriggerPayload }  (bomb/vengeful/PGO retaliation)
 
     // ── Win conditions ──
     WinReached,             // { winner, reason, metadata }
@@ -324,9 +324,10 @@ unknown Rust events.
 > resolution itself is the durable kill source. These are deliberately different fields serving
 > different layers — do not conflate them.
 
-`Trigger.payload` is intentionally opaque to the state fold, but the resolver emits a
-canonical attribution shape for generated kills: `{ on, source_target, source_actor,
-source_cause, produced_actor, produced_target }`.
+`Trigger.payload` is a closed [`TriggerPayload`]: `{ on, source_target, source_actor,
+source_cause, produced_actor, produced_target, actor_filter? }`. The state fold still
+ignores it. `RESULT_VERSION` 19 stored the same keys as an open JSON object; the
+`19 → 20` upcast copies those keys (plus optional `actor_filter`) and drops extras.
 
 `DayVoteOutcome` carries the full tally so projections and disputes have everything:
 

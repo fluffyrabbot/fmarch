@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn resolution_applied_unknown_contract_stays_unreadable() {
         let mut payload = current_resolution();
-        payload["result_version"] = json!(domain::RESULT_VERSION - 1);
+        payload["result_version"] = json!(18);
         let input = sample("ResolutionApplied", 1, payload.clone());
         let out = upcast(input);
         assert_eq!(out.version, 1);

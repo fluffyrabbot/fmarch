@@ -694,6 +694,27 @@ pub struct InspectionGeneratedExpectation<'a> {
     pub detail: serde_json::Value,
 }
 
+/// Inspection generated detail matches the resolver trace: `actor_filter` is
+/// omitted when empty.
+pub fn trigger_generated_inspection_detail(
+    payload: &domain::TriggerPayload,
+    event_index: usize,
+) -> serde_json::Value {
+    let mut detail = serde_json::json!({
+        "on": payload.on,
+        "source_target": payload.source_target,
+        "source_actor": payload.source_actor,
+        "source_cause": payload.source_cause,
+        "produced_actor": payload.produced_actor,
+        "produced_target": payload.produced_target,
+        "event_index": event_index,
+    });
+    if !payload.actor_filter.is_empty() {
+        detail["actor_filter"] = serde_json::json!(payload.actor_filter);
+    }
+    detail
+}
+
 pub fn check_anchored_inspection_generated(
     report: &commands::ResolutionTraceInspectionReport,
     expected: InspectionGeneratedExpectation<'_>,

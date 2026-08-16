@@ -15,7 +15,7 @@ use crate::events::{
     DuelResult, HostPromptIssued, HostPromptMetadata, IndexedEvent, InnerEvent,
     InvestigationResultBody, InvestigationResultFields, ItaCounters, ItaShotOutcome,
     LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement, ResolutionApplied,
-    ResolutionCounts, ResolutionTrace, TraceEdge, VoteStatus,
+    ResolutionCounts, ResolutionTrace, TraceEdge, TriggerPayload, VoteStatus,
 };
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
@@ -70,7 +70,7 @@ use trigger::{
 };
 
 /// Resolver contract version (doc 10 `result_version`).
-pub const RESULT_VERSION: u16 = 19;
+pub const RESULT_VERSION: u16 = 20;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]

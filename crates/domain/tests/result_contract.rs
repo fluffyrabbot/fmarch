@@ -112,17 +112,117 @@ fn legacy_header_payload_already_at_current_contract_upcasts() {
 #[test]
 fn missing_resolution_upcast_step_fails_closed() {
     let mut payload = valid_resolution();
-    payload["result_version"] = json!(RESULT_VERSION - 1);
-    let err = upcast_resolution_applied(payload, RESULT_VERSION - 1).unwrap_err();
+    payload["result_version"] = json!(18);
+    let err = upcast_resolution_applied(payload, 18).unwrap_err();
     assert!(
         matches!(
             err,
             domain::ResultValidationError::UnsupportedResultVersion {
                 expected: RESULT_VERSION,
-                actual,
-            } if actual == RESULT_VERSION - 1
+                actual: 18,
+            }
         ),
         "unexpected upcast error: {err}"
+    );
+}
+
+fn resolution_with_trigger(extra: Option<(&str, serde_json::Value)>) -> serde_json::Value {
+    let mut inner = json!({
+        "on": "Kill",
+        "source_target": "slot_2",
+        "source_actor": "slot_1",
+        "source_cause": "factional_kill",
+        "produced_actor": "slot_2",
+        "produced_target": "slot_1"
+    });
+    if let Some((key, value)) = extra {
+        inner[key] = value;
+    }
+    let mut payload = valid_resolution();
+    let events = payload["events"].as_array_mut().unwrap();
+    events.insert(
+        1,
+        json!({
+            "index": 1,
+            "kind": "Trigger",
+            "payload": {
+                "trigger_id": "bomb_retaliates",
+                "payload": inner
+            }
+        }),
+    );
+    for (index, event) in events.iter_mut().enumerate() {
+        event["index"] = json!(index);
+    }
+    payload["counts"]["events"] = json!(events.len());
+    payload
+}
+
+#[test]
+fn trigger_payload_passes_contract_validation() {
+    let applied = validate_resolution_json(&resolution_with_trigger(None), RESULT_VERSION)
+        .expect("closed trigger payload should pass");
+    match &applied.events[1].event {
+        domain::InnerEvent::Trigger {
+            trigger_id,
+            payload,
+        } => {
+            assert_eq!(trigger_id, "bomb_retaliates");
+            assert_eq!(payload.on, "Kill");
+            assert_eq!(payload.source_target, "slot_2");
+            assert_eq!(payload.produced_target, "slot_1");
+            assert!(payload.actor_filter.is_empty());
+        }
+        other => panic!("expected Trigger, got {other:?}"),
+    }
+}
+
+#[test]
+fn trigger_payload_unknown_key_fails_contract_validation() {
+    let err = validate_resolution_json(
+        &resolution_with_trigger(Some(("team", json!("mafia")))),
+        RESULT_VERSION,
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("unknown field `team`")
+            || err.to_string().contains("Trigger.payload"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn v19_trigger_payload_strips_unknown_keys_on_upcast() {
+    let mut payload = resolution_with_trigger(Some(("team", json!("mafia"))));
+    payload["result_version"] = json!(19);
+    let upcast = upcast_resolution_applied(payload, 19).expect("v19 trigger should upcast");
+    assert_eq!(upcast["result_version"], json!(RESULT_VERSION));
+    assert!(upcast["events"][1]["payload"]["payload"]
+        .get("team")
+        .is_none());
+    let applied = validate_resolution_json(&upcast, RESULT_VERSION)
+        .expect("upcasted trigger should validate");
+    match &applied.events[1].event {
+        domain::InnerEvent::Trigger { payload, .. } => {
+            assert_eq!(payload.on, "Kill");
+            assert!(payload.actor_filter.is_empty());
+        }
+        other => panic!("expected Trigger, got {other:?}"),
+    }
+}
+
+#[test]
+fn v19_trigger_payload_missing_required_key_fails_closed() {
+    let mut payload = resolution_with_trigger(None);
+    payload["result_version"] = json!(19);
+    payload["events"][1]["payload"]["payload"]
+        .as_object_mut()
+        .unwrap()
+        .remove("on");
+    let err = upcast_resolution_applied(payload, 19).unwrap_err();
+    assert!(
+        err.to_string().contains("missing `on`"),
+        "unexpected error: {err}"
     );
 }
 

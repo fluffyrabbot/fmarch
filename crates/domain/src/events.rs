@@ -510,7 +510,7 @@ pub enum InnerEvent {
     // ── Reactive ──
     Trigger {
         trigger_id: String,
-        payload: serde_json::Value,
+        payload: TriggerPayload,
     },
 
     // ── Win conditions ──
@@ -520,6 +520,21 @@ pub enum InnerEvent {
         #[serde(default)]
         metadata: Option<WinReachedMetadata>,
     },
+}
+
+/// Canonical trigger attribution. The state fold ignores this; traces and
+/// goldens read the named fields. `actor_filter` is omitted when empty.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TriggerPayload {
+    pub on: String,
+    pub source_target: SlotId,
+    pub source_actor: SlotId,
+    pub source_cause: String,
+    pub produced_actor: SlotId,
+    pub produced_target: SlotId,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actor_filter: Vec<Tag>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1165,16 +1180,87 @@ fn stamp_result_version(payload: &mut serde_json::Value, version: u16) {
 }
 
 fn apply_resolution_applied_upcast_step(
-    _payload: serde_json::Value,
+    payload: serde_json::Value,
     from_version: u16,
     current_version: u16,
 ) -> Result<serde_json::Value, ResultValidationError> {
-    // Next inner-event change: add `from_version => rewrite` here, then bump
-    // `RESULT_VERSION`. Until then, unreadable historical contracts stay errors.
-    Err(ResultValidationError::UnsupportedResultVersion {
-        expected: current_version,
-        actual: from_version,
-    })
+    match from_version {
+        19 => upcast_resolution_applied_v19_to_v20(payload),
+        _ => Err(ResultValidationError::UnsupportedResultVersion {
+            expected: current_version,
+            actual: from_version,
+        }),
+    }
+}
+
+const TRIGGER_PAYLOAD_REQUIRED_KEYS: &[&str] = &[
+    "on",
+    "source_target",
+    "source_actor",
+    "source_cause",
+    "produced_actor",
+    "produced_target",
+];
+
+fn upcast_resolution_applied_v19_to_v20(
+    mut payload: serde_json::Value,
+) -> Result<serde_json::Value, ResultValidationError> {
+    let events = payload
+        .get_mut("events")
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| {
+            ResultValidationError::MalformedJson(
+                "ResolutionApplied.events must be an array".to_string(),
+            )
+        })?;
+    for event in events {
+        if event.get("kind").and_then(serde_json::Value::as_str) != Some("Trigger") {
+            continue;
+        }
+        let trigger = event
+            .get_mut("payload")
+            .and_then(serde_json::Value::as_object_mut)
+            .ok_or_else(|| {
+                ResultValidationError::MalformedJson(
+                    "Trigger event payload must be an object".to_string(),
+                )
+            })?;
+        let Some(inner) = trigger.get_mut("payload") else {
+            return Err(ResultValidationError::MalformedJson(
+                "Trigger.payload is required".to_string(),
+            ));
+        };
+        *inner = closed_trigger_payload(inner)?;
+    }
+    Ok(payload)
+}
+
+fn closed_trigger_payload(
+    value: &serde_json::Value,
+) -> Result<serde_json::Value, ResultValidationError> {
+    let object = value.as_object().ok_or_else(|| {
+        ResultValidationError::MalformedJson("Trigger.payload must be an object".to_string())
+    })?;
+    let mut closed = serde_json::Map::new();
+    for key in TRIGGER_PAYLOAD_REQUIRED_KEYS {
+        let Some(field) = object.get(*key) else {
+            return Err(ResultValidationError::MalformedJson(format!(
+                "Trigger.payload missing `{key}`"
+            )));
+        };
+        if field.is_null() {
+            return Err(ResultValidationError::MalformedJson(format!(
+                "Trigger.payload `{key}` must not be null"
+            )));
+        }
+        closed.insert((*key).to_string(), field.clone());
+    }
+    if let Some(filter) = object.get("actor_filter") {
+        if !filter.is_null() {
+            closed.insert("actor_filter".into(), filter.clone());
+        }
+    }
+    Ok(serde_json::Value::Object(closed))
 }
 
 /// Validate a raw `ResolutionApplied` JSON payload before it crosses a storage

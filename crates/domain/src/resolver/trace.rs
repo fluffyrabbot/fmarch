@@ -721,31 +721,24 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     "trigger {trigger_id} emitted at event_index {}",
                     indexed.index
                 ));
-                let actor = payload
-                    .get("produced_actor")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or(trigger_id)
-                    .to_string();
-                let targets = payload
-                    .get("produced_target")
-                    .and_then(|value| value.as_str())
-                    .map(|target| vec![target.to_string()])
-                    .unwrap_or_default();
+                let mut detail = crate::json_atom!({
+                    "on": payload.on,
+                    "source_target": payload.source_target,
+                    "source_actor": payload.source_actor,
+                    "source_cause": payload.source_cause,
+                    "produced_actor": payload.produced_actor,
+                    "produced_target": payload.produced_target,
+                    "event_index": indexed.index,
+                });
+                if !payload.actor_filter.is_empty() {
+                    detail.insert("actor_filter", crate::json_atom!(payload.actor_filter));
+                }
                 generated.push(GeneratedActionTrace {
                     action_id: trigger_id.clone(),
                     source: "Trigger".to_string(),
-                    actor,
-                    targets,
-                    detail: crate::json_atom!({
-                        "on": payload.get("on").cloned().unwrap_or(serde_json::Value::Null),
-                        "source_target": payload.get("source_target").cloned().unwrap_or(serde_json::Value::Null),
-                        "source_actor": payload.get("source_actor").cloned().unwrap_or(serde_json::Value::Null),
-                        "source_cause": payload.get("source_cause").cloned().unwrap_or(serde_json::Value::Null),
-                        "produced_actor": payload.get("produced_actor").cloned().unwrap_or(serde_json::Value::Null),
-                        "produced_target": payload.get("produced_target").cloned().unwrap_or(serde_json::Value::Null),
-                        "actor_filter": payload.get("actor_filter").cloned().unwrap_or(serde_json::Value::Null),
-                        "event_index": indexed.index,
-                    }),
+                    actor: payload.produced_actor.clone(),
+                    targets: vec![payload.produced_target.clone()],
+                    detail,
                 });
                 "trigger"
             }

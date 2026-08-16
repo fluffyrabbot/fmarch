@@ -2112,11 +2112,11 @@ async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgP
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "hero_instigator_kill"
-                && payload["on"] == "VoteDuel"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["produced_actor"] == "slot_2"
-                && payload["produced_target"] == "slot_1"
+                && payload.on == "VoteDuel"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.produced_actor == "slot_2"
+                && payload.produced_target == "slot_1"
     )));
     assert!(
         applied.events.iter().any(|indexed| matches!(
@@ -6584,8 +6584,8 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
                 _ => None,
             })
             .unwrap_or_else(|| panic!("seed {seed}: {trigger_id} trigger event missing"));
-        assert_eq!(trigger_event.1["produced_actor"], produced_actor);
-        assert_eq!(trigger_event.1["produced_target"], produced_target);
+        assert_eq!(trigger_event.1.produced_actor, produced_actor);
+        assert_eq!(trigger_event.1.produced_target, produced_target);
         assert!(
             applied.events.iter().any(|event| matches!(
                 &event.event,
@@ -6635,16 +6635,7 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
                 source: "Trigger",
                 actor: produced_actor,
                 targets: vec![produced_target.to_string()],
-                detail: serde_json::json!({
-                    "on": trigger_event.1.get("on").cloned().unwrap_or(serde_json::Value::Null),
-                    "source_target": trigger_event.1.get("source_target").cloned().unwrap_or(serde_json::Value::Null),
-                    "source_actor": trigger_event.1.get("source_actor").cloned().unwrap_or(serde_json::Value::Null),
-                    "source_cause": trigger_event.1.get("source_cause").cloned().unwrap_or(serde_json::Value::Null),
-                    "produced_actor": trigger_event.1.get("produced_actor").cloned().unwrap_or(serde_json::Value::Null),
-                    "produced_target": trigger_event.1.get("produced_target").cloned().unwrap_or(serde_json::Value::Null),
-                    "actor_filter": trigger_event.1.get("actor_filter").cloned().unwrap_or(serde_json::Value::Null),
-                    "event_index": trigger_event.0,
-                }),
+                detail: trigger_generated_inspection_detail(&trigger_event.1, trigger_event.0),
             },
         ) {
             panic!("{context}\n{reason}");
@@ -10228,46 +10219,8 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                 .await
             );
         }
-        let bomb_actor = match bomb_trigger
-            .1
-            .get("produced_actor")
-            .and_then(|value| value.as_str())
-        {
-            Some(actor) => actor,
-            None => {
-                panic!(
-                    "{}",
-                    generated_shrink_failure_message(
-                        &pool,
-                        &shrink_stem,
-                        &fixture_json,
-                        &summary,
-                        "bomb trigger produced actor".to_string(),
-                    )
-                    .await
-                )
-            }
-        };
-        let bomb_target = match bomb_trigger
-            .1
-            .get("produced_target")
-            .and_then(|value| value.as_str())
-        {
-            Some(target) => target,
-            None => {
-                panic!(
-                    "{}",
-                    generated_shrink_failure_message(
-                        &pool,
-                        &shrink_stem,
-                        &fixture_json,
-                        &summary,
-                        "bomb trigger produced target".to_string(),
-                    )
-                    .await
-                )
-            }
-        };
+        let bomb_actor = bomb_trigger.1.produced_actor.as_str();
+        let bomb_target = bomb_trigger.1.produced_target.as_str();
         if let Err(reason) = check_anchored_inspection_generated(
             &trace_report,
             InspectionGeneratedExpectation {
@@ -10276,16 +10229,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                 source: "Trigger",
                 actor: bomb_actor,
                 targets: vec![bomb_target.to_string()],
-                detail: serde_json::json!({
-                    "on": bomb_trigger.1.get("on").cloned().unwrap_or(serde_json::Value::Null),
-                    "source_target": bomb_trigger.1.get("source_target").cloned().unwrap_or(serde_json::Value::Null),
-                    "source_actor": bomb_trigger.1.get("source_actor").cloned().unwrap_or(serde_json::Value::Null),
-                    "source_cause": bomb_trigger.1.get("source_cause").cloned().unwrap_or(serde_json::Value::Null),
-                    "produced_actor": bomb_trigger.1.get("produced_actor").cloned().unwrap_or(serde_json::Value::Null),
-                    "produced_target": bomb_trigger.1.get("produced_target").cloned().unwrap_or(serde_json::Value::Null),
-                    "actor_filter": bomb_trigger.1.get("actor_filter").cloned().unwrap_or(serde_json::Value::Null),
-                    "event_index": bomb_trigger.0,
-                }),
+                detail: trigger_generated_inspection_detail(&bomb_trigger.1, bomb_trigger.0),
             },
         ) {
             panic!(
@@ -11971,12 +11915,12 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
             trigger_id,
             payload,
         } if trigger_id == "super_saint_retaliates"
-            && payload["on"] == "Lynch"
-            && payload["source_target"] == "slot_1"
-            && payload["source_actor"] == "slot_2"
-            && payload["source_cause"] == "lynch"
-            && payload["produced_actor"] == "slot_1"
-            && payload["produced_target"] == "slot_2"
+            && payload.on == "Lynch"
+            && payload.source_target == "slot_1"
+            && payload.source_actor == "slot_2"
+            && payload.source_cause == "lynch"
+            && payload.produced_actor == "slot_1"
+            && payload.produced_target == "slot_2"
     )));
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -37174,9 +37118,9 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "visitor_kill_marked_visitor"
-                && payload["actor_filter"] == serde_json::json!(["visitor_kill_target"])
-                && payload["source_actor"] == "slot_3"
-                && payload["source_target"] == "slot_2"
+                && payload.actor_filter == ["visitor_kill_target".to_string()]
+                && payload.source_actor == "slot_3"
+                && payload.source_target == "slot_2"
     )));
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -37338,12 +37282,12 @@ async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "bomb_retaliates"
-                && payload["on"] == "Kill"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "factional_kill"
-                && payload["produced_actor"] == "slot_2"
-                && payload["produced_target"] == "slot_1"
+                && payload.on == "Kill"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "factional_kill"
+                && payload.produced_actor == "slot_2"
+                && payload.produced_target == "slot_1"
     )));
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -37738,17 +37682,13 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
             _ => None,
         })
         .expect("PGO trigger should be emitted before target-state gate skips its produced kill");
-    assert_eq!(
-        pgo_trigger_payload,
-        &serde_json::json!({
-            "on": "Visit",
-            "source_target": "slot_2",
-            "source_actor": "slot_1",
-            "source_cause": "roleblocker_block",
-            "produced_actor": "slot_2",
-            "produced_target": "slot_1"
-        })
-    );
+    assert_eq!(pgo_trigger_payload.on, "Visit");
+    assert_eq!(pgo_trigger_payload.source_target, "slot_2");
+    assert_eq!(pgo_trigger_payload.source_actor, "slot_1");
+    assert_eq!(pgo_trigger_payload.source_cause, "roleblocker_block");
+    assert_eq!(pgo_trigger_payload.produced_actor, "slot_2");
+    assert_eq!(pgo_trigger_payload.produced_target, "slot_1");
+    assert!(pgo_trigger_payload.actor_filter.is_empty());
     assert!(
         !applied.events.iter().any(|indexed| matches!(
             &indexed.event,
@@ -38713,12 +38653,12 @@ async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "death_curse_retaliates"
-                && payload["on"] == "Death"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "factional_kill"
-                && payload["produced_actor"] == "slot_2"
-                && payload["produced_target"] == "slot_1"
+                && payload.on == "Death"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "factional_kill"
+                && payload.produced_actor == "slot_2"
+                && payload.produced_target == "slot_1"
     )));
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -38892,12 +38832,12 @@ async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "death_mark_detonates"
-                && payload["on"] == "EffectMarked"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "death_mark_n01"
-                && payload["produced_actor"] == "slot_1"
-                && payload["produced_target"] == "slot_2"
+                && payload.on == "EffectMarked"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "death_mark_n01"
+                && payload.produced_actor == "slot_1"
+                && payload.produced_target == "slot_2"
     )));
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -39049,12 +38989,12 @@ async fn host_resolve_phase_projects_phase_end_trigger_kill(pool: PgPool) {
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "phase_end_doom_claims"
-                && payload["on"] == "PhaseEnd"
-                && payload["source_target"] == "slot_1"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "phase_end:N01"
-                && payload["produced_actor"] == "slot_1"
-                && payload["produced_target"] == "slot_1"
+                && payload.on == "PhaseEnd"
+                && payload.source_target == "slot_1"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "phase_end:N01"
+                && payload.produced_actor == "slot_1"
+                && payload.produced_target == "slot_1"
     )));
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -39191,12 +39131,12 @@ async fn host_resolve_phase_projects_win_trigger_before_final_win(pool: PgPool) 
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "win_witness_observes"
-                && payload["on"] == "Win"
-                && payload["source_target"] == "slot_1"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "win:town"
-                && payload["produced_actor"] == "slot_1"
-                && payload["produced_target"] == "slot_1"
+                && payload.on == "Win"
+                && payload.source_target == "slot_1"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "win:town"
+                && payload.produced_actor == "slot_1"
+                && payload.produced_target == "slot_1"
     )));
     assert!(matches!(
         applied.events.last().map(|indexed| &indexed.event),
@@ -39372,11 +39312,11 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
         &indexed.event,
         domain::InnerEvent::Trigger { trigger_id, payload }
             if trigger_id == "vengeful_retaliates"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "factional_kill"
-                && payload["produced_actor"] == "slot_2"
-                && payload["produced_target"] == "slot_1"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "factional_kill"
+                && payload.produced_actor == "slot_2"
+                && payload.produced_target == "slot_1"
     )));
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -41541,17 +41481,13 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
             _ => None,
         })
         .expect("combined trace audit resolution should emit PGO trigger");
-    assert_eq!(
-        pgo_trigger_payload,
-        &serde_json::json!({
-            "on": "Visit",
-            "source_target": "slot_9",
-            "source_actor": "slot_8",
-            "source_cause": "roleblocker_block",
-            "produced_actor": "slot_9",
-            "produced_target": "slot_8"
-        })
-    );
+    assert_eq!(pgo_trigger_payload.on, "Visit");
+    assert_eq!(pgo_trigger_payload.source_target, "slot_9");
+    assert_eq!(pgo_trigger_payload.source_actor, "slot_8");
+    assert_eq!(pgo_trigger_payload.source_cause, "roleblocker_block");
+    assert_eq!(pgo_trigger_payload.produced_actor, "slot_9");
+    assert_eq!(pgo_trigger_payload.produced_target, "slot_8");
+    assert!(pgo_trigger_payload.actor_filter.is_empty());
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
         domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, .. }
@@ -42123,17 +42059,13 @@ async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
         "loop-cap should stop before a second retaliatory trigger is emitted"
     );
     let (vengeful_trigger_event_index, vengeful_trigger_payload) = vengeful_triggers[0];
-    assert_eq!(
-        vengeful_trigger_payload,
-        &serde_json::json!({
-            "on": "Kill",
-            "source_target": "slot_2",
-            "source_actor": "slot_1",
-            "source_cause": "factional_kill",
-            "produced_actor": "slot_2",
-            "produced_target": "slot_1"
-        })
-    );
+    assert_eq!(vengeful_trigger_payload.on, "Kill");
+    assert_eq!(vengeful_trigger_payload.source_target, "slot_2");
+    assert_eq!(vengeful_trigger_payload.source_actor, "slot_1");
+    assert_eq!(vengeful_trigger_payload.source_cause, "factional_kill");
+    assert_eq!(vengeful_trigger_payload.produced_actor, "slot_2");
+    assert_eq!(vengeful_trigger_payload.produced_target, "slot_1");
+    assert!(vengeful_trigger_payload.actor_filter.is_empty());
     assert!(applied.events.iter().any(|indexed| matches!(
         &indexed.event,
         domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, .. }
@@ -45213,12 +45145,12 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
                 trigger_id,
                 payload,
             } if trigger_id == "bomb_retaliates"
-                && payload["on"] == "Kill"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == "factional_kill"
-                && payload["produced_actor"] == "slot_2"
-                && payload["produced_target"] == "slot_1" =>
+                && payload.on == "Kill"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == "factional_kill"
+                && payload.produced_actor == "slot_2"
+                && payload.produced_target == "slot_1" =>
             {
                 Some(indexed.index)
             }

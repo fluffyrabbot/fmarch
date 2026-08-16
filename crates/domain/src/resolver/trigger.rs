@@ -323,20 +323,17 @@ pub(super) fn apply_trigger_fixpoint(
                     TargetRef::Target => observation.target.clone(),
                     TargetRef::Other => continue,
                 };
-                let mut payload = serde_json::json!({
-                    "on": trigger_on_label(observation.on),
-                    "source_target": observation.target,
-                    "source_actor": observation.actor,
-                    "source_cause": observation.cause,
-                    "produced_actor": produced_actor,
-                    "produced_target": produced_target,
-                });
-                if !trig.if_actor_has.is_empty() {
-                    payload["actor_filter"] = serde_json::json!(trig.if_actor_has);
-                }
                 events.push(InnerEvent::Trigger {
                     trigger_id: trig.id.clone(),
-                    payload,
+                    payload: TriggerPayload {
+                        on: trigger_on_label(observation.on).to_string(),
+                        source_target: observation.target.clone(),
+                        source_actor: observation.actor.clone(),
+                        source_cause: observation.cause.clone(),
+                        produced_actor: produced_actor.clone(),
+                        produced_target: produced_target.clone(),
+                        actor_filter: trig.if_actor_has.clone(),
+                    },
                 });
                 if trig.produces.ability != IrAbility::Kill {
                     continue;

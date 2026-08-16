@@ -7681,12 +7681,12 @@ async fn assert_mafia_universe_bomber_case(
                 trigger_id,
                 payload,
             } if trigger_id == "bomb_retaliates"
-                && payload["on"] == "Kill"
-                && payload["source_target"] == "slot_2"
-                && payload["source_actor"] == "slot_1"
-                && payload["source_cause"] == direct_cause
-                && payload["produced_actor"] == "slot_2"
-                && payload["produced_target"] == "slot_1" =>
+                && payload.on == "Kill"
+                && payload.source_target == "slot_2"
+                && payload.source_actor == "slot_1"
+                && payload.source_cause == direct_cause
+                && payload.produced_actor == "slot_2"
+                && payload.produced_target == "slot_1" =>
             {
                 Some(indexed.index)
             }
