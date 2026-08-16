@@ -953,6 +953,42 @@ async fn fold_event(
             let actor = str_field(p, "actor", &ev.kind)?;
             delete_ballot(tx, game_id, &phase_id, &actor).await?;
         }
+        "ActionSubmitted" => {
+            let p = &ev.payload;
+            let phase_id = str_field(p, "phase_id", &ev.kind)?;
+            let actor = str_field(p, "actor", &ev.kind)?;
+            let action_id = str_field(p, "action_id", &ev.kind)?;
+            let template_id = str_field(p, "template_id", &ev.kind)?;
+            upsert_action_submission(
+                tx,
+                ActionSubmissionWrite {
+                    game_id,
+                    phase_id: &phase_id,
+                    actor_slot: &actor,
+                    action_id: &action_id,
+                    template_id: &template_id,
+                    grant_id: p.get("grant_id").and_then(|value| value.as_str()),
+                    targets: string_array_field(p, "targets", &ev.kind)?,
+                    instant_resolved: p
+                        .get("instant_resolved")
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(false),
+                },
+            )
+            .await?;
+        }
+        "ActionWithdrawn" => {
+            let p = &ev.payload;
+            let action_id = str_field(p, "action_id", &ev.kind)?;
+            delete_action_submission(
+                tx,
+                game_id,
+                &action_id,
+                p.get("actor").and_then(|value| value.as_str()),
+                p.get("phase_id").and_then(|value| value.as_str()),
+            )
+            .await?;
+        }
 
         // ── slot_state ──
         "RoleAssigned" => {
@@ -4837,6 +4873,8 @@ async fn rebuild_in_tx(
         "visit_history",
         "action_grant",
         "action_history",
+        "action_submission",
+        "engine_snapshot_checkpoint",
         effect_projection::TABLE,
         "slot_state",
         "game_authority",
@@ -9247,6 +9285,222 @@ async fn thread_view_for_channel_with_visibility(
 }
 
 // ───────────────────────── low-level upserts ─────────────────────────
+
+struct ActionSubmissionWrite<'a> {
+    game_id: Uuid,
+    phase_id: &'a str,
+    actor_slot: &'a str,
+    action_id: &'a str,
+    template_id: &'a str,
+    grant_id: Option<&'a str>,
+    targets: Vec<String>,
+    instant_resolved: bool,
+}
+
+async fn upsert_action_submission(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    write: ActionSubmissionWrite<'_>,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO action_submission (
+            game_id, phase_id, actor_slot, action_id, template_id, grant_id, targets, instant_resolved
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (game_id, action_id)
+        DO UPDATE SET
+            phase_id = EXCLUDED.phase_id,
+            actor_slot = EXCLUDED.actor_slot,
+            template_id = EXCLUDED.template_id,
+            grant_id = EXCLUDED.grant_id,
+            targets = EXCLUDED.targets,
+            instant_resolved = EXCLUDED.instant_resolved
+        "#,
+    )
+    .bind(write.game_id)
+    .bind(write.phase_id)
+    .bind(write.actor_slot)
+    .bind(write.action_id)
+    .bind(write.template_id)
+    .bind(write.grant_id)
+    .bind(serde_json::to_value(write.targets).map_err(|source| ProjectionError::Payload {
+        kind: "ActionSubmitted".to_string(),
+        source,
+    })?)
+    .bind(write.instant_resolved)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn delete_action_submission(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    action_id: &str,
+    actor_slot: Option<&str>,
+    phase_id: Option<&str>,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        DELETE FROM action_submission
+        WHERE game_id = $1
+          AND action_id = $2
+          AND ($3::text IS NULL OR actor_slot = $3)
+          AND ($4::text IS NULL OR phase_id = $4)
+        "#,
+    )
+    .bind(game_id)
+    .bind(action_id)
+    .bind(actor_slot)
+    .bind(phase_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Current non-instant action submissions for one actor in one phase.
+pub async fn active_action_submissions<'e, E>(
+    executor: E,
+    game_id: Uuid,
+    phase_id: &str,
+    actor_slot: &str,
+) -> Result<Vec<ActionSubmissionRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows = sqlx::query(
+        "SELECT action_id, template_id, grant_id, targets \
+         FROM action_submission \
+         WHERE game_id = $1 AND phase_id = $2 AND actor_slot = $3 \
+           AND NOT instant_resolved \
+         ORDER BY action_id",
+    )
+    .bind(game_id)
+    .bind(phase_id)
+    .bind(actor_slot)
+    .fetch_all(executor)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            let targets: serde_json::Value = row.get("targets");
+            Ok(ActionSubmissionRow {
+                action_id: row.get("action_id"),
+                template_id: row.get("template_id"),
+                grant_id: row.get("grant_id"),
+                targets: serde_json::from_value(targets).unwrap_or_default(),
+            })
+        })
+        .collect()
+}
+
+/// Whether one non-instant submission is still current for this actor/phase.
+pub async fn action_submission_is_active<'e, E>(
+    executor: E,
+    game_id: Uuid,
+    phase_id: &str,
+    actor_slot: &str,
+    action_id: &str,
+) -> Result<bool, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(\
+            SELECT 1 FROM action_submission \
+            WHERE game_id = $1 AND phase_id = $2 AND actor_slot = $3 \
+              AND action_id = $4 AND NOT instant_resolved\
+         )",
+    )
+    .bind(game_id)
+    .bind(phase_id)
+    .bind(actor_slot)
+    .bind(action_id)
+    .fetch_one(executor)
+    .await?;
+    Ok(exists)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActionSubmissionRow {
+    pub action_id: String,
+    pub template_id: String,
+    pub grant_id: Option<String>,
+    pub targets: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EngineSnapshotCheckpoint {
+    pub stream_seq: i64,
+    pub result_version: i16,
+    pub snapshot: domain::StateSnapshot,
+    pub last_resolution: Option<serde_json::Value>,
+}
+
+pub async fn load_engine_snapshot_checkpoint<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Option<EngineSnapshotCheckpoint>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let Some(row) = sqlx::query(
+        "SELECT stream_seq, result_version, snapshot, last_resolution \
+         FROM engine_snapshot_checkpoint WHERE game_id = $1",
+    )
+    .bind(game_id)
+    .fetch_optional(executor)
+    .await?
+    else {
+        return Ok(None);
+    };
+    let snapshot_value: serde_json::Value = row.get("snapshot");
+    let snapshot = serde_json::from_value(snapshot_value).map_err(|source| {
+        ProjectionError::Payload {
+            kind: "EngineSnapshotCheckpoint".to_string(),
+            source,
+        }
+    })?;
+    Ok(Some(EngineSnapshotCheckpoint {
+        stream_seq: row.get("stream_seq"),
+        result_version: row.get("result_version"),
+        snapshot,
+        last_resolution: row.get("last_resolution"),
+    }))
+}
+
+pub async fn store_engine_snapshot_checkpoint(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    stream_seq: i64,
+    result_version: i16,
+    snapshot: &domain::StateSnapshot,
+    last_resolution: Option<&serde_json::Value>,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO engine_snapshot_checkpoint (
+            game_id, stream_seq, result_version, snapshot, last_resolution
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (game_id) DO UPDATE SET
+            stream_seq = EXCLUDED.stream_seq,
+            result_version = EXCLUDED.result_version,
+            snapshot = EXCLUDED.snapshot,
+            last_resolution = EXCLUDED.last_resolution
+        "#,
+    )
+    .bind(game_id)
+    .bind(stream_seq)
+    .bind(result_version)
+    .bind(serde_json::to_value(snapshot).map_err(|source| ProjectionError::Payload {
+        kind: "EngineSnapshotCheckpoint".to_string(),
+        source,
+    })?)
+    .bind(last_resolution)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
 
 async fn upsert_ballot(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,

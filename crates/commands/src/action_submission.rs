@@ -6,9 +6,9 @@
 //! and the shared append-and-project persistence boundary.
 
 use super::{
-    load_pack, metadata_from_payload, pack_artifact_from_stream, persist, phase_kind, phase_number,
-    require_game, require_open_phase, require_slot_alive, require_slot_occupant,
-    resolve_capabilities_in_tx, EngineInputBuilder, EngineRunKind, Reject,
+    current_pack, load_engine_phase_input_in_tx, metadata_from_payload, persist, phase_kind,
+    phase_number, require_game, require_open_phase, require_slot_alive, require_slot_occupant,
+    resolve_capabilities_in_tx, EngineRunKind, Reject,
 };
 use caps::Principal;
 use domain::{
@@ -56,7 +56,6 @@ struct ActionValidationContext<'operation, 'transaction> {
     tx: &'operation mut Transaction<'transaction, Postgres>,
     game: Uuid,
     pack: &'operation domain::Pack,
-    stream: &'operation [eventstore::StoredEvent],
     phase_id: &'operation str,
     request: &'operation ActionSubmissionRequest,
 }
@@ -64,7 +63,6 @@ struct ActionValidationContext<'operation, 'transaction> {
 struct ActionCapacityContext<'operation, 'transaction> {
     tx: &'operation mut Transaction<'transaction, Postgres>,
     game: Uuid,
-    stream: &'operation [eventstore::StoredEvent],
     phase_id: &'operation str,
     phase_number: u32,
     actor_slot: &'operation str,
@@ -111,15 +109,11 @@ pub(super) async fn submit_action(
     require_slot_occupant(tx, request.game, &request.actor_slot, &caps).await?;
     let phase = require_open_phase(tx, request.game).await?;
     require_slot_alive(tx, request.game, &request.actor_slot).await?;
-    let stream = eventstore::load_stream_in_tx(tx, request.game)
-        .await
-        .map_err(|error| Reject::Internal(error.to_string()))?;
-    let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
+    let pack = current_pack(tx, request.game).await?;
     let action_window = validate_action_submission(ActionValidationContext {
         tx,
         game: request.game,
         pack: &pack,
-        stream: &stream,
         phase_id: &phase,
         request: &request,
     })
@@ -147,7 +141,7 @@ pub(super) async fn submit_action(
     );
     let mut events = vec![event];
     if action_window == Window::Instant {
-        let mut phase_input = EngineInputBuilder::new(request.game, &stream, &phase).build()?;
+        let (mut phase_input, _) = load_engine_phase_input_in_tx(tx, request.game, &phase).await?;
         let submission = domain::Submission {
             action_id: request.action_id.clone(),
             actor: request.actor_slot.clone(),
@@ -172,7 +166,7 @@ pub(super) async fn submit_action(
         events.push(EventInput::new(
             "ResolutionApplied",
             1,
-            serde_json::to_value(output.applied)
+            serde_json::to_value(&output.applied)
                 .map_err(|error| Reject::Internal(error.to_string()))?,
             ActorId::System,
             phase_input.next_stream_seq + 1,
@@ -180,7 +174,7 @@ pub(super) async fn submit_action(
         events.push(EventInput::new(
             "ResolutionTrace",
             1,
-            serde_json::to_value(output.trace)
+            serde_json::to_value(&output.trace)
                 .map_err(|error| Reject::Internal(error.to_string()))?,
             ActorId::System,
             phase_input.next_stream_seq + 2,
@@ -196,7 +190,6 @@ async fn validate_action_submission(
         tx,
         game,
         pack,
-        stream,
         phase_id,
         request,
     } = context;
@@ -410,7 +403,6 @@ async fn validate_action_submission(
     validate_action_slot_capacity(ActionCapacityContext {
         tx,
         game,
-        stream,
         phase_id,
         phase_number,
         actor_slot: &request.actor_slot,
@@ -540,7 +532,6 @@ async fn validate_action_slot_capacity(
     let ActionCapacityContext {
         tx,
         game,
-        stream,
         phase_id,
         phase_number,
         actor_slot,
@@ -549,7 +540,9 @@ async fn validate_action_slot_capacity(
         grant_id,
         source,
     } = context;
-    let active = active_actions_from_stream(stream, phase_id, actor_slot);
+    let active = active_actions_from_rows(
+        projections::active_action_submissions(&mut **tx, game, phase_id, actor_slot).await?,
+    );
     let uses_grant_option = matches!(source, ActionSource::Role)
         && grant_id
             .and_then(|id| selected_grant_option(template, id))
@@ -614,68 +607,26 @@ pub(super) async fn active_actions_for_actor_phase(
     phase_id: &str,
     actor_slot: &str,
 ) -> Result<BTreeMap<String, ActiveAction>, Reject> {
-    let stream = eventstore::load_stream(pool, game)
-        .await
-        .map_err(|error| Reject::Internal(error.to_string()))?;
-    Ok(active_actions_from_stream(&stream, phase_id, actor_slot))
+    Ok(active_actions_from_rows(
+        projections::active_action_submissions(pool, game, phase_id, actor_slot).await?,
+    ))
 }
 
-fn active_actions_from_stream(
-    stream: &[eventstore::StoredEvent],
-    phase_id: &str,
-    actor_slot: &str,
+fn active_actions_from_rows(
+    rows: Vec<projections::ActionSubmissionRow>,
 ) -> BTreeMap<String, ActiveAction> {
-    let mut active = BTreeMap::new();
-    for event in stream {
-        match event.kind.as_str() {
-            "ActionSubmitted"
-                if event.payload["phase_id"].as_str() == Some(phase_id)
-                    && event.payload["actor"].as_str() == Some(actor_slot) =>
-            {
-                if let (Some(action_id), Some(template_id)) = (
-                    event.payload["action_id"].as_str(),
-                    event.payload["template_id"].as_str(),
-                ) {
-                    active.insert(
-                        action_id.to_string(),
-                        ActiveAction {
-                            template_id: template_id.to_string(),
-                            grant_id: event.payload["grant_id"].as_str().map(str::to_string),
-                            targets: event.payload["targets"]
-                                .as_array()
-                                .map(|targets| {
-                                    targets
-                                        .iter()
-                                        .filter_map(|target| target.as_str().map(str::to_string))
-                                        .collect()
-                                })
-                                .unwrap_or_default(),
-                        },
-                    );
-                }
-            }
-            "ActionWithdrawn"
-                if event
-                    .payload
-                    .get("phase_id")
-                    .and_then(|value| value.as_str())
-                    .map(|withdraw_phase| withdraw_phase == phase_id)
-                    .unwrap_or(true)
-                    && event
-                        .payload
-                        .get("actor")
-                        .and_then(|value| value.as_str())
-                        .map(|withdraw_actor| withdraw_actor == actor_slot)
-                        .unwrap_or(true) =>
-            {
-                if let Some(action_id) = event.payload["action_id"].as_str() {
-                    active.remove(action_id);
-                }
-            }
-            _ => {}
-        }
-    }
-    active
+    rows.into_iter()
+        .map(|row| {
+            (
+                row.action_id,
+                ActiveAction {
+                    template_id: row.template_id,
+                    grant_id: row.grant_id,
+                    targets: row.targets,
+                },
+            )
+        })
+        .collect()
 }
 
 fn action_counter_id(template_id: &str) -> String {

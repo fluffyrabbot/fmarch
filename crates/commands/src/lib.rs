@@ -226,10 +226,23 @@ impl<'a> EngineInputBuilder<'a> {
         let pack = load_pack(&pack_artifact)?;
         let phase_kind = phase_kind(self.phase_id)?;
         let phase_number = phase_number(self.phase_id)?;
-        let state = current_snapshot(self.stream, &pack, self.phase_id, phase_kind, phase_number)?;
+        let state = current_snapshot(
+            None,
+            self.stream,
+            &pack,
+            self.phase_id,
+            phase_kind,
+            phase_number,
+        )?;
         let submissions = current_submissions(self.stream, self.phase_id);
-        let day_phase_inputs =
-            current_day_phase_inputs(self.stream, &state, phase_kind, phase_number)?;
+        let day_phase_inputs = current_day_phase_inputs(
+            self.stream,
+            &state,
+            phase_kind,
+            phase_number,
+            None,
+            0,
+        )?;
         let next_stream_seq = self.stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1);
 
         Ok(EnginePhaseInput {
@@ -245,6 +258,96 @@ impl<'a> EngineInputBuilder<'a> {
             next_stream_seq,
         })
     }
+}
+
+pub(crate) async fn load_engine_phase_input_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    phase_id: &str,
+) -> Result<(EnginePhaseInput, bool), Reject> {
+    let pack_artifact = current_pack_artifact(tx, game).await?;
+    let pack_ref = pack_artifact.pack_ref.clone();
+    let pack = load_pack(&pack_artifact)?;
+    let checkpoint = match projections::load_engine_snapshot_checkpoint(&mut **tx, game).await {
+        Ok(row) => row,
+        Err(projections::ProjectionError::Payload { .. }) => None,
+        Err(error) => return Err(Reject::Internal(error.to_string())),
+    };
+    let usable = checkpoint.filter(|row| row.result_version == domain::RESULT_VERSION as i16);
+    let after_seq = usable.as_ref().map(|row| row.stream_seq).unwrap_or(0);
+    let tail = eventstore::load_stream_after_in_tx(tx, game, after_seq)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    let phase_kind = phase_kind(phase_id)?;
+    let phase_number = phase_number(phase_id)?;
+    let last_resolution = usable.as_ref().and_then(|row| row.last_resolution.clone());
+    let seed = usable.as_ref().map(|row| &row.snapshot);
+    let state = current_snapshot(seed, &tail, &pack, phase_id, phase_kind, phase_number)?;
+    let submissions = current_submissions(&tail, phase_id);
+    let day_phase_inputs = current_day_phase_inputs(
+        &tail,
+        &state,
+        phase_kind,
+        phase_number,
+        last_resolution.as_ref(),
+        after_seq,
+    )?;
+    let next_stream_seq = eventstore::next_stream_seq_in_tx(tx, game)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    let already_resolved = official_resolution_applied(last_resolution.as_ref(), &tail, phase_id);
+    Ok((
+        EnginePhaseInput {
+            game,
+            pack_ref,
+            pack,
+            phase_id: phase_id.to_string(),
+            phase_kind,
+            phase_number,
+            state,
+            submissions,
+            day_phase_inputs,
+            next_stream_seq,
+        },
+        already_resolved,
+    ))
+}
+
+fn official_resolution_applied(
+    last_resolution: Option<&serde_json::Value>,
+    tail: &[eventstore::StoredEvent],
+    phase_id: &str,
+) -> bool {
+    let payload_matches = |payload: &serde_json::Value| {
+        payload["phase_id"].as_str() == Some(phase_id)
+            && payload["run_id"]
+                .as_str()
+                .is_some_and(|run_id| run_id.starts_with("resolution:"))
+    };
+    last_resolution.is_some_and(payload_matches)
+        || tail.iter().any(|ev| ev.kind == "ResolutionApplied" && payload_matches(&ev.payload))
+}
+
+/// Persist a discardable `StateSnapshot` after an official phase resolve.
+/// Instant and host-prompt envelopes stay in the stream tail so same-phase
+/// ballots and actions are not dropped from the next reducer input.
+pub(crate) async fn store_resolution_checkpoint(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    applied_seq: i64,
+    post_state: &domain::StateSnapshot,
+    applied: &serde_json::Value,
+) -> Result<(), Reject> {
+    projections::store_engine_snapshot_checkpoint(
+        tx,
+        game,
+        applied_seq,
+        domain::RESULT_VERSION as i16,
+        post_state,
+        Some(applied),
+    )
+    .await
+    .map_err(|error| Reject::Internal(error.to_string()))
 }
 
 impl EnginePhaseInput {
@@ -2206,10 +2309,7 @@ async fn submit_vote(
     );
     let mut events = vec![ev];
     if pack.vote.hammer {
-        let stream = eventstore::load_stream_in_tx(tx, game)
-            .await
-            .map_err(|e| Reject::Internal(e.to_string()))?;
-        let phase_input = EngineInputBuilder::new(game, &stream, &phase).build()?;
+        let (phase_input, _) = load_engine_phase_input_in_tx(tx, game, &phase).await?;
         validate_vote_actor_policy(&phase_input.pack, &phase_input.state, &actor_slot)?;
         if let Some(lock_ev) = hammer_lock_event(&phase_input, &actor_slot, &target_str)? {
             events.push(lock_ev);
@@ -2262,7 +2362,9 @@ async fn withdraw_action(
     require_slot_occupant(tx, game, &actor_slot, &caps).await?;
     let phase = require_open_phase(tx, game).await?;
     require_slot_alive(tx, game, &actor_slot).await?;
-    if !active_action_exists(tx, game, &phase, &actor_slot, &action_id).await? {
+    if !projections::action_submission_is_active(&mut **tx, game, &phase, &actor_slot, &action_id)
+        .await?
+    {
         return Err(Reject::InvalidTarget);
     }
 
@@ -2717,36 +2819,30 @@ async fn resolve_phase(
         return Err(Reject::PhaseLocked);
     }
 
-    let stream = eventstore::load_stream_in_tx(tx, game)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    if stream.iter().any(|ev| {
-        ev.kind == "ResolutionApplied"
-            && ev.payload["phase_id"].as_str() == Some(&phase.phase_id)
-            && ev.payload["run_id"]
-                .as_str()
-                .is_some_and(|run_id| run_id.starts_with("resolution:"))
-    }) {
+    let (phase_input, already_resolved) =
+        load_engine_phase_input_in_tx(tx, game, &phase.phase_id).await?;
+    if already_resolved {
         return Err(Reject::InvalidTarget);
     }
 
-    let phase_input = EngineInputBuilder::new(game, &stream, &phase.phase_id).build()?;
     let output = domain::resolve(phase_input.resolve_input(EngineRunKind::ResolvePhase { seed }));
     domain::validate_resolution_applied(&output.applied, domain::RESULT_VERSION)
         .map_err(|e| Reject::Internal(format!("invalid resolution result: {e}")))?;
     domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION)
         .map_err(|e| Reject::Internal(format!("invalid resolution trace: {e}")))?;
+    let applied_json =
+        serde_json::to_value(&output.applied).map_err(|e| Reject::Internal(e.to_string()))?;
     let applied_ev = EventInput::new(
         "ResolutionApplied",
         1,
-        serde_json::to_value(output.applied).map_err(|e| Reject::Internal(e.to_string()))?,
+        applied_json.clone(),
         ActorId::System,
         phase_input.next_stream_seq,
     );
     let trace_ev = EventInput::new(
         "ResolutionTrace",
         1,
-        serde_json::to_value(output.trace).map_err(|e| Reject::Internal(e.to_string()))?,
+        serde_json::to_value(&output.trace).map_err(|e| Reject::Internal(e.to_string()))?,
         ActorId::System,
         phase_input.next_stream_seq,
     );
@@ -2768,7 +2864,12 @@ async fn resolve_phase(
         &output.post_state,
     ));
     events.push(lock_ev);
-    persist(tx, game, &events).await
+    let ack = persist(tx, game, &events).await?;
+    let applied_seq = ack.stream_seqs.first().copied().ok_or_else(|| {
+        Reject::Internal("resolution persist returned no stream sequences".to_string())
+    })?;
+    store_resolution_checkpoint(tx, game, applied_seq, &output.post_state, &applied_json).await?;
+    Ok(ack)
 }
 
 async fn control_ita_session(
@@ -4181,6 +4282,7 @@ fn validate_phase_id_for_policy(
 }
 
 fn current_snapshot(
+    seed: Option<&domain::StateSnapshot>,
     stream: &[eventstore::StoredEvent],
     pack: &domain::Pack,
     phase_id: &str,
@@ -4188,25 +4290,71 @@ fn current_snapshot(
     phase_number: u32,
 ) -> Result<domain::StateSnapshot, Reject> {
     let phase_policy = pack.phases.clone();
-    let phase_deadline = current_phase_deadline(stream, phase_id);
-    let mut slots: BTreeMap<String, domain::SlotState> = BTreeMap::new();
-    let mut private_channels = Vec::new();
-    let mut effect_records = Vec::new();
-    let mut action_history = Vec::new();
-    let mut use_counters = Vec::new();
-    let mut investigation_memory = Vec::new();
-    let mut delayed_deaths = Vec::new();
-    let mut action_grants = Vec::new();
-    let mut conversion_origins = Vec::new();
-    let mut linked_slots = Vec::new();
-    let mut retaliations = Vec::new();
-    let mut backup_targets = Vec::new();
-    let mut target_lynch_win_targets = Vec::new();
-    let mut wolf_carry_tokens = Vec::new();
-    let mut wolf_beauty_marks = Vec::new();
-    let mut badges = Vec::new();
-    let mut buffered_ita_shots = Vec::new();
-    let mut visit_history = Vec::new();
+    let phase_deadline = current_phase_deadline(stream, phase_id).or_else(|| {
+        seed.filter(|snapshot| snapshot.phase_id == phase_id)
+            .and_then(|snapshot| snapshot.phase_deadline)
+    });
+    let mut slots: BTreeMap<String, domain::SlotState> = seed
+        .map(|snapshot| {
+            snapshot
+                .slots
+                .iter()
+                .cloned()
+                .map(|slot| (slot.slot_id.clone(), slot))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut private_channels = seed
+        .map(|snapshot| snapshot.private_channels.clone())
+        .unwrap_or_default();
+    let mut effect_records = seed
+        .map(|snapshot| snapshot.effect_records.clone())
+        .unwrap_or_default();
+    let mut action_history = seed
+        .map(|snapshot| snapshot.action_history.clone())
+        .unwrap_or_default();
+    let mut use_counters = seed
+        .map(|snapshot| snapshot.use_counters.clone())
+        .unwrap_or_default();
+    let mut investigation_memory = seed
+        .map(|snapshot| snapshot.investigation_memory.clone())
+        .unwrap_or_default();
+    let mut delayed_deaths = seed
+        .map(|snapshot| snapshot.delayed_deaths.clone())
+        .unwrap_or_default();
+    let mut action_grants = seed
+        .map(|snapshot| snapshot.action_grants.clone())
+        .unwrap_or_default();
+    let mut conversion_origins = seed
+        .map(|snapshot| snapshot.conversion_origins.clone())
+        .unwrap_or_default();
+    let mut linked_slots = seed
+        .map(|snapshot| snapshot.linked_slots.clone())
+        .unwrap_or_default();
+    let mut retaliations = seed
+        .map(|snapshot| snapshot.retaliations.clone())
+        .unwrap_or_default();
+    let mut backup_targets = seed
+        .map(|snapshot| snapshot.backup_targets.clone())
+        .unwrap_or_default();
+    let mut target_lynch_win_targets = seed
+        .map(|snapshot| snapshot.target_lynch_win_targets.clone())
+        .unwrap_or_default();
+    let mut wolf_carry_tokens = seed
+        .map(|snapshot| snapshot.wolf_carry_tokens.clone())
+        .unwrap_or_default();
+    let mut wolf_beauty_marks = seed
+        .map(|snapshot| snapshot.wolf_beauty_marks.clone())
+        .unwrap_or_default();
+    let mut badges = seed
+        .map(|snapshot| snapshot.badges.clone())
+        .unwrap_or_default();
+    let mut buffered_ita_shots = seed
+        .map(|snapshot| snapshot.buffered_ita_shots.clone())
+        .unwrap_or_default();
+    let mut visit_history = seed
+        .map(|snapshot| snapshot.visit_history.clone())
+        .unwrap_or_default();
 
     for ev in stream {
         match ev.kind.as_str() {
@@ -4737,11 +4885,53 @@ fn metadata_from_payload(payload: &serde_json::Value) -> BTreeMap<String, serde_
     metadata
 }
 
+fn collect_night_victims_from_applied(
+    applied: &domain::ResolutionApplied,
+    state: &domain::StateSnapshot,
+    phase_number: u32,
+    recorded_at: u64,
+    night_victims: &mut Vec<domain::DayAnnouncementInput>,
+) {
+    if applied.phase_kind != domain::pack::PhaseKind::Night
+        || applied.phase_number.saturating_add(1) != phase_number
+    {
+        return;
+    }
+    for indexed in &applied.events {
+        if let domain::InnerEvent::PlayerKilled {
+            slot_id,
+            cause,
+            attackers,
+            unstoppable,
+            ..
+        } = &indexed.event
+        {
+            let role_key = state
+                .slots
+                .iter()
+                .find(|slot| slot.slot_id == *slot_id)
+                .map(|slot| slot.role_key.clone())
+                .filter(|role_key| !role_key.is_empty());
+            night_victims.push(domain::DayAnnouncementInput {
+                player_id: slot_id.clone(),
+                cause: cause.clone(),
+                source_action_id: None,
+                attackers: attackers.clone(),
+                unstoppable: *unstoppable,
+                role_key,
+                recorded_at: Some(recorded_at),
+            });
+        }
+    }
+}
+
 fn current_day_phase_inputs(
     stream: &[eventstore::StoredEvent],
     state: &domain::StateSnapshot,
     phase_kind: domain::pack::PhaseKind,
     phase_number: u32,
+    last_resolution: Option<&serde_json::Value>,
+    last_resolution_seq: i64,
 ) -> Result<domain::DayPhaseInputs, Reject> {
     if phase_kind != domain::pack::PhaseKind::Day || phase_number == 0 {
         return Ok(domain::DayPhaseInputs::default());
@@ -4749,6 +4939,17 @@ fn current_day_phase_inputs(
 
     let mut night_victims = Vec::new();
     let mut ita_session_controls = Vec::new();
+    if let Some(value) = last_resolution {
+        let applied = domain::validate_resolution_json(value, domain::RESULT_VERSION)
+            .map_err(|e| Reject::Internal(format!("malformed checkpoint ResolutionApplied: {e}")))?;
+        collect_night_victims_from_applied(
+            &applied,
+            state,
+            phase_number,
+            last_resolution_seq as u64,
+            &mut night_victims,
+        );
+    }
     for ev in stream {
         if ev.kind == "ItaSessionControlRecorded"
             && ev.payload["phase_id"].as_str() == Some(&state.phase_id)
@@ -4770,38 +4971,13 @@ fn current_day_phase_inputs(
         }
         let applied = domain::validate_resolution_json(&ev.payload, domain::RESULT_VERSION)
             .map_err(|e| Reject::Internal(format!("malformed ResolutionApplied: {e}")))?;
-        if applied.phase_kind != domain::pack::PhaseKind::Night
-            || applied.phase_number.saturating_add(1) != phase_number
-        {
-            continue;
-        }
-
-        for indexed in applied.events {
-            if let domain::InnerEvent::PlayerKilled {
-                slot_id,
-                cause,
-                attackers,
-                unstoppable,
-                ..
-            } = indexed.event
-            {
-                let role_key = state
-                    .slots
-                    .iter()
-                    .find(|slot| slot.slot_id == slot_id)
-                    .map(|slot| slot.role_key.clone())
-                    .filter(|role_key| !role_key.is_empty());
-                night_victims.push(domain::DayAnnouncementInput {
-                    player_id: slot_id,
-                    cause,
-                    source_action_id: None,
-                    attackers,
-                    unstoppable,
-                    role_key,
-                    recorded_at: Some(ev.stream_seq as u64),
-                });
-            }
-        }
+        collect_night_victims_from_applied(
+            &applied,
+            state,
+            phase_number,
+            ev.stream_seq as u64,
+            &mut night_victims,
+        );
     }
 
     Ok(domain::DayPhaseInputs {
@@ -5166,49 +5342,6 @@ pub async fn active_actions_view_for_actor_phase(
             })
             .collect(),
     )
-}
-
-async fn active_action_exists(
-    tx: &mut Transaction<'_, Postgres>,
-    game: Uuid,
-    phase_id: &str,
-    actor_slot: &str,
-    action_id: &str,
-) -> Result<bool, Reject> {
-    let stream = eventstore::load_stream_in_tx(tx, game)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    let mut active = false;
-    for ev in stream {
-        match ev.kind.as_str() {
-            "ActionSubmitted"
-                if ev.payload["phase_id"].as_str() == Some(phase_id)
-                    && ev.payload["actor"].as_str() == Some(actor_slot)
-                    && ev.payload["action_id"].as_str() == Some(action_id) =>
-            {
-                active = !ev.payload["instant_resolved"].as_bool().unwrap_or(false);
-            }
-            "ActionWithdrawn"
-                if ev.payload["action_id"].as_str() == Some(action_id)
-                    && ev
-                        .payload
-                        .get("actor")
-                        .and_then(|value| value.as_str())
-                        .map(|withdraw_actor| withdraw_actor == actor_slot)
-                        .unwrap_or(true)
-                    && ev
-                        .payload
-                        .get("phase_id")
-                        .and_then(|value| value.as_str())
-                        .map(|withdraw_phase| withdraw_phase == phase_id)
-                        .unwrap_or(true) =>
-            {
-                active = false;
-            }
-            _ => {}
-        }
-    }
-    Ok(active)
 }
 
 /// A vote target is `no_lynch` or a currently alive slot in this game.

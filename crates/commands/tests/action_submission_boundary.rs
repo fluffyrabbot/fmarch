@@ -25,7 +25,7 @@ fn action_submission_has_one_typed_owner_without_dispatch_or_persistence_drift()
         "fn selected_grant_option",
         "fn target_role_filter_rejected(",
         "fn role_modifier_team_kill_rejected(",
-        "fn active_actions_from_stream(",
+        "fn active_actions_from_rows(",
     ] {
         assert!(
             action_submission.contains(owned_symbol),
@@ -43,7 +43,7 @@ fn action_submission_has_one_typed_owner_without_dispatch_or_persistence_drift()
         "require_slot_occupant(",
         "require_open_phase(",
         "require_slot_alive(",
-        "eventstore::load_stream_in_tx(",
+        "load_engine_phase_input_in_tx(",
         "\"ActionSubmitted\"",
         "domain::resolve_instant(",
         "\"ResolutionApplied\"",
@@ -65,6 +65,7 @@ fn action_submission_has_one_typed_owner_without_dispatch_or_persistence_drift()
     assert!(action_submission.contains("projections::action_counters("));
     assert!(action_submission.contains("projections::action_grants("));
     assert!(action_submission.contains("projections::action_history("));
+    assert!(action_submission.contains("projections::active_action_submissions("));
 
     assert!(
         !action_submission.contains("sqlx::query")

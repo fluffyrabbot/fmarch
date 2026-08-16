@@ -636,12 +636,32 @@ pub async fn load_stream_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     stream_id: Uuid,
 ) -> Result<Vec<StoredEvent>, StoreError> {
-    load_stream_with(&mut **tx, stream_id).await
+    load_stream_after_with(&mut **tx, stream_id, 0).await
+}
+
+/// Load events with `stream_seq > after_seq` in canonical order.
+pub async fn load_stream_after_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    after_seq: i64,
+) -> Result<Vec<StoredEvent>, StoreError> {
+    load_stream_after_with(&mut **tx, stream_id, after_seq).await
 }
 
 async fn load_stream_with<'e, E>(
     executor: E,
     stream_id: Uuid,
+) -> Result<Vec<StoredEvent>, StoreError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    load_stream_after_with(executor, stream_id, 0).await
+}
+
+async fn load_stream_after_with<'e, E>(
+    executor: E,
+    stream_id: Uuid,
+    after_seq: i64,
 ) -> Result<Vec<StoredEvent>, StoreError>
 where
     E: sqlx::PgExecutor<'e>,
@@ -654,11 +674,12 @@ where
         FROM events e
         JOIN event_stream_keys k
           ON k.stream_id = e.stream_id AND k.key_epoch = e.stream_key_epoch
-        WHERE e.stream_id = $1
+        WHERE e.stream_id = $1 AND e.stream_seq > $2
         ORDER BY e.stream_seq ASC
         "#,
     )
     .bind(stream_id)
+    .bind(after_seq)
     .fetch_all(executor)
     .await?;
 
