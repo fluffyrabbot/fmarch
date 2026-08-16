@@ -13,6 +13,9 @@ fn live_projection_publication_has_one_typed_owner_without_local_lint_debt() {
     assert!(publication.contains("enum LiveProjectionReceive"));
     assert!(publication.contains("fn assemble_update"));
     assert!(publication.contains("pub(super) async fn receive"));
+    assert!(publication.contains("pub(super) fn try_receive"));
+    assert!(publication.contains("fn inflight_guard"));
+    assert!(publication.contains("fn has_inflight"));
 
     assert!(!composition_root.contains("struct LiveProjectionUpdate"));
     assert!(!composition_root.contains("fn publish_live_projection_change"));

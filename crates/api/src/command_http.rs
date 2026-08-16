@@ -227,6 +227,7 @@ async fn command(
     let body = match prepared_command {
         Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
         Ok(command) => {
+            let _inflight = state.live_projection.inflight_guard(game);
             match commands::handle_idempotent(&state.pool, &principal, msg.command_id, command)
                 .await
             {

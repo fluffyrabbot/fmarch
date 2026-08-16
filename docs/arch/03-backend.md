@@ -80,9 +80,11 @@ authenticated REST/JSON; the WebSocket is a server-to-client projection channel.
 - Fan-out is **async** ([02](02-event-sourcing.md)) — it must not block the committing
   command. The author's own synchronous projections already reflect their action; everyone
   else gets the delta a beat later.
-- `events.seq` is the durable resume cursor. `LISTEN/NOTIFY` may wake fan-out workers, but
-  it is not the delivery log; reconnects and missed wakeups catch up by querying committed
-  events after the last delivered `seq`.
+- `events.seq` is the durable resume cursor. Each API process holds one `LISTEN`
+  on `fmarch_live`. Persist emits `NOTIFY` with the game id after the append
+  transaction commits. That wakeup is not the delivery log; reconnects and
+  missed notifications catch up by querying committed events after the last
+  delivered `seq`. A long interval fallback covers a dropped `NOTIFY`.
 - Subscriptions are scoped: a client subscribes to a game / channel set, and the server
   resolves visibility per delta. Visibility is computed from the `channel_membership` and
   `slot_state` projections, never trusted from the client.

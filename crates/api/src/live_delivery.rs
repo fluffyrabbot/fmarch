@@ -1,5 +1,6 @@
 //! Authenticated WebSocket live transport: tickets, admission, session loop,
-//! hydration, durable seq poll, lag resync, and binary-CBOR framing.
+//! hydration, LISTEN/NOTIFY wake, durable seq catch-up, lag resync, and
+//! binary-CBOR framing.
 //!
 //! Live change classification and broadcast publication remain in
 //! `live_projection`. This module consumes that publisher plus narrow
@@ -20,11 +21,11 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use caps::{Capability, Principal};
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgPool;
+use sqlx::postgres::{PgListener, PgPool};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::{broadcast, Mutex, Semaphore};
 use uuid::Uuid;
 use wire::{
     host_console_patches, CapabilityGrant, Hello, HostConsoleStateDelta, HostPromptDelta,
@@ -32,16 +33,17 @@ use wire::{
     RejectCode, ServerEnvelope, ServerMsg, PROTOCOL_VERSION,
 };
 
-/// Wake source for the durable cross-instance event poll in the live session loop.
+/// Wake source for the durable cross-instance event catch-up in the live
+/// session loop.
 ///
-/// `PollEventWake` is the current interval-based implementation. A future
-/// LISTEN/NOTIFY adapter can implement the same contract without changing the
-/// select! shape that also receives live projection broadcasts.
+/// `NotifyEventWake` waits on the process-wide LISTEN/NOTIFY hub and uses
+/// `PollEventWake` only as a missed-notification fallback. The select! shape
+/// that also receives live projection broadcasts stays the same.
 pub(super) trait EventWake {
     fn wait(&mut self) -> impl std::future::Future<Output = ()> + Send;
 }
 
-/// Interval-based durable event wake used when no push notification path exists.
+/// Interval-based durable event wake used as a missed-NOTIFY fallback.
 pub(super) struct PollEventWake {
     interval: tokio::time::Interval,
 }
@@ -60,6 +62,130 @@ impl EventWake for PollEventWake {
     }
 }
 
+struct GameEventWakeInner {
+    sender: broadcast::Sender<Uuid>,
+}
+
+/// Process-wide fan-out of committed game ids from one Postgres LISTEN.
+#[derive(Clone)]
+pub(super) struct GameEventWakeHub {
+    inner: Arc<GameEventWakeInner>,
+}
+
+impl GameEventWakeHub {
+    pub(super) fn new() -> Self {
+        let (sender, _) = broadcast::channel(1_024);
+        Self {
+            inner: Arc::new(GameEventWakeInner { sender }),
+        }
+    }
+
+    pub(super) fn subscribe(&self) -> broadcast::Receiver<Uuid> {
+        self.inner.sender.subscribe()
+    }
+
+    pub(super) fn spawn_listener(&self, pool: PgPool) {
+        if tokio::runtime::Handle::try_current().is_err() {
+            return;
+        }
+        let weak = Arc::downgrade(&self.inner);
+        tokio::spawn(async move {
+            run_live_event_listener(pool, weak).await;
+        });
+    }
+
+    #[cfg(test)]
+    fn fan_out_game(&self, game: Uuid) {
+        let _ = self.inner.sender.send(game);
+    }
+}
+
+/// Shared LISTEN/NOTIFY wake plus a long interval fallback.
+pub(super) struct NotifyEventWake {
+    game: Uuid,
+    notifications: broadcast::Receiver<Uuid>,
+    fallback: PollEventWake,
+    hub_closed: bool,
+}
+
+impl NotifyEventWake {
+    pub(super) fn new(
+        game: Uuid,
+        notifications: broadcast::Receiver<Uuid>,
+        fallback: Duration,
+    ) -> Self {
+        Self {
+            game,
+            notifications,
+            fallback: PollEventWake::new(fallback),
+            hub_closed: false,
+        }
+    }
+}
+
+impl EventWake for NotifyEventWake {
+    async fn wait(&mut self) {
+        if self.hub_closed {
+            self.fallback.wait().await;
+            return;
+        }
+        loop {
+            tokio::select! {
+                _ = self.fallback.wait() => return,
+                received = self.notifications.recv() => {
+                    match received {
+                        Ok(game) if game == self.game => return,
+                        Ok(_) => continue,
+                        Err(broadcast::error::RecvError::Lagged(_)) => return,
+                        Err(broadcast::error::RecvError::Closed) => {
+                            self.hub_closed = true;
+                            self.fallback.wait().await;
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn run_live_event_listener(pool: PgPool, inner: std::sync::Weak<GameEventWakeInner>) {
+    loop {
+        let Some(hub) = inner.upgrade() else {
+            return;
+        };
+        match listen_live_events(&pool, &hub).await {
+            Ok(()) => {}
+            Err(error) => {
+                tracing::warn!(
+                    event = "live_event_listen_failed",
+                    error = %error,
+                    "live event LISTEN loop failed; retrying"
+                );
+            }
+        }
+        drop(hub);
+        if inner.strong_count() == 0 {
+            return;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+}
+
+async fn listen_live_events(pool: &PgPool, hub: &GameEventWakeInner) -> Result<(), sqlx::Error> {
+    let mut listener = PgListener::connect_with(pool).await?;
+    listener
+        .listen(projections::LIVE_EVENT_NOTIFY_CHANNEL)
+        .await?;
+    loop {
+        let notification = listener.recv().await?;
+        let Ok(game) = Uuid::parse_str(notification.payload()) else {
+            continue;
+        };
+        let _ = hub.sender.send(game);
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct LiveDeliveryState {
     pool: PgPool,
@@ -71,6 +197,7 @@ pub(super) struct LiveDeliveryState {
     live_principal_slots: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
     live_principal_limit: usize,
     websocket_poll_interval: Duration,
+    live_event_wake: GameEventWakeHub,
 }
 
 impl LiveDeliveryState {
@@ -85,6 +212,7 @@ impl LiveDeliveryState {
             live_principal_slots: state.live_principal_slots.clone(),
             live_principal_limit: state.live_principal_limit,
             websocket_poll_interval: state.websocket_poll_interval,
+            live_event_wake: state.live_event_wake.clone(),
         }
     }
 }
@@ -443,7 +571,11 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
 
     // Subscribe before hydration so commands cannot publish into a handshake gap.
     let mut live_projection_rx = state.live_projection.subscribe();
-    let mut event_wake = PollEventWake::new(state.websocket_poll_interval);
+    let mut event_wake = NotifyEventWake::new(
+        game,
+        state.live_event_wake.subscribe(),
+        state.websocket_poll_interval,
+    );
     let mut observed_seq = current_game_event_seq(&state, game)
         .await
         .unwrap_or(claim.after_seq);
@@ -520,12 +652,15 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
     loop {
         let receive = tokio::select! {
             update = live_projection::receive(&mut live_projection_rx) => Some(update),
-            _ = event_wake.wait() => None,
+            _ = event_wake.wait() => live_projection::try_receive(&mut live_projection_rx),
         };
         if !session.active(&state, &claim).await {
             break;
         }
         let Some(receive) = receive else {
+            if state.live_projection.has_inflight(game) {
+                continue;
+            }
             let latest_seq = current_game_event_seq(&state, game)
                 .await
                 .unwrap_or(observed_seq);
@@ -1173,5 +1308,29 @@ async fn hello_for(
         protocol_v: PROTOCOL_VERSION,
         server: state.server_name.clone(),
         caps,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EventWake, GameEventWakeHub, NotifyEventWake};
+    use std::time::Duration;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn notify_event_wake_returns_on_matching_game() {
+        let hub = GameEventWakeHub::new();
+        let game = Uuid::new_v4();
+        let mut wake = NotifyEventWake::new(game, hub.subscribe(), Duration::from_secs(5));
+        wake.wait().await;
+        let published = hub.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            published.fan_out_game(Uuid::new_v4());
+            published.fan_out_game(game);
+        });
+        tokio::time::timeout(Duration::from_secs(1), wake.wait())
+            .await
+            .expect("matching NOTIFY woke the session");
     }
 }

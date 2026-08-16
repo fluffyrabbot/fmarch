@@ -35,6 +35,7 @@ use auth_http::{
     env_i64, internal_auth_error, unauthorized_session, unix_now_seconds, AuthHttpState,
 };
 
+use live_delivery::GameEventWakeHub;
 use live_projection::LiveProjectionPublisher;
 
 use crate::identity_delivery::{IdentityDeliveryError, IdentityDeliveryGateway};
@@ -71,6 +72,7 @@ pub struct ApiState {
     media_slots: Arc<Semaphore>,
     media_account_quota_bytes: i64,
     websocket_poll_interval: Duration,
+    live_event_wake: GameEventWakeHub,
 }
 
 const REGISTRATION_SESSION_TTL_SECONDS: i64 = 60 * 60 * 24 * 7;
@@ -87,6 +89,8 @@ impl ApiState {
         let live_principal_limit =
             env_i64("FMARCH_WS_MAX_CONNECTIONS_PER_PRINCIPAL", 4, 1, 128) as usize;
         let auth = AuthHttpState::new(pool.clone());
+        let live_event_wake = GameEventWakeHub::new();
+        live_event_wake.spawn_listener(pool.clone());
         ApiState {
             pool,
             auth,
@@ -116,10 +120,11 @@ impl ApiState {
             ),
             websocket_poll_interval: Duration::from_millis(env_i64(
                 "FMARCH_WS_POLL_INTERVAL_MS",
-                250,
+                5_000,
                 25,
                 5_000,
             ) as u64),
+            live_event_wake,
         }
     }
 

@@ -22,7 +22,7 @@ use projections::{
     phase_state, player_notifications, profile_editor_by_handle, public_profile_by_handle,
     public_search, rebuild, rebuild_discussion_stream, rebuild_moderation_stream,
     rebuild_profile_stream, reconcile_database_authority, slot_effects, slot_state, votecount,
-    ProjectionError, PublicSearchFilter, APPLICATION_DATABASE_ROLE,
+    ProjectionError, PublicSearchFilter, APPLICATION_DATABASE_ROLE, LIVE_EVENT_NOTIFY_CHANNEL,
 };
 use sha2::{Digest, Sha256};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -2702,6 +2702,37 @@ async fn projection_rolls_back_on_conflict(pool: sqlx::PgPool) {
     let slots = slot_state(&pool, game).await.unwrap();
     assert_eq!(slots.len(), 1);
     assert_eq!(slots[0].role_key.as_deref(), Some("doctor"));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn append_and_project_notifies_live_channel_after_commit(pool: sqlx::PgPool) {
+    let mut listener = sqlx::postgres::PgListener::connect_with(&pool)
+        .await
+        .expect("listen");
+    listener
+        .listen(LIVE_EVENT_NOTIFY_CHANNEL)
+        .await
+        .expect("subscribe live channel");
+    let game = Uuid::new_v4();
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "RoleAssigned",
+            1,
+            serde_json::json!({ "slot_id": "slot_1", "role_key": "doctor" }),
+            ActorId::System,
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    let notification = tokio::time::timeout(std::time::Duration::from_secs(2), listener.recv())
+        .await
+        .expect("NOTIFY after commit")
+        .expect("payload");
+    assert_eq!(notification.channel(), LIVE_EVENT_NOTIFY_CHANNEL);
+    assert_eq!(notification.payload(), game.to_string());
 }
 
 /// Non-game discussion streams use the same append-only store but a separate,

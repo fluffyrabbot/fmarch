@@ -270,11 +270,12 @@ bytes supplied outside the authenticated event archive.
   just made (e.g. your own post appearing, your vote in the count). The command handler
   appends events and updates these projections in **one DB transaction**. Strong
   read-your-writes, no eventual-consistency surprises in the hot path.
-- **Asynchronous listeners** can use Postgres `LISTEN/NOTIFY` on new `seq` for fan-out
-  work that can lag slightly: pushing deltas to other connected clients and notifications.
-  `NOTIFY` is only a wakeup optimization; the durable source of delivery
-  truth is the committed `events.seq` cursor. A listener that misses a notification catches
-  up by querying events after its last delivered `seq`. See [03-backend](03-backend.md).
+- **Asynchronous listeners** use Postgres `LISTEN/NOTIFY` on `fmarch_live` (payload:
+  game id) as a best-effort wakeup for live fan-out. Persist emits the notify in
+  the same transaction as the append, so Postgres delivers it only after commit.
+  `NOTIFY` is not the delivery log; the durable source of truth is the committed
+  `events.seq` cursor. A listener that misses a notification catches up by
+  querying events after its last delivered `seq`. See [03-backend](03-backend.md).
 
 This split keeps the author's own experience strictly consistent while letting broadcast
 and secondary read models scale independently.

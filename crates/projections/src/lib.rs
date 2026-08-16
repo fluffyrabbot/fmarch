@@ -3301,6 +3301,23 @@ pub async fn append_and_project(
     Ok(stored)
 }
 
+/// Best-effort live-delivery wakeup channel. Payload is the game/stream UUID.
+/// Postgres delivers `NOTIFY` only after the surrounding transaction commits;
+/// `events.seq` remains the durable resume cursor.
+pub const LIVE_EVENT_NOTIFY_CHANNEL: &str = "fmarch_live";
+
+async fn notify_live_stream(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT pg_notify($1, $2)")
+        .bind(LIVE_EVENT_NOTIFY_CHANNEL)
+        .bind(stream_id.to_string())
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
 /// Append `events` and fold synchronous projections inside an existing
 /// transaction. This is the atomic seam used by network command receipts: the
 /// receipt row, event append, and hot projections all commit or roll back
@@ -3314,6 +3331,9 @@ pub async fn append_and_project_in_tx(
     let stored = append_in_tx(tx, stream_id, &canonical).await?;
     for ev in &stored {
         fold_event(tx, stream_id, ev, Some(&opened_claims)).await?;
+    }
+    if !stored.is_empty() {
+        notify_live_stream(tx, stream_id).await?;
     }
     Ok(stored)
 }
@@ -3979,6 +3999,7 @@ async fn set_moderation_target_visibility(
         .bind(updated_seq)
         .execute(&mut **tx)
         .await?;
+        notify_live_stream(tx, scope_id).await?;
     }
     sync_moderated_target_search_document(tx, &target_kind, scope_id, source_seq).await?;
     Ok(())
@@ -7200,10 +7221,7 @@ pub async fn public_thread_view(
 }
 
 /// Highest `source_seq` already projected for a game, or 0 when the thread is empty.
-pub async fn thread_high_water_seq(
-    pool: &PgPool,
-    game_id: Uuid,
-) -> Result<i64, ProjectionError> {
+pub async fn thread_high_water_seq(pool: &PgPool, game_id: Uuid) -> Result<i64, ProjectionError> {
     let seq = sqlx::query_scalar::<_, i64>(
         "SELECT COALESCE(MAX(source_seq), 0) FROM thread_view WHERE game_id = $1",
     )
@@ -9454,12 +9472,11 @@ where
         return Ok(None);
     };
     let snapshot_value: serde_json::Value = row.get("snapshot");
-    let snapshot = serde_json::from_value(snapshot_value).map_err(|source| {
-        ProjectionError::Payload {
+    let snapshot =
+        serde_json::from_value(snapshot_value).map_err(|source| ProjectionError::Payload {
             kind: "EngineSnapshotCheckpoint".to_string(),
             source,
-        }
-    })?;
+        })?;
     Ok(Some(EngineSnapshotCheckpoint {
         stream_seq: row.get("stream_seq"),
         result_version: row.get("result_version"),
@@ -9492,10 +9509,12 @@ pub async fn store_engine_snapshot_checkpoint(
     .bind(game_id)
     .bind(stream_seq)
     .bind(result_version)
-    .bind(serde_json::to_value(snapshot).map_err(|source| ProjectionError::Payload {
-        kind: "EngineSnapshotCheckpoint".to_string(),
-        source,
-    })?)
+    .bind(
+        serde_json::to_value(snapshot).map_err(|source| ProjectionError::Payload {
+            kind: "EngineSnapshotCheckpoint".to_string(),
+            source,
+        })?,
+    )
     .bind(last_resolution)
     .execute(&mut **tx)
     .await?;

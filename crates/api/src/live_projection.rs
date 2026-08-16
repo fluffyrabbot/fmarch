@@ -1,5 +1,6 @@
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 use wire::{ProjectionDelta, VoteCountClearedDelta, VoteCountDelta};
@@ -31,16 +32,65 @@ pub(super) struct LiveProjectionUpdate {
 #[derive(Clone)]
 pub(super) struct LiveProjectionPublisher {
     sender: broadcast::Sender<LiveProjectionUpdate>,
+    inflight: Arc<Mutex<HashMap<Uuid, usize>>>,
+}
+
+pub(super) struct LiveProjectionInflightGuard {
+    publisher: LiveProjectionPublisher,
+    game: Option<Uuid>,
+}
+
+impl Drop for LiveProjectionInflightGuard {
+    fn drop(&mut self) {
+        if let Some(game) = self.game.take() {
+            self.publisher.end_inflight(game);
+        }
+    }
 }
 
 impl LiveProjectionPublisher {
     pub(super) fn new(capacity: usize) -> Self {
         let (sender, _) = broadcast::channel(capacity.clamp(1, 65_536));
-        Self { sender }
+        Self {
+            sender,
+            inflight: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     pub(super) fn subscribe(&self) -> broadcast::Receiver<LiveProjectionUpdate> {
         self.sender.subscribe()
+    }
+
+    pub(super) fn inflight_guard(&self, game: Option<Uuid>) -> LiveProjectionInflightGuard {
+        if let Some(game) = game {
+            self.begin_inflight(game);
+        }
+        LiveProjectionInflightGuard {
+            publisher: self.clone(),
+            game,
+        }
+    }
+
+    fn begin_inflight(&self, game: Uuid) {
+        let mut inflight = lock_inflight(&self.inflight);
+        *inflight.entry(game).or_insert(0) += 1;
+    }
+
+    fn end_inflight(&self, game: Uuid) {
+        let mut inflight = lock_inflight(&self.inflight);
+        let Some(count) = inflight.get_mut(&game) else {
+            return;
+        };
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            inflight.remove(&game);
+        }
+    }
+
+    pub(super) fn has_inflight(&self, game: Uuid) -> bool {
+        lock_inflight(&self.inflight)
+            .get(&game)
+            .is_some_and(|count| *count > 0)
     }
 
     pub(super) async fn publish(&self, pool: &PgPool, change: LiveProjectionChangeSet) {
@@ -56,6 +106,14 @@ impl LiveProjectionPublisher {
             let _ = self.sender.send(update);
         }
     }
+}
+
+fn lock_inflight(
+    inflight: &Mutex<HashMap<Uuid, usize>>,
+) -> std::sync::MutexGuard<'_, HashMap<Uuid, usize>> {
+    inflight
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 pub(super) async fn thread_high_water_seq(
@@ -165,6 +223,19 @@ pub(super) async fn receive(
     }
 }
 
+pub(super) fn try_receive(
+    receiver: &mut broadcast::Receiver<LiveProjectionUpdate>,
+) -> Option<LiveProjectionReceive> {
+    match receiver.try_recv() {
+        Ok(update) => Some(LiveProjectionReceive::Update(update)),
+        Err(broadcast::error::TryRecvError::Lagged(dropped_messages)) => {
+            Some(LiveProjectionReceive::Lagged { dropped_messages })
+        }
+        Err(broadcast::error::TryRecvError::Closed) => Some(LiveProjectionReceive::Closed),
+        Err(broadcast::error::TryRecvError::Empty) => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -243,6 +314,49 @@ mod tests {
     #[test]
     fn update_assembly_suppresses_empty_clean_publications() {
         assert!(assemble_update(change(Uuid::new_v4()), Vec::new()).is_none());
+    }
+
+    #[test]
+    fn inflight_guard_tracks_nested_same_game_publications() {
+        let publisher = LiveProjectionPublisher::new(8);
+        let game = Uuid::new_v4();
+        assert!(!publisher.has_inflight(game));
+        let outer = publisher.inflight_guard(Some(game));
+        assert!(publisher.has_inflight(game));
+        {
+            let inner = publisher.inflight_guard(Some(game));
+            assert!(publisher.has_inflight(game));
+            drop(inner);
+            assert!(publisher.has_inflight(game));
+        }
+        drop(outer);
+        assert!(!publisher.has_inflight(game));
+        let _ignored = publisher.inflight_guard(None);
+        assert!(!publisher.has_inflight(game));
+    }
+
+    #[test]
+    fn try_receive_is_empty_until_a_publication_arrives() {
+        let publisher = LiveProjectionPublisher::new(8);
+        let mut receiver = publisher.subscribe();
+        assert!(try_receive(&mut receiver).is_none());
+        let game = Uuid::new_v4();
+        let update = LiveProjectionUpdate {
+            game,
+            deltas: Vec::new(),
+            thread_after_seq: None,
+            thread_dirty: true,
+            host_console_dirty: false,
+            host_prompts_dirty: false,
+            player_private_dirty: false,
+            player_command_state_dirty: false,
+        };
+        publisher.sender.send(update).unwrap();
+        assert!(matches!(
+            try_receive(&mut receiver),
+            Some(LiveProjectionReceive::Update(received)) if received.game == game
+        ));
+        assert!(try_receive(&mut receiver).is_none());
     }
 
     #[tokio::test]

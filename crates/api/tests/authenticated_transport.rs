@@ -823,12 +823,12 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
     let app_a = api::router_with_state(
         ApiState::new(pool.clone(), media.clone())
             .with_websocket_audience("transport-proof")
-            .with_websocket_poll_interval(Duration::from_millis(20)),
+            .with_websocket_poll_interval(Duration::from_secs(5)),
     );
     let app_b = api::router_with_state(
         ApiState::new(pool.clone(), media)
             .with_websocket_audience("transport-proof")
-            .with_websocket_poll_interval(Duration::from_millis(20)),
+            .with_websocket_poll_interval(Duration::from_secs(5)),
     );
     let game = Uuid::new_v4();
     insert_account_session(

@@ -104,7 +104,8 @@ back into `lib.rs`.
 `crates/api/src/live_delivery.rs` owns ticket request/response handling, ticket
 persistence and redemption, connection and per-principal admission,
 authenticated session rechecks, subscribe-before-hydrate startup, durable
-cross-instance event wake (`EventWake` / `PollEventWake`), lag/resync handling,
+cross-instance event wake (`EventWake` / `NotifyEventWake` over a process-wide
+LISTEN plus `PollEventWake` fallback), lag/resync handling,
 audience-scoped snapshot assembly, binary-CBOR frame emission, and the `/ws`
 plus `/auth/websocket-tickets` routes behind `LiveDeliveryState`. It consumes
 only narrow auth helpers, game-read adapters, and
@@ -115,8 +116,8 @@ re-exports `WebsocketTicketResponse`. Command submission/preparation,
 completed-game import, auth persistence, game/community/media HTTP, and live
 change classification/publication remain outside. Ticket TTL/audience/single-use
 /session binding, capacity limits, initial ordering, private filtering, lag
-continuation, event-sequence polling, envelope IDs, protocol version, and
-disconnect behavior remain unchanged.
+continuation, LISTEN/NOTIFY wakeup with `events.seq` catch-up, envelope IDs,
+protocol version, and disconnect behavior remain unchanged.
 
 ## Closed API boundary: public community HTTP
 

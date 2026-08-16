@@ -16,9 +16,14 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
     assert!(live_delivery.contains(".with_state(LiveDeliveryState::new(state))"));
     assert!(live_delivery.contains("trait EventWake"));
     assert!(live_delivery.contains("struct PollEventWake"));
+    assert!(live_delivery.contains("struct NotifyEventWake"));
+    assert!(live_delivery.contains("struct GameEventWakeHub"));
     assert!(live_delivery.contains("event_wake.wait()"));
     assert!(live_delivery.contains("live_projection::receive"));
+    assert!(live_delivery.contains("live_projection::try_receive"));
+    assert!(live_delivery.contains("projections::LIVE_EVENT_NOTIFY_CHANNEL"));
     assert!(!live_delivery.contains("durable_poll.tick()"));
+    assert!(!live_delivery.contains("PollEventWake::new(state.websocket_poll_interval)"));
 
     for owned_symbol in [
         "struct CreateWebsocketTicket",
