@@ -1427,9 +1427,55 @@ pub struct HostPromptDelta {
     pub resolved_at: Option<i64>,
 }
 
-impl From<projections::HostPromptRow> for HostPromptDelta {
-    fn from(row: projections::HostPromptRow) -> Self {
-        HostPromptDelta {
+/// Fail-closed decode of a projection or inspection JSON column into a wire type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectionAdapterError {
+    pub kind: &'static str,
+    pub field: &'static str,
+    pub source: String,
+}
+
+impl std::fmt::Display for ProjectionAdapterError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "projection adapter failed to decode {} field `{}`: {}",
+            self.kind, self.field, self.source
+        )
+    }
+}
+
+impl std::error::Error for ProjectionAdapterError {}
+
+fn decode_field<T: serde::de::DeserializeOwned>(
+    kind: &'static str,
+    field: &'static str,
+    value: serde_json::Value,
+) -> Result<T, ProjectionAdapterError> {
+    serde_json::from_value(value).map_err(|source| ProjectionAdapterError {
+        kind,
+        field,
+        source: source.to_string(),
+    })
+}
+
+fn decode_opt_field<T: serde::de::DeserializeOwned>(
+    kind: &'static str,
+    field: &'static str,
+    value: Option<serde_json::Value>,
+) -> Result<Option<T>, ProjectionAdapterError> {
+    match value {
+        None => Ok(None),
+        Some(value) => Ok(Some(decode_field(kind, field, value)?)),
+    }
+}
+
+impl TryFrom<projections::HostPromptRow> for HostPromptDelta {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(row: projections::HostPromptRow) -> Result<Self, Self::Error> {
+        const KIND: &str = "HostPrompt";
+        Ok(HostPromptDelta {
             game: row.game_id,
             phase_id: row.phase_id,
             event_index: row.event_index,
@@ -1439,44 +1485,39 @@ impl From<projections::HostPromptRow> for HostPromptDelta {
             reason: row.reason,
             phase_kind: row.phase_kind,
             phase_number: row.phase_number,
-            metadata: json_value(row.metadata),
+            metadata: decode_field(KIND, "metadata", row.metadata)?,
             status: row.status,
-            decision: json_opt(row.decision),
-            public_resolution: json_opt(row.public_resolution),
+            decision: decode_opt_field(KIND, "decision", row.decision)?,
+            public_resolution: decode_opt_field(KIND, "public_resolution", row.public_resolution)?,
             resolved_by: row.resolved_by,
             resolved_at: row.resolved_at,
-        }
+        })
     }
 }
 
-impl From<projections::DayVoteOutcomeRow> for DayVoteOutcomeDelta {
-    fn from(row: projections::DayVoteOutcomeRow) -> Self {
-        DayVoteOutcomeDelta {
+impl TryFrom<projections::DayVoteOutcomeRow> for DayVoteOutcomeDelta {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(row: projections::DayVoteOutcomeRow) -> Result<Self, Self::Error> {
+        const KIND: &str = "DayVoteOutcome";
+        Ok(DayVoteOutcomeDelta {
             game: row.game_id,
             phase_id: row.phase_id,
             source_seq: row.source_seq,
             event_index: row.event_index,
             status: row.status,
             winner_slot: row.winner_slot,
-            contenders: json_value(row.contenders),
-            tallies: json_value(row.tallies),
-            votes: json_value(row.votes),
-            weights: json_value(row.weights),
+            contenders: decode_field(KIND, "contenders", row.contenders)?,
+            tallies: decode_field(KIND, "tallies", row.tallies)?,
+            votes: decode_field(KIND, "votes", row.votes)?,
+            weights: decode_field(KIND, "weights", row.weights)?,
             majority: row.majority,
-            thresholds: json_value(row.thresholds),
+            thresholds: decode_field(KIND, "thresholds", row.thresholds)?,
             total_weight: row.total_weight,
             tiebreak: row.tiebreak,
             reason: row.reason,
-        }
+        })
     }
-}
-
-fn json_value<T: Default + serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
-    serde_json::from_value(value).unwrap_or_default()
-}
-
-fn json_opt<T: serde::de::DeserializeOwned>(value: Option<serde_json::Value>) -> Option<T> {
-    value.and_then(|value| serde_json::from_value(value).ok())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2251,12 +2292,6 @@ pub enum InvestigationResultBody {
     Fields(Box<InvestigationResultFields>),
 }
 
-impl Default for InvestigationResultBody {
-    fn default() -> Self {
-        Self::Fields(Box::default())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, Default)]
 pub struct InvestigationResultFields {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2446,97 +2481,135 @@ pub struct ResolutionTraceNoteRow {
     pub note: String,
 }
 
-impl From<commands::ResolutionTraceInspectionReport> for ResolutionTraceInspectionReport {
-    fn from(report: commands::ResolutionTraceInspectionReport) -> Self {
-        ResolutionTraceInspectionReport {
+impl TryFrom<commands::ResolutionTraceInspectionReport> for ResolutionTraceInspectionReport {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(report: commands::ResolutionTraceInspectionReport) -> Result<Self, Self::Error> {
+        Ok(ResolutionTraceInspectionReport {
             game: report.game_id,
-            traces: report.traces.into_iter().map(Into::into).collect(),
-        }
+            traces: report
+                .traces
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        })
     }
 }
 
-impl From<commands::ResolutionTraceInspectionRun> for ResolutionTraceInspectionRun {
-    fn from(run: commands::ResolutionTraceInspectionRun) -> Self {
-        ResolutionTraceInspectionRun {
+impl TryFrom<commands::ResolutionTraceInspectionRun> for ResolutionTraceInspectionRun {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(run: commands::ResolutionTraceInspectionRun) -> Result<Self, Self::Error> {
+        Ok(ResolutionTraceInspectionRun {
             phase_id: run.phase_id,
             run_id: run.run_id,
             applied_stream_seq: run.applied_stream_seq,
             trace_stream_seq: run.trace_stream_seq,
             trace_version: run.trace_version,
-            decisions: run.decisions.into_iter().map(Into::into).collect(),
-            edges: run.edges.into_iter().map(Into::into).collect(),
-            generated: run.generated.into_iter().map(Into::into).collect(),
-            effect_changes: run.effect_changes.into_iter().map(Into::into).collect(),
-            visibility: run.visibility.into_iter().map(Into::into).collect(),
+            decisions: run
+                .decisions
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+            edges: run
+                .edges
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+            generated: run
+                .generated
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+            effect_changes: run
+                .effect_changes
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+            visibility: run
+                .visibility
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
             notes: run.notes.into_iter().map(Into::into).collect(),
-        }
+        })
     }
 }
 
-impl From<commands::ResolutionTraceDecisionRow> for ResolutionTraceDecisionRow {
-    fn from(row: commands::ResolutionTraceDecisionRow) -> Self {
-        ResolutionTraceDecisionRow {
+impl TryFrom<commands::ResolutionTraceDecisionRow> for ResolutionTraceDecisionRow {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(row: commands::ResolutionTraceDecisionRow) -> Result<Self, Self::Error> {
+        Ok(ResolutionTraceDecisionRow {
             row_index: row.row_index,
             applied_stream_seq: row.applied_stream_seq,
             event_index: row.event_index,
             stage: row.stage,
             source: row.source,
             outcome: row.outcome,
-            detail: json_value(row.detail),
-        }
+            detail: decode_field("ResolutionTraceDecision", "detail", row.detail)?,
+        })
     }
 }
 
-impl From<commands::ResolutionTraceEdgeRow> for ResolutionTraceEdgeRow {
-    fn from(row: commands::ResolutionTraceEdgeRow) -> Self {
-        ResolutionTraceEdgeRow {
+impl TryFrom<commands::ResolutionTraceEdgeRow> for ResolutionTraceEdgeRow {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(row: commands::ResolutionTraceEdgeRow) -> Result<Self, Self::Error> {
+        Ok(ResolutionTraceEdgeRow {
             row_index: row.row_index,
             applied_stream_seq: row.applied_stream_seq,
             from: row.from,
             to: row.to,
             kind: row.kind,
-            detail: json_value(row.detail),
-        }
+            detail: decode_field("ResolutionTraceEdge", "detail", row.detail)?,
+        })
     }
 }
 
-impl From<commands::ResolutionTraceGeneratedRow> for ResolutionTraceGeneratedRow {
-    fn from(row: commands::ResolutionTraceGeneratedRow) -> Self {
-        ResolutionTraceGeneratedRow {
+impl TryFrom<commands::ResolutionTraceGeneratedRow> for ResolutionTraceGeneratedRow {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(row: commands::ResolutionTraceGeneratedRow) -> Result<Self, Self::Error> {
+        Ok(ResolutionTraceGeneratedRow {
             row_index: row.row_index,
             applied_stream_seq: row.applied_stream_seq,
             action_id: row.action_id,
             source: row.source,
             actor: row.actor,
             targets: row.targets,
-            detail: json_value(row.detail),
-        }
+            detail: decode_field("ResolutionTraceGenerated", "detail", row.detail)?,
+        })
     }
 }
 
-impl From<commands::ResolutionTraceEffectChangeRow> for ResolutionTraceEffectChangeRow {
-    fn from(row: commands::ResolutionTraceEffectChangeRow) -> Self {
-        ResolutionTraceEffectChangeRow {
+impl TryFrom<commands::ResolutionTraceEffectChangeRow> for ResolutionTraceEffectChangeRow {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(row: commands::ResolutionTraceEffectChangeRow) -> Result<Self, Self::Error> {
+        Ok(ResolutionTraceEffectChangeRow {
             row_index: row.row_index,
             applied_stream_seq: row.applied_stream_seq,
             effect: row.effect,
             target: row.target,
             operation: row.operation,
-            detail: json_value(row.detail),
-        }
+            detail: decode_field("ResolutionTraceEffectChange", "detail", row.detail)?,
+        })
     }
 }
 
-impl From<commands::ResolutionTraceVisibilityRow> for ResolutionTraceVisibilityRow {
-    fn from(row: commands::ResolutionTraceVisibilityRow) -> Self {
-        ResolutionTraceVisibilityRow {
+impl TryFrom<commands::ResolutionTraceVisibilityRow> for ResolutionTraceVisibilityRow {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(row: commands::ResolutionTraceVisibilityRow) -> Result<Self, Self::Error> {
+        Ok(ResolutionTraceVisibilityRow {
             row_index: row.row_index,
             applied_stream_seq: row.applied_stream_seq,
             event_index: row.event_index,
             audience: row.audience,
             policy: row.policy,
-            detail: json_value(row.detail),
-        }
+            detail: decode_field("ResolutionTraceVisibility", "detail", row.detail)?,
+        })
     }
 }
 
@@ -2563,17 +2636,19 @@ impl From<projections::PlayerNotificationRow> for PlayerNotification {
     }
 }
 
-impl From<projections::PlayerInvestigationResultRow> for PlayerInvestigationResult {
-    fn from(row: projections::PlayerInvestigationResultRow) -> Self {
-        PlayerInvestigationResult {
+impl TryFrom<projections::PlayerInvestigationResultRow> for PlayerInvestigationResult {
+    type Error = ProjectionAdapterError;
+
+    fn try_from(row: projections::PlayerInvestigationResultRow) -> Result<Self, Self::Error> {
+        Ok(PlayerInvestigationResult {
             game: row.game_id,
             phase_id: row.phase_id,
             event_index: row.event_index,
             audience_slot: row.audience_slot,
             mode: row.mode,
             target_slot: row.target_slot,
-            result: json_value(row.result),
-        }
+            result: decode_field("PlayerInvestigationResult", "result", row.result)?,
+        })
     }
 }
 
@@ -2937,18 +3012,16 @@ mod live_json_map_tests {
     use super::*;
     use serde_json::json;
 
-    #[test]
-    fn day_vote_outcome_row_becomes_typed_maps() {
-        let game = Uuid::new_v4();
-        let delta = DayVoteOutcomeDelta::from(projections::DayVoteOutcomeRow {
-            game_id: game,
+    fn vote_row(tallies: serde_json::Value) -> projections::DayVoteOutcomeRow {
+        projections::DayVoteOutcomeRow {
+            game_id: Uuid::nil(),
             phase_id: "D01".into(),
             source_seq: 11,
             event_index: 0,
             status: "Lynch".into(),
             winner_slot: Some("slot-2".into()),
-            contenders: json!(["slot-2", "slot-7"]),
-            tallies: json!({ "slot-2": 4.0, "slot-7": 2.0 }),
+            contenders: json!(["slot-2"]),
+            tallies,
             votes: json!({ "slot-1": "slot-2" }),
             weights: json!({ "slot-1": 1.0 }),
             majority: Some(3.0),
@@ -2956,22 +3029,12 @@ mod live_json_map_tests {
             total_weight: 6.0,
             tiebreak: None,
             reason: None,
-        });
-        assert_eq!(delta.contenders, vec!["slot-2", "slot-7"]);
-        assert_eq!(delta.tallies.get("slot-2"), Some(&4.0));
-        assert_eq!(
-            delta.votes.get("slot-1").map(String::as_str),
-            Some("slot-2")
-        );
-        assert_eq!(delta.weights.get("slot-1"), Some(&1.0));
-        assert_eq!(delta.thresholds.get("slot-2"), Some(&3.0));
+        }
     }
 
-    #[test]
-    fn host_prompt_row_becomes_typed_decision_and_resolution() {
-        let game = Uuid::new_v4();
-        let delta = HostPromptDelta::from(projections::HostPromptRow {
-            game_id: game,
+    fn host_prompt_row(decision: Option<serde_json::Value>) -> projections::HostPromptRow {
+        projections::HostPromptRow {
+            game_id: Uuid::nil(),
             phase_id: "D01".into(),
             event_index: 0,
             prompt_id: "D01:pk:Tie".into(),
@@ -2987,7 +3050,7 @@ mod live_json_map_tests {
                 "tiebreak": "HostDecides"
             }),
             status: "resolved".into(),
-            decision: Some(json!({ "kind": "select_slot", "slot": "slot-2" })),
+            decision,
             public_resolution: Some(json!({
                 "kind": "day_vote_elimination",
                 "phase_id": "D01",
@@ -2996,7 +3059,57 @@ mod live_json_map_tests {
             })),
             resolved_by: Some("host".into()),
             resolved_at: Some(44),
-        });
+        }
+    }
+
+    fn investigation_row(result: serde_json::Value) -> projections::PlayerInvestigationResultRow {
+        projections::PlayerInvestigationResultRow {
+            game_id: Uuid::nil(),
+            phase_id: "N01".into(),
+            event_index: 0,
+            audience_slot: "slot-1".into(),
+            mode: "Track".into(),
+            target_slot: "slot-3".into(),
+            result,
+        }
+    }
+
+    fn trace_decision_row(detail: serde_json::Value) -> commands::ResolutionTraceDecisionRow {
+        commands::ResolutionTraceDecisionRow {
+            row_index: 0,
+            applied_stream_seq: Some(12),
+            event_index: Some(3),
+            stage: "result_contract".into(),
+            source: "domain::resolve/result_version:19".into(),
+            outcome: "2 inner events validated".into(),
+            detail,
+        }
+    }
+
+    #[test]
+    fn day_vote_outcome_row_becomes_typed_maps() {
+        let delta = DayVoteOutcomeDelta::try_from(vote_row(json!({
+            "slot-2": 4.0,
+            "slot-7": 2.0
+        })))
+        .expect("valid official tallies");
+        assert_eq!(delta.contenders, vec!["slot-2"]);
+        assert_eq!(delta.tallies.get("slot-2"), Some(&4.0));
+        assert_eq!(
+            delta.votes.get("slot-1").map(String::as_str),
+            Some("slot-2")
+        );
+        assert_eq!(delta.weights.get("slot-1"), Some(&1.0));
+        assert_eq!(delta.thresholds.get("slot-2"), Some(&3.0));
+    }
+
+    #[test]
+    fn host_prompt_row_becomes_typed_decision_and_resolution() {
+        let delta = HostPromptDelta::try_from(host_prompt_row(Some(json!({
+            "kind": "select_slot",
+            "slot": "slot-2"
+        }))))
+        .expect("valid host prompt");
         assert_eq!(
             delta.metadata.contenders,
             vec!["slot-2".to_string(), "slot-4".to_string()]
@@ -3023,27 +3136,23 @@ mod live_json_map_tests {
 
     #[test]
     fn investigation_result_row_becomes_typed_label_or_fields() {
-        let game = Uuid::new_v4();
-        let label = PlayerInvestigationResult::from(projections::PlayerInvestigationResultRow {
-            game_id: game,
-            phase_id: "N01".into(),
-            event_index: 0,
-            audience_slot: "slot-1".into(),
-            mode: "Parity".into(),
-            target_slot: "slot-2".into(),
-            result: json!("town"),
-        });
+        let label =
+            PlayerInvestigationResult::try_from(projections::PlayerInvestigationResultRow {
+                game_id: Uuid::nil(),
+                phase_id: "N01".into(),
+                event_index: 0,
+                audience_slot: "slot-1".into(),
+                mode: "Parity".into(),
+                target_slot: "slot-2".into(),
+                result: json!("town"),
+            })
+            .expect("parity label");
         assert_eq!(label.result, InvestigationResultBody::Label("town".into()));
 
-        let fields = PlayerInvestigationResult::from(projections::PlayerInvestigationResultRow {
-            game_id: game,
-            phase_id: "N01".into(),
-            event_index: 1,
-            audience_slot: "slot-1".into(),
-            mode: "Track".into(),
-            target_slot: "slot-3".into(),
-            result: json!({ "visited": ["slot-4"] }),
-        });
+        let fields = PlayerInvestigationResult::try_from(investigation_row(json!({
+            "visited": ["slot-4"]
+        })))
+        .expect("track fields");
         match fields.result {
             InvestigationResultBody::Fields(body) => {
                 assert_eq!(body.visited, vec!["slot-4".to_string()]);
@@ -3054,26 +3163,85 @@ mod live_json_map_tests {
 
     #[test]
     fn resolution_trace_detail_becomes_a_typed_atom_map() {
-        let row = ResolutionTraceDecisionRow::from(commands::ResolutionTraceDecisionRow {
-            row_index: 0,
-            applied_stream_seq: Some(12),
-            event_index: Some(3),
-            stage: "result_contract".into(),
-            source: "domain::resolve/result_version:19".into(),
-            outcome: "2 inner events validated".into(),
-            detail: json!({ "kills": 1, "saves": 0 }),
-        });
+        let row = ResolutionTraceDecisionRow::try_from(trace_decision_row(json!({
+            "kills": 1,
+            "saves": 0
+        })))
+        .expect("object detail");
         assert_eq!(row.detail.get("kills"), Some(&JsonAtom::Number(1.0)));
         assert_eq!(row.detail.get("saves"), Some(&JsonAtom::Number(0.0)));
-        let empty = ResolutionTraceDecisionRow::from(commands::ResolutionTraceDecisionRow {
-            row_index: 1,
-            applied_stream_seq: None,
-            event_index: None,
-            stage: "inner_event".into(),
-            source: "event_index:0".into(),
-            outcome: "phase_announcement".into(),
-            detail: json!(null),
-        });
+
+        let empty = ResolutionTraceDecisionRow::try_from(trace_decision_row(json!({})))
+            .expect("empty object is a valid map");
         assert!(empty.detail.is_empty());
+    }
+
+    #[test]
+    fn projection_adapter_rejects_malformed_json_columns() {
+        struct Case {
+            name: &'static str,
+            kind: &'static str,
+            field: &'static str,
+            run: fn() -> Result<(), ProjectionAdapterError>,
+        }
+
+        let cases = [
+            Case {
+                name: "type-wrong tallies",
+                kind: "DayVoteOutcome",
+                field: "tallies",
+                run: || {
+                    DayVoteOutcomeDelta::try_from(vote_row(json!({ "slot_5": "3" }))).map(|_| ())
+                },
+            },
+            Case {
+                name: "null investigation result",
+                kind: "PlayerInvestigationResult",
+                field: "result",
+                run: || {
+                    PlayerInvestigationResult::try_from(investigation_row(json!(null))).map(|_| ())
+                },
+            },
+            Case {
+                name: "visitor_roles item is not a string",
+                kind: "PlayerInvestigationResult",
+                field: "result",
+                run: || {
+                    PlayerInvestigationResult::try_from(investigation_row(json!({
+                        "visitor_roles": ["doctor", 7]
+                    })))
+                    .map(|_| ())
+                },
+            },
+            Case {
+                name: "unknown host-prompt decision kind",
+                kind: "HostPrompt",
+                field: "decision",
+                run: || {
+                    HostPromptDelta::try_from(host_prompt_row(Some(json!({ "kind": "nope" }))))
+                        .map(|_| ())
+                },
+            },
+            Case {
+                name: "null trace detail is not an empty map",
+                kind: "ResolutionTraceDecision",
+                field: "detail",
+                run: || {
+                    ResolutionTraceDecisionRow::try_from(trace_decision_row(json!(null)))
+                        .map(|_| ())
+                },
+            },
+        ];
+
+        for case in cases {
+            let err = (case.run)().expect_err(case.name);
+            assert_eq!(err.kind, case.kind, "{}", case.name);
+            assert_eq!(err.field, case.field, "{}", case.name);
+            assert!(
+                !err.source.is_empty(),
+                "{} should surface the serde diagnostic",
+                case.name
+            );
+        }
     }
 }

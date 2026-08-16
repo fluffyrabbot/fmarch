@@ -1229,9 +1229,23 @@ async fn host_prompts_delta_for_ws(
     projections::host_prompts(&state.pool, claim.game)
         .await
         .ok()
-        .map(|rows| HostPromptsDelta {
+        .and_then(|rows| {
+            rows.into_iter()
+                .map(HostPromptDelta::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    tracing::warn!(
+                        game_id = %claim.game,
+                        error = %error,
+                        "host prompt projection adapter failed; skipping live prompt delta"
+                    );
+                    error
+                })
+                .ok()
+        })
+        .map(|prompts| HostPromptsDelta {
             game: claim.game,
-            prompts: rows.into_iter().map(HostPromptDelta::from).collect(),
+            prompts,
         })
         .map(ProjectionDelta::HostPromptsChanged)
 }

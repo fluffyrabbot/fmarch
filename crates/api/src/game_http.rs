@@ -184,21 +184,22 @@ async fn endgame_summary(
         .map_err(command_reject_api_error)?;
     let result = projections::game_result(&state.pool, game).await?;
     let vote_history = if completed {
-        projections::day_vote_outcomes(&state.pool, game)
-            .await?
-            .into_iter()
-            .map(|outcome| EndgameDayVote {
-                phase_id: outcome.phase_id,
-                source_seq: outcome.source_seq,
-                event_index: outcome.event_index,
-                status: outcome.status,
-                winner_slot: outcome.winner_slot,
-                tallies: serde_json::from_value(outcome.tallies).unwrap_or_default(),
-                votes: serde_json::from_value(outcome.votes).unwrap_or_default(),
-                majority: outcome.majority,
-                reason: outcome.reason,
-            })
-            .collect()
+        let mut history = Vec::new();
+        for outcome in projections::day_vote_outcomes(&state.pool, game).await? {
+            let delta = DayVoteOutcomeDelta::try_from(outcome)?;
+            history.push(EndgameDayVote {
+                phase_id: delta.phase_id,
+                source_seq: delta.source_seq,
+                event_index: delta.event_index,
+                status: delta.status,
+                winner_slot: delta.winner_slot,
+                tallies: delta.tallies,
+                votes: delta.votes,
+                majority: delta.majority,
+                reason: delta.reason,
+            });
+        }
+        history
     } else {
         Vec::new()
     };
@@ -279,9 +280,10 @@ async fn day_vote_outcomes(
     let rows = projections::day_vote_outcomes(&state.pool, game).await?;
     Ok(Json(
         rows.into_iter()
-            .map(DayVoteOutcomeDelta::from)
-            .map(ProjectionDelta::DayVoteOutcomeApplied)
-            .collect(),
+            .map(|row| {
+                DayVoteOutcomeDelta::try_from(row).map(ProjectionDelta::DayVoteOutcomeApplied)
+            })
+            .collect::<Result<Vec<_>, _>>()?,
     ))
 }
 
@@ -761,8 +763,8 @@ pub(super) async fn player_investigation_results_for_principal(
 
     Ok(rows
         .into_iter()
-        .map(PlayerInvestigationResult::from)
-        .collect())
+        .map(PlayerInvestigationResult::try_from)
+        .collect::<Result<Vec<_>, _>>()?)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1647,10 +1649,12 @@ pub struct HostPrompt {
     pub resolved_at: Option<i64>,
 }
 
-impl From<projections::HostPromptRow> for HostPrompt {
-    fn from(row: projections::HostPromptRow) -> Self {
-        let delta = HostPromptDelta::from(row);
-        HostPrompt {
+impl TryFrom<projections::HostPromptRow> for HostPrompt {
+    type Error = wire::ProjectionAdapterError;
+
+    fn try_from(row: projections::HostPromptRow) -> Result<Self, Self::Error> {
+        let delta = HostPromptDelta::try_from(row)?;
+        Ok(HostPrompt {
             game: delta.game,
             phase_id: delta.phase_id,
             event_index: delta.event_index,
@@ -1666,7 +1670,7 @@ impl From<projections::HostPromptRow> for HostPrompt {
             public_resolution: delta.public_resolution,
             resolved_by: delta.resolved_by,
             resolved_at: delta.resolved_at,
-        }
+        })
     }
 }
 
@@ -1932,8 +1936,8 @@ async fn host_prompts(
         projections::host_prompts(&state.pool, game)
             .await?
             .into_iter()
-            .map(HostPrompt::from)
-            .collect(),
+            .map(HostPrompt::try_from)
+            .collect::<Result<Vec<_>, _>>()?,
     ))
 }
 

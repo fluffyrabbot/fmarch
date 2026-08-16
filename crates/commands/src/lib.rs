@@ -3290,7 +3290,7 @@ fn trace_inspection_run(
                 stage: decision.stage,
                 source: decision.source,
                 outcome: decision.outcome,
-                detail: serde_json::to_value(decision.detail).unwrap_or(serde_json::Value::Null),
+                detail: inspection_detail(decision.detail),
             })
             .collect(),
         edges: trace
@@ -3303,7 +3303,7 @@ fn trace_inspection_run(
                 from: edge.from,
                 to: edge.to,
                 kind: edge.kind,
-                detail: serde_json::to_value(edge.detail).unwrap_or(serde_json::Value::Null),
+                detail: inspection_detail(edge.detail),
             })
             .collect(),
         generated: trace
@@ -3317,7 +3317,7 @@ fn trace_inspection_run(
                 source: generated.source,
                 actor: generated.actor,
                 targets: generated.targets,
-                detail: serde_json::to_value(generated.detail).unwrap_or(serde_json::Value::Null),
+                detail: inspection_detail(generated.detail),
             })
             .collect(),
         effect_changes: trace
@@ -3330,7 +3330,7 @@ fn trace_inspection_run(
                 effect: effect.effect,
                 target: effect.target,
                 operation: effect.operation,
-                detail: serde_json::to_value(effect.detail).unwrap_or(serde_json::Value::Null),
+                detail: inspection_detail(effect.detail),
             })
             .collect(),
         visibility: trace
@@ -3343,7 +3343,7 @@ fn trace_inspection_run(
                 event_index: visibility.event_index,
                 audience: visibility.audience,
                 policy: visibility.policy,
-                detail: serde_json::to_value(visibility.detail).unwrap_or(serde_json::Value::Null),
+                detail: inspection_detail(visibility.detail),
             })
             .collect(),
         notes: trace
@@ -3356,6 +3356,16 @@ fn trace_inspection_run(
                 note,
             })
             .collect(),
+    }
+}
+
+/// Persist traces omit null detail. Inspection maps that to an empty object so
+/// the fail-closed wire adapter never sees `null` as a stand-in for a map.
+fn inspection_detail(detail: domain::JsonAtom) -> serde_json::Value {
+    if detail.is_null() {
+        serde_json::json!({})
+    } else {
+        serde_json::Value::from(detail)
     }
 }
 

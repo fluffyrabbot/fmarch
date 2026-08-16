@@ -54,7 +54,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
-use wire::{RejectCode, RejectMsg};
+use wire::{ProjectionAdapterError, RejectCode, RejectMsg};
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -377,6 +377,16 @@ struct WorkosProviderSessionLogoutRequiredResponse {
 impl From<projections::ProjectionError> for ApiError {
     fn from(err: projections::ProjectionError) -> Self {
         ApiError::Projection(err)
+    }
+}
+
+impl From<ProjectionAdapterError> for ApiError {
+    fn from(error: ProjectionAdapterError) -> Self {
+        ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: error.to_string(),
+        }
     }
 }
 

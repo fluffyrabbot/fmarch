@@ -44,7 +44,10 @@ use sqlx::postgres::PgPool;
 use std::{fs, path::Path as FsPath, sync::Arc};
 use tokio::sync::Semaphore;
 use uuid::Uuid;
-use wire::{HostPhaseControl, RejectCode, RejectMsg, ResolutionTraceInspectionReport};
+use wire::{
+    HostPhaseControl, ProjectionAdapterError, RejectCode, RejectMsg,
+    ResolutionTraceInspectionReport,
+};
 
 #[derive(Clone)]
 pub struct OperatorApiState {
@@ -877,7 +880,7 @@ async fn resolution_traces(
         commands::inspect_resolution_traces(&state.pool, game, query.run_id.as_deref())
             .await
             .map_err(command_api_error)?
-            .into(),
+            .try_into()?,
     ))
 }
 
@@ -4206,6 +4209,16 @@ pub enum ApiError {
 impl From<projections::ProjectionError> for ApiError {
     fn from(err: projections::ProjectionError) -> Self {
         ApiError::Projection(err)
+    }
+}
+
+impl From<ProjectionAdapterError> for ApiError {
+    fn from(error: ProjectionAdapterError) -> Self {
+        ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: error.to_string(),
+        }
     }
 }
 
