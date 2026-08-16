@@ -963,17 +963,12 @@ pub struct DayVoteOutcomeDelta {
     pub event_index: i32,
     pub status: String,
     pub winner_slot: Option<String>,
-    #[ts(type = "unknown")]
-    pub contenders: serde_json::Value,
-    #[ts(type = "unknown")]
-    pub tallies: serde_json::Value,
-    #[ts(type = "unknown")]
-    pub votes: serde_json::Value,
-    #[ts(type = "unknown")]
-    pub weights: serde_json::Value,
+    pub contenders: Vec<String>,
+    pub tallies: BTreeMap<String, f64>,
+    pub votes: BTreeMap<String, String>,
+    pub weights: BTreeMap<String, f64>,
     pub majority: Option<f64>,
-    #[ts(type = "unknown")]
-    pub thresholds: serde_json::Value,
+    pub thresholds: BTreeMap<String, f64>,
     pub total_weight: f64,
     pub tiebreak: Option<String>,
     pub reason: Option<String>,
@@ -1364,6 +1359,55 @@ pub struct HostPromptsDelta {
     pub prompts: Vec<HostPromptDelta>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, Default)]
+pub struct HostPromptMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contenders: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tiebreak: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub death_cause: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+}
+
+/// Stored host-prompt decision as folded into the projection (snake_case tagged).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum HostPromptRecordedDecision {
+    SelectSlot { slot: String },
+    SelectPolicy { policy: String },
+    Acknowledge,
+}
+
+/// Public host-prompt resolution, matching [`domain::HostPromptPublicResolution`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum HostPromptPublicResolution {
+    DayVoteElimination {
+        phase_id: String,
+        selected_slot: String,
+        reason: String,
+    },
+    PhaseAdvance {
+        source_phase_id: String,
+        target_phase_id: String,
+        reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        skipped_phase_id: Option<String>,
+    },
+    Acknowledged {
+        phase_id: String,
+        reason: String,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct HostPromptDelta {
     pub game: Uuid,
@@ -1375,13 +1419,10 @@ pub struct HostPromptDelta {
     pub reason: String,
     pub phase_kind: String,
     pub phase_number: i32,
-    #[ts(type = "unknown")]
-    pub metadata: serde_json::Value,
+    pub metadata: HostPromptMetadata,
     pub status: String,
-    #[ts(type = "unknown")]
-    pub decision: Option<serde_json::Value>,
-    #[ts(type = "unknown")]
-    pub public_resolution: Option<serde_json::Value>,
+    pub decision: Option<HostPromptRecordedDecision>,
+    pub public_resolution: Option<HostPromptPublicResolution>,
     pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
 }
@@ -1398,10 +1439,10 @@ impl From<projections::HostPromptRow> for HostPromptDelta {
             reason: row.reason,
             phase_kind: row.phase_kind,
             phase_number: row.phase_number,
-            metadata: row.metadata,
+            metadata: json_value(row.metadata),
             status: row.status,
-            decision: row.decision,
-            public_resolution: row.public_resolution,
+            decision: json_opt(row.decision),
+            public_resolution: json_opt(row.public_resolution),
             resolved_by: row.resolved_by,
             resolved_at: row.resolved_at,
         }
@@ -1417,17 +1458,25 @@ impl From<projections::DayVoteOutcomeRow> for DayVoteOutcomeDelta {
             event_index: row.event_index,
             status: row.status,
             winner_slot: row.winner_slot,
-            contenders: row.contenders,
-            tallies: row.tallies,
-            votes: row.votes,
-            weights: row.weights,
+            contenders: json_value(row.contenders),
+            tallies: json_value(row.tallies),
+            votes: json_value(row.votes),
+            weights: json_value(row.weights),
             majority: row.majority,
-            thresholds: row.thresholds,
+            thresholds: json_value(row.thresholds),
             total_weight: row.total_weight,
             tiebreak: row.tiebreak,
             reason: row.reason,
         }
     }
+}
+
+fn json_value<T: Default + serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
+    serde_json::from_value(value).unwrap_or_default()
+}
+
+fn json_opt<T: serde::de::DeserializeOwned>(value: Option<serde_json::Value>) -> Option<T> {
+    value.and_then(|value| serde_json::from_value(value).ok())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2501,15 +2550,16 @@ pub mod typescript {
         HostConsolePhaseStateDelta, HostConsoleSchedulerDelta, HostConsoleSlotOccupancyDelta,
         HostConsoleSlotsDelta, HostConsoleStateDelta, HostConsoleTasksDelta,
         HostConsoleThreadPostDelta, HostConsoleThreadPostRemovedDelta, HostConsoleThreadPostsDelta,
-        HostDayEventDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta, HostPromptsDelta,
-        HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
-        HostTaskUrgency, ItaSessionControlKind, MemberMutePage, MemberMuteState, ModerationCase,
-        ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
-        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, PostCitation,
-        PostCitationPage, PostCitationsChangedDelta, PostKind, PostRef, ProfileEditor,
-        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
-        Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
-        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        HostDayEventDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta,
+        HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
+        HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind,
+        HostTaskState, HostTaskUrgency, ItaSessionControlKind, MemberMutePage, MemberMuteState,
+        ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationHistory,
+        ModerationReport, ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification,
+        PostCitation, PostCitationPage, PostCitationsChangedDelta, PostKind, PostRef,
+        ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage,
+        PublicSearchResult, Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
+        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
         SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
@@ -2570,6 +2620,9 @@ pub mod typescript {
         push::<DayEventEvent>(&mut out, &config);
         push::<VoteTarget>(&mut out, &config);
         push::<HostPromptDecision>(&mut out, &config);
+        push::<HostPromptMetadata>(&mut out, &config);
+        push::<HostPromptRecordedDecision>(&mut out, &config);
+        push::<HostPromptPublicResolution>(&mut out, &config);
         push::<SlotLifecycle>(&mut out, &config);
         push::<ItaSessionControlKind>(&mut out, &config);
         push::<SubmitPostMedia>(&mut out, &config);
@@ -2807,6 +2860,96 @@ mod host_console_patch_tests {
                     stream_seq: 10,
                 }),
             ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod live_json_map_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn day_vote_outcome_row_becomes_typed_maps() {
+        let game = Uuid::new_v4();
+        let delta = DayVoteOutcomeDelta::from(projections::DayVoteOutcomeRow {
+            game_id: game,
+            phase_id: "D01".into(),
+            source_seq: 11,
+            event_index: 0,
+            status: "Lynch".into(),
+            winner_slot: Some("slot-2".into()),
+            contenders: json!(["slot-2", "slot-7"]),
+            tallies: json!({ "slot-2": 4.0, "slot-7": 2.0 }),
+            votes: json!({ "slot-1": "slot-2" }),
+            weights: json!({ "slot-1": 1.0 }),
+            majority: Some(3.0),
+            thresholds: json!({ "slot-2": 3.0 }),
+            total_weight: 6.0,
+            tiebreak: None,
+            reason: None,
+        });
+        assert_eq!(delta.contenders, vec!["slot-2", "slot-7"]);
+        assert_eq!(delta.tallies.get("slot-2"), Some(&4.0));
+        assert_eq!(
+            delta.votes.get("slot-1").map(String::as_str),
+            Some("slot-2")
+        );
+        assert_eq!(delta.weights.get("slot-1"), Some(&1.0));
+        assert_eq!(delta.thresholds.get("slot-2"), Some(&3.0));
+    }
+
+    #[test]
+    fn host_prompt_row_becomes_typed_decision_and_resolution() {
+        let game = Uuid::new_v4();
+        let delta = HostPromptDelta::from(projections::HostPromptRow {
+            game_id: game,
+            phase_id: "D01".into(),
+            event_index: 0,
+            prompt_id: "D01:pk:Tie".into(),
+            kind: "pk".into(),
+            subject_slot: None,
+            reason: "host_decides_tie".into(),
+            phase_kind: "Day".into(),
+            phase_number: 1,
+            metadata: json!({
+                "policy": "pk_host_decides_tie",
+                "status": "Tie",
+                "contenders": ["slot-2", "slot-4"],
+                "tiebreak": "HostDecides"
+            }),
+            status: "resolved".into(),
+            decision: Some(json!({ "kind": "select_slot", "slot": "slot-2" })),
+            public_resolution: Some(json!({
+                "kind": "day_vote_elimination",
+                "phase_id": "D01",
+                "selected_slot": "slot-2",
+                "reason": "host_decides_tie"
+            })),
+            resolved_by: Some("host".into()),
+            resolved_at: Some(44),
+        });
+        assert_eq!(
+            delta.metadata.contenders,
+            vec!["slot-2".to_string(), "slot-4".to_string()]
+        );
+        assert_eq!(
+            delta.metadata.policy.as_deref(),
+            Some("pk_host_decides_tie")
+        );
+        assert_eq!(
+            delta.decision,
+            Some(HostPromptRecordedDecision::SelectSlot {
+                slot: "slot-2".into()
+            })
+        );
+        assert_eq!(
+            delta.public_resolution,
+            Some(HostPromptPublicResolution::DayVoteElimination {
+                phase_id: "D01".into(),
+                selected_slot: "slot-2".into(),
+                reason: "host_decides_tie".into(),
+            })
         );
     }
 }

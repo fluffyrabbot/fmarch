@@ -99,6 +99,12 @@ export type VoteTarget = { "Slot": string } | "NoLynch";
 
 export type HostPromptDecision = { "SelectSlot": { slot: string, } } | { "SelectPolicy": { policy: string, } } | "Acknowledge";
 
+export type HostPromptMetadata = { policy?: string | null, status?: string | null, contenders?: Array<string>, tiebreak?: string | null, outcome_reason?: string | null, death_cause?: string | null, role?: string | null, };
+
+export type HostPromptRecordedDecision = { "kind": "select_slot", slot: string, } | { "kind": "select_policy", policy: string, } | { "kind": "acknowledge" };
+
+export type HostPromptPublicResolution = { "kind": "day_vote_elimination", phase_id: string, selected_slot: string, reason: string, } | { "kind": "phase_advance", source_phase_id: string, target_phase_id: string, reason: string, skipped_phase_id?: string | null, } | { "kind": "acknowledged", phase_id: string, reason: string, };
+
 export type SlotLifecycle = "alive" | "dead" | "modkilled";
 
 export type ItaSessionControlKind = "open" | "pause" | "cancel" | "update" | "close";
@@ -139,7 +145,7 @@ export type ThreadPostsDelta = { game: string, posts: Array<ThreadPost>, };
 
 export type PostCitationsChangedDelta = { quoted: PostRef, citation_count: bigint, };
 
-export type DayVoteOutcomeDelta = { game: string, phase_id: string, source_seq: bigint, event_index: number, status: string, winner_slot: string | null, contenders: unknown, tallies: unknown, votes: unknown, weights: unknown, majority: number | null, thresholds: unknown, total_weight: number, tiebreak: string | null, reason: string | null, };
+export type DayVoteOutcomeDelta = { game: string, phase_id: string, source_seq: bigint, event_index: number, status: string, winner_slot: string | null, contenders: Array<string>, tallies: { [key in string]: number }, votes: { [key in string]: string }, weights: { [key in string]: number }, majority: number | null, thresholds: { [key in string]: number }, total_weight: number, tiebreak: string | null, reason: string | null, };
 
 export type HostConsoleAuthorityKind = "HostOf" | "CohostOf" | "GlobalOperator";
 
@@ -216,7 +222,7 @@ day_events: Array<HostDayEventDelta>,
  */
 tasks: Array<HostTaskDelta>, };
 
-export type HostPromptDelta = { game: string, phase_id: string, event_index: number, prompt_id: string, kind: string, subject_slot: string | null, reason: string, phase_kind: string, phase_number: number, metadata: unknown, status: string, decision: unknown, public_resolution: unknown, resolved_by: string | null, resolved_at: bigint | null, };
+export type HostPromptDelta = { game: string, phase_id: string, event_index: number, prompt_id: string, kind: string, subject_slot: string | null, reason: string, phase_kind: string, phase_number: number, metadata: HostPromptMetadata, status: string, decision: HostPromptRecordedDecision | null, public_resolution: HostPromptPublicResolution | null, resolved_by: string | null, resolved_at: bigint | null, };
 
 export type HostPromptsDelta = { game: string, prompts: Array<HostPromptDelta>, };
 

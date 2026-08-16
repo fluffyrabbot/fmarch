@@ -3504,8 +3504,14 @@ async fn endgame_summary_reveals_vote_history_only_after_completion(pool: sqlx::
     assert_eq!(day_one.phase_id, "D01");
     assert_eq!(day_one.status, "NoMajority");
     assert_eq!(day_one.winner_slot, None);
-    assert_eq!(day_one.tallies, serde_json::json!({ "slot_2": 1.0 }));
-    assert_eq!(day_one.votes, serde_json::json!({ "slot_1": "slot_2" }));
+    assert_eq!(
+        day_one.tallies,
+        std::collections::BTreeMap::from([("slot_2".into(), 1.0)])
+    );
+    assert_eq!(
+        day_one.votes,
+        std::collections::BTreeMap::from([("slot_1".into(), "slot_2".into())])
+    );
     assert_eq!(day_one.majority, Some(2.0));
 }
 
@@ -5314,7 +5320,7 @@ async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::
                 && outcome.phase_id == "D01"
                 && outcome.status == "NoLynch"
                 && outcome.winner_slot.is_none()
-                && outcome.tallies["no_lynch"] == serde_json::json!(2.0)
+                && outcome.tallies.get("no_lynch") == Some(&2.0)
     )));
 }
 

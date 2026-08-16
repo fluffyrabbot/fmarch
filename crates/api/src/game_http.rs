@@ -14,18 +14,19 @@ use axum::{Json, Router};
 use caps::{Capability, Principal};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use uuid::Uuid;
 use wire::{
     DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
     GameIndexEntry, GameIndexPage, HostConsoleAuthorityDelta, HostConsoleAuthorityKind,
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
-    HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostTaskAllowedCommand,
-    HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency,
-    PlayerInvestigationResult, PlayerNotification, PostCitationPage, PostCitationsChangedDelta,
-    PostKind, PostRef, ProjectionDelta, PublicGameThreadPage, Quotation, RejectCode, ThreadPage,
-    ThreadPost, ThreadPostsDelta,
+    HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostPromptDelta,
+    HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
+    HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
+    HostTaskUrgency, PlayerInvestigationResult, PlayerNotification, PostCitationPage,
+    PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, PublicGameThreadPage, Quotation,
+    RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -164,8 +165,8 @@ pub struct EndgameDayVote {
     pub event_index: i32,
     pub status: String,
     pub winner_slot: Option<String>,
-    pub tallies: serde_json::Value,
-    pub votes: serde_json::Value,
+    pub tallies: BTreeMap<String, f64>,
+    pub votes: BTreeMap<String, String>,
     pub majority: Option<f64>,
     pub reason: Option<String>,
 }
@@ -192,8 +193,8 @@ async fn endgame_summary(
                 event_index: outcome.event_index,
                 status: outcome.status,
                 winner_slot: outcome.winner_slot,
-                tallies: outcome.tallies,
-                votes: outcome.votes,
+                tallies: serde_json::from_value(outcome.tallies).unwrap_or_default(),
+                votes: serde_json::from_value(outcome.votes).unwrap_or_default(),
                 majority: outcome.majority,
                 reason: outcome.reason,
             })
@@ -1638,32 +1639,33 @@ pub struct HostPrompt {
     pub reason: String,
     pub phase_kind: String,
     pub phase_number: i32,
-    pub metadata: serde_json::Value,
+    pub metadata: HostPromptMetadata,
     pub status: String,
-    pub decision: Option<serde_json::Value>,
-    pub public_resolution: Option<serde_json::Value>,
+    pub decision: Option<HostPromptRecordedDecision>,
+    pub public_resolution: Option<HostPromptPublicResolution>,
     pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
 }
 
 impl From<projections::HostPromptRow> for HostPrompt {
     fn from(row: projections::HostPromptRow) -> Self {
+        let delta = HostPromptDelta::from(row);
         HostPrompt {
-            game: row.game_id,
-            phase_id: row.phase_id,
-            event_index: row.event_index,
-            prompt_id: row.prompt_id,
-            kind: row.kind,
-            subject_slot: row.subject_slot,
-            reason: row.reason,
-            phase_kind: row.phase_kind,
-            phase_number: row.phase_number,
-            metadata: row.metadata,
-            status: row.status,
-            decision: row.decision,
-            public_resolution: row.public_resolution,
-            resolved_by: row.resolved_by,
-            resolved_at: row.resolved_at,
+            game: delta.game,
+            phase_id: delta.phase_id,
+            event_index: delta.event_index,
+            prompt_id: delta.prompt_id,
+            kind: delta.kind,
+            subject_slot: delta.subject_slot,
+            reason: delta.reason,
+            phase_kind: delta.phase_kind,
+            phase_number: delta.phase_number,
+            metadata: delta.metadata,
+            status: delta.status,
+            decision: delta.decision,
+            public_resolution: delta.public_resolution,
+            resolved_by: delta.resolved_by,
+            resolved_at: delta.resolved_at,
         }
     }
 }
