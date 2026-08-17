@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -108,6 +108,10 @@ export function parseArgs(argv) {
         args.logPath = path.resolve(takeValue(i, arg));
         i += 1;
         break;
+      case "--socket-dir":
+        args.socketDir = path.resolve(takeValue(i, arg));
+        i += 1;
+        break;
       case "--pg-bin":
         args.pgBin = path.resolve(takeValue(i, arg));
         i += 1;
@@ -122,16 +126,35 @@ export function parseArgs(argv) {
 
 export function buildConfig(args = {}, env = process.env) {
   const pgBin = args.pgBin ?? env.PG_BIN ?? findPgBin();
+  const dataDir = args.dataDir ?? env.FMARCH_DEV_POSTGRES_DATA ?? defaultDataDir;
   return {
     host: args.host ?? env.FMARCH_DEV_POSTGRES_HOST ?? defaultHost,
     port: args.port ?? parseEnvPort(env.FMARCH_DEV_POSTGRES_PORT) ?? defaultPort,
     database: args.database ?? env.FMARCH_DEV_POSTGRES_DB ?? defaultDatabase,
     user: args.user ?? env.FMARCH_DEV_POSTGRES_USER ?? defaultUser,
     password: args.password ?? env.FMARCH_DEV_POSTGRES_PASSWORD ?? defaultPassword,
-    dataDir: args.dataDir ?? env.FMARCH_DEV_POSTGRES_DATA ?? defaultDataDir,
+    dataDir,
+    socketDir:
+      args.socketDir ?? env.FMARCH_DEV_POSTGRES_SOCKET_DIR ?? socketDirectory(dataDir),
     logPath: args.logPath ?? env.FMARCH_DEV_POSTGRES_LOG ?? defaultLogPath,
     pgBin,
   };
+}
+
+/** Unix sockets live beside PGDATA, never in /run/postgresql. */
+export function socketDirectory(dataDir) {
+  return path.join(path.dirname(path.resolve(dataDir)), "sockets");
+}
+
+export function pgCtlStartOptions(config) {
+  return `-p ${config.port} -h ${config.host} -k ${quotePostgresArg(config.socketDir)}`;
+}
+
+export function quotePostgresArg(value) {
+  if (/^[A-Za-z0-9._/:-]+$/.test(value)) {
+    return value;
+  }
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
 }
 
 export function databaseUrl(config) {
@@ -174,13 +197,15 @@ async function startPostgres(config) {
     );
   }
 
+  await mkdir(config.socketDir, { recursive: true });
+  await ensureSocketDirectoryConfig(config);
   await runPg(config, "pg_ctl", [
     "-D",
     config.dataDir,
     "-l",
     config.logPath,
     "-o",
-    `-p ${config.port} -h ${config.host}`,
+    pgCtlStartOptions(config),
     "start",
   ]);
   await waitForReady(config);
@@ -224,6 +249,7 @@ async function printStatus(config) {
     })}`,
   );
   console.log(`dataDir=${config.dataDir}`);
+  console.log(`socketDir=${config.socketDir}`);
   console.log(`log=${config.logPath}`);
   console.log(`DATABASE_URL=${databaseUrl(config)}`);
 }
@@ -242,6 +268,33 @@ async function initIfNeeded(config) {
     "--no-locale",
     "--encoding=UTF8",
   ]);
+  await mkdir(config.socketDir, { recursive: true });
+  await ensureSocketDirectoryConfig(config);
+}
+
+export function unixSocketDirectoriesSetting(socketDir) {
+  return `unix_socket_directories = '${String(socketDir).replaceAll("'", "''")}'`;
+}
+
+export function applyUnixSocketDirectories(confText, socketDir) {
+  const desired = unixSocketDirectoriesSetting(socketDir);
+  if (/^[ \t]*unix_socket_directories[ \t]*=/m.test(confText)) {
+    return confText.replace(/^[ \t]*unix_socket_directories[ \t]*=[^\n]*/m, desired);
+  }
+  const prefix = confText.endsWith("\n") || confText.length === 0 ? "" : "\n";
+  return `${confText}${prefix}${desired}\n`;
+}
+
+async function ensureSocketDirectoryConfig(config) {
+  const confPath = path.join(config.dataDir, "postgresql.conf");
+  if (!existsSync(confPath)) {
+    return;
+  }
+  const current = await readFile(confPath, "utf8");
+  const next = applyUnixSocketDirectories(current, config.socketDir);
+  if (next !== current) {
+    await writeFile(confPath, next);
+  }
 }
 
 async function ensureDatabase(config) {
@@ -367,6 +420,7 @@ function printReady(config) {
   console.log("repo-local Postgres ready");
   console.log(`DATABASE_URL=${databaseUrl(config)}`);
   console.log(`dataDir=${config.dataDir}`);
+  console.log(`socketDir=${config.socketDir}`);
   console.log(`log=${config.logPath}`);
 }
 
@@ -402,6 +456,7 @@ Options:
   --user USER          Database user (default: ${defaultUser})
   --password PASSWORD  DATABASE_URL password label (default: ${defaultPassword})
   --data-dir PATH      Postgres data directory (default: target/local-postgres/data)
+  --socket-dir PATH    Unix socket directory (default: target/local-postgres/sockets)
   --log PATH           Postgres log path (default: target/local-postgres/postgres.log)
   --pg-bin PATH        Directory containing pg_ctl, initdb, createdb, and pg_isready
 `);

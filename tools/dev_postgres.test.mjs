@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  applyUnixSocketDirectories,
   buildConfig,
   databaseUrl,
   defaultDataDir,
@@ -9,6 +10,10 @@ import {
   defaultUser,
   devPostgresListenerState,
   parseArgs,
+  pgCtlStartOptions,
+  quotePostgresArg,
+  socketDirectory,
+  unixSocketDirectoriesSetting,
 } from "./dev_postgres.mjs";
 
 test("dev postgres args parse command and path controls", () => {
@@ -17,6 +22,13 @@ test("dev postgres args parse command and path controls", () => {
     port: 5545,
     dataDir: `${process.cwd()}/target/pg-alt`,
   });
+  assert.deepEqual(
+    parseArgs(["start", "--socket-dir", "target/pg-alt/sockets"]),
+    {
+      command: "start",
+      socketDir: `${process.cwd()}/target/pg-alt/sockets`,
+    },
+  );
   assert.deepEqual(parseArgs(["print-env"]), { command: "print-env" });
   assert.throws(() => parseArgs(["start", "--port", "nope"]), /positive integer/);
   assert.throws(() => parseArgs(["start", "--wat"]), /unknown argument/);
@@ -29,6 +41,7 @@ test("dev postgres config defaults to the repo-local lane", () => {
   assert.equal(config.user, defaultUser);
   assert.equal(config.database, "fmarch");
   assert.equal(config.dataDir, defaultDataDir);
+  assert.equal(config.socketDir, socketDirectory(defaultDataDir));
   assert.equal(config.pgBin, "/pg/bin");
   assert.equal(databaseUrl(config), "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch");
 });
@@ -44,6 +57,7 @@ test("dev postgres config accepts environment overrides", () => {
       FMARCH_DEV_POSTGRES_USER: "alice",
       FMARCH_DEV_POSTGRES_PASSWORD: "secret value",
       FMARCH_DEV_POSTGRES_DATA: "/tmp/fmarch-pg",
+      FMARCH_DEV_POSTGRES_SOCKET_DIR: "/tmp/fmarch-pg-sockets",
       FMARCH_DEV_POSTGRES_LOG: "/tmp/fmarch-pg.log",
     },
   );
@@ -53,8 +67,38 @@ test("dev postgres config accepts environment overrides", () => {
   assert.equal(config.database, "scratch");
   assert.equal(config.user, "alice");
   assert.equal(config.dataDir, "/tmp/fmarch-pg");
+  assert.equal(config.socketDir, "/tmp/fmarch-pg-sockets");
   assert.equal(config.logPath, "/tmp/fmarch-pg.log");
   assert.equal(databaseUrl(config), "postgres://alice:secret%20value@localhost:6544/scratch");
+});
+
+test("dev postgres keeps Unix sockets beside PGDATA, not in /run/postgresql", () => {
+  assert.equal(socketDirectory("/tmp/fmarch-pg/data"), "/tmp/fmarch-pg/sockets");
+  assert.equal(
+    socketDirectory("/home/fluffyr/build/fmarch/target/local-postgres/data"),
+    "/home/fluffyr/build/fmarch/target/local-postgres/sockets",
+  );
+  assert.match(quotePostgresArg("/tmp/pg sockets"), /^'\/tmp\/pg sockets'$/);
+  assert.equal(
+    pgCtlStartOptions({
+      host: "127.0.0.1",
+      port: 5544,
+      socketDir: "/tmp/fmarch-pg/sockets",
+    }),
+    "-p 5544 -h 127.0.0.1 -k /tmp/fmarch-pg/sockets",
+  );
+  assert.equal(
+    unixSocketDirectoriesSetting("/tmp/fmarch-pg/sockets"),
+    "unix_socket_directories = '/tmp/fmarch-pg/sockets'",
+  );
+  assert.match(
+    applyUnixSocketDirectories("# cluster\n", "/tmp/fmarch-pg/sockets"),
+    /unix_socket_directories = '\/tmp\/fmarch-pg\/sockets'\n$/,
+  );
+  assert.equal(
+    applyUnixSocketDirectories("unix_socket_directories = '/run/postgresql'\n", "/tmp/s"),
+    "unix_socket_directories = '/tmp/s'\n",
+  );
 });
 
 test("dev postgres distinguishes its server from an occupied port", () => {
