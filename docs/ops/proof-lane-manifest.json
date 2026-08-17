@@ -518,7 +518,7 @@
     {
       "id": "docs",
       "tier": "active",
-      "paths": ["docs/", "AGENTS.md"],
+      "paths": ["docs/", "AGENTS.md", "README.md"],
       "lanes": []
     },
     {
