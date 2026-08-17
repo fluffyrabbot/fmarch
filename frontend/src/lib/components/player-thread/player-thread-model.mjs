@@ -105,6 +105,30 @@ function pagerDisabledReason({ pending, hasOlder, threadPageStatus }) {
   return null;
 }
 
+export function buildPlayerThreadAuthorView(post = {}) {
+  const name = String(post?.authorLabel ?? "").trim() || "Unknown";
+  const seat = String(post?.authorSlot ?? "").trim();
+  return Object.freeze({
+    name,
+    seat: seat !== "" && seat !== name ? seat : null,
+  });
+}
+
+export function buildPlayerThreadPermalinkView(post = {}) {
+  const seq = Number(post?.seq);
+  if (!Number.isInteger(seq) || seq < 1) {
+    return null;
+  }
+  const meta = String(post?.meta ?? "").trim();
+  return Object.freeze({
+    href: `#thread-post-${seq}`,
+    testId: `thread-post-permalink-${seq}`,
+    label: `#${seq}`,
+    meta,
+    ariaLabel: meta === "" ? `Permalink to post ${seq}` : `Permalink to post ${seq}, ${meta}`,
+  });
+}
+
 export function buildPlayerThreadPostViewModel(
   post = {},
   { posts = [], quoteEnabled = false } = {},
@@ -114,6 +138,8 @@ export function buildPlayerThreadPostViewModel(
   const excerpt = excerptFromBody(post.body);
   return Object.freeze({
     ...post,
+    author: buildPlayerThreadAuthorView(post),
+    permalink: buildPlayerThreadPermalinkView(post),
     quotations: quote.quotations,
     citationCount: quote.citationCount,
     incomingCitations: quote.incomingCitations,

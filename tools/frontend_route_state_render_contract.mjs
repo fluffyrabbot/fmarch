@@ -1547,6 +1547,21 @@ async function proveRenderedPlayerSurface(bundle) {
   );
   assertIncludes(
     html,
+    'data-testid="thread-post-permalink-442"',
+    "player thread permalink",
+  );
+  assertIncludes(
+    html,
+    'href="#thread-post-442"',
+    "player thread permalink href",
+  );
+  assertIncludes(
+    html,
+    'data-testid="thread-post-seat-442"',
+    "player thread seat",
+  );
+  assertIncludes(
+    html,
     `data-testid="thread-post-media-${"e".repeat(64)}"`,
     "player thread media item",
   );

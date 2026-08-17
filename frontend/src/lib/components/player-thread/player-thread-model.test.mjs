@@ -3,7 +3,9 @@ import { test } from "node:test";
 import {
   PLAYER_THREAD_MEDIA_CONTRACT,
   PLAYER_THREAD_PAGER_CONTRACT,
+  buildPlayerThreadAuthorView,
   buildPlayerThreadPagerViewModel,
+  buildPlayerThreadPermalinkView,
   buildPlayerThreadViewModel,
   buildLiveOfficialPost,
   buildPlayerThreadMedia,
@@ -278,6 +280,53 @@ test("player thread model renders quote blocks and incoming citation disclosure"
   assert.equal(thread.posts[1].quotations[0].authorLabel, "Mira");
   assert.equal(thread.posts[1].quotations[0].href, "#thread-post-12");
   assert.equal(thread.quoteEnabled, true);
+  assert.deepEqual(thread.posts[0].author, { name: "Mira", seat: null });
+  assert.deepEqual(thread.posts[0].permalink, {
+    href: "#thread-post-12",
+    testId: "thread-post-permalink-12",
+    label: "#12",
+    meta: "",
+    ariaLabel: "Permalink to post 12",
+  });
+});
+
+test("player thread model names the seat when it differs from the author", () => {
+  assert.deepEqual(
+    buildPlayerThreadAuthorView({
+      authorLabel: "Mira",
+      authorSlot: "slot-7",
+    }),
+    { name: "Mira", seat: "slot-7" },
+  );
+  assert.deepEqual(
+    buildPlayerThreadAuthorView({
+      authorLabel: "slot-7",
+      authorSlot: "slot-7",
+    }),
+    { name: "slot-7", seat: null },
+  );
+  assert.deepEqual(
+    buildPlayerThreadPermalinkView({
+      seq: 443,
+      meta: "1 min ago",
+    }),
+    {
+      href: "#thread-post-443",
+      testId: "thread-post-permalink-443",
+      label: "#443",
+      meta: "1 min ago",
+      ariaLabel: "Permalink to post 443, 1 min ago",
+    },
+  );
+  assert.equal(buildPlayerThreadPermalinkView({ seq: "pending" }), null);
+  assert.deepEqual(buildPlayerThreadAuthorView({}), {
+    name: "Unknown",
+    seat: null,
+  });
+  assert.deepEqual(buildPlayerThreadAuthorView({ authorLabel: "  ", authorSlot: "  " }), {
+    name: "Unknown",
+    seat: null,
+  });
 });
 
 test("player thread media withholds original-only images", () => {

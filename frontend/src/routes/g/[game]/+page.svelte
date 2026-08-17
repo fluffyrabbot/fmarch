@@ -61,6 +61,7 @@
     recordPlayerCommandReceipt,
     clearPlayerCommandReceipt,
     persistPlayerInterruptedCommands,
+    clearedPlayerComposerDraft,
     playerRefreshKeysForLiveDelta,
     playerResyncKeys,
     restorePlayerInterruptedCommands,
@@ -83,9 +84,10 @@
 
   export let data;
 
-  let composerBody = data.composer.defaultBody;
+  let composerBody = data.composer.defaultBody ?? "";
   let composerMediaFiles = undefined;
   let composerMediaAlt = "";
+  let composerMediaEpoch = 0;
   let attachedQuotations = [];
   let quoteChannel = data.threadPager.channel;
   let commandStatus = null;
@@ -404,7 +406,12 @@
         bridgePlan.projectionRefreshKeys,
       );
       if (action === "submit_post" && commandStatus?.state === "ack") {
-        attachedQuotations = [];
+        const draft = clearedPlayerComposerDraft();
+        attachedQuotations = draft.quotations;
+        composerBody = draft.body;
+        composerMediaAlt = draft.mediaAlt;
+        composerMediaFiles = draft.mediaFiles;
+        composerMediaEpoch += 1;
       }
       if (typeof window !== "undefined") {
         exposePlayerCommandDispatchBridgePlan({
@@ -594,6 +601,7 @@
       bind:body={composerBody}
       bind:mediaFiles={composerMediaFiles}
       bind:mediaAlt={composerMediaAlt}
+      mediaResetKey={composerMediaEpoch}
       {attachedQuotations}
       onCommand={submitPlayerCommand}
       onRemoveQuote={removeQuotedPost}

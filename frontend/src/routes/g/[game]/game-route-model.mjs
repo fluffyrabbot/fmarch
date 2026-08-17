@@ -120,8 +120,7 @@ export async function buildGameRouteData({
   const phase = buildPlayerPhaseView(coldLoad.commandState);
   const composer = buildPlayerComposerView(
     {
-      canonicalVoteTag: "##vote slot-2",
-      defaultBody: "##vote slot-2",
+      defaultBody: "",
       postCommandLabel: "Post",
       voteCommandLabel: "Vote slot-2",
       withdrawCommandLabel: "Withdraw vote",

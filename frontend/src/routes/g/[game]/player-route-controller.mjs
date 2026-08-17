@@ -31,6 +31,15 @@ import {
   readInterruptedCommandAttempts,
 } from "../../../lib/app/command-recovery-storage.mjs";
 
+export function clearedPlayerComposerDraft() {
+  return Object.freeze({
+    body: "",
+    mediaAlt: "",
+    mediaFiles: undefined,
+    quotations: Object.freeze([]),
+  });
+}
+
 export function buildPlayerProjectionInitialSnapshot(data) {
   return Object.freeze({
     thread: data.thread,

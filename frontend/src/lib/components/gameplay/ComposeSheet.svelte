@@ -4,6 +4,7 @@
   export let body = "";
   export let mediaFiles = undefined;
   export let mediaAlt = "";
+  export let mediaResetKey = 0;
   export let attachedQuotations = [];
   export let onCommand = () => {};
   export let onRemoveQuote = () => {};
@@ -59,12 +60,14 @@
       <div class="fm-proof-disclosure__body">
         <label class="fm-field">
           <span>Image file</span>
-          <input
-            data-testid="player-media-file"
-            type="file"
-            accept={(composer.mediaUploadTypes ?? ["image/png", "image/jpeg"]).join(",")}
-            bind:files={mediaFiles}
-          />
+          {#key mediaResetKey}
+            <input
+              data-testid="player-media-file"
+              type="file"
+              accept={(composer.mediaUploadTypes ?? ["image/png", "image/jpeg"]).join(",")}
+              bind:files={mediaFiles}
+            />
+          {/key}
         </label>
         <label class="fm-field">
           <span>Image description</span>

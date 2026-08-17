@@ -365,10 +365,16 @@ function surfaceScenarios() {
         "player-game-bar-deadline",
         FIXTURE_THREAD_MEDIA_TEST_ID,
         "thread-post-media-boundary-442",
+        "thread-post-permalink-442",
+        "thread-post-seat-442",
         "player-private-link-notification-1",
         "player-live-status",
       ],
       links: [
+        {
+          testId: "thread-post-permalink-442",
+          href: "#thread-post-442",
+        },
         {
           testId: "player-private-link-notification-1",
           href: "/g/midsummer?private=notification-1",

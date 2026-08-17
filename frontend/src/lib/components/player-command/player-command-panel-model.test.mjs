@@ -8,7 +8,7 @@ import {
 test("player command panel model exposes tablet touch command contracts", () => {
   const view = buildPlayerCommandPanelViewModel({
     composer: {
-      defaultBody: "##vote slot-2",
+      defaultBody: "",
       voteCommandLabel: "Vote slot-2",
       voteCommands: [
         { action: "submit_vote", label: "Vote slot-2" },

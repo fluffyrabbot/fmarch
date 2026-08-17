@@ -113,6 +113,8 @@ test("player route data exposes thread, channel, votecount, and touch command la
     href: "/g/midsummer",
   });
   assert.equal(data.thread.posts[1].body, "##vote slot-2");
+  assert.equal(data.composer.defaultBody, "");
+  assert.equal("canonicalVoteTag" in data.composer, false);
   assert.equal(
     data.thread.posts[0].media[0].variants.tablet.webpUrl,
     "/media/midsummer/thread/receipt-442-tablet.png",

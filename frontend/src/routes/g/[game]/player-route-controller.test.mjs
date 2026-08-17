@@ -10,6 +10,7 @@ import {
   normalizePrivateRows,
   playerCommandErrorStatus,
   persistPlayerInterruptedCommands,
+  clearedPlayerComposerDraft,
   playerCommandInterruptedStatus,
   playerCommandPendingStatus,
   playerCommandTrace,
@@ -29,6 +30,15 @@ import {
   uploadPlayerPostMedia,
 } from "./player-route-controller.mjs";
 import { CommandInterruptedError } from "../../../lib/app/command-interruption.mjs";
+
+test("player composer draft clears body, media, and quotations after ack", () => {
+  assert.deepEqual(clearedPlayerComposerDraft(), {
+    body: "",
+    mediaAlt: "",
+    mediaFiles: undefined,
+    quotations: [],
+  });
+});
 
 test("player interrupted command keeps one retry identity and can be dismissed", () => {
   const status = playerCommandInterruptedStatus(

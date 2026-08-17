@@ -74,20 +74,39 @@
       data-testid={`thread-post-${post.seq}`}
     >
       <header>
-        <strong>{post.authorLabel}</strong>
-        <span>{post.meta}</span>
+        <div class="player-surface__post-identity">
+          <strong>{post.author.name}</strong>
+          {#if post.author.seat !== null}
+            <span
+              class="player-surface__post-seat"
+              data-testid={`thread-post-seat-${post.seq}`}
+            >{post.author.seat}</span>
+          {/if}
+        </div>
+        <div class="player-surface__post-meta">
+          {#if post.permalink !== null}
+            <a
+              class="player-surface__post-permalink"
+              href={post.permalink.href}
+              aria-label={post.permalink.ariaLabel}
+              data-testid={post.permalink.testId}
+            >
+              {post.permalink.label}{#if post.permalink.meta !== ""} · {post.permalink.meta}{/if}
+            </a>
+          {/if}
+          {#if post.quoteEnabled}
+            <button
+              type="button"
+              class="fm-touch-button fm-touch-button--secondary player-surface__quote-button"
+              data-min-touch-target-px="44"
+              data-testid={`player-quote-${post.seq}`}
+              on:click={() => onQuote(post)}
+            >
+              Quote
+            </button>
+          {/if}
+        </div>
       </header>
-      {#if post.quoteEnabled}
-        <button
-          type="button"
-          class="player-surface__quote-button"
-          data-min-touch-target-px="44"
-          data-testid={`player-quote-${post.seq}`}
-          on:click={() => onQuote(post)}
-        >
-          Quote
-        </button>
-      {/if}
       {#each post.quotations as quotation}
         <blockquote
           class="player-surface__quote"
@@ -104,7 +123,7 @@
           </cite>
         </blockquote>
       {/each}
-      <p>{post.body}</p>
+      <p class="player-surface__post-body">{post.body}</p>
       {#if post.citationCount > 0}
         <details
           class="player-surface__citations"
@@ -234,24 +253,54 @@
 
   .player-surface__post header {
     align-items: center;
-    display: grid;
-    gap: 12px;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    justify-content: space-between;
+  }
+
+  .player-surface__post:has(.player-surface__quote-button) header {
+    padding-inline-end: 56px;
+  }
+
+  .player-surface__post-identity {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-inline-size: 0;
+  }
+
+  .player-surface__post-meta {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-inline-size: 0;
+  }
+
+  .player-surface__post-seat,
+  .player-surface__post-permalink {
+    color: var(--fm-ink-subtle);
+    font-size: 13px;
+  }
+
+  .player-surface__post-permalink {
+    text-decoration: none;
+  }
+
+  .player-surface__post-permalink:hover,
+  .player-surface__post-permalink:focus-visible {
+    text-decoration: underline;
   }
 
   .player-surface__quote-button {
-    background: color-mix(in srgb, var(--fm-surface, var(--fm-ground)) 88%, transparent);
-    border: 1px solid var(--fm-line-strong, var(--fm-line));
-    border-radius: 8px;
-    color: var(--fm-ink);
-    font: inherit;
     font-size: 13px;
     font-weight: 800;
     inset-block-start: 0;
     inset-inline-end: 0;
-    min-block-size: 44px;
     min-inline-size: 44px;
-    padding: 8px 10px;
+    padding-inline: 12px;
     position: absolute;
     z-index: 1;
   }
@@ -264,15 +313,15 @@
     position: relative;
   }
 
-  .player-surface__post span {
-    color: var(--fm-ink-subtle);
-  }
-
   .player-surface__post p {
     font-size: 17px;
     line-height: 1.45;
     margin: 0;
     overflow-wrap: anywhere;
+  }
+
+  .player-surface__post-body {
+    white-space: pre-wrap;
   }
 
   .player-surface__quote {
@@ -350,6 +399,10 @@
   }
 
   @media (max-width: 560px) {
+    .player-surface__post header {
+      align-items: start;
+    }
+
     .player-surface__pager {
       min-block-size: 48px;
       padding-block-end: 6px;
