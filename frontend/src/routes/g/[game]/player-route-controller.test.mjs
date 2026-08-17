@@ -10,7 +10,10 @@ import {
   normalizePrivateRows,
   playerCommandErrorStatus,
   persistPlayerInterruptedCommands,
+  applyPlayerComposerChannelDraft,
   clearedPlayerComposerDraft,
+  playerAllowMediaOnlyPost,
+  playerActionConfig,
   playerCommandInterruptedStatus,
   playerCommandPendingStatus,
   playerCommandTrace,
@@ -38,6 +41,59 @@ test("player composer draft clears body, media, and quotations after ack", () =>
     mediaFiles: undefined,
     quotations: [],
   });
+});
+
+test("player composer draft stashes body and quotations per channel", () => {
+  const first = applyPlayerComposerChannelDraft({
+    previousChannel: "main",
+    nextChannel: "private:mafia",
+    current: {
+      body: "town read",
+      mediaAlt: "receipt",
+      mediaFiles: { length: 1 },
+      quotations: [{ sourceSeq: 12 }],
+    },
+  });
+  assert.deepEqual(first.drafts.main, {
+    body: "town read",
+    mediaAlt: "",
+    mediaFiles: undefined,
+    quotations: [{ sourceSeq: 12 }],
+  });
+  assert.deepEqual(first.draft, clearedPlayerComposerDraft());
+
+  const back = applyPlayerComposerChannelDraft({
+    drafts: first.drafts,
+    previousChannel: "private:mafia",
+    nextChannel: "main",
+    current: { body: "scum note", quotations: [] },
+  });
+  assert.equal(back.draft.body, "town read");
+  assert.deepEqual(back.draft.quotations, [{ sourceSeq: 12 }]);
+  assert.equal(back.drafts["private:mafia"].body, "scum note");
+});
+
+test("player submit_post config follows the current channel media-only policy", () => {
+  const data = {
+    threadPager: { channel: "main" },
+    commandState: {
+      postPolicies: [{ channelId: "main", allowMediaOnly: true }],
+    },
+    composer: {},
+  };
+  assert.equal(playerAllowMediaOnlyPost(data), true);
+  assert.deepEqual(playerActionConfig(data, "submit_post"), {
+    allowMediaOnlyPost: true,
+  });
+  assert.equal(
+    playerAllowMediaOnlyPost(
+      {
+        ...data,
+        threadPager: { channel: "private:mafia" },
+      },
+    ),
+    false,
+  );
 });
 
 test("player interrupted command keeps one retry identity and can be dismissed", () => {

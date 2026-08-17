@@ -61,6 +61,7 @@
     recordPlayerCommandReceipt,
     clearPlayerCommandReceipt,
     persistPlayerInterruptedCommands,
+    applyPlayerComposerChannelDraft,
     clearedPlayerComposerDraft,
     playerRefreshKeysForLiveDelta,
     playerResyncKeys,
@@ -89,6 +90,7 @@
   let composerMediaAlt = "";
   let composerMediaEpoch = 0;
   let attachedQuotations = [];
+  let composerDrafts = Object.freeze({});
   let quoteChannel = data.threadPager.channel;
   let commandStatus = null;
   $: commandPending = commandStatus?.state === "pending";
@@ -159,8 +161,22 @@
     surfaceHeader,
   });
   $: if (data.threadPager.channel !== quoteChannel) {
+    const switched = applyPlayerComposerChannelDraft({
+      drafts: composerDrafts,
+      previousChannel: quoteChannel,
+      nextChannel: data.threadPager.channel,
+      current: {
+        body: composerBody,
+        quotations: attachedQuotations,
+      },
+    });
+    composerDrafts = switched.drafts;
     quoteChannel = data.threadPager.channel;
-    attachedQuotations = [];
+    composerBody = switched.draft.body;
+    composerMediaAlt = switched.draft.mediaAlt;
+    composerMediaFiles = switched.draft.mediaFiles;
+    attachedQuotations = switched.draft.quotations;
+    composerMediaEpoch += 1;
   }
   $: playerActionView = buildPlayerCommandPanelViewModel({
     composer,
@@ -412,6 +428,10 @@
         composerMediaAlt = draft.mediaAlt;
         composerMediaFiles = draft.mediaFiles;
         composerMediaEpoch += 1;
+        composerDrafts = Object.freeze({
+          ...composerDrafts,
+          [quoteChannel]: draft,
+        });
       }
       if (typeof window !== "undefined") {
         exposePlayerCommandDispatchBridgePlan({

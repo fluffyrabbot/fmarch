@@ -542,6 +542,7 @@ test("normalizes player command state into route action configs", () => {
           member_count: 3,
           posting_allowed: false,
         }],
+        post_policies: [{ channel_id: "main", allow_media_only: true }],
         boundary: "live command state",
       },
       FALLBACK.commandState,
@@ -609,6 +610,7 @@ test("normalizes player command state into route action configs", () => {
         memberCount: 3,
         postingAllowed: false,
       }],
+      postPolicies: [{ channelId: "main", allowMediaOnly: true }],
       boundary: "live command state",
     },
   );

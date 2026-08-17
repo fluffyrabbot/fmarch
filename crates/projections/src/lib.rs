@@ -7059,6 +7059,30 @@ where
         }))
 }
 
+pub async fn post_policies<'e, E>(
+    executor: E,
+    game_id: Uuid,
+) -> Result<Vec<PostPolicyRow>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows = sqlx::query(
+        "SELECT game_id, channel_id, allow_media_only \
+         FROM post_policy WHERE game_id = $1 ORDER BY channel_id",
+    )
+    .bind(game_id)
+    .fetch_all(executor)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| PostPolicyRow {
+            game_id: row.get("game_id"),
+            channel_id: row.get("channel_id"),
+            allow_media_only: row.get("allow_media_only"),
+        })
+        .collect())
+}
+
 /// Whether a slot exists in the game (has a `slot_state` row).
 pub async fn slot_exists<'e, E>(
     executor: E,

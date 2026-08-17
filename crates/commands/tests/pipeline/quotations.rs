@@ -218,3 +218,63 @@ async fn submit_post_rejects_quoting_a_private_channel_seq_from_main(pool: PgPoo
     .await;
     assert!(matches!(rejected, Err(commands::Reject::InvalidTarget)));
 }
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn submit_post_allows_empty_body_when_same_thread_quotations_are_present(pool: PgPool) {
+    let host = "host_q_empty";
+    let slot = "slot_1";
+    let occupant = "player_q_empty";
+    let game = setup_game(&pool, host, slot, occupant).await;
+
+    handle(
+        &pool,
+        &user(occupant),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: slot.into(),
+            body: "Alpha signal analysis".into(),
+            media: Vec::new(),
+            quotations: Vec::new(),
+        },
+    )
+    .await
+    .expect("root post");
+
+    let quoted_seq: i64 = sqlx::query_scalar(
+        "SELECT source_seq FROM thread_view WHERE game_id = $1 AND channel_id = 'main' ORDER BY source_seq ASC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &user(occupant),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: slot.into(),
+            body: "".into(),
+            media: Vec::new(),
+            quotations: vec![Quotation {
+                target: PostRef {
+                    kind: PostKind::GamePost,
+                    scope_id: game,
+                    source_seq: quoted_seq,
+                },
+                excerpt: "Alpha signal".into(),
+            }],
+        },
+    )
+    .await
+    .expect("quote-only post");
+
+    let thread = projections::thread_view(&pool, game, None, 10)
+        .await
+        .expect("thread view");
+    assert_eq!(thread.posts.len(), 2);
+    assert_eq!(thread.posts[1].body, "");
+    assert_eq!(thread.posts[1].quotations[0].excerpt, "Alpha signal");
+}

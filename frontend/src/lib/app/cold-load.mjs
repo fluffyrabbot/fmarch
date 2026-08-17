@@ -593,6 +593,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   currentVote: null,
   dayEvents: Object.freeze([]),
   dayEventRooms: Object.freeze([]),
+  postPolicies: Object.freeze([]),
   boundary:
     "No live player command-state endpoint was available; the route renders no role action controls.",
 });
@@ -659,7 +660,31 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
     dayEventRooms: Object.freeze(
       dayEventRooms.map(normalizeDayEventRoom).filter(Boolean),
     ),
+    postPolicies: Object.freeze(
+      (Array.isArray(payload.post_policies)
+        ? payload.post_policies
+        : Array.isArray(payload.postPolicies)
+          ? payload.postPolicies
+          : fallback.postPolicies ?? []
+      )
+        .map(normalizePlayerPostPolicy)
+        .filter(Boolean),
+    ),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),
+  });
+}
+
+function normalizePlayerPostPolicy(entry) {
+  if (entry === null || typeof entry !== "object") {
+    return null;
+  }
+  const channelId = String(entry.channel_id ?? entry.channelId ?? "").trim();
+  if (channelId === "") {
+    return null;
+  }
+  return Object.freeze({
+    channelId,
+    allowMediaOnly: entry.allow_media_only === true || entry.allowMediaOnly === true,
   });
 }
 

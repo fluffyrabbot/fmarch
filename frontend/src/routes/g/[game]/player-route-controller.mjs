@@ -31,13 +31,59 @@ import {
   readInterruptedCommandAttempts,
 } from "../../../lib/app/command-recovery-storage.mjs";
 
-export function clearedPlayerComposerDraft() {
+export function playerComposerDraftFromState({
+  body = "",
+  mediaAlt = "",
+  mediaFiles,
+  quotations = [],
+} = {}) {
   return Object.freeze({
-    body: "",
-    mediaAlt: "",
-    mediaFiles: undefined,
-    quotations: Object.freeze([]),
+    body: String(body ?? ""),
+    mediaAlt: String(mediaAlt ?? ""),
+    mediaFiles,
+    quotations: Object.freeze([...(Array.isArray(quotations) ? quotations : [])]),
   });
+}
+
+export function clearedPlayerComposerDraft() {
+  return playerComposerDraftFromState();
+}
+
+export function applyPlayerComposerChannelDraft({
+  drafts = {},
+  previousChannel,
+  nextChannel,
+  current = {},
+} = {}) {
+  const previous = String(previousChannel ?? "");
+  const next = String(nextChannel ?? "");
+  const nextDrafts = { ...drafts };
+  if (previous !== "" && previous !== next) {
+    nextDrafts[previous] = playerComposerDraftFromState({
+      body: current.body,
+      quotations: current.quotations,
+    });
+  }
+  return Object.freeze({
+    drafts: Object.freeze(nextDrafts),
+    draft: nextDrafts[next] ?? clearedPlayerComposerDraft(),
+  });
+}
+
+export function playerAllowMediaOnlyPost(data, channelId) {
+  const channel = String(
+    channelId ?? data?.threadPager?.channel ?? data?.channel?.channel ?? "main",
+  );
+  const policies = Array.isArray(data?.commandState?.postPolicies)
+    ? data.commandState.postPolicies
+    : Array.isArray(data?.composer?.postPolicies)
+      ? data.composer.postPolicies
+      : [];
+  return policies.some(
+    (policy) =>
+      String(policy?.channelId ?? policy?.channel_id ?? "") === channel &&
+      (policy?.allowMediaOnly === true || policy?.allow_media_only === true),
+  );
 }
 
 export function buildPlayerProjectionInitialSnapshot(data) {
@@ -581,6 +627,11 @@ function playerRefreshKeysForStalePhase(data, action) {
 }
 
 export function playerActionConfig(data, action) {
+  if (String(action) === "submit_post") {
+    return Object.freeze({
+      allowMediaOnlyPost: playerAllowMediaOnlyPost(data),
+    });
+  }
   return (
     data.composer.voteCommands?.find(
       (command) => String(command.action) === String(action),

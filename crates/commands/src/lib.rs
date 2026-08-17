@@ -2528,13 +2528,13 @@ async fn submit_post(
     require_channel_actor_can_post(tx, game, &channel_id, &actor_slot).await?;
     validate_thread_post_media(&media)?;
     validate_game_post_body(&body)?;
-    if body.trim().is_empty() {
+    let quotations = decide_game_quotations(tx, game, &channel_id, principal, quotations).await?;
+    if body.trim().is_empty() && quotations.is_empty() {
         let policy = projections::post_policy(&mut **tx, game, &channel_id).await?;
         if media.is_empty() || !policy.allow_media_only {
             return Err(Reject::InvalidTarget);
         }
     }
-    let quotations = decide_game_quotations(tx, game, &channel_id, principal, quotations).await?;
     // A post is attributed to the SLOT (doc 01: post authorship attaches to the
     // slot, not the user). `slot_or_user` carries the slot id so authorship
     // survives a replacement. Phase id is recorded for partitioning.

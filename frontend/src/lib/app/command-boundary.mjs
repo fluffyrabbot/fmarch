@@ -39,7 +39,7 @@ export function buildPlayerCommand({
           game: requiredString(game, "game"),
           channel_id: requiredString(channelId, "channelId"),
           actor_slot: requiredString(actorSlot, "actorSlot"),
-          body: postBody(body, normalizedMedia, actionConfig),
+          body: postBody(body, normalizedMedia, actionConfig, normalizedQuotations),
           ...(normalizedMedia.length > 0 ? { media: normalizedMedia } : {}),
           ...(normalizedQuotations.length > 0 ? { quotations: normalizedQuotations } : {}),
         }),
@@ -345,17 +345,22 @@ function requiredString(value, field) {
   return value;
 }
 
-function postBody(value, media, actionConfig) {
+function postBody(value, media, actionConfig, quotations = []) {
   if (typeof value !== "string") {
     throw new TypeError("body must be a string");
   }
   if (value.trim() !== "") {
     return value;
   }
+  if (Array.isArray(quotations) && quotations.length > 0) {
+    return value;
+  }
   if (actionConfig?.allowMediaOnlyPost === true && media.length > 0) {
     return value;
   }
-  throw new TypeError("body must be a non-empty string unless media-only posts are enabled");
+  throw new TypeError(
+    "body must be a non-empty string unless the post carries quotations or media-only posts are enabled",
+  );
 }
 
 function submitPostQuotations(value) {

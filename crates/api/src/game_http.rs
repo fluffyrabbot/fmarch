@@ -793,6 +793,8 @@ pub struct PlayerCommandStateResponse {
     /// terminal rooms remain visible as read-only history while membership is
     /// retained; revoked rooms disappear from this projection immediately.
     pub day_event_rooms: Vec<DayEventRoomDelta>,
+    #[serde(default)]
+    pub post_policies: Vec<HostSetupPostPolicyState>,
     pub boundary: String,
 }
 
@@ -980,6 +982,14 @@ async fn player_command_state(
     };
     let day_event_workspace =
         load_player_day_event_workspace(&state.pool, game, actor, game_completed).await?;
+    let post_policies = projections::post_policies(&state.pool, game)
+        .await?
+        .into_iter()
+        .map(|policy| HostSetupPostPolicyState {
+            channel_id: policy.channel_id,
+            allow_media_only: policy.allow_media_only,
+        })
+        .collect();
 
     Ok(Json(PlayerCommandStateResponse {
         game,
@@ -996,6 +1006,7 @@ async fn player_command_state(
         current_vote,
         day_events: day_event_workspace.attention,
         day_event_rooms: day_event_workspace.rooms,
+        post_policies,
         boundary: if game_completed {
             "The game is complete; role actions, votes, and posts are closed while final role and alignment facts are public.".to_string()
         } else {

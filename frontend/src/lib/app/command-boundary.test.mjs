@@ -277,12 +277,28 @@ test("player post builder requires policy affordance for media-only posts", () =
       }),
     /media-only posts are enabled/,
   );
-  assert.throws(
-    () =>
-      buildPlayerCommand({
-        action: "submit_post",
+  assert.deepEqual(
+    buildPlayerCommand({
+      action: "submit_post",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      body: "",
+      quotations: [
+        {
+          target: {
+            kind: "game_post",
+            scope_id: "00000000-0000-0000-0000-000000000001",
+            source_seq: 12,
+          },
+          excerpt: "Alpha signal",
+        },
+      ],
+    }),
+    {
+      SubmitPost: {
         game: "00000000-0000-0000-0000-000000000001",
-        actorSlot: "slot-7",
+        channel_id: "main",
+        actor_slot: "slot-7",
         body: "",
         quotations: [
           {
@@ -294,8 +310,8 @@ test("player post builder requires policy affordance for media-only posts", () =
             excerpt: "Alpha signal",
           },
         ],
-      }),
-    /media-only posts are enabled/,
+      },
+    },
   );
 });
 
