@@ -634,6 +634,13 @@ pub fn assert_no_decision_trace(
     }
 }
 
+/// Persist traces store omitted detail as JSON null. Inspection maps that to
+/// an empty object so the fail-closed wire `ResolutionTraceDetail` map never
+/// sees `null`.
+pub fn empty_inspection_detail() -> serde_json::Value {
+    serde_json::json!({})
+}
+
 #[derive(Debug, Clone)]
 pub struct InspectionDecisionExpectation<'a> {
     pub phase_id: &'a str,

@@ -4820,7 +4820,7 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
                 stage: "inner_event",
                 source: &day_vote_source,
                 outcome: "day_vote_outcome",
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
             &format!("seed {seed}"),
         );
@@ -5021,7 +5021,7 @@ async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(p
                 stage: "inner_event",
                 source: &representative_source,
                 outcome: representative_event.1,
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
             &context,
         );
@@ -6319,7 +6319,7 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
                 stage: "inner_event",
                 source: &n01_source,
                 outcome: n01_state_event.1,
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
             &context,
         );
@@ -7076,7 +7076,7 @@ async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: 
             stage: "inner_event",
             source: &babysitter_event_source,
             outcome: "player_killed",
-            detail: serde_json::Value::Null,
+            detail: empty_inspection_detail(),
         },
         "large graph",
     );
@@ -7108,7 +7108,7 @@ async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: 
             stage: "inner_event",
             source: &hider_event_source,
             outcome: "player_killed",
-            detail: serde_json::Value::Null,
+            detail: empty_inspection_detail(),
         },
         "large graph",
     );
@@ -7120,7 +7120,7 @@ async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: 
             stage: "inner_event",
             source: &cupid_link_source,
             outcome: "players_linked",
-            detail: serde_json::Value::Null,
+            detail: empty_inspection_detail(),
         },
         "large graph",
     );
@@ -7480,7 +7480,7 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
                 stage: "inner_event",
                 source: &representative_source,
                 outcome: representative_event.1,
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
         ) {
             panic!(
@@ -8239,7 +8239,7 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
                 stage: "inner_event",
                 source: &representative_source,
                 outcome: representative_event.1,
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
         ) {
             panic!(
@@ -10252,7 +10252,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                 stage: "inner_event",
                 source: &bomb_trigger_source,
                 outcome: "trigger",
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
         ) {
             panic!(
@@ -10275,7 +10275,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                 stage: "inner_event",
                 source: &converted_source,
                 outcome: "player_converted",
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
         ) {
             panic!(
@@ -10298,7 +10298,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                 stage: "inner_event",
                 source: &blocked_source,
                 outcome: "conversion_blocked",
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
         ) {
             panic!(
@@ -10600,7 +10600,7 @@ async fn host_resolve_phase_carries_default_open_guardian_seer(pool: PgPool) {
             stage: "inner_event",
             source: &saved_source,
             outcome: "player_saved",
-            detail: serde_json::Value::Null,
+            detail: empty_inspection_detail(),
         },
         "default_open N01",
     );
@@ -10612,7 +10612,7 @@ async fn host_resolve_phase_carries_default_open_guardian_seer(pool: PgPool) {
             stage: "inner_event",
             source: &investigation_source,
             outcome: "investigation_result",
-            detail: serde_json::Value::Null,
+            detail: empty_inspection_detail(),
         },
         "default_open N01",
     );
@@ -10985,7 +10985,7 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
                 stage: "inner_event",
                 source: &investigation_source,
                 outcome: "investigation_result",
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
         ) {
             panic!(
@@ -11218,7 +11218,7 @@ async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
             stage: "inner_event",
             source: &day_vote_source,
             outcome: "day_vote_outcome",
-            detail: serde_json::Value::Null,
+            detail: empty_inspection_detail(),
         },
         "default_open D01",
     );
@@ -11230,7 +11230,7 @@ async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
             stage: "inner_event",
             source: &lynch_death_source,
             outcome: "player_killed",
-            detail: serde_json::Value::Null,
+            detail: empty_inspection_detail(),
         },
         "default_open D01",
     );
@@ -11242,7 +11242,7 @@ async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
             stage: "inner_event",
             source: &town_win_source,
             outcome: "win_reached",
-            detail: serde_json::Value::Null,
+            detail: empty_inspection_detail(),
         },
         "default_open D01",
     );
@@ -11578,7 +11578,7 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
                 stage: "inner_event",
                 source: &day_vote_source,
                 outcome: "day_vote_outcome",
-                detail: serde_json::Value::Null,
+                detail: empty_inspection_detail(),
             },
         ) {
             panic!(

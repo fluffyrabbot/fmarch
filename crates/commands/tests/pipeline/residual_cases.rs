@@ -6049,7 +6049,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
             stage: "inner_event",
             source: &day_vote_source,
             outcome: "day_vote_outcome",
-            detail: serde_json::Value::Null,
+            detail: empty_inspection_detail(),
         },
         "prompt-free resolution trace inspection",
     );
