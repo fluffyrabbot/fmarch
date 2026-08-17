@@ -10,10 +10,12 @@ import {
   hostCommandErrorOutcome,
   hostCommandInterruptedOutcome,
   hostCommandPendingStatus,
+  persistHostInterruptedCommands,
   hostPostAckRefreshKeys,
   hostPostCommandRefreshKeys,
   hostProjectionResyncKeys,
   recordHostCommandStatus,
+  restoreHostInterruptedCommands,
   clearHostCommandStatus,
   sendHostRouteAction,
 } from "./host-route-controller.mjs";
@@ -45,6 +47,44 @@ test("host interrupted command keeps confirmation and can be dismissed", () => {
     clearHostCommandStatus({ [event.actionId]: status }, event.actionId),
     {},
   );
+});
+
+test("host interrupted commands survive sessionStorage reload with the same command id", () => {
+  const storage = memoryStorage();
+  const event = {
+    actionId: "extend_deadline",
+    hours: 12,
+    confirmationTrace: {
+      kind: "confirmation-command-trace",
+      confirmationKind: "confirmation-action",
+      surface: "moderator-host",
+      actionId: "extend_deadline",
+      statusKey: "extend_deadline",
+      dispatchKind: "extend_deadline",
+    },
+  };
+  persistHostInterruptedCommands({
+    storage,
+    game: "midsummer",
+    attempts: {
+      extend_deadline: {
+        commandId: "host-command-1",
+        actionId: "extend_deadline",
+        interruption: "timeout",
+        event,
+      },
+    },
+  });
+
+  const restored = restoreHostInterruptedCommands({
+    storage,
+    game: "midsummer",
+  });
+
+  assert.equal(restored.attempts.extend_deadline.commandId, "host-command-1");
+  assert.equal(restored.commandStatuses.extend_deadline.commandId, "host-command-1");
+  assert.equal(restored.commandStatuses.extend_deadline.state, "interrupted");
+  assert.equal(restored.attempts.extend_deadline.event.hours, 12);
 });
 
 test("host route controller builds projection store boundaries from route data", () => {
@@ -798,6 +838,21 @@ function fakeProjectionStore(snapshot) {
     },
     getSnapshot() {
       return snapshot;
+    },
+  };
+}
+
+function memoryStorage() {
+  const values = new Map();
+  return {
+    getItem(key) {
+      return values.has(key) ? values.get(key) : null;
+    },
+    setItem(key, value) {
+      values.set(key, String(value));
+    },
+    removeItem(key) {
+      values.delete(key);
     },
   };
 }

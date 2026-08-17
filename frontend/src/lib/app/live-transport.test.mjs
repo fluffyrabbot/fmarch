@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  attachLiveProjectionPageLifecycle,
   buildLiveProjectionUrl,
   connectLiveProjection,
   decodeServerEnvelopeFrame,
   encodeServerEnvelopeFrame,
+  liveProjectionReconnectDelayMs,
   liveProjectionStatusForEvent,
   normalizeServerEnvelopeMessage,
   projectionPatchForLiveEnvelope,
   recoverLiveProjection,
   resolveWebSocketUrl,
+  shouldWakeLiveProjection,
 } from "./live-transport.mjs";
 
 test("builds websocket URLs from API bases and relative app origins", () => {
@@ -530,7 +533,7 @@ test("hung ticket mint is aborted before retrying connection establishment", asy
   assert.equal(scheduled.length, 1);
   assert.deepEqual(events.map((event) => event.message), [
     { kind: "error", message: "live ticket request timed out" },
-    { kind: "reconnecting", attempt: 1 },
+    { kind: "reconnecting", attempt: 1, reason: "close" },
   ]);
 
   scheduled[0].callback();
@@ -569,7 +572,7 @@ test("rate-limited ticket mint honors Retry-After before reconnecting", async ()
   assert.equal(scheduled[0].delayMs, 17_000);
   assert.deepEqual(events.map((event) => event.message), [
     { kind: "error", message: "live ticket request failed with HTTP 429" },
-    { kind: "reconnecting", attempt: 1 },
+    { kind: "reconnecting", attempt: 1, reason: "close" },
   ]);
   connection.close();
 });
@@ -841,7 +844,7 @@ test("websocket close schedules reconnect and refreshes projections on reopen", 
 
   assert.deepEqual(events.map((event) => event.message), [
     { kind: "close" },
-    { kind: "reconnecting", attempt: 1 },
+    { kind: "reconnecting", attempt: 1, reason: "close" },
   ]);
   assert.equal(scheduled.length, 1);
   assert.equal(scheduled[0].delayMs, 42);
@@ -901,10 +904,10 @@ test("failed reconnect refresh closes the unusable socket and retries recovery",
   assert.deepEqual(events.slice(-3).map((event) => event.message), [
     { kind: "error", message: "snapshot refresh unavailable" },
     { kind: "close" },
-    { kind: "reconnecting", attempt: 2 },
+    { kind: "reconnecting", attempt: 2, reason: "close" },
   ]);
   assert.equal(scheduled.length, 2);
-  assert.equal(scheduled[1].delayMs, 42);
+  assert.equal(scheduled[1].delayMs, 84);
 
   scheduled[1].callback();
   await FakeWebSocket.instances[2].emit("open");
@@ -949,7 +952,7 @@ test("hung reconnect refresh is aborted before retrying recovery", async () => {
   assert.deepEqual(events.slice(-3).map((event) => event.message), [
     { kind: "error", message: "live projection recovery timed out" },
     { kind: "close" },
-    { kind: "reconnecting", attempt: 2 },
+    { kind: "reconnecting", attempt: 2, reason: "close" },
   ]);
   assert.equal(scheduled.length, 2);
   connection.close();
@@ -1002,7 +1005,7 @@ test("transport drop enters reconnect immediately and ignores duplicate close ev
 
   assert.deepEqual(events.map((event) => event.message), [
     { kind: "close" },
-    { kind: "reconnecting", attempt: 1 },
+    { kind: "reconnecting", attempt: 1, reason: "close" },
   ]);
   assert.equal(scheduled.length, 1);
   assert.equal(scheduled[0].delayMs, 5);
@@ -1041,7 +1044,7 @@ test("transport drop ignores late messages from the invalidated socket", async (
 
   assert.deepEqual(events.map((event) => event.message), [
     { kind: "close" },
-    { kind: "reconnecting", attempt: 1 },
+    { kind: "reconnecting", attempt: 1, reason: "close" },
   ]);
 });
 
@@ -1102,6 +1105,135 @@ test("live projection events map to visible status copy", () => {
   });
 });
 
+test("generic close uses exponential backoff and resets after a healthy reopen", async () => {
+  assert.equal(liveProjectionReconnectDelayMs(0, 42), 42);
+  assert.equal(liveProjectionReconnectDelayMs(1, 42), 84);
+  assert.equal(liveProjectionReconnectDelayMs(5, 42), 1344);
+  assert.equal(liveProjectionReconnectDelayMs(9, 42), 1344);
+
+  FakeWebSocket.instances = [];
+  const scheduled = [];
+  const events = [];
+  const store = fakeProjectionStore({ thread: { posts: [] } });
+  const connection = connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    fetchImpl: async () => jsonResponse({ posts: [{ seq: 2, body: "recovered" }] }),
+    resyncKeys: ["thread"],
+    reconnectDelayMs: 42,
+    scheduleReconnect(callback, delayMs) {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  await FakeWebSocket.instances[0].emit("close");
+  assert.equal(scheduled[0].delayMs, 42);
+  scheduled[0].callback();
+  await FakeWebSocket.instances[1].emit("close");
+  assert.equal(scheduled[1].delayMs, 84);
+
+  scheduled[1].callback();
+  await FakeWebSocket.instances[2].emit("open");
+  assert.equal(events.at(-1).message.kind, "reconnect");
+
+  await FakeWebSocket.instances[2].emit("close");
+  assert.equal(scheduled[2].delayMs, 42);
+  connection.close();
+});
+
+test("page lifecycle wake remints a ticket and refreshes immediately", async () => {
+  FakeWebSocket.instances = [];
+  const scheduled = [];
+  const tickets = [];
+  const events = [];
+  const store = fakeProjectionStore({ thread: { posts: [] } });
+  const connection = connectLiveProjection({
+    url: "/live/tickets?game=midsummer",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    fetchImpl: async (url) => {
+      if (String(url).startsWith("/live/tickets")) {
+        tickets.push(url);
+        return jsonResponse({
+          url: `wss://api.example/ws?ticket=wake-${tickets.length}`,
+        });
+      }
+      return jsonResponse({ posts: [{ seq: 11, body: "woke" }] });
+    },
+    resyncKeys: ["thread"],
+    reconnectDelayMs: 5_000,
+    scheduleReconnect(callback, delayMs) {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  await waitFor(() => FakeWebSocket.instances.length === 1);
+  await FakeWebSocket.instances[0].emit("open");
+  assert.equal(connection.reconnectNow({ reason: "visibilitychange" }), true);
+  assert.equal(scheduled.length, 0);
+  await waitFor(() => FakeWebSocket.instances.length === 2);
+  await FakeWebSocket.instances[1].emit("open");
+
+  assert.equal(tickets.length, 2);
+  assert.deepEqual(events.at(-2).message, {
+    kind: "reconnecting",
+    attempt: 1,
+    reason: "visibilitychange",
+  });
+  assert.deepEqual(events.at(-1).message, {
+    kind: "reconnect",
+    attempt: 0,
+    state: "recovered",
+  });
+  assert.deepEqual(store.refreshed, [["thread"]]);
+  connection.close();
+});
+
+test("page lifecycle owner wakes on visible/online/bfcache and ignores hidden/normal pageshow", async () => {
+  assert.equal(shouldWakeLiveProjection("online"), true);
+  assert.equal(shouldWakeLiveProjection("pageshow", { persisted: true }), true);
+  assert.equal(shouldWakeLiveProjection("pageshow", { persisted: false }), false);
+  assert.equal(
+    shouldWakeLiveProjection("visibilitychange", { visibilityState: "visible" }),
+    true,
+  );
+  assert.equal(
+    shouldWakeLiveProjection("visibilitychange", { visibilityState: "hidden" }),
+    false,
+  );
+
+  const reasons = [];
+  const documentRef = fakeEventTarget({ visibilityState: "hidden" });
+  const windowRef = fakeEventTarget({ document: documentRef });
+  const lifecycle = attachLiveProjectionPageLifecycle({
+    connection: {
+      reconnectNow({ reason }) {
+        reasons.push(reason);
+        return true;
+      },
+    },
+    target: windowRef,
+    documentRef,
+  });
+
+  documentRef.visibilityState = "hidden";
+  documentRef.emit("visibilitychange");
+  documentRef.visibilityState = "visible";
+  documentRef.emit("visibilitychange");
+  windowRef.emit("online");
+  windowRef.emit("pageshow", { persisted: false });
+  windowRef.emit("pageshow", { persisted: true });
+  lifecycle.detach();
+  windowRef.emit("online");
+
+  assert.deepEqual(reasons, ["visibilitychange", "online", "pageshow"]);
+});
+
 class FakeWebSocket {
   static last = null;
   static instances = [];
@@ -1124,6 +1256,22 @@ class FakeWebSocket {
   close() {
     this.closed = true;
   }
+}
+
+function fakeEventTarget(extra = {}) {
+  const listeners = new Map();
+  return {
+    ...extra,
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    },
+    removeEventListener(type) {
+      listeners.delete(type);
+    },
+    emit(type, event = {}) {
+      listeners.get(type)?.(event);
+    },
+  };
 }
 
 function fakeProjectionStore(initialSnapshot) {

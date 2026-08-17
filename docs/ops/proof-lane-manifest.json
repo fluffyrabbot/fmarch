@@ -63,6 +63,7 @@
     "test:frontend-contract": { "kind": "npm" },
     "test:frontend-static-role-contract": { "kind": "npm" },
     "test:frontend-role-smoke": { "kind": "npm" },
+    "test:frontend-route-live-contract": { "kind": "npm" },
     "test:frontend-route-state-render": { "kind": "npm" },
     "test:frontend-tablet-interaction": { "kind": "npm" },
     "test:frontend-role-dom-smoke": { "kind": "npm" },
@@ -360,6 +361,7 @@
       "lanes": [
         "test:frontend-contract",
         "test:frontend-role-smoke",
+        "test:frontend-route-live-contract",
         "test:frontend-route-state-render",
         "test:frontend-static-role-contract",
         "test:frontend-tablet-interaction",
@@ -499,7 +501,8 @@
         "test:proof-lane-contract",
         "test:dev-postgres-contract",
         "test:dev-test-game-contract",
-        "test:frontend-static-role-contract"
+        "test:frontend-static-role-contract",
+        "test:frontend-route-live-contract"
       ]
     },
     {

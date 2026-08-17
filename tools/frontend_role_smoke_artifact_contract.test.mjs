@@ -2741,6 +2741,7 @@ test("route live contract records Svelte onMount websocket and resync evidence",
     moderatorRoutePage: "frontend/src/routes/g/[game]/host/+page.svelte",
     liveTransport: "frontend/src/lib/app/live-transport.mjs",
     projectionStore: "frontend/src/lib/app/projection-store.mjs",
+    commandRecoveryStorage: "frontend/src/lib/app/command-recovery-storage.mjs",
   });
   assert.deepEqual(
     [
@@ -2785,6 +2786,22 @@ test("route live contract records Svelte onMount websocket and resync evidence",
   ]);
   assert.equal(routeLive.runtime.player.finalStatus.state, "recovered");
   assert.equal(routeLive.runtime.moderator.finalStatus.state, "recovered");
+  assert.deepEqual(routeLive.sources.player.pageLifecycleOwner, "attachLiveProjectionPageLifecycle");
+  assert.deepEqual(routeLive.sources.moderator.pageLifecycleOwner, "attachLiveProjectionPageLifecycle");
+  assert.deepEqual(routeLive.runtime.playerLifecycle.wakeReasons, [
+    "visibilitychange",
+    "online",
+    "pageshow",
+  ]);
+  assert.deepEqual(routeLive.runtime.moderatorLifecycle.wakeReasons, [
+    "visibilitychange",
+    "online",
+    "pageshow",
+  ]);
+  assert.deepEqual(routeLive.runtime.playerLifecycle.genericCloseBackoffMs, [42, 84]);
+  assert.deepEqual(routeLive.runtime.moderatorLifecycle.genericCloseBackoffMs, [42, 84]);
+  assert.equal(routeLive.runtime.playerCommandRecovery.restoredCommandId, "player-live-command-1");
+  assert.equal(routeLive.runtime.moderatorCommandRecovery.restoredCommandId, "host-live-command-1");
 });
 
 test("host confirmation static DOM artifact covers destructive moderator actions", async () => {

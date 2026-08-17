@@ -19,7 +19,14 @@ import {
   projectHostConsoleState,
   sendHostActionCommand,
 } from "../../../../lib/components/host-action/host-command-boundary.mjs";
-import { commandInterruptionStatus } from "../../../../lib/app/command-interruption.mjs";
+import {
+  CommandInterruptedError,
+  commandInterruptionStatus,
+} from "../../../../lib/app/command-interruption.mjs";
+import {
+  persistInterruptedCommandAttempts,
+  readInterruptedCommandAttempts,
+} from "../../../../lib/app/command-recovery-storage.mjs";
 
 export const HOST_PROJECTION_RESYNC_KEYS = Object.freeze([
   "host",
@@ -151,6 +158,39 @@ export function hostCommandErrorOutcome({ actionId, error, event = null }) {
 export function hostCommandInterruptedOutcome({ actionId, commandId, error, event = null }) {
   const status = commandInterruptionStatus(error, { actionId, commandId });
   return status === null ? null : attachEventConfirmationTrace(status, event);
+}
+
+export function persistHostInterruptedCommands({ storage, game, attempts }) {
+  return persistInterruptedCommandAttempts({
+    storage,
+    game,
+    surface: "moderator",
+    attempts,
+  });
+}
+
+export function restoreHostInterruptedCommands({ storage, game }) {
+  const attempts = readInterruptedCommandAttempts({
+    storage,
+    game,
+    surface: "moderator",
+  });
+  const commandStatuses = {};
+  for (const [actionId, attempt] of Object.entries(attempts)) {
+    const status = hostCommandInterruptedOutcome({
+      actionId,
+      commandId: attempt.commandId,
+      error: new CommandInterruptedError(attempt.interruption),
+      event: attempt.event,
+    });
+    if (status !== null) {
+      commandStatuses[actionId] = status;
+    }
+  }
+  return Object.freeze({
+    attempts,
+    commandStatuses: Object.freeze(commandStatuses),
+  });
 }
 
 export function buildHostCommandDispatchBridgePlan({

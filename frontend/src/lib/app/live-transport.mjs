@@ -14,9 +14,18 @@ export const LIVE_TRANSPORT_BOUNDARY = Object.freeze({
   status: "cbor-ws-projection-deltas-with-resync-and-reconnect",
   protocol: "WebSocket CBOR",
   resyncPolicy: "single-flight-latest-trailing-refresh",
+  reconnectPolicy: "exponential-backoff-on-close-immediate-on-page-lifecycle",
   proof:
-    "Initial binary-CBOR WebSocket Hello plus command-following projection delta, single-flight ResyncRequired recovery with one latest trailing refresh, and reconnect refresh recovery are proven over the versioned typed CBOR boundary.",
+    "Initial binary-CBOR WebSocket Hello plus command-following projection delta, single-flight ResyncRequired recovery with one latest trailing refresh, reconnect refresh recovery, exponential backoff on generic close, and visibility/online/pageshow immediate ticket+refresh are proven over the versioned typed CBOR boundary.",
 });
+
+export const LIVE_PROJECTION_PAGE_LIFECYCLE_EVENTS = Object.freeze([
+  "visibilitychange",
+  "online",
+  "pageshow",
+]);
+
+export const LIVE_PROJECTION_RECONNECT_BACKOFF_CAP_EXPONENT = 5;
 
 export const LIVE_PROJECTION_CONNECTING_STATUS = Object.freeze({
   state: "connecting",
@@ -155,6 +164,95 @@ export async function recoverLiveProjection({
   });
 }
 
+export function liveProjectionReconnectDelayMs(
+  attempt,
+  baseMs,
+  capExponent = LIVE_PROJECTION_RECONNECT_BACKOFF_CAP_EXPONENT,
+) {
+  if (!Number.isFinite(baseMs) || baseMs < 0) {
+    throw new TypeError("reconnect base delay must be a non-negative number");
+  }
+  const exponent = Math.min(Math.max(0, Number(attempt) || 0), capExponent);
+  return baseMs * 2 ** exponent;
+}
+
+export function shouldWakeLiveProjection(
+  eventType,
+  { visibilityState = "visible", persisted = false } = {},
+) {
+  if (eventType === "online") {
+    return true;
+  }
+  if (eventType === "pageshow") {
+    return persisted === true;
+  }
+  if (eventType === "visibilitychange") {
+    return visibilityState !== "hidden";
+  }
+  return false;
+}
+
+export function attachLiveProjectionPageLifecycle({
+  connection,
+  target = globalThis,
+  documentRef = target?.document ?? target,
+} = {}) {
+  if (
+    connection === null ||
+    connection === undefined ||
+    typeof connection.reconnectNow !== "function"
+  ) {
+    return null;
+  }
+  if (
+    typeof target?.addEventListener !== "function" ||
+    typeof target?.removeEventListener !== "function"
+  ) {
+    return null;
+  }
+  const visibilityTarget =
+    documentRef !== undefined &&
+    documentRef !== null &&
+    typeof documentRef.addEventListener === "function"
+      ? documentRef
+      : target;
+
+  function wake(eventType, event) {
+    if (
+      !shouldWakeLiveProjection(eventType, {
+        visibilityState: visibilityTarget?.visibilityState,
+        persisted: event?.persisted === true,
+      })
+    ) {
+      return false;
+    }
+    return connection.reconnectNow({ reason: eventType });
+  }
+
+  function onVisibility(event) {
+    wake("visibilitychange", event);
+  }
+  function onOnline(event) {
+    wake("online", event);
+  }
+  function onPageShow(event) {
+    wake("pageshow", event);
+  }
+
+  visibilityTarget.addEventListener("visibilitychange", onVisibility);
+  target.addEventListener("online", onOnline);
+  target.addEventListener("pageshow", onPageShow);
+
+  return Object.freeze({
+    detach() {
+      visibilityTarget.removeEventListener("visibilitychange", onVisibility);
+      target.removeEventListener("online", onOnline);
+      target.removeEventListener("pageshow", onPageShow);
+    },
+    wake,
+  });
+}
+
 export function connectLiveProjection({
   url,
   projectionStore,
@@ -179,6 +277,7 @@ export function connectLiveProjection({
   let reconnectHandle = null;
   let reconnectAttempt = 0;
   let handleSocketClose = () => {};
+  let opening = false;
   const metrics = { ...EMPTY_LIVE_PROJECTION_METRICS };
   const ticketEndpoint = requiredString(url, "url");
 
@@ -186,7 +285,38 @@ export function connectLiveProjection({
     return Object.freeze({ ...metrics });
   }
 
+  function markConnectionHealthy() {
+    reconnectAttempt = 0;
+  }
+
+  function cancelScheduledReconnect() {
+    if (reconnectHandle === null) {
+      return;
+    }
+    clearReconnect(reconnectHandle);
+    reconnectHandle = null;
+  }
+
+  function abandonSocket() {
+    const droppedSocket = socket;
+    handleSocketClose = () => {};
+    socket = null;
+    droppedSocket?.close();
+  }
+
   async function openSocket({ recoverOnOpen = false } = {}) {
+    if (opening) {
+      return null;
+    }
+    opening = true;
+    try {
+      return await openSocketBody({ recoverOnOpen });
+    } finally {
+      opening = false;
+    }
+  }
+
+  async function openSocketBody({ recoverOnOpen = false } = {}) {
     let socketUrl = ticketEndpoint;
     if (!ticketEndpoint.startsWith("ws://") && !ticketEndpoint.startsWith("wss://") && !ticketEndpoint.startsWith("/ws?")) {
       try {
@@ -224,8 +354,10 @@ export function connectLiveProjection({
           if ([429, 503].includes(ticketResponse.status)) {
             error.reconnectDelayMs = retryAfterMilliseconds({
               headers: ticketResponse.headers,
-              fallbackMs:
-                reconnectDelayMs * 2 ** Math.min(reconnectAttempt, 5),
+              fallbackMs: liveProjectionReconnectDelayMs(
+                reconnectAttempt,
+                reconnectDelayMs,
+              ),
             });
           }
           throw error;
@@ -246,6 +378,7 @@ export function connectLiveProjection({
     const openedSocket = new WebSocketCtor(resolveWebSocketUrl(socketUrl));
     openedSocket.binaryType = "arraybuffer";
     socket = openedSocket;
+    opening = false;
     let closeHandled = false;
     let pendingResyncMessage = null;
     let resyncRecoveryPromise = null;
@@ -304,6 +437,7 @@ export function connectLiveProjection({
               return;
             }
             onEvent(recovery.message, recovery.snapshot);
+            markConnectionHealthy();
           } catch (error) {
             if (openedSocket !== socket || stopped) {
               return;
@@ -333,6 +467,7 @@ export function connectLiveProjection({
         return;
       }
       if (!recoverOnOpen) {
+        markConnectionHealthy();
         onEvent(Object.freeze({ kind: "open" }), projectionStore.getSnapshot());
         return;
       }
@@ -341,6 +476,7 @@ export function connectLiveProjection({
           kind: "reconnect",
           attempt: reconnectAttempt,
         });
+        markConnectionHealthy();
         onEvent(recovery.message, recovery.snapshot);
       } catch (error) {
         invalidateSocketAfterRecoveryFailure(error);
@@ -363,6 +499,7 @@ export function connectLiveProjection({
         if (refreshKeys.length > 0) {
           snapshot = await projectionStore.refresh(refreshKeys, { fetchImpl });
         }
+        markConnectionHealthy();
         onEvent(message, snapshot);
       } catch (error) {
         onEvent(Object.freeze({ kind: "error", message: error.message }), null);
@@ -383,19 +520,47 @@ export function connectLiveProjection({
     return openedSocket;
   }
 
-  function queueReconnect(delayMs = reconnectDelayMs) {
+  function queueReconnect(delayMs) {
     if (stopped || reconnect !== true || reconnectHandle !== null) {
       return;
     }
+    const delay = Number.isFinite(delayMs)
+      ? delayMs
+      : liveProjectionReconnectDelayMs(reconnectAttempt, reconnectDelayMs);
     reconnectAttempt += 1;
     onEvent(
-      Object.freeze({ kind: "reconnecting", attempt: reconnectAttempt }),
+      Object.freeze({
+        kind: "reconnecting",
+        attempt: reconnectAttempt,
+        reason: "close",
+      }),
       projectionStore.getSnapshot(),
     );
     reconnectHandle = scheduleReconnect(() => {
       reconnectHandle = null;
       openSocket({ recoverOnOpen: true });
-    }, delayMs);
+    }, delay);
+  }
+
+  function reconnectNow({ reason = "wake" } = {}) {
+    if (stopped || reconnect !== true) {
+      return false;
+    }
+    if (opening) {
+      return false;
+    }
+    cancelScheduledReconnect();
+    abandonSocket();
+    onEvent(
+      Object.freeze({
+        kind: "reconnecting",
+        attempt: Math.max(reconnectAttempt, 1),
+        reason,
+      }),
+      projectionStore.getSnapshot(),
+    );
+    void openSocket({ recoverOnOpen: true });
+    return true;
   }
 
   void openSocket();
@@ -403,10 +568,7 @@ export function connectLiveProjection({
   return Object.freeze({
     close() {
       stopped = true;
-      if (reconnectHandle !== null) {
-        clearReconnect(reconnectHandle);
-        reconnectHandle = null;
-      }
+      cancelScheduledReconnect();
       socket?.close();
     },
     drop() {
@@ -415,6 +577,7 @@ export function connectLiveProjection({
       socket = null;
       droppedSocket?.close();
     },
+    reconnectNow,
     metrics: currentMetrics,
   });
 }

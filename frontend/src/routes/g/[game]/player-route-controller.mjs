@@ -22,7 +22,14 @@ import {
   mergeThreadPage,
   threadPageStatusForResult,
 } from "../../../lib/components/player-thread/player-thread-model.mjs";
-import { commandInterruptionStatus } from "../../../lib/app/command-interruption.mjs";
+import {
+  CommandInterruptedError,
+  commandInterruptionStatus,
+} from "../../../lib/app/command-interruption.mjs";
+import {
+  persistInterruptedCommandAttempts,
+  readInterruptedCommandAttempts,
+} from "../../../lib/app/command-recovery-storage.mjs";
 
 export function buildPlayerProjectionInitialSnapshot(data) {
   return Object.freeze({
@@ -169,6 +176,41 @@ export function playerCommandInterruptedStatus(error, { action, commandId }) {
   return status === null
     ? null
     : attachCommandTrace(status, playerCommandTrace(action));
+}
+
+export function persistPlayerInterruptedCommands({ storage, game, attempts }) {
+  return persistInterruptedCommandAttempts({
+    storage,
+    game,
+    surface: "player",
+    attempts,
+  });
+}
+
+export function restorePlayerInterruptedCommands({ storage, game }) {
+  const attempts = readInterruptedCommandAttempts({
+    storage,
+    game,
+    surface: "player",
+  });
+  let commandStatus = null;
+  let commandReceipts = Object.freeze([]);
+  for (const [action, attempt] of Object.entries(attempts)) {
+    const status = playerCommandInterruptedStatus(
+      new CommandInterruptedError(attempt.interruption),
+      { action, commandId: attempt.commandId },
+    );
+    if (status === null) {
+      continue;
+    }
+    commandStatus = status;
+    commandReceipts = recordPlayerCommandReceipt(commandReceipts, action, status);
+  }
+  return Object.freeze({
+    attempts,
+    commandStatus,
+    commandReceipts,
+  });
 }
 
 export function recordPlayerCommandReceipt(

@@ -9,6 +9,7 @@ import {
   normalizePlayerCommandStateRefreshError,
   normalizePrivateRows,
   playerCommandErrorStatus,
+  persistPlayerInterruptedCommands,
   playerCommandInterruptedStatus,
   playerCommandPendingStatus,
   playerCommandTrace,
@@ -17,6 +18,7 @@ import {
   playerRefreshKeysForLiveDelta,
   playerResyncKeys,
   recordPlayerCommandReceipt,
+  restorePlayerInterruptedCommands,
   clearPlayerCommandReceipt,
   playerThreadErrorStatus,
   playerThreadNoOlderStatus,
@@ -39,6 +41,33 @@ test("player interrupted command keeps one retry identity and can be dismissed",
   assert.equal(status.commandId, "player-command-1");
   assert.equal(status.commandTrace.actionId, "submit_post");
   assert.deepEqual(clearPlayerCommandReceipt(receipts, "submit_post"), []);
+});
+
+test("player interrupted commands survive sessionStorage reload with the same command id", () => {
+  const storage = memoryStorage();
+  persistPlayerInterruptedCommands({
+    storage,
+    game: "midsummer",
+    attempts: {
+      submit_vote: {
+        commandId: "player-command-1",
+        action: "submit_vote",
+        interruption: "connection_lost",
+        data: { stale: true },
+      },
+    },
+  });
+
+  const restored = restorePlayerInterruptedCommands({
+    storage,
+    game: "midsummer",
+  });
+
+  assert.equal(restored.attempts.submit_vote.commandId, "player-command-1");
+  assert.equal(restored.attempts.submit_vote.data, undefined);
+  assert.equal(restored.commandStatus.commandId, "player-command-1");
+  assert.equal(restored.commandStatus.state, "interrupted");
+  assert.equal(restored.commandReceipts[0].actionId, "submit_vote");
 });
 
 test("player route controller builds projection store boundaries from route data", () => {
@@ -949,6 +978,21 @@ function jsonResponse(body) {
     status: 200,
     async json() {
       return body;
+    },
+  };
+}
+
+function memoryStorage() {
+  const values = new Map();
+  return {
+    getItem(key) {
+      return values.has(key) ? values.get(key) : null;
+    },
+    setItem(key, value) {
+      values.set(key, String(value));
+    },
+    removeItem(key) {
+      values.delete(key);
     },
   };
 }

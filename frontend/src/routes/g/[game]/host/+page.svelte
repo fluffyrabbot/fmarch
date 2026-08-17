@@ -18,6 +18,7 @@
     buildHostLifecycleControlCheckpoint,
   } from "$lib/components/host-action/host-lifecycle-control-checkpoint.mjs";
   import {
+    attachLiveProjectionPageLifecycle,
     connectLiveProjection,
     LIVE_PROJECTION_CONNECTING_STATUS,
   } from "$lib/app/live-transport.mjs";
@@ -41,6 +42,8 @@
     hostCommandInterruptedOutcome,
     hostCommandPendingStatus,
     hostProjectionResyncKeys,
+    persistHostInterruptedCommands,
+    restoreHostInterruptedCommands,
     recordHostCommandStatus,
     clearHostCommandStatus,
     sendHostRouteAction,
@@ -153,6 +156,7 @@
       windowRef: window,
       endpoint: data.liveProjection.endpoint,
     });
+    restoreHostCommandRecovery();
     const connection = connectLiveProjection({
       url: data.liveProjection.endpoint,
       projectionStore,
@@ -166,6 +170,10 @@
           currentStatus: liveStatus,
         });
       },
+    });
+    const pageLifecycle = attachLiveProjectionPageLifecycle({
+      connection,
+      target: window,
     });
     window.__fmarchGetHostLiveProjectionMetrics = () => connection?.metrics?.() ?? null;
     window.__fmarchTriggerHostResync = async (fromSeq = 0) => {
@@ -201,6 +209,7 @@
       delete window.__fmarchDropHostLiveProjection;
       delete window.__fmarchDispatchHostAction;
       activePhaseTheme.set(null);
+      pageLifecycle?.detach();
       connection?.close();
     };
   });
@@ -235,7 +244,7 @@
       });
       const nextAttempts = { ...commandRecoveryAttempts };
       delete nextAttempts[event.actionId];
-      commandRecoveryAttempts = nextAttempts;
+      commitHostCommandRecovery(nextAttempts);
       const outcome = result.outcome;
       const tracedOutcome = attachEventConfirmationTrace(outcome, event);
       commandOutcomes = appendHostCommandOutcome(commandOutcomes, tracedOutcome);
@@ -272,14 +281,17 @@
         event,
       });
       if (interruptedOutcome !== null) {
-        commandRecoveryAttempts = {
+        commitHostCommandRecovery({
           ...commandRecoveryAttempts,
-          [event.actionId]: attempt,
-        };
+          [event.actionId]: Object.freeze({
+            ...attempt,
+            interruption: interruptedOutcome.interruption,
+          }),
+        });
       } else {
         const nextAttempts = { ...commandRecoveryAttempts };
         delete nextAttempts[event.actionId];
-        commandRecoveryAttempts = nextAttempts;
+        commitHostCommandRecovery(nextAttempts);
         commandOutcomes = appendHostCommandOutcome(commandOutcomes, outcome);
       }
       recordCommandStatus(event.actionId, outcome);
@@ -311,8 +323,28 @@
   function cancelHostCommandRecovery(actionId) {
     const nextAttempts = { ...commandRecoveryAttempts };
     delete nextAttempts[actionId];
-    commandRecoveryAttempts = nextAttempts;
+    commitHostCommandRecovery(nextAttempts);
     commandStatuses = clearHostCommandStatus(commandStatuses, actionId);
+  }
+
+  function restoreHostCommandRecovery() {
+    const restored = restoreHostInterruptedCommands({
+      storage: window.sessionStorage,
+      game: data.game.id,
+    });
+    commandRecoveryAttempts = restored.attempts;
+    if (Object.keys(restored.commandStatuses).length > 0) {
+      commandStatuses = restored.commandStatuses;
+    }
+  }
+
+  function commitHostCommandRecovery(nextAttempts) {
+    commandRecoveryAttempts = nextAttempts;
+    persistHostInterruptedCommands({
+      storage: window.sessionStorage,
+      game: data.game.id,
+      attempts: nextAttempts,
+    });
   }
 
   function recordCommandStatus(actionId, status) {

@@ -7,6 +7,7 @@
     isPlayerRouteEmpty,
   } from "$lib/app/app-route-state-model.mjs";
   import {
+    attachLiveProjectionPageLifecycle,
     connectLiveProjection,
     LIVE_PROJECTION_CONNECTING_STATUS,
   } from "$lib/app/live-transport.mjs";
@@ -59,8 +60,10 @@
     playerCommandPendingStatus,
     recordPlayerCommandReceipt,
     clearPlayerCommandReceipt,
+    persistPlayerInterruptedCommands,
     playerRefreshKeysForLiveDelta,
     playerResyncKeys,
+    restorePlayerInterruptedCommands,
     playerThreadErrorStatus,
     playerThreadPendingStatus,
     submitPlayerRouteCommand,
@@ -262,6 +265,7 @@
       windowRef: window,
       snapshot: projectionStore.getSnapshot(),
     });
+    restorePlayerCommandRecovery();
     const connection = connectLiveProjection({
       url: data.liveProjection.endpoint,
       projectionStore,
@@ -280,6 +284,10 @@
           currentStatus: liveStatus,
         });
       },
+    });
+    const pageLifecycle = attachLiveProjectionPageLifecycle({
+      connection,
+      target: window,
     });
     window.__fmarchPlayerColdLoadEndpoints = data.coldLoad;
     window.__fmarchPlayerResyncKeys = playerProjectionResyncKeys;
@@ -317,6 +325,7 @@
       delete window.__fmarchPlayerResyncKeys;
       delete window.__fmarchGetPlayerLiveProjectionMetrics;
       activePhaseTheme.set(null);
+      pageLifecycle?.detach();
       connection?.close();
     };
   });
@@ -377,7 +386,7 @@
       });
       const nextAttempts = { ...commandRecoveryAttempts };
       delete nextAttempts[action];
-      commandRecoveryAttempts = nextAttempts;
+      commitPlayerCommandRecovery(nextAttempts);
       commandStatus = result.commandStatus;
       const bridgePlan = buildPlayerCommandDispatchBridgePlan({
         data: dispatchData,
@@ -415,14 +424,17 @@
           });
       commandStatus = interruptedStatus ?? playerCommandErrorStatus(error, action);
       if (interruptedStatus !== null) {
-        commandRecoveryAttempts = {
+        commitPlayerCommandRecovery({
           ...commandRecoveryAttempts,
-          [action]: attempt,
-        };
+          [action]: Object.freeze({
+            ...attempt,
+            interruption: interruptedStatus.interruption,
+          }),
+        });
       } else {
         const nextAttempts = { ...commandRecoveryAttempts };
         delete nextAttempts[action];
-        commandRecoveryAttempts = nextAttempts;
+        commitPlayerCommandRecovery(nextAttempts);
       }
       const bridgePlan = buildPlayerCommandDispatchBridgePlan({
         data: dispatchData,
@@ -460,9 +472,32 @@
   function cancelPlayerCommandRecovery(action) {
     const nextAttempts = { ...commandRecoveryAttempts };
     delete nextAttempts[action];
-    commandRecoveryAttempts = nextAttempts;
+    commitPlayerCommandRecovery(nextAttempts);
     commandReceipts = clearPlayerCommandReceipt(commandReceipts, action);
     commandStatus = null;
+  }
+
+  function restorePlayerCommandRecovery() {
+    const restored = restorePlayerInterruptedCommands({
+      storage: window.sessionStorage,
+      game: data.game.id,
+    });
+    commandRecoveryAttempts = restored.attempts;
+    if (restored.commandStatus !== null) {
+      commandStatus = restored.commandStatus;
+      commandReceipts = restored.commandReceipts;
+      exposePlayerCommandStatus({ windowRef: window, commandStatus });
+      exposePlayerCommandReceipts({ windowRef: window, commandReceipts });
+    }
+  }
+
+  function commitPlayerCommandRecovery(nextAttempts) {
+    commandRecoveryAttempts = nextAttempts;
+    persistPlayerInterruptedCommands({
+      storage: window.sessionStorage,
+      game: data.game.id,
+      attempts: nextAttempts,
+    });
   }
 
   async function loadOlderThread() {
