@@ -933,6 +933,7 @@ async fn handle_command(
             body,
             media,
             quotations,
+            embed_url,
         } => {
             submit_post(
                 tx,
@@ -944,6 +945,7 @@ async fn handle_command(
                     body,
                     media,
                     quotations,
+                    embed_url,
                 },
             )
             .await
@@ -2414,6 +2416,7 @@ struct SubmitPostRequest {
     body: String,
     media: Vec<model::ThreadPostMedia>,
     quotations: Vec<community::Quotation>,
+    embed_url: Option<String>,
 }
 
 const MAX_GAME_POST_BODY_BYTES: usize = game_platform::MAX_RENDERED_NARRATIVE_BYTES;
@@ -2497,7 +2500,8 @@ fn quotation_reject(reject: community::CommunityReject) -> Reject {
         | community::CommunityReject::InvalidQuotationExcerpt
         | community::CommunityReject::TooManyQuotations
         | community::CommunityReject::QuotationChainTooDeep
-        | community::CommunityReject::DuplicateQuotation => Reject::InvalidTarget,
+        | community::CommunityReject::DuplicateQuotation
+        | community::CommunityReject::InvalidEmbed => Reject::InvalidTarget,
         other => Reject::Internal(other.to_string()),
     }
 }
@@ -2514,6 +2518,7 @@ async fn submit_post(
         body,
         media,
         quotations,
+        embed_url,
     } = request;
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
@@ -2529,7 +2534,9 @@ async fn submit_post(
     validate_thread_post_media(&media)?;
     validate_game_post_body(&body)?;
     let quotations = decide_game_quotations(tx, game, &channel_id, principal, quotations).await?;
-    if body.trim().is_empty() && quotations.is_empty() {
+    let embed = community::decide_post_embed(&channel_id, embed_url.as_deref())
+        .map_err(quotation_reject)?;
+    if body.trim().is_empty() && quotations.is_empty() && embed.is_none() {
         let policy = projections::post_policy(&mut **tx, game, &channel_id).await?;
         if media.is_empty() || !policy.allow_media_only {
             return Err(Reject::InvalidTarget);
@@ -2553,6 +2560,9 @@ async fn submit_post(
     }
     if let Some(quotations) = community::quotations_payload(&quotations) {
         payload["quotations"] = quotations;
+    }
+    if let Some(embed) = community::embed_payload(&embed) {
+        payload["embed"] = embed;
     }
     let ev = EventInput::new(
         "PostSubmitted",

@@ -315,6 +315,27 @@ test("player post builder requires policy affordance for media-only posts", () =
   );
 });
 
+test("player post builder allows an empty body with a YouTube embed", () => {
+  assert.deepEqual(
+    buildPlayerCommand({
+      action: "submit_post",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      body: "",
+      embedUrl: "https://youtu.be/dQw4w9WgXcQ",
+    }),
+    {
+      SubmitPost: {
+        game: "00000000-0000-0000-0000-000000000001",
+        channel_id: "main",
+        actor_slot: "slot-7",
+        body: "",
+        embed: { url: "https://youtu.be/dQw4w9WgXcQ" },
+      },
+    },
+  );
+});
+
 test("generic command envelope uses the Rust ClientEnvelope shape", () => {
   const envelope = buildCommandEnvelope({
     principalUserId: "player_mira",

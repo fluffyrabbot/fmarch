@@ -489,6 +489,7 @@ pub struct ThreadPostRow {
     pub body: String,
     pub media: serde_json::Value,
     pub quotations: Vec<community::Quotation>,
+    pub embed: Option<community::PostEmbed>,
     pub citation_count: i64,
     pub occurred_at: i64,
 }
@@ -1232,6 +1233,11 @@ async fn fold_event(
             let body = str_field(p, "body", &ev.kind)?;
             let media = thread_media_payload(p);
             let quotations = quotations_from_event(p, &ev.kind)?;
+            let embed =
+                community::embed_from_payload(p).map_err(|source| ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source,
+                })?;
             let public_main = channel_id == "main";
             let notification_author = author_user.clone();
             insert_thread_post(
@@ -1247,6 +1253,7 @@ async fn fold_event(
                     body,
                     media,
                     quotations: quotations.clone(),
+                    embed,
                     occurred_at: ev.occurred_at,
                 },
             )
@@ -1314,6 +1321,7 @@ async fn fold_event(
                         body,
                         media: serde_json::json!([]),
                         quotations: Vec::new(),
+                        embed: None,
                         occurred_at: ev.occurred_at,
                     },
                 )
@@ -9206,7 +9214,7 @@ async fn thread_view_for_channel_with_visibility(
     let rows = sqlx::query(
         r#"
         SELECT game_id, source_seq, stream_seq, channel_id, author_slot,
-               author_user, phase_id, body, body_private, media, quotations, occurred_at,
+               author_user, phase_id, body, body_private, media, quotations, embed, occurred_at,
                (
                    SELECT COUNT(*)::bigint
                    FROM post_citation AS citation
@@ -9319,6 +9327,15 @@ async fn thread_view_for_channel_with_visibility(
                 body,
                 media: r.get("media"),
                 quotations,
+                embed: match r.get::<Option<serde_json::Value>, _>("embed") {
+                    None | Some(serde_json::Value::Null) => None,
+                    Some(value) => serde_json::from_value(value).map_err(|source| {
+                        ProjectionError::Payload {
+                            kind: "PostSubmitted".into(),
+                            source,
+                        }
+                    })?,
+                },
                 citation_count: r.get("citation_count"),
                 occurred_at: r.get("occurred_at"),
             })
@@ -10690,6 +10707,7 @@ struct ThreadPostInsert {
     body: String,
     media: serde_json::Value,
     quotations: Vec<community::Quotation>,
+    embed: Option<community::PostEmbed>,
     occurred_at: i64,
 }
 
@@ -10704,6 +10722,10 @@ async fn insert_thread_post(
             kind: "PostSubmitted".into(),
             source,
         })?;
+    let embed = serde_json::to_value(&post.embed).map_err(|source| ProjectionError::Payload {
+        kind: "PostSubmitted".into(),
+        source,
+    })?;
     let (body, body_private, stored_quotations) = if post.channel_id == "main" {
         (Some(post.body.as_str()), None, quotations)
     } else {
@@ -10725,9 +10747,9 @@ async fn insert_thread_post(
         r#"
         INSERT INTO thread_view (
             game_id, source_seq, stream_seq, channel_id, author_slot,
-            author_user, phase_id, body, body_private, media, quotations, occurred_at
+            author_user, phase_id, body, body_private, media, quotations, embed, occurred_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (game_id, source_seq) DO NOTHING
         "#,
     )
@@ -10742,6 +10764,7 @@ async fn insert_thread_post(
     .bind(body_private)
     .bind(&post.media)
     .bind(&stored_quotations)
+    .bind(&embed)
     .bind(post.occurred_at)
     .execute(&mut **tx)
     .await?;

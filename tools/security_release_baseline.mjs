@@ -116,6 +116,7 @@ export async function validateSecurityReleaseBaseline() {
   assert.match(csp, /sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo=/);
   assert.match(csp, /"object-src": \["none"\]/);
   assert.match(csp, /"frame-ancestors": \["none"\]/);
+  assert.match(csp, /"frame-src": \["https:\/\/www\.youtube-nocookie\.com"\]/);
   assert.doesNotMatch(csp, /unsafe-eval|unsafe-inline/);
   assert.doesNotMatch(csp, /"connect-src"[^\n]*"https:"/);
   for (const frontendPath of await filesUnder(path.join(root, "frontend", "src"))) {

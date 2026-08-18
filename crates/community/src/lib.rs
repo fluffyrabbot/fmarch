@@ -4,6 +4,13 @@
 //! load a topic state, ask the aggregate to decide a typed command, then append
 //! the returned typed events against the state's expected version.
 
+mod embed;
+
+pub use embed::{
+    decide_post_embed, embed_from_payload, embed_payload, parse_youtube_embed, EmbedProvider,
+    PostEmbed, YOUTUBE_EMBED_ORIGIN,
+};
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -922,6 +929,8 @@ pub enum CommunityReject {
     QuotationChainTooDeep,
     #[error("post quotes the same target more than once")]
     DuplicateQuotation,
+    #[error("post embed is not a main-thread YouTube URL")]
+    InvalidEmbed,
 }
 
 #[cfg(test)]
@@ -950,7 +959,7 @@ mod tests {
                     body: "late".into(),
                     author_profile_id: profile,
                     quotations: Vec::new(),
-                }
+                },
             ),
             Err(CommunityReject::TopicLocked)
         );
@@ -963,7 +972,7 @@ mod tests {
                     body: "late".into(),
                     author_profile_id: profile,
                     quotations: Vec::new(),
-                }
+                },
             ),
             Err(CommunityReject::TopicHidden)
         );

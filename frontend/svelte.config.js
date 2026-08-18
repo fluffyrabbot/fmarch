@@ -20,7 +20,7 @@ const config = {
         "font-src": ["self"],
         "form-action": ["self"],
         "frame-ancestors": ["none"],
-        "frame-src": ["none"],
+        "frame-src": ["https://www.youtube-nocookie.com"],
         "img-src": ["self", "data:", "blob:"],
         "manifest-src": ["self"],
         "media-src": ["self"],

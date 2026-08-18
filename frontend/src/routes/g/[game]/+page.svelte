@@ -89,6 +89,7 @@
   let composerMediaFiles = undefined;
   let composerMediaAlt = "";
   let composerMediaEpoch = 0;
+  let composerEmbedUrl = "";
   let attachedQuotations = [];
   let composerDrafts = Object.freeze({});
   let quoteChannel = data.threadPager.channel;
@@ -168,6 +169,7 @@
       current: {
         body: composerBody,
         quotations: attachedQuotations,
+        embedUrl: composerEmbedUrl,
       },
     });
     composerDrafts = switched.drafts;
@@ -176,6 +178,7 @@
     composerMediaAlt = switched.draft.mediaAlt;
     composerMediaFiles = switched.draft.mediaFiles;
     attachedQuotations = switched.draft.quotations;
+    composerEmbedUrl = switched.draft.embedUrl;
     composerMediaEpoch += 1;
   }
   $: playerActionView = buildPlayerCommandPanelViewModel({
@@ -378,6 +381,7 @@
         composerBody,
         media: dispatchedMedia,
         quotations: submittedQuotationsPayload(attachedQuotations),
+        embedUrl: composerEmbedUrl,
         data: dispatchData,
         commandId: commandAttemptId(
           typeof window !== "undefined" &&
@@ -395,6 +399,7 @@
           composerBody: attempt.composerBody,
           media: attempt.media,
           quotations: attempt.quotations ?? [],
+          embedUrl: attempt.embedUrl ?? "",
           commandIdFactory: () => attempt.commandId,
           signal,
           data: dispatchData,
@@ -412,6 +417,7 @@
         composerBody: attempt.composerBody,
         media: dispatchedMedia,
         quotations: attempt.quotations ?? [],
+        embedUrl: attempt.embedUrl ?? "",
         optimisticStatus,
         finalStatus: commandStatus,
       });
@@ -427,6 +433,7 @@
         composerBody = draft.body;
         composerMediaAlt = draft.mediaAlt;
         composerMediaFiles = draft.mediaFiles;
+        composerEmbedUrl = draft.embedUrl;
         composerMediaEpoch += 1;
         composerDrafts = Object.freeze({
           ...composerDrafts,
@@ -621,6 +628,7 @@
       bind:body={composerBody}
       bind:mediaFiles={composerMediaFiles}
       bind:mediaAlt={composerMediaAlt}
+      bind:embedUrl={composerEmbedUrl}
       mediaResetKey={composerMediaEpoch}
       {attachedQuotations}
       onCommand={submitPlayerCommand}

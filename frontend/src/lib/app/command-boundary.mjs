@@ -26,6 +26,7 @@ export function buildPlayerCommand({
   body,
   media = [],
   quotations = [],
+  embedUrl = "",
   target,
   actionConfig = null,
 }) {
@@ -34,14 +35,22 @@ export function buildPlayerCommand({
     case "submit_post": {
       const normalizedMedia = submitPostMedia(media);
       const normalizedQuotations = submitPostQuotations(quotations);
+      const normalizedEmbed = submitPostEmbed(embedUrl);
       return Object.freeze({
         SubmitPost: Object.freeze({
           game: requiredString(game, "game"),
           channel_id: requiredString(channelId, "channelId"),
           actor_slot: requiredString(actorSlot, "actorSlot"),
-          body: postBody(body, normalizedMedia, actionConfig, normalizedQuotations),
+          body: postBody(
+            body,
+            normalizedMedia,
+            actionConfig,
+            normalizedQuotations,
+            normalizedEmbed,
+          ),
           ...(normalizedMedia.length > 0 ? { media: normalizedMedia } : {}),
           ...(normalizedQuotations.length > 0 ? { quotations: normalizedQuotations } : {}),
+          ...(normalizedEmbed === undefined ? {} : { embed: normalizedEmbed }),
         }),
       });
     }
@@ -345,7 +354,7 @@ function requiredString(value, field) {
   return value;
 }
 
-function postBody(value, media, actionConfig, quotations = []) {
+function postBody(value, media, actionConfig, quotations = [], embed) {
   if (typeof value !== "string") {
     throw new TypeError("body must be a string");
   }
@@ -355,12 +364,26 @@ function postBody(value, media, actionConfig, quotations = []) {
   if (Array.isArray(quotations) && quotations.length > 0) {
     return value;
   }
+  if (embed !== undefined) {
+    return value;
+  }
   if (actionConfig?.allowMediaOnlyPost === true && media.length > 0) {
     return value;
   }
   throw new TypeError(
-    "body must be a non-empty string unless the post carries quotations or media-only posts are enabled",
+    "body must be a non-empty string unless the post carries quotations, a YouTube embed, or media-only posts are enabled",
   );
+}
+
+function submitPostEmbed(value) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  const url = typeof value === "string" ? value.trim() : String(value?.url ?? "").trim();
+  if (url === "") {
+    return undefined;
+  }
+  return Object.freeze({ url });
 }
 
 function submitPostQuotations(value) {

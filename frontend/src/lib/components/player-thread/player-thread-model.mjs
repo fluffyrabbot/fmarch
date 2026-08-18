@@ -2,6 +2,7 @@ import {
   buildGamePostQuoteView,
   excerptFromBody,
 } from "../../app/game-quotation-model.mjs";
+import { buildPlayerThreadEmbedView } from "../../app/youtube-embed.mjs";
 
 export const PLAYER_THREAD_MEDIA_CONTRACT = Object.freeze({
   component: "player-thread-media",
@@ -140,6 +141,7 @@ export function buildPlayerThreadPostViewModel(
     ...post,
     author: buildPlayerThreadAuthorView(post),
     permalink: buildPlayerThreadPermalinkView(post),
+    embed: buildPlayerThreadEmbedView(post.embed, post.seq),
     quotations: quote.quotations,
     citationCount: quote.citationCount,
     incomingCitations: quote.incomingCitations,

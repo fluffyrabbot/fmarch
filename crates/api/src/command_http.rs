@@ -549,6 +549,7 @@ mod tests {
             body: "hi".to_string(),
             media: None,
             quotations: None,
+            embed: None,
         }));
     }
 }

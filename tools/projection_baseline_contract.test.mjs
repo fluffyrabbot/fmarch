@@ -84,8 +84,9 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     "0026_runtime_kek_retirement.sql",
     "0027_workos_session_lifecycle.sql",
     "0028_action_submission_and_engine_checkpoint.sql",
+    "0029_post_embed.sql",
   ]);
-  assert.equal(report.migration_file_count, 28);
+  assert.equal(report.migration_file_count, 29);
   assert.ok(report.statement_count > 100);
 });
 

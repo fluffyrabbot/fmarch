@@ -852,6 +852,7 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
             body: "participant-only draft".into(),
             media: Vec::new(),
             quotations: Vec::new(),
+            embed_url: None,
         },
     )
     .await
@@ -947,6 +948,7 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
             body: "late private post".into(),
             media: Vec::new(),
             quotations: Vec::new(),
+            embed_url: None,
         },
     )
     .await

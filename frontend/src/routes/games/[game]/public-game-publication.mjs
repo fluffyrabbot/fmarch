@@ -2,6 +2,7 @@ import {
   GAME_CITATION_PREVIEW_LIMIT,
   buildGamePostQuoteView,
 } from "../../../lib/app/game-quotation-model.mjs";
+import { buildPlayerThreadEmbedView } from "../../../lib/app/youtube-embed.mjs";
 
 export { GAME_CITATION_PREVIEW_LIMIT };
 
@@ -72,6 +73,10 @@ export function buildPublicGamePosts(posts = [], citationPages = {}) {
       });
       return Object.freeze({
         ...post,
+        embed: buildPlayerThreadEmbedView(
+          post.embed,
+          post.source_seq ?? post.sourceSeq,
+        ),
         quotations: quote.quotations,
         citationCount: quote.citationCount,
         incomingCitations: quote.incomingCitations,

@@ -104,6 +104,7 @@ function normalizeAttempt(actionId, attempt) {
     ...(Array.isArray(attempt.quotations)
       ? { quotations: Object.freeze([...attempt.quotations]) }
       : {}),
+    ...(typeof attempt.embedUrl === "string" ? { embedUrl: attempt.embedUrl } : {}),
     ...(attempt.event !== undefined && attempt.event !== null
       ? { event: freezeJson(attempt.event) }
       : {}),

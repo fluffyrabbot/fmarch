@@ -333,6 +333,8 @@ pub enum Command {
         media: Vec<ThreadPostMedia>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         quotations: Vec<community::Quotation>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        embed_url: Option<String>,
     },
     /// Extend a phase deadline. Host-team (Deadline class).
     ExtendDeadline { game: Uuid, phase: String, at: i64 },

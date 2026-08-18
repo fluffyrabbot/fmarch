@@ -482,6 +482,9 @@ pub enum Command {
         #[serde(default)]
         #[ts(optional)]
         quotations: Option<Vec<Quotation>>,
+        #[serde(default)]
+        #[ts(optional)]
+        embed: Option<SubmitPostEmbed>,
     },
     ExtendDeadline {
         game: Uuid,
@@ -736,6 +739,7 @@ impl Command {
                 body,
                 media,
                 quotations,
+                embed,
             } => commands::Command::SubmitPost {
                 game,
                 channel_id,
@@ -755,6 +759,9 @@ impl Command {
                     .into_iter()
                     .map(Quotation::into)
                     .collect(),
+                embed_url: embed
+                    .map(|embed| embed.url)
+                    .filter(|url| !url.trim().is_empty()),
             },
             Command::ExtendDeadline { game, phase, at } => {
                 commands::Command::ExtendDeadline { game, phase, at }
@@ -1534,6 +1541,9 @@ pub struct ThreadPost {
     #[serde(default)]
     pub quotations: Vec<Quotation>,
     #[serde(default)]
+    #[ts(optional)]
+    pub embed: Option<PostEmbed>,
+    #[serde(default)]
     pub citation_count: i64,
     pub occurred_at: i64,
 }
@@ -1543,6 +1553,37 @@ pub struct ThreadPost {
 pub struct SubmitPostMedia {
     pub content_id: String,
     pub alt: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct SubmitPostEmbed {
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum EmbedProvider {
+    Youtube,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PostEmbed {
+    pub provider: EmbedProvider,
+    pub provider_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub start_seconds: Option<u32>,
+}
+
+impl From<community::PostEmbed> for PostEmbed {
+    fn from(value: community::PostEmbed) -> Self {
+        PostEmbed {
+            provider: EmbedProvider::Youtube,
+            provider_id: value.provider_id,
+            start_seconds: value.start_seconds,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1687,6 +1728,7 @@ impl From<projections::ThreadPostRow> for ThreadPost {
             body: row.body,
             media,
             quotations: row.quotations.into_iter().map(Quotation::from).collect(),
+            embed: row.embed.map(PostEmbed::from),
             citation_count: row.citation_count,
             occurred_at: row.occurred_at,
         }
@@ -2684,26 +2726,27 @@ pub mod typescript {
         CohostPermissionClass, Command, CommandMsg, CommunityInboxItem, CommunityInboxPage,
         DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
         DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
-        DiscussionTopicPage, GameIndexEntry, GameIndexPage, Hello, HostConsoleAuthorityDelta,
-        HostConsoleAuthorityKind, HostConsoleDayEventsDelta, HostConsoleHeaderDelta,
-        HostConsolePhaseStateDelta, HostConsoleSchedulerDelta, HostConsoleSlotOccupancyDelta,
-        HostConsoleSlotsDelta, HostConsoleStateDelta, HostConsoleTasksDelta,
-        HostConsoleThreadPostDelta, HostConsoleThreadPostRemovedDelta, HostConsoleThreadPostsDelta,
-        HostDayEventDelta, HostPhaseControl, HostPromptDecision, HostPromptDelta,
-        HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
-        HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind,
-        HostTaskState, HostTaskUrgency, InvestigationResultBody, InvestigationResultFields,
-        ItaSessionControlKind, JsonAtom, MemberMutePage, MemberMuteState, ModerationCase,
-        ModerationCaseDetail, ModerationCasePage, ModerationHistory, ModerationReport,
-        ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, PostCitation,
-        PostCitationPage, PostCitationsChangedDelta, PostKind, PostRef, ProfileEditor,
-        ProjectionDelta, PublicGameThreadPage, PublicProfile, PublicSearchPage, PublicSearchResult,
-        Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
-        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
-        ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
-        ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia,
-        SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia, ThreadPostMediaVariant,
-        ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, VoteTarget,
+        DiscussionTopicPage, EmbedProvider, GameIndexEntry, GameIndexPage, Hello,
+        HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsoleDayEventsDelta,
+        HostConsoleHeaderDelta, HostConsolePhaseStateDelta, HostConsoleSchedulerDelta,
+        HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
+        HostConsoleTasksDelta, HostConsoleThreadPostDelta, HostConsoleThreadPostRemovedDelta,
+        HostConsoleThreadPostsDelta, HostDayEventDelta, HostPhaseControl, HostPromptDecision,
+        HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution,
+        HostPromptRecordedDecision, HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind,
+        HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency, InvestigationResultBody,
+        InvestigationResultFields, ItaSessionControlKind, JsonAtom, MemberMutePage,
+        MemberMuteState, ModerationCase, ModerationCaseDetail, ModerationCasePage,
+        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
+        PlayerNotification, PostCitation, PostCitationPage, PostCitationsChangedDelta, PostEmbed,
+        PostKind, PostRef, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
+        PublicSearchPage, PublicSearchResult, Quotation, RejectCode, RejectMsg,
+        ResolutionTraceDecisionRow, ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow,
+        ResolutionTraceGeneratedRow, ResolutionTraceInspectionReport, ResolutionTraceInspectionRun,
+        ResolutionTraceNoteRow, ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg,
+        SlotLifecycle, SubmitPostEmbed, SubmitPostMedia, SubscriptionTargetState, ThreadPage,
+        ThreadPost, ThreadPostMedia, ThreadPostMediaVariant, ThreadPostsDelta,
+        VoteCountClearedDelta, VoteCountDelta, VoteTarget,
     };
 
     const HEADER: &str = "// This file is @generated by wire::typescript::render.\n// Run `cargo run -p wire --bin export_types -- --write` to regenerate.\n\n";
@@ -2766,6 +2809,9 @@ pub mod typescript {
         push::<SlotLifecycle>(&mut out, &config);
         push::<ItaSessionControlKind>(&mut out, &config);
         push::<SubmitPostMedia>(&mut out, &config);
+        push::<SubmitPostEmbed>(&mut out, &config);
+        push::<EmbedProvider>(&mut out, &config);
+        push::<PostEmbed>(&mut out, &config);
         push::<PostKind>(&mut out, &config);
         push::<PostRef>(&mut out, &config);
         push::<Quotation>(&mut out, &config);

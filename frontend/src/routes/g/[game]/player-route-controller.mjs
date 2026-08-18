@@ -36,12 +36,14 @@ export function playerComposerDraftFromState({
   mediaAlt = "",
   mediaFiles,
   quotations = [],
+  embedUrl = "",
 } = {}) {
   return Object.freeze({
     body: String(body ?? ""),
     mediaAlt: String(mediaAlt ?? ""),
     mediaFiles,
     quotations: Object.freeze([...(Array.isArray(quotations) ? quotations : [])]),
+    embedUrl: String(embedUrl ?? ""),
   });
 }
 
@@ -62,6 +64,7 @@ export function applyPlayerComposerChannelDraft({
     nextDrafts[previous] = playerComposerDraftFromState({
       body: current.body,
       quotations: current.quotations,
+      embedUrl: current.embedUrl,
     });
   }
   return Object.freeze({
@@ -376,6 +379,7 @@ export function buildPlayerCommandRequest({
   composerBody,
   media = [],
   quotations = [],
+  embedUrl = "",
 }) {
   const actionConfig = playerActionConfig(data, action);
   return Object.freeze({
@@ -388,6 +392,7 @@ export function buildPlayerCommandRequest({
       body: composerBody,
       media,
       quotations,
+      embedUrl,
       target: data.composer.voteTargetSlot,
       actionConfig,
     }),
@@ -400,6 +405,7 @@ export function buildPlayerCommandDispatchBridgePlan({
   composerBody,
   media = [],
   quotations = [],
+  embedUrl = "",
   optimisticStatus,
   finalStatus,
 }) {
@@ -414,6 +420,7 @@ export function buildPlayerCommandDispatchBridgePlan({
     composerBody,
     media,
     quotations,
+    embedUrl,
   });
   return buildDispatchBridgePlanFromRequest({
     role: "player",
@@ -434,6 +441,7 @@ export async function submitPlayerRouteCommand({
   composerBody,
   media = [],
   quotations = [],
+  embedUrl = "",
   commandIdFactory,
   signal,
   data,
@@ -442,7 +450,7 @@ export async function submitPlayerRouteCommand({
   sendCommandImpl = sendCommand,
 }) {
   const commandStatus = await sendCommandImpl({
-    ...buildPlayerCommandRequest({ data, action, composerBody, media, quotations }),
+    ...buildPlayerCommandRequest({ data, action, composerBody, media, quotations, embedUrl }),
     commandIdFactory,
     fetchImpl,
     signal,

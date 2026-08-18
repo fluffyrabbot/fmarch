@@ -40,6 +40,7 @@ test("player composer draft clears body, media, and quotations after ack", () =>
     mediaAlt: "",
     mediaFiles: undefined,
     quotations: [],
+    embedUrl: "",
   });
 });
 
@@ -52,6 +53,7 @@ test("player composer draft stashes body and quotations per channel", () => {
       mediaAlt: "receipt",
       mediaFiles: { length: 1 },
       quotations: [{ sourceSeq: 12 }],
+      embedUrl: "https://youtu.be/dQw4w9WgXcQ",
     },
   });
   assert.deepEqual(first.drafts.main, {
@@ -59,6 +61,7 @@ test("player composer draft stashes body and quotations per channel", () => {
     mediaAlt: "",
     mediaFiles: undefined,
     quotations: [{ sourceSeq: 12 }],
+    embedUrl: "https://youtu.be/dQw4w9WgXcQ",
   });
   assert.deepEqual(first.draft, clearedPlayerComposerDraft());
 

@@ -2,6 +2,8 @@
   export let data;
   export let form;
 
+  let activeEmbedSeq = null;
+
   function occurredAt(value) {
     const seconds = Number(value);
     return Number.isFinite(seconds) && seconds > 0
@@ -94,6 +96,32 @@
                 </blockquote>
               {/each}
               <p>{post.body}</p>
+              {#if post.embed !== null}
+                <div class="public-game-embed" data-testid={`public-game-embed-${post.source_seq}`}>
+                  {#if activeEmbedSeq === post.source_seq}
+                    <iframe
+                      class="public-game-embed-frame"
+                      title={post.embed.playLabel}
+                      src={post.embed.playbackSrc}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      sandbox="allow-scripts allow-same-origin allow-presentation"
+                      referrerpolicy="no-referrer-when-downgrade"
+                    ></iframe>
+                  {:else}
+                    <button
+                      type="button"
+                      class="fm-touch-button fm-touch-button--secondary"
+                      data-min-touch-target-px="44"
+                      data-testid={`public-game-embed-play-${post.source_seq}`}
+                      on:click={() => {
+                        activeEmbedSeq = post.source_seq;
+                      }}
+                    >
+                      {post.embed.playLabel}
+                    </button>
+                  {/if}
+                </div>
+              {/if}
               {#if post.citationCount > 0}
                 <details class="public-game-citations" data-testid={`public-game-citations-${post.source_seq}`}>
                   <summary>
@@ -168,6 +196,8 @@
   .public-game-post header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .public-game-post header a { color: var(--fm-ink-muted); font-size: 13px; }
   .public-game-post p { font-size: 17px; line-height: 1.65; margin-block-end: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .public-game-embed { display: grid; gap: 8px; margin-block-start: 12px; min-inline-size: 0; }
+  .public-game-embed-frame { aspect-ratio: 16 / 9; border: 1px solid var(--fm-line); border-radius: 6px; inline-size: 100%; max-block-size: 420px; }
   .public-game-quote {
     border-inline-start: 4px solid var(--fm-line-strong, var(--fm-line));
     display: grid;

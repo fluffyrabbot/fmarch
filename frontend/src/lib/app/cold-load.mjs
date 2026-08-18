@@ -344,6 +344,7 @@ export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
         fallback: fallbackMeta,
       }),
     ...(media.length === 0 ? {} : { media }),
+    ...(post?.embed == null ? {} : { embed: post.embed }),
   });
 }
 

@@ -12,6 +12,7 @@
   export let onLoadOlder = () => {};
   export let onQuote = () => {};
 
+  let activeEmbedSeq = null;
   $: threadView = buildPlayerThreadViewModel(thread, { threadPageStatus, quoteEnabled });
 </script>
 
@@ -124,6 +125,32 @@
         </blockquote>
       {/each}
       <p class="player-surface__post-body">{post.body}</p>
+      {#if post.embed !== null}
+        <div class="player-surface__embed" data-testid={`thread-post-embed-${post.seq}`}>
+          {#if activeEmbedSeq === post.seq}
+            <iframe
+              class="player-surface__embed-frame"
+              title={post.embed.playLabel}
+              src={post.embed.playbackSrc}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              sandbox="allow-scripts allow-same-origin allow-presentation"
+              referrerpolicy="no-referrer-when-downgrade"
+            ></iframe>
+          {:else}
+            <button
+              type="button"
+              class="fm-touch-button fm-touch-button--secondary player-surface__embed-play"
+              data-min-touch-target-px="44"
+              data-testid={post.embed.testId}
+              on:click={() => {
+                activeEmbedSeq = post.seq;
+              }}
+            >
+              {post.embed.playLabel}
+            </button>
+          {/if}
+        </div>
+      {/if}
       {#if post.citationCount > 0}
         <details
           class="player-surface__citations"
@@ -322,6 +349,24 @@
 
   .player-surface__post-body {
     white-space: pre-wrap;
+  }
+
+  .player-surface__embed {
+    display: grid;
+    gap: 8px;
+    min-inline-size: 0;
+  }
+
+  .player-surface__embed-play {
+    justify-self: start;
+  }
+
+  .player-surface__embed-frame {
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--fm-line);
+    border-radius: 6px;
+    inline-size: 100%;
+    max-block-size: 420px;
   }
 
   .player-surface__quote {

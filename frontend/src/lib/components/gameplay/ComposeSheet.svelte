@@ -5,6 +5,7 @@
   export let mediaFiles = undefined;
   export let mediaAlt = "";
   export let mediaResetKey = 0;
+  export let embedUrl = "";
   export let attachedQuotations = [];
   export let onCommand = () => {};
   export let onRemoveQuote = () => {};
@@ -56,8 +57,21 @@
       data-testid="player-media-composer"
       data-max-encoded-bytes={composer.mediaMaxEncodedBytes}
     >
-      <summary>Attach an image</summary>
+      <summary>Attach media</summary>
       <div class="fm-proof-disclosure__body">
+        {#if view.channelContext.channelId === "main"}
+          <label class="fm-field">
+            <span>YouTube URL</span>
+            <input
+              data-testid="player-embed-url"
+              type="url"
+              inputmode="url"
+              placeholder="https://www.youtube.com/watch?v=…"
+              bind:value={embedUrl}
+            />
+          </label>
+          <small>Watch, Shorts, or youtu.be links. The player loads only after someone presses Play.</small>
+        {/if}
         <label class="fm-field">
           <span>Image file</span>
           {#key mediaResetKey}
