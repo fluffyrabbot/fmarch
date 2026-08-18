@@ -1,4 +1,9 @@
 <script>
+  import {
+    applyComposerEmbedToButtons,
+    buildComposerEmbedView,
+  } from "../../app/youtube-embed.mjs";
+
   export let view;
   export let composer;
   export let body = "";
@@ -9,6 +14,12 @@
   export let attachedQuotations = [];
   export let onCommand = () => {};
   export let onRemoveQuote = () => {};
+
+  $: embedView = buildComposerEmbedView({
+    embedUrl,
+    channelId: view?.channelContext?.channelId,
+  });
+  $: composerButtons = applyComposerEmbedToButtons(view?.buttons ?? [], embedView);
 </script>
 
 {#if view?.readOnly !== true}
@@ -67,10 +78,16 @@
               type="url"
               inputmode="url"
               placeholder="https://www.youtube.com/watch?v=…"
+              aria-invalid={embedView.state === "invalid" ? "true" : undefined}
+              aria-describedby="player-embed-status"
               bind:value={embedUrl}
             />
           </label>
-          <small>Watch, Shorts, or youtu.be links. The player loads only after someone presses Play.</small>
+          <small
+            id="player-embed-status"
+            data-testid="player-embed-status"
+            data-embed-state={embedView.state}
+          >{embedView.hint}</small>
         {/if}
         <label class="fm-field">
           <span>Image file</span>
@@ -97,7 +114,7 @@
       </div>
     </details>
     <div class="compose-sheet__actions">
-      {#each view.buttons as button}
+      {#each composerButtons as button}
         <button
           type="button"
           class={button.className}
@@ -107,7 +124,12 @@
           data-disabled-reason={button.reason}
           disabled={button.disabled}
           aria-disabled={button.disabled ? "true" : undefined}
-          on:click={() => onCommand(button.action)}
+          on:click={() => {
+            if (button.disabled) {
+              return;
+            }
+            onCommand(button.action);
+          }}
         >
           {button.label}
         </button>

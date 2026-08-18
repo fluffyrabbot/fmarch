@@ -1,6 +1,58 @@
 export const YOUTUBE_EMBED_ORIGIN = "https://www.youtube-nocookie.com";
+export const COMPOSER_EMBED_HINT =
+  "Watch, Shorts, or youtu.be links. The player loads only after someone presses Play.";
+export const COMPOSER_EMBED_PREVIEW = "YouTube video will play after send";
+export const COMPOSER_EMBED_REJECTION = "Reject InvalidTarget: invalid target";
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/u;
 const MAX_START_SECONDS = 12 * 60 * 60;
+
+export function buildComposerEmbedView({ embedUrl = "", channelId = "main" } = {}) {
+  const trimmed = String(embedUrl ?? "").trim();
+  if (trimmed === "") {
+    return Object.freeze({
+      state: "empty",
+      hint: COMPOSER_EMBED_HINT,
+      disablePost: false,
+      reason: "",
+    });
+  }
+  const parsed = String(channelId ?? "") === "main" ? parseYoutubeEmbed(trimmed) : null;
+  if (parsed !== null) {
+    return Object.freeze({
+      state: "ready",
+      hint: COMPOSER_EMBED_PREVIEW,
+      disablePost: false,
+      reason: "",
+    });
+  }
+  return Object.freeze({
+    state: "invalid",
+    hint: COMPOSER_EMBED_REJECTION,
+    disablePost: true,
+    reason: COMPOSER_EMBED_REJECTION,
+  });
+}
+
+export function applyComposerEmbedToButtons(buttons, embedView) {
+  if (!Array.isArray(buttons) || embedView?.disablePost !== true) {
+    return buttons;
+  }
+  return Object.freeze(
+    buttons.map((button) => {
+      if (button?.action !== "submit_post") {
+        return button;
+      }
+      return Object.freeze({
+        ...button,
+        disabled: true,
+        reason:
+          button.disabled === true && String(button.reason ?? "") !== ""
+            ? button.reason
+            : embedView.reason,
+      });
+    }),
+  );
+}
 
 export function parseYoutubeEmbed(input) {
   const trimmed = String(input ?? "").trim();
