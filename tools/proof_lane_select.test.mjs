@@ -18,8 +18,15 @@ import {
   pathMatches,
   reverseCrateClosure,
   regenerateArtifact,
+  costEstimates,
+  isCostObservation,
+  isDiffSensitive,
+  measureLane,
+  measureLanes,
+  pruneUnknownLanes,
   runLanes,
   selectLanes,
+  warmupCommand,
 } from './proof_lane_select.mjs';
 
 const manifest = loadManifest(MANIFEST_PATH);
@@ -778,4 +785,200 @@ test('unmapped files are reported; missing crate graph arms all crate areas', ()
   for (const area of manifest.areas.filter((a) => a.crate)) {
     assert.ok(touchedIds.has(area.id), `fallback must arm ${area.id}`);
   }
+});
+
+test('cargo lanes warm up with a build-only form; other lanes warm by repeating', () => {
+  assert.equal(
+    warmupCommand('DATABASE_URL=postgres://x cargo test -p api -- --test-threads=1'),
+    'DATABASE_URL=postgres://x cargo test -p api --no-run',
+  );
+  assert.equal(
+    warmupCommand('cargo test -p commands --test pipeline -- --test-threads=4'),
+    'cargo test -p commands --test pipeline --no-run',
+  );
+  assert.equal(
+    warmupCommand('cargo run -p wire --bin export_types -- --check'),
+    'cargo build -p wire --bin export_types',
+  );
+  // Clippy has no build-only form, so it warms by running twice.
+  const clippy = 'cargo clippy --workspace --all-targets --all-features -- -D warnings';
+  assert.equal(warmupCommand(clippy), clippy);
+  assert.equal(warmupCommand('npm run test:frontend-contract'), 'npm run test:frontend-contract');
+
+  // Every real cargo lane must reach a cheaper warm-up than a second full run.
+  for (const [laneId, lane] of Object.entries(manifest.lanes)) {
+    if (lane.kind !== 'shell' || !/cargo\s+(test|run)\s/.test(lane.command)) continue;
+    const command = laneCommand(laneId, manifest);
+    assert.notEqual(
+      warmupCommand(command),
+      command,
+      `cargo lane ${laneId} should warm up with a build-only command`,
+    );
+  }
+});
+
+test('measurement records the warm run, not the compilation before it', () => {
+  const fixtureManifest = {
+    lanes: { 'cargo:x': { kind: 'shell', command: 'cargo test -p x -- --test-threads=1' } },
+  };
+  const commands = [];
+  const times = [0, 90_000, 90_000, 100_600];
+  const measurement = measureLane('cargo:x', fixtureManifest, {
+    log: () => {},
+    spawn: (command) => {
+      commands.push(command);
+      return { status: 0 };
+    },
+    now: () => times.shift(),
+  });
+
+  assert.deepEqual(commands, ['cargo test -p x --no-run', 'cargo test -p x -- --test-threads=1']);
+  assert.equal(measurement.warmup_seconds, 90);
+  assert.equal(measurement.seconds, 10.6);
+  assert.equal(measurement.method, 'isolated');
+  assert.equal(measurement.failedPhase, null);
+});
+
+test('a failed warm-up leaves the tracked baseline untouched', () => {
+  const fixtureManifest = {
+    lanes: {
+      good: { kind: 'shell', command: 'npm run good' },
+      bad: { kind: 'shell', command: 'npm run bad' },
+    },
+  };
+  const timings = { version: 1, lanes: { good: { seconds: 130 }, bad: { seconds: 42 } } };
+  const persisted = [];
+  const results = measureLanes(['good', 'bad'], fixtureManifest, {
+    log: () => {},
+    logError: () => {},
+    spawn: (command) => ({ status: command === 'npm run bad' ? 3 : 0 }),
+    now: (() => {
+      const times = [0, 1_000, 1_000, 11_600, 11_600, 12_000];
+      return () => times.shift();
+    })(),
+    timings,
+    persist: (next) => persisted.push(structuredClone(next)),
+  });
+
+  assert.equal(timings.lanes.good.seconds, 10.6);
+  assert.equal(timings.lanes.good.method, 'isolated');
+  assert.equal(timings.lanes.bad.seconds, 42, 'failed lane keeps its previous baseline');
+  assert.equal(persisted.length, 1, 'only the successful lane is persisted');
+  assert.equal(results[0].previousSeconds, 130);
+  assert.equal(results[1].failedPhase, 'warm');
+});
+
+test('diff-sensitive lanes are never measured by repetition', () => {
+  // Repeating a lint pass with no edit between runs measures an empty run, so
+  // the sweep must refuse rather than record a floor as if it were a cost.
+  assert.ok(
+    isDiffSensitive('cargo:clippy-workspace', manifest),
+    'workspace clippy is diff-sensitive and must be annotated as such',
+  );
+
+  const fixtureManifest = {
+    lanes: {
+      lint: { kind: 'shell', command: 'cargo clippy', measurement: 'diff-sensitive' },
+      unit: { kind: 'shell', command: 'npm run unit' },
+    },
+  };
+  const timings = { version: 1, lanes: { lint: { seconds: 511.6 } } };
+  const ran = [];
+  const results = measureLanes(['lint', 'unit'], fixtureManifest, {
+    log: () => {},
+    logError: () => {},
+    spawn: (command) => {
+      ran.push(command);
+      return { status: 0 };
+    },
+    now: (() => {
+      const times = [0, 1_000, 1_000, 3_400];
+      return () => times.shift();
+    })(),
+    timings,
+    persist: () => {},
+  });
+
+  assert.deepEqual(ran, ['npm run unit', 'npm run unit'], 'the lint lane is never executed');
+  assert.equal(timings.lanes.lint.seconds, 511.6, 'its baseline is left alone');
+  assert.equal(results[0].skipped, 'diff-sensitive');
+  assert.equal(results[1].seconds, 2.4);
+});
+
+test('a failed lane\'s duration never becomes a cost estimate', () => {
+  // Regression: a `cargo:api` run that exited 101 after 64.4s was merged into the
+  // selector's estimates, advertising a 269s lane as the cheapest Rust work.
+  assert.equal(isCostObservation({ seconds: 64.4, status: 101 }), false);
+  assert.equal(isCostObservation({ seconds: 269.2, status: 0 }), true);
+  assert.equal(isCostObservation({ seconds: 0.2 }), true, 'legacy entries carry no status');
+
+  const merged = mergeTimings(
+    { version: 1, lanes: { 'cargo:api': { seconds: 269.2, status: 0 } } },
+    { version: 1, lanes: { 'cargo:api': { seconds: 64.4, status: 101 } } },
+  );
+  assert.deepEqual(
+    merged.lanes,
+    { 'cargo:api': { seconds: 269.2, status: 0 } },
+    'the failed observation is ignored and the measured baseline shows through',
+  );
+
+  // A lane known only from a failed run has no estimate at all, rather than a fast one.
+  assert.deepEqual(
+    mergeTimings({ version: 1, lanes: {} }, { version: 1, lanes: { solo: { seconds: 3, status: 9 } } }).lanes,
+    {},
+  );
+});
+
+test('the tracked baseline outranks runtime observations, which only fill gaps', () => {
+  // Regression: a --run sweep's exhaust shadowed the measured baseline, so the
+  // selector advertised test:release-topology at 6.3m when it measures 3.5s warm.
+  const fixtureManifest = { lanes: { measured: {}, 'never-measured': {} } };
+  const baseline = { version: 1, lanes: { measured: { seconds: 3.5, status: 0, method: 'isolated' } } };
+  const runtime = {
+    version: 1,
+    lanes: { measured: { seconds: 376.3, status: 0 }, 'never-measured': { seconds: 91.2, status: 0 } },
+  };
+
+  const estimates = costEstimates(baseline, runtime, fixtureManifest);
+  assert.equal(estimates.lanes.measured.seconds, 3.5, 'runtime must not override a measured lane');
+  assert.equal(
+    estimates.lanes['never-measured'].seconds,
+    91.2,
+    'an overstated estimate still beats no estimate for ordering',
+  );
+
+  // A deliberate --record entry carries no method, and must win just the same:
+  // it was timed against a representative edit, which the sweep cannot be.
+  const recorded = { version: 1, lanes: { measured: { seconds: 193.6, status: 0 } } };
+  assert.equal(costEstimates(recorded, runtime, fixtureManifest).lanes.measured.seconds, 193.6);
+});
+
+test('runtime observations for lanes the manifest dropped are pruned', () => {
+  // cargo:commands was split into three leaves and deleted from the manifest,
+  // but its observation sat in the runtime file for weeks afterwards.
+  const fixtureManifest = { lanes: { 'cargo:commands-pg': {} } };
+  const runtime = {
+    version: 1,
+    lanes: { 'cargo:commands-pg': { seconds: 180.7 }, 'cargo:commands': { seconds: 911 } },
+  };
+
+  assert.deepEqual(pruneUnknownLanes(runtime, fixtureManifest).lanes, {
+    'cargo:commands-pg': { seconds: 180.7 },
+  });
+  assert.ok(!('cargo:commands' in costEstimates({ version: 1, lanes: {} }, runtime, fixtureManifest).lanes));
+
+  // Every lane in the tracked baseline must still be one the manifest declares.
+  for (const laneId of Object.keys(timingBaseline.lanes)) {
+    assert.ok(manifest.lanes[laneId], `baseline times unknown lane ${laneId}`);
+  }
+});
+
+test('a failed runtime observation falls through to the baseline, not to nothing', () => {
+  const fixtureManifest = { lanes: { 'cargo:api': {} } };
+  const estimates = costEstimates(
+    { version: 1, lanes: { 'cargo:api': { seconds: 127.1, status: 0, method: 'isolated' } } },
+    { version: 1, lanes: { 'cargo:api': { seconds: 64.4, status: 101 } } },
+    fixtureManifest,
+  );
+  assert.equal(estimates.lanes['cargo:api'].seconds, 127.1);
 });

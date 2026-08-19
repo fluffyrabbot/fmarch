@@ -14,7 +14,7 @@
   "push_sentinel_budget_seconds": 60,
   "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract"],
   "lanes": {
-    "cargo:clippy-workspace": { "kind": "shell", "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings" },
+    "cargo:clippy-workspace": { "kind": "shell", "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings", "measurement": "diff-sensitive" },
     "cargo:content-registry": { "kind": "shell", "command": "cargo test -p content_registry" },
     "cargo:domain": { "kind": "shell", "command": "cargo test -p domain" },
     "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -- --test-threads=1" },
@@ -54,10 +54,10 @@
       ],
       "outputs": ["packs/*/golden/*.json"]
     },
-    "cargo:community": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -- --test-threads=1" },
+    "cargo:community": { "kind": "shell", "command": "cargo test -p community" },
     "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p identity -- --test-threads=1" },
     "cargo:media": { "kind": "shell", "command": "cargo test -p media" },
-    "cargo:api": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1" },
+    "cargo:api": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=4" },
     "cargo:operator_api": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p operator_api -- --test-threads=1" },
     "cargo:server": { "kind": "shell", "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p server -- --test-threads=1" },
     "test:frontend-contract": { "kind": "npm" },

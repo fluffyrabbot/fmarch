@@ -18,12 +18,24 @@
 //   node tools/proof_lane_select.mjs [--mode inner|push|sprint|full] [--base <ref>]
 //                                    [--changed <path> ...] [--json] [--list] [--run]
 //                                    [--record <lane-id>] [--regenerate <lane-id>]
+//                                    [--measure <lane-id> ...] [--measure-all]
 //
 // --changed bypasses git and supplies the changed set explicitly (also used by
 // the contract test). --run executes the selected lanes in cost order and stops
 // on the first failure while recording runtime observations under target/.
 // --record deliberately promotes one observation into the tracked timing
 // baseline at docs/ops/proof-lane-timings.json.
+//
+// --measure/--measure-all rewrite that baseline from isolated measurement: each
+// lane is warmed and then timed, so an entry means "this lane costs this much on
+// a warm checkout" rather than "this lane ran after that one". Observations taken
+// during a --run sweep attribute the previous lane's leftover compilation to
+// whichever lane happened to follow it, which is why the two paths stay separate.
+//
+// Estimates therefore prefer the tracked baseline, and fall back to runtime
+// observations only for lanes it has never measured. Runtime numbers overstate
+// by construction, so letting them override the baseline would re-bury every
+// measurement the first time anyone ran --run.
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -47,11 +59,42 @@ export function loadTimings(path = TIMINGS_PATH) {
   }
 }
 
+// A lane that failed still has a duration, but that duration is how long it took
+// to break, not what it costs to prove the change. Recording it is useful for
+// diagnosis; serving it as an estimate is not, because a lane that fails fast
+// looks cheap and sorts to the front of every subsequent run.
+export function isCostObservation(entry) {
+  return Boolean(entry) && (entry.status === undefined || entry.status === 0);
+}
+
 export function mergeTimings(...sources) {
+  // Filter per source, not after merging: a failed observation must fall through
+  // to the baseline underneath it rather than erase it.
+  const costOnly = (source) =>
+    Object.fromEntries(Object.entries(source?.lanes ?? {}).filter(([, entry]) => isCostObservation(entry)));
+  return { version: 1, lanes: Object.assign({}, ...sources.map(costOnly)) };
+}
+
+// Runtime observations for lanes the manifest no longer declares cannot be
+// selected, so keeping them means a deleted lane lingers in the file forever.
+export function pruneUnknownLanes(timings, manifest) {
   return {
     version: 1,
-    lanes: Object.assign({}, ...sources.map((source) => source?.lanes ?? {})),
+    lanes: Object.fromEntries(
+      Object.entries(timings?.lanes ?? {}).filter(([laneId]) => manifest.lanes[laneId]),
+    ),
   };
+}
+
+// The cost estimates the selector serves. The tracked baseline is curated:
+// every entry got there by deliberate promotion (--record, timed against a
+// representative edit) or isolated measurement (--measure). The runtime file is
+// exhaust from --run sweeps, where each lane absorbs whatever compilation the
+// lane before it left undone; it systematically overstates, and it cannot tell
+// a real regression from an unlucky neighbour. So runtime observations fill
+// lanes the baseline has never measured, and never override it.
+export function costEstimates(baseline, runtime, manifest) {
+  return mergeTimings(pruneUnknownLanes(runtime, manifest), baseline);
 }
 
 export function writeTimings(path, timings) {
@@ -341,6 +384,148 @@ function recordLane(laneId, manifest) {
   console.log(`recorded ${laneId}: ${seconds}s`);
 }
 
+// A lane's steady-state cost is its own work, not the compilation the previously
+// executed lane happened to leave undone. Cargo lanes therefore warm up with a
+// build-only form of the same command; every other lane warms by running once
+// and discarding the result.
+// Most lanes do the same work every run, so timing a second run measures that
+// work. A lint pass does not: its work is proportional to what changed, so
+// running it twice with no edit in between measures an empty run. Such lanes
+// declare `measurement: "diff-sensitive"` and must be timed against a real edit.
+export function isDiffSensitive(laneId, manifest) {
+  return manifest.lanes[laneId]?.measurement === 'diff-sensitive';
+}
+
+export function warmupCommand(command) {
+  const beforeHarnessArgs = command.split(' -- ')[0];
+  if (/(^|\s)cargo\s+test(\s|$)/.test(beforeHarnessArgs)) return `${beforeHarnessArgs} --no-run`;
+  if (/(^|\s)cargo\s+run(\s|$)/.test(beforeHarnessArgs)) {
+    return beforeHarnessArgs.replace(/(^|\s)cargo\s+run(\s|$)/, '$1cargo build$2');
+  }
+  return command;
+}
+
+// Measures one lane in isolation: warm first, then time the real command. The
+// recorded number is the second phase, so a baseline entry means "this lane
+// costs this much on a warm checkout" rather than "this lane ran after that one".
+export function measureLane(
+  laneId,
+  manifest,
+  { spawn = spawnSync, now = Date.now, log = console.log } = {},
+) {
+  const command = laneCommand(laneId, manifest);
+  const warmup = warmupCommand(command);
+  const phase = (label, phaseCommand) => {
+    log(`  ${label}: ${phaseCommand}`);
+    const started = now();
+    const result = spawn(phaseCommand, { cwd: REPO_ROOT, shell: true, stdio: 'inherit' });
+    const finished = now();
+    return { seconds: elapsedSeconds(started, finished), finished, status: result.status ?? 1 };
+  };
+
+  const warmed = phase('warm', warmup);
+  if (warmed.status !== 0) {
+    return {
+      laneId,
+      command,
+      failedPhase: 'warm',
+      status: warmed.status,
+      warmup_command: warmup,
+      warmup_seconds: warmed.seconds,
+    };
+  }
+  const measured = phase('measure', command);
+  return {
+    laneId,
+    command,
+    status: measured.status,
+    failedPhase: measured.status === 0 ? null : 'measure',
+    warmup_command: warmup,
+    warmup_seconds: warmed.seconds,
+    seconds: measured.seconds,
+    method: 'isolated',
+    measured_at: new Date(measured.finished).toISOString(),
+  };
+}
+
+export function timingEntryFromMeasurement(measurement) {
+  return {
+    seconds: measurement.seconds,
+    measured_at: measurement.measured_at,
+    command: measurement.command,
+    status: measurement.status,
+    method: measurement.method,
+    warmup_seconds: measurement.warmup_seconds,
+  };
+}
+
+// Sweeps lanes one at a time, promoting each success into the tracked baseline
+// immediately so a long sweep that dies late still keeps what it proved.
+export function measureLanes(
+  laneIds,
+  manifest,
+  {
+    spawn = spawnSync,
+    now = Date.now,
+    timings = loadTimings(),
+    // What the selector currently believes, so the was/now report compares
+    // against the estimate actually being served.
+    compareTo = timings,
+    persist = () => {},
+    log = console.log,
+    logError = console.error,
+  } = {},
+) {
+  const results = [];
+  for (const [index, laneId] of laneIds.entries()) {
+    log(`\n[${index + 1}/${laneIds.length}] measuring ${laneId}`);
+    const previous = compareTo.lanes[laneId];
+    if (isDiffSensitive(laneId, manifest)) {
+      logError(
+        `  ${laneId} is diff-sensitive: repeating it measures an empty run, not its cost. ` +
+          'Time it against a representative edit and use --record. Baseline left unchanged.',
+      );
+      results.push({ laneId, command: laneCommand(laneId, manifest), skipped: 'diff-sensitive', previousSeconds: previous?.seconds ?? null });
+      continue;
+    }
+    const measurement = measureLane(laneId, manifest, { spawn, now, log });
+    if (measurement.failedPhase) {
+      logError(
+        `  ${laneId} failed during ${measurement.failedPhase} (exit ${measurement.status}); baseline left unchanged`,
+      );
+    } else {
+      timings.lanes[laneId] = timingEntryFromMeasurement(measurement);
+      persist(timings);
+      log(
+        `  ${laneId}: ${measurement.seconds}s (warm ${measurement.warmup_seconds}s)` +
+          (previous ? ` — was ${previous.seconds}s` : ' — new'),
+      );
+    }
+    results.push({ ...measurement, previousSeconds: previous?.seconds ?? null });
+  }
+  return results;
+}
+
+export function formatMeasurementReport(results) {
+  const lines = ['', 'lane                                      was      now    ratio', ''];
+  for (const result of [...results].sort((a, b) => (b.seconds ?? 0) - (a.seconds ?? 0))) {
+    if (result.skipped) {
+      lines.push(`${result.laneId.padEnd(38)}  ${String(result.previousSeconds ?? '?').padStart(7)}   SKIPPED (${result.skipped})`);
+      continue;
+    }
+    if (result.failedPhase) {
+      lines.push(`${result.laneId.padEnd(38)}  ${String(result.previousSeconds ?? '?').padStart(7)}   FAILED (${result.failedPhase})`);
+      continue;
+    }
+    const was = result.previousSeconds;
+    const ratio = was && result.seconds > 0 ? `${(was / result.seconds).toFixed(1)}x` : '—';
+    lines.push(
+      `${result.laneId.padEnd(38)}  ${String(was ?? '—').padStart(7)}  ${String(result.seconds).padStart(7)}  ${ratio.padStart(7)}`,
+    );
+  }
+  return lines.join('\n');
+}
+
 export function regenerateArtifact(
   laneId,
   manifest,
@@ -370,7 +555,7 @@ function formatSeconds(entry) {
 }
 
 function main(argv) {
-  const args = { mode: 'inner', changed: [], json: false, list: false, run: false };
+  const args = { mode: 'inner', changed: [], json: false, list: false, run: false, measure: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--mode') args.mode = argv[++i];
@@ -380,25 +565,59 @@ function main(argv) {
     else if (arg === '--list') args.list = true;
     else if (arg === '--run') args.run = true;
     else if (arg === '--record') args.record = argv[++i];
+    else if (arg === '--measure') args.measure.push(argv[++i]);
+    else if (arg === '--measure-all') args.measureAll = true;
     else if (arg === '--regenerate') args.regenerate = argv[++i];
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!['inner', 'push', 'sprint', 'full'].includes(args.mode)) {
     throw new Error(`unknown mode: ${args.mode}`);
   }
-  if (args.run && (args.json || args.list || args.record || args.regenerate)) {
-    throw new Error('--run cannot be combined with --json, --list, --record, or --regenerate');
+  const measuring = args.measureAll || args.measure.length > 0;
+  if (args.run && (args.json || args.list || args.record || args.regenerate || measuring)) {
+    throw new Error('--run cannot be combined with --json, --list, --record, --measure, or --regenerate');
+  }
+  if (measuring && (args.json || args.list || args.record || args.regenerate)) {
+    throw new Error('--measure cannot be combined with --json, --list, --record, or --regenerate');
   }
   if (args.regenerate && (args.json || args.list || args.record || args.changed.length > 0 || args.base)) {
     throw new Error('--regenerate must be used without selection or recording options');
   }
 
   const manifest = loadManifest();
+  if (measuring) {
+    // Cheapest first, so a long sweep banks its easy lanes before the slow ones.
+    const laneIds = args.measureAll
+      ? orderedExecutionPlan(Object.keys(manifest.lanes), manifest, costEstimates(loadTimings(), loadTimings(RUNTIME_TIMINGS_PATH), manifest))
+      : args.measure;
+    for (const laneId of laneIds) {
+      if (!manifest.lanes[laneId]) throw new Error(`unknown lane: ${laneId}`);
+    }
+    const baseline = loadTimings();
+    const results = measureLanes(laneIds, manifest, {
+      timings: baseline,
+      compareTo: costEstimates(baseline, loadTimings(RUNTIME_TIMINGS_PATH), manifest),
+      persist: (timings) => writeTimings(TIMINGS_PATH, timings),
+    });
+    console.log(formatMeasurementReport(results));
+    const skipped = results.filter((result) => result.skipped);
+    if (skipped.length > 0) {
+      console.error(`\n${skipped.length} diff-sensitive lane(s) skipped: ${skipped.map((r) => r.laneId).join(', ')}`);
+    }
+    const failed = results.filter((result) => result.failedPhase);
+    if (failed.length > 0) {
+      console.error(`\n${failed.length} lane(s) failed to measure: ${failed.map((r) => r.laneId).join(', ')}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
   if (args.record) return recordLane(args.record, manifest);
   if (args.regenerate) return regenerateArtifact(args.regenerate, manifest);
   const baselineTimings = loadTimings();
-  const runtimeTimings = loadTimings(RUNTIME_TIMINGS_PATH);
-  const timings = mergeTimings(baselineTimings, runtimeTimings);
+  // Pruned here, not only inside the estimate, so the --run write-back below
+  // persists the pruned file rather than carrying deleted lanes forward.
+  const runtimeTimings = pruneUnknownLanes(loadTimings(RUNTIME_TIMINGS_PATH), manifest);
+  const timings = costEstimates(baselineTimings, runtimeTimings, manifest);
 
   if (args.list) {
     for (const laneId of Object.keys(manifest.lanes)) {

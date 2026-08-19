@@ -33,7 +33,20 @@ touched closure plus two measured sentinels with a 60-second budget. The former
 all-active behavior is explicit sprint mode; full mode still runs every leaf.
 Every `--run` records timing observations under ignored
 `target/proof-lanes/timings.json`, while `--record` remains the deliberate path
-for updating the tracked baseline.
+for updating the tracked baseline. `--measure`/`--measure-all` rewrite that
+baseline from isolated measurement: each lane is warmed, then timed, so an entry
+states what the lane costs on a warm checkout rather than what it cost following
+whichever lane happened to precede it. Lanes whose work is proportional to the
+diff declare `"measurement": "diff-sensitive"` and refuse repetition-measurement,
+because a second run with no edit between measures an empty pass; workspace
+Clippy is the one such lane and stays on `--record`.
+
+Estimates prefer the tracked baseline and fall back to runtime observations only
+for lanes it has never measured. Runtime numbers absorb the previous lane's
+leftover compilation and so overstate by construction; letting them win would
+re-bury every measurement the first time anyone ran `--run`. Observations from a
+failed lane are never served as cost, and observations for lanes the manifest no
+longer declares are pruned on load.
 
 ## Problem
 
@@ -43,8 +56,8 @@ the resource model still contains the dominant latency:
 
 - Database-dependent npm lanes rely on ambient `DATABASE_URL`; concurrent runs
   can share the mutable `fmarch` database and contaminate one another.
-- The tracked baseline does not yet cover every lane. Execution has no timeout,
-  checkpoint, resume token, structured receipt, or resource scheduler.
+- The tracked baseline now covers every lane, but execution still has no
+  timeout, checkpoint, resume token, structured receipt, or resource scheduler.
 
 The desired shape is a manifest-owned DAG of independently executable leaf
 lanes. Aggregates remain useful user-facing aliases, but they must not appear as

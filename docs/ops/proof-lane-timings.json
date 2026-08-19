@@ -2,156 +2,396 @@
   "version": 1,
   "lanes": {
     "test:proof-lane-contract": {
-      "seconds": 0.2,
-      "measured_at": "2026-07-22T19:17:52.474Z",
-      "command": "npm run test:proof-lane-contract"
+      "seconds": 0.3,
+      "measured_at": "2026-08-19T06:57:11.506Z",
+      "command": "npm run test:proof-lane-contract",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.3
     },
     "test:completeness-scorecard": {
-      "seconds": 0.3,
-      "measured_at": "2026-07-22T19:17:52.818Z",
-      "command": "npm run test:completeness-scorecard"
+      "seconds": 0.4,
+      "measured_at": "2026-08-19T06:57:15.184Z",
+      "command": "npm run test:completeness-scorecard",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.4
     },
     "test:dev-postgres-contract": {
       "seconds": 0.2,
-      "measured_at": "2026-07-22T19:17:53.336Z",
-      "command": "npm run test:dev-postgres-contract"
+      "measured_at": "2026-08-19T06:57:07.398Z",
+      "command": "npm run test:dev-postgres-contract",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.4
     },
     "test:dev-test-game-contract": {
-      "seconds": 1,
-      "measured_at": "2026-07-22T19:17:54.408Z",
-      "command": "npm run test:dev-test-game-contract"
+      "seconds": 1.3,
+      "measured_at": "2026-08-19T07:01:42.127Z",
+      "command": "npm run test:dev-test-game-contract",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 1.3
     },
     "test:projection-baseline:static": {
-      "seconds": 0.5,
-      "measured_at": "2026-07-22T19:17:54.918Z",
-      "command": "npm run test:projection-baseline:static"
+      "seconds": 0.4,
+      "measured_at": "2026-08-19T06:57:10.407Z",
+      "command": "npm run test:projection-baseline:static",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.4
     },
     "check:build-posture": {
-      "seconds": 0.1,
-      "measured_at": "2026-07-22T19:17:55.089Z",
-      "command": "npm run check:build-posture"
+      "seconds": 0.6,
+      "measured_at": "2026-08-19T07:01:39.548Z",
+      "command": "npm run check:build-posture",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.6
     },
     "cargo:projections": {
-      "seconds": 26.3,
-      "measured_at": "2026-07-26T09:42:52.377Z",
-      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1"
+      "seconds": 63.2,
+      "measured_at": "2026-08-19T07:19:46.308Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p projections -- --test-threads=1",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.6
     },
     "test:frontend-route-state-render": {
       "seconds": 0.3,
-      "measured_at": "2026-07-26T09:42:52.718Z",
-      "command": "npm run test:frontend-route-state-render"
+      "measured_at": "2026-08-19T06:57:09.645Z",
+      "command": "npm run test:frontend-route-state-render",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.4
     },
     "test:frontend-tablet-interaction": {
-      "seconds": 0.3,
-      "measured_at": "2026-07-26T09:42:53.068Z",
-      "command": "npm run test:frontend-tablet-interaction"
+      "seconds": 0.6,
+      "measured_at": "2026-08-19T06:57:14.292Z",
+      "command": "npm run test:frontend-tablet-interaction",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.6
     },
     "test:frontend-role-dom-smoke": {
-      "seconds": 0.3,
-      "measured_at": "2026-07-26T09:42:53.421Z",
-      "command": "npm run test:frontend-role-dom-smoke"
+      "seconds": 0.6,
+      "measured_at": "2026-08-19T06:57:16.332Z",
+      "command": "npm run test:frontend-role-dom-smoke",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.6
     },
     "test:host-console-live-stack-contract": {
-      "seconds": 0.2,
-      "measured_at": "2026-07-26T09:43:27.940Z",
-      "command": "npm run test:host-console-live-stack-contract"
+      "seconds": 0.3,
+      "measured_at": "2026-08-19T06:57:10.907Z",
+      "command": "npm run test:host-console-live-stack-contract",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.2
     },
     "test:host-console-day-event-room-live-stack": {
-      "seconds": 13.5,
-      "measured_at": "2026-07-26T09:43:47.105Z",
-      "command": "npm run test:host-console-day-event-room-live-stack"
+      "seconds": 13.6,
+      "measured_at": "2026-08-19T07:02:44.678Z",
+      "command": "npm run test:host-console-day-event-room-live-stack",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 14.5
     },
     "test:frontend-static-role-contract": {
-      "seconds": 0.2,
-      "measured_at": "2026-07-26T09:43:47.386Z",
-      "command": "npm run test:frontend-static-role-contract"
+      "seconds": 0.3,
+      "measured_at": "2026-08-19T06:57:08.422Z",
+      "command": "npm run test:frontend-static-role-contract",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.4
     },
     "cargo:game-platform": {
-      "seconds": 6.3,
-      "measured_at": "2026-07-26T09:44:54.837Z",
-      "command": "cargo test -p game_platform --all-features"
+      "seconds": 8.1,
+      "measured_at": "2026-08-19T07:08:21.284Z",
+      "command": "cargo test -p game_platform --all-features",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 28.5
     },
     "cargo:identity": {
-      "seconds": 7.2,
-      "measured_at": "2026-07-26T09:45:02.071Z",
-      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p identity -- --test-threads=1"
+      "seconds": 27.7,
+      "measured_at": "2026-08-19T07:06:10.925Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p identity -- --test-threads=1",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 177.9
     },
     "test:auth-invite-role-proof": {
-      "seconds": 71.8,
-      "measured_at": "2026-07-26T09:46:13.877Z",
-      "command": "npm run test:auth-invite-role-proof"
+      "seconds": 87.1,
+      "measured_at": "2026-08-19T18:16:55.368Z",
+      "command": "npm run test:auth-invite-role-proof",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 96.8
     },
     "cargo:api": {
-      "seconds": 192.4,
-      "measured_at": "2026-07-26T09:49:26.291Z",
-      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=1"
+      "seconds": 127.1,
+      "measured_at": "2026-08-19T08:30:50.261Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p api -- --test-threads=4",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.7
     },
     "test:mash-scale-acceptance": {
-      "seconds": 9.5,
-      "measured_at": "2026-07-26T09:49:43.343Z",
-      "command": "npm run test:mash-scale-acceptance"
+      "seconds": 14.1,
+      "measured_at": "2026-08-19T07:29:00.680Z",
+      "command": "npm run test:mash-scale-acceptance",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 14.4
     },
     "cargo:server": {
-      "seconds": 0.9,
-      "measured_at": "2026-07-26T09:49:44.239Z",
-      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p server -- --test-threads=1"
+      "seconds": 11.9,
+      "measured_at": "2026-08-19T07:07:08.857Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p server -- --test-threads=1",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.5
     },
     "test:frontend-contract": {
-      "seconds": 2,
-      "measured_at": "2026-07-26T09:49:46.255Z",
-      "command": "npm run test:frontend-contract"
+      "seconds": 2.3,
+      "measured_at": "2026-08-19T07:01:50.364Z",
+      "command": "npm run test:frontend-contract",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 2.6
     },
     "test:production-promotion": {
       "seconds": 0.2,
-      "measured_at": "2026-07-26T09:49:46.430Z",
-      "command": "npm run test:production-promotion"
+      "measured_at": "2026-08-19T06:57:12.010Z",
+      "command": "npm run test:production-promotion",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.3
     },
     "test:railway-staging-target": {
-      "seconds": 0.1,
-      "measured_at": "2026-07-26T09:49:46.563Z",
-      "command": "npm run test:railway-staging-target"
+      "seconds": 0.2,
+      "measured_at": "2026-08-19T06:57:07.754Z",
+      "command": "npm run test:railway-staging-target",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.2
     },
     "check:command-goldens": {
-      "seconds": 2.5,
-      "measured_at": "2026-08-04T20:13:08.802Z",
+      "seconds": 2.9,
+      "measured_at": "2026-08-19T07:02:00.266Z",
       "command": "cargo run -p commands --bin check_goldens -- --check",
-      "status": 0
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.2
     },
     "check:wire-types": {
       "seconds": 0.2,
-      "measured_at": "2026-08-04T20:13:08.980Z",
+      "measured_at": "2026-08-19T07:28:22.508Z",
       "command": "cargo run -p wire --bin export_types -- --check",
-      "status": 0
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.6
     },
     "cargo:commands-unit": {
-      "seconds": 0.7,
-      "measured_at": "2026-08-06T23:45:06.553Z",
+      "seconds": 0.4,
+      "measured_at": "2026-08-19T07:02:45.331Z",
       "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary --test day_runtime_boundary",
-      "status": 0
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.2
     },
     "cargo:commands-pg": {
-      "seconds": 129.9,
-      "measured_at": "2026-08-09T00:39:53.736Z",
+      "seconds": 180.7,
+      "measured_at": "2026-08-19T07:28:21.738Z",
       "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --test-threads=4",
-      "status": 0
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.7
     },
     "cargo:commands-concurrency": {
-      "seconds": 1.6,
-      "measured_at": "2026-08-06T22:35:16.585Z",
+      "seconds": 2.6,
+      "measured_at": "2026-08-19T07:08:37.189Z",
       "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test runtime_cancellation -- --test-threads=1",
-      "status": 0
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.5
     },
     "cargo:commands-audit": {
-      "seconds": 552.2,
-      "measured_at": "2026-08-09T00:49:50.804Z",
+      "seconds": 780.2,
+      "measured_at": "2026-08-19T07:42:29.780Z",
       "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test semantic_audit -- --test-threads=4",
-      "status": 0
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 28.9
     },
     "cargo:operator-proof": {
-      "seconds": 2.1,
-      "measured_at": "2026-08-06T22:46:12.162Z",
+      "seconds": 9.1,
+      "measured_at": "2026-08-19T07:13:16.525Z",
       "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p operator_proof -- --test-threads=1",
-      "status": 0
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.6
+    },
+    "cargo:caps": {
+      "seconds": 8.2,
+      "measured_at": "2026-08-19T07:06:56.517Z",
+      "command": "cargo test -p caps",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.2
+    },
+    "test:frontend-route-live-contract": {
+      "seconds": 0.2,
+      "measured_at": "2026-08-19T06:57:08.915Z",
+      "command": "npm run test:frontend-route-live-contract",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.3
+    },
+    "test:workos-oidc-preflight": {
+      "seconds": 0.3,
+      "measured_at": "2026-08-19T06:57:12.534Z",
+      "command": "npm run test:workos-oidc-preflight",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.2
+    },
+    "test:security-release-baseline": {
+      "seconds": 0.3,
+      "measured_at": "2026-08-19T06:57:13.139Z",
+      "command": "npm run test:security-release-baseline",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.3
+    },
+    "test:frontend-role-smoke": {
+      "seconds": 124.8,
+      "measured_at": "2026-08-19T07:01:37.407Z",
+      "command": "npm run test:frontend-role-smoke",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 136.3
+    },
+    "test:frontend-visual-regression": {
+      "seconds": 0.4,
+      "measured_at": "2026-08-19T07:01:38.302Z",
+      "command": "npm run test:frontend-visual-regression",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.5
+    },
+    "test:dependency-policy": {
+      "seconds": 1.3,
+      "measured_at": "2026-08-19T07:01:45.525Z",
+      "command": "npm run test:dependency-policy",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 2.1
+    },
+    "test:event-key-rotation-rehearsal": {
+      "seconds": 3.8,
+      "measured_at": "2026-08-19T07:01:57.143Z",
+      "command": "npm run test:event-key-rotation-rehearsal",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 2.9
+    },
+    "cargo:community": {
+      "seconds": 7.9,
+      "measured_at": "2026-08-19T08:30:58.344Z",
+      "command": "cargo test -p community",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.2
+    },
+    "cargo:content-registry": {
+      "seconds": 8,
+      "measured_at": "2026-08-19T07:02:16.664Z",
+      "command": "cargo test -p content_registry",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.1
+    },
+    "cargo:media": {
+      "seconds": 27.2,
+      "measured_at": "2026-08-19T07:06:38.657Z",
+      "command": "cargo test -p media",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.5
+    },
+    "cargo:wire": {
+      "seconds": 8.9,
+      "measured_at": "2026-08-19T07:06:48.116Z",
+      "command": "cargo test -p wire",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.6
+    },
+    "cargo:eventstore": {
+      "seconds": 15,
+      "measured_at": "2026-08-19T07:07:44.695Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p eventstore -- --test-threads=1",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 20.8
+    },
+    "cargo:domain": {
+      "seconds": 12.7,
+      "measured_at": "2026-08-19T07:08:34.101Z",
+      "command": "cargo test -p domain",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.1
+    },
+    "test:database-tls-boundary": {
+      "seconds": 1.6,
+      "measured_at": "2026-08-19T07:14:59.749Z",
+      "command": "npm run test:database-tls-boundary",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 2.4
+    },
+    "test:frontend-csp-browser": {
+      "seconds": 109.7,
+      "measured_at": "2026-08-19T07:18:42.486Z",
+      "command": "npm run test:frontend-csp-browser",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 113
+    },
+    "cargo:operator_api": {
+      "seconds": 24,
+      "measured_at": "2026-08-19T07:20:10.895Z",
+      "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p operator_api -- --test-threads=1",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.6
+    },
+    "test:exact-image-content": {
+      "seconds": 22.5,
+      "measured_at": "2026-08-19T07:25:20.368Z",
+      "command": "npm run test:exact-image-content",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 287
+    },
+    "test:release-topology": {
+      "seconds": 3.5,
+      "measured_at": "2026-08-19T07:28:30.850Z",
+      "command": "npm run test:release-topology",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 4.9
+    },
+    "cargo:clippy-workspace": {
+      "seconds": 193.6,
+      "measured_at": "2026-08-19T07:55:00.000Z",
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "status": 0,
+      "method": "diff-sensitive-worst-case",
+      "note": "Cost scales with the edit: 193.6s after touching crates/domain (DAG root), 54.4s after touching crates/api (leaf). Recorded worst case; a repeat-run measurement of this lane reads ~0.2s and is meaningless."
     }
   }
 }
