@@ -274,3 +274,98 @@ fn redirect_resolution_has_one_typed_owner_and_single_coordinator_call() {
     assert!(!redirect.contains("#[expect"));
     assert!(!redirect.contains("#[allow(clippy"));
 }
+
+#[test]
+fn block_suppression_and_empower_discovery_have_one_typed_owner_and_feed_redirect() {
+    let coordinator = resolver_coordinator_source();
+    let suppression = resolver_source("suppression.rs");
+    let redirect = resolver_source("redirect.rs");
+
+    assert!(coordinator.contains("mod suppression;"));
+    assert!(suppression.contains("use super::intake::{ability_order, Action};"));
+    assert!(
+        suppression.contains("pub(super) struct SuppressionResolutionContext<'context, 'action>")
+    );
+    assert!(suppression.contains("pub(super) actions: &'context mut [Action<'action>]"));
+    assert!(suppression.contains("pub(super) events: &'context mut Vec<InnerEvent>"));
+    assert!(suppression.contains("pub(super) trace_decisions: &'context mut Vec<DecisionTrace>"));
+    assert!(suppression.contains("pub(super) struct EmpowerDiscoveryInput<'context, 'action>"));
+    assert!(suppression.contains("pub(super) actions: &'context [Action<'action>]"));
+    assert!(suppression.contains("pub(super) blocked_action_idxs: &'context BTreeSet<usize>"));
+    assert!(suppression.contains("pub(super) fn resolve_suppression("));
+    assert!(suppression.contains(") -> BTreeSet<SlotId> {"));
+    assert!(suppression.contains("pub(super) fn discover_empowered_slots("));
+    assert!(suppression.contains("struct BlockSource"));
+    assert!(suppression.contains("fn trace_detail("));
+    assert!(suppression.contains("fn index_block_sources("));
+    assert!(suppression.contains("fn select_block_candidates("));
+    assert!(suppression.contains("fn night_resolution_block_participates("));
+    assert!(suppression.contains("fn night_resolution_block_suppression_scope("));
+    assert!(suppression.contains("InnerEvent::ActionInterfered"));
+    assert!(suppression.contains("outcome: \"action_suppressed\".to_string()"));
+    assert!(suppression.contains("outcome: \"action_suppression_bypassed\".to_string()"));
+
+    // The block stage is one call that returns the empowered set, rather than a
+    // stage body that assigns a coordinator-scoped variable as a side effect.
+    assert_eq!(
+        coordinator
+            .matches("SuppressionResolutionContext {")
+            .count(),
+        1,
+        "the block stage must construct the mutable context directly once"
+    );
+    assert_eq!(
+        coordinator.matches("resolve_suppression(").count(),
+        1,
+        "the coordinator must invoke suppression resolution exactly once"
+    );
+    assert!(coordinator
+        .contains("empowered_slots = resolve_suppression(SuppressionResolutionContext {"));
+
+    // Both stages discover empowered slots through the same owner; the redirect
+    // fallback differs only in the blocked-index input it supplies.
+    assert_eq!(
+        coordinator
+            .matches("discover_empowered_slots(EmpowerDiscoveryInput {")
+            .count(),
+        1,
+        "only the redirect fallback may call discovery directly"
+    );
+    assert!(coordinator.contains("blocked_action_idxs: &blocked_idxs,"));
+    let fallback = coordinator
+        .find("empowered_slots = discover_empowered_slots(EmpowerDiscoveryInput {")
+        .unwrap();
+    let redirect_context = coordinator
+        .find("resolve_redirects(RedirectResolutionContext {")
+        .unwrap();
+    assert!(
+        fallback < redirect_context,
+        "the fallback must run before the redirect context is constructed"
+    );
+
+    // Suppression produces the empowered set and redirect consumes it. Neither
+    // module may reach for the other.
+    assert!(!suppression.contains("use super::redirect"));
+    assert!(!suppression.contains("resolve_redirects"));
+    assert!(!redirect.contains("use super::suppression"));
+    assert!(!redirect.contains("discover_empowered_slots"));
+
+    for moved_owner in [
+        "struct BlockSource",
+        "fn collect_empowered_slots(",
+        "fn night_resolution_block_participates(",
+        "fn night_resolution_block_suppression_scope(",
+        "outcome: \"action_suppressed\".to_string()",
+        "outcome: \"action_suppression_bypassed\".to_string()",
+        "reason: \"roleblocked\".to_string()",
+    ] {
+        assert!(
+            !coordinator.contains(moved_owner),
+            "the coordinator must not retain `{moved_owner}`"
+        );
+    }
+    assert!(!coordinator.contains("pub(super) use suppression::"));
+    assert!(!suppression.contains("use super::*"));
+    assert!(!suppression.contains("#[expect"));
+    assert!(!suppression.contains("#[allow(clippy"));
+}

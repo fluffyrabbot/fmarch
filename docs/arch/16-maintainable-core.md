@@ -31,7 +31,7 @@ The line counts below are a 2026-08-06 orientation snapshot, not a target.
 | Surface | Current concentration | Superior ownership boundary | Dependency direction | Next extraction |
 |---|---|---|---|---|
 | `crates/domain/src/pack.rs` façade; `pack/model.rs` (~1.9k); `pack/validation.rs` (~8.5k) | Closed first-level boundary: serialized schema/defaults are separate from loading, derived indexes, diagnostics, and ordering | `pack/model` owns declarative types; `pack/validation` owns `PackValidationContext` and validation behavior; `validation_tests` owns private contract tests | validation → model; resolver/commands → public pack façade | Split validation families only when their next independent change requires it; do not re-complect model ownership |
-| `crates/domain/src/resolver.rs` (~7.4k); `resolver/intake.rs` (~0.7k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k); `resolver/redirect.rs` (~0.3k); `resolver/trace.rs` (~0.8k) | Night-action intake, redirect graph planning/target rewriting, kill/protection, trigger-fixpoint, duel/day-vote outcome, and exhaustive trace construction are closed behind typed boundaries; block/empower suppression and broad phase orchestration remain concentrated | Resolver coordinator plus bounded intake, redirect, action, trigger, outcome, and trace families | intake → domain state/validated pack; redirect, action, and trigger → intake-owned action; redirect → validated pack/trace contract; trace → event contract; outcome → action/trigger/domain state/validated pack; coordinator → bounded families | Extract block suppression and empower discovery as the next coherent resolver owner; do not reopen redirect or intake ownership |
+| `crates/domain/src/resolver.rs` (~7.3k); `resolver/intake.rs` (~0.7k); `resolver/action.rs` (~1.0k); `resolver/trigger.rs` (~0.4k); `resolver/outcome.rs` (~1.4k); `resolver/redirect.rs` (~0.3k); `resolver/suppression.rs` (~0.3k); `resolver/trace.rs` (~0.8k) | Night-action intake, block suppression/empower discovery, redirect graph planning/target rewriting, kill/protection, trigger-fixpoint, duel/day-vote outcome, and exhaustive trace construction are closed behind typed boundaries; broad phase orchestration remains concentrated | Resolver coordinator plus bounded intake, suppression, redirect, action, trigger, outcome, and trace families | intake → domain state/validated pack; suppression, redirect, action, and trigger → intake-owned action; suppression and redirect → validated pack/trace contract; redirect → suppression-discovered empowered slots via the coordinator; trace → event contract; outcome → action/trigger/domain state/validated pack; coordinator → bounded families | Split the broad phase-orchestration coordinator as the next coherent resolver owner; do not reopen suppression, redirect, or intake ownership |
 | `crates/api/src/lib.rs` (~0.6k); `command_http.rs` (~0.5k); `game_http.rs` (~2.6k); `community_http.rs` (~1.4k); `auth_http.rs` (~3.9k); `authentication.rs` (~0.7k); `identity_delivery.rs` (~1.0k); `live_projection.rs` (~0.2k); `live_delivery.rs` (~0.9k) | Media, auth, community, game-read, command/import, and live-delivery HTTP plus authentication attempt/delivery, provider-neutral identity-delivery lifecycle records, and live publication are closed behind typed boundaries | Thin composition root plus route-family modules with typed request contexts and a provider-neutral identity-delivery worker with typed lifecycle records | route families → application/domain ports; composition root → route families; authentication → identity-delivery ports; identity-delivery lifecycle records → worker transaction; command transport → command application port/live-publication port | Split the next API family only when an independent change exposes a coherent ownership boundary; do not reopen lifecycle records |
 | `crates/media/src/variants.rs` (~2.3k) | Variant generation, immutable persistence, snapshot verification, repair, lookup, and descriptor-relative reads are coherent; each attached read receives one immutable request that owns its already-open file | Variant store plus an immutable attached-read request that keeps the descriptor and verification identity together | variant store → attached-read primitive → descriptor-relative filesystem checks | Split the next media responsibility only when an independent change exposes a coherent boundary; do not reopen the attached-read request |
 | `crates/projections/src/lib.rs` (~8.2k); `effect_projection.rs` (~0.3k); `private_channel_projection.rs` (~0.3k) | Effect and encrypted private-channel folding, reads, mutations, and rebuild hooks are closed behind typed family boundaries; dispatcher plus unrelated game, community, identity, media-reference, and scheduler projections remain concentrated | Projection dispatcher plus one module per projection family and shared SQL/encryption primitives | family projectors → shared transaction/encryption primitives; dispatcher → families | Split the next family only when it has an independent change |
@@ -280,6 +280,35 @@ of local lint suppression. Submission traversal, faction-vote selection,
 constraint short-circuiting and reasons, counter identifiers, stage ordering,
 seeded determinism, and generated goldens remain unchanged.
 
+## Closed resolver boundary: block suppression and empower discovery
+
+`crates/domain/src/resolver/suppression.rs` is the single owner of `BlockSource`
+indexing, stable suppression-candidate selection, `FirstMatchingAction`
+consumption, suppression-policy participation and scope lookup, the empowered
+`Mark` fixpoint, empowered suppression-bypass decisions, and block-stage
+`ActionInterfered` emission. `resolve_night` constructs one
+`SuppressionResolutionContext` at the `IrAbility::Block` stage and receives the
+discovered empowered-slot set as the call's return value rather than through a
+mutated coordinator variable. The suppression owner imports the intake-owned
+`Action` directly; no resolver-root re-export or forwarding facade exists.
+
+Empower discovery is owned here because suppression candidacy is its input, but
+the discovered set is returned rather than retained. The `IrAbility::Redirect`
+fallback calls the same `discover_empowered_slots` owner with its own
+blocked-index input before constructing `RedirectResolutionContext`, so the two
+stages cannot develop separate notions of who is empowered. The dependency
+direction runs suppression to redirect through the coordinator: neither module
+imports the other.
+
+Block action priority and submission ordering, block-source ordering,
+`FirstMatchingAction` consumption, block eligibility and scopes, empowered
+closure iteration and bypass timing, exact event and decision JSON, redirect
+inputs, seeded outputs, and generated goldens remain unchanged. The
+source-boundary contract fixes the moved ownership, the single block-stage
+construction and call site, the shared discovery owner, the dependency
+direction from suppression to redirect, and the absence of local lint
+suppression.
+
 ## Closed resolver boundary: redirect resolution
 
 `crates/domain/src/resolver/redirect.rs` is the single owner of redirect target-
@@ -492,9 +521,9 @@ durability, and symlink tests.
 The strict baseline intentionally records, rather than hides, remaining
 boundary pressure:
 
-- resolver intake, redirect, action, trigger, outcome, and trace boundaries are
-  typed and carry no local lint expectations; remaining block/empower execution
-  and coordinator concentration are tracked as an ownership frontier rather than
+- resolver intake, suppression, redirect, action, trigger, outcome, and trace
+  boundaries are typed and carry no local lint expectations; the remaining
+  coordinator concentration is tracked as an ownership frontier rather than
   hidden lint debt;
 - action submission/validation, host-prompt resolution/replay, and DayEvent
   resolution application are typed and carry no local lint expectations or

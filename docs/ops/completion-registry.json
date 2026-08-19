@@ -318,7 +318,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, provider-neutral identity-delivery cancellation/audit persistence, and live publication, media attached-variant reads, command action submission/validation, host-prompt resolution/replay, DayEvent resolution application, operator-proof report/tool ownership, command verification cost boundaries, domain pack model/validation, resolver intake/redirect/action/trigger/outcome/trace, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver block/empower and broad-stage coordination, other projection, physical command-test family, and proof-runner scenario/orchestration concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, provider-neutral identity-delivery cancellation/audit persistence, and live publication, media attached-variant reads, command action submission/validation, host-prompt resolution/replay, DayEvent resolution application, operator-proof report/tool ownership, command verification cost boundaries, domain pack model/validation, resolver intake/suppression/redirect/action/trigger/outcome/trace, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver night-policy admission and broad-stage coordination, other projection, physical command-test family, and proof-runner scenario/orchestration concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -477,6 +477,10 @@
         },
         {
           "kind": "source",
+          "value": "crates/domain/src/resolver/suppression.rs"
+        },
+        {
+          "kind": "source",
           "value": "crates/domain/src/resolver/trace.rs"
         },
         {
@@ -529,17 +533,16 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver block/empower and broad-stage coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split remaining resolver night-policy admission and broad-stage coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the remaining localized lint expectations and allowances as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract block suppression and empower discovery from crates/domain/src/resolver.rs into a private crates/domain/src/resolver/suppression.rs owner. Move BlockSource, block-source indexing, stable candidate selection, FirstMatchingAction consumption, suppression-policy participation/scope lookup, empowered Mark fixpoint discovery, empowered suppression-bypass decisions, ActionInterfered emission, and the full IrAbility::Block stage body behind typed SuppressionResolutionContext and EmpowerDiscoveryInput boundaries. Return the discovered empowered-slot set explicitly to the coordinator and let the existing redirect-stage fallback call the same discovery owner with its exact blocked-index input before constructing RedirectResolutionContext. Import the intake-owned Action directly without a resolver-root re-export or forwarding compatibility wrapper. Extend the resolver source-boundary contract to fix moved ownership, the single block-stage call, shared discovery owner, and suppression-to-redirect dependency direction. Preserve block action priority/submission ordering, source ordering, FirstMatchingAction consumption, block eligibility and scopes, empowered closure iteration and bypass timing, exact event/decision ordering and JSON, redirect inputs, seeded outputs, and golden semantics.",
+        "objective": "Extract night-resolution pack-policy admission from crates/domain/src/resolver.rs into a private crates/domain/src/resolver/policy.rs owner. Move the require_night_resolution_* admission family, require_conversion_policy, require_ninja_visibility_policy, require_valid_night_ability_order, and the night_resolution_* catalog/classifier/precedence derivation helpers they consume behind a typed NightPolicyAdmission boundary, so the coordinator states which policies a pipeline admits rather than how each is checked. Give resolve_inner and resolve_night one admission call each in place of their current open-coded require_* sequences. Keep the pack fa\u00e7ade the only pack dependency and import the intake-owned Action directly where action shape is inspected, without a resolver-root re-export or forwarding compatibility wrapper. Extend the resolver source-boundary contract to fix moved ownership, the single admission call per pipeline, and the absence of local lint suppression. Preserve exact panic messages and their trigger conditions, admission order within each pipeline, derived catalog and classifier contents, and golden semantics.",
         "paths": [
           "crates/domain/src/resolver.rs",
-          "crates/domain/src/resolver/suppression.rs",
-          "crates/domain/src/resolver/intake.rs",
-          "crates/domain/src/resolver/redirect.rs",
+          "crates/domain/src/resolver/policy.rs",
           "crates/domain/tests/resolver_boundary.rs",
+          "crates/domain/tests/pack_validation.rs",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
@@ -551,10 +554,10 @@
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not redesign redirect graph planning/target rewriting, non-block night ability execution, kill/protection/trigger/outcome policy, pack validation, event schemas or versions, public resolver APIs, or deterministic seed behavior as part of suppression ownership extraction.",
-          "Do not change block eligibility, suppression-policy lookup, source/candidate traversal, FirstMatchingAction consumption, empowered fixed-point semantics, bypass selection, exact event/decision ordering or JSON detail, or the blocked actions and empowered slots observed by redirect and downstream stages.",
-          "Do not leave BlockSource, block-stage implementation, or moved policy/discovery helpers in the coordinator as re-exports or forwarding compatibility facades; import the intake Action owner directly and keep redirect dependent only on the explicit empowered-slot product.",
-          "Do not mark foundation.maintainable-core complete; broader night stage coordination, other projection families, physical command-test family, and remaining proof-runner scenario/orchestration concentrations remain."
+          "Do not redesign pack validation itself, night ability execution, suppression/redirect/kill/protection/trigger/outcome policy behavior, event schemas or versions, public resolver APIs, or deterministic seed behavior as part of policy-admission ownership extraction.",
+          "Do not change which packs are admitted or rejected, the exact panic message text or the condition that raises each one, admission order within a pipeline, or the derived catalogs, classifiers, and precedence edges the admission family computes.",
+          "Do not leave admission helpers in the coordinator as re-exports or forwarding compatibility facades, and do not route the new owner around the public pack facade.",
+          "Do not mark foundation.maintainable-core complete; broad night stage coordination, other projection families, physical command-test family, and remaining proof-runner scenario/orchestration concentrations remain."
         ]
       }
     },

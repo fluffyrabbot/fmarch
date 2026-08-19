@@ -40,6 +40,7 @@ mod action;
 mod intake;
 mod outcome;
 mod redirect;
+mod suppression;
 mod trace;
 mod trigger;
 
@@ -60,6 +61,11 @@ use intake::{
 use outcome::{resolve_day_vote, resolve_duel_actions, DayVoteResolutionContext};
 
 use redirect::{resolve_redirects, RedirectResolutionContext};
+
+use suppression::{
+    discover_empowered_slots, resolve_suppression, EmpowerDiscoveryInput,
+    SuppressionResolutionContext,
+};
 
 use trace::{build_resolution_trace, ResolutionTraceInput};
 
@@ -153,23 +159,6 @@ impl DetRng {
     fn next_f64(&mut self) -> f64 {
         const SCALE: f64 = 1.0 / ((1u64 << 53) as f64);
         ((self.next_u64() >> 11) as f64) * SCALE
-    }
-}
-
-#[derive(Clone)]
-struct BlockSource {
-    actor: SlotId,
-    source_action_id: String,
-    template_id: String,
-}
-
-impl BlockSource {
-    fn trace_detail(&self) -> serde_json::Value {
-        serde_json::json!({
-            "actor": self.actor,
-            "action_id": self.source_action_id,
-            "template_id": self.template_id,
-        })
     }
 }
 
@@ -3678,124 +3667,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     for stage in stage_order {
         match stage {
             IrAbility::Block => {
-                // Block is a pack-priority/precedence stage: once resolved, it
-                // suppresses pack-classified actions before later stages inspect them.
-                let mut block_sources: BTreeMap<SlotId, Vec<BlockSource>> = BTreeMap::new();
-                for idx in ability_order(&actions, IrAbility::Block) {
-                    if actions[idx].blocked
-                        || !night_resolution_block_participates(pack, actions[idx].template)
-                    {
-                        continue;
-                    }
-                    for t in &actions[idx].targets {
-                        block_sources
-                            .entry(t.clone())
-                            .or_default()
-                            .push(BlockSource {
-                                actor: actions[idx].sub.actor.clone(),
-                                source_action_id: actions[idx].sub.action_id.clone(),
-                                template_id: actions[idx].template.id.clone(),
-                            });
-                    }
-                }
-                let mut block_candidates: Vec<(usize, Vec<BlockSource>)> = Vec::new();
-                let mut consumed_first_match_sources: BTreeSet<(SlotId, String)> = BTreeSet::new();
-                for (idx, action) in actions.iter().enumerate() {
-                    if action.blocked {
-                        continue;
-                    }
-                    let suppressing_sources = block_sources
-                        .get(&action.sub.actor)
-                        .into_iter()
-                        .flat_map(|sources| sources.iter())
-                        .filter_map(|source| {
-                            let scope = night_resolution_block_suppression_scope(
-                                pack,
-                                source,
-                                action.template,
-                            )?;
-                            let key = (action.sub.actor.clone(), source.source_action_id.clone());
-                            if scope == SuppressionScope::FirstMatchingAction
-                                && consumed_first_match_sources.contains(&key)
-                            {
-                                return None;
-                            }
-                            Some((source.clone(), scope))
-                        })
-                        .collect::<Vec<_>>();
-                    if !suppressing_sources.is_empty() {
-                        for (source, scope) in &suppressing_sources {
-                            if *scope == SuppressionScope::FirstMatchingAction {
-                                consumed_first_match_sources.insert((
-                                    action.sub.actor.clone(),
-                                    source.source_action_id.clone(),
-                                ));
-                            }
-                        }
-                        block_candidates.push((
-                            idx,
-                            suppressing_sources
-                                .into_iter()
-                                .map(|(source, _)| source)
-                                .collect(),
-                        ));
-                    }
-                }
-                let block_candidate_idxs = block_candidates
-                    .iter()
-                    .map(|(idx, _)| *idx)
-                    .collect::<BTreeSet<_>>();
-                empowered_slots = collect_empowered_slots(&actions, pack, &block_candidate_idxs);
-
-                let mut newly_blocked: Vec<(SlotId, String, String, Vec<BlockSource>)> = Vec::new();
-                for (idx, sources) in block_candidates {
-                    if empowered_slots.contains(&actions[idx].sub.actor) {
-                        trace_decisions.push(DecisionTrace {
-                            stage: "night:block".to_string(),
-                            source: "night_resolution.empower_effects".to_string(),
-                            outcome: "action_suppression_bypassed".to_string(),
-                            detail: crate::json_atom!({
-                                "actor": actions[idx].sub.actor,
-                                "action_id": actions[idx].sub.action_id,
-                                "template_id": actions[idx].template.id,
-                                "empower_effects": pack.night_resolution.empower_effects.clone(),
-                                "block_sources": sources
-                                    .iter()
-                                    .map(BlockSource::trace_detail)
-                                    .collect::<Vec<_>>(),
-                            }),
-                        });
-                        continue;
-                    }
-                    actions[idx].blocked = true;
-                    newly_blocked.push((
-                        actions[idx].sub.actor.clone(),
-                        actions[idx].sub.action_id.clone(),
-                        actions[idx].template.id.clone(),
-                        sources,
-                    ));
-                }
-                for (actor, action_id, template_id, sources) in newly_blocked {
-                    trace_decisions.push(DecisionTrace {
-                        stage: "night:block".to_string(),
-                        source: "IrAbility::Block".to_string(),
-                        outcome: "action_suppressed".to_string(),
-                        detail: crate::json_atom!({
-                            "actor": actor,
-                            "action_id": action_id,
-                            "template_id": template_id,
-                            "reason": "roleblocked",
-                            "block_sources": sources
-                                .iter()
-                                .map(BlockSource::trace_detail)
-                                .collect::<Vec<_>>(),
-                        }),
-                    });
-                    events.push(InnerEvent::ActionInterfered {
-                        actor,
-                        reason: "roleblocked".to_string(),
-                    });
-                }
+                empowered_slots = resolve_suppression(SuppressionResolutionContext {
+                    actions: &mut actions,
+                    pack,
+                    events: &mut events,
+                    trace_decisions: &mut trace_decisions,
+                });
             }
             IrAbility::Redirect => {
                 // Redirect rewrites target maps before later target-reading stages.
@@ -3805,7 +3682,11 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                         .enumerate()
                         .filter_map(|(idx, action)| action.blocked.then_some(idx))
                         .collect::<BTreeSet<_>>();
-                    empowered_slots = collect_empowered_slots(&actions, pack, &blocked_idxs);
+                    empowered_slots = discover_empowered_slots(EmpowerDiscoveryInput {
+                        actions: &actions,
+                        pack,
+                        blocked_action_idxs: &blocked_idxs,
+                    });
                 }
                 resolve_redirects(RedirectResolutionContext {
                     actions: &mut actions,
@@ -5231,48 +5112,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     }
 }
 
-fn collect_empowered_slots(
-    actions: &[Action],
-    pack: &Pack,
-    blocked_action_idxs: &BTreeSet<usize>,
-) -> BTreeSet<SlotId> {
-    if pack.night_resolution.empower_effects.is_empty() {
-        return BTreeSet::new();
-    }
-
-    let empower_effects = pack
-        .night_resolution
-        .empower_effects
-        .iter()
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    let mut empowered = BTreeSet::new();
-    loop {
-        let mut changed = false;
-        for (idx, action) in actions.iter().enumerate() {
-            if action.blocked || !action.has_ability(IrAbility::Mark) {
-                continue;
-            }
-            let Some(effect) = action.template.effect.as_deref() else {
-                continue;
-            };
-            if !empower_effects.contains(effect) {
-                continue;
-            }
-            if blocked_action_idxs.contains(&idx) && !empowered.contains(&action.sub.actor) {
-                continue;
-            }
-            for target in &action.targets {
-                changed |= empowered.insert(target.clone());
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
-    empowered
-}
-
 /// Compute the slots a tracked slot visited this night: the (post-redirect)
 /// targets of that slot's own actions, excluding Ninja-hidden actions per the
 /// visibility rule. Stable, de-duplicated ordering.
@@ -5550,47 +5389,6 @@ fn protect_beats_kill_unless_strongman(pack: &Pack) -> bool {
             && rule.beats.contains(&IrAbility::Kill)
             && rule.unless_modifiers.contains(&Modifier::Strongman)
     })
-}
-
-fn night_resolution_block_participates(pack: &Pack, template: &ActionTemplate) -> bool {
-    if !pack.night_resolution.is_explicit() {
-        return true;
-    }
-    pack.night_resolution
-        .block_action_ids
-        .iter()
-        .chain(pack.night_resolution.jailkeep_action_ids.iter())
-        .any(|action_id| action_id == &template.id)
-}
-
-fn night_resolution_block_suppression_scope(
-    pack: &Pack,
-    source: &BlockSource,
-    target: &ActionTemplate,
-) -> Option<SuppressionScope> {
-    if !pack.night_resolution.is_explicit() {
-        return target
-            .constraints
-            .roleblockable
-            .then_some(SuppressionScope::AllMatchingActions);
-    }
-    pack.night_resolution
-        .suppression_policy
-        .get(&source.template_id)
-        .and_then(|policy| {
-            policy
-                .suppresses
-                .iter()
-                .any(|action_id| action_id == &target.id)
-                .then(|| {
-                    policy.scope.unwrap_or_else(|| {
-                        panic!(
-                            "invalid night_resolution suppression policy: Block action `{}` must declare suppression scope",
-                            source.template_id
-                        )
-                    })
-                })
-        })
 }
 
 fn night_resolution_protect_participates(pack: &Pack, template: &ActionTemplate) -> bool {
