@@ -2,6 +2,8 @@
   import {
     applyComposerEmbedToButtons,
     buildComposerEmbedView,
+    createComposerEmbedResolver,
+    YOUTUBE_EMBED_RESOLVE_ENDPOINT,
   } from "../../app/youtube-embed.mjs";
 
   export let view;
@@ -15,10 +17,24 @@
   export let onCommand = () => {};
   export let onRemoveQuote = () => {};
 
-  $: embedView = buildComposerEmbedView({
-    embedUrl,
-    channelId: view?.channelContext?.channelId,
+  const embedResolver = createComposerEmbedResolver({
+    endpoint: composer?.embedResolveEndpoint ?? YOUTUBE_EMBED_RESOLVE_ENDPOINT,
   });
+  let embedView = buildComposerEmbedView();
+  $: channelId = view?.channelContext?.channelId;
+  $: {
+    if (typeof window === "undefined") {
+      embedView = buildComposerEmbedView({ embedUrl, channelId });
+    } else {
+      void embedResolver.lookUp({
+        embedUrl,
+        channelId,
+        onChange: (next) => {
+          embedView = next;
+        },
+      });
+    }
+  }
   $: composerButtons = applyComposerEmbedToButtons(view?.buttons ?? [], embedView);
 </script>
 

@@ -115,7 +115,11 @@ export type SubmitPostEmbed = { url: string, };
 
 export type EmbedProvider = "youtube";
 
-export type PostEmbed = { provider: EmbedProvider, provider_id: string, start_seconds?: number, };
+export type EmbedPoster = { content_id: string, };
+
+export type EmbedSnapshot = { title: string, author?: string, poster?: EmbedPoster, };
+
+export type PostEmbed = { provider: EmbedProvider, provider_id: string, start_seconds?: number, snapshot?: EmbedSnapshot, };
 
 export type PostKind = "discussion_post" | "game_post";
 

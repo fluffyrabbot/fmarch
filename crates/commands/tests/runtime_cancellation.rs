@@ -68,6 +68,7 @@ fn post(game: Uuid, body: &str) -> Command {
         media: Vec::new(),
         quotations: Vec::new(),
         embed_url: None,
+        embed_snapshot: None,
     }
 }
 

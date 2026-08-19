@@ -1583,6 +1583,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -1786,6 +1787,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 media: Vec::new(),
                 quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
         )
         .await
@@ -1818,6 +1820,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -1834,6 +1837,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 media: Vec::new(),
                 quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
         )
         .await
@@ -1853,6 +1857,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 media: Vec::new(),
                 quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
         )
         .await
@@ -1899,6 +1904,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 media: Vec::new(),
                 quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
         )
         .await
@@ -1916,6 +1922,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -1969,6 +1976,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 media: Vec::new(),
                 quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
         )
         .await
@@ -1986,6 +1994,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2065,6 +2074,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
                 media: Vec::new(),
                 quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
         )
         .await
@@ -2288,6 +2298,7 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2324,6 +2335,7 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2341,6 +2353,7 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2407,6 +2420,7 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
             media: first_media.clone(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2422,6 +2436,7 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2503,6 +2518,7 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
             media: canvas_media.clone(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2520,6 +2536,7 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2555,6 +2572,7 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
             media: canvas_media.clone(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2591,6 +2609,7 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
             media: canvas_media,
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2700,6 +2719,7 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
             media,
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -2775,6 +2795,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
                 media: Vec::new(),
                 quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
         )
         .await
@@ -2841,6 +2862,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -4923,6 +4945,7 @@ async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: P
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -5134,6 +5157,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
                 media: Vec::new(),
                 quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
         ),
     ] {
@@ -5226,6 +5250,7 @@ async fn concurrent_player_post_and_complete_game_serialize_terminal_boundary(po
                 media: Vec::new(),
                 quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
         ),
     );
@@ -13300,6 +13325,7 @@ async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
         media: Vec::new(),
         quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         };
 
     let first = handle_idempotent(&pool, &user("user_a"), command_id, command.clone())
@@ -13322,6 +13348,7 @@ async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -13358,6 +13385,7 @@ async fn cancellation_while_waiting_for_command_lock_rolls_back_receipt_and_tran
         media: Vec::new(),
         quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         };
 
     let mut blocker = pool.begin().await.unwrap();
@@ -13400,6 +13428,7 @@ async fn cancellation_during_projection_rolls_back_event_projection_receipt_and_
         media: Vec::new(),
         quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         };
     let lock_key = 41_009_i64;
     install_thread_view_insert_blocker(&pool, game, lock_key).await;

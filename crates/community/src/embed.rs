@@ -9,6 +9,10 @@ use serde_json::Value;
 use super::CommunityReject;
 
 pub const YOUTUBE_EMBED_ORIGIN: &str = "https://www.youtube-nocookie.com";
+pub const YOUTUBE_OEMBED_ORIGIN: &str = "https://www.youtube.com";
+pub const YOUTUBE_OEMBED_PATH: &str = "/oembed";
+pub const MAX_EMBED_TITLE_CHARS: usize = 200;
+pub const MAX_EMBED_AUTHOR_CHARS: usize = 100;
 const YOUTUBE_ID_LEN: usize = 11;
 const MAX_START_SECONDS: u32 = 12 * 60 * 60;
 
@@ -19,11 +23,35 @@ pub enum EmbedProvider {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EmbedPoster {
+    pub content_id: String,
+}
+
+/// Write-time provider snapshot. Identity fields stay on [`PostEmbed`];
+/// additive preview facts go here so a poster can land later without a new envelope.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EmbedSnapshot {
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poster: Option<EmbedPoster>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostEmbed {
     pub provider: EmbedProvider,
     pub provider_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_seconds: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<EmbedSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct YoutubeOembedQuery {
+    pub watch_url: String,
+    pub format: &'static str,
 }
 
 impl PostEmbed {
@@ -53,6 +81,66 @@ pub fn decide_post_embed(
     Ok(Some(parse_youtube_embed(raw)?))
 }
 
+pub fn attach_embed_snapshot(
+    embed: Option<PostEmbed>,
+    snapshot: Option<EmbedSnapshot>,
+) -> Result<Option<PostEmbed>, CommunityReject> {
+    match (embed, snapshot) {
+        (None, None) => Ok(None),
+        (None, Some(_)) | (Some(_), None) => Err(CommunityReject::InvalidEmbed),
+        (Some(mut embed), Some(snapshot)) => {
+            embed.snapshot = Some(validate_embed_snapshot(snapshot)?);
+            Ok(Some(embed))
+        }
+    }
+}
+
+pub fn youtube_oembed_query(provider_id: &str) -> Option<YoutubeOembedQuery> {
+    if !is_youtube_id(provider_id) {
+        return None;
+    }
+    Some(YoutubeOembedQuery {
+        watch_url: format!("https://www.youtube.com/watch?v={provider_id}"),
+        format: "json",
+    })
+}
+
+pub fn snapshot_from_oembed(value: &Value) -> Result<EmbedSnapshot, CommunityReject> {
+    let title = clamp_embed_text(
+        value.get("title").and_then(Value::as_str).unwrap_or(""),
+        MAX_EMBED_TITLE_CHARS,
+    )
+    .ok_or(CommunityReject::InvalidEmbed)?;
+    let author = value
+        .get("author_name")
+        .and_then(Value::as_str)
+        .and_then(|name| clamp_embed_text(name, MAX_EMBED_AUTHOR_CHARS));
+    Ok(EmbedSnapshot {
+        title,
+        author,
+        poster: None,
+    })
+}
+
+pub fn validate_embed_snapshot(snapshot: EmbedSnapshot) -> Result<EmbedSnapshot, CommunityReject> {
+    let title = clamp_embed_text(&snapshot.title, MAX_EMBED_TITLE_CHARS)
+        .ok_or(CommunityReject::InvalidEmbed)?;
+    let author = snapshot
+        .author
+        .as_deref()
+        .and_then(|name| clamp_embed_text(name, MAX_EMBED_AUTHOR_CHARS));
+    if let Some(poster) = snapshot.poster.as_ref() {
+        if !is_content_id(&poster.content_id) {
+            return Err(CommunityReject::InvalidEmbed);
+        }
+    }
+    Ok(EmbedSnapshot {
+        title,
+        author,
+        poster: snapshot.poster,
+    })
+}
+
 pub fn parse_youtube_embed(input: &str) -> Result<PostEmbed, CommunityReject> {
     let trimmed = input.trim();
     let rest = trimmed
@@ -76,6 +164,7 @@ pub fn parse_youtube_embed(input: &str) -> Result<PostEmbed, CommunityReject> {
         provider: EmbedProvider::Youtube,
         provider_id,
         start_seconds: parse_start_seconds(query.get("t").or_else(|| query.get("start")).copied()),
+        snapshot: None,
     })
 }
 
@@ -144,6 +233,18 @@ fn first_segment(path: &str) -> Option<String> {
     } else {
         Some(segment.to_string())
     }
+}
+
+fn clamp_embed_text(value: &str, max_chars: usize) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.chars().take(max_chars).collect())
+}
+
+fn is_content_id(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn is_youtube_id(value: &str) -> bool {
@@ -216,6 +317,7 @@ mod tests {
             assert_eq!(embed.provider, EmbedProvider::Youtube);
             assert_eq!(embed.provider_id, id());
             assert_eq!(embed.start_seconds, None);
+            assert_eq!(embed.snapshot, None);
         }
     }
 
@@ -284,5 +386,39 @@ mod tests {
             embed.playback_src(),
             "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0&start=15"
         );
+    }
+
+    #[test]
+    fn oembed_snapshot_is_title_only_and_fail_closed() {
+        let query = youtube_oembed_query(id()).unwrap();
+        assert_eq!(query.watch_url, "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        assert_eq!(query.format, "json");
+        assert_eq!(youtube_oembed_query("short"), None);
+        let snapshot = snapshot_from_oembed(&serde_json::json!({
+            "title": "  Never Gonna Give You Up  ",
+            "author_name": " Rick Astley ",
+            "html": "<iframe></iframe>",
+            "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
+        }))
+        .unwrap();
+        assert_eq!(
+            snapshot,
+            EmbedSnapshot {
+                title: "Never Gonna Give You Up".into(),
+                author: Some("Rick Astley".into()),
+                poster: None,
+            }
+        );
+        assert_eq!(
+            snapshot_from_oembed(&serde_json::json!({"title": "   "})),
+            Err(CommunityReject::InvalidEmbed)
+        );
+        let embed = parse_youtube_embed("https://youtu.be/dQw4w9WgXcQ").unwrap();
+        assert_eq!(
+            attach_embed_snapshot(Some(embed.clone()), None),
+            Err(CommunityReject::InvalidEmbed)
+        );
+        let attached = attach_embed_snapshot(Some(embed), Some(snapshot.clone())).unwrap();
+        assert_eq!(attached.unwrap().snapshot, Some(snapshot));
     }
 }

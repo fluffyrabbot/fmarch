@@ -934,6 +934,7 @@ async fn handle_command(
             media,
             quotations,
             embed_url,
+            embed_snapshot,
         } => {
             submit_post(
                 tx,
@@ -946,6 +947,7 @@ async fn handle_command(
                     media,
                     quotations,
                     embed_url,
+                    embed_snapshot,
                 },
             )
             .await
@@ -2417,6 +2419,7 @@ struct SubmitPostRequest {
     media: Vec<model::ThreadPostMedia>,
     quotations: Vec<community::Quotation>,
     embed_url: Option<String>,
+    embed_snapshot: Option<community::EmbedSnapshot>,
 }
 
 const MAX_GAME_POST_BODY_BYTES: usize = game_platform::MAX_RENDERED_NARRATIVE_BYTES;
@@ -2519,6 +2522,7 @@ async fn submit_post(
         media,
         quotations,
         embed_url,
+        embed_snapshot,
     } = request;
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
@@ -2534,8 +2538,12 @@ async fn submit_post(
     validate_thread_post_media(&media)?;
     validate_game_post_body(&body)?;
     let quotations = decide_game_quotations(tx, game, &channel_id, principal, quotations).await?;
-    let embed = community::decide_post_embed(&channel_id, embed_url.as_deref())
-        .map_err(quotation_reject)?;
+    let embed = community::attach_embed_snapshot(
+        community::decide_post_embed(&channel_id, embed_url.as_deref())
+            .map_err(quotation_reject)?,
+        embed_snapshot,
+    )
+    .map_err(quotation_reject)?;
     if body.trim().is_empty() && quotations.is_empty() && embed.is_none() {
         let policy = projections::post_policy(&mut **tx, game, &channel_id).await?;
         if media.is_empty() || !policy.allow_media_only {

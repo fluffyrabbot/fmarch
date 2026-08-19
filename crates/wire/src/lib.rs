@@ -762,6 +762,7 @@ impl Command {
                 embed_url: embed
                     .map(|embed| embed.url)
                     .filter(|url| !url.trim().is_empty()),
+                embed_snapshot: None,
             },
             Command::ExtendDeadline { game, phase, at } => {
                 commands::Command::ExtendDeadline { game, phase, at }
@@ -1574,6 +1575,25 @@ pub struct PostEmbed {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub start_seconds: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub snapshot: Option<EmbedSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct EmbedSnapshot {
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub poster: Option<EmbedPoster>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct EmbedPoster {
+    pub content_id: String,
 }
 
 impl From<community::PostEmbed> for PostEmbed {
@@ -1582,6 +1602,19 @@ impl From<community::PostEmbed> for PostEmbed {
             provider: EmbedProvider::Youtube,
             provider_id: value.provider_id,
             start_seconds: value.start_seconds,
+            snapshot: value.snapshot.map(EmbedSnapshot::from),
+        }
+    }
+}
+
+impl From<community::EmbedSnapshot> for EmbedSnapshot {
+    fn from(value: community::EmbedSnapshot) -> Self {
+        EmbedSnapshot {
+            title: value.title,
+            author: value.author,
+            poster: value.poster.map(|poster| EmbedPoster {
+                content_id: poster.content_id,
+            }),
         }
     }
 }
@@ -2726,7 +2759,8 @@ pub mod typescript {
         CohostPermissionClass, Command, CommandMsg, CommunityInboxItem, CommunityInboxPage,
         DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
         DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
-        DiscussionTopicPage, EmbedProvider, GameIndexEntry, GameIndexPage, Hello,
+        DiscussionTopicPage, EmbedPoster, EmbedProvider, EmbedSnapshot, GameIndexEntry,
+        GameIndexPage, Hello,
         HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsoleDayEventsDelta,
         HostConsoleHeaderDelta, HostConsolePhaseStateDelta, HostConsoleSchedulerDelta,
         HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
@@ -2811,6 +2845,8 @@ pub mod typescript {
         push::<SubmitPostMedia>(&mut out, &config);
         push::<SubmitPostEmbed>(&mut out, &config);
         push::<EmbedProvider>(&mut out, &config);
+        push::<EmbedPoster>(&mut out, &config);
+        push::<EmbedSnapshot>(&mut out, &config);
         push::<PostEmbed>(&mut out, &config);
         push::<PostKind>(&mut out, &config);
         push::<PostRef>(&mut out, &config);

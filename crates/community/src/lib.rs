@@ -7,8 +7,10 @@
 mod embed;
 
 pub use embed::{
-    decide_post_embed, embed_from_payload, embed_payload, parse_youtube_embed, EmbedProvider,
-    PostEmbed, YOUTUBE_EMBED_ORIGIN,
+    attach_embed_snapshot, decide_post_embed, embed_from_payload, embed_payload,
+    parse_youtube_embed, snapshot_from_oembed, validate_embed_snapshot, youtube_oembed_query,
+    EmbedPoster, EmbedProvider, EmbedSnapshot, PostEmbed, YoutubeOembedQuery, YOUTUBE_EMBED_ORIGIN,
+    YOUTUBE_OEMBED_ORIGIN, YOUTUBE_OEMBED_PATH,
 };
 
 use serde::{Deserialize, Serialize};

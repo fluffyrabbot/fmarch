@@ -8,6 +8,7 @@ mod auth_http;
 mod authentication;
 mod command_http;
 mod community_http;
+mod embed_http;
 mod game_http;
 pub mod identity_delivery;
 mod live_delivery;
@@ -28,6 +29,7 @@ pub use game_http::{
     PlayerCommandPhaseState, PlayerCommandRoleView, PlayerCommandStateResponse,
     PlayerDayEventAttention, PlayerVoteTarget,
 };
+pub use embed_http::YoutubeSnapshotLookup;
 pub use live_delivery::WebsocketTicketResponse;
 pub use media_http::{MediaUploadResponse, MediaUploadVariant};
 
@@ -73,6 +75,7 @@ pub struct ApiState {
     media_account_quota_bytes: i64,
     websocket_poll_interval: Duration,
     live_event_wake: GameEventWakeHub,
+    embed_lookup: embed_http::YoutubeSnapshotLookup,
 }
 
 const REGISTRATION_SESSION_TTL_SECONDS: i64 = 60 * 60 * 24 * 7;
@@ -125,7 +128,14 @@ impl ApiState {
                 5_000,
             ) as u64),
             live_event_wake,
+            embed_lookup: embed_http::YoutubeSnapshotLookup::http()
+                .expect("youtube oembed client"),
         }
+    }
+
+    pub fn with_embed_lookup(mut self, lookup: embed_http::YoutubeSnapshotLookup) -> Self {
+        self.embed_lookup = lookup;
+        self
     }
 
     /// Classic (username + password) sign-in is a first-class method, enabled
@@ -257,6 +267,7 @@ pub fn router_with_state(state: ApiState) -> Router {
     let auth_routes = auth_http::routes(&state);
     let command_routes = command_http::routes(&state);
     let community_routes = community_http::routes(&state);
+    let embed_routes = embed_http::routes();
     let game_routes = game_http::routes(&state);
     let live_delivery_routes = live_delivery::routes(&state);
     let app = Router::new()
@@ -267,6 +278,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .merge(auth_routes)
         .merge(command_routes)
         .merge(community_routes)
+        .merge(embed_routes)
         .merge(game_routes)
         .merge(live_delivery_routes);
     app.with_state(state)

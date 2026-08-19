@@ -31,6 +31,7 @@ pub(super) struct CommandHttpState {
     media_store: MediaRepository,
     variant_limits: VariantLimits,
     live_projection: LiveProjectionPublisher,
+    embed_lookup: crate::embed_http::YoutubeSnapshotLookup,
 }
 
 impl CommandHttpState {
@@ -41,6 +42,7 @@ impl CommandHttpState {
             media_store: state.media_store.clone(),
             variant_limits: state.variant_limits,
             live_projection: state.live_projection.clone(),
+            embed_lookup: state.embed_lookup.clone(),
         }
     }
 }
@@ -77,7 +79,34 @@ async fn prepare_wire_command(
             }
         }
     };
-    prepare_command_media(state, command).await
+    let command = prepare_command_media(state, command).await?;
+    prepare_command_embed(state, command).await
+}
+
+async fn prepare_command_embed(
+    state: &CommandHttpState,
+    mut command: commands::Command,
+) -> Result<commands::Command, commands::Reject> {
+    let commands::Command::SubmitPost {
+        embed_url,
+        embed_snapshot,
+        channel_id,
+        ..
+    } = &mut command
+    else {
+        return Ok(command);
+    };
+    let Some(url) = embed_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(command);
+    };
+    let resolved =
+        crate::embed_http::resolve_youtube_snapshot(&state.embed_lookup, channel_id, url).await?;
+    *embed_snapshot = resolved.snapshot;
+    Ok(command)
 }
 
 async fn prepare_command_media(

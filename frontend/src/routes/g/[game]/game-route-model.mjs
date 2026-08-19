@@ -127,6 +127,7 @@ export async function buildGameRouteData({
       voteTargetSlot: "slot-2",
       commandEndpoint: "/commands",
       mediaUploadEndpoint: "/media/uploads",
+      embedResolveEndpoint: "/embeds/youtube/resolve",
       mediaUploadTypes: Object.freeze(["image/png", "image/jpeg"]),
       mediaMaxEncodedBytes: 12 * 1024 * 1024,
       transportBoundary: LIVE_TRANSPORT_BOUNDARY.proof,

@@ -5,10 +5,12 @@ import {
   buildComposerEmbedView,
   buildPlayerThreadEmbedView,
   buildYoutubePlaybackSrc,
+  createComposerEmbedResolver,
   COMPOSER_EMBED_HINT,
-  COMPOSER_EMBED_PREVIEW,
+  COMPOSER_EMBED_PENDING,
   COMPOSER_EMBED_REJECTION,
   parseYoutubeEmbed,
+  resolveYoutubeEmbed,
 } from "./youtube-embed.mjs";
 
 const id = "dQw4w9WgXcQ";
@@ -67,10 +69,11 @@ test("composer embed view previews closed YouTube URLs and rejects everything el
     buildComposerEmbedView({
       embedUrl: `https://www.youtube.com/shorts/${id}?t=15`,
       channelId: "main",
+      snapshot: { title: "Never Gonna Give You Up" },
     }),
     {
       state: "ready",
-      hint: COMPOSER_EMBED_PREVIEW,
+      hint: "Never Gonna Give You Up will play after send",
       disablePost: false,
       reason: "",
     },
@@ -79,15 +82,21 @@ test("composer embed view previews closed YouTube URLs and rejects everything el
     buildComposerEmbedView({
       embedUrl: `https://youtu.be/${id}`,
       channelId: "main",
-    }).hint,
-    COMPOSER_EMBED_PREVIEW,
+      resolveState: "pending",
+    }),
+    {
+      state: "pending",
+      hint: COMPOSER_EMBED_PENDING,
+      disablePost: true,
+      reason: COMPOSER_EMBED_PENDING,
+    },
   );
-  assert.deepEqual(
+  assert.equal(
     buildComposerEmbedView({
       embedUrl: `https://www.youtube.com/watch?v=${id}`,
       channelId: "main",
     }).state,
-    "ready",
+    "invalid",
   );
   assert.deepEqual(
     buildComposerEmbedView({
@@ -121,6 +130,7 @@ test("composer embed disable overlays only submit_post", () => {
   const ready = buildComposerEmbedView({
     embedUrl: `https://youtu.be/${id}`,
     channelId: "main",
+    snapshot: { title: "Never Gonna Give You Up" },
   });
   const invalid = buildComposerEmbedView({
     embedUrl: "https://example.com/watch?v=dQw4w9WgXcQ",
@@ -158,7 +168,62 @@ test("playback src uses the privacy-enhanced origin", () => {
     providerId: id,
     startSeconds: null,
     playbackSrc: `https://www.youtube-nocookie.com/embed/${id}?rel=0`,
+    snapshot: null,
     playLabel: "Play YouTube video",
     testId: "thread-post-embed-play-12",
   });
+  assert.equal(
+    buildPlayerThreadEmbedView(
+      {
+        provider: "youtube",
+        provider_id: id,
+        snapshot: { title: "Never Gonna Give You Up" },
+      },
+      12,
+    ).playLabel,
+    "Play Never Gonna Give You Up",
+  );
+});
+
+test("composer resolve is fail-closed and uses the same-origin endpoint", async () => {
+  const calls = [];
+  const ready = await resolveYoutubeEmbed({
+    url: `https://youtu.be/${id}`,
+    endpoint: "/embeds/youtube/resolve",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return Response.json({
+        embed: {
+          provider: "youtube",
+          provider_id: id,
+          snapshot: { title: "Never Gonna Give You Up", author: "Rick Astley" },
+        },
+      });
+    },
+  });
+  assert.equal(calls[0].url, "/embeds/youtube/resolve");
+  assert.equal(JSON.parse(calls[0].init.body).url, `https://youtu.be/${id}`);
+  assert.deepEqual(ready, {
+    state: "ready",
+    snapshot: { title: "Never Gonna Give You Up", author: "Rick Astley" },
+  });
+  const missing = await resolveYoutubeEmbed({
+    url: `https://youtu.be/${id}`,
+    fetchImpl: async () => Response.json({ error: "InvalidTarget" }, { status: 400 }),
+  });
+  assert.equal(missing.state, "unavailable");
+  const views = [];
+  const resolver = createComposerEmbedResolver({
+    delayMs: 0,
+    fetchImpl: async () =>
+      Response.json({
+        embed: { snapshot: { title: "Never Gonna Give You Up" } },
+      }),
+  });
+  await resolver.lookUp({
+    embedUrl: `https://youtu.be/${id}`,
+    channelId: "main",
+    onChange: (view) => views.push(view.state),
+  });
+  assert.deepEqual(views, ["pending", "ready"]);
 });

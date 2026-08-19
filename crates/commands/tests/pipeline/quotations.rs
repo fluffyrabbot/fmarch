@@ -25,6 +25,7 @@ async fn submit_post_records_same_thread_quotations_without_writing_the_quoted_s
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -56,6 +57,7 @@ async fn submit_post_records_same_thread_quotations_without_writing_the_quoted_s
                 excerpt: "Alpha signal".into(),
             }],
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -106,6 +108,7 @@ async fn submit_post_records_same_thread_quotations_without_writing_the_quoted_s
                 excerpt: "nope".into(),
             }],
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await;
@@ -187,6 +190,7 @@ async fn submit_post_rejects_quoting_a_private_channel_seq_from_main(pool: PgPoo
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -218,6 +222,7 @@ async fn submit_post_rejects_quoting_a_private_channel_seq_from_main(pool: PgPoo
                 excerpt: "secret mason claim".into(),
             }],
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await;
@@ -242,6 +247,7 @@ async fn submit_post_allows_empty_body_when_same_thread_quotations_are_present(p
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -273,6 +279,7 @@ async fn submit_post_allows_empty_body_when_same_thread_quotations_are_present(p
                 excerpt: "Alpha signal".into(),
             }],
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await

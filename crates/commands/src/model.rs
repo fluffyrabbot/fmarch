@@ -335,6 +335,8 @@ pub enum Command {
         quotations: Vec<community::Quotation>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         embed_url: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        embed_snapshot: Option<community::EmbedSnapshot>,
     },
     /// Extend a phase deadline. Host-team (Deadline class).
     ExtendDeadline { game: Uuid, phase: String, at: i64 },

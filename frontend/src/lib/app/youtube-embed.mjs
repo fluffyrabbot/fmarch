@@ -1,12 +1,19 @@
 export const YOUTUBE_EMBED_ORIGIN = "https://www.youtube-nocookie.com";
+export const YOUTUBE_EMBED_RESOLVE_ENDPOINT = "/embeds/youtube/resolve";
 export const COMPOSER_EMBED_HINT =
   "Watch, Shorts, or youtu.be links. The player loads only after someone presses Play.";
-export const COMPOSER_EMBED_PREVIEW = "YouTube video will play after send";
+export const COMPOSER_EMBED_PENDING = "Looking up YouTube title…";
 export const COMPOSER_EMBED_REJECTION = "Reject InvalidTarget: invalid target";
+export const COMPOSER_EMBED_RESOLVE_DELAY_MS = 400;
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/u;
 const MAX_START_SECONDS = 12 * 60 * 60;
 
-export function buildComposerEmbedView({ embedUrl = "", channelId = "main" } = {}) {
+export function buildComposerEmbedView({
+  embedUrl = "",
+  channelId = "main",
+  snapshot = null,
+  resolveState = "idle",
+} = {}) {
   const trimmed = String(embedUrl ?? "").trim();
   if (trimmed === "") {
     return Object.freeze({
@@ -17,12 +24,29 @@ export function buildComposerEmbedView({ embedUrl = "", channelId = "main" } = {
     });
   }
   const parsed = String(channelId ?? "") === "main" ? parseYoutubeEmbed(trimmed) : null;
-  if (parsed !== null) {
+  if (parsed === null) {
+    return Object.freeze({
+      state: "invalid",
+      hint: COMPOSER_EMBED_REJECTION,
+      disablePost: true,
+      reason: COMPOSER_EMBED_REJECTION,
+    });
+  }
+  const title = String(snapshot?.title ?? "").trim();
+  if (title !== "") {
     return Object.freeze({
       state: "ready",
-      hint: COMPOSER_EMBED_PREVIEW,
+      hint: `${title} will play after send`,
       disablePost: false,
       reason: "",
+    });
+  }
+  if (resolveState === "pending") {
+    return Object.freeze({
+      state: "pending",
+      hint: COMPOSER_EMBED_PENDING,
+      disablePost: true,
+      reason: COMPOSER_EMBED_PENDING,
     });
   }
   return Object.freeze({
@@ -30,6 +54,117 @@ export function buildComposerEmbedView({ embedUrl = "", channelId = "main" } = {
     hint: COMPOSER_EMBED_REJECTION,
     disablePost: true,
     reason: COMPOSER_EMBED_REJECTION,
+  });
+}
+
+export function normalizeEmbedSnapshot(value) {
+  const title = String(value?.title ?? "").trim();
+  if (title === "") {
+    return null;
+  }
+  const author = String(value?.author ?? "").trim();
+  const posterId = String(value?.poster?.content_id ?? value?.poster?.contentId ?? "").trim();
+  return Object.freeze({
+    title,
+    ...(author === "" ? {} : { author }),
+    ...(posterId === "" ? {} : { poster: Object.freeze({ contentId: posterId }) }),
+  });
+}
+
+export async function resolveYoutubeEmbed({
+  url,
+  fetchImpl = fetch,
+  endpoint = YOUTUBE_EMBED_RESOLVE_ENDPOINT,
+  signal,
+} = {}) {
+  if (parseYoutubeEmbed(url) === null) {
+    return Object.freeze({ state: "invalid", snapshot: null });
+  }
+  if (typeof fetchImpl !== "function") {
+    return Object.freeze({ state: "unavailable", snapshot: null });
+  }
+  const response = await fetchImpl(endpoint, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ url: String(url).trim() }),
+    signal,
+  });
+  const payload = await response.json().catch(() => null);
+  const snapshot = normalizeEmbedSnapshot(payload?.embed?.snapshot ?? payload?.snapshot);
+  if (!response.ok || snapshot === null) {
+    return Object.freeze({ state: "unavailable", snapshot: null });
+  }
+  return Object.freeze({ state: "ready", snapshot });
+}
+
+export function createComposerEmbedResolver({
+  fetchImpl = fetch,
+  endpoint = YOUTUBE_EMBED_RESOLVE_ENDPOINT,
+  delayMs = COMPOSER_EMBED_RESOLVE_DELAY_MS,
+} = {}) {
+  let generation = 0;
+  let timer = null;
+  let abort = null;
+  return Object.freeze({
+    lookUp({ embedUrl, channelId, onChange }) {
+      generation += 1;
+      const gen = generation;
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      abort?.abort();
+      abort = null;
+      const trimmed = String(embedUrl ?? "").trim();
+      if (
+        trimmed === "" ||
+        String(channelId ?? "") !== "main" ||
+        parseYoutubeEmbed(trimmed) === null
+      ) {
+        onChange(buildComposerEmbedView({ embedUrl, channelId }));
+        return Promise.resolve();
+      }
+      onChange(buildComposerEmbedView({ embedUrl, channelId, resolveState: "pending" }));
+      return new Promise((resolve) => {
+        timer = setTimeout(() => {
+          timer = null;
+          resolve();
+        }, delayMs);
+      }).then(async () => {
+        if (gen !== generation) {
+          return;
+        }
+        abort = new AbortController();
+        let resolved;
+        try {
+          resolved = await resolveYoutubeEmbed({
+            url: embedUrl,
+            fetchImpl,
+            endpoint,
+            signal: abort.signal,
+          });
+        } catch (error) {
+          if (error?.name === "AbortError") {
+            return;
+          }
+          resolved = { state: "unavailable", snapshot: null };
+        }
+        if (gen !== generation) {
+          return;
+        }
+        onChange(
+          buildComposerEmbedView({
+            embedUrl,
+            channelId,
+            snapshot: resolved.snapshot,
+            resolveState: resolved.state === "ready" ? "ready" : "unavailable",
+          }),
+        );
+      });
+    },
   });
 }
 
@@ -121,12 +256,15 @@ export function buildPlayerThreadEmbedView(embed, seq) {
     return null;
   }
   const postSeq = Number(seq);
+  const snapshot = normalizeEmbedSnapshot(embed?.snapshot);
+  const title = snapshot?.title ?? "";
   return Object.freeze({
     provider: "youtube",
     providerId: source.providerId,
     startSeconds: source.startSeconds,
     playbackSrc,
-    playLabel: "Play YouTube video",
+    snapshot,
+    playLabel: title === "" ? "Play YouTube video" : `Play ${title}`,
     testId:
       Number.isInteger(postSeq) && postSeq >= 1
         ? `thread-post-embed-play-${postSeq}`

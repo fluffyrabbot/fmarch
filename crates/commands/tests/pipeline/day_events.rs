@@ -853,6 +853,7 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
@@ -949,6 +950,7 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await

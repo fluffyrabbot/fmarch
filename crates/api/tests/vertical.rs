@@ -7224,6 +7224,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
             media: Vec::new(),
             quotations: Vec::new(),
             embed_url: None,
+            embed_snapshot: None,
         },
     )
     .await
