@@ -84,7 +84,7 @@ test('command audit is a dedicated exact-size integration target', () => {
   const witnessSource = readFileSync(witnessPath, 'utf8');
 
   assert.equal([...ordinarySource.matchAll(testAttribute)].length, 107);
-  assert.equal([...auditSource.matchAll(testAttribute)].length, 179);
+  assert.equal([...auditSource.matchAll(testAttribute)].length, 169);
   assert.equal([...witnessSource.matchAll(testAttribute)].length, 2);
   assert.ok(!ordinarySource.includes('#[ignore'));
   assert.ok(!auditSource.includes('#[ignore'));

@@ -170,6 +170,7 @@
         "host_resolve_phase_carries_mafiascum_role_set_info",
         "host_resolve_phase_carries_mafiascum_roleblocker_aliases",
         "host_resolve_phase_carries_mafiascum_serial_killer_win",
+        "host_resolve_phase_carries_mafiascum_specialist_info",
         "host_resolve_phase_carries_saulus_alignment_flip_on_lynch",
         "host_resolve_phase_counts_traitor_for_mafia_parity",
         "host_resolve_phase_day_action_win_runs_after_announcement",
@@ -190,6 +191,7 @@
         "host_resolve_phase_stacks_babysitter_dependency_with_direct_ward_death",
         "host_resolve_phase_stacks_hider_dependency_with_direct_death",
         "host_resolve_phase_uses_pack_declared_triplevoter_weight",
+        "host_resolve_phase_uses_pack_declared_vote_weights",
         "host_resolve_phase_uses_pack_declared_x_voter_weight",
         "host_resolve_phase_weak_cop_dies_on_scum_result"
       ]
@@ -270,7 +272,13 @@
           "reason": "illegal power-role kill target is rejected at command admission"
         }
       ],
-      "replaced_tests": []
+      "replaced_tests": [
+        "host_resolve_phase_carries_mafia_universe_janitor_concealment",
+        "host_resolve_phase_carries_mafia_universe_power_role_killer_filter",
+        "host_resolve_phase_carries_mafia_universe_rolestop",
+        "host_resolve_phase_carries_mafia_universe_town_strongman_pierce",
+        "host_resolve_phase_carries_mafia_universe_vigilante_kills"
+      ]
     },
     {
       "pack": "chinese_structured",
@@ -303,7 +311,11 @@
           "reason": "day action is rejected at command admission during N01"
         }
       ],
-      "replaced_tests": []
+      "replaced_tests": [
+        "host_resolve_phase_carries_chinese_guard_self_save_night_one_policy",
+        "host_resolve_phase_carries_chinese_white_wolf_king_night_kill",
+        "host_resolve_phase_carries_wolf_self_destruct_trade"
+      ]
     }
   ]
 }
