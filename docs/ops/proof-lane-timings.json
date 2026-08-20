@@ -218,12 +218,12 @@
       "warmup_seconds": 0.5
     },
     "cargo:commands-audit": {
-      "seconds": 639.6,
-      "measured_at": "2026-08-20T03:30:00.000Z",
+      "seconds": 460.4,
+      "measured_at": "2026-08-20T06:07:26.000Z",
       "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test semantic_audit -- --test-threads=4",
       "status": 0,
       "method": "warm-run",
-      "note": "After expanding the golden command witness to 166 fresh mafiascum/mafia_universe/chinese_structured goldens and folding 18 leftover minimizer fixtures onto 8 isolated workers. Test body 639.61s on a warm checkout."
+      "note": "After leftover handwritten host_resolve cases share one migrated database. Test body 460.38s on a warm checkout."
     },
     "cargo:operator-proof": {
       "seconds": 9.1,

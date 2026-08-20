@@ -84,8 +84,8 @@ test('command audit is a dedicated exact-size integration target', () => {
   const witnessSource = readFileSync(witnessPath, 'utf8');
 
   assert.equal([...ordinarySource.matchAll(testAttribute)].length, 107);
-  assert.equal([...auditSource.matchAll(testAttribute)].length, 169);
-  assert.equal([...witnessSource.matchAll(testAttribute)].length, 2);
+  assert.equal([...auditSource.matchAll(testAttribute)].length, 29);
+  assert.equal([...witnessSource.matchAll(testAttribute)].length, 3);
   assert.ok(!ordinarySource.includes('#[ignore'));
   assert.ok(!auditSource.includes('#[ignore'));
   assert.ok(!witnessSource.includes('#[ignore'));
@@ -139,7 +139,7 @@ test('host_resolve_phase tests cite a golden or are adapter-only, and witnessed 
   assert.ok(hostFns.length > 0);
   const cited = [
     ...auditSource.matchAll(
-      /\/\/ (golden: \S+|adapter-only: .+)\n#\[sqlx::test[^\]]*\]\s*async fn (host_resolve_phase_[a-z0-9_]+)\(/g,
+      /\/\/ (golden: \S+|adapter-only: .+)\nasync fn (host_resolve_phase_[a-z0-9_]+)\(/g,
     ),
   ];
   assert.equal(cited.length, hostFns.length, 'every host_resolve_phase test must be cited');
@@ -152,6 +152,22 @@ test('host_resolve_phase tests cite a golden or are adapter-only, and witnessed 
         `${name} cites missing golden ${relative}`,
       );
     }
+  }
+
+  const witnessSource = readFileSync(join(auditDir, 'golden_witness.rs'), 'utf8');
+  const leftoverDispatcher = witnessSource.slice(
+    witnessSource.indexOf('leftover_host_resolve_phase_cases_share_one_migrated_database'),
+  );
+  assert.ok(leftoverDispatcher.length > 0, 'leftover host_resolve dispatcher must exist');
+  assert.match(
+    witnessSource,
+    new RegExp(`const LEFTOVER_HOST_RESOLVE_PHASE_CASES: usize = ${hostFns.length};`),
+  );
+  for (const name of hostFns) {
+    assert.ok(
+      leftoverDispatcher.includes(name),
+      `leftover host_resolve dispatcher missing ${name}`,
+    );
   }
 });
 

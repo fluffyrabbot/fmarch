@@ -30,11 +30,7 @@ fn golden_command_witness_packs() -> Vec<GoldenCommandWitnessPack> {
                 .as_array()
                 .expect("witness pack stems")
                 .iter()
-                .map(|stem| {
-                    stem.as_str()
-                        .expect("witness stem is a string")
-                        .to_string()
-                })
+                .map(|stem| stem.as_str().expect("witness stem is a string").to_string())
                 .collect(),
         })
         .collect()
@@ -326,7 +322,9 @@ async fn replay_pack_golden(
         .await
         .map_err(|err| format!("{pack}/{stem}: audit_resolution_envelopes: {err}"))?;
     if !audit.ok {
-        return Err(format!("{pack}/{stem}: resolution audit drifted: {audit:?}"));
+        return Err(format!(
+            "{pack}/{stem}: resolution audit drifted: {audit:?}"
+        ));
     }
     Ok(game)
 }
@@ -577,5 +575,171 @@ async fn folded_semantic_fixtures_shrink_on_isolated_workers(
         reports.len(),
         FOLDED_MINIMIZER_WITNESS_CASES,
         "folded minimizer workers must drain every case"
+    );
+}
+
+const LEFTOVER_HOST_RESOLVE_PHASE_CASES: usize = 140;
+
+macro_rules! run_leftover_host_resolve {
+    ($pool:ident, $($case:ident),+ $(,)?) => {{
+        let mut ran = 0usize;
+        $(
+            $case($pool.clone()).await;
+            ran += 1;
+        )+
+        ran
+    }};
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn leftover_host_resolve_phase_cases_share_one_migrated_database(pool: PgPool) {
+    // Unique leftover host_resolve claims share one migrated database. Games
+    // use fresh UUIDs; cases stay sequential so a failure keeps its assertion.
+    let ran = run_leftover_host_resolve!(
+        pool,
+        host_resolve_phase_reveals_town_alignment_without_role,
+        host_resolve_phase_carries_mafia_universe_reveal_town,
+        host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal,
+        host_resolve_phase_carries_mafia_universe_role_oracle_reveal,
+        host_resolve_phase_carries_mafia_universe_backup_inheritance,
+        host_resolve_phase_projects_hero_instigator_kill_on_vote_duel,
+        host_resolve_phase_carries_twilight_self_destruct_window,
+        host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window,
+        host_resolve_phase_conceals_janitor_and_flipless_death_reveals,
+        host_resolve_phase_projects_alignment_only_death_reveal,
+        host_resolve_phase_carries_default_open_guardian_seer,
+        host_resolve_phase_carries_default_open_day_majority,
+        host_resolve_phase_carries_super_saint_lynch_trigger,
+        host_resolve_phase_projects_beloved_princess_host_prompt,
+        host_resolve_phase_projects_virgin_night_death_skip_prompt,
+        host_resolve_phase_uses_pack_declared_role_tiebreaker,
+        host_resolve_phase_uses_dynamic_effect_vote_weight,
+        host_resolve_phase_uses_vote_weight_action_grant,
+        host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt,
+        host_resolve_phase_uses_loved_hated_threshold_adjustments,
+        host_resolve_phase_projects_epicmafia_pk_tie_prompt,
+        host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt,
+        host_resolve_phase_carries_sheriff_badge_lifecycle,
+        host_resolve_phase_carries_knight_duel_death,
+        host_resolve_phase_carries_knight_duel_failure_before_vote,
+        host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill,
+        host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill,
+        host_resolve_phase_carries_chinese_wolf_faction_vote_policy,
+        host_resolve_phase_carries_wolf_beauty_mark_and_drag,
+        host_resolve_phase_carries_witch_poison_beauty_drag,
+        host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death,
+        host_resolve_phase_carries_guard_witch_poison_policy,
+        host_resolve_phase_carries_guard_witch_double_save_policy,
+        host_resolve_phase_carries_guard_witch_killtarget_policy,
+        host_resolve_phase_carries_ita_session_lethal_shot,
+        host_resolve_phase_invalidates_later_ita_shot_at_dead_target,
+        host_resolve_phase_refunds_ita_shot_at_already_dead_target,
+        host_resolve_phase_buffers_ita_shot_without_same_pass_resolution,
+        host_resolve_phase_releases_buffered_ita_shot_on_later_pass,
+        host_resolve_phase_invalidates_buffered_ita_shot_on_later_release,
+        host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_release,
+        host_resolve_phase_applies_ita_lifecycle_pause_control,
+        host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection,
+        host_resolve_phase_carries_ita_chance_overrides_and_shields,
+        host_resolve_phase_carries_mafia_universe_basic_nar,
+        host_resolve_phase_carries_mafia_universe_joat_block_counter,
+        host_resolve_phase_carries_mafiascum_joat_block_counter,
+        host_resolve_phase_carries_mafiascum_two_shot_counter,
+        host_resolve_phase_carries_mafia_universe_night_desperado_kills,
+        host_resolve_phase_carries_mafia_universe_day_vigilante_kills,
+        host_resolve_phase_carries_mafia_universe_day_desperado_failback,
+        host_resolve_phase_carries_mafia_universe_cpr_harm,
+        host_resolve_phase_carries_mafia_universe_framer_investigation,
+        host_resolve_phase_carries_mafia_universe_town_framer_investigation,
+        host_resolve_phase_carries_mafiascum_role_scan,
+        host_resolve_phase_carries_mafiascum_coroner_corpse_inspection,
+        host_resolve_phase_carries_mafiascum_pt_cop_access,
+        host_resolve_phase_carries_mafia_universe_role_set_info,
+        host_resolve_phase_carries_mafia_universe_role_and_full_role_info,
+        host_resolve_phase_carries_mafia_universe_culture_aliases,
+        host_resolve_phase_carries_mafia_universe_parity_scan_memory,
+        host_resolve_phase_carries_mafia_universe_graph_info,
+        host_resolve_phase_carries_mafia_universe_voyeur_action_info,
+        host_resolve_phase_carries_mafia_universe_ninja_hidden_visit_results,
+        host_resolve_phase_carries_mafia_universe_redirect_graph,
+        host_resolve_phase_carries_mafia_universe_commute,
+        host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death,
+        host_resolve_phase_carries_mafia_universe_healer_alias_cure,
+        host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite,
+        host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alias,
+        host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends,
+        host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications,
+        host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spends,
+        host_resolve_phase_carries_mafia_universe_empower_bypass,
+        host_resolve_phase_carries_day_announcements_and_last_words,
+        host_resolve_phase_uses_pack_declared_night_parity,
+        host_resolve_phase_uses_pack_declared_cycle_parity,
+        host_resolve_phase_applies_godfather_investigation_override,
+        host_resolve_phase_projects_mafiascum_info_results,
+        host_resolve_phase_carries_mafiascum_fruit_vendor_notification,
+        host_resolve_phase_preserves_prior_investigation_memory,
+        host_resolve_phase_records_visit_history_for_prior_motion,
+        host_resolve_phase_carries_action_history_for_non_consecutive,
+        host_resolve_phase_projects_conversion_and_persistent_effects,
+        host_resolve_phase_blocks_conversion_of_pending_death_target,
+        host_resolve_phase_filters_hidden_effect_notifications,
+        host_resolve_phase_persists_loyal_conversion_block_trace,
+        host_resolve_phase_persists_disloyal_modifier_trace_and_projection,
+        host_resolve_phase_carries_poison_cure_and_delayed_death,
+        host_resolve_phase_traces_pending_poison_target_already_dead,
+        host_resolve_phase_persists_cleanse_read_effect_trace_decision,
+        host_resolve_phase_deprograms_from_conversion_origin,
+        host_resolve_phase_vanillaize_then_restore_mutation,
+        host_resolve_phase_backup_cop_inherits_on_death,
+        host_resolve_phase_targeted_backup_inherits_chosen_source,
+        host_resolve_phase_carries_condemner_target_lynch_win,
+        host_resolve_phase_carries_executioner_target_lynch_win,
+        host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_wins,
+        host_resolve_phase_projects_pgo_visit_trigger,
+        host_resolve_phase_projects_target_filtered_visitor_kill,
+        host_resolve_phase_projects_epicmafia_bomb_trigger,
+        host_resolve_phase_protects_generated_pgo_trigger_kill,
+        host_resolve_phase_generated_pgo_kill_obeys_transient_target_state,
+        host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill,
+        host_resolve_phase_persists_cpr_harm_policy,
+        host_resolve_phase_bypasses_protection_for_strongman_trigger_kill,
+        host_resolve_phase_projects_death_trigger_kill,
+        host_resolve_phase_projects_effect_marked_trigger_kill,
+        host_resolve_phase_projects_phase_end_trigger_kill,
+        host_resolve_phase_projects_win_trigger_before_final_win,
+        host_resolve_phase_protects_ordinary_vengeful_trigger_kill,
+        host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill,
+        host_resolve_phase_persists_redirect_trace_edge,
+        host_resolve_phase_persists_mass_redirect_rotate_trace_edges,
+        host_resolve_phase_persists_suppression_and_conflict_trace_decisions,
+        host_resolve_phase_strong_willed_bypasses_roleblock,
+        host_resolve_phase_non_roleblockable_block_survives_roleblock,
+        host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace,
+        host_resolve_phase_persists_combined_trace_audit_branches,
+        host_resolve_phase_persists_redirect_loop_cap_trace_note,
+        host_resolve_phase_persists_trigger_loop_cap_trace_note,
+        host_resolve_phase_persists_target_state_trace_decisions,
+        host_resolve_phase_preserves_ninja_hidden_visit_results,
+        host_resolve_phase_projects_tracker_private_visit_result,
+        host_resolve_phase_projects_babysitter_dependency_death,
+        host_resolve_phase_projects_hider_host_death,
+        host_resolve_phase_carries_lover_link_and_suicide,
+        host_resolve_phase_stacks_lover_suicide_with_direct_death,
+        host_resolve_phase_carries_mafia_universe_lover_setup_cascade,
+        host_resolve_phase_projects_mafia_universe_bomber_triggers,
+        host_resolve_phase_projects_mafiascum_bomb_trigger,
+        host_resolve_phase_carries_hunter_retaliation,
+        host_resolve_phase_carries_chinese_hunter_poison_policy,
+        host_resolve_phase_carries_chinese_hunter_day_vote_retaliation,
+        host_resolve_phase_carries_chinese_idiot_survival_policy,
+        host_resolve_phase_carries_chinese_prophet_alignment_result,
+        host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade,
+        host_resolve_phase_carries_chinese_lover_poison_cascade,
+        host_resolve_phase_carries_chinese_lover_lynch_cascade,
+        host_resolve_phase_emits_hammer_vote_outcome,
+    );
+    assert_eq!(
+        ran, LEFTOVER_HOST_RESOLVE_PHASE_CASES,
+        "leftover host_resolve dispatcher must run every remaining handwritten case"
     );
 }

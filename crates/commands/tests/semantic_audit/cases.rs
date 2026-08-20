@@ -1,7 +1,6 @@
 // Full semantic and generated command audit. This dedicated target runs every case directly.
 
 // golden: packs/mafiascum/golden/reveal_town_day.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
     let host = user("host_alignment_reveal");
     let game = Uuid::new_v4();
@@ -173,7 +172,6 @@ async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/reveal_town_day.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_reveal_town(pool: PgPool) {
     let host = user("host_mu_alignment_reveal");
     let game = Uuid::new_v4();
@@ -352,7 +350,6 @@ async fn host_resolve_phase_carries_mafia_universe_reveal_town(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/alignment_oracle_marks_target.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal(pool: PgPool) {
     let host = user("host_mu_alignment_oracle");
     let game = Uuid::new_v4();
@@ -627,7 +624,6 @@ async fn host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal(pool:
 }
 
 // golden: packs/mafia_universe/golden/role_oracle_marks_target.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_role_oracle_reveal(pool: PgPool) {
     let host = user("host_mu_role_oracle");
     let game = Uuid::new_v4();
@@ -902,7 +898,6 @@ async fn host_resolve_phase_carries_mafia_universe_role_oracle_reveal(pool: PgPo
 }
 
 // golden: packs/mafia_universe/golden/backup_alignment_variants_designate_sources.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPool) {
     let host = user("host_mu_backup");
     let game = Uuid::new_v4();
@@ -1267,7 +1262,6 @@ async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPo
 }
 
 // golden: packs/mafiascum/golden/hero_instigator_kill_on_vote_duel.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgPool) {
     let host = user("host_hero_vote_duel");
     let game = Uuid::new_v4();
@@ -1495,7 +1489,6 @@ async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgP
 }
 
 // golden: packs/test_twilight_window/golden/twilight_self_destruct.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_twilight_self_destruct_window(pool: PgPool) {
     let host = user("host_twilight_self_destruct");
     let game = Uuid::new_v4();
@@ -1704,7 +1697,6 @@ async fn host_resolve_phase_carries_twilight_self_destruct_window(pool: PgPool) 
 }
 
 // golden: packs/mafiascum/golden/white_wolf_king_night_kill.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: PgPool) {
     let host = user("host_mafiascum_white_wolf_king");
 
@@ -2073,7 +2065,6 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
 
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_conceals_janitor_and_flipless_death_reveals(pool: PgPool) {
     let host = user("host_concealed_death_reveal");
     let game = Uuid::new_v4();
@@ -2254,7 +2245,6 @@ async fn host_resolve_phase_conceals_janitor_and_flipless_death_reveals(pool: Pg
 }
 
 // golden: packs/mafiascum/golden/death_reveal_policy.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_alignment_only_death_reveal(pool: PgPool) {
     let host = user("host_alignment_only_death_reveal");
     let game = Uuid::new_v4();
@@ -8189,7 +8179,6 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
 }
 
 // golden: packs/default_open/golden/guardian_seer_night.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_default_open_guardian_seer(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -8806,7 +8795,6 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
 }
 
 // golden: packs/default_open/golden/day_majority_elimination.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -9582,7 +9570,6 @@ fn generated_shrink_report_summary_mentions_paths_and_preservation() {
 }
 
 // golden: packs/mafiascum/golden/super_saint_retaliates_on_lynch.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -9775,7 +9762,6 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/beloved_princess_lynch_prompts_skip_day.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -10081,7 +10067,6 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
 }
 
 // golden: packs/mafiascum/golden/virgin_night_death_prompts_skip_day.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -10288,7 +10273,6 @@ async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool
 }
 
 // golden: packs/test_role_tiebreaker_vote/golden/role_tiebreaker_selects_tied_candidate.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_uses_pack_declared_role_tiebreaker(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -10409,7 +10393,6 @@ async fn host_resolve_phase_uses_pack_declared_role_tiebreaker(pool: PgPool) {
 }
 
 // golden: packs/test_dynamic_vote_effect/golden/dynamic_vote_effect_weight.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_uses_dynamic_effect_vote_weight(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -10619,7 +10602,6 @@ async fn host_resolve_phase_uses_dynamic_effect_vote_weight(pool: PgPool) {
 }
 
 // golden: packs/test_dynamic_vote_effect/golden/dynamic_vote_grant_weight.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_uses_vote_weight_action_grant(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -10849,7 +10831,6 @@ async fn host_resolve_phase_uses_vote_weight_action_grant(pool: PgPool) {
 }
 
 // golden: packs/test_dynamic_vote_prompt/golden/dynamic_vote_grant_no_majority_prompt.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -11088,7 +11069,6 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt(pool
 }
 
 // golden: packs/mafiascum/golden/day_vote_hated_threshold.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -11543,7 +11523,6 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
 }
 
 // golden: packs/epicmafia/golden/pk_host_decides_tie_prompt.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -11903,7 +11882,6 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
 }
 
 // golden: packs/test_dynamic_vote_pk/golden/dynamic_vote_grant_pk_tie_prompt.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -12235,7 +12213,6 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
 }
 
 // golden: packs/chinese_structured/golden/sheriff_badge_destroy.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -12523,7 +12500,6 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
 }
 
 // golden: packs/chinese_structured/golden/knight_duel_success.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -12656,7 +12632,6 @@ async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
 }
 
 // golden: packs/chinese_structured/golden/knight_duel_failure.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -12839,13 +12814,11 @@ async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool
 }
 
 // golden: packs/mafiascum/golden/white_wolf_king_night_kill.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill(pool: PgPool) {
     host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role(pool).await;
 }
 
 // golden: packs/chinese_structured/golden/wolf_carry_extra_night_kill.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -13081,7 +13054,6 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
 }
 
 // golden: packs/chinese_structured/golden/wolf_faction_vote_tie_blocks_kill.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_wolf_faction_vote_policy(pool: PgPool) {
     let same_target_game = Uuid::new_v4();
     let same_target_host = user("host_wolf_faction_same_target");
@@ -13270,7 +13242,6 @@ async fn host_resolve_phase_carries_chinese_wolf_faction_vote_policy(pool: PgPoo
 }
 
 // golden: packs/chinese_structured/golden/wolf_beauty_mark.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -13513,7 +13484,6 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
 }
 
 // golden: packs/chinese_structured/golden/witch_poison_triggers_wolf_beauty_drag.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -13760,7 +13730,6 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
 }
 
 // golden: packs/chinese_structured/golden/wolf_beauty_drag_stacks_with_direct_death.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -14026,7 +13995,6 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
 }
 
 // golden: packs/chinese_structured/golden/guard_blocks_witch_poison.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -14237,7 +14205,6 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
 }
 
 // golden: packs/chinese_structured/golden/guard_witch_double_save_succeeds.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool) {
     let host = "host_guard_witch_double_save";
     let game = Uuid::new_v4();
@@ -14459,7 +14426,6 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
 }
 
 // golden: packs/chinese_structured/golden/guard_witch_same_target_kills.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) {
     let host = "host_guard_witch_killtarget";
     let game = Uuid::new_v4();
@@ -14688,7 +14654,6 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
 }
 
 // golden: packs/mafia_universe/golden/ita_session_lethal_shot.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -14949,7 +14914,6 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/ita_session_invalidates_later_dead_target.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPool) {
     let host = "host_ita_invalidated";
     let game = Uuid::new_v4();
@@ -15204,7 +15168,6 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
 }
 
 // golden: packs/mafia_universe/golden/ita_session_refunds_already_dead_target.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool) {
     let host = "host_ita_refunded";
     let game = Uuid::new_v4();
@@ -15537,7 +15500,6 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
 
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: PgPool) {
     let host = "host_ita_buffered";
     let game = Uuid::new_v4();
@@ -15751,7 +15713,6 @@ async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: 
 }
 
 // golden: packs/test_ita_buffered/golden/ita_session_buffered_shot.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPool) {
     let host = "host_ita_buffer_release";
     let game = Uuid::new_v4();
@@ -15989,7 +15950,6 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
 }
 
 // golden: packs/test_ita_buffered/golden/ita_session_buffered_shot.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool: PgPool) {
     let host = "host_ita_buffer_invalidated";
     let game = Uuid::new_v4();
@@ -16263,7 +16223,6 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
 
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_release(
     pool: PgPool,
 ) {
@@ -16558,7 +16517,6 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
 }
 
 // golden: packs/test_ita_buffered/golden/ita_session_lifecycle_controls.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_applies_ita_lifecycle_pause_control(pool: PgPool) {
     let host = "host_ita_lifecycle";
     let game = Uuid::new_v4();
@@ -16718,7 +16676,6 @@ async fn host_resolve_phase_applies_ita_lifecycle_pause_control(pool: PgPool) {
 }
 
 // golden: packs/test_ita_buffered/golden/ita_session_buffered_shot.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool: PgPool) {
     let host = "host_ita_buffer_hp_hybrid";
     let game = Uuid::new_v4();
@@ -17007,7 +16964,6 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
 }
 
 // golden: packs/mafia_universe/golden/ita_chance_and_shields.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPool) {
     let host = "host_ita_modifiers";
     let game = Uuid::new_v4();
@@ -17228,10 +17184,19 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
         blocked_trace.detail.at("outcome"),
         serde_json::json!("Blocked")
     );
-    assert_eq!(blocked_trace.detail.at("hit_chance"), serde_json::json!(0.75));
+    assert_eq!(
+        blocked_trace.detail.at("hit_chance"),
+        serde_json::json!(0.75)
+    );
     assert_eq!(blocked_trace.detail.at("kill"), serde_json::json!(false));
-    assert_eq!(blocked_trace.detail.at("shield_before"), serde_json::json!(1));
-    assert_eq!(blocked_trace.detail.at("shield_after"), serde_json::json!(0));
+    assert_eq!(
+        blocked_trace.detail.at("shield_before"),
+        serde_json::json!(1)
+    );
+    assert_eq!(
+        blocked_trace.detail.at("shield_after"),
+        serde_json::json!(0)
+    );
     assert_eq!(
         blocked_trace.detail.at("shield_spent"),
         serde_json::json!(true)
@@ -17251,10 +17216,19 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
         composed_trace.detail.at("outcome"),
         serde_json::json!("Blocked")
     );
-    assert_eq!(composed_trace.detail.at("hit_chance"), serde_json::json!(0.5));
+    assert_eq!(
+        composed_trace.detail.at("hit_chance"),
+        serde_json::json!(0.5)
+    );
     assert_eq!(composed_trace.detail.at("kill"), serde_json::json!(false));
-    assert_eq!(composed_trace.detail.at("shield_before"), serde_json::json!(1));
-    assert_eq!(composed_trace.detail.at("shield_after"), serde_json::json!(0));
+    assert_eq!(
+        composed_trace.detail.at("shield_before"),
+        serde_json::json!(1)
+    );
+    assert_eq!(
+        composed_trace.detail.at("shield_after"),
+        serde_json::json!(0)
+    );
     assert_eq!(
         composed_trace.detail.at("shield_spent"),
         serde_json::json!(true)
@@ -17297,7 +17271,6 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
 }
 
 // golden: packs/mafia_universe/golden/basic_nar_cpr_kills_unattacked_target.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_basic_nar(pool: PgPool) {
     let host = "host_mu_basic_nar";
     let game = Uuid::new_v4();
@@ -17479,7 +17452,6 @@ async fn host_resolve_phase_carries_mafia_universe_basic_nar(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/jack_of_all_trades_block_consumes_one_shot.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_joat_block_counter(pool: PgPool) {
     let host = "host_mu_joat_block";
     let game = Uuid::new_v4();
@@ -17683,7 +17655,6 @@ async fn host_resolve_phase_carries_mafia_universe_joat_block_counter(pool: PgPo
 }
 
 // golden: packs/mafiascum/golden/jack_of_all_trades_block_consumes_one_shot.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafiascum_joat_block_counter(pool: PgPool) {
     let host = "host_mafiascum_joat_block";
     let game = Uuid::new_v4();
@@ -17870,7 +17841,6 @@ async fn host_resolve_phase_carries_mafiascum_joat_block_counter(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/two_shot_vigilante_exhausted.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafiascum_two_shot_counter(pool: PgPool) {
     let host = "host_mafiascum_two_shot";
     let game = Uuid::new_v4();
@@ -18111,7 +18081,6 @@ async fn host_resolve_phase_carries_mafiascum_two_shot_counter(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/night_desperado_alignment_variants_kill.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_night_desperado_kills(pool: PgPool) {
     let host = "host_mu_night_desperado";
     let game = Uuid::new_v4();
@@ -18352,7 +18321,6 @@ async fn host_resolve_phase_carries_mafia_universe_night_desperado_kills(pool: P
 }
 
 // golden: packs/mafia_universe/golden/day_vigilante_alignment_variants_kill.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgPool) {
     let host = "host_mu_day_vigilante";
     let game = Uuid::new_v4();
@@ -18601,7 +18569,6 @@ async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgP
 }
 
 // golden: packs/mafia_universe/golden/day_desperado_alignment_failback.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: PgPool) {
     let host = "host_mu_day_desperado";
     let game = Uuid::new_v4();
@@ -18839,7 +18806,6 @@ async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: 
 
 // golden: packs/mafia_universe/golden/power_role_killer_kills_power_roles.json
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_cpr_harm(pool: PgPool) {
     let host = "host_mu_cpr_harm";
     let game = Uuid::new_v4();
@@ -19018,7 +18984,6 @@ async fn host_resolve_phase_carries_mafia_universe_cpr_harm(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/investigation_framer_parity_override.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_framer_investigation(pool: PgPool) {
     let host = "host_mu_framer_investigation";
     let game = Uuid::new_v4();
@@ -19223,7 +19188,6 @@ async fn host_resolve_phase_carries_mafia_universe_framer_investigation(pool: Pg
 }
 
 // golden: packs/mafia_universe/golden/investigation_town_framer_parity_override.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_town_framer_investigation(pool: PgPool) {
     let host = "host_mu_town_framer_investigation";
     let game = Uuid::new_v4();
@@ -19428,7 +19392,6 @@ async fn host_resolve_phase_carries_mafia_universe_town_framer_investigation(poo
 }
 
 // golden: packs/mafiascum/golden/role_scan_reveals_role.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafiascum_role_scan(pool: PgPool) {
     let host = "host_ms_role_scan";
     let game = Uuid::new_v4();
@@ -19606,7 +19569,6 @@ async fn host_resolve_phase_carries_mafiascum_role_scan(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/coroner_inspects_corpse.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafiascum_coroner_corpse_inspection(pool: PgPool) {
     let host = "host_ms_coroner";
     let game = Uuid::new_v4();
@@ -19817,7 +19779,6 @@ async fn host_resolve_phase_carries_mafiascum_coroner_corpse_inspection(pool: Pg
 }
 
 // golden: packs/mafiascum/golden/pt_cop_reads_private_topic_access.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
     let host = "host_ms_pt_cop";
     let game = Uuid::new_v4();
@@ -20068,7 +20029,6 @@ async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/role_set_info_mafia_investigations.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_role_set_info(pool: PgPool) {
     let host = "host_mu_role_set_info";
     let game = Uuid::new_v4();
@@ -20348,7 +20308,6 @@ async fn host_resolve_phase_carries_mafia_universe_role_set_info(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/role_and_full_role_info_mafia_investigations.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_role_and_full_role_info(pool: PgPool) {
     let host = "host_mu_role_full_role_info";
     let game = Uuid::new_v4();
@@ -20604,7 +20563,6 @@ async fn host_resolve_phase_carries_mafia_universe_role_and_full_role_info(pool:
 }
 
 // golden: packs/mafia_universe/golden/culture_alias_alignment_cops_and_serial_killer.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_culture_aliases(pool: PgPool) {
     let host = "host_mu_culture_aliases";
     let game = Uuid::new_v4();
@@ -20852,7 +20810,6 @@ async fn host_resolve_phase_carries_mafia_universe_culture_aliases(pool: PgPool)
 }
 
 // golden: packs/mafia_universe/golden/parity_scan_investigator_memory.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_parity_scan_memory(pool: PgPool) {
     let host = "host_mu_parity_scan";
     let game = Uuid::new_v4();
@@ -21155,7 +21112,6 @@ async fn host_resolve_phase_carries_mafia_universe_parity_scan_memory(pool: PgPo
 }
 
 // golden: packs/mafia_universe/golden/graph_info_town_tracker_watcher_motion.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_graph_info(pool: PgPool) {
     let host = "host_mu_graph_info";
     let game = Uuid::new_v4();
@@ -21480,7 +21436,6 @@ async fn host_resolve_phase_carries_mafia_universe_graph_info(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/voyeur_action_investigation.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_voyeur_action_info(pool: PgPool) {
     let host = "host_mu_voyeur_action_info";
     let game = Uuid::new_v4();
@@ -21768,7 +21723,6 @@ async fn host_resolve_phase_carries_mafia_universe_voyeur_action_info(pool: PgPo
 }
 
 // golden: packs/mafia_universe/golden/ninja_hidden_from_watch_motion.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_ninja_hidden_visit_results(pool: PgPool) {
     let host = "host_mu_ninja";
     let game = Uuid::new_v4();
@@ -22116,7 +22070,6 @@ async fn host_resolve_phase_carries_mafia_universe_ninja_hidden_visit_results(po
 }
 
 // golden: packs/mafia_universe/golden/redirect_town_bus_driver_swap.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_redirect_graph(pool: PgPool) {
     let host = "host_mu_redirect_graph";
     let game = Uuid::new_v4();
@@ -22349,7 +22302,6 @@ async fn host_resolve_phase_carries_mafia_universe_redirect_graph(pool: PgPool) 
 }
 
 // golden: packs/mafia_universe/golden/commute_mafia_blocks_investigation.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_commute(pool: PgPool) {
     let host = "host_mu_commute";
     let game = Uuid::new_v4();
@@ -22613,7 +22565,6 @@ async fn host_resolve_phase_carries_mafia_universe_commute(pool: PgPool) {
 }
 
 // golden: packs/mafia_universe/golden/poison_cure_town_preempts_death.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death(pool: PgPool) {
     let host = "host_mu_poison";
     let game = Uuid::new_v4();
@@ -22966,7 +22917,6 @@ async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death
 }
 
 // golden: packs/mafia_universe/golden/roleblocker_mafia_blocks_doctor.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPool) {
     let host = "host_mu_healer";
     let game = Uuid::new_v4();
@@ -23293,7 +23243,6 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
 }
 
 // golden: packs/mafia_universe/golden/extinguish_town_preempts_ignite.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite(pool: PgPool) {
     let host = "host_mu_arson";
     let game = Uuid::new_v4();
@@ -23664,7 +23613,6 @@ async fn host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite(p
 }
 
 // golden: packs/mafia_universe/golden/extinguish_town_firefighter_preempt_preempts_ignite.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alias(pool: PgPool) {
     let host = "host_mu_firefighter_preempt";
     let game = Uuid::new_v4();
@@ -23928,7 +23876,6 @@ async fn host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alia
 }
 
 // golden: packs/mafia_universe/golden/motivator_town_grants_extra_action.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(pool: PgPool) {
     let host = "host_mu_motivator";
     let game = Uuid::new_v4();
@@ -24288,7 +24235,6 @@ async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(p
 }
 
 // golden: packs/mafia_universe/golden/fruit_vendor_mafia_sends_fruit.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(pool: PgPool) {
     let host = "host_mu_fruit_vendor";
     let game = Uuid::new_v4();
@@ -24510,7 +24456,6 @@ async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(po
 }
 
 // golden: packs/mafia_universe/golden/inventor_town_grants_item.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spends(pool: PgPool) {
     let host = "host_mu_inventor";
     let game = Uuid::new_v4();
@@ -25109,7 +25054,6 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
 }
 
 // golden: packs/mafia_universe/golden/empower_town_bypasses_block_and_redirect.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) {
     let host = "host_mu_empower";
     let game = Uuid::new_v4();
@@ -25308,7 +25252,6 @@ async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) 
 }
 
 // golden: packs/mafia_universe/golden/day_notes_announcement_last_words.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -25636,7 +25579,6 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
 }
 
 // golden: packs/mafiascum/golden/godfather_parity_override.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_uses_pack_declared_night_parity(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -25785,7 +25727,6 @@ async fn host_resolve_phase_uses_pack_declared_night_parity(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/miller_parity_override.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_uses_pack_declared_cycle_parity(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -25934,7 +25875,6 @@ async fn host_resolve_phase_uses_pack_declared_cycle_parity(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/godfather_parity_override.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_applies_godfather_investigation_override(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -26056,7 +25996,6 @@ async fn host_resolve_phase_applies_godfather_investigation_override(pool: PgPoo
 }
 
 // golden: packs/mafiascum/golden/info_actions_private_results.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
     let host = "host_mafiascum_info";
     let game = Uuid::new_v4();
@@ -26257,7 +26196,6 @@ async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/fruit_vendor_sends_fruit.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: PgPool) {
     let host = "host_mafiascum_fruit_vendor";
     let game = Uuid::new_v4();
@@ -26422,7 +26360,6 @@ async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: Pg
 }
 
 // golden: packs/mafiascum/golden/action_investigation_guards.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -26626,7 +26563,6 @@ async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/prior_motion_reads_visit_history.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -26811,7 +26747,6 @@ async fn host_resolve_phase_records_visit_history_for_prior_motion(pool: PgPool)
 }
 
 // golden: packs/mafiascum/golden/activated_cop_blocks_before_active.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -26972,7 +26907,6 @@ async fn host_resolve_phase_carries_action_history_for_non_consecutive(pool: PgP
 
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -27274,7 +27208,6 @@ async fn host_resolve_phase_projects_conversion_and_persistent_effects(pool: PgP
 }
 
 // golden: packs/mafiascum/golden/conversion_blocked_on_pending_death.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPool) {
     let host = "host_conversion_pending_death";
     let game = Uuid::new_v4();
@@ -27516,7 +27449,6 @@ async fn host_resolve_phase_blocks_conversion_of_pending_death_target(pool: PgPo
 }
 
 // golden: packs/mafiascum/golden/loud_announcing_notifications.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_filters_hidden_effect_notifications(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -27695,7 +27627,6 @@ async fn host_resolve_phase_filters_hidden_effect_notifications(pool: PgPool) {
 }
 
 // golden: packs/epicmafia/golden/cult_convert.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -27838,7 +27769,6 @@ async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) 
 }
 
 // golden: packs/mafiascum/golden/faith_healer_chance_protect_misses.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -28044,7 +27974,6 @@ async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool
 }
 
 // golden: packs/mafiascum/golden/poison_marks_no_death.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -28350,7 +28279,6 @@ async fn host_resolve_phase_carries_poison_cure_and_delayed_death(pool: PgPool) 
 }
 
 // golden: packs/mafiascum/golden/pending_poison_target_already_dead.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPool) {
     let host = "host_pending_poison_already_dead";
     let game = Uuid::new_v4();
@@ -28536,7 +28464,6 @@ async fn host_resolve_phase_traces_pending_poison_target_already_dead(pool: PgPo
 }
 
 // golden: packs/mafiascum/golden/mass_redirect_rotate.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -28708,7 +28635,6 @@ async fn host_resolve_phase_persists_cleanse_read_effect_trace_decision(pool: Pg
 }
 
 // golden: packs/mafiascum/golden/deprogram_restores_original.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -28929,7 +28855,6 @@ async fn host_resolve_phase_deprograms_from_conversion_origin(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/vanillaize_mutates_role.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -29152,7 +29077,6 @@ async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/backup_cop_inherits_on_cop_death.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_backup_cop_inherits_on_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -29283,7 +29207,6 @@ async fn host_resolve_phase_backup_cop_inherits_on_death(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/targeted_backup_inherits_on_target_death.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_targeted_backup_inherits_chosen_source(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -29472,7 +29395,6 @@ async fn host_resolve_phase_targeted_backup_inherits_chosen_source(pool: PgPool)
 }
 
 // golden: packs/mafiascum/golden/condemner_wins_on_target_lynch.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_condemner_target_lynch_win(pool: PgPool) {
     assert_target_lynch_win_pipeline(
         pool,
@@ -29490,7 +29412,6 @@ async fn host_resolve_phase_carries_condemner_target_lynch_win(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/executioner_wins_on_target_lynch.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_executioner_target_lynch_win(pool: PgPool) {
     assert_target_lynch_win_pipeline(
         pool,
@@ -29508,7 +29429,6 @@ async fn host_resolve_phase_carries_executioner_target_lynch_win(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/catastrophic_roleblock_suppresses_all_actions.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_wins(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -29737,7 +29657,6 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
 }
 
 // golden: packs/mafiascum/golden/pgo_shoots_visitor.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_pgo_visit_trigger(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -29874,7 +29793,6 @@ async fn host_resolve_phase_projects_pgo_visit_trigger(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/watcher_sees_visitors.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -30072,7 +29990,6 @@ async fn host_resolve_phase_projects_target_filtered_visitor_kill(pool: PgPool) 
 }
 
 // golden: packs/epicmafia/golden/bomb_trigger.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -30259,7 +30176,6 @@ async fn host_resolve_phase_projects_epicmafia_bomb_trigger(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/pending_poison_kills.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -30452,7 +30368,6 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/rolestop_and_shield_target_state.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -30635,7 +30550,6 @@ async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool
 }
 
 // golden: packs/mafiascum/golden/bodyguard_intercept.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -30883,7 +30797,6 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
 }
 
 // golden: packs/mafiascum/golden/death_reveal_policy.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
@@ -31042,7 +30955,6 @@ async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/executioner_wins_on_target_lynch.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -31257,7 +31169,6 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
 }
 
 // golden: packs/mafiascum/golden/bomb_retaliates_on_night_kill.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -31429,7 +31340,6 @@ async fn host_resolve_phase_projects_death_trigger_kill(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/white_wolf_king_night_kill.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -31614,7 +31524,6 @@ async fn host_resolve_phase_projects_effect_marked_trigger_kill(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/pending_poison_kills.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_phase_end_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -31759,7 +31668,6 @@ async fn host_resolve_phase_projects_phase_end_trigger_kill(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/win_witness_observes_on_win.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_win_trigger_before_final_win(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -31904,7 +31812,6 @@ async fn host_resolve_phase_projects_win_trigger_before_final_win(pool: PgPool) 
 }
 
 // golden: packs/mafiascum/golden/vengeful_retaliates_on_kill.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32124,7 +32031,6 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
 }
 
 // golden: packs/mafiascum/golden/strongman_pierces_bulletproof.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32355,7 +32261,6 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
 }
 
 // golden: packs/mafiascum/golden/redirect_cycle_stable.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32504,7 +32409,6 @@ async fn host_resolve_phase_persists_redirect_trace_edge(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/mass_redirect_rotate.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -32707,7 +32611,6 @@ async fn host_resolve_phase_persists_mass_redirect_rotate_trace_edges(pool: PgPo
 
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -33074,7 +32977,6 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
 }
 
 // golden: packs/mafiascum/golden/strong_willed_bypasses_roleblock.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -33232,7 +33134,6 @@ async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/non_roleblockable_roleblocker_survives_block.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -33385,9 +33286,16 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
                 && decision.detail.at("action_id") == "cop_check_n01"
         })
         .expect("trace should persist Cop suppression");
-    assert_eq!(suppression.detail.at("block_sources").nth(0).at("actor"), "slot_3");
     assert_eq!(
-        suppression.detail.at("block_sources").nth(0).at("action_id"),
+        suppression.detail.at("block_sources").nth(0).at("actor"),
+        "slot_3"
+    );
+    assert_eq!(
+        suppression
+            .detail
+            .at("block_sources")
+            .nth(0)
+            .at("action_id"),
         "block_cop_n01"
     );
     assert!(
@@ -33420,7 +33328,6 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
 }
 
 // golden: packs/mafiascum/golden/catastrophic_roleblock_suppresses_all_actions.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -33569,7 +33476,12 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
                 decision.detail.at("block_sources").nth(0).at("action_id"),
                 "catastrophic_block_n01"
             );
-            decision.detail.at("template_id").as_str().unwrap().to_string()
+            decision
+                .detail
+                .at("template_id")
+                .as_str()
+                .unwrap()
+                .to_string()
         })
         .collect::<Vec<_>>();
     assert_eq!(
@@ -33587,7 +33499,6 @@ async fn host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace(p
 }
 
 // golden: packs/mafiascum/golden/condemner_wins_on_target_lynch.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -33945,7 +33856,6 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
 }
 
 // golden: packs/mafiascum/golden/redirect_cycle_stable.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -34212,7 +34122,6 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
 }
 
 // golden: packs/mafiascum/golden/tracker_tracks_visit.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -34481,7 +34390,6 @@ async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/tracker_tracks_visit.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -34684,7 +34592,6 @@ async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) 
 }
 
 // golden: packs/mafiascum/golden/ninja_hidden_from_motion.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -34931,7 +34838,6 @@ async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/tracker_tracks_visit.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_tracker_private_visit_result(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35138,7 +35044,6 @@ async fn host_resolve_phase_projects_tracker_private_visit_result(pool: PgPool) 
 }
 
 // golden: packs/mafiascum/golden/babysitter_dependency_stacks_with_direct_ward_death.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35325,7 +35230,6 @@ async fn host_resolve_phase_projects_babysitter_dependency_death(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/hider_dies_when_host_dies.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35513,7 +35417,6 @@ async fn host_resolve_phase_projects_hider_host_death(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/lover_suicide_on_partner_death.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35691,7 +35594,6 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/lover_suicide_stacks_with_direct_death.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -35925,7 +35827,6 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
 
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -36151,7 +36052,6 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
 }
 
 // golden: packs/epicmafia/golden/bomb_trigger.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_mafia_universe_bomber_triggers(pool: PgPool) {
     assert_mafia_universe_bomber_case(
         &pool,
@@ -36175,7 +36075,6 @@ async fn host_resolve_phase_projects_mafia_universe_bomber_triggers(pool: PgPool
 
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -36380,7 +36279,6 @@ async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
 }
 
 // golden: packs/mafiascum/golden/hunter_arms_retaliation.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -36565,7 +36463,6 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
 }
 
 // golden: packs/chinese_structured/golden/hunter_poison_suppresses_retaliation.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -37011,7 +36908,6 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
 }
 
 // golden: packs/chinese_structured/golden/hunter_arms_retaliation.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -37289,7 +37185,6 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
 }
 
 // golden: packs/chinese_structured/golden/idiot_survives_first_lynch.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -37542,7 +37437,6 @@ async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) 
 }
 
 // golden: packs/chinese_structured/golden/prophet_alignment_results.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_prophet_alignment_result(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -37707,7 +37601,6 @@ async fn host_resolve_phase_carries_chinese_prophet_alignment_result(pool: PgPoo
 }
 
 // golden: packs/chinese_structured/golden/cupid_lovers_death_cascade.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -37928,7 +37821,6 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
 }
 
 // golden: packs/chinese_structured/golden/cupid_lovers_poison_cascade.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -38154,7 +38046,6 @@ async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
 }
 
 // golden: packs/chinese_structured/golden/cupid_lovers_lynch_cascade.json
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -38349,7 +38240,6 @@ async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
 
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
 // adapter-only: command-pipeline claim not replayed by a fresh pack golden
-#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_emits_hammer_vote_outcome(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
