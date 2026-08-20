@@ -255,7 +255,7 @@ test('every Rust crate change arms pinned strict workspace Clippy', () => {
     manifest.lanes['cargo:clippy-workspace'].command,
     'cargo clippy --workspace --all-targets --all-features -- -D warnings',
   );
-  for (const area of manifest.areas.filter((area) => area.crate)) {
+  for (const area of manifest.areas.filter((area) => area.crate || area.closure_crate)) {
     assert.ok(
       area.lanes.includes('cargo:clippy-workspace'),
       `${area.id} must arm strict workspace Clippy`,
@@ -267,7 +267,7 @@ test('every Rust crate change arms pinned strict workspace Clippy', () => {
 });
 
 test('generated artifacts have one owner, a writer, and exact freshness selection', () => {
-  assert.equal(manifest.version, 3);
+  assert.equal(manifest.version, 4);
   const outputOwners = new Map();
   const artifactLanes = Object.entries(manifest.lanes).filter(
     ([, lane]) => lane.inputs || lane.outputs || lane.write_command,
@@ -758,6 +758,23 @@ test('every workspace crate is covered by exactly one crate area', () => {
   }
 });
 
+test('specialized closure areas reference one canonical workspace crate', () => {
+  const canonicalCrates = new Set(
+    manifest.areas.filter((area) => area.crate).map((area) => area.crate),
+  );
+  for (const area of manifest.areas.filter((area) => area.closure_crate)) {
+    assert.equal(
+      Boolean(area.crate),
+      false,
+      `${area.id} must not compete with a canonical crate owner`,
+    );
+    assert.ok(
+      canonicalCrates.has(area.closure_crate),
+      `${area.id} references unknown closure crate ${area.closure_crate}`,
+    );
+  }
+});
+
 test('frozen areas cite registry capabilities that are all complete', () => {
   const statusById = new Map(registry.items.map((item) => [item.id, item.status]));
   for (const area of manifest.areas.filter((a) => a.tier === 'frozen')) {
@@ -830,6 +847,211 @@ test('crate closure arms dependent crate areas', () => {
     assert.ok(touchedIds.has(id), `expected ${id} in closure`);
   }
   assert.ok(!touchedIds.has('crate:domain'), 'dependencies (not dependents) must stay untouched');
+});
+
+test('test-target edits stay out of reverse crate closure while retaining target precision', () => {
+  const cases = [
+    {
+      source: 'crates/domain/tests/determinism_guard.rs',
+      includes: ['cargo:domain'],
+    },
+    {
+      source: 'crates/domain/src/pack/validation_tests.rs',
+      includes: ['cargo:domain'],
+    },
+    {
+      source: 'crates/eventstore/tests/concurrency.rs',
+      includes: ['cargo:eventstore'],
+    },
+    {
+      source: 'crates/identity/tests/workos_erasure_lock_order.rs',
+      includes: ['cargo:identity'],
+    },
+    {
+      source: 'crates/projections/tests/e2e.rs',
+      includes: ['cargo:projections'],
+    },
+    {
+      source: 'crates/operator_proof/tests/boundary.rs',
+      includes: ['cargo:operator-proof'],
+    },
+    {
+      source: 'crates/wire/tests/typescript.rs',
+      includes: ['cargo:wire'],
+    },
+    {
+      source: 'crates/media/tests/variant_read_boundary.rs',
+      includes: ['cargo:media'],
+    },
+    {
+      source: 'crates/api/tests/auth_methods.rs',
+      includes: ['cargo:api'],
+    },
+    {
+      source: 'crates/operator_api/tests/operator_routes.rs',
+      includes: ['cargo:operator_api'],
+    },
+    {
+      source: 'crates/server/tests/event_key_admin_rehearsal.rs',
+      includes: ['cargo:server'],
+    },
+    {
+      source: 'crates/commands/tests/action_submission_boundary.rs',
+      includes: ['cargo:commands-unit'],
+    },
+    {
+      source: 'crates/commands/tests/runtime_cancellation.rs',
+      includes: ['cargo:commands-concurrency'],
+    },
+    {
+      source: 'crates/commands/tests/pipeline/residual_cases.rs',
+      includes: ['cargo:commands-pg', 'cargo:operator-proof', 'cargo:operator_api'],
+      excludes: ['cargo:commands-audit'],
+    },
+    {
+      source: 'crates/commands/tests/semantic_audit/cases.rs',
+      includes: ['cargo:commands-audit', 'cargo:operator-proof', 'cargo:operator_api'],
+      excludes: ['cargo:commands-pg'],
+    },
+    {
+      source: 'crates/commands/tests/pipeline/day_events.rs',
+      includes: ['cargo:commands-pg', 'cargo:operator-proof', 'cargo:operator_api'],
+      excludes: ['cargo:commands-audit'],
+    },
+    {
+      source: 'crates/commands/tests/pipeline/residual_support.rs',
+      includes: ['cargo:commands-pg', 'cargo:commands-audit'],
+    },
+    {
+      source: 'crates/commands/tests/pipeline/common.rs',
+      includes: [
+        'cargo:commands-pg',
+        'cargo:commands-audit',
+        'cargo:commands-concurrency',
+        'cargo:clippy-workspace',
+      ],
+    },
+  ];
+
+  for (const { source, includes, excludes = [] } of cases) {
+    const selection = selectLanes({
+      changed: [source],
+      manifest,
+      crateGraph: FIXTURE_GRAPH,
+      mode: 'inner',
+    });
+    const closureTouches = selection.touched.filter(({ reasons }) =>
+      reasons.some((reason) => reason.startsWith('crate-closure:')),
+    );
+
+    assert.deepEqual(
+      closureTouches,
+      [],
+      `${source} is test-only and must not arm downstream crate areas`,
+    );
+    for (const lane of includes) {
+      assert.ok(selection.laneIds.includes(lane), `${source} must arm ${lane}`);
+    }
+    for (const lane of excludes) {
+      assert.ok(!selection.laneIds.includes(lane), `${source} must not arm ${lane}`);
+    }
+  }
+});
+
+test('specialized Cargo inputs retain their crate closure', () => {
+  const selection = selectLanes({
+    changed: ['crates/commands/Cargo.toml'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  const touched = new Map(selection.touched.map((area) => [area.id, area.reasons]));
+
+  for (const lane of [
+    'cargo:commands-unit',
+    'cargo:commands-pg',
+    'cargo:commands-concurrency',
+    'cargo:commands-audit',
+    'cargo:operator-proof',
+    'cargo:operator_api',
+  ]) {
+    assert.ok(selection.laneIds.includes(lane), `Cargo input must arm ${lane}`);
+  }
+  assert.ok(
+    touched.get('crate:operator-proof')?.includes('crate-closure:commands'),
+    'Cargo input must retain the true reverse Cargo closure',
+  );
+});
+
+test('direct proof-tool sources select their owning proof lanes', () => {
+  const cases = [
+    ['tools/frontend_role_smoke_scenarios.test.mjs', 'test:frontend-contract'],
+    ['tools/frontend_static_role_contract.mjs', 'test:frontend-static-role-contract'],
+    [
+      'tools/frontend_role_smoke.mjs',
+      ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
+    ],
+    [
+      'tools/frontend_role_smoke_flows.mjs',
+      ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
+    ],
+    ['tools/frontend_route_live_contract.mjs', 'test:frontend-route-live-contract'],
+    ['tools/frontend_route_state_render_contract.mjs', 'test:frontend-route-state-render'],
+    ['tools/frontend_tablet_interaction_contract.mjs', 'test:frontend-tablet-interaction'],
+    ['tools/frontend_role_dom_smoke.mjs', 'test:frontend-role-dom-smoke'],
+    [
+      'tools/frontend_visual_regression.mjs',
+      ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
+    ],
+    [
+      'tools/fixtures/frontend-visual-baselines/mobile-player.json',
+      ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
+    ],
+    [
+      'tools/frontend_screenshot_pixels.mjs',
+      ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
+    ],
+    ['tools/auth_invite_role_proof.mjs', 'test:auth-invite-role-proof'],
+    ['tools/projection_baseline_contract.mjs', 'test:projection-baseline:static'],
+    ['tools/projection_baseline_contract.test.mjs', 'test:projection-baseline:static'],
+    ['tools/completeness_scorecard.mjs', 'test:completeness-scorecard'],
+    ['tools/completeness_scorecard.test.mjs', 'test:completeness-scorecard'],
+    [
+      'tools/live_stack_readiness_contract.mjs',
+      ['test:host-console-live-stack-contract', 'test:host-console-day-event-room-live-stack'],
+    ],
+    [
+      'tools/live_stack_proof_summary.mjs',
+      ['test:host-console-live-stack-contract', 'test:host-console-day-event-room-live-stack'],
+    ],
+    [
+      'tools/railway_staging_target_contract.mjs',
+      'test:railway-staging-target',
+    ],
+    ['tools/frontend_csp_browser_proof.mjs', 'test:frontend-csp-browser'],
+  ];
+
+  for (const [source, expectedLanes] of cases) {
+    const lanes = Array.isArray(expectedLanes) ? expectedLanes : [expectedLanes];
+    const selection = selectLanes({
+      changed: [source],
+      manifest,
+      crateGraph: FIXTURE_GRAPH,
+      mode: 'inner',
+    });
+    const directOwners = selection.touched.filter(({ reasons }) => reasons.includes(source));
+
+    assert.equal(directOwners.length, 1, `${source} must have one direct owner`);
+    const owner = manifest.areas.find((area) => area.id === directOwners[0].id);
+    assert.ok(
+      owner.paths.some((entry) => entry !== 'tools/' && pathMatches(source, entry)),
+      `${source} must be owned by a source-specific proof area`,
+    );
+    for (const lane of lanes) {
+      assert.ok(manifest.lanes[lane], `${source} names an undeclared lane ${lane}`);
+      assert.ok(selection.laneIds.includes(lane), `${source} must arm ${lane}`);
+    }
+  }
 });
 
 test('also_triggers re-arms cross-boundary areas: wire thaws frontend:game and tools', () => {

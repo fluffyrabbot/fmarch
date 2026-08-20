@@ -1,11 +1,12 @@
 {
-  "version": 3,
+  "version": 4,
   "base_ref": "origin/main",
   "notes": [
     "Maps changed paths to the narrowest truthful proof-lane set. Consumed by tools/proof_lane_select.mjs.",
     "Tier semantics: 'frozen' areas are trusted between full sweeps and excluded from sprint-mode defaults; tier NEVER exempts an area from diff-triggered selection — touching a frozen area (directly, via crate closure, or via also_triggers) re-arms its lanes for that run.",
     "Re-declare tiers at sprint boundaries: the current frontier's areas are 'active', completed-and-untouched surfaces are 'frozen'. Frozen areas must cite registry capabilities that are all status=complete (validated by test:proof-lane-contract).",
     "Path matching: entries ending in '/' or '.' are prefixes; anything else is an exact file match. Longest match wins.",
+    "A canonical crate area uses 'crate' to own its reverse Cargo closure. A specialized build-input area may instead use 'closure_crate' to participate in that closure without competing for canonical crate ownership.",
     "also_triggers encodes cross-boundary blast radius the crate DAG cannot see (e.g. strict-wire change 32e8623b broke ~10 proof tools and frontend transport).",
     "Generated-artifact lanes declare source input and checked-in output path patterns plus a canonical write_command. Either side directly arms the freshness lane, independent of area boundaries; every concrete output has one lane owner.",
     "Manifest lanes are executable leaves. Human aggregate npm aliases stay outside this table; selected leaves are deduplicated by canonical execution key.",
@@ -118,11 +119,28 @@
       "capabilities": ["foundation.resolution-engine-parity"]
     },
     {
+      "id": "domain:tests",
+      "tier": "frozen",
+      "paths": [
+        "crates/domain/tests/",
+        "crates/domain/src/pack/validation_tests.rs"
+      ],
+      "lanes": ["cargo:domain", "cargo:clippy-workspace"],
+      "capabilities": ["foundation.resolution-engine-parity"]
+    },
+    {
       "id": "crate:eventstore",
       "tier": "frozen",
       "paths": ["crates/eventstore/"],
       "crate": "eventstore",
       "lanes": ["cargo:eventstore", "cargo:clippy-workspace", "test:event-key-rotation-rehearsal"],
+      "capabilities": ["foundation.event-store-projections"]
+    },
+    {
+      "id": "eventstore:tests",
+      "tier": "frozen",
+      "paths": ["crates/eventstore/tests/"],
+      "lanes": ["cargo:eventstore", "cargo:clippy-workspace"],
       "capabilities": ["foundation.event-store-projections"]
     },
     {
@@ -146,6 +164,18 @@
       ]
     },
     {
+      "id": "projections:tests",
+      "tier": "frozen",
+      "paths": ["crates/projections/tests/"],
+      "lanes": ["cargo:projections", "cargo:clippy-workspace"],
+      "capabilities": [
+        "foundation.event-store-projections",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
+    },
+    {
       "id": "crate:caps",
       "tier": "frozen",
       "paths": ["crates/caps/"],
@@ -160,17 +190,148 @@
       "lanes": ["cargo:commands-audit", "cargo:clippy-workspace"]
     },
     {
-      "id": "commands:pipeline-support",
-      "tier": "active",
-      "paths": [
-        "crates/commands/Cargo.toml",
-        "crates/commands/tests/pipeline/common.rs",
-        "crates/commands/tests/pipeline/residual_support.rs"
+      "id": "commands:semantic-audit-proof-source",
+      "tier": "frozen",
+      "paths": ["crates/commands/tests/semantic_audit/cases.rs"],
+      "lanes": [
+        "cargo:commands-audit",
+        "cargo:operator-proof",
+        "cargo:operator_api",
+        "cargo:clippy-workspace"
       ],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
+    },
+    {
+      "id": "commands:pipeline-common",
+      "tier": "frozen",
+      "paths": ["crates/commands/tests/pipeline/common.rs"],
+      "lanes": [
+        "cargo:commands-pg",
+        "cargo:commands-audit",
+        "cargo:commands-concurrency",
+        "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
+    },
+    {
+      "id": "commands:pipeline-residual-support",
+      "tier": "frozen",
+      "paths": ["crates/commands/tests/pipeline/residual_support.rs"],
       "lanes": [
         "cargo:commands-pg",
         "cargo:commands-audit",
         "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
+    },
+    {
+      "id": "commands:pipeline-proof-source",
+      "tier": "frozen",
+      "paths": [
+        "crates/commands/tests/pipeline/day_events.rs",
+        "crates/commands/tests/pipeline/residual_cases.rs"
+      ],
+      "lanes": [
+        "cargo:commands-pg",
+        "cargo:operator-proof",
+        "cargo:operator_api",
+        "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
+    },
+    {
+      "id": "commands:pipeline",
+      "tier": "frozen",
+      "paths": ["crates/commands/tests/pipeline/"],
+      "lanes": ["cargo:commands-pg", "cargo:clippy-workspace"],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
+    },
+    {
+      "id": "commands:unit-boundaries",
+      "tier": "frozen",
+      "paths": [
+        "crates/commands/tests/action_submission_boundary.rs",
+        "crates/commands/tests/host_prompt_resolution_boundary.rs",
+        "crates/commands/tests/day_runtime_boundary.rs"
+      ],
+      "lanes": ["cargo:commands-unit", "cargo:clippy-workspace"],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
+    },
+    {
+      "id": "commands:runtime-cancellation",
+      "tier": "frozen",
+      "paths": ["crates/commands/tests/runtime_cancellation.rs"],
+      "lanes": ["cargo:commands-concurrency", "cargo:clippy-workspace"],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
+    },
+    {
+      "id": "commands:build-inputs",
+      "tier": "frozen",
+      "paths": ["crates/commands/Cargo.toml"],
+      "closure_crate": "commands",
+      "lanes": [
+        "cargo:commands-unit",
+        "cargo:commands-pg",
+        "cargo:commands-concurrency",
+        "cargo:commands-audit",
+        "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
       ]
     },
     {
@@ -214,6 +375,12 @@
       "lanes": ["cargo:operator-proof", "cargo:clippy-workspace"]
     },
     {
+      "id": "operator-proof:tests",
+      "tier": "active",
+      "paths": ["crates/operator_proof/tests/"],
+      "lanes": ["cargo:operator-proof", "cargo:clippy-workspace"]
+    },
+    {
       "id": "crate:game-platform",
       "tier": "active",
       "paths": ["crates/game_platform/"],
@@ -229,6 +396,13 @@
       "lanes": ["cargo:wire", "cargo:clippy-workspace", "check:wire-types"],
       "capabilities": ["foundation.wire-live-delivery"],
       "also_triggers": ["frontend:game", "tools:proof-infra"]
+    },
+    {
+      "id": "wire:tests",
+      "tier": "frozen",
+      "paths": ["crates/wire/tests/"],
+      "lanes": ["cargo:wire", "cargo:clippy-workspace"],
+      "capabilities": ["foundation.wire-live-delivery"]
     },
     {
       "id": "crate:community",
@@ -253,11 +427,30 @@
       "lanes": ["cargo:identity", "cargo:clippy-workspace", "test:auth-invite-role-proof"]
     },
     {
+      "id": "identity:tests",
+      "tier": "active",
+      "paths": ["crates/identity/tests/"],
+      "lanes": ["cargo:identity", "cargo:clippy-workspace"]
+    },
+    {
       "id": "crate:media",
       "tier": "frozen",
       "paths": ["crates/media/"],
       "crate": "media",
       "lanes": ["cargo:media", "cargo:clippy-workspace", "test:release-topology"],
+      "capabilities": [
+        "product.media.reference-ingest-serving",
+        "product.media.canonical-blob-store",
+        "product.media.variant-generation",
+        "product.media.authenticated-upload",
+        "product.media.upload-to-private-post"
+      ]
+    },
+    {
+      "id": "media:tests",
+      "tier": "frozen",
+      "paths": ["crates/media/tests/"],
+      "lanes": ["cargo:media", "cargo:clippy-workspace"],
       "capabilities": [
         "product.media.reference-ingest-serving",
         "product.media.canonical-blob-store",
@@ -281,10 +474,23 @@
       ]
     },
     {
+      "id": "api:tests",
+      "tier": "active",
+      "paths": ["crates/api/tests/"],
+      "lanes": ["cargo:api", "cargo:clippy-workspace"]
+    },
+    {
       "id": "crate:operator_api",
       "tier": "frozen",
       "paths": ["crates/operator_api/"],
       "crate": "operator_api",
+      "lanes": ["cargo:operator_api", "cargo:clippy-workspace"],
+      "capabilities": ["product.archive.completed-game-export"]
+    },
+    {
+      "id": "operator-api:tests",
+      "tier": "frozen",
+      "paths": ["crates/operator_api/tests/"],
       "lanes": ["cargo:operator_api", "cargo:clippy-workspace"],
       "capabilities": ["product.archive.completed-game-export"]
     },
@@ -304,6 +510,12 @@
         "test:railway-staging-target",
         "test:production-promotion"
       ]
+    },
+    {
+      "id": "server:tests",
+      "tier": "active",
+      "paths": ["crates/server/tests/"],
+      "lanes": ["cargo:server", "cargo:clippy-workspace"]
     },
     {
       "id": "packs",
@@ -440,6 +652,168 @@
       ]
     },
     {
+      "id": "ops:railway-staging-target",
+      "tier": "active",
+      "paths": ["tools/railway_staging_target_contract.mjs"],
+      "lanes": ["test:railway-staging-target"]
+    },
+    {
+      "id": "proof:frontend-contract",
+      "tier": "active",
+      "paths": ["tools/frontend_role_smoke_scenarios.test.mjs"],
+      "lanes": ["test:frontend-contract"]
+    },
+    {
+      "id": "proof:frontend-static-role-contract",
+      "tier": "frozen",
+      "paths": ["tools/frontend_static_role_contract.mjs"],
+      "lanes": ["test:frontend-static-role-contract"],
+      "capabilities": [
+        "foundation.wire-live-delivery",
+        "product.game.setup",
+        "product.game.core-loop",
+        "product.game.host-moderation",
+        "product.game.replacement-continuity",
+        "product.game.endgame-reveal-history",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms"
+      ]
+    },
+    {
+      "id": "proof:frontend-role-smoke",
+      "tier": "frozen",
+      "paths": [
+        "tools/frontend_role_smoke.mjs",
+        "tools/frontend_role_smoke_flows.mjs"
+      ],
+      "lanes": ["test:frontend-role-smoke", "test:frontend-visual-regression"],
+      "capabilities": [
+        "foundation.wire-live-delivery",
+        "product.game.setup",
+        "product.game.core-loop",
+        "product.game.host-moderation",
+        "product.game.replacement-continuity",
+        "product.game.endgame-reveal-history",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms"
+      ]
+    },
+    {
+      "id": "proof:frontend-route-live-contract",
+      "tier": "frozen",
+      "paths": ["tools/frontend_route_live_contract.mjs"],
+      "lanes": ["test:frontend-route-live-contract"],
+      "capabilities": [
+        "foundation.wire-live-delivery",
+        "product.game.setup",
+        "product.game.core-loop",
+        "product.game.host-moderation",
+        "product.game.replacement-continuity",
+        "product.game.endgame-reveal-history",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms"
+      ]
+    },
+    {
+      "id": "proof:frontend-route-state-render",
+      "tier": "frozen",
+      "paths": ["tools/frontend_route_state_render_contract.mjs"],
+      "lanes": ["test:frontend-route-state-render"],
+      "capabilities": [
+        "foundation.wire-live-delivery",
+        "product.game.setup",
+        "product.game.core-loop",
+        "product.game.host-moderation",
+        "product.game.replacement-continuity",
+        "product.game.endgame-reveal-history",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms"
+      ]
+    },
+    {
+      "id": "proof:frontend-tablet-interaction",
+      "tier": "frozen",
+      "paths": ["tools/frontend_tablet_interaction_contract.mjs"],
+      "lanes": ["test:frontend-tablet-interaction"],
+      "capabilities": [
+        "foundation.wire-live-delivery",
+        "product.game.setup",
+        "product.game.core-loop",
+        "product.game.host-moderation",
+        "product.game.replacement-continuity",
+        "product.game.endgame-reveal-history",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms"
+      ]
+    },
+    {
+      "id": "proof:frontend-role-dom-smoke",
+      "tier": "frozen",
+      "paths": ["tools/frontend_role_dom_smoke.mjs"],
+      "lanes": ["test:frontend-role-dom-smoke"],
+      "capabilities": [
+        "foundation.wire-live-delivery",
+        "product.game.setup",
+        "product.game.core-loop",
+        "product.game.host-moderation",
+        "product.game.replacement-continuity",
+        "product.game.endgame-reveal-history",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms"
+      ]
+    },
+    {
+      "id": "proof:frontend-visual-regression",
+      "tier": "frozen",
+      "paths": [
+        "tools/frontend_visual_regression.mjs",
+        "tools/frontend_screenshot_pixels.mjs",
+        "tools/fixtures/frontend-visual-baselines/"
+      ],
+      "lanes": ["test:frontend-role-smoke", "test:frontend-visual-regression"],
+      "capabilities": [
+        "foundation.wire-live-delivery",
+        "product.game.setup",
+        "product.game.core-loop",
+        "product.game.host-moderation",
+        "product.game.replacement-continuity",
+        "product.game.endgame-reveal-history",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms"
+      ]
+    },
+    {
+      "id": "proof:auth-invite-role",
+      "tier": "active",
+      "paths": ["tools/auth_invite_role_proof.mjs"],
+      "lanes": ["test:auth-invite-role-proof"]
+    },
+    {
+      "id": "proof:projection-baseline",
+      "tier": "active",
+      "paths": [
+        "tools/projection_baseline_contract.mjs",
+        "tools/projection_baseline_contract.test.mjs"
+      ],
+      "lanes": ["test:projection-baseline:static"]
+    },
+    {
+      "id": "proof:completeness-scorecard",
+      "tier": "active",
+      "paths": [
+        "tools/completeness_scorecard.mjs",
+        "tools/completeness_scorecard.test.mjs"
+      ],
+      "lanes": ["test:completeness-scorecard"]
+    },
+    {
       "id": "proof:mash-scale",
       "tier": "active",
       "paths": [
@@ -455,7 +829,9 @@
       "tier": "active",
       "paths": [
         "tools/host_console_live_stack_smoke.mjs",
-        "tools/live_stack/"
+        "tools/live_stack/",
+        "tools/live_stack_readiness_contract.mjs",
+        "tools/live_stack_proof_summary.mjs"
       ],
       "lanes": [
         "test:host-console-live-stack-contract",

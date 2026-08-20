@@ -189,8 +189,9 @@ export function gitChangedFiles(
 }
 
 // Core selection. Pure over its inputs so the contract test can drive it with
-// fixtures. crateGraph of null means "unknown": if a crate area is touched we
-// conservatively arm every crate area instead of guessing the closure.
+// fixtures. crateGraph of null means "unknown": if a crate or specialized
+// closure area is touched we conservatively arm every crate area instead of
+// guessing the closure.
 export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
   const areasById = new Map(manifest.areas.map((a) => [a.id, a]));
   const areasByCrate = new Map(manifest.areas.filter((a) => a.crate).map((a) => [a.crate, a]));
@@ -216,8 +217,8 @@ export function selectLanes({ changed, manifest, crateGraph, mode = 'inner' }) {
 
   const touchedCrates = [...touched.keys()]
     .map((id) => areasById.get(id))
-    .filter((a) => a?.crate)
-    .map((a) => a.crate);
+    .map((area) => area?.crate ?? area?.closure_crate)
+    .filter(Boolean);
   let crateFallback = false;
   if (touchedCrates.length > 0) {
     if (crateGraph) {
