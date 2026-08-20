@@ -70,18 +70,73 @@ test('command audit is a dedicated exact-size integration target', () => {
     'semantic_audit',
     'cases.rs',
   );
+  const witnessPath = join(
+    REPO_ROOT,
+    'crates',
+    'commands',
+    'tests',
+    'semantic_audit',
+    'golden_witness.rs',
+  );
   const testAttribute = /^#\[(?:sqlx::test|tokio::test|test)\b/gm;
   const ordinarySource = readFileSync(ordinaryPath, 'utf8');
   const auditSource = readFileSync(auditPath, 'utf8');
+  const witnessSource = readFileSync(witnessPath, 'utf8');
 
   assert.equal([...ordinarySource.matchAll(testAttribute)].length, 112);
-  assert.equal([...auditSource.matchAll(testAttribute)].length, 217);
+  assert.equal([...auditSource.matchAll(testAttribute)].length, 179);
+  assert.equal([...witnessSource.matchAll(testAttribute)].length, 1);
   assert.ok(!ordinarySource.includes('#[ignore'));
   assert.ok(!auditSource.includes('#[ignore'));
+  assert.ok(!witnessSource.includes('#[ignore'));
   assert.ok(!existsSync(join(REPO_ROOT, 'crates', 'commands', 'tests', 'pipeline.rs')));
   assert.match(manifest.lanes['cargo:commands-pg'].command, /--test pipeline\b/);
   assert.match(manifest.lanes['cargo:commands-audit'].command, /--test semantic_audit\b/);
   assert.doesNotMatch(manifest.lanes['cargo:commands-audit'].command, /--ignored\b/);
+});
+
+test('host_resolve_phase tests cite a golden or are adapter-only, and witnessed goldens replace handwritten cases', () => {
+  const auditDir = join(REPO_ROOT, 'crates', 'commands', 'tests', 'semantic_audit');
+  const auditSource = readFileSync(join(auditDir, 'cases.rs'), 'utf8');
+  const witnessManifest = JSON.parse(
+    readFileSync(join(auditDir, 'mafiascum_command_witnesses.json'), 'utf8'),
+  );
+  assert.equal(witnessManifest.pack, 'mafiascum');
+  assert.ok(witnessManifest.stems.length > 0);
+  assert.ok(witnessManifest.replaced_tests.length > 0);
+
+  for (const stem of witnessManifest.stems) {
+    const goldenPath = join(REPO_ROOT, 'packs', 'mafiascum', 'golden', `${stem}.json`);
+    assert.ok(existsSync(goldenPath), `witness golden missing: ${goldenPath}`);
+  }
+  for (const testName of witnessManifest.replaced_tests) {
+    assert.equal(
+      auditSource.includes(`async fn ${testName}(`),
+      false,
+      `replaced handwritten test still present: ${testName}`,
+    );
+  }
+
+  const hostFns = [...auditSource.matchAll(/async fn (host_resolve_phase_[a-z0-9_]+)\(/g)].map(
+    (match) => match[1],
+  );
+  assert.ok(hostFns.length > 0);
+  const cited = [
+    ...auditSource.matchAll(
+      /\/\/ (golden: \S+|adapter-only: .+)\n#\[sqlx::test[^\]]*\]\s*async fn (host_resolve_phase_[a-z0-9_]+)\(/g,
+    ),
+  ];
+  assert.equal(cited.length, hostFns.length, 'every host_resolve_phase test must be cited');
+  for (const match of cited) {
+    const [, citation, name] = match;
+    if (citation.startsWith('golden: ')) {
+      const relative = citation.slice('golden: '.length);
+      assert.ok(
+        existsSync(join(REPO_ROOT, relative)),
+        `${name} cites missing golden ${relative}`,
+      );
+    }
+  }
 });
 
 test('workspace crate graph excludes test-only reverse dependencies', () => {
@@ -552,6 +607,15 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
   });
   assert.ok(semanticAudit.laneIds.includes('cargo:commands-audit'));
   assert.ok(!semanticAudit.laneIds.includes('cargo:commands-pg'));
+
+  const goldenWitness = selectLanes({
+    changed: ['crates/commands/tests/semantic_audit/golden_witness.rs'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'inner',
+  });
+  assert.ok(goldenWitness.laneIds.includes('cargo:commands-audit'));
+  assert.ok(!goldenWitness.laneIds.includes('cargo:commands-pg'));
 
   const minimizer = selectLanes({
     changed: ['crates/operator_proof/src/minimizer.rs'],

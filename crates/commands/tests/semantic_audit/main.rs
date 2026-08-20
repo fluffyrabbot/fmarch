@@ -22,4 +22,8 @@ mod residual {
         env!("CARGO_MANIFEST_DIR"),
         "/tests/semantic_audit/cases.rs"
     ));
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/semantic_audit/golden_witness.rs"
+    ));
 }

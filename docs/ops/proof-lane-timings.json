@@ -218,12 +218,12 @@
       "warmup_seconds": 0.5
     },
     "cargo:commands-audit": {
-      "seconds": 780.2,
-      "measured_at": "2026-08-19T07:42:29.780Z",
+      "seconds": 522.7,
+      "measured_at": "2026-08-20T02:35:00.000Z",
       "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test semantic_audit -- --test-threads=4",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 28.9
+      "method": "warm-run",
+      "note": "After collapsing 38 mafiascum host_resolve_phase sqlx::test cases into one shared-pool golden command witness. Test body 522.74s on a warm checkout; previous isolated baseline was 780.2s."
     },
     "cargo:operator-proof": {
       "seconds": 9.1,
