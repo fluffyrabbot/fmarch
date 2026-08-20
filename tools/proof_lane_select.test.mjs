@@ -83,12 +83,16 @@ test('command audit is a dedicated exact-size integration target', () => {
   const auditSource = readFileSync(auditPath, 'utf8');
   const witnessSource = readFileSync(witnessPath, 'utf8');
 
-  assert.equal([...ordinarySource.matchAll(testAttribute)].length, 112);
+  assert.equal([...ordinarySource.matchAll(testAttribute)].length, 107);
   assert.equal([...auditSource.matchAll(testAttribute)].length, 179);
-  assert.equal([...witnessSource.matchAll(testAttribute)].length, 1);
+  assert.equal([...witnessSource.matchAll(testAttribute)].length, 2);
   assert.ok(!ordinarySource.includes('#[ignore'));
   assert.ok(!auditSource.includes('#[ignore'));
   assert.ok(!witnessSource.includes('#[ignore'));
+  assert.ok(
+    !ordinarySource.includes('run_minimizer('),
+    'ordinary pipeline must not run semantic minimizer replays',
+  );
   assert.ok(!existsSync(join(REPO_ROOT, 'crates', 'commands', 'tests', 'pipeline.rs')));
   assert.match(manifest.lanes['cargo:commands-pg'].command, /--test pipeline\b/);
   assert.match(manifest.lanes['cargo:commands-audit'].command, /--test semantic_audit\b/);
@@ -99,22 +103,34 @@ test('host_resolve_phase tests cite a golden or are adapter-only, and witnessed 
   const auditDir = join(REPO_ROOT, 'crates', 'commands', 'tests', 'semantic_audit');
   const auditSource = readFileSync(join(auditDir, 'cases.rs'), 'utf8');
   const witnessManifest = JSON.parse(
-    readFileSync(join(auditDir, 'mafiascum_command_witnesses.json'), 'utf8'),
+    readFileSync(join(auditDir, 'golden_command_witnesses.json'), 'utf8'),
   );
-  assert.equal(witnessManifest.pack, 'mafiascum');
-  assert.ok(witnessManifest.stems.length > 0);
-  assert.ok(witnessManifest.replaced_tests.length > 0);
+  assert.ok(Array.isArray(witnessManifest.packs));
+  assert.ok(witnessManifest.packs.length > 0);
 
-  for (const stem of witnessManifest.stems) {
-    const goldenPath = join(REPO_ROOT, 'packs', 'mafiascum', 'golden', `${stem}.json`);
-    assert.ok(existsSync(goldenPath), `witness golden missing: ${goldenPath}`);
-  }
-  for (const testName of witnessManifest.replaced_tests) {
-    assert.equal(
-      auditSource.includes(`async fn ${testName}(`),
-      false,
-      `replaced handwritten test still present: ${testName}`,
-    );
+  for (const pack of witnessManifest.packs) {
+    assert.ok(pack.pack);
+    assert.ok(pack.stems.length > 0, `${pack.pack} must list command-witness stems`);
+    for (const stem of pack.stems) {
+      const goldenPath = join(REPO_ROOT, 'packs', pack.pack, 'golden', `${stem}.json`);
+      assert.ok(existsSync(goldenPath), `witness golden missing: ${goldenPath}`);
+    }
+    for (const excluded of pack.excluded ?? []) {
+      const goldenPath = join(REPO_ROOT, 'packs', pack.pack, 'golden', `${excluded.stem}.json`);
+      assert.ok(existsSync(goldenPath), `excluded golden missing: ${goldenPath}`);
+      assert.ok(excluded.reason, `${excluded.stem} needs an exclusion reason`);
+      assert.ok(
+        !pack.stems.includes(excluded.stem),
+        `${excluded.stem} cannot be both witnessed and excluded`,
+      );
+    }
+    for (const testName of pack.replaced_tests ?? []) {
+      assert.equal(
+        auditSource.includes(`async fn ${testName}(`),
+        false,
+        `replaced handwritten test still present: ${testName}`,
+      );
+    }
   }
 
   const hostFns = [...auditSource.matchAll(/async fn (host_resolve_phase_[a-z0-9_]+)\(/g)].map(

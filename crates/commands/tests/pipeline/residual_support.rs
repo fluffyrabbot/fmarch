@@ -606,6 +606,18 @@ fn test_operator_proof_artifact_path(label: &str, game: Uuid) -> PathBuf {
 
 const GENERATED_SHRINK_MATRIX_WORKERS: usize = 8;
 const GENERATED_SHRINK_MATRIX_WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
+const FOLDED_MINIMIZER_WITNESS_CASES: usize = 18;
+
+#[derive(Debug)]
+struct FoldedMinimizerCase {
+    stem: String,
+    fixture_json: String,
+    min_expectations: usize,
+    expected_audited: i64,
+    expected_traces: i64,
+    expected_setup_phases: Option<usize>,
+    require_projection_audit: bool,
+}
 
 #[derive(Debug)]
 struct GeneratedShrinkMatrixCase {
@@ -779,6 +791,132 @@ fn run_generated_shrink_matrix_cases(
             .then_with(|| left.seed.cmp(&right.seed))
     });
     entries
+}
+
+async fn run_folded_minimizer_case(pool: &PgPool, case: FoldedMinimizerCase) -> String {
+    let FoldedMinimizerCase {
+        stem,
+        fixture_json,
+        min_expectations,
+        expected_audited,
+        expected_traces,
+        expected_setup_phases,
+        require_projection_audit,
+    } = case;
+    let fixture: serde_json::Value =
+        serde_json::from_str(&fixture_json).unwrap_or_else(|err| panic!("{stem} fixture parses: {err}"));
+    if let Some(expected_setup_phases) = expected_setup_phases {
+        assert_eq!(
+            fixture["setup_phases"].as_array().map_or(0, Vec::len),
+            expected_setup_phases,
+            "{stem} should seed the expected folded setup phases"
+        );
+    }
+    let expectation_count = generated_expectation_count(&fixture["expectations"]);
+    assert!(
+        expectation_count >= min_expectations,
+        "{stem} should preserve semantic expectations"
+    );
+
+    let artifacts = GeneratedShrinkArtifacts::new(&stem);
+    artifacts.remove_existing();
+    artifacts.write_fixture(&fixture_json);
+    let report = artifacts
+        .run_minimizer_with_preprovisioned_principals(pool)
+        .await;
+    assert_eq!(report["original"]["ok"], true, "{stem} original replay");
+    assert_eq!(
+        report["original"]["resolution_audited"],
+        serde_json::json!(expected_audited),
+        "{stem} audited envelope count"
+    );
+    assert_eq!(
+        report["original"]["trace_count"],
+        serde_json::json!(expected_traces),
+        "{stem} trace count"
+    );
+    if require_projection_audit {
+        assert_eq!(
+            report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "{stem} projection audit"
+        );
+    }
+    assert_eq!(
+        report["original"]["semantic_expectations_checked"],
+        serde_json::json!(expectation_count),
+        "{stem} semantic expectation count"
+    );
+    assert_eq!(
+        report["reduction"]["replay_success"],
+        true,
+        "{stem} reduction replay"
+    );
+    assert_eq!(
+        report["write_reduced"]["promoted_success_fixture"],
+        true,
+        "{stem} promotion"
+    );
+    stem
+}
+
+fn run_folded_minimizer_cases(
+    connect_options: sqlx::postgres::PgConnectOptions,
+    cases: Vec<FoldedMinimizerCase>,
+) -> Vec<String> {
+    assert_eq!(
+        cases.len(),
+        FOLDED_MINIMIZER_WITNESS_CASES,
+        "folded minimizer witness case manifest"
+    );
+    let queue = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::from(
+        cases,
+    )));
+    let mut stems = std::thread::scope(|scope| {
+        let mut workers = Vec::with_capacity(GENERATED_SHRINK_MATRIX_WORKERS);
+        for worker_index in 0..GENERATED_SHRINK_MATRIX_WORKERS {
+            let queue = std::sync::Arc::clone(&queue);
+            let connect_options = connect_options.clone();
+            workers.push(
+                std::thread::Builder::new()
+                    .name(format!("folded-minimizer-witness-{worker_index}"))
+                    .stack_size(GENERATED_SHRINK_MATRIX_WORKER_STACK_BYTES)
+                    .spawn_scoped(scope, move || {
+                        let runtime = tokio::runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .build()
+                            .expect("folded minimizer worker runtime");
+                        runtime.block_on(async move {
+                            let pool = sqlx::postgres::PgPoolOptions::new()
+                                .max_connections(1)
+                                .connect_with(connect_options)
+                                .await
+                                .expect("folded minimizer worker database connection");
+                            let mut stems = Vec::new();
+                            loop {
+                                let next = queue
+                                    .lock()
+                                    .expect("folded minimizer case queue")
+                                    .pop_front();
+                                let Some(case) = next else {
+                                    break;
+                                };
+                                stems.push(run_folded_minimizer_case(&pool, case).await);
+                            }
+                            pool.close().await;
+                            stems
+                        })
+                    })
+                    .expect("spawn folded minimizer worker"),
+            );
+        }
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().expect("folded minimizer worker failed"))
+            .collect::<Vec<_>>()
+    });
+    stems.sort();
+    stems
 }
 
 #[derive(Debug, Clone)]

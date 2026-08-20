@@ -1,0 +1,309 @@
+{
+  "packs": [
+    {
+      "pack": "mafiascum",
+      "stems": [
+        "action_investigation_guards",
+        "ascetic_blocks_non_lethal_actions",
+        "ascetic_blocks_protect_and_convert",
+        "babysitter_dependency_stacks_with_direct_ward_death",
+        "babysitter_protects_then_dooms_ward",
+        "beloved_princess_lynch_prompts_skip_day",
+        "bodyguard_intercept",
+        "bulletproof_saves_kill",
+        "busdriver_redirect",
+        "catastrophic_roleblock_suppresses_all_actions",
+        "commuter_avoids_targeting",
+        "compulsive_missing_action",
+        "condemner_targets_victim",
+        "conversion_blocked_on_dead_target",
+        "cooldown_cop_records_use",
+        "cpr_kills_unattacked_target",
+        "cpr_saves_attacked_target",
+        "cpr_strongman_bypass",
+        "cult_recruit_converts_to_cultist",
+        "cupid_links_lovers",
+        "day_action_kill_triggers_post_announcement_win",
+        "day_self_destruct_trade",
+        "day_vigilante_kill_before_vote",
+        "day_vote_hated_threshold",
+        "day_vote_triplevoter_weighted_role",
+        "day_vote_weighted_roles",
+        "day_vote_x_voter_weight",
+        "death_mark_detonates_on_effect_marked",
+        "disabled_endgame_cop_allows_above_threshold",
+        "disloyal_cult_recruit_cross_alignment",
+        "executioner_targets_victim",
+        "faith_healer_chance_protect_misses",
+        "faith_healer_chance_protect_saves",
+        "follower_reads_action_type",
+        "framer_parity_override",
+        "friendly_neighbor_visit",
+        "gladiator_vote_duel",
+        "gladiator_vote_duel_no_ballots",
+        "gladiator_vote_duel_tied_ballots",
+        "governor_veto_cancels_lynch",
+        "hider_dependency_stacks_with_direct_death",
+        "hider_dies_when_host_dies",
+        "hider_untargetable_behind_town",
+        "hunter_arms_retaliation",
+        "huntsman_guard_retaliates",
+        "info_actions_private_results",
+        "inventor_grants_item",
+        "jack_of_all_trades_block_consumes_one_shot",
+        "jailkeeper_block_protect",
+        "jester_wins_on_self_lynch",
+        "kill_vs_doctor",
+        "lawyer_parity_override",
+        "lazy_cop_allows_multiple_non_town",
+        "lightning_rod_pull",
+        "lost_mafia_goon_allows_team_kill_when_sole_mafia_alive",
+        "loud_announcing_notifications",
+        "macho_ignores_protection",
+        "martyr_intercept",
+        "mass_redirect_rotate",
+        "motion_detector_activity",
+        "motivator_grants_extra_action",
+        "neighborize_visit",
+        "ninja_hidden_from_motion",
+        "ninja_hidden_from_watch_motion",
+        "non_roleblockable_roleblocker_survives_block",
+        "one_shot_vigilante_marks_use",
+        "ordinary_roleblocker_suppresses_first_matching_action",
+        "poison_marks_no_death",
+        "protected_multi_attacker_no_death",
+        "psychologist_detects_killer",
+        "recluse_mafia_goon_allows_team_kill_when_living_teammates_recluse",
+        "redirect_cycle_stable",
+        "reveal_town_day",
+        "role_set_info_negative",
+        "role_set_info_positive",
+        "roleblock_stops_action",
+        "roleblock_stops_doctor_protect",
+        "roleblocker_aliases_block_first_matching",
+        "rolestop_and_shield_target_state",
+        "saulus_flips_alignment_on_lynch",
+        "serial_killer_blocks_mafia_parity",
+        "serial_killer_wins_as_sole_survivor",
+        "simultaneous_vigilante_allows_multiple_same_template_submissions",
+        "specialist_detects_specialist",
+        "strong_willed_bypasses_roleblock",
+        "strongman_pierces_bulletproof",
+        "survivor_wins_alive_at_end_with_town",
+        "targeted_backup_designates_source",
+        "tracker_tracks_visit",
+        "traitor_counts_for_mafia_parity",
+        "uncooperative_cop_ambiguous_feedback",
+        "untargetable_blocks_targeting",
+        "vanillaize_mutates_role",
+        "vanillizer_mutates_role",
+        "virgin_night_death_prompts_skip_day",
+        "watcher_sees_visitors",
+        "weak_cop_dies_on_scum",
+        "white_wolf_king_day_self_destruct",
+        "white_wolf_king_night_kill"
+      ],
+      "excluded": [
+        {
+          "stem": "activated_cop_blocks_before_active",
+          "reason": "command admission rejects investigate_alignment before the cop is active"
+        },
+        {
+          "stem": "day_vote_loved_threshold",
+          "reason": "command admission rejects a loved-threshold ballot target"
+        },
+        {
+          "stem": "disabled_endgame_cop_blocks_at_threshold",
+          "reason": "command admission rejects investigate_alignment at the endgame threshold"
+        },
+        {
+          "stem": "duplicate_base_action_blocks_without_simultaneous",
+          "reason": "second same-template submission is rejected at command admission"
+        },
+        {
+          "stem": "fruit_vendor_sends_fruit",
+          "reason": "golden seats town_vanilla, which AssignRole rejects on the mafiascum pack"
+        },
+        {
+          "stem": "lazy_cop_blocks_endgame",
+          "reason": "command admission rejects investigate_alignment at the lazy-cop endgame threshold"
+        },
+        {
+          "stem": "lost_mafia_goon_blocks_team_kill_with_teammate_alive",
+          "reason": "command admission rejects factional_kill while a teammate is alive"
+        },
+        {
+          "stem": "non_reflexive_self_target_rejected",
+          "reason": "self-target is rejected at command admission"
+        },
+        {
+          "stem": "novice_cop_blocks_before_active",
+          "reason": "command admission rejects investigate_alignment before the novice cop is active"
+        },
+        {
+          "stem": "personal_commute_rejects_other_target",
+          "reason": "illegal commute target is rejected at command admission"
+        },
+        {
+          "stem": "phase_window_night_action_rejected_during_day",
+          "reason": "night action is rejected at command admission during D01"
+        },
+        {
+          "stem": "recluse_mafia_goon_blocks_team_kill_with_non_recluse_teammate_alive",
+          "reason": "command admission rejects factional_kill while a non-recluse teammate is alive"
+        }
+      ],
+      "replaced_tests": [
+        "host_resolve_phase_applies_gladiator_vote_duel",
+        "host_resolve_phase_applies_gladiator_vote_duel_no_ballots",
+        "host_resolve_phase_applies_gladiator_vote_duel_tied_ballots",
+        "host_resolve_phase_applies_lawyer_result_mod_override",
+        "host_resolve_phase_awards_survivor_alive_at_end",
+        "host_resolve_phase_blocks_conversion_of_dead_target",
+        "host_resolve_phase_carries_jester_self_lynch_win",
+        "host_resolve_phase_carries_mafiascum_ascetic_non_lethal_immunity",
+        "host_resolve_phase_carries_mafiascum_day_self_destruct_trade",
+        "host_resolve_phase_carries_mafiascum_day_vigilante_kill",
+        "host_resolve_phase_carries_mafiascum_faith_healer_chance_protect",
+        "host_resolve_phase_carries_mafiascum_governor_veto",
+        "host_resolve_phase_carries_mafiascum_psychologist_killer_info",
+        "host_resolve_phase_carries_mafiascum_role_set_info",
+        "host_resolve_phase_carries_mafiascum_roleblocker_aliases",
+        "host_resolve_phase_carries_mafiascum_serial_killer_win",
+        "host_resolve_phase_carries_saulus_alignment_flip_on_lynch",
+        "host_resolve_phase_counts_traitor_for_mafia_parity",
+        "host_resolve_phase_day_action_win_runs_after_announcement",
+        "host_resolve_phase_macho_target_ignores_doctor_protection",
+        "host_resolve_phase_persists_jailkeeper_block_plus_protect_policy",
+        "host_resolve_phase_persists_martyr_intercept_policy",
+        "host_resolve_phase_persists_rolestop_and_shield_target_state",
+        "host_resolve_phase_preserves_protected_multi_attacker_no_death",
+        "host_resolve_phase_projects_follower_action_type_result",
+        "host_resolve_phase_projects_huntsman_guard_retaliation",
+        "host_resolve_phase_projects_loud_and_announcing_notifications",
+        "host_resolve_phase_projects_mafiascum_action_investigation_guards",
+        "host_resolve_phase_projects_motivator_grant",
+        "host_resolve_phase_records_friendly_neighbor_visit",
+        "host_resolve_phase_records_missing_compulsive_action",
+        "host_resolve_phase_records_neighborize_visit",
+        "host_resolve_phase_serial_killer_blocks_mafia_parity",
+        "host_resolve_phase_stacks_babysitter_dependency_with_direct_ward_death",
+        "host_resolve_phase_stacks_hider_dependency_with_direct_death",
+        "host_resolve_phase_uses_pack_declared_triplevoter_weight",
+        "host_resolve_phase_uses_pack_declared_x_voter_weight",
+        "host_resolve_phase_weak_cop_dies_on_scum_result"
+      ]
+    },
+    {
+      "pack": "mafia_universe",
+      "stems": [
+        "alignment_oracle_marks_target",
+        "backup_alignment_variants_designate_sources",
+        "basic_nar_bodyguard_intercepts",
+        "basic_nar_cpr_kills_unattacked_target",
+        "basic_nar_cpr_saves_attacked_target",
+        "basic_nar_doctor_saves",
+        "basic_nar_jail_blocks_and_protects",
+        "basic_nar_martyr_intercepts",
+        "basic_nar_roleblock_opens_kill",
+        "basic_nar_strongman_pierces_doctor",
+        "commute_mafia_blocks_investigation",
+        "commute_town_avoids_targeting",
+        "culture_alias_alignment_cops_and_serial_killer",
+        "day_desperado_alignment_failback",
+        "day_vigilante_alignment_variants_kill",
+        "douse_mafia_marks_target",
+        "douse_town_marks_target",
+        "empower_mafia_bypasses_block_and_redirect",
+        "empower_town_bypasses_block_and_redirect",
+        "fruit_vendor_mafia_sends_fruit",
+        "fruit_vendor_town_sends_fruit",
+        "graph_info_mafia_tracker_watcher_motion",
+        "graph_info_town_tracker_watcher_motion",
+        "inventor_mafia_grants_item",
+        "inventor_town_grants_item",
+        "investigation_framer_parity_override",
+        "investigation_parity_scum",
+        "investigation_town_framer_parity_override",
+        "jack_of_all_trades_block_consumes_one_shot",
+        "jack_of_all_trades_town_block_consumes_one_shot",
+        "janitor_alignment_variants_conceal",
+        "mafia_treestump_status_on_lynch",
+        "motivator_mafia_grants_extra_action",
+        "motivator_town_grants_extra_action",
+        "night_desperado_alignment_variants_kill",
+        "ninja_hidden_from_watch_motion",
+        "poison_mafia_marks_no_death",
+        "poison_town_marks_no_death",
+        "power_role_killer_kills_power_roles",
+        "redirect_mafia_bus_driver_swap",
+        "redirect_mixed_redirector_cycle",
+        "redirect_town_bus_driver_swap",
+        "reveal_town_day",
+        "role_and_full_role_info_mafia_investigations",
+        "role_oracle_marks_target",
+        "role_set_info_mafia_investigations",
+        "role_set_info_town_investigations",
+        "roleblocker_mafia_blocks_doctor",
+        "rolestop_mafia_blocks_kill_and_investigation",
+        "rolestop_town_blocks_kill_and_investigation",
+        "town_strongman_pierces_doctor",
+        "treestump_status_on_lynch",
+        "vigilante_alignment_variants_kill",
+        "voyeur_action_investigation"
+      ],
+      "excluded": [
+        {
+          "stem": "commute_personal_rejects_other_target",
+          "reason": "illegal commute target is rejected at command admission"
+        },
+        {
+          "stem": "ita_session_invalidates_later_dead_target",
+          "reason": "ITA invalidation needs a later pass; a single ResolvePhase does not match the golden envelope"
+        },
+        {
+          "stem": "ita_session_lethal_shot",
+          "reason": "ITA lethal shot needs session controls a single SubmitAction/ResolvePhase does not reproduce"
+        },
+        {
+          "stem": "power_role_killer_rejects_vanilla_target",
+          "reason": "illegal power-role kill target is rejected at command admission"
+        }
+      ],
+      "replaced_tests": []
+    },
+    {
+      "pack": "chinese_structured",
+      "stems": [
+        "cupid_links_lovers",
+        "guard_self_save_night_one_allowed",
+        "guard_witch_double_save_succeeds",
+        "hunter_arms_retaliation",
+        "idiot_survives_first_lynch",
+        "knight_duel_failure",
+        "knight_duel_success",
+        "prophet_alignment_results",
+        "sheriff_badge_election_weighted_vote",
+        "white_wolf_king_shared_night_kill",
+        "witch_heal_potion_protects_wolf_kill",
+        "wolf_beauty_mark",
+        "wolf_self_destruct_trade"
+      ],
+      "excluded": [
+        {
+          "stem": "cupid_lovers_death_cascade",
+          "reason": "lover-death cascade does not round-trip through a single command resolve"
+        },
+        {
+          "stem": "cupid_lovers_lynch_cascade",
+          "reason": "lover-lynch cascade does not round-trip through a single command resolve"
+        },
+        {
+          "stem": "phase_window_day_action_rejected_during_night",
+          "reason": "day action is rejected at command admission during N01"
+        }
+      ],
+      "replaced_tests": []
+    }
+  ]
+}

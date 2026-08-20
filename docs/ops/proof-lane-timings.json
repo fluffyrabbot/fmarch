@@ -202,12 +202,12 @@
       "warmup_seconds": 0.2
     },
     "cargo:commands-pg": {
-      "seconds": 180.7,
-      "measured_at": "2026-08-19T07:28:21.738Z",
+      "seconds": 146.0,
+      "measured_at": "2026-08-20T03:20:00.000Z",
       "command": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test pipeline -- --test-threads=4",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 0.7
+      "method": "warm-run",
+      "note": "After moving five leftover minimizer replays out of the ordinary pipeline. Test body 146.04s on a warm checkout; previous isolated baseline was 180.7s."
     },
     "cargo:commands-concurrency": {
       "seconds": 2.6,
@@ -218,12 +218,12 @@
       "warmup_seconds": 0.5
     },
     "cargo:commands-audit": {
-      "seconds": 522.7,
-      "measured_at": "2026-08-20T02:35:00.000Z",
+      "seconds": 639.6,
+      "measured_at": "2026-08-20T03:30:00.000Z",
       "command": "RUST_MIN_STACK=8388608 DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p commands --test semantic_audit -- --test-threads=4",
       "status": 0,
       "method": "warm-run",
-      "note": "After collapsing 38 mafiascum host_resolve_phase sqlx::test cases into one shared-pool golden command witness. Test body 522.74s on a warm checkout; previous isolated baseline was 780.2s."
+      "note": "After expanding the golden command witness to 166 fresh mafiascum/mafia_universe/chinese_structured goldens and folding 18 leftover minimizer fixtures onto 8 isolated workers. Test body 639.61s on a warm checkout."
     },
     "cargo:operator-proof": {
       "seconds": 9.1,

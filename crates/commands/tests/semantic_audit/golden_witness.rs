@@ -1,36 +1,43 @@
-// Pack-scoped command witness for mafiascum goldens that previously each
-// bought an isolated `sqlx::test` database. Engine inner-events stay owned by
-// `check:command-goldens`; this driver proves `Command::ResolvePhase` persisted
-// the same envelope on one migrated pool.
+// Pack-scoped command witnesses for fresh N01/D01 goldens. Engine inner-events
+// stay owned by `check:command-goldens`; this driver proves
+// `Command::ResolvePhase` persisted the same envelope on one migrated pool.
+// Command-admission rejects stay excluded in the manifest: those goldens cannot
+// round-trip through SubmitAction/SubmitVote.
 
-const MAFIASCUM_COMMAND_WITNESSES_JSON: &str = include_str!(concat!(
+const GOLDEN_COMMAND_WITNESSES_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/tests/semantic_audit/mafiascum_command_witnesses.json"
+    "/tests/semantic_audit/golden_command_witnesses.json"
 ));
 
-struct MafiascumCommandWitnessManifest {
+struct GoldenCommandWitnessPack {
     pack: String,
     stems: Vec<String>,
 }
 
-fn mafiascum_command_witness_manifest() -> MafiascumCommandWitnessManifest {
-    let manifest: serde_json::Value = serde_json::from_str(MAFIASCUM_COMMAND_WITNESSES_JSON)
-        .expect("mafiascum command witness manifest parses");
-    let pack = manifest["pack"]
-        .as_str()
-        .expect("witness manifest pack")
-        .to_string();
-    let stems = manifest["stems"]
+fn golden_command_witness_packs() -> Vec<GoldenCommandWitnessPack> {
+    let manifest: serde_json::Value = serde_json::from_str(GOLDEN_COMMAND_WITNESSES_JSON)
+        .expect("golden command witness manifest parses");
+    manifest["packs"]
         .as_array()
-        .expect("witness manifest stems")
+        .expect("witness manifest packs")
         .iter()
-        .map(|stem| {
-            stem.as_str()
-                .expect("witness stem is a string")
-                .to_string()
+        .map(|pack| GoldenCommandWitnessPack {
+            pack: pack["pack"]
+                .as_str()
+                .expect("witness pack name")
+                .to_string(),
+            stems: pack["stems"]
+                .as_array()
+                .expect("witness pack stems")
+                .iter()
+                .map(|stem| {
+                    stem.as_str()
+                        .expect("witness stem is a string")
+                        .to_string()
+                })
+                .collect(),
         })
-        .collect();
-    MafiascumCommandWitnessManifest { pack, stems }
+        .collect()
 }
 
 fn commands_repo_root() -> PathBuf {
@@ -41,9 +48,11 @@ fn commands_repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn mafiascum_golden_path(stem: &str) -> PathBuf {
+fn pack_golden_path(pack: &str, stem: &str) -> PathBuf {
     commands_repo_root()
-        .join("packs/mafiascum/golden")
+        .join("packs")
+        .join(pack)
+        .join("golden")
         .join(format!("{stem}.json"))
 }
 
@@ -111,45 +120,60 @@ fn fresh_command_witness_reason(golden: &serde_json::Value) -> Option<String> {
     None
 }
 
-fn load_mafiascum_golden(stem: &str) -> serde_json::Value {
-    let path = mafiascum_golden_path(stem);
+fn load_pack_golden(pack: &str, stem: &str) -> serde_json::Value {
+    let path = pack_golden_path(pack, stem);
     let raw = fs::read_to_string(&path)
-        .unwrap_or_else(|err| panic!("read mafiascum golden {}: {err}", path.display()));
+        .unwrap_or_else(|err| panic!("read {pack} golden {}: {err}", path.display()));
     serde_json::from_str(&raw)
-        .unwrap_or_else(|err| panic!("parse mafiascum golden {}: {err}", path.display()))
+        .unwrap_or_else(|err| panic!("parse {pack} golden {}: {err}", path.display()))
 }
 
-fn occupant_id(stem: &str, slot: &str) -> String {
-    format!("gw_{stem}_{slot}")
+fn occupant_id(pack: &str, stem: &str, slot: &str) -> String {
+    format!("gw_{pack}_{stem}_{slot}")
 }
 
-fn vote_target(stem: &str, targets: &[String]) -> VoteTarget {
+fn vote_target(pack: &str, stem: &str, targets: &[String]) -> VoteTarget {
     match targets {
         [target] if target == "no_lynch" => VoteTarget::NoLynch,
         [target] => VoteTarget::Slot(target.clone()),
-        other => panic!("golden {stem}: day_vote needs one target, got {other:?}"),
+        other => panic!("golden {pack}/{stem}: day_vote needs one target, got {other:?}"),
     }
 }
 
-async fn replay_mafiascum_golden(pool: &PgPool, stem: &str, golden: &serde_json::Value) -> Uuid {
+fn submission_grant_id(submission: &serde_json::Value) -> Option<String> {
+    submission
+        .get("metadata")
+        .and_then(|metadata| metadata.get("grant_id"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+}
+
+async fn replay_pack_golden(
+    pool: &PgPool,
+    pack: &str,
+    stem: &str,
+    golden: &serde_json::Value,
+) -> Result<Uuid, String> {
     if let Some(reason) = fresh_command_witness_reason(golden) {
-        panic!("mafiascum golden {stem} is not a fresh command witness: {reason}");
+        return Err(format!(
+            "{pack}/{stem} is not a fresh command witness: {reason}"
+        ));
     }
 
     let input = &golden["input"];
     let phase_id = input["phase_id"]
         .as_str()
-        .unwrap_or_else(|| panic!("golden {stem} missing input.phase_id"));
+        .unwrap_or_else(|| panic!("golden {pack}/{stem} missing input.phase_id"));
     let seed = input["seed"]
         .as_u64()
-        .unwrap_or_else(|| panic!("golden {stem} missing input.seed"));
+        .unwrap_or_else(|| panic!("golden {pack}/{stem} missing input.seed"));
     let slots = input["state"]["slots"]
         .as_array()
-        .unwrap_or_else(|| panic!("golden {stem} missing input.state.slots"));
+        .unwrap_or_else(|| panic!("golden {pack}/{stem} missing input.state.slots"));
     let submissions = input["submissions"].as_array().cloned().unwrap_or_default();
 
     let game = Uuid::new_v4();
-    let host_id = format!("gw_host_{stem}");
+    let host_id = format!("gw_host_{pack}_{stem}");
     let host = user(&host_id);
 
     handle(
@@ -157,21 +181,21 @@ async fn replay_mafiascum_golden(pool: &PgPool, stem: &str, golden: &serde_json:
         &host,
         Command::CreateGame {
             game,
-            pack: "mafiascum".into(),
+            pack: pack.into(),
             cohost_denied: vec![],
         },
     )
     .await
-    .unwrap_or_else(|err| panic!("golden {stem}: CreateGame: {err}"));
+    .map_err(|err| format!("{pack}/{stem}: CreateGame: {err}"))?;
 
     for slot in slots {
         let slot_id = slot["slot_id"]
             .as_str()
-            .unwrap_or_else(|| panic!("golden {stem}: slot missing slot_id"));
+            .ok_or_else(|| format!("{pack}/{stem}: slot missing slot_id"))?;
         let role_key = slot["role_key"]
             .as_str()
-            .unwrap_or_else(|| panic!("golden {stem}: {slot_id} missing role_key"));
-        let occupant = occupant_id(stem, slot_id);
+            .ok_or_else(|| format!("{pack}/{stem}: {slot_id} missing role_key"))?;
+        let occupant = occupant_id(pack, stem, slot_id);
         handle(
             pool,
             &host,
@@ -181,7 +205,7 @@ async fn replay_mafiascum_golden(pool: &PgPool, stem: &str, golden: &serde_json:
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("golden {stem}: AddSlot {slot_id}: {err}"));
+        .map_err(|err| format!("{pack}/{stem}: AddSlot {slot_id}: {err}"))?;
         handle(
             pool,
             &host,
@@ -192,7 +216,7 @@ async fn replay_mafiascum_golden(pool: &PgPool, stem: &str, golden: &serde_json:
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("golden {stem}: SeatPersona {slot_id}: {err}"));
+        .map_err(|err| format!("{pack}/{stem}: SeatPersona {slot_id}: {err}"))?;
         handle(
             pool,
             &host,
@@ -203,7 +227,7 @@ async fn replay_mafiascum_golden(pool: &PgPool, stem: &str, golden: &serde_json:
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("golden {stem}: AssignRole {slot_id}: {err}"));
+        .map_err(|err| format!("{pack}/{stem}: AssignRole {slot_id}: {err}"))?;
     }
 
     handle(
@@ -215,18 +239,18 @@ async fn replay_mafiascum_golden(pool: &PgPool, stem: &str, golden: &serde_json:
         },
     )
     .await
-    .unwrap_or_else(|err| panic!("golden {stem}: StartGame {phase_id}: {err}"));
+    .map_err(|err| format!("{pack}/{stem}: StartGame {phase_id}: {err}"))?;
 
     for submission in &submissions {
         let template_id = submission["template_id"]
             .as_str()
-            .unwrap_or_else(|| panic!("golden {stem}: submission missing template_id"));
+            .unwrap_or_else(|| panic!("golden {pack}/{stem}: submission missing template_id"));
         let actor = submission["actor"]
             .as_str()
-            .unwrap_or_else(|| panic!("golden {stem}: submission missing actor"));
+            .unwrap_or_else(|| panic!("golden {pack}/{stem}: submission missing actor"));
         let action_id = submission["action_id"]
             .as_str()
-            .unwrap_or_else(|| panic!("golden {stem}: submission missing action_id"));
+            .unwrap_or_else(|| panic!("golden {pack}/{stem}: submission missing action_id"));
         let targets = submission["targets"]
             .as_array()
             .map(|values| {
@@ -236,19 +260,20 @@ async fn replay_mafiascum_golden(pool: &PgPool, stem: &str, golden: &serde_json:
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let occupant = user(&occupant_id(stem, actor));
-        if template_id == "day_vote" {
+        let occupant = user(&occupant_id(pack, stem, actor));
+        let submitted = if template_id == "day_vote" {
             handle(
                 pool,
                 &occupant,
                 Command::SubmitVote {
                     game,
                     actor_slot: actor.into(),
-                    target: vote_target(stem, &targets),
+                    target: vote_target(pack, stem, &targets),
                 },
             )
             .await
-            .unwrap_or_else(|err| panic!("golden {stem}: SubmitVote {actor}: {err}"));
+            .map(|_| ())
+            .map_err(|err| format!("SubmitVote {actor}: {err}"))
         } else {
             handle(
                 pool,
@@ -259,27 +284,27 @@ async fn replay_mafiascum_golden(pool: &PgPool, stem: &str, golden: &serde_json:
                     actor_slot: actor.into(),
                     template_id: template_id.into(),
                     targets,
-                    grant_id: None,
+                    grant_id: submission_grant_id(submission),
                 },
             )
             .await
-            .unwrap_or_else(|err| {
-                panic!("golden {stem}: SubmitAction {actor}/{template_id}: {err}")
-            });
+            .map(|_| ())
+            .map_err(|err| format!("SubmitAction {actor}/{template_id}: {err}"))
+        };
+        if let Err(err) = submitted {
+            return Err(format!(
+                "{pack}/{stem}: command admission rejected a golden submission ({err})"
+            ));
         }
     }
 
-    handle(
-        pool,
-        &host,
-        Command::ResolvePhase { game, seed },
-    )
-    .await
-    .unwrap_or_else(|err| panic!("golden {stem}: ResolvePhase: {err}"));
+    handle(pool, &host, Command::ResolvePhase { game, seed })
+        .await
+        .map_err(|err| format!("{pack}/{stem}: ResolvePhase: {err}"))?;
 
     let applied_payload = resolution_payload(pool, game, phase_id, seed).await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-        .unwrap_or_else(|err| panic!("golden {stem}: ResolutionApplied validates: {err}"));
+        .map_err(|err| format!("{pack}/{stem}: ResolutionApplied validates: {err}"))?;
     let actual = applied
         .events
         .iter()
@@ -288,39 +313,60 @@ async fn replay_mafiascum_golden(pool: &PgPool, stem: &str, golden: &serde_json:
     let expected = golden["expected_events"]
         .as_array()
         .cloned()
-        .unwrap_or_else(|| panic!("golden {stem} missing expected_events"));
-    assert_eq!(
-        domain::normalize_golden_events(&actual),
-        domain::normalize_golden_events(&expected),
-        "command witness drifted from packs/mafiascum/golden/{stem}.json"
-    );
+        .ok_or_else(|| format!("{pack}/{stem} missing expected_events"))?;
+    let actual = domain::normalize_golden_events(&actual);
+    let expected = domain::normalize_golden_events(&expected);
+    if actual != expected {
+        return Err(format!(
+            "{pack}/{stem}: command witness drifted from packs/{pack}/golden/{stem}.json"
+        ));
+    }
 
     let audit = audit_resolution_envelopes(pool, game)
         .await
-        .unwrap_or_else(|err| panic!("golden {stem}: audit_resolution_envelopes: {err}"));
-    assert!(
-        audit.ok,
-        "golden {stem}: resolution audit drifted: {audit:?}"
-    );
-    game
+        .map_err(|err| format!("{pack}/{stem}: audit_resolution_envelopes: {err}"))?;
+    if !audit.ok {
+        return Err(format!("{pack}/{stem}: resolution audit drifted: {audit:?}"));
+    }
+    Ok(game)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn mafiascum_fresh_goldens_replay_through_command_resolve(pool: PgPool) {
-    let manifest = mafiascum_command_witness_manifest();
-    assert_eq!(manifest.pack, "mafiascum");
+async fn fresh_pack_goldens_replay_through_command_resolve(pool: PgPool) {
+    let packs = golden_command_witness_packs();
     assert!(
-        !manifest.stems.is_empty(),
-        "mafiascum command witness list must not be empty"
+        !packs.is_empty(),
+        "golden command witness list must not be empty"
     );
 
     let mut last_game = None;
-    for stem in &manifest.stems {
-        let golden = load_mafiascum_golden(stem);
-        last_game = Some(replay_mafiascum_golden(&pool, stem, &golden).await);
+    let mut replayed = 0usize;
+    let mut failures = Vec::new();
+    for pack in &packs {
+        assert!(
+            !pack.stems.is_empty(),
+            "golden command witness pack {} must list stems",
+            pack.pack
+        );
+        for stem in &pack.stems {
+            let golden = load_pack_golden(&pack.pack, stem);
+            match replay_pack_golden(&pool, &pack.pack, stem, &golden).await {
+                Ok(game) => {
+                    last_game = Some(game);
+                    replayed += 1;
+                }
+                Err(error) => failures.push(error),
+            }
+        }
     }
+    assert!(
+        failures.is_empty(),
+        "golden command witness failures:\n{}",
+        failures.join("\n")
+    );
+    assert!(replayed > 0, "at least one golden must replay");
 
-    let game = last_game.expect("at least one mafiascum golden replayed");
+    let game = last_game.expect("at least one golden replayed");
     let slots_before = serde_json::to_string(&slot_state(&pool, game).await.unwrap())
         .expect("slot_state serializes");
     rebuild(&pool, game)
@@ -329,6 +375,207 @@ async fn mafiascum_fresh_goldens_replay_through_command_resolve(pool: PgPool) {
     assert_eq!(
         slots_before,
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
-        "slot_state rebuild must preserve the last mafiascum command witness"
+        "slot_state rebuild must preserve the last golden command witness"
+    );
+}
+
+fn folded_minimizer_witness_cases() -> Vec<FoldedMinimizerCase> {
+    vec![
+        FoldedMinimizerCase {
+            stem: "chinese-folded-wolf-beauty-drag-semantic-expectations".into(),
+            fixture_json: chinese_folded_wolf_beauty_drag_fixture_json(),
+            min_expectations: 3,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: Some(1),
+            require_projection_audit: false,
+        },
+        FoldedMinimizerCase {
+            stem: "chinese-folded-cupid-lover-suicide-semantic-expectations".into(),
+            fixture_json: chinese_folded_cupid_lover_suicide_fixture_json(),
+            min_expectations: 3,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: Some(1),
+            require_projection_audit: false,
+        },
+        FoldedMinimizerCase {
+            stem: "chinese-folded-hunter-retaliation-semantic-expectations".into(),
+            fixture_json: chinese_folded_hunter_retaliation_fixture_json(),
+            min_expectations: 3,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: Some(1),
+            require_projection_audit: false,
+        },
+        FoldedMinimizerCase {
+            stem: "chinese-folded-hunter-poison-suppression-semantic-expectations".into(),
+            fixture_json: chinese_folded_hunter_poison_suppression_fixture_json(),
+            min_expectations: 3,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: Some(1),
+            require_projection_audit: false,
+        },
+        FoldedMinimizerCase {
+            stem: "chinese-sheriff-badge-election-semantic-expectations".into(),
+            fixture_json: chinese_sheriff_badge_election_fixture_json(),
+            min_expectations: 5,
+            expected_audited: 1,
+            expected_traces: 1,
+            expected_setup_phases: None,
+            require_projection_audit: true,
+        },
+        FoldedMinimizerCase {
+            stem: "chinese-sheriff-badge-pass-semantic-expectations".into(),
+            fixture_json: chinese_sheriff_badge_pass_fixture_json(),
+            min_expectations: 5,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: None,
+            require_projection_audit: true,
+        },
+        FoldedMinimizerCase {
+            stem: "chinese-sheriff-badge-destroy-semantic-expectations".into(),
+            fixture_json: chinese_sheriff_badge_destroy_fixture_json(),
+            min_expectations: 5,
+            expected_audited: 3,
+            expected_traces: 3,
+            expected_setup_phases: None,
+            require_projection_audit: true,
+        },
+        FoldedMinimizerCase {
+            stem: "ita-buffered-release-semantic-expectations".into(),
+            fixture_json: ita_buffered_release_fixture_json(),
+            min_expectations: 8,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: None,
+            require_projection_audit: true,
+        },
+        FoldedMinimizerCase {
+            stem: "ita-buffered-release-invalidated-semantic-expectations".into(),
+            fixture_json: ita_buffered_release_invalidated_fixture_json(),
+            min_expectations: 10,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: None,
+            require_projection_audit: true,
+        },
+        FoldedMinimizerCase {
+            stem: "ita-buffered-release-refunded-semantic-expectations".into(),
+            fixture_json: ita_buffered_release_refunded_fixture_json(),
+            min_expectations: 7,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: None,
+            require_projection_audit: true,
+        },
+        FoldedMinimizerCase {
+            stem: "ita-buffered-release-hp-hybrid-semantic-expectations".into(),
+            fixture_json: ita_buffered_release_hp_hybrid_fixture_json(),
+            min_expectations: 11,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: None,
+            require_projection_audit: true,
+        },
+        FoldedMinimizerCase {
+            stem: "ita-lifecycle-controls-semantic-expectations".into(),
+            fixture_json: ita_lifecycle_controls_fixture_json(),
+            min_expectations: 6,
+            expected_audited: 1,
+            expected_traces: 1,
+            expected_setup_phases: None,
+            require_projection_audit: true,
+        },
+        FoldedMinimizerCase {
+            stem: "mafia-universe-day-notes-semantic-expectations".into(),
+            fixture_json: mafia_universe_day_notes_fixture_json(),
+            min_expectations: 7,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: None,
+            require_projection_audit: false,
+        },
+        FoldedMinimizerCase {
+            stem: "mafiascum-no-majority-revote-resolution-semantic-expectations".into(),
+            fixture_json: mafiascum_no_majority_revote_prompt_fixture_json(),
+            min_expectations: 6,
+            expected_audited: 1,
+            expected_traces: 1,
+            expected_setup_phases: None,
+            require_projection_audit: false,
+        },
+        FoldedMinimizerCase {
+            stem: "mafiascum-beloved-princess-skip-next-day-semantic-expectations".into(),
+            fixture_json: mafiascum_beloved_princess_skip_next_day_fixture_json(),
+            min_expectations: 7,
+            expected_audited: 1,
+            expected_traces: 1,
+            expected_setup_phases: None,
+            require_projection_audit: false,
+        },
+        FoldedMinimizerCase {
+            stem: "mafiascum-virgin-night-skip-next-day-semantic-expectations".into(),
+            fixture_json: mafiascum_virgin_night_skip_next_day_fixture_json(),
+            min_expectations: 6,
+            expected_audited: 1,
+            expected_traces: 1,
+            expected_setup_phases: None,
+            require_projection_audit: false,
+        },
+        FoldedMinimizerCase {
+            stem: "dynamic-vote-no-majority-revote-semantic-expectations".into(),
+            fixture_json: dynamic_vote_no_majority_revote_prompt_fixture_json(),
+            min_expectations: 6,
+            expected_audited: 2,
+            expected_traces: 2,
+            expected_setup_phases: None,
+            require_projection_audit: false,
+        },
+        FoldedMinimizerCase {
+            stem: "dynamic-vote-pk-resolution-semantic-expectations".into(),
+            fixture_json: dynamic_vote_pk_prompt_fixture_json(),
+            min_expectations: 7,
+            expected_audited: 3,
+            expected_traces: 3,
+            expected_setup_phases: None,
+            require_projection_audit: false,
+        },
+    ]
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn folded_semantic_fixtures_shrink_on_isolated_workers(
+    pool_options: sqlx::postgres::PgPoolOptions,
+    connect_options: sqlx::postgres::PgConnectOptions,
+) {
+    let cases = folded_minimizer_witness_cases();
+    assert_eq!(
+        cases.len(),
+        FOLDED_MINIMIZER_WITNESS_CASES,
+        "folded minimizer witness case manifest"
+    );
+    let mut principals = BTreeSet::new();
+    for case in &cases {
+        principals.extend(
+            minimizer_fixture_principals(&case.fixture_json)
+                .expect("folded minimizer principals derive from valid fixtures"),
+        );
+    }
+    let fixture_pool = pool_options
+        .max_connections(1)
+        .connect_with(connect_options.clone())
+        .await
+        .expect("connect folded minimizer identity fixture pool");
+    ensure_test_principals(&fixture_pool, principals.iter().map(String::as_str)).await;
+    fixture_pool.close().await;
+
+    let reports = run_folded_minimizer_cases(connect_options, cases);
+    assert_eq!(
+        reports.len(),
+        FOLDED_MINIMIZER_WITNESS_CASES,
+        "folded minimizer workers must drain every case"
     );
 }
