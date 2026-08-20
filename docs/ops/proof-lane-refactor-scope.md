@@ -34,9 +34,13 @@ all-active behavior is explicit sprint mode; full mode still runs every leaf.
 Every `--run` records timing observations under ignored
 `target/proof-lanes/timings.json`, while `--record` remains the deliberate path
 for updating the tracked baseline. `--measure`/`--measure-all` rewrite that
-baseline from isolated measurement: each lane is warmed, then timed, so an entry
-states what the lane costs on a warm checkout rather than what it cost following
-whichever lane happened to precede it. Lanes whose work is proportional to the
+baseline from isolated measurement: each lane is run once to warm it, then
+timed, so an entry states what the lane costs on a warm checkout rather than
+what it cost following whichever lane happened to precede it. Warm-up runs the
+lane's own command rather than a build-only stand-in: `cargo test --no-run`
+builds the test binaries but leaves the doctest target cold, which charged the
+timed run a one-time rustdoc build and mismeasured `cargo test -p domain` at
+229s against a true warm cost of 10.6s. Lanes whose work is proportional to the
 diff declare `"measurement": "diff-sensitive"` and refuse repetition-measurement,
 because a second run with no edit between measures an empty pass; workspace
 Clippy is the one such lane and stays on `--record`.

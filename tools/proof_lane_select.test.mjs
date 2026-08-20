@@ -787,34 +787,35 @@ test('unmapped files are reported; missing crate graph arms all crate areas', ()
   }
 });
 
-test('cargo lanes warm up with a build-only form; other lanes warm by repeating', () => {
-  assert.equal(
-    warmupCommand('DATABASE_URL=postgres://x cargo test -p api -- --test-threads=1'),
-    'DATABASE_URL=postgres://x cargo test -p api --no-run',
-  );
-  assert.equal(
-    warmupCommand('cargo test -p commands --test pipeline -- --test-threads=4'),
-    'cargo test -p commands --test pipeline --no-run',
-  );
-  assert.equal(
-    warmupCommand('cargo run -p wire --bin export_types -- --check'),
-    'cargo build -p wire --bin export_types',
-  );
-  // Clippy has no build-only form, so it warms by running twice.
-  const clippy = 'cargo clippy --workspace --all-targets --all-features -- -D warnings';
-  assert.equal(warmupCommand(clippy), clippy);
-  assert.equal(warmupCommand('npm run test:frontend-contract'), 'npm run test:frontend-contract');
-
-  // Every real cargo lane must reach a cheaper warm-up than a second full run.
-  for (const [laneId, lane] of Object.entries(manifest.lanes)) {
-    if (lane.kind !== 'shell' || !/cargo\s+(test|run)\s/.test(lane.command)) continue;
-    const command = laneCommand(laneId, manifest);
-    assert.notEqual(
-      warmupCommand(command),
-      command,
-      `cargo lane ${laneId} should warm up with a build-only command`,
-    );
+test('warm-up runs the lane command itself, never a build-only stand-in', () => {
+  // Regression: warming `cargo test` with `--no-run` built the test binaries but
+  // left the doctest target cold, so the timed run absorbed a one-time rustdoc
+  // build of the crate and its dependencies. `cargo test -p domain` measured
+  // 229s against a true warm cost of 10.6s. Warm-up must run what is measured.
+  for (const command of [
+    'DATABASE_URL=postgres://x cargo test -p api -- --test-threads=4',
+    'cargo test -p domain',
+    'cargo run -p wire --bin export_types -- --check',
+    'cargo clippy --workspace --all-targets --all-features -- -D warnings',
+    'npm run test:frontend-contract',
+  ]) {
+    assert.equal(warmupCommand(command), command);
   }
+
+  // Every manifest lane, not just the shapes spelled out above.
+  for (const laneId of Object.keys(manifest.lanes)) {
+    const command = laneCommand(laneId, manifest);
+    assert.equal(warmupCommand(command), command, `lane ${laneId} must warm with its real command`);
+  }
+  // Guard the code, not the comment above `warmupCommand` that explains the bug.
+  const executableSource = readFileSync(join(REPO_ROOT, 'tools', 'proof_lane_select.mjs'), 'utf8')
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n');
+  assert.ok(
+    !executableSource.includes('--no-run'),
+    'the build-only warm-up must not come back',
+  );
 });
 
 test('measurement records the warm run, not the compilation before it', () => {
@@ -832,7 +833,10 @@ test('measurement records the warm run, not the compilation before it', () => {
     now: () => times.shift(),
   });
 
-  assert.deepEqual(commands, ['cargo test -p x --no-run', 'cargo test -p x -- --test-threads=1']);
+  assert.deepEqual(commands, [
+    'cargo test -p x -- --test-threads=1',
+    'cargo test -p x -- --test-threads=1',
+  ]);
   assert.equal(measurement.warmup_seconds, 90);
   assert.equal(measurement.seconds, 10.6);
   assert.equal(measurement.method, 'isolated');

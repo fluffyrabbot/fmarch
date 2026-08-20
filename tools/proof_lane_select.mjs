@@ -27,10 +27,12 @@
 // baseline at docs/ops/proof-lane-timings.json.
 //
 // --measure/--measure-all rewrite that baseline from isolated measurement: each
-// lane is warmed and then timed, so an entry means "this lane costs this much on
-// a warm checkout" rather than "this lane ran after that one". Observations taken
-// during a --run sweep attribute the previous lane's leftover compilation to
-// whichever lane happened to follow it, which is why the two paths stay separate.
+// lane is run once to warm it and then timed, so an entry means "this lane costs
+// this much on a warm checkout" rather than "this lane ran after that one".
+// Observations taken during a --run sweep attribute the previous lane's leftover
+// compilation to whichever lane happened to follow it, which is why the two
+// paths stay separate. Warm-up runs the lane's real command; see warmupCommand
+// for why a cheaper build-only stand-in is not equivalent.
 //
 // Estimates therefore prefer the tracked baseline, and fall back to runtime
 // observations only for lanes it has never measured. Runtime numbers overstate
@@ -384,10 +386,6 @@ function recordLane(laneId, manifest) {
   console.log(`recorded ${laneId}: ${seconds}s`);
 }
 
-// A lane's steady-state cost is its own work, not the compilation the previously
-// executed lane happened to leave undone. Cargo lanes therefore warm up with a
-// build-only form of the same command; every other lane warms by running once
-// and discarding the result.
 // Most lanes do the same work every run, so timing a second run measures that
 // work. A lint pass does not: its work is proportional to what changed, so
 // running it twice with no edit in between measures an empty run. Such lanes
@@ -396,12 +394,18 @@ export function isDiffSensitive(laneId, manifest) {
   return manifest.lanes[laneId]?.measurement === 'diff-sensitive';
 }
 
+// A lane's steady-state cost is its own work, not the compilation the previously
+// executed lane happened to leave undone, so warm-up runs the lane's real
+// command once and discards the result.
+//
+// Do not replace this with a build-only form. `cargo test --no-run` looks like a
+// cheaper way to reach the same warm state and is not: it builds the test
+// binaries but leaves the doctest target cold, so the timed run still absorbs a
+// one-time rustdoc build of the crate and its dependencies. That mismeasured
+// `cargo test -p domain` at 229s against a true warm cost of 10.6s -- a 21x
+// error, and exactly the kind of one-time build cost this whole path exists to
+// keep out of the baseline. Warm-up must run precisely what is being measured.
 export function warmupCommand(command) {
-  const beforeHarnessArgs = command.split(' -- ')[0];
-  if (/(^|\s)cargo\s+test(\s|$)/.test(beforeHarnessArgs)) return `${beforeHarnessArgs} --no-run`;
-  if (/(^|\s)cargo\s+run(\s|$)/.test(beforeHarnessArgs)) {
-    return beforeHarnessArgs.replace(/(^|\s)cargo\s+run(\s|$)/, '$1cargo build$2');
-  }
   return command;
 }
 
