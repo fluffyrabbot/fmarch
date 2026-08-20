@@ -67,7 +67,7 @@
       ],
       "outputs": ["packs/*/golden/*.json"]
     },
-    "cargo:community": { "kind": "shell", "command": "cargo test -p community" },
+    "cargo:public-platform": { "kind": "shell", "command": "cargo test -p attention -p social -p trust_safety -p forum -p content_reference" },
     "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p identity -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "identity", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:media": { "kind": "shell", "command": "cargo test -p media" },
     "cargo:api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p api -- --test-threads=4", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "api", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
@@ -427,11 +427,11 @@
       "capabilities": ["foundation.wire-live-delivery"]
     },
     {
-      "id": "crate:community",
+      "id": "crate:public-platform",
       "tier": "frozen",
-      "paths": ["crates/community/"],
-      "crate": "community",
-      "lanes": ["cargo:community", "cargo:clippy-workspace"],
+      "paths": ["crates/forum/"],
+      "crate": "forum",
+      "lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
       "capabilities": [
         "product.community.game-index",
         "product.community.discussions",
@@ -440,6 +440,38 @@
         "product.community.moderation-operations",
         "product.community.subscriptions"
       ]
+    },
+    {
+      "id": "crate:attention",
+      "tier": "frozen",
+      "paths": ["crates/attention/"],
+      "crate": "attention",
+      "lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
+      "capabilities": ["product.community.subscriptions"]
+    },
+    {
+      "id": "crate:content-reference",
+      "tier": "frozen",
+      "paths": ["crates/content_reference/"],
+      "crate": "content_reference",
+      "lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
+      "capabilities": ["product.community.discussions"]
+    },
+    {
+      "id": "crate:social",
+      "tier": "frozen",
+      "paths": ["crates/social/"],
+      "crate": "social",
+      "lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
+      "capabilities": ["product.community.profiles"]
+    },
+    {
+      "id": "crate:trust-safety",
+      "tier": "frozen",
+      "paths": ["crates/trust_safety/"],
+      "crate": "trust_safety",
+      "lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
+      "capabilities": ["product.community.moderation-operations"]
     },
     {
       "id": "crate:identity",
@@ -950,6 +982,7 @@
         "test:projection-baseline:static",
         "cargo:clippy-workspace",
         "cargo:content-registry",
+        "cargo:public-platform",
         "cargo:commands-unit",
         "cargo:commands-pg",
         "cargo:commands-concurrency",

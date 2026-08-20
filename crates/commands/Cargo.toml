@@ -33,7 +33,7 @@ path = "tests/day_runtime_boundary.rs"
 
 [dependencies]
 caps = { path = "../caps", version = "0.1.0" }
-community = { path = "../community", version = "0.1.0" }
+content_reference = { path = "../content_reference", version = "0.1.0" }
 content_registry = { path = "../content_registry", version = "0.1.0" }
 projections = { path = "../projections", version = "0.1.0" }
 eventstore = { path = "../eventstore", version = "0.1.0" }

@@ -52,7 +52,7 @@
         </form>
       </section>
     {:else if discussion.hasSession}
-      <p data-testid="discussion-profile-required">Create or make public your <a href="/profile/edit">community profile</a> before starting a public topic.</p>
+      <p data-testid="discussion-profile-required">Create or make public your <a href="/profile/edit">public profile</a> before starting a public topic.</p>
     {:else}
       <p data-testid="discussion-post-sign-in">Sign in to start a topic or reply.</p>
     {/if}

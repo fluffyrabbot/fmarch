@@ -82,14 +82,16 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 name = "api"
 version = "0.1.0"
 dependencies = [
+ "attention",
  "axum",
  "caps",
  "ciborium",
  "commands",
- "community",
+ "content_reference",
  "content_registry",
  "domain",
  "eventstore",
+ "forum",
  "futures-util",
  "game_platform",
  "hmac 0.12.1",
@@ -102,6 +104,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "social",
  "sqlx",
  "tempfile",
  "thiserror 1.0.69",
@@ -109,6 +112,7 @@ dependencies = [
  "tokio-tungstenite",
  "tower",
  "tracing",
+ "trust_safety",
  "uuid",
  "wire",
 ]
@@ -188,6 +192,16 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "attention"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "uuid",
+]
 
 [[package]]
 name = "autocfg"
@@ -625,7 +639,7 @@ name = "commands"
 version = "0.1.0"
 dependencies = [
  "caps",
- "community",
+ "content_reference",
  "content_registry",
  "domain",
  "eventstore",
@@ -645,7 +659,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "community"
+name = "constant_time_eq"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
+
+[[package]]
+name = "content_reference"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -653,12 +673,6 @@ dependencies = [
  "thiserror 1.0.69",
  "uuid",
 ]
-
-[[package]]
-name = "constant_time_eq"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
 name = "content_registry"
@@ -1061,6 +1075,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "forum"
+version = "0.1.0"
+dependencies = [
+ "content_reference",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "uuid",
 ]
 
 [[package]]
@@ -2349,20 +2374,24 @@ dependencies = [
 name = "projections"
 version = "0.1.0"
 dependencies = [
- "community",
+ "attention",
+ "content_reference",
  "content_registry",
  "domain",
  "eventstore",
+ "forum",
  "game_platform",
  "identity",
  "object_store",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "social",
  "sqlx",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "trust_safety",
  "uuid",
 ]
 
@@ -3129,6 +3158,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "social"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
 name = "socket2"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3767,6 +3805,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "trust_safety"
+version = "0.1.0"
+dependencies = [
+ "content_reference",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4282,7 +4331,7 @@ version = "0.1.0"
 dependencies = [
  "caps",
  "commands",
- "community",
+ "content_reference",
  "domain",
  "game_platform",
  "projections",

@@ -154,14 +154,14 @@ Examples:
 | `channel_membership` | who can read/post where (drives authz reads) |
 | `game_index` | public board listing: active/completed games, pack, status, current phase, and stable page cursor |
 | `discussion_area` / `discussion_topic` / `discussion_post` | public non-game areas, visible topic lifecycle, and paginated post threads |
-| `public_search_document` | public-only weighted search documents with canonical links across discussions, profiles, games, and public main-thread posts |
+| `publication_surface` / `public_publication` | source-agnostic public index with canonical links across discussions, profiles, games, and public main-thread posts |
 | `moderation_case` / `moderation_report` / `moderation_case_history` | durable public-content reports, current GlobalMod review state, and append-only reasoned action history |
 | `moderation_target_state` | reversible public visibility overlay for individually moderated discussion and main-thread posts |
 | `pack_artifact` | immutable content-addressed cache of the canonical typed pack attachment carried by `GameCreated`; recreated from the stream and exact-identity-bound to `game_index` |
-| `community_subscription` / `community_subscription_period` | one member/target watch stream, current membership, monotonic read cursor, and historical active intervals |
-| `community_inbox_item` | privacy-safe per-member references to public posts published during active watch intervals |
-| `community_member_mute` | one private member/profile relationship stream, current active state, replay version, and bounded member-owned list cursor |
-| `post_citation` | rebuildable reverse index of who quoted which public post; folded from quoting `PostSubmitted` / `DiscussionPostSubmitted` events, never written onto the quoted post's stream |
+| `public_watch` / `public_watch_period` | one member/target watch stream, current membership, monotonic read cursor, and historical active intervals |
+| `public_inbox_item` | privacy-safe per-member references to public posts published during active watch intervals |
+| `profile_mute` | one private member/profile relationship stream, current active state, replay version, and bounded member-owned list cursor |
+| `public_citation` / `game_private_citation` | rebuildable reverse indexes for public publications and private game-channel posts; folded from quoting events, never written onto the quoted post's stream |
 
 `game_index` folds `GameCreated`, `GameStarted`, `PhaseAdvanced`, and `GameCompleted`
 synchronously with the game stream. Setup rows remain rebuildable but are excluded from the
@@ -179,7 +179,7 @@ expected stream version. A concurrent lock or hide therefore invalidates a stale
 than allowing it across the moderation boundary. Public queries expose profile-backed authorship
 without credential principals; hidden topics are excluded, and the topic index uses
 `(updated_seq, topic_id)` keyset pagination. Topic creation and posting require an enabled account
-with a community profile. Moderation transitions require `GlobalMod` or `GlobalAdmin`, also backed
+with a public profile. Moderation transitions require `GlobalMod` or `GlobalAdmin`, also backed
 by an enabled account, resolved at the API boundary.
 
 Profiles likewise use a dedicated append-only stream per profile. `ProfileCreated` and
@@ -200,7 +200,7 @@ channels, credential principals, authorization state, and engagement signals nev
 projection. Public game-post results resolve through the read-only `/games/{game}` surface rather
 than a capability-scoped player route.
 
-Community moderation is event-sourced rather than implemented as destructive post edits. An
+Public-publication moderation is event-sourced rather than implemented as destructive post edits. An
 authenticated report opens or appends to one target-keyed moderation case stream; one active
 report per reporter, target, and reason family is enforced under a transaction-scoped target lock,
 and each reporter is bounded to ten submissions per rolling day. Reporter receipts reveal only the
@@ -220,7 +220,7 @@ it does not manufacture historical unread work. Read advancement is strictly mon
 move beyond the target's current public sequence.
 
 Public discussion and `main` game-thread post folds synchronously fan out a reference into
-`community_inbox_item` for every subscription period active at that global event sequence. Authors
+`public_inbox_item` for every subscription period active at that global event sequence. Authors
 do not receive their own update. Inbox rows contain no post body, author identity, credential
 principal, private audience, or engagement signal: presentation resolves only the public target
 title and canonical post URL. Topic/game visibility and `moderation_target_state` are applied at
@@ -230,7 +230,7 @@ reproduce exactly the updates that existed while each watch was active.
 
 Member mutes use one durable relationship stream per authenticated member and target public
 profile. `CommunityMemberMuted` and `CommunityMemberUnmuted` preserve the reversible decision
-history while `community_member_mute` exposes only the member's current active relationships.
+history while `profile_mute` exposes only the member's current active relationships.
 Self-mutes and duplicate transitions are rejected under a transaction-scoped relationship lock.
 The relationship is never global moderation: anonymous and other-member reads are unchanged.
 

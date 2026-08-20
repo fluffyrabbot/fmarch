@@ -56,6 +56,7 @@ proceed without relitigating settled decisions.
 
 - **Accepted:** [RFC 0001 — First-class replay and history explorer](../rfcs/0001-first-class-replay-and-history-explorer.md) — public as-of state, named occupancy history, meaningful-moment navigation, and durable share links
 - **Accepted:** [RFC 0002 — First-class quotations and citation provenance](../rfcs/0002-first-class-quotations.md) — quotations as directed edges over the thread log; “quoted by” is a rebuildable projection, not a mutation of the quoted post
+- **Accepted:** [RFC 0003 — Community Platform v2](../rfcs/0003-community-platform-v2.md) — separate game/forum writes, explicit content references, and one public-publication index for engagement features
 
 ## The one idea everything hangs on
 

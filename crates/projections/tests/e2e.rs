@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 use std::process::Command as ProcessCommand;
 use std::str::FromStr;
 
+use attention::WatchTarget;
+use content_reference::PublicContentRef;
 use domain::events::{IndexedEvent, ResolutionCounts};
 use domain::pack::{GrantKind, Pack, PhaseKind};
 use domain::state::{RevealState, SlotLifecycle, SlotState, StateSnapshot, Submission};
@@ -27,6 +29,7 @@ use projections::{
 use sha2::{Digest, Sha256};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, PgPool, Row};
+use trust_safety::{self, ModerationCommand, ModerationTarget, ReportReasonFamily};
 use uuid::Uuid;
 
 const LOCAL_APPLICATION_DATABASE_PASSWORD: &str = "fmarch-local-application-password";
@@ -1847,7 +1850,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     assert!(discussions
         .results
         .iter()
-        .all(|row| row.kind.starts_with("discussion_")));
+        .all(|row| row.kind == "discussions"));
     assert!(discussions
         .results
         .iter()
@@ -1919,10 +1922,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     let rebuilt_games = public_search(&pool, "signal", PublicSearchFilter::Games, None, 10, None)
         .await
         .unwrap();
-    assert!(rebuilt_games
-        .results
-        .iter()
-        .any(|row| row.kind == "game_post"));
+    assert!(rebuilt_games.results.iter().any(|row| row.kind == "games"));
     assert!(rebuilt_games
         .results
         .iter()
@@ -1971,10 +1971,8 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         .unwrap()
         .posts[0]
         .source_seq;
-    let target = community::ModerationTarget {
-        kind: community::ModerationTargetKind::GamePost,
-        scope_id: game,
-        source_seq,
+    let target = ModerationTarget {
+        public: PublicContentRef::new(game, source_seq),
     };
     let report_id = Uuid::new_v4();
     let receipt = projections::submit_moderation_report(
@@ -1982,7 +1980,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         target.clone(),
         report_id,
         "reporter_a",
-        community::ReportReasonFamily::Harassment,
+        ReportReasonFamily::Harassment,
         "direct abuse".into(),
         10,
     )
@@ -1995,7 +1993,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
             target.clone(),
             Uuid::new_v4(),
             "reporter_a",
-            community::ReportReasonFamily::Harassment,
+            ReportReasonFamily::Harassment,
             "duplicate".into(),
             11,
         )
@@ -2018,9 +2016,9 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         .await
         .unwrap()
         .unwrap();
-    let hidden = community::decide_moderation(
+    let hidden = trust_safety::decide_moderation(
         Some(&state),
-        community::ModerationCommand::Hide {
+        ModerationCommand::Hide {
             reason: "harassing content".into(),
         },
     )
@@ -2060,9 +2058,9 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         .await
         .unwrap()
         .unwrap();
-    let restored = community::decide_moderation(
+    let restored = trust_safety::decide_moderation(
         Some(&state),
-        community::ModerationCommand::Restore {
+        ModerationCommand::Restore {
             reason: "appeal accepted".into(),
         },
     )
@@ -2099,7 +2097,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         target,
         Uuid::new_v4(),
         "reporter_a",
-        community::ReportReasonFamily::Harassment,
+        ReportReasonFamily::Harassment,
         "new report after restoration".into(),
         14,
     )
@@ -2109,9 +2107,9 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         .await
         .unwrap()
         .unwrap();
-    let dismissed = community::decide_moderation(
+    let dismissed = trust_safety::decide_moderation(
         Some(&state),
-        community::ModerationCommand::Dismiss {
+        ModerationCommand::Dismiss {
             reason: "not a violation".into(),
         },
     )
@@ -2193,14 +2191,12 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
     for (index, post) in posts.iter().take(10).enumerate() {
         projections::submit_moderation_report(
             &pool,
-            community::ModerationTarget {
-                kind: community::ModerationTargetKind::GamePost,
-                scope_id: game,
-                source_seq: post.source_seq,
+            ModerationTarget {
+                public: PublicContentRef::new(game, post.source_seq),
             },
             Uuid::new_v4(),
             "bounded_reporter",
-            community::ReportReasonFamily::Other,
+            ReportReasonFamily::Other,
             String::new(),
             100 + index as i64,
         )
@@ -2209,14 +2205,12 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
     }
     let rejected = projections::submit_moderation_report(
         &pool,
-        community::ModerationTarget {
-            kind: community::ModerationTargetKind::GamePost,
-            scope_id: game,
-            source_seq: posts[10].source_seq,
+        ModerationTarget {
+            public: PublicContentRef::new(game, posts[10].source_seq),
         },
         Uuid::new_v4(),
         "bounded_reporter",
-        community::ReportReasonFamily::Other,
+        ReportReasonFamily::Other,
         String::new(),
         111,
     )
@@ -2287,10 +2281,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     )
     .await
     .unwrap();
-    let target = community::SubscriptionTarget {
-        kind: community::SubscriptionTargetKind::DiscussionTopic,
-        scope_id: topic,
-    };
+    let target = WatchTarget { surface_id: topic };
     let watcher = projections::subscribe_to_public_target(&pool, target.clone(), "member_b", 5)
         .await
         .unwrap();
@@ -2325,7 +2316,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .unwrap()
         .last_post_seq
         .unwrap();
-    let inbox = projections::community_inbox(&pool, "member_b", None, 20)
+    let inbox = projections::public_inbox(&pool, "member_b", None, 20)
         .await
         .unwrap();
     assert_eq!(inbox.unread_count, 1);
@@ -2335,7 +2326,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .href
         .ends_with(&format!("#post-{watched_seq}")));
     assert!(!inbox.items[0].href.contains("member_b"));
-    assert!(projections::community_inbox(&pool, "author_a", None, 20)
+    assert!(projections::public_inbox(&pool, "author_a", None, 20)
         .await
         .unwrap()
         .items
@@ -2351,7 +2342,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     .await
     .unwrap();
     assert_eq!(
-        projections::community_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, "member_b", None, 20)
             .await
             .unwrap()
             .unread_count,
@@ -2383,17 +2374,15 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .unwrap()
         .last_post_seq
         .unwrap();
-    let moderation_target = community::ModerationTarget {
-        kind: community::ModerationTargetKind::DiscussionPost,
-        scope_id: topic,
-        source_seq: moderated_seq,
+    let moderation_target = ModerationTarget {
+        public: PublicContentRef::new(topic, moderated_seq),
     };
     projections::submit_moderation_report(
         &pool,
         moderation_target,
         Uuid::new_v4(),
         "reporter",
-        community::ReportReasonFamily::Spam,
+        ReportReasonFamily::Spam,
         "spam".into(),
         9,
     )
@@ -2410,9 +2399,9 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .await
         .unwrap()
         .unwrap();
-    let hidden = community::decide_moderation(
+    let hidden = trust_safety::decide_moderation(
         Some(&case_state),
-        community::ModerationCommand::Hide {
+        ModerationCommand::Hide {
             reason: "spam".into(),
         },
     )
@@ -2428,7 +2417,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     .await
     .unwrap();
     assert_eq!(
-        projections::community_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, "member_b", None, 20)
             .await
             .unwrap()
             .unread_count,
@@ -2438,9 +2427,9 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .await
         .unwrap()
         .unwrap();
-    let restored = community::decide_moderation(
+    let restored = trust_safety::decide_moderation(
         Some(&case_state),
-        community::ModerationCommand::Restore {
+        ModerationCommand::Restore {
             reason: "restored".into(),
         },
     )
@@ -2456,7 +2445,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     .await
     .unwrap();
     assert_eq!(
-        projections::community_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, "member_b", None, 20)
             .await
             .unwrap()
             .unread_count,
@@ -2485,7 +2474,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     )
     .await
     .unwrap();
-    let before_resubscribe = projections::community_inbox(&pool, "member_b", None, 20)
+    let before_resubscribe = projections::public_inbox(&pool, "member_b", None, 20)
         .await
         .unwrap()
         .items
@@ -2501,7 +2490,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
 
     rebuild_discussion_stream(&pool, topic).await.unwrap();
     assert_eq!(
-        projections::community_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, "member_b", None, 20)
             .await
             .unwrap()
             .items
@@ -2509,7 +2498,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         before_resubscribe
     );
     let subscription_id: Uuid = sqlx::query_scalar(
-        "SELECT subscription_id FROM community_subscription WHERE principal_user_id = 'member_b' AND target_kind = 'discussion_topic' AND scope_id = $1",
+        "SELECT subscription_id FROM public_watch WHERE principal_user_id = 'member_b' AND surface_id = $1",
     )
     .bind(topic)
     .fetch_one(&pool)
@@ -2519,7 +2508,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .await
         .unwrap();
     assert_eq!(
-        projections::community_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, "member_b", None, 20)
             .await
             .unwrap()
             .items
@@ -2550,10 +2539,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     )
     .await
     .unwrap();
-    let game_target = community::SubscriptionTarget {
-        kind: community::SubscriptionTargetKind::GameThread,
-        scope_id: game,
-    };
+    let game_target = WatchTarget { surface_id: game };
     projections::subscribe_to_public_target(&pool, game_target, "member_b", 17)
         .await
         .unwrap();
@@ -2575,22 +2561,22 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     )
     .await
     .unwrap();
-    let game_items = projections::community_inbox(&pool, "member_b", None, 20)
+    let game_items = projections::public_inbox(&pool, "member_b", None, 20)
         .await
         .unwrap()
         .items
         .into_iter()
-        .filter(|item| item.target_kind == "game_thread")
+        .filter(|item| item.surface_id == game)
         .count();
     assert_eq!(game_items, 1);
     rebuild(&pool, game).await.unwrap();
     assert_eq!(
-        projections::community_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, "member_b", None, 20)
             .await
             .unwrap()
             .items
             .into_iter()
-            .filter(|item| item.target_kind == "game_thread")
+            .filter(|item| item.surface_id == game)
             .count(),
         1
     );
@@ -2958,7 +2944,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
                     "principal_user_id": principal,
                     "handle": handle,
                     "display_name": display_name,
-                    "bio": if principal == "reader" { "Reader profile" } else { "Orchid community profile" },
+                    "bio": if principal == "reader" { "Reader profile" } else { "Orchid public profile" },
                     "visibility": "public"
                 }),
                 ActorId::User(principal.into()),
@@ -3014,10 +3000,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
     )
     .await
     .unwrap();
-    let subscription_target = community::SubscriptionTarget {
-        kind: community::SubscriptionTargetKind::DiscussionTopic,
-        scope_id: topic,
-    };
+    let subscription_target = WatchTarget { surface_id: topic };
     projections::subscribe_to_public_target(&pool, subscription_target.clone(), "reader", 5)
         .await
         .unwrap();
@@ -3044,7 +3027,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
     .await
     .unwrap();
     assert_eq!(
-        projections::community_inbox(&pool, "reader", None, 20)
+        projections::public_inbox(&pool, "reader", None, 20)
             .await
             .unwrap()
             .unread_count,
@@ -3100,7 +3083,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
             .results
             .is_empty()
     );
-    assert!(projections::community_inbox(&pool, "reader", None, 20)
+    assert!(projections::public_inbox(&pool, "reader", None, 20)
         .await
         .unwrap()
         .items
@@ -3114,7 +3097,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
     );
 
     let relationship_id: Uuid = sqlx::query_scalar(
-        "SELECT relationship_id FROM community_member_mute WHERE principal_user_id = 'reader'",
+        "SELECT relationship_id FROM profile_mute WHERE principal_user_id = 'reader'",
     )
     .fetch_one(&pool)
     .await
@@ -3139,7 +3122,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
             1,
             serde_json::json!({
                 "display_name": "Orchid Author",
-                "bio": "Orchid community profile",
+                "bio": "Orchid public profile",
                 "visibility": "members"
             }),
             ActorId::User("orchid_author".into()),
@@ -3168,7 +3151,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
             >= 2
     );
     assert_eq!(
-        projections::community_inbox(&pool, "reader", None, 20)
+        projections::public_inbox(&pool, "reader", None, 20)
             .await
             .unwrap()
             .unread_count,

@@ -986,8 +986,7 @@ async fn current_hidden_thread_post_deltas(
         r#"
         SELECT source_seq
         FROM moderation_target_state
-        WHERE target_kind = 'game_post'
-          AND scope_id = $1
+        WHERE surface_id = $1
           AND visibility = 'hidden'
         ORDER BY source_seq
         "#,

@@ -297,8 +297,7 @@ async fn media_thread_variant(
             OR NOT EXISTS (
               SELECT 1
               FROM moderation_target_state AS moderation
-              WHERE moderation.target_kind = 'game_post'
-                AND moderation.scope_id = post.game_id
+              WHERE moderation.surface_id = post.game_id
                 AND moderation.source_seq = post.source_seq
                 AND moderation.visibility = 'hidden'
             )

@@ -29,8 +29,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
         locals,
         fetch,
         apiBaseUrl,
-        targetKind: "discussion_topic",
-        scopeId: params.topic,
+        surfaceId: params.topic,
       });
   const canPost = profile !== null;
   const citationPages = thread === null
@@ -118,7 +117,7 @@ export const actions = {
       cookies,
       locals,
       fetch,
-      path: `/subscriptions/discussion_topic/${encodeURIComponent(params.topic)}`,
+      path: `/subscriptions/${encodeURIComponent(params.topic)}`,
       method: action === "subscribe" ? "PUT" : "DELETE",
     });
     const payload = await response.json().catch(() => null);
@@ -148,8 +147,7 @@ export const actions = {
       fetch,
       path: "/moderation/reports",
       body: {
-        target_kind: "discussion_post",
-        scope_id: params.topic,
+        surface_id: params.topic,
         source_seq: Number(sourceSeq),
         reason_family: text(form.get("reason_family")),
         details: text(form.get("details")),
@@ -225,11 +223,11 @@ async function loadCurrentProfile({ locals, cookies, fetch, apiBaseUrl }) {
   return profile?.visibility === "public" ? profile : null;
 }
 
-async function loadSubscription({ locals, cookies, fetch, apiBaseUrl, targetKind, scopeId }) {
+async function loadSubscription({ locals, cookies, fetch, apiBaseUrl, surfaceId }) {
   const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") return null;
   const response = await fetch(
-    `${apiBaseUrl}/subscriptions/${encodeURIComponent(targetKind)}/${encodeURIComponent(scopeId)}`,
+    `${apiBaseUrl}/subscriptions/${encodeURIComponent(surfaceId)}`,
     { headers: { authorization: `Bearer ${token}`, accept: "application/json" } },
   );
   return response.ok ? response.json().catch(() => null) : null;

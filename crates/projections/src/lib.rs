@@ -55,8 +55,8 @@
 //!   whether media-only posts are accepted.
 //! - `thread_view`    — stable, paginated channel-thread posts folded from
 //!   `PostSubmitted` plus public engine announcements in `ResolutionApplied`.
-//! - `post_citation`  — rebuildable reverse index of who quoted which post,
-//!   folded from quoting `PostSubmitted` / `DiscussionPostSubmitted` events.
+//! - `public_citation` / `game_private_citation` — rebuildable reverse indexes
+//!   for public publications and private game channels respectively.
 //!
 //! The centerpiece is [`append_and_project`]: it appends events AND folds them
 //! into the projection tables **in one transaction** (doc 02 synchronous
@@ -65,36 +65,48 @@
 //!
 //! Runtime sqlx queries only (no `query!` macro) so `cargo build` needs no DB.
 
+use attention::{self, WatchState, WatchTarget};
+use content_reference::{
+    self, PostKind, PostRef, Quotation, QuotationPostState, QuotationThreadState,
+};
 use content_registry::{ContentHash, PackArtifactSnapshot, PackRef};
 use eventstore::{append_in_tx, EventInput, StoreError, StoredEvent};
+use forum::{self, PostingState, TopicVisibility};
 use identity::{
     active_subject_key_store, open_subject_claim, seal_subject_claim, ClaimId,
     SubjectClaimEnvelope, SubjectId, SubjectKeyStore,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use social::{self};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use trust_safety::{
+    self, ModerationCaseState, ModerationCaseStatus, ModerationTarget, ReportReasonFamily,
+};
 use uuid::Uuid;
 
-mod community_writes;
+mod attention_writes;
 mod database_authority;
 mod effect_projection;
+mod moderation_writes;
 mod private_channel_projection;
+mod publications;
 mod schema;
-pub use community_writes::{
-    advance_subscription_read_cursor, append_moderation_and_project_expected, mute_public_profile,
-    submit_moderation_report, subscribe_to_public_target, unmute_public_profile,
-    unsubscribe_from_public_target,
+mod social_writes;
+pub use attention_writes::{
+    advance_subscription_read_cursor, subscribe_to_public_target, unsubscribe_from_public_target,
 };
 pub use database_authority::{
     reconcile_database_authority, verify_database_principal, verify_migration_authority,
     DatabaseAuthorityError, DatabasePrincipal, APPLICATION_DATABASE_ROLE, KEY_ADMIN_DATABASE_ROLE,
 };
 pub use effect_projection::{slot_effects, slot_effects_for_slot, SlotEffectRow};
+pub use moderation_writes::{append_moderation_and_project_expected, submit_moderation_report};
 pub use private_channel_projection::{private_channel_members, PrivateChannelMemberRow};
 pub use schema::{ensure_schema_ready, inspect_schema_readiness, SchemaReadiness, MIGRATOR};
+pub use social_writes::{mute_public_profile, unmute_public_profile};
 
 /// A row of the `votecount` running tally: the COUNT of current ballots cast at
 /// `candidate_slot` in `phase_id` (unweighted; Phase-3 ruling).
@@ -488,8 +500,8 @@ pub struct ThreadPostRow {
     pub phase_id: String,
     pub body: String,
     pub media: serde_json::Value,
-    pub quotations: Vec<community::Quotation>,
-    pub embed: Option<community::PostEmbed>,
+    pub quotations: Vec<Quotation>,
+    pub embed: Option<game_platform::embed::PostEmbed>,
     pub citation_count: i64,
     pub occurred_at: i64,
 }
@@ -619,7 +631,7 @@ pub struct DiscussionPostRow {
     pub source_seq: i64,
     pub author: Option<DiscussionAuthorRow>,
     pub body: String,
-    pub quotations: Vec<community::Quotation>,
+    pub quotations: Vec<Quotation>,
     pub citation_count: i64,
     pub created_at: i64,
 }
@@ -627,15 +639,30 @@ pub struct DiscussionPostRow {
 /// One visible incoming citation of a public post.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostCitationRow {
-    pub quoting: community::PostRef,
+    pub quoting: PostRef,
     pub occurred_at: i64,
 }
 
 /// Bounded incoming-citation page for one quoted post.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostCitationPage {
-    pub quoted: community::PostRef,
+    pub quoted: PostRef,
     pub citations: Vec<PostCitationRow>,
+    pub citation_count: i64,
+}
+
+/// One incoming citation in the generic public-publication graph.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicCitationRow {
+    pub quoting: content_reference::PublicContentRef,
+    pub occurred_at: i64,
+}
+
+/// Bounded incoming citations for a public-publication item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicCitationPage {
+    pub quoted: content_reference::PublicContentRef,
+    pub citations: Vec<PublicCitationRow>,
     pub citation_count: i64,
 }
 
@@ -655,8 +682,7 @@ pub struct ModerationReportReceiptRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModerationCaseRow {
     pub case_id: Uuid,
-    pub target_kind: String,
-    pub scope_id: Uuid,
+    pub surface_id: Uuid,
     pub source_seq: i64,
     pub target_href: String,
     pub target_body: String,
@@ -709,8 +735,7 @@ pub struct ModerationCasePage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubscriptionTargetStateRow {
-    pub target_kind: String,
-    pub scope_id: Uuid,
+    pub surface_id: Uuid,
     pub subscribed: bool,
     pub read_through_seq: i64,
     pub latest_source_seq: i64,
@@ -718,9 +743,8 @@ pub struct SubscriptionTargetStateRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CommunityInboxItemRow {
-    pub target_kind: String,
-    pub scope_id: Uuid,
+pub struct PublicInboxItemRow {
+    pub surface_id: Uuid,
     pub source_seq: i64,
     pub title: String,
     pub href: String,
@@ -730,8 +754,8 @@ pub struct CommunityInboxItemRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CommunityInboxPage {
-    pub items: Vec<CommunityInboxItemRow>,
+pub struct PublicInboxPage {
+    pub items: Vec<PublicInboxItemRow>,
     pub unread_count: i64,
     pub next_cursor: Option<i64>,
 }
@@ -1169,7 +1193,17 @@ async fn fold_event(
             let phase_opened_at = ev.payload["phase_opened_at"].as_i64();
             set_phase(tx, game_id, &phase_id, phase_opened_at).await?;
             activate_game_index(tx, game_id, &phase_id, ev.seq).await?;
-            sync_game_search_documents(tx, game_id).await?;
+            publications::record_game_surface(tx, game_id, ev.seq).await?;
+            publications::record_publication(
+                tx,
+                game_id,
+                ev.seq,
+                "public game",
+                "",
+                None,
+                ev.occurred_at,
+            )
+            .await?;
         }
         "PhaseAdvanced" => {
             // Set the current phase; a new phase starts unlocked with no deadline.
@@ -1187,7 +1221,6 @@ async fn fold_event(
             )
             .await?;
             update_game_index_phase(tx, game_id, &phase_control.phase_id, ev.seq).await?;
-            sync_game_search_documents(tx, game_id).await?;
         }
         "DeadlineSet" | "DeadlineExtended" => {
             let p = &ev.payload;
@@ -1233,12 +1266,14 @@ async fn fold_event(
             let body = str_field(p, "body", &ev.kind)?;
             let media = thread_media_payload(p);
             let quotations = quotations_from_event(p, &ev.kind)?;
-            let embed =
-                community::embed_from_payload(p).map_err(|source| ProjectionError::Payload {
+            let embed = game_platform::embed::embed_from_payload(p).map_err(|source| {
+                ProjectionError::Payload {
                     kind: ev.kind.clone(),
                     source,
-                })?;
+                }
+            })?;
             let public_main = channel_id == "main";
+            let publication_body = public_main.then(|| body.clone());
             let notification_author = author_user.clone();
             insert_thread_post(
                 tx,
@@ -1258,10 +1293,24 @@ async fn fold_event(
                 },
             )
             .await?;
-            fold_post_citations(
+            let public_author_profile_id =
+                if public_main {
+                    match notification_author.as_deref() {
+                        Some(principal_user_id) => sqlx::query_scalar(
+                            "SELECT profile_id FROM profile_editor WHERE principal_user_id = $1",
+                        )
+                        .bind(principal_user_id)
+                        .fetch_optional(&mut **tx)
+                        .await?,
+                        None => None,
+                    }
+                } else {
+                    None
+                };
+            record_game_private_citations(
                 tx,
-                community::PostRef {
-                    kind: community::PostKind::GamePost,
+                PostRef {
+                    kind: PostKind::GamePost,
                     scope_id: game_id,
                     source_seq: ev.seq,
                 },
@@ -1270,10 +1319,29 @@ async fn fold_event(
             )
             .await?;
             if public_main {
-                insert_game_post_search_document(tx, game_id, ev.seq).await?;
-                fan_out_public_community_update(
+                publications::record_game_surface(tx, game_id, ev.seq).await?;
+                publications::record_publication(
                     tx,
-                    community::SubscriptionTargetKind::GameThread,
+                    game_id,
+                    ev.seq,
+                    publication_body
+                        .as_deref()
+                        .expect("public main retains a publication body"),
+                    "#thread-post-",
+                    public_author_profile_id,
+                    ev.occurred_at,
+                )
+                .await?;
+                publications::record_public_citations(
+                    tx,
+                    game_id,
+                    ev.seq,
+                    &quotations,
+                    ev.occurred_at,
+                )
+                .await?;
+                fan_out_public_publication_update(
+                    tx,
                     game_id,
                     ev.seq,
                     ev.occurred_at,
@@ -1318,7 +1386,7 @@ async fn fold_event(
                         author_slot: None,
                         author_user: Some("system".to_string()),
                         phase_id: applied.phase_id.clone(),
-                        body,
+                        body: body.clone(),
                         media: serde_json::json!([]),
                         quotations: Vec::new(),
                         embed: None,
@@ -1326,16 +1394,19 @@ async fn fold_event(
                     },
                 )
                 .await?;
-                insert_game_post_search_document(tx, game_id, ev.seq).await?;
-                fan_out_public_community_update(
+                publications::record_game_surface(tx, game_id, ev.seq).await?;
+                publications::record_publication(
                     tx,
-                    community::SubscriptionTargetKind::GameThread,
                     game_id,
                     ev.seq,
-                    ev.occurred_at,
+                    &body,
+                    "#thread-post-",
                     None,
+                    ev.occurred_at,
                 )
                 .await?;
+                fan_out_public_publication_update(tx, game_id, ev.seq, ev.occurred_at, None)
+                    .await?;
             }
         }
         "ResolutionTrace" => {
@@ -1807,7 +1878,7 @@ async fn fold_event(
             .execute(&mut **tx)
             .await?;
             complete_game_index(tx, game_id, ev.seq).await?;
-            sync_game_search_documents(tx, game_id).await?;
+            publications::record_game_surface(tx, game_id, ev.seq).await?;
         }
 
         // Everything else (posts, channels) is not folded by THESE projections.
@@ -3415,7 +3486,7 @@ pub async fn member_mute_state(
                COALESCE(mute.updated_seq, 0) AS updated_seq
         FROM profile_public AS profile
         JOIN profile_editor AS owner ON owner.profile_id = profile.profile_id
-        LEFT JOIN community_member_mute AS mute
+        LEFT JOIN profile_mute AS mute
           ON mute.principal_user_id = $1
          AND mute.target_profile_id = profile.profile_id
         WHERE profile.handle = $2
@@ -3450,7 +3521,7 @@ pub async fn member_mutes(
                 r#"
                 SELECT mute.relationship_id, mute.target_profile_id, mute.updated_seq,
                        profile.handle, profile.display_name
-                FROM community_member_mute AS mute
+                FROM profile_mute AS mute
                 JOIN profile_public AS profile ON profile.profile_id = mute.target_profile_id
                 WHERE mute.principal_user_id = $1 AND mute.active
                   AND (mute.updated_seq < $2 OR
@@ -3471,7 +3542,7 @@ pub async fn member_mutes(
                 r#"
                 SELECT mute.relationship_id, mute.target_profile_id, mute.updated_seq,
                        profile.handle, profile.display_name
-                FROM community_member_mute AS mute
+                FROM profile_mute AS mute
                 JOIN profile_public AS profile ON profile.profile_id = mute.target_profile_id
                 WHERE mute.principal_user_id = $1 AND mute.active
                 ORDER BY mute.updated_seq DESC, mute.relationship_id DESC
@@ -3512,18 +3583,17 @@ pub async fn member_mutes(
 async fn subscription_domain_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     principal_user_id: &str,
-    target: &community::SubscriptionTarget,
-) -> Result<Option<community::SubscriptionState>, ProjectionError> {
+    target: &WatchTarget,
+) -> Result<Option<WatchState>, ProjectionError> {
     let row = sqlx::query(
-        "SELECT subscription_id, active, read_through_seq, version FROM community_subscription WHERE principal_user_id = $1 AND target_kind = $2 AND scope_id = $3",
+        "SELECT subscription_id, active, read_through_seq, version FROM public_watch WHERE principal_user_id = $1 AND surface_id = $2",
     )
     .bind(principal_user_id)
-    .bind(target.kind.as_str())
-    .bind(target.scope_id)
+    .bind(target.surface_id)
     .fetch_optional(&mut **tx)
     .await?;
-    Ok(row.map(|row| community::SubscriptionState {
-        subscription_id: row.get("subscription_id"),
+    Ok(row.map(|row| WatchState {
+        watch_id: row.get("subscription_id"),
         principal_user_id: principal_user_id.to_string(),
         target: target.clone(),
         active: row.get("active"),
@@ -3534,57 +3604,29 @@ async fn subscription_domain_state(
 
 async fn public_subscription_target_latest_seq(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    target: &community::SubscriptionTarget,
+    target: &WatchTarget,
 ) -> Result<Option<i64>, ProjectionError> {
-    let latest = match target.kind {
-        community::SubscriptionTargetKind::DiscussionTopic => {
-            sqlx::query_scalar(
-                r#"
-                SELECT COALESCE(MAX(post.source_seq), 0)::bigint
-                FROM discussion_topic AS topic
-                LEFT JOIN discussion_post AS post ON post.topic_id = topic.topic_id
-                  AND NOT EXISTS (
-                      SELECT 1 FROM moderation_target_state AS moderation
-                      WHERE moderation.target_kind = 'discussion_post'
-                        AND moderation.scope_id = post.topic_id
-                        AND moderation.source_seq = post.source_seq
-                        AND moderation.visibility = 'hidden'
-                  )
-                WHERE topic.topic_id = $1 AND topic.visibility = 'visible'
-                GROUP BY topic.topic_id
-                "#,
-            )
-            .bind(target.scope_id)
-            .fetch_optional(&mut **tx)
-            .await?
-        }
-        community::SubscriptionTargetKind::GameThread => {
-            sqlx::query_scalar(
-                r#"
-                SELECT COALESCE(MAX(post.source_seq), 0)::bigint
-                FROM game_index AS game
-                LEFT JOIN thread_view AS post ON post.game_id = game.game_id
-                  AND post.channel_id = 'main'
-                  AND NOT EXISTS (
-                      SELECT 1 FROM moderation_target_state AS moderation
-                      WHERE moderation.target_kind = 'game_post'
-                        AND moderation.scope_id = post.game_id
-                        AND moderation.source_seq = post.source_seq
-                        AND moderation.visibility = 'hidden'
-                  )
-                WHERE game.game_id = $1 AND game.status IN ('active', 'completed')
-                GROUP BY game.game_id
-                "#,
-            )
-            .bind(target.scope_id)
-            .fetch_optional(&mut **tx)
-            .await?
-        }
-    };
+    let latest = sqlx::query_scalar(
+        r#"
+        SELECT COALESCE(MAX(publication.source_seq), 0)::bigint
+        FROM publication_surface AS surface
+        LEFT JOIN public_publication AS publication
+          ON publication.surface_id = surface.surface_id
+         AND publication.visible
+        WHERE surface.surface_id = $1 AND surface.visible
+        GROUP BY surface.surface_id
+        "#,
+    )
+    .bind(target.surface_id)
+    .fetch_optional(&mut **tx)
+    .await?;
     Ok(latest)
 }
 
-fn moderation_domain_error(reject: community::CommunityReject, action: &str) -> ProjectionError {
+fn moderation_domain_error(
+    reject: trust_safety::TrustSafetyReject,
+    action: &str,
+) -> ProjectionError {
     ProjectionError::Payload {
         kind: format!("moderation {action}"),
         source: serde::de::Error::custom(reject.to_string()),
@@ -3606,10 +3648,10 @@ async fn fold_subscription_event(
         }
     };
     match event.kind.as_str() {
-        community::SUBSCRIPTION_ENABLED => {
+        attention::SUBSCRIPTION_ENABLED => {
             #[derive(Deserialize)]
             struct Payload {
-                target: community::SubscriptionTarget,
+                target: WatchTarget,
                 initial_read_through_seq: i64,
             }
             let payload: Payload =
@@ -3621,14 +3663,14 @@ async fn fold_subscription_event(
                 })?;
             sqlx::query(
                 r#"
-                INSERT INTO community_subscription (
-                    subscription_id, principal_user_id, target_kind, scope_id,
+                INSERT INTO public_watch (
+                    subscription_id, principal_user_id, surface_id,
                     active, read_through_seq, created_seq, updated_seq, version
-                ) VALUES ($1, $2, $3, $4, TRUE, $5, $6, $6, $7)
+                ) VALUES ($1, $2, $3, TRUE, $4, $5, $5, $6)
                 ON CONFLICT (subscription_id) DO UPDATE SET
                     active = TRUE,
                     read_through_seq = GREATEST(
-                        community_subscription.read_through_seq,
+                        public_watch.read_through_seq,
                         EXCLUDED.read_through_seq
                     ),
                     updated_seq = EXCLUDED.updated_seq,
@@ -3637,24 +3679,23 @@ async fn fold_subscription_event(
             )
             .bind(subscription_id)
             .bind(principal_user_id)
-            .bind(payload.target.kind.as_str())
-            .bind(payload.target.scope_id)
+            .bind(payload.target.surface_id)
             .bind(payload.initial_read_through_seq)
             .bind(event.seq)
             .bind(event.stream_seq)
             .execute(&mut **tx)
             .await?;
             sqlx::query(
-                "INSERT INTO community_subscription_period (subscription_id, started_seq, ended_seq) VALUES ($1, $2, NULL)",
+                "INSERT INTO public_watch_period (subscription_id, started_seq, ended_seq) VALUES ($1, $2, NULL)",
             )
             .bind(subscription_id)
             .bind(event.seq)
             .execute(&mut **tx)
             .await?;
         }
-        community::SUBSCRIPTION_DISABLED => {
+        attention::SUBSCRIPTION_DISABLED => {
             sqlx::query(
-                "UPDATE community_subscription SET active = FALSE, updated_seq = $2, version = $3 WHERE subscription_id = $1",
+                "UPDATE public_watch SET active = FALSE, updated_seq = $2, version = $3 WHERE subscription_id = $1",
             )
             .bind(subscription_id)
             .bind(event.seq)
@@ -3662,14 +3703,14 @@ async fn fold_subscription_event(
             .execute(&mut **tx)
             .await?;
             sqlx::query(
-                "UPDATE community_subscription_period SET ended_seq = $2 WHERE subscription_id = $1 AND ended_seq IS NULL",
+                "UPDATE public_watch_period SET ended_seq = $2 WHERE subscription_id = $1 AND ended_seq IS NULL",
             )
             .bind(subscription_id)
             .bind(event.seq)
             .execute(&mut **tx)
             .await?;
         }
-        community::SUBSCRIPTION_READ_ADVANCED => {
+        attention::SUBSCRIPTION_READ_ADVANCED => {
             let read_through_seq = event
                 .payload
                 .get("read_through_seq")
@@ -3681,7 +3722,7 @@ async fn fold_subscription_event(
                     ),
                 })?;
             sqlx::query(
-                "UPDATE community_subscription SET read_through_seq = GREATEST(read_through_seq, $2), updated_seq = $3, version = $4 WHERE subscription_id = $1",
+                "UPDATE public_watch SET read_through_seq = GREATEST(read_through_seq, $2), updated_seq = $3, version = $4 WHERE subscription_id = $1",
             )
             .bind(subscription_id)
             .bind(read_through_seq)
@@ -3710,7 +3751,7 @@ async fn fold_member_mute_event(
         }
     };
     match event.kind.as_str() {
-        community::MEMBER_MUTED => {
+        social::MEMBER_MUTED => {
             let target_profile_id =
                 event
                     .payload
@@ -3731,7 +3772,7 @@ async fn fold_member_mute_event(
                 })?;
             sqlx::query(
                 r#"
-                INSERT INTO community_member_mute (
+                INSERT INTO profile_mute (
                     relationship_id, principal_user_id, target_profile_id,
                     active, updated_seq, version
                 ) VALUES ($1, $2, $3, TRUE, $4, $5)
@@ -3749,9 +3790,9 @@ async fn fold_member_mute_event(
             .execute(&mut **tx)
             .await?;
         }
-        community::MEMBER_UNMUTED => {
+        social::MEMBER_UNMUTED => {
             sqlx::query(
-                "UPDATE community_member_mute SET active = FALSE, updated_seq = $2, version = $3 WHERE relationship_id = $1",
+                "UPDATE profile_mute SET active = FALSE, updated_seq = $2, version = $3 WHERE relationship_id = $1",
             )
             .bind(relationship_id)
             .bind(event.seq)
@@ -3764,33 +3805,30 @@ async fn fold_member_mute_event(
     Ok(())
 }
 
-async fn fan_out_public_community_update(
+async fn fan_out_public_publication_update(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    target_kind: community::SubscriptionTargetKind,
-    scope_id: Uuid,
+    surface_id: Uuid,
     source_seq: i64,
     occurred_at: i64,
     author_principal_id: Option<&str>,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
-        INSERT INTO community_inbox_item (
-            subscription_id, source_seq, target_kind, scope_id, occurred_at
+        INSERT INTO public_inbox_item (
+            subscription_id, source_seq, surface_id, occurred_at
         )
-        SELECT subscription.subscription_id, $3, $1, $2, $4
-        FROM community_subscription AS subscription
-        JOIN community_subscription_period AS period
+        SELECT subscription.subscription_id, $2, $1, $3
+        FROM public_watch AS subscription
+        JOIN public_watch_period AS period
           ON period.subscription_id = subscription.subscription_id
-         AND period.started_seq < $3
-         AND (period.ended_seq IS NULL OR period.ended_seq > $3)
-        WHERE subscription.target_kind = $1
-          AND subscription.scope_id = $2
-          AND ($5::text IS NULL OR subscription.principal_user_id <> $5)
+         AND period.started_seq < $2
+         AND (period.ended_seq IS NULL OR period.ended_seq > $2)
+        WHERE subscription.surface_id = $1
+          AND ($4::text IS NULL OR subscription.principal_user_id <> $4)
         ON CONFLICT (subscription_id, source_seq) DO NOTHING
         "#,
     )
-    .bind(target_kind.as_str())
-    .bind(scope_id)
+    .bind(surface_id)
     .bind(source_seq)
     .bind(occurred_at)
     .bind(author_principal_id)
@@ -3815,10 +3853,10 @@ async fn fold_moderation_event(
     };
     let mut history_reason = None;
     match event.kind.as_str() {
-        community::MODERATION_CASE_OPENED => {
+        trust_safety::MODERATION_CASE_OPENED => {
             #[derive(Deserialize)]
             struct Payload {
-                target: community::ModerationTarget,
+                target: ModerationTarget,
             }
             let payload: Payload =
                 serde_json::from_value(event.payload.clone()).map_err(|source| {
@@ -3830,22 +3868,21 @@ async fn fold_moderation_event(
             sqlx::query(
                 r#"
                 INSERT INTO moderation_case (
-                    case_id, target_kind, scope_id, source_seq, status,
+                    case_id, surface_id, source_seq, status,
                     opened_at, updated_at, updated_seq, version
-                ) VALUES ($1, $2, $3, $4, 'open', $5, $5, $6, $7)
+                ) VALUES ($1, $2, $3, 'open', $4, $4, $5, $6)
                 "#,
             )
             .bind(case_id)
-            .bind(payload.target.kind.as_str())
-            .bind(payload.target.scope_id)
-            .bind(payload.target.source_seq)
+            .bind(payload.target.public.surface_id)
+            .bind(payload.target.public.source_seq)
             .bind(event.occurred_at)
             .bind(event.seq)
             .bind(event.stream_seq)
             .execute(&mut **tx)
             .await?;
         }
-        community::MODERATION_REPORT_SUBMITTED => {
+        trust_safety::MODERATION_REPORT_SUBMITTED => {
             #[derive(Deserialize)]
             struct Payload {
                 report_id: Uuid,
@@ -3859,7 +3896,7 @@ async fn fold_moderation_event(
                         source,
                     }
                 })?;
-            community::ReportReasonFamily::parse(payload.reason.as_str())
+            ReportReasonFamily::parse(payload.reason.as_str())
                 .map_err(|reject| moderation_domain_error(reject, "fold report"))?;
             sqlx::query(
                 r#"
@@ -3889,9 +3926,9 @@ async fn fold_moderation_event(
             .await?;
             history_reason = Some(payload.reason);
         }
-        community::MODERATION_CONTENT_HIDDEN
-        | community::MODERATION_CASE_DISMISSED
-        | community::MODERATION_CONTENT_RESTORED => {
+        trust_safety::MODERATION_CONTENT_HIDDEN
+        | trust_safety::MODERATION_CASE_DISMISSED
+        | trust_safety::MODERATION_CONTENT_RESTORED => {
             #[derive(Deserialize)]
             struct Payload {
                 reason: String,
@@ -3904,8 +3941,8 @@ async fn fold_moderation_event(
                     }
                 })?;
             let status = match event.kind.as_str() {
-                community::MODERATION_CONTENT_HIDDEN => "hidden",
-                community::MODERATION_CASE_DISMISSED => "dismissed",
+                trust_safety::MODERATION_CONTENT_HIDDEN => "hidden",
+                trust_safety::MODERATION_CASE_DISMISSED => "dismissed",
                 _ => "restored",
             };
             sqlx::query(
@@ -3925,7 +3962,7 @@ async fn fold_moderation_event(
             .bind(case_id)
             .execute(&mut **tx)
             .await?;
-            if event.kind == community::MODERATION_CONTENT_HIDDEN {
+            if event.kind == trust_safety::MODERATION_CONTENT_HIDDEN {
                 set_moderation_target_visibility(
                     tx,
                     case_id,
@@ -3935,7 +3972,7 @@ async fn fold_moderation_event(
                     event.seq,
                 )
                 .await?;
-            } else if event.kind == community::MODERATION_CONTENT_RESTORED {
+            } else if event.kind == trust_safety::MODERATION_CONTENT_RESTORED {
                 set_moderation_target_visibility(
                     tx,
                     case_id,
@@ -3972,30 +4009,26 @@ async fn set_moderation_target_visibility(
     moderator_principal_id: &str,
     updated_seq: i64,
 ) -> Result<(), ProjectionError> {
-    let row = sqlx::query(
-        "SELECT target_kind, scope_id, source_seq FROM moderation_case WHERE case_id = $1",
-    )
-    .bind(case_id)
-    .fetch_one(&mut **tx)
-    .await?;
-    let target_kind: String = row.get("target_kind");
-    let scope_id: Uuid = row.get("scope_id");
+    let row = sqlx::query("SELECT surface_id, source_seq FROM moderation_case WHERE case_id = $1")
+        .bind(case_id)
+        .fetch_one(&mut **tx)
+        .await?;
+    let surface_id: Uuid = row.get("surface_id");
     let source_seq: i64 = row.get("source_seq");
     sqlx::query(
         r#"
         INSERT INTO moderation_target_state (
-            target_kind, scope_id, source_seq, visibility, reason,
+            surface_id, source_seq, visibility, reason,
             moderator_principal_id, updated_seq
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (target_kind, scope_id, source_seq) DO UPDATE SET
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (surface_id, source_seq) DO UPDATE SET
             visibility = EXCLUDED.visibility,
             reason = EXCLUDED.reason,
             moderator_principal_id = EXCLUDED.moderator_principal_id,
             updated_seq = EXCLUDED.updated_seq
         "#,
     )
-    .bind(&target_kind)
-    .bind(scope_id)
+    .bind(surface_id)
     .bind(source_seq)
     .bind(visibility)
     .bind(reason)
@@ -4003,47 +4036,32 @@ async fn set_moderation_target_visibility(
     .bind(updated_seq)
     .execute(&mut **tx)
     .await?;
-    if target_kind == "game_post" {
-        sqlx::query(
-            r#"
-            INSERT INTO game_thread_visibility_change (
-                game_id, source_seq, visibility, moderation_seq
-            )
-            VALUES ($1, $2, $3, $4)
-            "#,
-        )
-        .bind(scope_id)
-        .bind(source_seq)
-        .bind(visibility)
-        .bind(updated_seq)
-        .execute(&mut **tx)
-        .await?;
-        notify_live_stream(tx, scope_id).await?;
-    }
-    sync_moderated_target_search_document(tx, &target_kind, scope_id, source_seq).await?;
-    Ok(())
-}
-
-async fn sync_moderated_target_search_document(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    target_kind: &str,
-    scope_id: Uuid,
-    source_seq: i64,
-) -> Result<(), ProjectionError> {
-    let document_kind = target_kind;
-    let document_key = format!("{scope_id}-{source_seq}");
     sqlx::query(
-        "DELETE FROM public_search_document WHERE document_kind = $1 AND document_key = $2",
+        "UPDATE public_publication SET visible = $3 WHERE surface_id = $1 AND source_seq = $2",
     )
-    .bind(document_kind)
-    .bind(&document_key)
+    .bind(surface_id)
+    .bind(source_seq)
+    .bind(visibility == "visible")
     .execute(&mut **tx)
     .await?;
-    if target_kind == "discussion_post" {
-        insert_discussion_post_search_document(tx, scope_id, source_seq).await?;
-    } else if target_kind == "game_post" {
-        insert_game_post_search_document(tx, scope_id, source_seq).await?;
-    }
+    // Game live-stream invalidation is a source adapter side effect. The
+    // generic moderation model never classifies the target; a non-game
+    // surface simply produces no row here.
+    sqlx::query(
+        r#"
+        INSERT INTO game_thread_visibility_change (game_id, source_seq, visibility, moderation_seq)
+        SELECT post.game_id, post.source_seq, $3, $4
+        FROM thread_view AS post
+        WHERE post.game_id = $1 AND post.source_seq = $2 AND post.channel_id = 'main'
+        "#,
+    )
+    .bind(surface_id)
+    .bind(source_seq)
+    .bind(visibility)
+    .bind(updated_seq)
+    .execute(&mut **tx)
+    .await?;
+    notify_live_stream(tx, surface_id).await?;
     Ok(())
 }
 
@@ -4057,33 +4075,21 @@ pub async fn rebuild_discussion_stream(
     let events = eventstore::load_stream(pool, stream_id).await?;
     let is_topic_stream = events
         .iter()
-        .any(|event| event.kind == community::TOPIC_CREATED);
-    let is_area_stream = events
-        .iter()
-        .any(|event| event.kind == community::AREA_CREATED);
+        .any(|event| event.kind == forum::TOPIC_CREATED);
+    let is_area_stream = events.iter().any(|event| event.kind == forum::AREA_CREATED);
     if !is_topic_stream && !is_area_stream {
         return Ok(());
     }
     let mut tx = pool.begin().await?;
     if is_topic_stream {
-        sqlx::query(
-            "DELETE FROM post_citation WHERE quoting_kind = 'discussion_post' AND quoting_scope_id = $1",
-        )
-        .bind(stream_id)
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query(
-            "DELETE FROM community_inbox_item WHERE target_kind = 'discussion_topic' AND scope_id = $1",
-        )
-        .bind(stream_id)
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query(
-            "DELETE FROM public_search_document WHERE scope_kind = 'discussion' AND scope_id = $1",
-        )
-        .bind(stream_id)
-        .execute(&mut *tx)
-        .await?;
+        sqlx::query("DELETE FROM public_inbox_item WHERE surface_id = $1")
+            .bind(stream_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM publication_surface WHERE surface_id = $1")
+            .bind(stream_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query("DELETE FROM discussion_post WHERE topic_id = $1")
             .bind(stream_id)
             .execute(&mut *tx)
@@ -4108,17 +4114,17 @@ pub async fn rebuild_moderation_stream(
     let events = eventstore::load_stream(pool, case_id).await?;
     if !events
         .iter()
-        .any(|event| event.kind == community::MODERATION_CASE_OPENED)
+        .any(|event| event.kind == trust_safety::MODERATION_CASE_OPENED)
     {
         return Ok(());
     }
     #[derive(Deserialize)]
     struct Payload {
-        target: community::ModerationTarget,
+        target: ModerationTarget,
     }
     let opened = events
         .iter()
-        .find(|event| event.kind == community::MODERATION_CASE_OPENED)
+        .find(|event| event.kind == trust_safety::MODERATION_CASE_OPENED)
         .expect("moderation stream has opening event");
     let payload: Payload = serde_json::from_value(opened.payload.clone()).map_err(|source| {
         ProjectionError::Payload {
@@ -4127,14 +4133,11 @@ pub async fn rebuild_moderation_stream(
         }
     })?;
     let mut tx = pool.begin().await?;
-    sqlx::query(
-        "DELETE FROM moderation_target_state WHERE target_kind = $1 AND scope_id = $2 AND source_seq = $3",
-    )
-    .bind(payload.target.kind.as_str())
-    .bind(payload.target.scope_id)
-    .bind(payload.target.source_seq)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("DELETE FROM moderation_target_state WHERE surface_id = $1 AND source_seq = $2")
+        .bind(payload.target.public.surface_id)
+        .bind(payload.target.public.source_seq)
+        .execute(&mut *tx)
+        .await?;
     sqlx::query("DELETE FROM moderation_case WHERE case_id = $1")
         .bind(case_id)
         .execute(&mut *tx)
@@ -4142,13 +4145,6 @@ pub async fn rebuild_moderation_stream(
     for event in &events {
         fold_moderation_event(&mut tx, case_id, event).await?;
     }
-    sync_moderated_target_search_document(
-        &mut tx,
-        payload.target.kind.as_str(),
-        payload.target.scope_id,
-        payload.target.source_seq,
-    )
-    .await?;
     tx.commit().await?;
     Ok(())
 }
@@ -4164,12 +4160,12 @@ pub async fn rebuild_subscription_stream(
     let events = eventstore::load_stream(pool, subscription_id).await?;
     if !events
         .iter()
-        .any(|event| event.kind == community::SUBSCRIPTION_ENABLED)
+        .any(|event| event.kind == attention::SUBSCRIPTION_ENABLED)
     {
         return Ok(());
     }
     let mut tx = pool.begin().await?;
-    sqlx::query("DELETE FROM community_subscription WHERE subscription_id = $1")
+    sqlx::query("DELETE FROM public_watch WHERE subscription_id = $1")
         .bind(subscription_id)
         .execute(&mut *tx)
         .await?;
@@ -4188,12 +4184,12 @@ pub async fn rebuild_member_mute_stream(
     let events = eventstore::load_stream(pool, relationship_id).await?;
     if !events
         .iter()
-        .any(|event| event.kind == community::MEMBER_MUTED)
+        .any(|event| event.kind == social::MEMBER_MUTED)
     {
         return Ok(());
     }
     let mut tx = pool.begin().await?;
-    sqlx::query("DELETE FROM community_member_mute WHERE relationship_id = $1")
+    sqlx::query("DELETE FROM profile_mute WHERE relationship_id = $1")
         .bind(relationship_id)
         .execute(&mut *tx)
         .await?;
@@ -4210,49 +4206,24 @@ async fn backfill_subscription_inbox(
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
-        INSERT INTO community_inbox_item (
-            subscription_id, source_seq, target_kind, scope_id, occurred_at
+        INSERT INTO public_inbox_item (
+            subscription_id, source_seq, surface_id, occurred_at
         )
-        SELECT subscription.subscription_id, post.source_seq,
-               subscription.target_kind, subscription.scope_id, post.created_at
-        FROM community_subscription AS subscription
-        JOIN community_subscription_period AS period
+        SELECT subscription.subscription_id, publication.source_seq,
+               publication.surface_id, publication.occurred_at
+        FROM public_watch AS subscription
+        JOIN public_watch_period AS period
           ON period.subscription_id = subscription.subscription_id
-        JOIN discussion_post AS post
-          ON subscription.target_kind = 'discussion_topic'
-         AND post.topic_id = subscription.scope_id
-         AND period.started_seq < post.source_seq
-         AND (period.ended_seq IS NULL OR period.ended_seq > post.source_seq)
-        LEFT JOIN profile_editor AS author
-          ON author.profile_id = post.author_profile_id
+        JOIN public_publication AS publication
+          ON publication.surface_id = subscription.surface_id
+         AND period.started_seq < publication.source_seq
+         AND (period.ended_seq IS NULL OR period.ended_seq > publication.source_seq)
         WHERE subscription.subscription_id = $1
-          AND (author.principal_user_id IS NULL
-               OR author.principal_user_id <> subscription.principal_user_id)
-        ON CONFLICT (subscription_id, source_seq) DO NOTHING
-        "#,
-    )
-    .bind(subscription_id)
-    .execute(&mut **tx)
-    .await?;
-    sqlx::query(
-        r#"
-        INSERT INTO community_inbox_item (
-            subscription_id, source_seq, target_kind, scope_id, occurred_at
-        )
-        SELECT subscription.subscription_id, post.source_seq,
-               subscription.target_kind, subscription.scope_id, post.occurred_at
-        FROM community_subscription AS subscription
-        JOIN community_subscription_period AS period
-          ON period.subscription_id = subscription.subscription_id
-        JOIN thread_view AS post
-          ON subscription.target_kind = 'game_thread'
-         AND post.game_id = subscription.scope_id
-         AND post.channel_id = 'main'
-         AND period.started_seq < post.source_seq
-         AND (period.ended_seq IS NULL OR period.ended_seq > post.source_seq)
-        WHERE subscription.subscription_id = $1
-          AND (post.author_user IS NULL
-               OR post.author_user <> subscription.principal_user_id)
+          AND NOT EXISTS (
+              SELECT 1 FROM profile_editor AS author
+              WHERE author.profile_id = publication.author_profile_id
+                AND author.principal_user_id = subscription.principal_user_id
+          )
         ON CONFLICT (subscription_id, source_seq) DO NOTHING
         "#,
     )
@@ -4269,13 +4240,13 @@ async fn fold_discussion_event(
 ) -> Result<(), ProjectionError> {
     let is_topic_event = matches!(
         event.kind.as_str(),
-        community::TOPIC_CREATED
-            | community::POST_SUBMITTED
-            | community::POSTING_STATE_CHANGED
-            | community::VISIBILITY_CHANGED
+        forum::TOPIC_CREATED
+            | forum::POST_SUBMITTED
+            | forum::POSTING_STATE_CHANGED
+            | forum::VISIBILITY_CHANGED
     );
     match event.kind.as_str() {
-        community::AREA_CREATED => {
+        forum::AREA_CREATED => {
             let slug = str_field(&event.payload, "slug", &event.kind)?;
             let title = str_field(&event.payload, "title", &event.kind)?;
             let description = str_field(&event.payload, "description", &event.kind)?;
@@ -4290,7 +4261,7 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
         }
-        community::TOPIC_CREATED => {
+        forum::TOPIC_CREATED => {
             let area_id = uuid_field(&event.payload, "area_id", &event.kind)?;
             let title = str_field(&event.payload, "title", &event.kind)?;
             let author_profile_id = discussion_author_profile_id(tx, event).await?;
@@ -4312,8 +4283,19 @@ async fn fold_discussion_event(
             .bind(event.occurred_at)
             .execute(&mut **tx)
             .await?;
+            publications::record_forum_surface(tx, stream_id, event.seq).await?;
+            publications::record_publication(
+                tx,
+                stream_id,
+                event.seq,
+                "public discussion",
+                "",
+                author_profile_id,
+                event.occurred_at,
+            )
+            .await?;
         }
-        community::POST_SUBMITTED => {
+        forum::POST_SUBMITTED => {
             let body = str_field(&event.payload, "body", &event.kind)?;
             let quotations = quotations_from_event(&event.payload, &event.kind)?;
             let author_profile_id = discussion_author_profile_id(tx, event).await?;
@@ -4323,7 +4305,7 @@ async fn fold_discussion_event(
             .bind(event.seq)
             .bind(stream_id)
             .bind(author_profile_id)
-            .bind(body)
+            .bind(&body)
             .bind(serde_json::to_value(&quotations).map_err(|source| {
                 ProjectionError::Payload {
                     kind: event.kind.clone(),
@@ -4333,10 +4315,10 @@ async fn fold_discussion_event(
             .bind(event.occurred_at)
             .execute(&mut **tx)
             .await?;
-            fold_post_citations(
+            record_game_private_citations(
                 tx,
-                community::PostRef {
-                    kind: community::PostKind::DiscussionPost,
+                PostRef {
+                    kind: PostKind::DiscussionPost,
                     scope_id: stream_id,
                     source_seq: event.seq,
                 },
@@ -4357,9 +4339,26 @@ async fn fold_discussion_event(
                 eventstore::ActorId::User(principal) => Some(principal.as_str()),
                 _ => None,
             };
-            fan_out_public_community_update(
+            publications::record_publication(
                 tx,
-                community::SubscriptionTargetKind::DiscussionTopic,
+                stream_id,
+                event.seq,
+                &body,
+                "#post-",
+                author_profile_id,
+                event.occurred_at,
+            )
+            .await?;
+            publications::record_public_citations(
+                tx,
+                stream_id,
+                event.seq,
+                &quotations,
+                event.occurred_at,
+            )
+            .await?;
+            fan_out_public_publication_update(
+                tx,
                 stream_id,
                 event.seq,
                 event.occurred_at,
@@ -4367,9 +4366,9 @@ async fn fold_discussion_event(
             )
             .await?;
         }
-        community::POSTING_STATE_CHANGED => {
+        forum::POSTING_STATE_CHANGED => {
             let posting_state = str_field(&event.payload, "posting_state", &event.kind)?;
-            community::PostingState::parse(posting_state.as_str())
+            PostingState::parse(posting_state.as_str())
                 .map_err(|error| ProjectionError::Db(sqlx::Error::Protocol(error.to_string())))?;
             sqlx::query(
                 "UPDATE discussion_topic SET posting_state = $2, updated_seq = $3, updated_at = $4, moderated_seq = $3, version = $5 WHERE topic_id = $1",
@@ -4382,9 +4381,9 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
         }
-        community::VISIBILITY_CHANGED => {
+        forum::VISIBILITY_CHANGED => {
             let visibility = str_field(&event.payload, "visibility", &event.kind)?;
-            community::TopicVisibility::parse(visibility.as_str())
+            TopicVisibility::parse(visibility.as_str())
                 .map_err(|error| ProjectionError::Db(sqlx::Error::Protocol(error.to_string())))?;
             sqlx::query(
                 "UPDATE discussion_topic SET visibility = $2, updated_seq = $3, updated_at = $4, moderated_seq = $3, version = $5 WHERE topic_id = $1",
@@ -4400,7 +4399,7 @@ async fn fold_discussion_event(
         _ => {}
     }
     if is_topic_event {
-        sync_discussion_search_documents(tx, stream_id).await?;
+        publications::record_forum_surface(tx, stream_id, event.seq).await?;
     }
     Ok(())
 }
@@ -4469,12 +4468,6 @@ pub async fn rebuild_profile_stream(pool: &PgPool, stream_id: Uuid) -> Result<()
         .bind(stream_id)
         .execute(&mut *tx)
         .await?;
-    sqlx::query(
-        "DELETE FROM public_search_document WHERE scope_kind = 'profile' AND scope_id = $1",
-    )
-    .bind(stream_id)
-    .execute(&mut *tx)
-    .await?;
     for event in &events {
         fold_profile_event(&mut tx, stream_id, event, None).await?;
     }
@@ -4611,7 +4604,7 @@ async fn fold_profile_event(
         }
         _ => {}
     }
-    sync_profile_search_document(tx, stream_id).await?;
+    publications::record_profile_surface(tx, stream_id, event.seq, event.occurred_at).await?;
     Ok(())
 }
 
@@ -4880,18 +4873,14 @@ async fn rebuild_in_tx(
     let events = eventstore::load_stream_in_tx(tx, game_id).await?;
     prelock_rebuild_subject_owners(tx, &events).await?;
 
-    sqlx::query(
-        "DELETE FROM post_citation WHERE quoting_kind = 'game_post' AND quoting_scope_id = $1",
-    )
-    .bind(game_id)
-    .execute(&mut **tx)
-    .await?;
-    sqlx::query(
-        "DELETE FROM community_inbox_item WHERE target_kind = 'game_thread' AND scope_id = $1",
-    )
-    .bind(game_id)
-    .execute(&mut **tx)
-    .await?;
+    sqlx::query("DELETE FROM game_private_citation WHERE game_id = $1")
+        .bind(game_id)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query("DELETE FROM public_inbox_item WHERE surface_id = $1")
+        .bind(game_id)
+        .execute(&mut **tx)
+        .await?;
     for table in [
         "vote_ballot",
         "day_event_schedule_work",
@@ -4938,10 +4927,6 @@ async fn rebuild_in_tx(
         .execute(&mut **tx)
         .await?;
     }
-    sqlx::query("DELETE FROM public_search_document WHERE scope_kind = 'game' AND scope_id = $1")
-        .bind(game_id)
-        .execute(&mut **tx)
-        .await?;
 
     for stored in &events {
         fold_event(tx, game_id, stored, None).await?;
@@ -5096,10 +5081,6 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
         table: "game_index",
         order_by: "game_id",
     },
-    AuditProjection {
-        table: "public_search_document",
-        order_by: "document_kind, document_key",
-    },
 ];
 
 /// Replay one game's event stream inside a rollback-only transaction and compare
@@ -5148,11 +5129,7 @@ async fn projection_snapshot(
     projection: &AuditProjection,
     game_id: Uuid,
 ) -> Result<serde_json::Value, ProjectionError> {
-    let predicate = if projection.table == "public_search_document" {
-        "scope_kind = 'game' AND scope_id = $1"
-    } else {
-        "game_id = $1"
-    };
+    let predicate = "game_id = $1";
     let sql = format!(
         "SELECT COALESCE(jsonb_agg(to_jsonb(snapshot_rows) ORDER BY {order_by}), '[]'::jsonb) AS rows \
          FROM (SELECT * FROM {table} WHERE {predicate}) snapshot_rows",
@@ -7478,149 +7455,61 @@ pub async fn public_search(
         PublicSearchFilter::Profiles => "profiles",
         PublicSearchFilter::Games => "games",
     };
-    let rows = match cursor {
-        Some(cursor) => {
-            sqlx::query(
-                r#"
-                WITH search_query AS (
-                    SELECT websearch_to_tsquery('english', $1) AS value
-                ), ranked AS (
-                    SELECT document_kind, document_key, title, href, updated_seq, published_at,
-                           ROUND(ts_rank_cd(search_vector, search_query.value)::numeric * 1000000)::BIGINT AS rank,
-                           regexp_replace(
-                               ts_headline(
-                                   'english', concat_ws(' ', title, body), search_query.value,
-                                   'MaxWords=24, MinWords=8'
-                               ),
-                               '</?b>', '', 'g'
-                           ) AS excerpt
-                    FROM public_search_document AS document, search_query
-                    WHERE document.search_vector @@ search_query.value
-                      AND (
-                          $2 = 'all'
-                          OR ($2 = 'discussions' AND document.document_kind IN ('discussion_topic', 'discussion_post'))
-                          OR ($2 = 'profiles' AND document.document_kind = 'profile')
-                          OR ($2 = 'games' AND document.document_kind IN ('game', 'game_post'))
-                      )
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM community_member_mute AS mute
-                          WHERE $3::text IS NOT NULL
-                            AND mute.principal_user_id = $3
-                            AND mute.active
-                            AND (
-                                (document.document_kind = 'profile'
-                                 AND mute.target_profile_id = document.scope_id)
-                                OR (document.document_kind = 'discussion_topic' AND EXISTS (
-                                    SELECT 1 FROM discussion_topic AS topic
-                                    WHERE topic.topic_id = document.scope_id
-                                      AND topic.author_profile_id = mute.target_profile_id
-                                ))
-                                OR (document.document_kind = 'discussion_post' AND EXISTS (
-                                    SELECT 1 FROM discussion_post AS post
-                                    WHERE post.topic_id = document.scope_id
-                                      AND post.source_seq = document.updated_seq
-                                      AND post.author_profile_id = mute.target_profile_id
-                                ))
-                                OR (document.document_kind = 'game_post' AND EXISTS (
-                                    SELECT 1
-                                    FROM thread_view AS post
-                                    JOIN profile_editor AS author
-                                      ON author.principal_user_id = post.author_user
-                                    WHERE post.game_id = document.scope_id
-                                      AND post.source_seq = document.updated_seq
-                                      AND author.profile_id = mute.target_profile_id
-                                ))
-                            )
-                      )
-                )
-                SELECT document_kind, document_key, title, href, updated_seq, published_at, rank, excerpt
-                FROM ranked
-                WHERE rank < $4
-                   OR (rank = $4 AND updated_seq < $5)
-                   OR (rank = $4 AND updated_seq = $5 AND document_kind > $6)
-                   OR (rank = $4 AND updated_seq = $5 AND document_kind = $6 AND document_key > $7)
-                ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
-                LIMIT $8
-                "#,
-            )
-            .bind(query)
-            .bind(filter)
-            .bind(viewer_principal_user_id)
-            .bind(cursor.rank)
-            .bind(cursor.updated_seq)
-            .bind(cursor.document_kind)
-            .bind(cursor.document_key)
-            .bind(fetch_limit)
-            .fetch_all(pool)
-            .await?
-        }
-        None => {
-            sqlx::query(
-                r#"
-                WITH search_query AS (
-                    SELECT websearch_to_tsquery('english', $1) AS value
-                )
-                SELECT document_kind, document_key, title, href, updated_seq, published_at,
-                       ROUND(ts_rank_cd(search_vector, search_query.value)::numeric * 1000000)::BIGINT AS rank,
-                       regexp_replace(
-                           ts_headline(
-                               'english', concat_ws(' ', title, body), search_query.value,
-                               'MaxWords=24, MinWords=8'
-                           ),
-                           '</?b>', '', 'g'
-                       ) AS excerpt
-                FROM public_search_document AS document, search_query
-                WHERE document.search_vector @@ search_query.value
-                  AND (
-                      $2 = 'all'
-                      OR ($2 = 'discussions' AND document.document_kind IN ('discussion_topic', 'discussion_post'))
-                      OR ($2 = 'profiles' AND document.document_kind = 'profile')
-                      OR ($2 = 'games' AND document.document_kind IN ('game', 'game_post'))
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM community_member_mute AS mute
-                      WHERE $3::text IS NOT NULL
-                        AND mute.principal_user_id = $3
-                        AND mute.active
-                        AND (
-                            (document.document_kind = 'profile'
-                             AND mute.target_profile_id = document.scope_id)
-                            OR (document.document_kind = 'discussion_topic' AND EXISTS (
-                                SELECT 1 FROM discussion_topic AS topic
-                                WHERE topic.topic_id = document.scope_id
-                                  AND topic.author_profile_id = mute.target_profile_id
-                            ))
-                            OR (document.document_kind = 'discussion_post' AND EXISTS (
-                                SELECT 1 FROM discussion_post AS post
-                                WHERE post.topic_id = document.scope_id
-                                  AND post.source_seq = document.updated_seq
-                                  AND post.author_profile_id = mute.target_profile_id
-                            ))
-                            OR (document.document_kind = 'game_post' AND EXISTS (
-                                SELECT 1
-                                FROM thread_view AS post
-                                JOIN profile_editor AS author
-                                  ON author.principal_user_id = post.author_user
-                                WHERE post.game_id = document.scope_id
-                                  AND post.source_seq = document.updated_seq
-                                  AND author.profile_id = mute.target_profile_id
-                            ))
-                        )
-                  )
-                ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
-                LIMIT $4
-                "#,
-            )
-            .bind(query)
-            .bind(filter)
-            .bind(viewer_principal_user_id)
-            .bind(fetch_limit)
-            .fetch_all(pool)
-            .await?
-        }
-    };
+    let rows = sqlx::query(
+        r#"
+        WITH search_query AS (
+            SELECT websearch_to_tsquery('english', $1) AS value
+        ), ranked AS (
+            SELECT surface.search_group AS document_kind,
+                   publication.surface_id::text || '-' || publication.source_seq::text AS document_key,
+                   surface.title, publication.href, publication.source_seq AS updated_seq,
+                   publication.occurred_at AS published_at,
+                   ROUND(ts_rank_cd(
+                       to_tsvector('english', concat_ws(' ', surface.title, publication.body)),
+                       search_query.value
+                   )::numeric * 1000000)::BIGINT AS rank,
+                   regexp_replace(
+                       ts_headline(
+                           'english', concat_ws(' ', surface.title, publication.body), search_query.value,
+                           'MaxWords=24, MinWords=8'
+                       ), '</?b>', '', 'g'
+                   ) AS excerpt
+            FROM public_publication AS publication
+            JOIN publication_surface AS surface ON surface.surface_id = publication.surface_id
+            CROSS JOIN search_query
+            WHERE to_tsvector('english', concat_ws(' ', surface.title, publication.body))
+                      @@ search_query.value
+              AND publication.visible AND surface.visible
+              AND ($2 = 'all' OR surface.search_group = $2)
+              AND NOT EXISTS (
+                  SELECT 1 FROM profile_mute AS mute
+                  WHERE $3::text IS NOT NULL
+                    AND mute.principal_user_id = $3
+                    AND mute.active
+                    AND mute.target_profile_id = publication.author_profile_id
+              )
+        )
+        SELECT document_kind, document_key, title, href, updated_seq, published_at, rank, excerpt
+        FROM ranked
+        WHERE $4::bigint IS NULL
+           OR rank < $4
+           OR (rank = $4 AND updated_seq < $5)
+           OR (rank = $4 AND updated_seq = $5 AND document_kind > $6)
+           OR (rank = $4 AND updated_seq = $5 AND document_kind = $6 AND document_key > $7)
+        ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
+        LIMIT $8
+        "#,
+    )
+    .bind(query)
+    .bind(filter)
+    .bind(viewer_principal_user_id)
+    .bind(cursor.as_ref().map(|value| value.rank))
+    .bind(cursor.as_ref().map(|value| value.updated_seq))
+    .bind(cursor.as_ref().map(|value| value.document_kind.as_str()))
+    .bind(cursor.as_ref().map(|value| value.document_key.as_str()))
+    .bind(fetch_limit)
+    .fetch_all(pool)
+    .await?;
     let has_more = rows.len() as i64 > limit;
     let results: Vec<_> = rows
         .into_iter()
@@ -7716,7 +7605,7 @@ pub async fn discussion_topics(
                   AND topic.visibility = 'visible'
                   AND (topic.updated_seq < $2 OR (topic.updated_seq = $2 AND topic.topic_id < $3))
                   AND NOT EXISTS (
-                      SELECT 1 FROM community_member_mute AS mute
+                      SELECT 1 FROM profile_mute AS mute
                       WHERE $4::text IS NOT NULL
                         AND mute.principal_user_id = $4
                         AND mute.target_profile_id = topic.author_profile_id
@@ -7747,7 +7636,7 @@ pub async fn discussion_topics(
                 LEFT JOIN profile_public AS author ON author.profile_id = topic.author_profile_id
                 WHERE topic.area_id = $1 AND topic.visibility = 'visible'
                   AND NOT EXISTS (
-                      SELECT 1 FROM community_member_mute AS mute
+                      SELECT 1 FROM profile_mute AS mute
                       WHERE $2::text IS NOT NULL
                         AND mute.principal_user_id = $2
                         AND mute.target_profile_id = topic.author_profile_id
@@ -7822,125 +7711,55 @@ pub async fn discussion_posts(
 ) -> Result<DiscussionPostPage, ProjectionError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
-    let rows = match before_seq {
-        Some(before_seq) => {
-            sqlx::query(
-                r#"
-                SELECT post.source_seq, post.body, post.quotations, post.created_at,
-                       author.profile_id AS author_profile_id,
-                       author.handle AS author_handle, author.display_name AS author_display_name,
-                       (
-                           SELECT COUNT(*)::bigint
-                           FROM post_citation AS citation
-                           JOIN discussion_post AS quoting
-                             ON quoting.topic_id = citation.quoting_scope_id
-                            AND quoting.source_seq = citation.quoting_source_seq
-                           WHERE citation.quoted_kind = 'discussion_post'
-                             AND citation.quoted_scope_id = post.topic_id
-                             AND citation.quoted_source_seq = post.source_seq
-                             AND citation.quoting_kind = 'discussion_post'
-                             AND NOT EXISTS (
-                                 SELECT 1 FROM community_member_mute AS mute
-                                 WHERE $3::text IS NOT NULL
-                                   AND mute.principal_user_id = $3
-                                   AND mute.target_profile_id = quoting.author_profile_id
-                                   AND mute.active
-                             )
-                             AND NOT EXISTS (
-                                 SELECT 1 FROM moderation_target_state AS moderation
-                                 WHERE moderation.target_kind = 'discussion_post'
-                                   AND moderation.scope_id = quoting.topic_id
-                                   AND moderation.source_seq = quoting.source_seq
-                                   AND moderation.visibility = 'hidden'
-                             )
-                       ) AS citation_count
-                FROM discussion_post AS post
-                LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
-                WHERE post.topic_id = $1 AND post.source_seq < $2
-                  AND NOT EXISTS (
-                      SELECT 1 FROM community_member_mute AS mute
-                      WHERE $3::text IS NOT NULL
-                        AND mute.principal_user_id = $3
-                        AND mute.target_profile_id = post.author_profile_id
-                        AND mute.active
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1 FROM moderation_target_state AS moderation
-                      WHERE moderation.target_kind = 'discussion_post'
-                        AND moderation.scope_id = post.topic_id
-                        AND moderation.source_seq = post.source_seq
-                        AND moderation.visibility = 'hidden'
-                  )
-                ORDER BY post.source_seq DESC
-                LIMIT $4
-                "#,
-            )
-            .bind(topic_id)
-            .bind(before_seq)
-            .bind(viewer_principal_user_id)
-            .bind(fetch_limit)
-            .fetch_all(pool)
-            .await?
-        }
-        None => {
-            sqlx::query(
-                r#"
-                SELECT post.source_seq, post.body, post.quotations, post.created_at,
-                       author.profile_id AS author_profile_id,
-                       author.handle AS author_handle, author.display_name AS author_display_name,
-                       (
-                           SELECT COUNT(*)::bigint
-                           FROM post_citation AS citation
-                           JOIN discussion_post AS quoting
-                             ON quoting.topic_id = citation.quoting_scope_id
-                            AND quoting.source_seq = citation.quoting_source_seq
-                           WHERE citation.quoted_kind = 'discussion_post'
-                             AND citation.quoted_scope_id = post.topic_id
-                             AND citation.quoted_source_seq = post.source_seq
-                             AND citation.quoting_kind = 'discussion_post'
-                             AND NOT EXISTS (
-                                 SELECT 1 FROM community_member_mute AS mute
-                                 WHERE $2::text IS NOT NULL
-                                   AND mute.principal_user_id = $2
-                                   AND mute.target_profile_id = quoting.author_profile_id
-                                   AND mute.active
-                             )
-                             AND NOT EXISTS (
-                                 SELECT 1 FROM moderation_target_state AS moderation
-                                 WHERE moderation.target_kind = 'discussion_post'
-                                   AND moderation.scope_id = quoting.topic_id
-                                   AND moderation.source_seq = quoting.source_seq
-                                   AND moderation.visibility = 'hidden'
-                             )
-                       ) AS citation_count
-                FROM discussion_post AS post
-                LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
-                WHERE post.topic_id = $1
-                  AND NOT EXISTS (
-                      SELECT 1 FROM community_member_mute AS mute
-                      WHERE $2::text IS NOT NULL
-                        AND mute.principal_user_id = $2
-                        AND mute.target_profile_id = post.author_profile_id
-                        AND mute.active
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1 FROM moderation_target_state AS moderation
-                      WHERE moderation.target_kind = 'discussion_post'
-                        AND moderation.scope_id = post.topic_id
-                        AND moderation.source_seq = post.source_seq
-                        AND moderation.visibility = 'hidden'
-                  )
-                ORDER BY post.source_seq DESC
-                LIMIT $3
-                "#,
-            )
-            .bind(topic_id)
-            .bind(viewer_principal_user_id)
-            .bind(fetch_limit)
-            .fetch_all(pool)
-            .await?
-        }
-    };
+    let rows = sqlx::query(
+        r#"
+        SELECT post.source_seq, post.body, post.quotations, post.created_at,
+               author.profile_id AS author_profile_id,
+               author.handle AS author_handle, author.display_name AS author_display_name,
+               (
+                   SELECT COUNT(*)::bigint
+                   FROM public_citation AS citation
+                   JOIN public_publication AS quoting
+                     ON quoting.surface_id = citation.quoting_surface_id
+                    AND quoting.source_seq = citation.quoting_source_seq
+                   JOIN publication_surface AS quoting_surface
+                     ON quoting_surface.surface_id = quoting.surface_id
+                   WHERE citation.quoted_surface_id = post.topic_id
+                     AND citation.quoted_source_seq = post.source_seq
+                     AND quoting.visible AND quoting_surface.visible
+                     AND NOT EXISTS (
+                         SELECT 1 FROM profile_mute AS mute
+                         WHERE $3::text IS NOT NULL
+                           AND mute.principal_user_id = $3
+                           AND mute.target_profile_id = quoting.author_profile_id
+                           AND mute.active
+                     )
+               ) AS citation_count
+        FROM discussion_post AS post
+        LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
+        JOIN public_publication AS publication
+          ON publication.surface_id = post.topic_id AND publication.source_seq = post.source_seq
+        JOIN publication_surface AS surface ON surface.surface_id = publication.surface_id
+        WHERE post.topic_id = $1
+          AND ($2::bigint IS NULL OR post.source_seq < $2)
+          AND publication.visible AND surface.visible
+          AND NOT EXISTS (
+              SELECT 1 FROM profile_mute AS mute
+              WHERE $3::text IS NOT NULL
+                AND mute.principal_user_id = $3
+                AND mute.target_profile_id = post.author_profile_id
+                AND mute.active
+          )
+        ORDER BY post.source_seq DESC
+        LIMIT $4
+        "#,
+    )
+    .bind(topic_id)
+    .bind(before_seq)
+    .bind(viewer_principal_user_id)
+    .bind(fetch_limit)
+    .fetch_all(pool)
+    .await?;
     let has_more = rows.len() as i64 > limit;
     let mut posts: Vec<_> = rows
         .into_iter()
@@ -7970,12 +7789,12 @@ pub async fn quotation_thread_for_discussion(
     pool: &PgPool,
     topic_id: Uuid,
     viewer_principal_user_id: Option<&str>,
-) -> Result<community::QuotationThreadState, ProjectionError> {
+) -> Result<QuotationThreadState, ProjectionError> {
     let rows = sqlx::query(
         r#"
         SELECT post.source_seq, post.body, post.quotations,
                NOT EXISTS (
-                   SELECT 1 FROM community_member_mute AS mute
+                   SELECT 1 FROM profile_mute AS mute
                    WHERE $2::text IS NOT NULL
                      AND mute.principal_user_id = $2
                      AND mute.target_profile_id = post.author_profile_id
@@ -7983,8 +7802,7 @@ pub async fn quotation_thread_for_discussion(
                )
                AND NOT EXISTS (
                    SELECT 1 FROM moderation_target_state AS moderation
-                   WHERE moderation.target_kind = 'discussion_post'
-                     AND moderation.scope_id = post.topic_id
+                   WHERE moderation.surface_id = post.topic_id
                      AND moderation.source_seq = post.source_seq
                      AND moderation.visibility = 'hidden'
                ) AS visible
@@ -8000,7 +7818,7 @@ pub async fn quotation_thread_for_discussion(
     let mut posts = Vec::with_capacity(rows.len());
     for row in rows {
         let quotations = quotations_from_json(row.get("quotations"), "DiscussionPostSubmitted")?;
-        posts.push(community::QuotationPostState {
+        posts.push(QuotationPostState {
             source_seq: row.get("source_seq"),
             body: row.get("body"),
             visible: row.get("visible"),
@@ -8010,8 +7828,8 @@ pub async fn quotation_thread_for_discussion(
                 .collect(),
         });
     }
-    Ok(community::QuotationThreadState {
-        thread: community::PostRef::thread(community::PostKind::DiscussionPost, topic_id),
+    Ok(QuotationThreadState {
+        thread: PostRef::thread(PostKind::DiscussionPost, topic_id),
         posts,
     })
 }
@@ -8022,20 +7840,19 @@ pub async fn quotation_thread_for_game_channel_in_tx(
     game_id: Uuid,
     channel_id: &str,
     viewer_principal_user_id: Option<&str>,
-) -> Result<community::QuotationThreadState, ProjectionError> {
+) -> Result<QuotationThreadState, ProjectionError> {
     let rows = sqlx::query(
         r#"
         SELECT source_seq, body, body_private, quotations,
                NOT EXISTS (
                    SELECT 1 FROM moderation_target_state AS moderation
-                   WHERE moderation.target_kind = 'game_post'
-                     AND moderation.scope_id = thread_view.game_id
+                   WHERE moderation.surface_id = thread_view.game_id
                      AND moderation.source_seq = thread_view.source_seq
                      AND moderation.visibility = 'hidden'
                )
                AND NOT EXISTS (
                    SELECT 1
-                   FROM community_member_mute AS mute
+                   FROM profile_mute AS mute
                    JOIN profile_editor AS author
                      ON author.profile_id = mute.target_profile_id
                    WHERE $3::text IS NOT NULL
@@ -8078,7 +7895,7 @@ pub async fn quotation_thread_for_game_channel_in_tx(
                 (body, quotations)
             }
         };
-        posts.push(community::QuotationPostState {
+        posts.push(QuotationPostState {
             source_seq,
             body,
             visible: row.get("visible"),
@@ -8088,8 +7905,8 @@ pub async fn quotation_thread_for_game_channel_in_tx(
                 .collect(),
         });
     }
-    Ok(community::QuotationThreadState {
-        thread: community::PostRef::thread(community::PostKind::GamePost, game_id),
+    Ok(QuotationThreadState {
+        thread: PostRef::thread(PostKind::GamePost, game_id),
         posts,
     })
 }
@@ -8098,43 +7915,19 @@ pub async fn quotation_thread_for_game_channel_in_tx(
 /// Returns `None` when the quoted post is missing or hidden from the viewer.
 pub async fn visible_incoming_citations(
     pool: &PgPool,
-    quoted: community::PostRef,
+    quoted: PostRef,
     channel_id: Option<&str>,
     viewer_principal_user_id: Option<&str>,
     limit: i64,
 ) -> Result<Option<PostCitationPage>, ProjectionError> {
-    let limit = limit.clamp(1, community::MAX_POST_CITATION_LIMIT);
+    let limit = limit.clamp(1, content_reference::MAX_POST_CITATION_LIMIT);
     let (citation_count, citations) = match quoted.kind {
-        community::PostKind::DiscussionPost => {
-            if !discussion_post_is_visible(
-                pool,
-                quoted.scope_id,
-                quoted.source_seq,
-                viewer_principal_user_id,
-            )
-            .await?
-            {
-                return Ok(None);
-            }
-            (
-                discussion_citation_count(
-                    pool,
-                    quoted.scope_id,
-                    quoted.source_seq,
-                    viewer_principal_user_id,
-                )
-                .await?,
-                discussion_citation_rows(
-                    pool,
-                    quoted.scope_id,
-                    quoted.source_seq,
-                    viewer_principal_user_id,
-                    limit,
-                )
-                .await?,
-            )
+        PostKind::DiscussionPost => {
+            // Public discussion citations use `visible_public_incoming_citations`.
+            // There is no private forum citation surface in v2.
+            return Ok(None);
         }
-        community::PostKind::GamePost => {
+        PostKind::GamePost => {
             let channel_id = channel_id.ok_or_else(|| ProjectionError::Payload {
                 kind: "PostCitation".into(),
                 source: serde::de::Error::custom("game_post citations require a channel"),
@@ -8178,40 +7971,115 @@ pub async fn visible_incoming_citations(
     }))
 }
 
-async fn discussion_post_is_visible(
+/// Bounded newest-first incoming citations for one public-publication item.
+/// The query is intentionally source-agnostic: publication eligibility,
+/// moderation visibility, and mute overlays are resolved by the index before
+/// paging.
+pub async fn visible_public_incoming_citations(
     pool: &PgPool,
-    topic_id: Uuid,
-    source_seq: i64,
+    quoted: content_reference::PublicContentRef,
     viewer_principal_user_id: Option<&str>,
-) -> Result<bool, ProjectionError> {
-    Ok(sqlx::query_scalar(
+    limit: i64,
+) -> Result<Option<PublicCitationPage>, ProjectionError> {
+    let limit = limit.clamp(1, content_reference::MAX_POST_CITATION_LIMIT);
+    let visible: bool = sqlx::query_scalar(
         r#"
         SELECT EXISTS (
             SELECT 1
-            FROM discussion_post AS post
-            WHERE post.topic_id = $1 AND post.source_seq = $2
+            FROM public_publication AS publication
+            JOIN publication_surface AS surface ON surface.surface_id = publication.surface_id
+            WHERE publication.surface_id = $1
+              AND publication.source_seq = $2
+              AND publication.visible
+              AND surface.visible
               AND NOT EXISTS (
-                  SELECT 1 FROM community_member_mute AS mute
+                  SELECT 1 FROM profile_mute AS mute
                   WHERE $3::text IS NOT NULL
                     AND mute.principal_user_id = $3
-                    AND mute.target_profile_id = post.author_profile_id
+                    AND mute.target_profile_id = publication.author_profile_id
                     AND mute.active
-              )
-              AND NOT EXISTS (
-                  SELECT 1 FROM moderation_target_state AS moderation
-                  WHERE moderation.target_kind = 'discussion_post'
-                    AND moderation.scope_id = post.topic_id
-                    AND moderation.source_seq = post.source_seq
-                    AND moderation.visibility = 'hidden'
               )
         )
         "#,
     )
-    .bind(topic_id)
-    .bind(source_seq)
+    .bind(quoted.surface_id)
+    .bind(quoted.source_seq)
     .bind(viewer_principal_user_id)
     .fetch_one(pool)
-    .await?)
+    .await?;
+    if !visible {
+        return Ok(None);
+    }
+    let citation_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)::bigint
+        FROM public_citation AS citation
+        JOIN public_publication AS quoting
+          ON quoting.surface_id = citation.quoting_surface_id
+         AND quoting.source_seq = citation.quoting_source_seq
+        JOIN publication_surface AS surface ON surface.surface_id = quoting.surface_id
+        WHERE citation.quoted_surface_id = $1
+          AND citation.quoted_source_seq = $2
+          AND quoting.visible
+          AND surface.visible
+          AND NOT EXISTS (
+              SELECT 1 FROM profile_mute AS mute
+              WHERE $3::text IS NOT NULL
+                AND mute.principal_user_id = $3
+                AND mute.target_profile_id = quoting.author_profile_id
+                AND mute.active
+          )
+        "#,
+    )
+    .bind(quoted.surface_id)
+    .bind(quoted.source_seq)
+    .bind(viewer_principal_user_id)
+    .fetch_one(pool)
+    .await?;
+    let rows = sqlx::query(
+        r#"
+        SELECT citation.quoting_surface_id, citation.quoting_source_seq, citation.occurred_at
+        FROM public_citation AS citation
+        JOIN public_publication AS quoting
+          ON quoting.surface_id = citation.quoting_surface_id
+         AND quoting.source_seq = citation.quoting_source_seq
+        JOIN publication_surface AS surface ON surface.surface_id = quoting.surface_id
+        WHERE citation.quoted_surface_id = $1
+          AND citation.quoted_source_seq = $2
+          AND quoting.visible
+          AND surface.visible
+          AND NOT EXISTS (
+              SELECT 1 FROM profile_mute AS mute
+              WHERE $3::text IS NOT NULL
+                AND mute.principal_user_id = $3
+                AND mute.target_profile_id = quoting.author_profile_id
+                AND mute.active
+          )
+        ORDER BY citation.quoting_source_seq DESC
+        LIMIT $4
+        "#,
+    )
+    .bind(quoted.surface_id)
+    .bind(quoted.source_seq)
+    .bind(viewer_principal_user_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+    let citations = rows
+        .into_iter()
+        .map(|row| PublicCitationRow {
+            quoting: content_reference::PublicContentRef::new(
+                row.get("quoting_surface_id"),
+                row.get("quoting_source_seq"),
+            ),
+            occurred_at: row.get("occurred_at"),
+        })
+        .collect();
+    Ok(Some(PublicCitationPage {
+        quoted,
+        citations,
+        citation_count,
+    }))
 }
 
 async fn game_post_is_visible(
@@ -8231,15 +8099,14 @@ async fn game_post_is_visible(
               AND (
                   NOT $4::BOOLEAN OR NOT EXISTS (
                       SELECT 1 FROM moderation_target_state AS moderation
-                      WHERE moderation.target_kind = 'game_post'
-                        AND moderation.scope_id = thread_view.game_id
+                      WHERE moderation.surface_id = thread_view.game_id
                         AND moderation.source_seq = thread_view.source_seq
                         AND moderation.visibility = 'hidden'
                   )
               )
               AND NOT EXISTS (
                   SELECT 1
-                  FROM community_member_mute AS mute
+                  FROM profile_mute AS mute
                   JOIN profile_editor AS author
                     ON author.profile_id = mute.target_profile_id
                   WHERE $5::text IS NOT NULL
@@ -8259,46 +8126,6 @@ async fn game_post_is_visible(
     .await?)
 }
 
-async fn discussion_citation_count(
-    pool: &PgPool,
-    topic_id: Uuid,
-    source_seq: i64,
-    viewer_principal_user_id: Option<&str>,
-) -> Result<i64, ProjectionError> {
-    Ok(sqlx::query_scalar(
-        r#"
-        SELECT COUNT(*)::bigint
-        FROM post_citation AS citation
-        JOIN discussion_post AS quoting
-          ON quoting.topic_id = citation.quoting_scope_id
-         AND quoting.source_seq = citation.quoting_source_seq
-        WHERE citation.quoted_kind = 'discussion_post'
-          AND citation.quoted_scope_id = $1
-          AND citation.quoted_source_seq = $2
-          AND citation.quoting_kind = 'discussion_post'
-          AND NOT EXISTS (
-              SELECT 1 FROM community_member_mute AS mute
-              WHERE $3::text IS NOT NULL
-                AND mute.principal_user_id = $3
-                AND mute.target_profile_id = quoting.author_profile_id
-                AND mute.active
-          )
-          AND NOT EXISTS (
-              SELECT 1 FROM moderation_target_state AS moderation
-              WHERE moderation.target_kind = 'discussion_post'
-                AND moderation.scope_id = quoting.topic_id
-                AND moderation.source_seq = quoting.source_seq
-                AND moderation.visibility = 'hidden'
-          )
-        "#,
-    )
-    .bind(topic_id)
-    .bind(source_seq)
-    .bind(viewer_principal_user_id)
-    .fetch_one(pool)
-    .await?)
-}
-
 async fn game_citation_count(
     pool: &PgPool,
     game_id: Uuid,
@@ -8310,27 +8137,24 @@ async fn game_citation_count(
     Ok(sqlx::query_scalar(
         r#"
         SELECT COUNT(*)::bigint
-        FROM post_citation AS citation
+        FROM game_private_citation AS citation
         JOIN thread_view AS quoting
-          ON quoting.game_id = citation.quoting_scope_id
+          ON quoting.game_id = citation.game_id
          AND quoting.source_seq = citation.quoting_source_seq
          AND quoting.channel_id = $2
-        WHERE citation.quoted_kind = 'game_post'
-          AND citation.quoted_scope_id = $1
+        WHERE citation.game_id = $1
           AND citation.quoted_source_seq = $3
-          AND citation.quoting_kind = 'game_post'
           AND (
               NOT $4::BOOLEAN OR NOT EXISTS (
                   SELECT 1 FROM moderation_target_state AS moderation
-                  WHERE moderation.target_kind = 'game_post'
-                    AND moderation.scope_id = quoting.game_id
+                  WHERE moderation.surface_id = quoting.game_id
                     AND moderation.source_seq = quoting.source_seq
                     AND moderation.visibility = 'hidden'
               )
           )
           AND NOT EXISTS (
               SELECT 1
-              FROM community_member_mute AS mute
+              FROM profile_mute AS mute
               JOIN profile_editor AS author
                 ON author.profile_id = mute.target_profile_id
               WHERE $5::text IS NOT NULL
@@ -8363,59 +8187,45 @@ pub async fn off_page_game_citation_counts(
     if quoting_source_seqs.is_empty() {
         return Ok(Vec::new());
     }
-    let public_only = channel_id == "main";
+    if channel_id != "main" {
+        return Ok(Vec::new());
+    }
     let rows = sqlx::query(
         r#"
-        SELECT quoted.source_seq AS quoted_source_seq,
+        SELECT citation.quoted_source_seq,
                (
                    SELECT COUNT(*)::bigint
-                   FROM post_citation AS incoming
-                   JOIN thread_view AS quoting
-                     ON quoting.game_id = incoming.quoting_scope_id
+                   FROM public_citation AS incoming
+                   JOIN public_publication AS quoting
+                     ON quoting.surface_id = incoming.quoting_surface_id
                     AND quoting.source_seq = incoming.quoting_source_seq
-                    AND quoting.channel_id = $2
-                   WHERE incoming.quoted_kind = 'game_post'
-                     AND incoming.quoting_kind = 'game_post'
-                     AND incoming.quoted_scope_id = $1
-                     AND incoming.quoted_source_seq = quoted.source_seq
-                     AND (
-                         NOT $4::BOOLEAN OR NOT EXISTS (
-                             SELECT 1 FROM moderation_target_state AS moderation
-                             WHERE moderation.target_kind = 'game_post'
-                               AND moderation.scope_id = quoting.game_id
-                               AND moderation.source_seq = quoting.source_seq
-                               AND moderation.visibility = 'hidden'
-                         )
-                     )
+                   JOIN publication_surface AS surface ON surface.surface_id = quoting.surface_id
+                   WHERE incoming.quoted_surface_id = $1
+                     AND incoming.quoted_source_seq = citation.quoted_source_seq
+                     AND quoting.visible AND surface.visible
                      AND NOT EXISTS (
                          SELECT 1
-                         FROM community_member_mute AS mute
-                         JOIN profile_editor AS author
-                           ON author.profile_id = mute.target_profile_id
-                         WHERE $5::text IS NOT NULL
-                           AND mute.principal_user_id = $5
+                         FROM profile_mute AS mute
+                         WHERE $3::text IS NOT NULL
+                           AND mute.principal_user_id = $3
                            AND mute.active
-                           AND author.principal_user_id = quoting.author_user
+                           AND mute.target_profile_id = quoting.author_profile_id
                      )
                ) AS citation_count
-        FROM post_citation AS citation
-        JOIN thread_view AS quoted
-          ON quoted.game_id = citation.quoted_scope_id
+        FROM public_citation AS citation
+        JOIN public_publication AS quoted
+          ON quoted.surface_id = citation.quoted_surface_id
          AND quoted.source_seq = citation.quoted_source_seq
-         AND quoted.channel_id = $2
-        WHERE citation.quoted_kind = 'game_post'
-          AND citation.quoting_kind = 'game_post'
-          AND citation.quoted_scope_id = $1
-          AND citation.quoting_source_seq = ANY($3)
-          AND NOT (quoted.source_seq = ANY($6))
-        GROUP BY quoted.source_seq
-        ORDER BY quoted.source_seq
+        WHERE citation.quoted_surface_id = $1
+          AND citation.quoting_source_seq = ANY($2)
+          AND quoted.visible
+          AND NOT (citation.quoted_source_seq = ANY($4))
+        GROUP BY citation.quoted_source_seq
+        ORDER BY citation.quoted_source_seq
         "#,
     )
     .bind(game_id)
-    .bind(channel_id)
     .bind(quoting_source_seqs)
-    .bind(public_only)
     .bind(viewer_principal_user_id)
     .bind(present_source_seqs)
     .fetch_all(pool)
@@ -8431,59 +8241,6 @@ pub async fn off_page_game_citation_counts(
         .collect())
 }
 
-async fn discussion_citation_rows(
-    pool: &PgPool,
-    topic_id: Uuid,
-    source_seq: i64,
-    viewer_principal_user_id: Option<&str>,
-    limit: i64,
-) -> Result<Vec<PostCitationRow>, ProjectionError> {
-    let rows = sqlx::query(
-        r#"
-        SELECT citation.quoting_kind, citation.quoting_scope_id,
-               citation.quoting_source_seq, citation.occurred_at
-        FROM post_citation AS citation
-        JOIN discussion_post AS quoting
-          ON quoting.topic_id = citation.quoting_scope_id
-         AND quoting.source_seq = citation.quoting_source_seq
-        WHERE citation.quoted_kind = 'discussion_post'
-          AND citation.quoted_scope_id = $1
-          AND citation.quoted_source_seq = $2
-          AND citation.quoting_kind = 'discussion_post'
-          AND NOT EXISTS (
-              SELECT 1 FROM community_member_mute AS mute
-              WHERE $3::text IS NOT NULL
-                AND mute.principal_user_id = $3
-                AND mute.target_profile_id = quoting.author_profile_id
-                AND mute.active
-          )
-          AND NOT EXISTS (
-              SELECT 1 FROM moderation_target_state AS moderation
-              WHERE moderation.target_kind = 'discussion_post'
-                AND moderation.scope_id = quoting.topic_id
-                AND moderation.source_seq = quoting.source_seq
-                AND moderation.visibility = 'hidden'
-          )
-        ORDER BY citation.quoting_source_seq DESC
-        LIMIT $4
-        "#,
-    )
-    .bind(topic_id)
-    .bind(source_seq)
-    .bind(viewer_principal_user_id)
-    .bind(limit)
-    .fetch_all(pool)
-    .await?;
-    rows.into_iter()
-        .map(|row| {
-            Ok(PostCitationRow {
-                quoting: citation_post_ref(&row)?,
-                occurred_at: row.get("occurred_at"),
-            })
-        })
-        .collect()
-}
-
 async fn game_citation_rows(
     pool: &PgPool,
     game_id: Uuid,
@@ -8495,29 +8252,25 @@ async fn game_citation_rows(
     let public_only = channel_id == "main";
     let rows = sqlx::query(
         r#"
-        SELECT citation.quoting_kind, citation.quoting_scope_id,
-               citation.quoting_source_seq, citation.occurred_at
-        FROM post_citation AS citation
+        SELECT citation.quoting_source_seq, citation.occurred_at
+        FROM game_private_citation AS citation
         JOIN thread_view AS quoting
-          ON quoting.game_id = citation.quoting_scope_id
+          ON quoting.game_id = citation.game_id
          AND quoting.source_seq = citation.quoting_source_seq
          AND quoting.channel_id = $2
-        WHERE citation.quoted_kind = 'game_post'
-          AND citation.quoted_scope_id = $1
+        WHERE citation.game_id = $1
           AND citation.quoted_source_seq = $3
-          AND citation.quoting_kind = 'game_post'
           AND (
               NOT $4::BOOLEAN OR NOT EXISTS (
                   SELECT 1 FROM moderation_target_state AS moderation
-                  WHERE moderation.target_kind = 'game_post'
-                    AND moderation.scope_id = quoting.game_id
+                  WHERE moderation.surface_id = quoting.game_id
                     AND moderation.source_seq = quoting.source_seq
                     AND moderation.visibility = 'hidden'
               )
           )
           AND NOT EXISTS (
               SELECT 1
-              FROM community_member_mute AS mute
+              FROM profile_mute AS mute
               JOIN profile_editor AS author
                 ON author.profile_id = mute.target_profile_id
               WHERE $5::text IS NOT NULL
@@ -8540,31 +8293,21 @@ async fn game_citation_rows(
     rows.into_iter()
         .map(|row| {
             Ok(PostCitationRow {
-                quoting: citation_post_ref(&row)?,
+                quoting: content_reference::PostRef {
+                    kind: content_reference::PostKind::GamePost,
+                    scope_id: game_id,
+                    source_seq: row.get("quoting_source_seq"),
+                },
                 occurred_at: row.get("occurred_at"),
             })
         })
         .collect()
 }
 
-fn citation_post_ref(row: &sqlx::postgres::PgRow) -> Result<community::PostRef, ProjectionError> {
-    let kind = row.get::<String, _>("quoting_kind");
-    Ok(community::PostRef {
-        kind: community::PostKind::parse(kind.as_str()).map_err(|error| {
-            ProjectionError::Payload {
-                kind: "PostCitation".into(),
-                source: serde::de::Error::custom(error.to_string()),
-            }
-        })?,
-        scope_id: row.get("quoting_scope_id"),
-        source_seq: row.get("quoting_source_seq"),
-    })
-}
-
 pub async fn subscription_target_state(
     pool: &PgPool,
     principal_user_id: &str,
-    target: community::SubscriptionTarget,
+    target: WatchTarget,
 ) -> Result<SubscriptionTargetStateRow, ProjectionError> {
     let mut tx = pool.begin().await?;
     let latest_source_seq = public_subscription_target_latest_seq(&mut tx, &target).await?;
@@ -8576,7 +8319,7 @@ pub async fn subscription_target_state(
         Some(state) => {
             let unread_count = visible_subscription_inbox_count(
                 &mut tx,
-                state.subscription_id,
+                state.watch_id,
                 state.read_through_seq,
                 principal_user_id,
             )
@@ -8587,8 +8330,7 @@ pub async fn subscription_target_state(
     };
     tx.commit().await?;
     Ok(SubscriptionTargetStateRow {
-        target_kind: target.kind.as_str().to_string(),
-        scope_id: target.scope_id,
+        surface_id: target.surface_id,
         subscribed,
         read_through_seq,
         latest_source_seq: latest_source_seq.unwrap_or(read_through_seq),
@@ -8605,48 +8347,18 @@ async fn visible_subscription_inbox_count(
     Ok(sqlx::query_scalar(
         r#"
         SELECT COUNT(*)
-        FROM community_inbox_item AS item
-        LEFT JOIN discussion_topic AS topic
-          ON item.target_kind = 'discussion_topic' AND topic.topic_id = item.scope_id
-        LEFT JOIN game_index AS game
-          ON item.target_kind = 'game_thread' AND game.game_id = item.scope_id
+        FROM public_inbox_item AS item
+        JOIN public_publication AS publication
+          ON publication.surface_id = item.surface_id
+         AND publication.source_seq = item.source_seq
+        JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
         WHERE item.subscription_id = $1 AND item.source_seq > $2
-          AND (
-            (item.target_kind = 'discussion_topic' AND topic.visibility = 'visible')
-            OR
-            (item.target_kind = 'game_thread' AND game.status IN ('active', 'completed'))
-          )
+          AND publication.visible AND surface.visible
           AND NOT EXISTS (
-            SELECT 1 FROM moderation_target_state AS moderation
-            WHERE moderation.target_kind = CASE item.target_kind
-                    WHEN 'discussion_topic' THEN 'discussion_post'
-                    ELSE 'game_post'
-                  END
-              AND moderation.scope_id = item.scope_id
-              AND moderation.source_seq = item.source_seq
-              AND moderation.visibility = 'hidden'
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM community_member_mute AS mute
+            SELECT 1 FROM profile_mute AS mute
             WHERE mute.principal_user_id = $3
               AND mute.active
-              AND (
-                (item.target_kind = 'discussion_topic' AND EXISTS (
-                  SELECT 1 FROM discussion_post AS post
-                  WHERE post.topic_id = item.scope_id
-                    AND post.source_seq = item.source_seq
-                    AND post.author_profile_id = mute.target_profile_id
-                ))
-                OR (item.target_kind = 'game_thread' AND EXISTS (
-                  SELECT 1
-                  FROM thread_view AS post
-                  JOIN profile_editor AS author
-                    ON author.principal_user_id = post.author_user
-                  WHERE post.game_id = item.scope_id
-                    AND post.source_seq = item.source_seq
-                    AND author.profile_id = mute.target_profile_id
-                ))
-              )
+              AND mute.target_profile_id = publication.author_profile_id
           )
         "#,
     )
@@ -8657,73 +8369,35 @@ async fn visible_subscription_inbox_count(
     .await?)
 }
 
-pub async fn community_inbox(
+pub async fn public_inbox(
     pool: &PgPool,
     principal_user_id: &str,
     before_seq: Option<i64>,
     limit: i64,
-) -> Result<CommunityInboxPage, ProjectionError> {
+) -> Result<PublicInboxPage, ProjectionError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
     let rows = sqlx::query(
         r#"
-        SELECT item.target_kind, item.scope_id, item.source_seq, item.occurred_at,
+        SELECT item.surface_id, item.source_seq, item.occurred_at,
                item.source_seq > subscription.read_through_seq AS unread,
                subscription.active AS subscribed,
-               CASE item.target_kind
-                 WHEN 'discussion_topic' THEN topic.title
-                 ELSE game.pack_key || ' game'
-               END AS title,
-               CASE item.target_kind
-                 WHEN 'discussion_topic' THEN '/discussions/' || area.slug || '/t/' || item.scope_id::text || '#post-' || item.source_seq::text
-                 ELSE '/games/' || item.scope_id::text || '#thread-post-' || item.source_seq::text
-               END AS href
-        FROM community_inbox_item AS item
-        JOIN community_subscription AS subscription
+               surface.title, publication.href
+        FROM public_inbox_item AS item
+        JOIN public_watch AS subscription
           ON subscription.subscription_id = item.subscription_id
-        LEFT JOIN discussion_topic AS topic
-          ON item.target_kind = 'discussion_topic' AND topic.topic_id = item.scope_id
-        LEFT JOIN discussion_area AS area ON area.area_id = topic.area_id
-        LEFT JOIN game_index AS game
-          ON item.target_kind = 'game_thread' AND game.game_id = item.scope_id
+        JOIN public_publication AS publication
+          ON publication.surface_id = item.surface_id
+         AND publication.source_seq = item.source_seq
+        JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
         WHERE subscription.principal_user_id = $1
           AND ($2::bigint IS NULL OR item.source_seq < $2)
-          AND (
-            (item.target_kind = 'discussion_topic' AND topic.visibility = 'visible')
-            OR
-            (item.target_kind = 'game_thread' AND game.status IN ('active', 'completed'))
-          )
+          AND publication.visible AND surface.visible
           AND NOT EXISTS (
-            SELECT 1 FROM moderation_target_state AS moderation
-            WHERE moderation.target_kind = CASE item.target_kind
-                    WHEN 'discussion_topic' THEN 'discussion_post'
-                    ELSE 'game_post'
-                  END
-              AND moderation.scope_id = item.scope_id
-              AND moderation.source_seq = item.source_seq
-              AND moderation.visibility = 'hidden'
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM community_member_mute AS mute
+            SELECT 1 FROM profile_mute AS mute
             WHERE mute.principal_user_id = $1
               AND mute.active
-              AND (
-                (item.target_kind = 'discussion_topic' AND EXISTS (
-                  SELECT 1 FROM discussion_post AS post
-                  WHERE post.topic_id = item.scope_id
-                    AND post.source_seq = item.source_seq
-                    AND post.author_profile_id = mute.target_profile_id
-                ))
-                OR (item.target_kind = 'game_thread' AND EXISTS (
-                  SELECT 1
-                  FROM thread_view AS post
-                  JOIN profile_editor AS author
-                    ON author.principal_user_id = post.author_user
-                  WHERE post.game_id = item.scope_id
-                    AND post.source_seq = item.source_seq
-                    AND author.profile_id = mute.target_profile_id
-                ))
-              )
+              AND mute.target_profile_id = publication.author_profile_id
           )
         ORDER BY item.source_seq DESC
         LIMIT $3
@@ -8738,9 +8412,8 @@ pub async fn community_inbox(
     let items: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
-        .map(|row| CommunityInboxItemRow {
-            target_kind: row.get("target_kind"),
-            scope_id: row.get("scope_id"),
+        .map(|row| PublicInboxItemRow {
+            surface_id: row.get("surface_id"),
             source_seq: row.get("source_seq"),
             title: row.get("title"),
             href: row.get("href"),
@@ -8752,51 +8425,21 @@ pub async fn community_inbox(
     let unread_count: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*)
-        FROM community_inbox_item AS item
-        JOIN community_subscription AS subscription
+        FROM public_inbox_item AS item
+        JOIN public_watch AS subscription
           ON subscription.subscription_id = item.subscription_id
-        LEFT JOIN discussion_topic AS topic
-          ON item.target_kind = 'discussion_topic' AND topic.topic_id = item.scope_id
-        LEFT JOIN game_index AS game
-          ON item.target_kind = 'game_thread' AND game.game_id = item.scope_id
+        JOIN public_publication AS publication
+          ON publication.surface_id = item.surface_id
+         AND publication.source_seq = item.source_seq
+        JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
         WHERE subscription.principal_user_id = $1
           AND item.source_seq > subscription.read_through_seq
-          AND (
-            (item.target_kind = 'discussion_topic' AND topic.visibility = 'visible')
-            OR
-            (item.target_kind = 'game_thread' AND game.status IN ('active', 'completed'))
-          )
+          AND publication.visible AND surface.visible
           AND NOT EXISTS (
-            SELECT 1 FROM moderation_target_state AS moderation
-            WHERE moderation.target_kind = CASE item.target_kind
-                    WHEN 'discussion_topic' THEN 'discussion_post'
-                    ELSE 'game_post'
-                  END
-              AND moderation.scope_id = item.scope_id
-              AND moderation.source_seq = item.source_seq
-              AND moderation.visibility = 'hidden'
-          )
-          AND NOT EXISTS (
-            SELECT 1 FROM community_member_mute AS mute
+            SELECT 1 FROM profile_mute AS mute
             WHERE mute.principal_user_id = $1
               AND mute.active
-              AND (
-                (item.target_kind = 'discussion_topic' AND EXISTS (
-                  SELECT 1 FROM discussion_post AS post
-                  WHERE post.topic_id = item.scope_id
-                    AND post.source_seq = item.source_seq
-                    AND post.author_profile_id = mute.target_profile_id
-                ))
-                OR (item.target_kind = 'game_thread' AND EXISTS (
-                  SELECT 1
-                  FROM thread_view AS post
-                  JOIN profile_editor AS author
-                    ON author.principal_user_id = post.author_user
-                  WHERE post.game_id = item.scope_id
-                    AND post.source_seq = item.source_seq
-                    AND author.profile_id = mute.target_profile_id
-                ))
-              )
+              AND mute.target_profile_id = publication.author_profile_id
           )
         "#,
     )
@@ -8809,7 +8452,7 @@ pub async fn community_inbox(
             .expect("full inbox page has a final item")
             .source_seq
     });
-    Ok(CommunityInboxPage {
+    Ok(PublicInboxPage {
         items,
         unread_count,
         next_cursor,
@@ -8850,24 +8493,15 @@ pub async fn moderation_cases(
     let limit = limit.clamp(1, 100);
     let rows = sqlx::query(
         r#"
-        SELECT item.case_id, item.target_kind, item.scope_id, item.source_seq,
+        SELECT item.case_id, item.surface_id, item.source_seq,
                item.status, item.report_count, item.opened_at, item.updated_at,
                item.updated_seq, item.version, item.action_reason,
-               COALESCE(discussion.body, game_post.body, '') AS target_body,
-               CASE item.target_kind
-                   WHEN 'discussion_post' THEN '/discussions/' || area.slug || '/t/' ||
-                       item.scope_id::text || '#post-' || item.source_seq::text
-                   ELSE '/games/' || item.scope_id::text || '#thread-post-' || item.source_seq::text
-               END AS target_href
+               COALESCE(publication.body, '') AS target_body,
+               COALESCE(publication.href, surface.href) AS target_href
         FROM moderation_case AS item
-        LEFT JOIN discussion_post AS discussion
-          ON item.target_kind = 'discussion_post'
-         AND discussion.topic_id = item.scope_id AND discussion.source_seq = item.source_seq
-        LEFT JOIN discussion_topic AS topic ON topic.topic_id = discussion.topic_id
-        LEFT JOIN discussion_area AS area ON area.area_id = topic.area_id
-        LEFT JOIN thread_view AS game_post
-          ON item.target_kind = 'game_post'
-         AND game_post.game_id = item.scope_id AND game_post.source_seq = item.source_seq
+        LEFT JOIN public_publication AS publication
+          ON publication.surface_id = item.surface_id AND publication.source_seq = item.source_seq
+        LEFT JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
         WHERE ($1::TEXT IS NULL OR item.status = $1)
           AND ($2::BIGINT IS NULL OR item.updated_seq < $2
                OR (item.updated_seq = $2 AND item.case_id < $3))
@@ -8903,24 +8537,15 @@ pub async fn moderation_case_by_id(
 ) -> Result<Option<ModerationCaseDetailRow>, ProjectionError> {
     let case = sqlx::query(
         r#"
-        SELECT item.case_id, item.target_kind, item.scope_id, item.source_seq,
+        SELECT item.case_id, item.surface_id, item.source_seq,
                item.status, item.report_count, item.opened_at, item.updated_at,
                item.updated_seq, item.version, item.action_reason,
-               COALESCE(discussion.body, game_post.body, '') AS target_body,
-               CASE item.target_kind
-                   WHEN 'discussion_post' THEN '/discussions/' || area.slug || '/t/' ||
-                       item.scope_id::text || '#post-' || item.source_seq::text
-                   ELSE '/games/' || item.scope_id::text || '#thread-post-' || item.source_seq::text
-               END AS target_href
+               COALESCE(publication.body, '') AS target_body,
+               COALESCE(publication.href, surface.href) AS target_href
         FROM moderation_case AS item
-        LEFT JOIN discussion_post AS discussion
-          ON item.target_kind = 'discussion_post'
-         AND discussion.topic_id = item.scope_id AND discussion.source_seq = item.source_seq
-        LEFT JOIN discussion_topic AS topic ON topic.topic_id = discussion.topic_id
-        LEFT JOIN discussion_area AS area ON area.area_id = topic.area_id
-        LEFT JOIN thread_view AS game_post
-          ON item.target_kind = 'game_post'
-         AND game_post.game_id = item.scope_id AND game_post.source_seq = item.source_seq
+        LEFT JOIN public_publication AS publication
+          ON publication.surface_id = item.surface_id AND publication.source_seq = item.source_seq
+        LEFT JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
         WHERE item.case_id = $1
         "#,
     )
@@ -8970,25 +8595,23 @@ pub async fn moderation_case_by_id(
 pub async fn moderation_case_state(
     pool: &PgPool,
     case_id: Uuid,
-) -> Result<Option<community::ModerationCaseState>, ProjectionError> {
+) -> Result<Option<ModerationCaseState>, ProjectionError> {
     let row = sqlx::query(
-        "SELECT target_kind, scope_id, source_seq, status, version FROM moderation_case WHERE case_id = $1",
+        "SELECT surface_id, source_seq, status, version FROM moderation_case WHERE case_id = $1",
     )
     .bind(case_id)
     .fetch_optional(pool)
     .await?;
     row.map(|row| {
-        Ok(community::ModerationCaseState {
+        Ok(ModerationCaseState {
             case_id,
-            target: community::ModerationTarget {
-                kind: community::ModerationTargetKind::parse(
-                    row.get::<String, _>("target_kind").as_str(),
-                )
-                .map_err(|reject| moderation_domain_error(reject, "load case"))?,
-                scope_id: row.get("scope_id"),
-                source_seq: row.get("source_seq"),
+            target: ModerationTarget {
+                public: content_reference::PublicContentRef::new(
+                    row.get("surface_id"),
+                    row.get("source_seq"),
+                ),
             },
-            status: community::ModerationCaseStatus::parse(row.get::<String, _>("status").as_str())
+            status: ModerationCaseStatus::parse(row.get::<String, _>("status").as_str())
                 .map_err(|reject| moderation_domain_error(reject, "load case"))?,
             version: row.get("version"),
         })
@@ -8999,8 +8622,7 @@ pub async fn moderation_case_state(
 fn moderation_case_row(row: sqlx::postgres::PgRow) -> ModerationCaseRow {
     ModerationCaseRow {
         case_id: row.get("case_id"),
-        target_kind: row.get("target_kind"),
-        scope_id: row.get("scope_id"),
+        surface_id: row.get("surface_id"),
         source_seq: row.get("source_seq"),
         target_href: row.get("target_href"),
         target_body: row.get("target_body"),
@@ -9217,33 +8839,21 @@ async fn thread_view_for_channel_with_visibility(
                author_user, phase_id, body, body_private, media, quotations, embed, occurred_at,
                (
                    SELECT COUNT(*)::bigint
-                   FROM post_citation AS citation
-                   JOIN thread_view AS quoting
-                     ON quoting.game_id = citation.quoting_scope_id
+                   FROM public_citation AS citation
+                   JOIN public_publication AS quoting
+                     ON quoting.surface_id = citation.quoting_surface_id
                     AND quoting.source_seq = citation.quoting_source_seq
-                    AND quoting.channel_id = thread_view.channel_id
-                   WHERE citation.quoted_kind = 'game_post'
-                     AND citation.quoted_scope_id = thread_view.game_id
+                   JOIN publication_surface AS surface ON surface.surface_id = quoting.surface_id
+                   WHERE citation.quoted_surface_id = thread_view.game_id
                      AND citation.quoted_source_seq = thread_view.source_seq
-                     AND citation.quoting_kind = 'game_post'
-                     AND (
-                         NOT $5::BOOLEAN OR NOT EXISTS (
-                             SELECT 1 FROM moderation_target_state AS moderation
-                             WHERE moderation.target_kind = 'game_post'
-                               AND moderation.scope_id = quoting.game_id
-                               AND moderation.source_seq = quoting.source_seq
-                               AND moderation.visibility = 'hidden'
-                         )
-                     )
+                     AND quoting.visible AND surface.visible
                      AND NOT EXISTS (
                          SELECT 1
-                         FROM community_member_mute AS mute
-                         JOIN profile_editor AS author
-                           ON author.profile_id = mute.target_profile_id
+                         FROM profile_mute AS mute
                          WHERE $6::text IS NOT NULL
                            AND mute.principal_user_id = $6
                            AND mute.active
-                           AND author.principal_user_id = quoting.author_user
+                           AND mute.target_profile_id = quoting.author_profile_id
                      )
                ) AS citation_count
         FROM thread_view
@@ -9254,15 +8864,14 @@ async fn thread_view_for_channel_with_visibility(
           AND (
               NOT $5::BOOLEAN OR NOT EXISTS (
                   SELECT 1 FROM moderation_target_state AS moderation
-                  WHERE moderation.target_kind = 'game_post'
-                    AND moderation.scope_id = thread_view.game_id
+                  WHERE moderation.surface_id = thread_view.game_id
                     AND moderation.source_seq = thread_view.source_seq
                     AND moderation.visibility = 'hidden'
               )
           )
           AND NOT EXISTS (
               SELECT 1
-              FROM community_member_mute AS mute
+              FROM profile_mute AS mute
               JOIN profile_editor AS author
                 ON author.profile_id = mute.target_profile_id
               WHERE $6::text IS NOT NULL
@@ -10374,238 +9983,6 @@ async fn complete_game_index(
     Ok(())
 }
 
-async fn sync_game_search_documents(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    game_id: Uuid,
-) -> Result<(), ProjectionError> {
-    sqlx::query("DELETE FROM public_search_document WHERE scope_kind = 'game' AND scope_id = $1")
-        .bind(game_id)
-        .execute(&mut **tx)
-        .await?;
-    sqlx::query(
-        r#"
-        INSERT INTO public_search_document (
-            document_kind, document_key, scope_kind, scope_id, title, body,
-            href, updated_seq, published_at
-        )
-        SELECT 'game', game.game_id::text, 'game', game.game_id,
-               game.pack_key || ' game',
-               concat_ws(' ', game.pack_key, game.status, game.phase_id),
-               '/games/' || game.game_id::text,
-               game.updated_seq, event.occurred_at
-        FROM game_index AS game
-        JOIN events AS event ON event.seq = game.updated_seq
-        WHERE game.game_id = $1 AND game.status IN ('active', 'completed')
-        "#,
-    )
-    .bind(game_id)
-    .execute(&mut **tx)
-    .await?;
-    sqlx::query(
-        r#"
-        INSERT INTO public_search_document (
-            document_kind, document_key, scope_kind, scope_id, title, body,
-            href, updated_seq, published_at
-        )
-        SELECT 'game_post', post.game_id::text || '-' || post.source_seq::text,
-               'game', post.game_id,
-               'Post in ' || game.pack_key || ' game', post.body,
-               '/games/' || post.game_id::text || '#thread-post-' || post.source_seq::text,
-               post.source_seq, post.occurred_at
-        FROM thread_view AS post
-        JOIN game_index AS game ON game.game_id = post.game_id
-        WHERE post.game_id = $1
-          AND post.channel_id = 'main'
-          AND game.status IN ('active', 'completed')
-          AND NOT EXISTS (
-              SELECT 1 FROM moderation_target_state AS moderation
-              WHERE moderation.target_kind = 'game_post'
-                AND moderation.scope_id = post.game_id
-                AND moderation.source_seq = post.source_seq
-                AND moderation.visibility = 'hidden'
-          )
-        "#,
-    )
-    .bind(game_id)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
-async fn insert_game_post_search_document(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    game_id: Uuid,
-    source_seq: i64,
-) -> Result<(), ProjectionError> {
-    sqlx::query(
-        r#"
-        INSERT INTO public_search_document (
-            document_kind, document_key, scope_kind, scope_id, title, body,
-            href, updated_seq, published_at
-        )
-        SELECT 'game_post', post.game_id::text || '-' || post.source_seq::text,
-               'game', post.game_id,
-               'Post in ' || game.pack_key || ' game', post.body,
-               '/games/' || post.game_id::text || '#thread-post-' || post.source_seq::text,
-               post.source_seq, post.occurred_at
-        FROM thread_view AS post
-        JOIN game_index AS game ON game.game_id = post.game_id
-        WHERE post.game_id = $1 AND post.source_seq = $2
-          AND post.channel_id = 'main'
-          AND game.status IN ('active', 'completed')
-          AND NOT EXISTS (
-              SELECT 1 FROM moderation_target_state AS moderation
-              WHERE moderation.target_kind = 'game_post'
-                AND moderation.scope_id = post.game_id
-                AND moderation.source_seq = post.source_seq
-                AND moderation.visibility = 'hidden'
-          )
-        ON CONFLICT (document_kind, document_key) DO UPDATE SET
-            title = EXCLUDED.title,
-            body = EXCLUDED.body,
-            href = EXCLUDED.href,
-            updated_seq = EXCLUDED.updated_seq,
-            published_at = EXCLUDED.published_at
-        "#,
-    )
-    .bind(game_id)
-    .bind(source_seq)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
-async fn sync_profile_search_document(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    profile_id: Uuid,
-) -> Result<(), ProjectionError> {
-    sqlx::query(
-        "DELETE FROM public_search_document WHERE scope_kind = 'profile' AND scope_id = $1",
-    )
-    .bind(profile_id)
-    .execute(&mut **tx)
-    .await?;
-    sqlx::query(
-        r#"
-        INSERT INTO public_search_document (
-            document_kind, document_key, scope_kind, scope_id, title, body,
-            href, updated_seq, published_at
-        )
-        SELECT 'profile', profile.profile_id::text, 'profile', profile.profile_id,
-               profile.display_name, concat_ws(' ', profile.handle, profile.bio),
-               '/u/' || profile.handle, profile.updated_seq, event.occurred_at
-        FROM profile_public AS profile
-        JOIN events AS event ON event.seq = profile.updated_seq
-        WHERE profile.profile_id = $1 AND profile.visibility = 'public'
-        "#,
-    )
-    .bind(profile_id)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
-async fn sync_discussion_search_documents(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    topic_id: Uuid,
-) -> Result<(), ProjectionError> {
-    sqlx::query(
-        "DELETE FROM public_search_document WHERE scope_kind = 'discussion' AND scope_id = $1",
-    )
-    .bind(topic_id)
-    .execute(&mut **tx)
-    .await?;
-    sqlx::query(
-        r#"
-        INSERT INTO public_search_document (
-            document_kind, document_key, scope_kind, scope_id, title, body,
-            href, updated_seq, published_at
-        )
-        SELECT 'discussion_topic', topic.topic_id::text, 'discussion', topic.topic_id,
-               topic.title, area.title || ' ' || area.description,
-               '/discussions/' || area.slug || '/t/' || topic.topic_id::text,
-               topic.updated_seq, topic.updated_at
-        FROM discussion_topic AS topic
-        JOIN discussion_area AS area ON area.area_id = topic.area_id
-        WHERE topic.topic_id = $1 AND topic.visibility = 'visible'
-        "#,
-    )
-    .bind(topic_id)
-    .execute(&mut **tx)
-    .await?;
-    sqlx::query(
-        r#"
-        INSERT INTO public_search_document (
-            document_kind, document_key, scope_kind, scope_id, title, body,
-            href, updated_seq, published_at
-        )
-        SELECT 'discussion_post', post.topic_id::text || '-' || post.source_seq::text,
-               'discussion', post.topic_id, 'Reply in ' || topic.title, post.body,
-               '/discussions/' || area.slug || '/t/' || post.topic_id::text ||
-                   '#post-' || post.source_seq::text,
-               post.source_seq, post.created_at
-        FROM discussion_post AS post
-        JOIN discussion_topic AS topic ON topic.topic_id = post.topic_id
-        JOIN discussion_area AS area ON area.area_id = topic.area_id
-        WHERE post.topic_id = $1 AND topic.visibility = 'visible'
-          AND NOT EXISTS (
-              SELECT 1 FROM moderation_target_state AS moderation
-              WHERE moderation.target_kind = 'discussion_post'
-                AND moderation.scope_id = post.topic_id
-                AND moderation.source_seq = post.source_seq
-                AND moderation.visibility = 'hidden'
-          )
-        "#,
-    )
-    .bind(topic_id)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
-async fn insert_discussion_post_search_document(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    topic_id: Uuid,
-    source_seq: i64,
-) -> Result<(), ProjectionError> {
-    sqlx::query(
-        r#"
-        INSERT INTO public_search_document (
-            document_kind, document_key, scope_kind, scope_id, title, body,
-            href, updated_seq, published_at
-        )
-        SELECT 'discussion_post', post.topic_id::text || '-' || post.source_seq::text,
-               'discussion', post.topic_id, 'Reply in ' || topic.title, post.body,
-               '/discussions/' || area.slug || '/t/' || post.topic_id::text ||
-                   '#post-' || post.source_seq::text,
-               post.source_seq, post.created_at
-        FROM discussion_post AS post
-        JOIN discussion_topic AS topic ON topic.topic_id = post.topic_id
-        JOIN discussion_area AS area ON area.area_id = topic.area_id
-        WHERE post.topic_id = $1 AND post.source_seq = $2
-          AND topic.visibility = 'visible'
-          AND NOT EXISTS (
-              SELECT 1 FROM moderation_target_state AS moderation
-              WHERE moderation.target_kind = 'discussion_post'
-                AND moderation.scope_id = post.topic_id
-                AND moderation.source_seq = post.source_seq
-                AND moderation.visibility = 'hidden'
-          )
-        ON CONFLICT (document_kind, document_key) DO UPDATE SET
-            title = EXCLUDED.title,
-            body = EXCLUDED.body,
-            href = EXCLUDED.href,
-            updated_seq = EXCLUDED.updated_seq,
-            published_at = EXCLUDED.published_at
-        "#,
-    )
-    .bind(topic_id)
-    .bind(source_seq)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
 /// Ensure a phase_state row exists for the game (without clobbering an existing
 /// phase). Used by deadline events that may arrive for the current phase.
 async fn ensure_phase(
@@ -10643,8 +10020,8 @@ async fn set_locked(
 fn quotations_from_event(
     payload: &serde_json::Value,
     kind: &str,
-) -> Result<Vec<community::Quotation>, ProjectionError> {
-    community::quotations_from_payload(payload).map_err(|source| ProjectionError::Payload {
+) -> Result<Vec<Quotation>, ProjectionError> {
+    content_reference::quotations_from_payload(payload).map_err(|source| ProjectionError::Payload {
         kind: kind.to_string(),
         source,
     })
@@ -10653,7 +10030,7 @@ fn quotations_from_event(
 fn quotations_from_json(
     value: serde_json::Value,
     kind: &str,
-) -> Result<Vec<community::Quotation>, ProjectionError> {
+) -> Result<Vec<Quotation>, ProjectionError> {
     if value.is_null() {
         return Ok(Vec::new());
     }
@@ -10663,31 +10040,29 @@ fn quotations_from_json(
     })
 }
 
-async fn fold_post_citations(
+async fn record_game_private_citations(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    quoting: community::PostRef,
-    quotations: &[community::Quotation],
+    quoting: PostRef,
+    quotations: &[Quotation],
     occurred_at: i64,
 ) -> Result<(), ProjectionError> {
+    if quoting.kind != content_reference::PostKind::GamePost {
+        return Ok(());
+    }
     for quotation in quotations {
+        if quotation.target.kind != content_reference::PostKind::GamePost {
+            continue;
+        }
         sqlx::query(
             r#"
-            INSERT INTO post_citation (
-                quoted_kind, quoted_scope_id, quoted_source_seq,
-                quoting_kind, quoting_scope_id, quoting_source_seq,
-                occurred_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (
-                quoting_kind, quoting_scope_id, quoting_source_seq,
-                quoted_kind, quoted_scope_id, quoted_source_seq
-            ) DO NOTHING
+            INSERT INTO game_private_citation (
+                game_id, quoted_source_seq, quoting_source_seq, occurred_at
+            ) VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
             "#,
         )
-        .bind(quotation.target.kind.as_str())
-        .bind(quotation.target.scope_id)
-        .bind(quotation.target.source_seq)
-        .bind(quoting.kind.as_str())
         .bind(quoting.scope_id)
+        .bind(quotation.target.source_seq)
         .bind(quoting.source_seq)
         .bind(occurred_at)
         .execute(&mut **tx)
@@ -10706,8 +10081,8 @@ struct ThreadPostInsert {
     phase_id: String,
     body: String,
     media: serde_json::Value,
-    quotations: Vec<community::Quotation>,
-    embed: Option<community::PostEmbed>,
+    quotations: Vec<Quotation>,
+    embed: Option<game_platform::embed::PostEmbed>,
     occurred_at: i64,
 }
 

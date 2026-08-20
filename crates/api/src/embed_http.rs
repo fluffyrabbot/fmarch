@@ -8,7 +8,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use community::{
+use game_platform::embed::{
     decide_post_embed, snapshot_from_oembed, youtube_oembed_query, EmbedSnapshot, PostEmbed,
     YOUTUBE_OEMBED_ORIGIN, YOUTUBE_OEMBED_PATH,
 };
@@ -58,10 +58,12 @@ impl YoutubeSnapshotLookup {
             .build()
             .map_err(|error| format!("youtube oembed client: {error}"))?;
         Ok(Self {
-            inner: Arc::new(YoutubeSnapshotLookupInner::Http(HttpYoutubeSnapshotLookup {
-                client,
-                origin: YOUTUBE_OEMBED_ORIGIN.to_string(),
-            })),
+            inner: Arc::new(YoutubeSnapshotLookupInner::Http(
+                HttpYoutubeSnapshotLookup {
+                    client,
+                    origin: YOUTUBE_OEMBED_ORIGIN.to_string(),
+                },
+            )),
         })
     }
 
@@ -168,7 +170,8 @@ pub(super) async fn resolve_youtube_snapshot(
     channel_id: &str,
     url: &str,
 ) -> Result<PostEmbed, commands::Reject> {
-    let embed = decide_post_embed(channel_id, Some(url)).map_err(|_| commands::Reject::InvalidTarget)?;
+    let embed =
+        decide_post_embed(channel_id, Some(url)).map_err(|_| commands::Reject::InvalidTarget)?;
     let Some(mut embed) = embed else {
         return Err(commands::Reject::InvalidTarget);
     };
@@ -198,12 +201,17 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            embed.snapshot.as_ref().map(|snapshot| snapshot.title.as_str()),
+            embed
+                .snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.title.as_str()),
             Some("Never Gonna Give You Up")
         );
-        assert!(resolve_youtube_snapshot(&lookup, "main", "https://youtu.be/xxxxxxxxxxx")
-            .await
-            .is_err());
+        assert!(
+            resolve_youtube_snapshot(&lookup, "main", "https://youtu.be/xxxxxxxxxxx")
+                .await
+                .is_err()
+        );
         assert!(resolve_youtube_snapshot(
             &lookup,
             "private:role_pm:slot_1",
@@ -221,5 +229,3 @@ mod tests {
         );
     }
 }
-
-

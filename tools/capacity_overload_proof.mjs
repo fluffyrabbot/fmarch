@@ -217,23 +217,22 @@ async function seedReadFixtures({ psql, databaseUrl }) {
         ORDER BY pack_key, pack_version, content_hash
         LIMIT 1
       ) AS artifact;
-      INSERT INTO public_search_document (
-        document_kind, document_key, scope_kind, scope_id, title, body, href,
-        updated_seq, published_at
+      INSERT INTO publication_surface (
+        surface_id, search_group, title, href, visible, updated_seq
+      ) VALUES (
+        '${crawlerScope}', 'capacity', 'Capacity fixture', '/capacity', TRUE,
+        ${budgets.crawlerDocuments}
+      );
+      INSERT INTO public_publication (
+        surface_id, source_seq, body, href, author_profile_id, occurred_at, visible
       )
-      SELECT CASE WHEN value % 2 = 0 THEN 'game_post' ELSE 'discussion_post' END,
-             '${runId}-' || value,
-             CASE WHEN value % 2 = 0 THEN 'game' ELSE 'discussion' END,
-             '${crawlerScope}',
-             'Capacity document ' || value,
+      SELECT '${crawlerScope}', value,
              'capacityword bounded crawler fixture ' || value,
-             '/capacity/' || value,
-             value,
-             value
+             '/capacity/' || value, NULL, value, TRUE
       FROM generate_series(1, ${budgets.crawlerDocuments}) AS value;
       ANALYZE thread_view;
       ANALYZE game_index;
-      ANALYZE public_search_document;
+      ANALYZE public_publication;
     `,
   );
 }
@@ -276,8 +275,7 @@ async function explainThreadPage({ psql, databaseUrl }) {
        AND channel_id = 'main'
        AND NOT EXISTS (
          SELECT 1 FROM moderation_target_state AS moderation
-         WHERE moderation.target_kind = 'game_post'
-           AND moderation.scope_id = thread_view.game_id
+         WHERE moderation.surface_id = thread_view.game_id
            AND moderation.source_seq = thread_view.source_seq
            AND moderation.visibility = 'hidden'
        )
@@ -765,7 +763,7 @@ async function cleanupReadFixtures({ psql, databaseUrl }) {
   await runPsql(
     psql,
     databaseUrl,
-    `DELETE FROM public_search_document WHERE scope_id = '${crawlerScope}';
+    `DELETE FROM publication_surface WHERE surface_id = '${crawlerScope}';
      DELETE FROM thread_view WHERE game_id = '${largeThreadGame}';
      DELETE FROM game_index
      WHERE game_id = '${largeThreadGame}'

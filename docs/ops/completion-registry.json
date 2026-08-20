@@ -385,11 +385,11 @@
         },
         {
           "kind": "source",
-          "value": "crates/api/src/community_http.rs"
+          "value": "crates/api/src/public_platform_http.rs"
         },
         {
           "kind": "source",
-          "value": "crates/api/tests/community_http_boundary.rs"
+          "value": "crates/api/tests/public_platform_http_boundary.rs"
         },
         {
           "kind": "source",
@@ -1649,7 +1649,7 @@
       "evidence": [
         {
           "kind": "source",
-          "value": "crates/community/src/lib.rs"
+          "value": "crates/forum/src/lib.rs"
         },
         {
           "kind": "source",
@@ -1768,7 +1768,7 @@
       "id": "product.community.moderation-operations",
       "section": "community",
       "order": 50,
-      "title": "Community moderation operations",
+      "title": "Public-publication moderation operations",
       "execution_class": "code",
       "status": "complete",
       "summary": "Authenticated members can report public discussion and game-thread posts into typed moderation-case streams with active-report deduplication and bounded daily submissions. GlobalMod operators have a capability-safe queue, reporter evidence, reasoned hide/dismiss/restore transitions, append-only history, and synchronous public-thread/search visibility updates.",
@@ -1808,7 +1808,7 @@
       "id": "product.community.subscriptions",
       "section": "community",
       "order": 60,
-      "title": "Community subscriptions and unread inbox",
+      "title": "Public watches and unread inbox",
       "execution_class": "code",
       "status": "complete",
       "summary": "Authenticated members can watch public discussion topics and public game threads through one durable member-target stream, receive privacy-safe in-app update references only for active watch periods, and advance a monotonic per-watch read cursor. Fanout is synchronous and rebuildable, author-self updates are excluded, and moderation hide/restore state suppresses and restores inbox entries without mutating history.",
@@ -1870,7 +1870,7 @@
         },
         {
           "kind": "source",
-          "value": "crates/community/src/lib.rs"
+          "value": "crates/social/src/lib.rs"
         },
         {
           "kind": "source",
@@ -1886,7 +1886,7 @@
         },
         {
           "kind": "command",
-          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p community -p projections -p api member_mute -- --test-threads=1"
+          "value": "DATABASE_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch cargo test -p social -p projections -p api member_mute -- --test-threads=1"
         },
         {
           "kind": "command",

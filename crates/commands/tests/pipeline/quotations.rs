@@ -1,5 +1,5 @@
 use commands::{handle, Command};
-use community::{PostKind, PostRef, Quotation};
+use content_reference::{PostKind, PostRef, Quotation};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -79,8 +79,8 @@ async fn submit_post_records_same_thread_quotations_without_writing_the_quoted_s
     let citation = sqlx::query(
         r#"
         SELECT quoted_source_seq, quoting_source_seq
-        FROM post_citation
-        WHERE quoting_kind = 'game_post' AND quoting_scope_id = $1
+        FROM public_citation
+        WHERE quoting_surface_id = $1
         "#,
     )
     .bind(game)

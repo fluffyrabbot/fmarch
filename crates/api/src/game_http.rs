@@ -6,12 +6,15 @@ use super::auth_http::{
 };
 use super::command_http::command_reject_api_error;
 use super::{ApiError, ApiState};
-use crate::{community_http, live_projection, program_library};
+use crate::{live_projection, program_library, public_platform_http};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::get;
 use axum::{Json, Router};
 use caps::{Capability, Principal};
+use content_reference::{
+    self, PostKind as ContentPostKind, PostRef as ContentPostRef, DEFAULT_POST_CITATION_LIMIT,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,8 +28,8 @@ use wire::{
     HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
     HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
     HostTaskUrgency, PlayerInvestigationResult, PlayerNotification, PostCitationPage,
-    PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, PublicGameThreadPage, Quotation,
-    RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
+    PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, PublicGameThreadPage,
+    PublicPostCitationPage, Quotation, RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -363,7 +366,7 @@ async fn public_game_thread(
     headers: HeaderMap,
 ) -> Result<Json<PublicGameThreadPage>, ApiError> {
     let viewer_principal_user_id =
-        community_http::optional_authenticated_community_member(&state.auth, &headers).await?;
+        public_platform_http::optional_authenticated_member(&state.auth, &headers).await?;
     let game_row = projections::public_game_by_id(&state.pool, game)
         .await?
         .ok_or_else(|| ApiError::Reject {
@@ -458,9 +461,9 @@ async fn public_game_post_citations(
     Path((game, source_seq)): Path<(Uuid, i64)>,
     Query(query): Query<PostCitationQuery>,
     headers: HeaderMap,
-) -> Result<Json<PostCitationPage>, ApiError> {
+) -> Result<Json<PublicPostCitationPage>, ApiError> {
     let viewer_principal_user_id =
-        community_http::optional_authenticated_community_member(&state.auth, &headers).await?;
+        public_platform_http::optional_authenticated_member(&state.auth, &headers).await?;
     if projections::public_game_by_id(&state.pool, game)
         .await?
         .is_none()
@@ -471,15 +474,21 @@ async fn public_game_post_citations(
             message: "public game was not found".to_string(),
         });
     }
-    game_post_citations(
+    let page = projections::visible_public_incoming_citations(
         &state.pool,
-        game,
-        "main",
-        source_seq,
+        content_reference::PublicContentRef::new(game, source_seq),
         viewer_principal_user_id.as_deref(),
-        query.limit,
+        query
+            .limit
+            .unwrap_or(content_reference::DEFAULT_POST_CITATION_LIMIT),
     )
-    .await
+    .await?
+    .ok_or_else(|| ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::NotAuthorized,
+        message: "game post was not found".to_string(),
+    })?;
+    Ok(Json(PublicPostCitationPage::from(page)))
 }
 
 async fn channel_post_citations(
@@ -524,14 +533,14 @@ async fn game_post_citations(
 ) -> Result<Json<PostCitationPage>, ApiError> {
     let page = projections::visible_incoming_citations(
         pool,
-        community::PostRef {
-            kind: community::PostKind::GamePost,
+        ContentPostRef {
+            kind: ContentPostKind::GamePost,
             scope_id: game,
             source_seq,
         },
         Some(channel_id),
         viewer_principal_user_id,
-        limit.unwrap_or(community::DEFAULT_POST_CITATION_LIMIT),
+        limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
     )
     .await?
     .ok_or_else(|| ApiError::Reject {

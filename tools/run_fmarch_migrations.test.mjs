@@ -13,7 +13,7 @@ const migrationHarnessCallers = Object.freeze([
   "auth_invite_role_proof.mjs",
   "capacity_overload_proof.mjs",
   "community_moderation_role_proof.mjs",
-  "community_subscription_role_proof.mjs",
+  "public_watch_role_proof.mjs",
   "completed_game_export_role_proof.mjs",
   "dev_test_game.mjs",
   "discussion_role_proof.mjs",

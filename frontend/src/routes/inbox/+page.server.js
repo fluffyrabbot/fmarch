@@ -44,17 +44,16 @@ export async function load({ cookies, locals, fetch, url }) {
 export const actions = {
   markRead: async ({ locals, cookies, fetch, request }) => {
     const form = await request.formData();
-    const targetKind = subscriptionTargetKind(form.get("target_kind"));
-    const scopeId = text(form.get("scope_id"));
+    const surfaceId = text(form.get("surface_id"));
     const sourceSeq = positiveSequence(form.get("source_seq"));
-    if (targetKind === null || scopeId === "" || sourceSeq === null) {
+    if (surfaceId === "" || sourceSeq === null) {
       return fail(400, { id: "inbox-read", state: "reject", message: "Invalid inbox update" });
     }
     const response = await mutation({
       cookies,
       locals,
       fetch,
-      path: `/subscriptions/${targetKind}/${encodeURIComponent(scopeId)}/read`,
+      path: `/subscriptions/${encodeURIComponent(surfaceId)}/read`,
       method: "POST",
       body: { read_through_seq: Number(sourceSeq) },
     });
@@ -63,16 +62,15 @@ export const actions = {
   },
   unwatch: async ({ locals, cookies, fetch, request }) => {
     const form = await request.formData();
-    const targetKind = subscriptionTargetKind(form.get("target_kind"));
-    const scopeId = text(form.get("scope_id"));
-    if (targetKind === null || scopeId === "") {
+    const surfaceId = text(form.get("surface_id"));
+    if (surfaceId === "") {
       return fail(400, { id: "inbox-unwatch", state: "reject", message: "Invalid watch target" });
     }
     const response = await mutation({
       cookies,
       locals,
       fetch,
-      path: `/subscriptions/${targetKind}/${encodeURIComponent(scopeId)}`,
+      path: `/subscriptions/${encodeURIComponent(surfaceId)}`,
       method: "DELETE",
     });
     if (!response.ok) return mutationFailure(response, "Unable to remove this watch");
@@ -123,10 +121,6 @@ async function mutationFailure(response, fallback) {
 
 function authHeaders(token) {
   return { authorization: `Bearer ${token}`, accept: "application/json" };
-}
-
-function subscriptionTargetKind(value) {
-  return ["discussion_topic", "game_thread"].includes(value) ? value : null;
 }
 
 function positiveSequence(value) {

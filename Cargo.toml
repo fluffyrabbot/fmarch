@@ -3,7 +3,11 @@ resolver = "2"
 members = [
     "crates/content_registry",
     "crates/identity",
-    "crates/community",
+    "crates/content_reference",
+    "crates/attention",
+    "crates/social",
+    "crates/trust_safety",
+    "crates/forum",
     "crates/domain",
     "crates/eventstore",
     "crates/projections",

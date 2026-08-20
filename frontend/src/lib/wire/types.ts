@@ -131,6 +131,10 @@ export type PostCitation = { quoting: PostRef, occurred_at: bigint, };
 
 export type PostCitationPage = { quoted: PostRef, citations: Array<PostCitation>, citation_count: bigint, };
 
+export type PublicPostCitation = { quoting_surface_id: string, quoting_source_seq: bigint, occurred_at: bigint, };
+
+export type PublicPostCitationPage = { quoted_surface_id: string, quoted_source_seq: bigint, citations: Array<PublicPostCitation>, citation_count: bigint, };
+
 export type CohostPermissionClass = "setup" | "phase_resolve" | "host_prompt_resolve" | "lifecycle" | "replacement" | "deadline" | "narrative" | "ita_control" | "effect_spec" | "day_event_ops" | "day_event_resolve" | "program_attach";
 
 export type Command = { "CreateGame": { game: string, pack: string, cohost_denied?: Array<CohostPermissionClass>, } } | { "AddSlot": { game: string, slot: string, } } | { "SeatPersona": { game: string, slot: string, principal_user_id: string, public_name: string, } } | { "RenameGamePersona": { game: string, persona_id: string, public_name: string, } } | { "AssignRole": { game: string, slot: string, role_key: string, } } | { "SetSlotStatus": { game: string, slot: string, status: SlotLifecycle, } } | { "AddSlotStatusTag": { game: string, slot: string, tag: string, } } | { "RemoveSlotStatusTag": { game: string, slot: string, tag: string, } } | { "AddCohost": { game: string, user: string, } } | { "GrantSpectator": { game: string, user: string, } } | { "RevokeSpectator": { game: string, user: string, } } | { "StartGame": { game: string, phase: string, } } | { "OpenDayPhase": { game: string, phase: string, } } | { "AdvancePhase": { game: string, } } | { "AdvancePhaseByDeadline": { game: string, phase: string, observed_at: bigint, } } | { "LockThread": { game: string, } } | { "UnlockThread": { game: string, } } | { "ResolvePhase": { game: string, seed: bigint, } } | { "CompleteGame": { game: string, } } | { "PublishVotecount": { game: string, } } | { "ResolveHostPrompt": { game: string, prompt_id: string, decision: HostPromptDecision, } } | { "SetPostPolicy": { game: string, channel_id: string, allow_media_only: boolean, } } | { "PublishSpectatorPost": { game: string, body: string, media?: Array<SubmitPostMedia>, } } | { "ControlItaSession": { game: string, session_id: string, control: ItaSessionControlKind, message?: string, } } | { "ApplyEffectPlan": { game: string, effects: Array<ConcreteEffect>, reason: string, } } | { "AttachDayProgram": { game: string, program_ref: DayProgramRef, } } | { "ScheduleDayEvent": { game: string, event: DayEvent, } } | { "OpenDayEvent": { game: string, event_id: DayEventId, } } | { "LockDayEvent": { game: string, event_id: DayEventId, } } | { "CancelDayEvent": { game: string, event_id: DayEventId, reason: string, } } | { "SubmitDayEventParticipation": { game: string, event_id: DayEventId, actor_slot: string, payload: ParticipationPayload, } } | { "WithdrawDayEventParticipation": { game: string, event_id: DayEventId, actor_slot: string, } } | { "ResolveDayEvent": { game: string, event_id: DayEventId, decision: DayEventDecision, } } | { "SubmitVote": { game: string, actor_slot: string, target: VoteTarget, } } | { "WithdrawVote": { game: string, actor_slot: string, } } | { "SubmitAction": { game: string, action_id: string, actor_slot: string, template_id: string, targets: Array<string>, grant_id: string | null, } } | { "WithdrawAction": { game: string, action_id: string, actor_slot: string, } } | { "SubmitPost": { game: string, channel_id: string, actor_slot: string, body: string, media?: Array<SubmitPostMedia>, quotations?: Array<Quotation>, embed?: SubmitPostEmbed, } } | { "ExtendDeadline": { game: string, phase: string, at: bigint, } } | { "ProcessReplacement": { game: string, slot: string, outgoing_persona_id: string, incoming_principal_user_id: string, } };
@@ -266,13 +270,13 @@ export type DiscussionPost = { source_seq: bigint, author: DiscussionAuthor | nu
 
 export type DiscussionThreadPage = { area: DiscussionArea, topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
 
-export type SubscriptionTargetState = { target_kind: string, scope_id: string, subscribed: boolean, read_through_seq: bigint, latest_source_seq: bigint, unread_count: bigint, };
+export type SubscriptionTargetState = { surface_id: string, subscribed: boolean, read_through_seq: bigint, latest_source_seq: bigint, unread_count: bigint, };
 
 export type AdvanceSubscriptionReadRequest = { read_through_seq: bigint, };
 
-export type CommunityInboxItem = { target_kind: string, scope_id: string, source_seq: bigint, title: string, href: string, occurred_at: bigint, unread: boolean, subscribed: boolean, };
+export type PublicInboxItem = { surface_id: string, source_seq: bigint, title: string, href: string, occurred_at: bigint, unread: boolean, subscribed: boolean, };
 
-export type CommunityInboxPage = { items: Array<CommunityInboxItem>, unread_count: bigint, next_cursor: bigint | null, };
+export type PublicInboxPage = { items: Array<PublicInboxItem>, unread_count: bigint, next_cursor: bigint | null, };
 
 export type MemberMuteState = { profile_id: string, handle: string, display_name: string, muted: boolean, updated_seq: bigint, };
 
@@ -280,7 +284,7 @@ export type MemberMutePage = { members: Array<MemberMuteState>, next_cursor: str
 
 export type ModerationReportReceipt = { report_id: string, status: string, submitted_at: bigint, };
 
-export type ModerationCase = { case_id: string, target_kind: string, scope_id: string, source_seq: bigint, target_href: string, target_body: string, status: string, report_count: bigint, opened_at: bigint, updated_at: bigint, updated_seq: bigint, action_reason: string | null, };
+export type ModerationCase = { case_id: string, surface_id: string, source_seq: bigint, target_href: string, target_body: string, status: string, report_count: bigint, opened_at: bigint, updated_at: bigint, updated_seq: bigint, action_reason: string | null, };
 
 export type ModerationReport = { report_id: string, reporter_principal_id: string, reason_family: string, details: string, active: boolean, submitted_at: bigint, };
 

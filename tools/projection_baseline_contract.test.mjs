@@ -70,10 +70,10 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     "0012_day_event_auto_resolution.sql",
     "0013_day_event_narrative.sql",
     "0014_private_day_event_channels.sql",
-    "0015_community_member_mutes.sql",
+    "0015_profile_mutes.sql",
     "0016_member_lifecycle.sql",
     "0017_auth_session_integrity.sql",
-    "0018_post_citation.sql",
+    "0018_game_private_citation.sql",
     "0019_subject_privacy.sql",
     "0020_sealed_event_body.sql",
     "0021_game_pack_ref.sql",
@@ -85,8 +85,9 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     "0027_workos_session_lifecycle.sql",
     "0028_action_submission_and_engine_checkpoint.sql",
     "0029_post_embed.sql",
+    "0030_public_publication_index.sql",
   ]);
-  assert.equal(report.migration_file_count, 29);
+  assert.equal(report.migration_file_count, 30);
   assert.ok(report.statement_count > 100);
 });
 

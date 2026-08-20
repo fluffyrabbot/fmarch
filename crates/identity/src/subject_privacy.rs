@@ -2524,7 +2524,7 @@ async fn scrub_subject_projections(
         .bind(subject_id.as_uuid()).bind(alias).execute(&mut **tx).await.map_err(database_error)?;
     sqlx::query("UPDATE profile_editor SET principal_user_id = $2, current_claim_id = NULL WHERE subject_id = $1")
         .bind(subject_id.as_uuid()).bind(alias).execute(&mut **tx).await.map_err(database_error)?;
-    sqlx::query("DELETE FROM public_search_document WHERE scope_kind = 'profile' AND scope_id IN (SELECT profile_id FROM profile_editor WHERE subject_id = $1)")
+    sqlx::query("DELETE FROM publication_surface WHERE surface_id IN (SELECT profile_id FROM profile_editor WHERE subject_id = $1)")
         .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;
     sqlx::query("DELETE FROM game_persona_name_claim WHERE (game_id, persona_id) IN (SELECT game_id, persona_id FROM game_persona_private WHERE subject_id = $1)")
         .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;

@@ -1,11 +1,11 @@
-//! First-class quotations fold into post_citation and rebuild identically.
+//! First-class quotations fold into public and private citation indexes identically.
 
-use community::{PostKind, PostRef};
+use content_reference::{PostKind, PostRef};
 use eventstore::{ActorId, EventInput};
 use projections::{
     append_and_project, append_discussion_and_project, append_profile_and_project,
     discussion_posts, off_page_game_citation_counts, public_thread_view, rebuild,
-    rebuild_discussion_stream, visible_incoming_citations,
+    rebuild_discussion_stream, visible_incoming_citations, visible_public_incoming_citations,
 };
 use sqlx::Row;
 use uuid::Uuid;
@@ -113,7 +113,7 @@ async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) 
     .await
     .unwrap();
 
-    let before_citations = citation_rows(&pool, "discussion_post", topic).await;
+    let before_citations = public_citation_rows(&pool, topic).await;
     let before_json: serde_json::Value = sqlx::query_scalar(
         "SELECT quotations FROM discussion_post WHERE topic_id = $1 AND source_seq = $2",
     )
@@ -135,7 +135,7 @@ async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) 
     assert!(first_post.payload.get("quotations").is_none());
 
     rebuild_discussion_stream(&pool, topic).await.unwrap();
-    let after_citations = citation_rows(&pool, "discussion_post", topic).await;
+    let after_citations = public_citation_rows(&pool, topic).await;
     let after_json: serde_json::Value = sqlx::query_scalar(
         "SELECT quotations FROM discussion_post WHERE topic_id = $1 AND source_seq = $2",
     )
@@ -219,12 +219,12 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     .await
     .unwrap();
 
-    let before = citation_rows(&pool, "game_post", game).await;
+    let before = public_citation_rows(&pool, game).await;
     assert_eq!(before.len(), 1);
     assert_eq!(before[0].0, quoted_seq);
 
     rebuild(&pool, game).await.unwrap();
-    assert_eq!(before, citation_rows(&pool, "game_post", game).await);
+    assert_eq!(before, public_citation_rows(&pool, game).await);
 
     let page = public_thread_view(&pool, game, None, 10, None)
         .await
@@ -383,10 +383,18 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
     sqlx::query(
         r#"
         INSERT INTO moderation_target_state (
-            target_kind, scope_id, source_seq, visibility, reason,
+            surface_id, source_seq, visibility, reason,
             moderator_principal_id, updated_seq
-        ) VALUES ('discussion_post', $1, $2, 'hidden', 'spam', 'moderator', $2)
+        ) VALUES ($1, $2, 'hidden', 'spam', 'moderator', $2)
         "#,
+    )
+    .bind(topic)
+    .bind(quoting[1].seq)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "UPDATE public_publication SET visible = FALSE WHERE surface_id = $1 AND source_seq = $2",
     )
     .bind(topic)
     .bind(quoting[1].seq)
@@ -403,14 +411,9 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
     assert_eq!(page.posts[1].quotations[0].excerpt, "Root");
     assert_eq!(page.posts[1].citation_count, 0);
 
-    let citations = visible_incoming_citations(
+    let citations = visible_public_incoming_citations(
         &pool,
-        PostRef {
-            kind: PostKind::DiscussionPost,
-            scope_id: topic,
-            source_seq: quoted_seq,
-        },
-        None,
+        content_reference::PublicContentRef::new(topic, quoted_seq),
         None,
         5,
     )
@@ -420,14 +423,9 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
     assert_eq!(citations.citation_count, 1);
     assert_eq!(citations.citations.len(), 1);
     assert_eq!(citations.citations[0].quoting.source_seq, quoting[0].seq);
-    assert!(visible_incoming_citations(
+    assert!(visible_public_incoming_citations(
         &pool,
-        PostRef {
-            kind: PostKind::DiscussionPost,
-            scope_id: topic,
-            source_seq: quoting[1].seq,
-        },
-        None,
+        content_reference::PublicContentRef::new(topic, quoting[1].seq),
         None,
         5,
     )
@@ -436,17 +434,16 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
     .is_none());
 }
 
-async fn citation_rows(pool: &sqlx::PgPool, kind: &str, scope_id: Uuid) -> Vec<(i64, i64)> {
+async fn public_citation_rows(pool: &sqlx::PgPool, surface_id: Uuid) -> Vec<(i64, i64)> {
     sqlx::query(
         r#"
         SELECT quoted_source_seq, quoting_source_seq
-        FROM post_citation
-        WHERE quoting_kind = $1 AND quoting_scope_id = $2
+        FROM public_citation
+        WHERE quoting_surface_id = $1
         ORDER BY quoting_source_seq, quoted_source_seq
         "#,
     )
-    .bind(kind)
-    .bind(scope_id)
+    .bind(surface_id)
     .fetch_all(pool)
     .await
     .unwrap()

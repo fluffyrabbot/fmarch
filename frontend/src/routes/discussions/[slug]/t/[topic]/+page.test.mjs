@@ -45,10 +45,9 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
           next_before_seq: 20,
         });
       }
-      if (url === `/subscriptions/discussion_topic/${topic}`) {
+      if (url === `/subscriptions/${topic}`) {
         return Response.json({
-          target_kind: "discussion_topic",
-          scope_id: topic,
+          surface_id: topic,
           subscribed: true,
           read_through_seq: 40,
           latest_source_seq: 80,
@@ -64,7 +63,7 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
   assert.deepEqual(requests, [
     `/discussions/areas/general/topics/${topic}?limit=50&before_seq=41`,
     "/profiles/me/editor",
-    `/subscriptions/discussion_topic/${topic}`,
+    `/subscriptions/${topic}`,
   ]);
   assert.equal(data.discussion.thread.posts[0].author.handle, "member_a");
   assert.equal(data.discussion.thread.next_before_seq, 20);
@@ -101,8 +100,7 @@ test("discussion report action maps the canonical topic post and returns a priva
   });
   assert.equal(mutation.url, "/moderation/reports");
   assert.deepEqual(mutation.body, {
-    target_kind: "discussion_post",
-    scope_id: topic,
+    surface_id: topic,
     source_seq: 42,
     reason_family: "harassment",
     details: "context",
@@ -125,7 +123,7 @@ test("discussion watch action uses the typed member-target endpoint", async () =
     },
   });
   assert.deepEqual(mutation, {
-    url: `/subscriptions/discussion_topic/${topic}`,
+    url: `/subscriptions/${topic}`,
     method: "PUT",
   });
   assert.equal(result.subscribed, true);
@@ -186,7 +184,7 @@ test("quote query seeds composer chips without copying excerpt into the body fie
           next_before_seq: null,
         });
       }
-      if (url === `/subscriptions/discussion_topic/${topic}`) {
+      if (url === `/subscriptions/${topic}`) {
         return Response.json({ subscribed: false, unread_count: 0 });
       }
       return Response.json({ handle: "member_a", visibility: "public" });

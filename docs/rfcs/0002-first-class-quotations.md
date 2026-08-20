@@ -45,7 +45,7 @@ Pasting quoted prose into `body` cannot:
 - reconstruct a quote chain without guessing at text.
 
 The event log already makes the honest model cheap: record the edge on the
-quoting event; fold the reverse index the way `community_inbox_item` folds
+quoting event; fold the reverse index the way `public_inbox_item` folds
 watch fan-out.
 
 ## Goals
@@ -113,7 +113,7 @@ post text; quotations are not parsed from post text.
 ### “Quoted by” is operational
 
 The quoted post did not change. Incoming citations are a projection over
-quoting events, in the same family as `community_inbox_item`:
+quoting events, in the same family as `public_inbox_item`:
 
 ```text
 quoting event  ──fold──▶  post_citation
@@ -333,7 +333,7 @@ post_citation
 Fold only from `DiscussionPostSubmitted` / `PostSubmitted` that carry
 quotations. Rebuild deletes and replays. Hidden or muted quoting posts are
 filtered at read time with the same overlays already used for thread pages
-(`moderation_target_state`, `community_member_mute`, channel membership).
+(`moderation_target_state`, `profile_mute`, channel membership).
 The index itself stores the edge, not the visibility decision.
 
 Reads:
@@ -473,7 +473,7 @@ identically.
 
 ### 3. Search and inbox stay unaware in the first slice
 
-`public_search_document` and `community_inbox_item` continue to fan out
+`public_search_document` and `public_inbox_item` continue to fan out
 from the quoting post as they do today. Citation is not a search document
 kind and not an inbox reason yet.
 

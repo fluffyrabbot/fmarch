@@ -100,8 +100,7 @@ test("signed-in public game report maps only the canonical public post target", 
   });
   assert.equal(mutation.url, "/moderation/reports");
   assert.deepEqual(mutation.body, {
-    target_kind: "game_post",
-    scope_id: "00000000-0000-0000-0000-000000000001",
+    surface_id: "00000000-0000-0000-0000-000000000001",
     source_seq: 41,
     reason_family: "spam",
     details: "repeated link",
@@ -124,7 +123,7 @@ test("signed-in public game watch uses the typed game-thread endpoint", async ()
     },
   });
   assert.deepEqual(mutation, {
-    url: "/subscriptions/game_thread/00000000-0000-0000-0000-000000000001",
+    url: "/subscriptions/00000000-0000-0000-0000-000000000001",
     method: "PUT",
   });
   assert.equal(result.subscribed, true);

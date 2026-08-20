@@ -119,13 +119,13 @@ change classification/publication remain outside. Ticket TTL/audience/single-use
 continuation, LISTEN/NOTIFY wakeup with `events.seq` catch-up, envelope IDs,
 protocol version, and disconnect behavior remain unchanged.
 
-## Closed API boundary: public community HTTP
+## Closed API boundary: public-platform HTTP
 
-`crates/api/src/community_http.rs` owns the public search, personalized inbox,
+`crates/api/src/public_platform_http.rs` owns the public search, personalized inbox,
 subscriptions, member mutes, discussion, moderation, and profile route family.
 Its request/query DTOs, cursor and target decoders, community admission,
 capability checks, response adaptation, validation, and projection-error
-mapping live behind `CommunityHttpState`, whose dependency set is only the
+mapping live behind `PublicPlatformHttpState`, whose dependency set is only the
 Postgres pool and the configured authentication boundary.
 
 The composition root mounts the route family as one fragment. It retains game

@@ -22,7 +22,7 @@
     <section class="case-grid" aria-label="Moderation cases" data-testid="moderation-case-list">
       {#each moderation.cases as item}
         <article class="fm-panel" data-testid={`moderation-case-${item.case_id}`}>
-          <p class="fm-eyebrow">{item.status} · {item.target_kind}</p>
+          <p class="fm-eyebrow">{item.status} · public content</p>
           <h2>{item.report_count} report{item.report_count === 1 ? "" : "s"}</h2>
           <p>{item.target_body}</p>
           <div class="case-links">
@@ -41,7 +41,7 @@
   {#if detail}
     <section class="fm-panel case-detail" data-testid="moderation-case-detail">
       <p class="fm-eyebrow">Case {detail.case.case_id}</p>
-      <h2>{detail.case.status}: {detail.case.target_kind}</h2>
+      <h2>{detail.case.status}: public content</h2>
       <p>{detail.case.target_body}</p>
       <h3>Reports</h3>
       {#each detail.reports as report}

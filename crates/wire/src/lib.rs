@@ -1596,8 +1596,8 @@ pub struct EmbedPoster {
     pub content_id: String,
 }
 
-impl From<community::PostEmbed> for PostEmbed {
-    fn from(value: community::PostEmbed) -> Self {
+impl From<game_platform::embed::PostEmbed> for PostEmbed {
+    fn from(value: game_platform::embed::PostEmbed) -> Self {
         PostEmbed {
             provider: EmbedProvider::Youtube,
             provider_id: value.provider_id,
@@ -1607,8 +1607,8 @@ impl From<community::PostEmbed> for PostEmbed {
     }
 }
 
-impl From<community::EmbedSnapshot> for EmbedSnapshot {
-    fn from(value: community::EmbedSnapshot) -> Self {
+impl From<game_platform::embed::EmbedSnapshot> for EmbedSnapshot {
+    fn from(value: game_platform::embed::EmbedSnapshot) -> Self {
         EmbedSnapshot {
             title: value.title,
             author: value.author,
@@ -1626,11 +1626,11 @@ pub enum PostKind {
     GamePost,
 }
 
-impl From<PostKind> for community::PostKind {
+impl From<PostKind> for content_reference::PostKind {
     fn from(kind: PostKind) -> Self {
         match kind {
-            PostKind::DiscussionPost => community::PostKind::DiscussionPost,
-            PostKind::GamePost => community::PostKind::GamePost,
+            PostKind::DiscussionPost => content_reference::PostKind::DiscussionPost,
+            PostKind::GamePost => content_reference::PostKind::GamePost,
         }
     }
 }
@@ -1642,9 +1642,9 @@ pub struct PostRef {
     pub source_seq: i64,
 }
 
-impl From<PostRef> for community::PostRef {
+impl From<PostRef> for content_reference::PostRef {
     fn from(value: PostRef) -> Self {
-        community::PostRef {
+        content_reference::PostRef {
             kind: value.kind.into(),
             scope_id: value.scope_id,
             source_seq: value.source_seq,
@@ -1658,26 +1658,26 @@ pub struct Quotation {
     pub excerpt: String,
 }
 
-impl From<Quotation> for community::Quotation {
+impl From<Quotation> for content_reference::Quotation {
     fn from(value: Quotation) -> Self {
-        community::Quotation {
+        content_reference::Quotation {
             target: value.target.into(),
             excerpt: value.excerpt,
         }
     }
 }
 
-impl From<community::PostKind> for PostKind {
-    fn from(kind: community::PostKind) -> Self {
+impl From<content_reference::PostKind> for PostKind {
+    fn from(kind: content_reference::PostKind) -> Self {
         match kind {
-            community::PostKind::DiscussionPost => PostKind::DiscussionPost,
-            community::PostKind::GamePost => PostKind::GamePost,
+            content_reference::PostKind::DiscussionPost => PostKind::DiscussionPost,
+            content_reference::PostKind::GamePost => PostKind::GamePost,
         }
     }
 }
 
-impl From<community::PostRef> for PostRef {
-    fn from(value: community::PostRef) -> Self {
+impl From<content_reference::PostRef> for PostRef {
+    fn from(value: content_reference::PostRef) -> Self {
         PostRef {
             kind: value.kind.into(),
             scope_id: value.scope_id,
@@ -1686,8 +1686,8 @@ impl From<community::PostRef> for PostRef {
     }
 }
 
-impl From<community::Quotation> for Quotation {
-    fn from(value: community::Quotation) -> Self {
+impl From<content_reference::Quotation> for Quotation {
+    fn from(value: content_reference::Quotation) -> Self {
         Quotation {
             target: value.target.into(),
             excerpt: value.excerpt,
@@ -1715,6 +1715,46 @@ pub struct PostCitationPage {
     pub quoted: PostRef,
     pub citations: Vec<PostCitation>,
     pub citation_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PublicPostCitation {
+    pub quoting_surface_id: Uuid,
+    pub quoting_source_seq: i64,
+    pub occurred_at: i64,
+}
+
+impl From<projections::PublicCitationRow> for PublicPostCitation {
+    fn from(row: projections::PublicCitationRow) -> Self {
+        Self {
+            quoting_surface_id: row.quoting.surface_id,
+            quoting_source_seq: row.quoting.source_seq,
+            occurred_at: row.occurred_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PublicPostCitationPage {
+    pub quoted_surface_id: Uuid,
+    pub quoted_source_seq: i64,
+    pub citations: Vec<PublicPostCitation>,
+    pub citation_count: i64,
+}
+
+impl From<projections::PublicCitationPage> for PublicPostCitationPage {
+    fn from(page: projections::PublicCitationPage) -> Self {
+        Self {
+            quoted_surface_id: page.quoted.surface_id,
+            quoted_source_seq: page.quoted.source_seq,
+            citations: page
+                .citations
+                .into_iter()
+                .map(PublicPostCitation::from)
+                .collect(),
+            citation_count: page.citation_count,
+        }
+    }
 }
 
 impl From<projections::PostCitationPage> for PostCitationPage {
@@ -2032,8 +2072,7 @@ pub struct DiscussionThreadPage {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SubscriptionTargetState {
-    pub target_kind: String,
-    pub scope_id: Uuid,
+    pub surface_id: Uuid,
     pub subscribed: bool,
     pub read_through_seq: i64,
     pub latest_source_seq: i64,
@@ -2043,8 +2082,7 @@ pub struct SubscriptionTargetState {
 impl From<projections::SubscriptionTargetStateRow> for SubscriptionTargetState {
     fn from(row: projections::SubscriptionTargetStateRow) -> Self {
         Self {
-            target_kind: row.target_kind,
-            scope_id: row.scope_id,
+            surface_id: row.surface_id,
             subscribed: row.subscribed,
             read_through_seq: row.read_through_seq,
             latest_source_seq: row.latest_source_seq,
@@ -2059,9 +2097,8 @@ pub struct AdvanceSubscriptionReadRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct CommunityInboxItem {
-    pub target_kind: String,
-    pub scope_id: Uuid,
+pub struct PublicInboxItem {
+    pub surface_id: Uuid,
     pub source_seq: i64,
     pub title: String,
     pub href: String,
@@ -2070,11 +2107,10 @@ pub struct CommunityInboxItem {
     pub subscribed: bool,
 }
 
-impl From<projections::CommunityInboxItemRow> for CommunityInboxItem {
-    fn from(row: projections::CommunityInboxItemRow) -> Self {
+impl From<projections::PublicInboxItemRow> for PublicInboxItem {
+    fn from(row: projections::PublicInboxItemRow) -> Self {
         Self {
-            target_kind: row.target_kind,
-            scope_id: row.scope_id,
+            surface_id: row.surface_id,
             source_seq: row.source_seq,
             title: row.title,
             href: row.href,
@@ -2086,8 +2122,8 @@ impl From<projections::CommunityInboxItemRow> for CommunityInboxItem {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub struct CommunityInboxPage {
-    pub items: Vec<CommunityInboxItem>,
+pub struct PublicInboxPage {
+    pub items: Vec<PublicInboxItem>,
     pub unread_count: i64,
     pub next_cursor: Option<i64>,
 }
@@ -2119,14 +2155,10 @@ pub struct MemberMutePage {
     pub next_cursor: Option<String>,
 }
 
-impl From<projections::CommunityInboxPage> for CommunityInboxPage {
-    fn from(page: projections::CommunityInboxPage) -> Self {
+impl From<projections::PublicInboxPage> for PublicInboxPage {
+    fn from(page: projections::PublicInboxPage) -> Self {
         Self {
-            items: page
-                .items
-                .into_iter()
-                .map(CommunityInboxItem::from)
-                .collect(),
+            items: page.items.into_iter().map(PublicInboxItem::from).collect(),
             unread_count: page.unread_count,
             next_cursor: page.next_cursor,
         }
@@ -2203,8 +2235,7 @@ impl From<projections::ModerationReportReceiptRow> for ModerationReportReceipt {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ModerationCase {
     pub case_id: Uuid,
-    pub target_kind: String,
-    pub scope_id: Uuid,
+    pub surface_id: Uuid,
     pub source_seq: i64,
     pub target_href: String,
     pub target_body: String,
@@ -2220,8 +2251,7 @@ impl From<projections::ModerationCaseRow> for ModerationCase {
     fn from(row: projections::ModerationCaseRow) -> Self {
         Self {
             case_id: row.case_id,
-            target_kind: row.target_kind,
-            scope_id: row.scope_id,
+            surface_id: row.surface_id,
             source_seq: row.source_seq,
             target_href: row.target_href,
             target_body: row.target_body,
@@ -2756,11 +2786,10 @@ pub mod typescript {
 
     use crate::{
         AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, ClientMsg,
-        CohostPermissionClass, Command, CommandMsg, CommunityInboxItem, CommunityInboxPage,
-        DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
-        DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionThreadPage, DiscussionTopic,
-        DiscussionTopicPage, EmbedPoster, EmbedProvider, EmbedSnapshot, GameIndexEntry,
-        GameIndexPage, Hello,
+        CohostPermissionClass, Command, CommandMsg, DayEventNarrativeDelta, DayEventRoomDelta,
+        DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea, DiscussionAuthor,
+        DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, EmbedPoster,
+        EmbedProvider, EmbedSnapshot, GameIndexEntry, GameIndexPage, Hello,
         HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsoleDayEventsDelta,
         HostConsoleHeaderDelta, HostConsolePhaseStateDelta, HostConsoleSchedulerDelta,
         HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
@@ -2773,7 +2802,8 @@ pub mod typescript {
         MemberMuteState, ModerationCase, ModerationCaseDetail, ModerationCasePage,
         ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
         PlayerNotification, PostCitation, PostCitationPage, PostCitationsChangedDelta, PostEmbed,
-        PostKind, PostRef, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicProfile,
+        PostKind, PostRef, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicInboxItem,
+        PublicInboxPage, PublicPostCitation, PublicPostCitationPage, PublicProfile,
         PublicSearchPage, PublicSearchResult, Quotation, RejectCode, RejectMsg,
         ResolutionTraceDecisionRow, ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow,
         ResolutionTraceGeneratedRow, ResolutionTraceInspectionReport, ResolutionTraceInspectionRun,
@@ -2853,6 +2883,8 @@ pub mod typescript {
         push::<Quotation>(&mut out, &config);
         push::<PostCitation>(&mut out, &config);
         push::<PostCitationPage>(&mut out, &config);
+        push::<PublicPostCitation>(&mut out, &config);
+        push::<PublicPostCitationPage>(&mut out, &config);
         push::<CohostPermissionClass>(&mut out, &config);
         push::<Command>(&mut out, &config);
         push::<CommandMsg>(&mut out, &config);
@@ -2908,8 +2940,8 @@ pub mod typescript {
         push::<DiscussionThreadPage>(&mut out, &config);
         push::<SubscriptionTargetState>(&mut out, &config);
         push::<AdvanceSubscriptionReadRequest>(&mut out, &config);
-        push::<CommunityInboxItem>(&mut out, &config);
-        push::<CommunityInboxPage>(&mut out, &config);
+        push::<PublicInboxItem>(&mut out, &config);
+        push::<PublicInboxPage>(&mut out, &config);
         push::<MemberMuteState>(&mut out, &config);
         push::<MemberMutePage>(&mut out, &config);
         push::<ModerationReportReceipt>(&mut out, &config);

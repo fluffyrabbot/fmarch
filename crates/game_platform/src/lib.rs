@@ -13,6 +13,7 @@ use thiserror::Error;
 pub mod day_auto_resolution;
 pub mod day_narrative;
 pub mod day_schedule;
+pub mod embed;
 pub mod persona;
 
 pub use persona::{
@@ -88,6 +89,8 @@ pub enum ModelError {
     },
     #[error("program content hash must be 64 lowercase hexadecimal characters")]
     InvalidProgramContentHash,
+    #[error("game post embed is invalid")]
+    InvalidEmbed,
     #[error("day program could not be serialized canonically")]
     CanonicalProgramSerialization,
 }

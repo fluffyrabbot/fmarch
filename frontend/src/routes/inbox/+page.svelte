@@ -10,9 +10,6 @@
       : "Time unavailable";
   }
 
-  function targetLabel(kind) {
-    return kind === "discussion_topic" ? "Discussion" : "Public game";
-  }
 </script>
 
 <svelte:head><title>Update inbox | fmarch</title></svelte:head>
@@ -31,23 +28,21 @@
       {#each data.inbox.items as item}
         <li class:unread={item.unread} class="fm-panel inbox-item" data-testid={`community-inbox-item-${item.source_seq}`}>
           <div>
-            <p class="fm-eyebrow">{targetLabel(item.target_kind)}{item.unread ? " · Unread" : ""}</p>
+            <p class="fm-eyebrow">Public update{item.unread ? " · Unread" : ""}</p>
             <h2><a href={item.href}>{item.title}</a></h2>
             <p>Update #{item.source_seq} · {occurredAt(item.occurred_at)}</p>
           </div>
           <div class="inbox-actions">
             {#if item.unread}
               <form method="POST" action="?/markRead">
-                <input type="hidden" name="target_kind" value={item.target_kind} />
-                <input type="hidden" name="scope_id" value={item.scope_id} />
+                <input type="hidden" name="surface_id" value={item.surface_id} />
                 <input type="hidden" name="source_seq" value={item.source_seq} />
                 <button type="submit" class="fm-touch-button" data-testid={`community-inbox-read-${item.source_seq}`}>Mark read</button>
               </form>
             {/if}
             {#if item.subscribed}
               <form method="POST" action="?/unwatch">
-                <input type="hidden" name="target_kind" value={item.target_kind} />
-                <input type="hidden" name="scope_id" value={item.scope_id} />
+                <input type="hidden" name="surface_id" value={item.surface_id} />
                 <button type="submit" class="fm-touch-button fm-touch-button--secondary" data-testid={`community-inbox-unwatch-${item.source_seq}`}>Stop watching</button>
               </form>
             {/if}

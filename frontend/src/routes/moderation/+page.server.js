@@ -10,10 +10,10 @@ export async function load({ cookies, locals, fetch, url }) {
     : [];
   const allowed = hasCapability({ capabilities, kind: "GlobalMod" })
     || hasCapability({ capabilities, kind: "GlobalAdmin" });
-  if (!allowed) throw error(403, "Community moderation requires GlobalMod");
+  if (!allowed) throw error(403, "Public-publication moderation requires GlobalMod");
   const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") {
-    throw error(401, "Community moderation requires an authenticated session");
+    throw error(401, "Public-publication moderation requires an authenticated session");
   }
   const status = moderationStatus(url.searchParams.get("status"));
   const search = new URLSearchParams({ status, limit: "25" });

@@ -28,6 +28,7 @@ use std::sync::{
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use caps::{Capability, CapabilitySet, Principal};
+use content_reference::{self, ContentReferenceReject};
 use domain::pack::ItaSessionControlKind;
 use eventstore::{ActorId, EventInput};
 use projections::{append_and_project_in_tx, audit_rebuild, ProjectionError};
@@ -2417,9 +2418,9 @@ struct SubmitPostRequest {
     actor_slot: String,
     body: String,
     media: Vec<model::ThreadPostMedia>,
-    quotations: Vec<community::Quotation>,
+    quotations: Vec<content_reference::Quotation>,
     embed_url: Option<String>,
-    embed_snapshot: Option<community::EmbedSnapshot>,
+    embed_snapshot: Option<game_platform::embed::EmbedSnapshot>,
 }
 
 const MAX_GAME_POST_BODY_BYTES: usize = game_platform::MAX_RENDERED_NARRATIVE_BYTES;
@@ -2480,8 +2481,8 @@ async fn decide_game_quotations(
     game: Uuid,
     channel_id: &str,
     principal: &Principal,
-    quotations: Vec<community::Quotation>,
-) -> Result<Vec<community::Quotation>, Reject> {
+    quotations: Vec<content_reference::Quotation>,
+) -> Result<Vec<content_reference::Quotation>, Reject> {
     if quotations.is_empty() {
         return Ok(Vec::new());
     }
@@ -2493,19 +2494,53 @@ async fn decide_game_quotations(
     )
     .await
     .map_err(|error| Reject::Internal(error.to_string()))?;
-    community::decide_quotations(&thread, &quotations).map_err(quotation_reject)
+    let thread = content_reference::QuotationThreadState {
+        thread: content_reference::PostRef {
+            kind: match thread.thread.kind.as_str() {
+                "discussion_post" => content_reference::PostKind::DiscussionPost,
+                "game_post" => content_reference::PostKind::GamePost,
+                _ => unreachable!("legacy projection emitted an unknown quotation source"),
+            },
+            scope_id: thread.thread.scope_id,
+            source_seq: thread.thread.source_seq,
+        },
+        posts: thread
+            .posts
+            .into_iter()
+            .map(|post| content_reference::QuotationPostState {
+                source_seq: post.source_seq,
+                body: post.body,
+                visible: post.visible,
+                outgoing: post
+                    .outgoing
+                    .into_iter()
+                    .map(|target| content_reference::PostRef {
+                        kind: match target.kind.as_str() {
+                            "discussion_post" => content_reference::PostKind::DiscussionPost,
+                            "game_post" => content_reference::PostKind::GamePost,
+                            _ => unreachable!(
+                                "legacy projection emitted an unknown quotation source"
+                            ),
+                        },
+                        scope_id: target.scope_id,
+                        source_seq: target.source_seq,
+                    })
+                    .collect(),
+            })
+            .collect(),
+    };
+    content_reference::decide_quotations(&thread, &quotations).map_err(quotation_reject)
 }
 
-fn quotation_reject(reject: community::CommunityReject) -> Reject {
+fn quotation_reject(reject: ContentReferenceReject) -> Reject {
     match reject {
-        community::CommunityReject::QuotationNotFound
-        | community::CommunityReject::InvalidQuotationTarget
-        | community::CommunityReject::InvalidQuotationExcerpt
-        | community::CommunityReject::TooManyQuotations
-        | community::CommunityReject::QuotationChainTooDeep
-        | community::CommunityReject::DuplicateQuotation
-        | community::CommunityReject::InvalidEmbed => Reject::InvalidTarget,
-        other => Reject::Internal(other.to_string()),
+        ContentReferenceReject::QuotationNotFound
+        | ContentReferenceReject::InvalidQuotationTarget
+        | ContentReferenceReject::InvalidQuotationExcerpt
+        | ContentReferenceReject::TooManyQuotations
+        | ContentReferenceReject::QuotationChainTooDeep
+        | ContentReferenceReject::DuplicateQuotation => Reject::InvalidTarget,
+        ContentReferenceReject::InvalidPostKind => Reject::Internal(reject.to_string()),
     }
 }
 
@@ -2538,12 +2573,12 @@ async fn submit_post(
     validate_thread_post_media(&media)?;
     validate_game_post_body(&body)?;
     let quotations = decide_game_quotations(tx, game, &channel_id, principal, quotations).await?;
-    let embed = community::attach_embed_snapshot(
-        community::decide_post_embed(&channel_id, embed_url.as_deref())
-            .map_err(quotation_reject)?,
+    let embed = game_platform::embed::attach_embed_snapshot(
+        game_platform::embed::decide_post_embed(&channel_id, embed_url.as_deref())
+            .map_err(|_| Reject::InvalidTarget)?,
         embed_snapshot,
     )
-    .map_err(quotation_reject)?;
+    .map_err(|_| Reject::InvalidTarget)?;
     if body.trim().is_empty() && quotations.is_empty() && embed.is_none() {
         let policy = projections::post_policy(&mut **tx, game, &channel_id).await?;
         if media.is_empty() || !policy.allow_media_only {
@@ -2566,10 +2601,10 @@ async fn submit_post(
     if !media.is_empty() {
         payload["media"] = serde_json::to_value(media).expect("thread post media serializes");
     }
-    if let Some(quotations) = community::quotations_payload(&quotations) {
+    if let Some(quotations) = content_reference::quotations_payload(&quotations) {
         payload["quotations"] = quotations;
     }
-    if let Some(embed) = community::embed_payload(&embed) {
+    if let Some(embed) = game_platform::embed::embed_payload(&embed) {
         payload["embed"] = embed;
     }
     let ev = EventInput::new(

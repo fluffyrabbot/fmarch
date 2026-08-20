@@ -7,7 +7,6 @@
 mod auth_http;
 mod authentication;
 mod command_http;
-mod community_http;
 mod embed_http;
 mod game_http;
 pub mod identity_delivery;
@@ -16,8 +15,10 @@ mod live_projection;
 pub mod mash_scale;
 mod media_http;
 pub mod program_library;
+mod public_platform_http;
 
 pub use auth_http::{bootstrap_classic_global_admin, bootstrap_workos_global_admin};
+pub use embed_http::YoutubeSnapshotLookup;
 pub use game_http::{
     load_host_console_state_for_principal, load_player_day_event_attention_for_principal,
     EndgameDayVote, EndgameSlotReveal, EndgameSummaryResponse, EndgameWinner,
@@ -29,7 +30,6 @@ pub use game_http::{
     PlayerCommandPhaseState, PlayerCommandRoleView, PlayerCommandStateResponse,
     PlayerDayEventAttention, PlayerVoteTarget,
 };
-pub use embed_http::YoutubeSnapshotLookup;
 pub use live_delivery::WebsocketTicketResponse;
 pub use media_http::{MediaUploadResponse, MediaUploadVariant};
 
@@ -128,8 +128,7 @@ impl ApiState {
                 5_000,
             ) as u64),
             live_event_wake,
-            embed_lookup: embed_http::YoutubeSnapshotLookup::http()
-                .expect("youtube oembed client"),
+            embed_lookup: embed_http::YoutubeSnapshotLookup::http().expect("youtube oembed client"),
         }
     }
 
@@ -266,7 +265,7 @@ pub fn router_with_state(state: ApiState) -> Router {
     let media_routes = media_http::routes(&state);
     let auth_routes = auth_http::routes(&state);
     let command_routes = command_http::routes(&state);
-    let community_routes = community_http::routes(&state);
+    let public_platform_routes = public_platform_http::routes(&state);
     let embed_routes = embed_http::routes();
     let game_routes = game_http::routes(&state);
     let live_delivery_routes = live_delivery::routes(&state);
@@ -277,7 +276,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .merge(media_routes)
         .merge(auth_routes)
         .merge(command_routes)
-        .merge(community_routes)
+        .merge(public_platform_routes)
         .merge(embed_routes)
         .merge(game_routes)
         .merge(live_delivery_routes);

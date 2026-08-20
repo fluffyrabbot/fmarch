@@ -164,7 +164,7 @@
       {:else if thread.topic.posting_state === "locked"}
         <p data-testid="discussion-topic-locked">This topic is locked.</p>
       {:else if discussion.hasSession}
-        <p data-testid="discussion-profile-required">Create or make public your <a href="/profile/edit">community profile</a> before replying publicly.</p>
+        <p data-testid="discussion-profile-required">Create or make public your <a href="/profile/edit">public profile</a> before replying publicly.</p>
       {:else}
         <p data-testid="discussion-post-sign-in">Sign in to reply.</p>
       {/if}

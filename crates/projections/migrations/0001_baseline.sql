@@ -609,25 +609,6 @@ CREATE TABLE public.profile_public (
 );
 
 
---
--- Name: public_search_document; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.public_search_document (
-    document_kind text NOT NULL,
-    document_key text NOT NULL,
-    scope_kind text NOT NULL,
-    scope_id uuid NOT NULL,
-    title text NOT NULL,
-    body text NOT NULL,
-    href text NOT NULL,
-    updated_seq bigint NOT NULL,
-    published_at bigint NOT NULL,
-    search_vector tsvector GENERATED ALWAYS AS ((setweight(to_tsvector('english'::regconfig, COALESCE(title, ''::text)), 'A'::"char") || setweight(to_tsvector('english'::regconfig, COALESCE(body, ''::text)), 'B'::"char"))) STORED,
-    CONSTRAINT public_search_document_document_kind_check CHECK ((document_kind = ANY (ARRAY['discussion_topic'::text, 'discussion_post'::text, 'profile'::text, 'game'::text, 'game_post'::text]))),
-    CONSTRAINT public_search_document_scope_kind_check CHECK ((scope_kind = ANY (ARRAY['discussion'::text, 'profile'::text, 'game'::text])))
-);
-
 
 --
 -- Name: sheriff_badge; Type: TABLE; Schema: public; Owner: -
@@ -1131,13 +1112,6 @@ ALTER TABLE ONLY public.profile_public
     ADD CONSTRAINT profile_public_pkey PRIMARY KEY (profile_id);
 
 
---
--- Name: public_search_document public_search_document_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.public_search_document
-    ADD CONSTRAINT public_search_document_pkey PRIMARY KEY (document_kind, document_key);
-
 
 --
 -- Name: sheriff_badge sheriff_badge_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1509,26 +1483,6 @@ CREATE INDEX private_channel_member_slot_idx ON public.private_channel_member US
 CREATE INDEX profile_public_visible_handle_idx ON public.profile_public USING btree (handle) WHERE (visibility = 'public'::text);
 
 
---
--- Name: public_search_document_page_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX public_search_document_page_idx ON public.public_search_document USING btree (updated_seq DESC, document_kind, document_key);
-
-
---
--- Name: public_search_document_scope_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX public_search_document_scope_idx ON public.public_search_document USING btree (scope_kind, scope_id);
-
-
---
--- Name: public_search_document_vector_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX public_search_document_vector_idx ON public.public_search_document USING gin (search_vector);
-
 
 --
 -- Name: sheriff_badge_owner_idx; Type: INDEX; Schema: public; Owner: -
@@ -1672,13 +1626,12 @@ ALTER TABLE ONLY public.profile_editor
 
 
 --
--- Community moderation: typed cases, reports, audit history, and visibility overlay.
+-- Public-publication moderation: typed cases, reports, audit history, and visibility overlay.
 --
 
 CREATE TABLE public.moderation_case (
     case_id uuid NOT NULL,
-    target_kind text NOT NULL,
-    scope_id uuid NOT NULL,
+    surface_id uuid NOT NULL,
     source_seq bigint NOT NULL,
     status text NOT NULL,
     report_count bigint DEFAULT 0 NOT NULL,
@@ -1688,8 +1641,7 @@ CREATE TABLE public.moderation_case (
     version bigint NOT NULL,
     action_reason text,
     CONSTRAINT moderation_case_report_count_check CHECK ((report_count >= 0)),
-    CONSTRAINT moderation_case_status_check CHECK ((status = ANY (ARRAY['open'::text, 'hidden'::text, 'dismissed'::text, 'restored'::text]))),
-    CONSTRAINT moderation_case_target_kind_check CHECK ((target_kind = ANY (ARRAY['discussion_post'::text, 'game_post'::text])))
+    CONSTRAINT moderation_case_status_check CHECK ((status = ANY (ARRAY['open'::text, 'hidden'::text, 'dismissed'::text, 'restored'::text])))
 );
 
 CREATE TABLE public.moderation_report (
@@ -1714,27 +1666,25 @@ CREATE TABLE public.moderation_case_history (
 );
 
 CREATE TABLE public.moderation_target_state (
-    target_kind text NOT NULL,
-    scope_id uuid NOT NULL,
+    surface_id uuid NOT NULL,
     source_seq bigint NOT NULL,
     visibility text NOT NULL,
     reason text NOT NULL,
     moderator_principal_id text NOT NULL,
     updated_seq bigint NOT NULL,
-    CONSTRAINT moderation_target_state_target_kind_check CHECK ((target_kind = ANY (ARRAY['discussion_post'::text, 'game_post'::text]))),
     CONSTRAINT moderation_target_state_visibility_check CHECK ((visibility = ANY (ARRAY['visible'::text, 'hidden'::text])))
 );
 
 ALTER TABLE ONLY public.moderation_case
     ADD CONSTRAINT moderation_case_pkey PRIMARY KEY (case_id);
 ALTER TABLE ONLY public.moderation_case
-    ADD CONSTRAINT moderation_case_target_key UNIQUE (target_kind, scope_id, source_seq);
+    ADD CONSTRAINT moderation_case_target_key UNIQUE (surface_id, source_seq);
 ALTER TABLE ONLY public.moderation_report
     ADD CONSTRAINT moderation_report_pkey PRIMARY KEY (report_id);
 ALTER TABLE ONLY public.moderation_case_history
     ADD CONSTRAINT moderation_case_history_pkey PRIMARY KEY (source_seq);
 ALTER TABLE ONLY public.moderation_target_state
-    ADD CONSTRAINT moderation_target_state_pkey PRIMARY KEY (target_kind, scope_id, source_seq);
+    ADD CONSTRAINT moderation_target_state_pkey PRIMARY KEY (surface_id, source_seq);
 
 CREATE INDEX moderation_case_queue_idx ON public.moderation_case USING btree (status, updated_seq DESC, case_id DESC);
 CREATE INDEX moderation_report_rate_idx ON public.moderation_report USING btree (reporter_principal_id, submitted_at DESC);
@@ -1748,58 +1698,54 @@ ALTER TABLE ONLY public.moderation_case_history
 
 
 --
--- Community subscriptions: durable membership periods, monotonic read cursors,
+-- Public watches: durable membership periods, monotonic read cursors,
 -- and privacy-safe in-app update references.
 --
 
-CREATE TABLE public.community_subscription (
+CREATE TABLE public.public_watch (
     subscription_id uuid NOT NULL,
     principal_user_id text NOT NULL,
-    target_kind text NOT NULL,
-    scope_id uuid NOT NULL,
+    surface_id uuid NOT NULL,
     active boolean DEFAULT true NOT NULL,
     read_through_seq bigint DEFAULT 0 NOT NULL,
     created_seq bigint NOT NULL,
     updated_seq bigint NOT NULL,
     version bigint NOT NULL,
-    CONSTRAINT community_subscription_read_through_seq_check CHECK ((read_through_seq >= 0)),
-    CONSTRAINT community_subscription_target_kind_check CHECK ((target_kind = ANY (ARRAY['discussion_topic'::text, 'game_thread'::text])))
+    CONSTRAINT public_watch_read_through_seq_check CHECK ((read_through_seq >= 0))
 );
 
-CREATE TABLE public.community_subscription_period (
+CREATE TABLE public.public_watch_period (
     subscription_id uuid NOT NULL,
     started_seq bigint NOT NULL,
     ended_seq bigint,
-    CONSTRAINT community_subscription_period_bounds_check CHECK (((ended_seq IS NULL) OR (ended_seq > started_seq)))
+    CONSTRAINT public_watch_period_bounds_check CHECK (((ended_seq IS NULL) OR (ended_seq > started_seq)))
 );
 
-CREATE TABLE public.community_inbox_item (
+CREATE TABLE public.public_inbox_item (
     subscription_id uuid NOT NULL,
     source_seq bigint NOT NULL,
-    target_kind text NOT NULL,
-    scope_id uuid NOT NULL,
-    occurred_at bigint NOT NULL,
-    CONSTRAINT community_inbox_item_target_kind_check CHECK ((target_kind = ANY (ARRAY['discussion_topic'::text, 'game_thread'::text])))
+    surface_id uuid NOT NULL,
+    occurred_at bigint NOT NULL
 );
 
-ALTER TABLE ONLY public.community_subscription
-    ADD CONSTRAINT community_subscription_pkey PRIMARY KEY (subscription_id);
-ALTER TABLE ONLY public.community_subscription
-    ADD CONSTRAINT community_subscription_member_target_key UNIQUE (principal_user_id, target_kind, scope_id);
-ALTER TABLE ONLY public.community_subscription_period
-    ADD CONSTRAINT community_subscription_period_pkey PRIMARY KEY (subscription_id, started_seq);
-ALTER TABLE ONLY public.community_inbox_item
-    ADD CONSTRAINT community_inbox_item_pkey PRIMARY KEY (subscription_id, source_seq);
+ALTER TABLE ONLY public.public_watch
+    ADD CONSTRAINT public_watch_pkey PRIMARY KEY (subscription_id);
+ALTER TABLE ONLY public.public_watch
+    ADD CONSTRAINT public_watch_member_target_key UNIQUE (principal_user_id, surface_id);
+ALTER TABLE ONLY public.public_watch_period
+    ADD CONSTRAINT public_watch_period_pkey PRIMARY KEY (subscription_id, started_seq);
+ALTER TABLE ONLY public.public_inbox_item
+    ADD CONSTRAINT public_inbox_item_pkey PRIMARY KEY (subscription_id, source_seq);
 
-CREATE INDEX community_subscription_member_idx ON public.community_subscription USING btree (principal_user_id, active, updated_seq DESC);
-CREATE INDEX community_subscription_target_idx ON public.community_subscription USING btree (target_kind, scope_id, active);
-CREATE INDEX community_subscription_period_lookup_idx ON public.community_subscription_period USING btree (subscription_id, started_seq, ended_seq);
-CREATE INDEX community_inbox_item_page_idx ON public.community_inbox_item USING btree (subscription_id, source_seq DESC);
+CREATE INDEX public_watch_member_idx ON public.public_watch USING btree (principal_user_id, active, updated_seq DESC);
+CREATE INDEX public_watch_target_idx ON public.public_watch USING btree (surface_id, active);
+CREATE INDEX public_watch_period_lookup_idx ON public.public_watch_period USING btree (subscription_id, started_seq, ended_seq);
+CREATE INDEX public_inbox_item_page_idx ON public.public_inbox_item USING btree (subscription_id, source_seq DESC);
 
-ALTER TABLE ONLY public.community_subscription_period
-    ADD CONSTRAINT community_subscription_period_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.community_subscription(subscription_id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.community_inbox_item
-    ADD CONSTRAINT community_inbox_item_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.community_subscription(subscription_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.public_watch_period
+    ADD CONSTRAINT public_watch_period_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.public_watch(subscription_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.public_inbox_item
+    ADD CONSTRAINT public_inbox_item_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.public_watch(subscription_id) ON DELETE CASCADE;
 
 
 --

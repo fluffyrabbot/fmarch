@@ -51,8 +51,7 @@ try {
     const restoredWatch = await inspectInbox(watcher, frontendBase, seeded, 2, 1, true);
     const newest = (await json(`${apiBase}/discussions/areas/subscriptions/topics/${seeded.topic}?limit=50`)).posts.at(-1).source_seq;
     const report = await json(`${apiBase}/moderation/reports`, post({
-      target_kind: "discussion_post",
-      scope_id: seeded.topic,
+      surface_id: seeded.topic,
       source_seq: newest,
       reason_family: "spam",
       details: "subscription moderation proof",

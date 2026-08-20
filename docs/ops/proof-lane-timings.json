@@ -297,14 +297,6 @@
       "method": "isolated",
       "warmup_seconds": 2.9
     },
-    "cargo:community": {
-      "seconds": 7.9,
-      "measured_at": "2026-08-19T08:30:58.344Z",
-      "command": "cargo test -p community",
-      "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 0.2
-    },
     "cargo:content-registry": {
       "seconds": 8,
       "measured_at": "2026-08-19T07:02:16.664Z",

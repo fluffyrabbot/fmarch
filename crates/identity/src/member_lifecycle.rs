@@ -940,7 +940,7 @@ async fn apply_retained_authorship_redaction(
     // Public authorship remains coherent without retaining account/profile labels.
     sqlx::query("UPDATE profile_public SET handle = CONCAT('former-member-', REPLACE(profile_id::text, '-', '')), display_name = $2, bio = '', visibility = 'public' WHERE profile_id IN (SELECT profile_id FROM profile_editor WHERE principal_user_id = $1)")
         .bind(principal_user_id).bind(pseudonym).execute(&mut **tx).await?;
-    sqlx::query("DELETE FROM public_search_document WHERE scope_kind = 'profile' AND scope_id IN (SELECT profile_id FROM profile_editor WHERE principal_user_id = $1)")
+    sqlx::query("DELETE FROM publication_surface WHERE surface_id IN (SELECT profile_id FROM profile_editor WHERE principal_user_id = $1)")
         .bind(principal_user_id).execute(&mut **tx).await?;
     sqlx::query("UPDATE profile_editor SET principal_user_id = $2, current_claim_id = NULL WHERE principal_user_id = $1")
         .bind(principal_user_id)

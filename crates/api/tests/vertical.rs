@@ -19,12 +19,12 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
-    ClientEnvelope, ClientMsg, Command, CommandMsg, CommunityInboxPage, DiscussionThreadPage,
-    DiscussionTopic, DiscussionTopicPage, GameIndexPage, InvestigationResultBody, MemberMutePage,
-    MemberMuteState, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
-    PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta,
-    PublicGameThreadPage, PublicProfile, PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope,
-    ServerMsg, SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget,
+    ClientEnvelope, ClientMsg, Command, CommandMsg, DiscussionThreadPage, DiscussionTopic,
+    DiscussionTopicPage, GameIndexPage, InvestigationResultBody, MemberMutePage, MemberMuteState,
+    ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
+    PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicInboxPage,
+    PublicProfile, PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
+    SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget,
     PROTOCOL_VERSION,
 };
 
@@ -1435,8 +1435,8 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
                     alt: "Private uploaded receipt".into(),
                 }]),
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
     );
@@ -1497,8 +1497,8 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
                 body: "stale outgoing Role PM post".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
         RejectCode::NotYourSlot,
@@ -1552,8 +1552,8 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
                 body: "incoming Role PM post".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
     );
@@ -1891,8 +1891,8 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                         alt: alt.into(),
                     }]),
                     quotations: None,
-            embed: None,
-        },
+                    embed: None,
+                },
             )
             .await,
         );
@@ -1956,8 +1956,8 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                     body: "stale outgoing room post".into(),
                     media: None,
                     quotations: None,
-            embed: None,
-        },
+                    embed: None,
+                },
             )
             .await,
             RejectCode::NotYourSlot,
@@ -1991,8 +1991,8 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                     body: body.into(),
                     media: None,
                     quotations: None,
-            embed: None,
-        },
+                    embed: None,
+                },
             )
             .await,
         );
@@ -2122,8 +2122,8 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                     body: "outsider room post".into(),
                     media: None,
                     quotations: None,
-            embed: None,
-        },
+                    embed: None,
+                },
             )
             .await,
             RejectCode::NotAuthorized,
@@ -2237,8 +2237,8 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                 body: "alive dead-chat attempt".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
         RejectCode::NotAuthorized,
@@ -2285,8 +2285,8 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                     alt: "Dead-chat receipt".into(),
                 }]),
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
     );
@@ -2362,8 +2362,8 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                 body: "incoming dead-chat live delta".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
     );
@@ -2481,8 +2481,8 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                     body: "denied dead-chat append".into(),
                     media: None,
                     quotations: None,
-            embed: None,
-        },
+                    embed: None,
+                },
             )
             .await,
             expected_append_reject,
@@ -2550,8 +2550,8 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                 body: "restored-alive dead-chat append".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
         RejectCode::NotAuthorized,
@@ -2787,8 +2787,8 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
                 body: "spectator append attempt".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
         RejectCode::NotAuthorized,
@@ -2869,8 +2869,8 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
                 body: "revoked spectator append attempt".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
         RejectCode::NotAuthorized,
@@ -4432,8 +4432,8 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
                     body: format!("lag burst post {offset}"),
                     media: None,
                     quotations: None,
-            embed: None,
-        },
+                    embed: None,
+                },
             )
             .await,
         );
@@ -4467,8 +4467,8 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
                 body: continuation_body.clone(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
     );
@@ -5424,8 +5424,8 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
                     body: body.into(),
                     media: None,
                     quotations: None,
-            embed: None,
-        },
+                    embed: None,
+                },
             )
             .await,
         );
@@ -5504,8 +5504,8 @@ async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: s
     .unwrap();
     sqlx::query(
         "INSERT INTO moderation_target_state \
-         (target_kind, scope_id, source_seq, visibility, reason, moderator_principal_id, updated_seq) \
-         VALUES ('game_post', $1, $2, 'hidden', 'confirmed abuse', 'global_mod', 42)",
+         (surface_id, source_seq, visibility, reason, moderator_principal_id, updated_seq) \
+         VALUES ($1, $2, 'hidden', 'confirmed abuse', 'global_mod', 42)",
     )
     .bind(game)
     .bind(hidden_source_seq)
@@ -6240,7 +6240,7 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
         &pool,
         area,
         &[eventstore::EventInput::new(
-            community::AREA_CREATED,
+            forum::AREA_CREATED,
             1,
             serde_json::json!({
                 "slug": "subscription-api",
@@ -6268,7 +6268,7 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
     )
     .unwrap();
 
-    let subscription_uri = format!("/subscriptions/discussion_topic/{}", topic.topic);
+    let subscription_uri = format!("/subscriptions/{}", topic.topic);
     let missing = app
         .clone()
         .oneshot(
@@ -6321,7 +6321,7 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
         .await
         .unwrap();
     assert_eq!(inbox.status(), StatusCode::OK);
-    let inbox: CommunityInboxPage =
+    let inbox: PublicInboxPage =
         serde_json::from_slice(&to_bytes(inbox.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(inbox.unread_count, 1);
     assert_eq!(inbox.items.len(), 1);
@@ -6347,7 +6347,7 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
         )
         .await
         .unwrap();
-    let author_inbox: CommunityInboxPage = serde_json::from_slice(
+    let author_inbox: PublicInboxPage = serde_json::from_slice(
         &to_bytes(author_inbox.into_body(), usize::MAX)
             .await
             .unwrap(),
@@ -6539,8 +6539,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     assert_eq!(visible_media.status(), StatusCode::OK);
 
     let report_body = serde_json::json!({
-        "target_kind": "game_post",
-        "scope_id": game,
+        "surface_id": game,
         "source_seq": public_source_seq,
         "reason_family": "harassment",
         "details": "member supplied context"
@@ -6568,8 +6567,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
         &app,
         "/moderation/reports",
         serde_json::json!({
-            "target_kind": "game_post",
-            "scope_id": game,
+            "surface_id": game,
             "source_seq": private_source_seq,
             "reason_family": "other"
         }),
@@ -7556,8 +7554,8 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
                 body: "private role confirmation".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
     );
@@ -7710,8 +7708,8 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
                 body: "day chat is live".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
     );
@@ -7846,8 +7844,8 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
                 body: "Slot 7 check-in before replacement".into(),
                 media: None,
                 quotations: None,
-            embed: None,
-        },
+                embed: None,
+            },
         )
         .await,
     );
@@ -10991,8 +10989,8 @@ async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: 
         body: "commit happened; ack vanished".into(),
         media: None,
         quotations: None,
-            embed: None,
-        };
+        embed: None,
+    };
 
     let first_ack = expect_ack(
         post_command_with_command_id(app.clone(), 5, command_id, "user_a", command.clone()).await,

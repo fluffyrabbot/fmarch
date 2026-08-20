@@ -18,8 +18,7 @@ test("community inbox loads the authenticated update page and private mute contr
       }
       return Response.json({
         items: [{
-          target_kind: "discussion_topic",
-          scope_id: "00000000-0000-0000-0000-000000000111",
+          surface_id: "00000000-0000-0000-0000-000000000111",
           source_seq: 80,
           title: "Watched topic",
           href: "/discussions/general/t/00000000-0000-0000-0000-000000000111#post-80",
@@ -63,8 +62,7 @@ test("mark read advances the typed target cursor", async () => {
       request: new Request("http://localhost/inbox?/markRead", {
         method: "POST",
         body: new URLSearchParams({
-          target_kind: "game_thread",
-          scope_id: "00000000-0000-0000-0000-000000000222",
+          surface_id: "00000000-0000-0000-0000-000000000222",
           source_seq: "81",
         }),
       }),
@@ -76,7 +74,7 @@ test("mark read advances the typed target cursor", async () => {
     (failure) => failure.status === 303 && failure.location === "/inbox",
   );
   assert.deepEqual(mutation, {
-    url: "/subscriptions/game_thread/00000000-0000-0000-0000-000000000222/read",
+    url: "/subscriptions/00000000-0000-0000-0000-000000000222/read",
     method: "POST",
     body: { read_through_seq: 81 },
   });

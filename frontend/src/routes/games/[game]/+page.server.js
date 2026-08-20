@@ -96,7 +96,7 @@ export const actions = {
     }
     const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
     const response = await fetch(
-      `${apiBaseUrl}/subscriptions/game_thread/${encodeURIComponent(params.game)}`,
+      `${apiBaseUrl}/subscriptions/${encodeURIComponent(params.game)}`,
       {
         method: action === "subscribe" ? "PUT" : "DELETE",
         headers: { authorization: `Bearer ${token}`, accept: "application/json" },
@@ -136,8 +136,7 @@ export const actions = {
         accept: "application/json",
       },
       body: JSON.stringify({
-        target_kind: "game_post",
-        scope_id: params.game,
+        surface_id: params.game,
         source_seq: Number(sourceSeq),
         reason_family: text(form.get("reason_family")),
         details: text(form.get("details")),
@@ -165,7 +164,7 @@ async function loadSubscription({ locals, cookies, fetch, apiBaseUrl, game }) {
   const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") return null;
   const response = await fetch(
-    `${apiBaseUrl}/subscriptions/game_thread/${encodeURIComponent(game)}`,
+    `${apiBaseUrl}/subscriptions/${encodeURIComponent(game)}`,
     { headers: { authorization: `Bearer ${token}`, accept: "application/json" } },
   );
   return response.ok ? response.json().catch(() => null) : null;

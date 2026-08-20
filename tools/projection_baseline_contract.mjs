@@ -9,10 +9,10 @@ export const repoRoot = path.resolve(
 );
 export const migrationDirectory = "crates/projections/migrations";
 export const baselineFilename = "0001_baseline.sql";
-// Deliberate greenfield rebaseline: persona/occupancy is a foundational
-// projection identity replacement, so it belongs in the no-user baseline
-// rather than as a compatibility migration retaining the obsolete table.
-export const baselineSha256 = "4e6a96e5b95542492090885200e88cac5e871cc72580ab5045770c6d99a556b9";
+// Deliberate greenfield rebaseline: foundational identity and public-platform
+// replacements belong in the no-user baseline rather than compatibility
+// migrations retaining the obsolete projection forms.
+export const baselineSha256 = "ad1bd0e42fbe3d489b79f08b70bf3d8c1bb2e41bdaf92290583554f4ff0e83a6";
 
 const migrationFilenamePattern = /^(\d{4})_[a-z0-9_]+\.sql$/u;
 

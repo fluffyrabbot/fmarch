@@ -1,34 +1,43 @@
-//! Public community discovery, discussion, moderation, subscription, and profile HTTP boundary.
+//! Public-platform discovery, discussion, moderation, watch, and profile HTTP boundary.
 
 use super::auth_http::{
     authorization_context, bearer_token, require_authorized_principal, unauthorized_account,
     unauthorized_session, unix_now_seconds, AuthHttpState,
 };
 use super::{ApiError, ApiState};
+use attention::WatchTarget;
 use axum::extract::{Path, Query, State};
 use axum::http::header::AUTHORIZATION;
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use content_reference::{self, Quotation, DEFAULT_POST_CITATION_LIMIT};
 use eventstore::{ActorId, EventInput};
+use forum::{
+    self, ForumReject, PostingState, TopicCommand, TopicEvent, TopicState, TopicVisibility,
+};
 use serde::Deserialize;
 use sqlx::postgres::PgPool;
+use trust_safety::{
+    self, ModerationCaseStatus, ModerationCommand, ModerationTarget, ReportReasonFamily,
+    TrustSafetyReject,
+};
 use uuid::Uuid;
 use wire::{
-    AdvanceSubscriptionReadRequest, CommunityInboxPage, DiscussionArea, DiscussionPost,
-    DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, MemberMutePage, MemberMuteState,
-    ModerationCase, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
-    PostCitationPage, ProfileEditor, PublicProfile, PublicSearchPage, PublicSearchResult,
+    AdvanceSubscriptionReadRequest, DiscussionArea, DiscussionPost, DiscussionThreadPage,
+    DiscussionTopic, DiscussionTopicPage, MemberMutePage, MemberMuteState, ModerationCase,
+    ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt, ProfileEditor,
+    PublicInboxPage, PublicPostCitationPage, PublicProfile, PublicSearchPage, PublicSearchResult,
     RejectCode, SubscriptionTargetState,
 };
 
 #[derive(Clone)]
-pub(super) struct CommunityHttpState {
+pub(super) struct PublicPlatformHttpState {
     pool: PgPool,
     auth: AuthHttpState,
 }
 
-impl CommunityHttpState {
+impl PublicPlatformHttpState {
     pub(super) fn new(pool: PgPool, auth: AuthHttpState) -> Self {
         Self { pool, auth }
     }
@@ -37,7 +46,7 @@ impl CommunityHttpState {
 pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
     Router::new()
         .route("/search", get(public_search))
-        .route("/inbox", get(community_inbox))
+        .route("/inbox", get(public_inbox))
         .route("/mutes", get(member_mutes))
         .route(
             "/mutes/profiles/{handle}",
@@ -46,13 +55,13 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
                 .delete(unmute_public_profile),
         )
         .route(
-            "/subscriptions/{target_kind}/{scope_id}",
+            "/subscriptions/{surface_id}",
             get(subscription_target_state)
                 .put(subscribe_to_target)
                 .delete(unsubscribe_from_target),
         )
         .route(
-            "/subscriptions/{target_kind}/{scope_id}/read",
+            "/subscriptions/{surface_id}/read",
             post(advance_subscription_read),
         )
         .route("/moderation/reports", post(submit_moderation_report))
@@ -95,7 +104,7 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
             "/profiles/{handle}",
             get(public_profile).put(update_profile),
         )
-        .with_state(CommunityHttpState::new(
+        .with_state(PublicPlatformHttpState::new(
             state.pool.clone(),
             state.auth.clone(),
         ))
@@ -110,7 +119,7 @@ struct PublicSearchQuery {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct CommunityInboxQuery {
+struct PublicInboxQuery {
     before_seq: Option<i64>,
     limit: Option<i64>,
 }
@@ -122,12 +131,12 @@ struct MemberMuteQuery {
 }
 
 async fn subscription_target_state(
-    State(state): State<CommunityHttpState>,
-    Path((target_kind, scope_id)): Path<(String, Uuid)>,
+    State(state): State<PublicPlatformHttpState>,
+    Path(surface_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_user_id = authenticated_community_member(&state.auth, &headers).await?;
-    let target = subscription_target(target_kind.as_str(), scope_id)?;
+    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let target = subscription_target(surface_id);
     Ok(Json(
         projections::subscription_target_state(&state.pool, principal_user_id.as_str(), target)
             .await
@@ -137,12 +146,12 @@ async fn subscription_target_state(
 }
 
 async fn subscribe_to_target(
-    State(state): State<CommunityHttpState>,
-    Path((target_kind, scope_id)): Path<(String, Uuid)>,
+    State(state): State<PublicPlatformHttpState>,
+    Path(surface_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_user_id = authenticated_community_member(&state.auth, &headers).await?;
-    let target = subscription_target(target_kind.as_str(), scope_id)?;
+    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let target = subscription_target(surface_id);
     let state = projections::subscribe_to_public_target(
         &state.pool,
         target,
@@ -155,12 +164,12 @@ async fn subscribe_to_target(
 }
 
 async fn unsubscribe_from_target(
-    State(state): State<CommunityHttpState>,
-    Path((target_kind, scope_id)): Path<(String, Uuid)>,
+    State(state): State<PublicPlatformHttpState>,
+    Path(surface_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_user_id = authenticated_community_member(&state.auth, &headers).await?;
-    let target = subscription_target(target_kind.as_str(), scope_id)?;
+    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let target = subscription_target(surface_id);
     let state = projections::unsubscribe_from_public_target(
         &state.pool,
         target,
@@ -173,13 +182,13 @@ async fn unsubscribe_from_target(
 }
 
 async fn advance_subscription_read(
-    State(state): State<CommunityHttpState>,
-    Path((target_kind, scope_id)): Path<(String, Uuid)>,
+    State(state): State<PublicPlatformHttpState>,
+    Path(surface_id): Path<Uuid>,
     headers: HeaderMap,
     Json(request): Json<AdvanceSubscriptionReadRequest>,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_user_id = authenticated_community_member(&state.auth, &headers).await?;
-    let target = subscription_target(target_kind.as_str(), scope_id)?;
+    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let target = subscription_target(surface_id);
     let state = projections::advance_subscription_read_cursor(
         &state.pool,
         target,
@@ -192,19 +201,19 @@ async fn advance_subscription_read(
     Ok(Json(state.into()))
 }
 
-async fn community_inbox(
-    State(state): State<CommunityHttpState>,
-    Query(query): Query<CommunityInboxQuery>,
+async fn public_inbox(
+    State(state): State<PublicPlatformHttpState>,
+    Query(query): Query<PublicInboxQuery>,
     headers: HeaderMap,
-) -> Result<Json<CommunityInboxPage>, ApiError> {
-    let principal_user_id = authenticated_community_member(&state.auth, &headers).await?;
+) -> Result<Json<PublicInboxPage>, ApiError> {
+    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
     if query.before_seq.is_some_and(|seq| seq <= 0) {
         return Err(subscription_bad_request(
             "inbox before_seq must be a positive event sequence",
         ));
     }
     Ok(Json(
-        projections::community_inbox(
+        projections::public_inbox(
             &state.pool,
             principal_user_id.as_str(),
             query.before_seq,
@@ -216,11 +225,11 @@ async fn community_inbox(
 }
 
 async fn member_mutes(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Query(query): Query<MemberMuteQuery>,
     headers: HeaderMap,
 ) -> Result<Json<MemberMutePage>, ApiError> {
-    let principal_user_id = authenticated_community_member(&state.auth, &headers).await?;
+    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
     let cursor = query
         .cursor
         .as_deref()
@@ -246,11 +255,11 @@ async fn member_mutes(
 }
 
 async fn member_mute_state(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(handle): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<MemberMuteState>, ApiError> {
-    let principal_user_id = authenticated_community_member(&state.auth, &headers).await?;
+    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
     Ok(Json(
         projections::member_mute_state(&state.pool, principal_user_id.as_str(), handle.as_str())
             .await
@@ -260,11 +269,11 @@ async fn member_mute_state(
 }
 
 async fn mute_public_profile(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(handle): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<MemberMuteState>, ApiError> {
-    let principal_user_id = authenticated_community_member(&state.auth, &headers).await?;
+    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
     Ok(Json(
         projections::mute_public_profile(
             &state.pool,
@@ -279,11 +288,11 @@ async fn mute_public_profile(
 }
 
 async fn unmute_public_profile(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(handle): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<MemberMuteState>, ApiError> {
-    let principal_user_id = authenticated_community_member(&state.auth, &headers).await?;
+    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
     Ok(Json(
         projections::unmute_public_profile(
             &state.pool,
@@ -297,7 +306,7 @@ async fn unmute_public_profile(
     ))
 }
 
-async fn authenticated_community_member(
+async fn authenticated_member(
     auth: &AuthHttpState,
     headers: &HeaderMap,
 ) -> Result<String, ApiError> {
@@ -305,7 +314,7 @@ async fn authenticated_community_member(
     require_authorized_principal(auth, token).await
 }
 
-pub(super) async fn optional_authenticated_community_member(
+pub(super) async fn optional_authenticated_member(
     auth: &AuthHttpState,
     headers: &HeaderMap,
 ) -> Result<Option<String>, ApiError> {
@@ -370,15 +379,8 @@ fn member_mute_bad_request(message: &str) -> ApiError {
     }
 }
 
-fn subscription_target(
-    target_kind: &str,
-    scope_id: Uuid,
-) -> Result<community::SubscriptionTarget, ApiError> {
-    Ok(community::SubscriptionTarget {
-        kind: community::SubscriptionTargetKind::parse(target_kind)
-            .map_err(|_| subscription_bad_request("invalid subscription target kind"))?,
-        scope_id,
-    })
+fn subscription_target(surface_id: Uuid) -> WatchTarget {
+    WatchTarget { surface_id }
 }
 
 fn subscription_projection_api_error(error: projections::ProjectionError) -> ApiError {
@@ -421,12 +423,11 @@ fn subscription_bad_request(message: &str) -> ApiError {
 }
 
 async fn public_search(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Query(query): Query<PublicSearchQuery>,
     headers: HeaderMap,
 ) -> Result<Json<PublicSearchPage>, ApiError> {
-    let viewer_principal_user_id =
-        optional_authenticated_community_member(&state.auth, &headers).await?;
+    let viewer_principal_user_id = optional_authenticated_member(&state.auth, &headers).await?;
     let normalized_query = query.q.trim();
     if normalized_query.chars().count() < 2 || normalized_query.chars().count() > 200 {
         return Err(ApiError::Reject {
@@ -555,7 +556,7 @@ struct CreateDiscussionTopicRequest {
 struct CreateDiscussionPostRequest {
     body: String,
     #[serde(default)]
-    quotations: Vec<community::Quotation>,
+    quotations: Vec<Quotation>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -566,8 +567,7 @@ struct ModerateDiscussionTopicRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 struct SubmitModerationReportRequest {
-    target_kind: String,
-    scope_id: Uuid,
+    surface_id: Uuid,
     source_seq: i64,
     reason_family: String,
     #[serde(default)]
@@ -588,7 +588,7 @@ struct ModerateCaseRequest {
 }
 
 async fn discussion_areas(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
 ) -> Result<Json<Vec<DiscussionArea>>, ApiError> {
     Ok(Json(
         projections::discussion_areas(&state.pool)
@@ -600,13 +600,12 @@ async fn discussion_areas(
 }
 
 async fn discussion_area_topics(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(slug): Path<String>,
     Query(query): Query<DiscussionPageQuery>,
     headers: HeaderMap,
 ) -> Result<Json<DiscussionTopicPage>, ApiError> {
-    let viewer_principal_user_id =
-        optional_authenticated_community_member(&state.auth, &headers).await?;
+    let viewer_principal_user_id = optional_authenticated_member(&state.auth, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
@@ -633,13 +632,12 @@ async fn discussion_area_topics(
 }
 
 async fn discussion_topic_thread(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path((slug, topic)): Path<(String, Uuid)>,
     Query(query): Query<DiscussionPostQuery>,
     headers: HeaderMap,
 ) -> Result<Json<DiscussionThreadPage>, ApiError> {
-    let viewer_principal_user_id =
-        optional_authenticated_community_member(&state.auth, &headers).await?;
+    let viewer_principal_user_id = optional_authenticated_member(&state.auth, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
@@ -664,7 +662,7 @@ async fn discussion_topic_thread(
 }
 
 async fn create_discussion_area(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     headers: HeaderMap,
     Json(request): Json<CreateDiscussionAreaRequest>,
 ) -> Result<(StatusCode, Json<DiscussionArea>), ApiError> {
@@ -686,7 +684,7 @@ async fn create_discussion_area(
         ));
     }
     let area_id = Uuid::new_v4();
-    let created = community::AreaCreated {
+    let created = forum::AreaCreated {
         slug: slug.clone(),
         title,
         description,
@@ -710,7 +708,7 @@ async fn create_discussion_area(
 }
 
 async fn create_discussion_topic(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(slug): Path<String>,
     headers: HeaderMap,
     Json(request): Json<CreateDiscussionTopicRequest>,
@@ -722,9 +720,9 @@ async fn create_discussion_topic(
     let title = validate_discussion_text(request.title.as_str(), "discussion topic title", 180)?;
     let body = validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
     let topic_id = Uuid::new_v4();
-    let events = community::decide_topic(
+    let events = forum::decide_topic(
         None,
-        community::TopicCommand::Create {
+        TopicCommand::Create {
             topic_id,
             area_id: area.area_id,
             title,
@@ -732,8 +730,8 @@ async fn create_discussion_topic(
             author_profile_id: profile.profile_id,
         },
     )
-    .map_err(community_reject_api_error)?;
-    append_community_events(&state.pool, topic_id, 0, events, profile.principal_user_id).await?;
+    .map_err(forum_reject_api_error)?;
+    append_forum_events(&state.pool, topic_id, 0, events, profile.principal_user_id).await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic_id)
         .await?
         .expect("projected discussion topic is readable");
@@ -741,7 +739,7 @@ async fn create_discussion_topic(
 }
 
 async fn create_discussion_post(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(topic): Path<Uuid>,
     headers: HeaderMap,
     Json(request): Json<CreateDiscussionPostRequest>,
@@ -750,15 +748,15 @@ async fn create_discussion_post(
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = community_topic_state(&current)?;
+    let topic_state = forum_topic_state(&current)?;
     let thread = projections::quotation_thread_for_discussion(
         &state.pool,
         topic,
         Some(profile.principal_user_id.as_str()),
     )
     .await?;
-    let quotations = community::decide_quotations(&thread, &request.quotations)
-        .map_err(community_reject_api_error)?;
+    let quotations = content_reference::decide_quotations(&thread, &request.quotations)
+        .map_err(content_reference_reject_api_error)?;
     let body = if request.body.trim().is_empty() {
         if quotations.is_empty() {
             validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
@@ -767,16 +765,16 @@ async fn create_discussion_post(
     } else {
         validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?
     };
-    let events = community::decide_topic(
+    let events = forum::decide_topic(
         Some(&topic_state),
-        community::TopicCommand::SubmitPost {
+        TopicCommand::SubmitPost {
             body,
             author_profile_id: profile.profile_id,
             quotations,
         },
     )
-    .map_err(community_reject_api_error)?;
-    append_community_events(
+    .map_err(forum_reject_api_error)?;
+    append_forum_events(
         &state.pool,
         topic,
         current.version,
@@ -791,34 +789,26 @@ async fn create_discussion_post(
 }
 
 async fn discussion_post_citations(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path((topic, source_seq)): Path<(Uuid, i64)>,
     Query(query): Query<PostCitationQuery>,
     headers: HeaderMap,
-) -> Result<Json<PostCitationPage>, ApiError> {
+) -> Result<Json<PublicPostCitationPage>, ApiError> {
     let _topic = visible_discussion_topic(&state, topic).await?;
-    let viewer_principal_user_id =
-        optional_authenticated_community_member(&state.auth, &headers).await?;
-    let page = projections::visible_incoming_citations(
+    let viewer_principal_user_id = optional_authenticated_member(&state.auth, &headers).await?;
+    let page = projections::visible_public_incoming_citations(
         &state.pool,
-        community::PostRef {
-            kind: community::PostKind::DiscussionPost,
-            scope_id: topic,
-            source_seq,
-        },
-        None,
+        content_reference::PublicContentRef::new(topic, source_seq),
         viewer_principal_user_id.as_deref(),
-        query
-            .limit
-            .unwrap_or(community::DEFAULT_POST_CITATION_LIMIT),
+        query.limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
     )
     .await?
     .ok_or_else(|| discussion_not_found("discussion post"))?;
-    Ok(Json(PostCitationPage::from(page)))
+    Ok(Json(PublicPostCitationPage::from(page)))
 }
 
 async fn moderate_discussion_topic(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(topic): Path<Uuid>,
     headers: HeaderMap,
     Json(request): Json<ModerateDiscussionTopicRequest>,
@@ -828,31 +818,30 @@ async fn moderate_discussion_topic(
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    let topic_state = community_topic_state(&current)?;
-    let command =
-        match (
-            request.posting_state.as_deref(),
-            request.visibility.as_deref(),
-        ) {
-            (Some(posting_state), None) => community::TopicCommand::SetPostingState {
-                posting_state: community::PostingState::parse(posting_state)
-                    .map_err(community_reject_api_error)?,
-            },
-            (None, Some(visibility)) => community::TopicCommand::SetVisibility {
-                visibility: community::TopicVisibility::parse(visibility)
-                    .map_err(community_reject_api_error)?,
-            },
-            _ => return Err(ApiError::Reject {
+    let topic_state = forum_topic_state(&current)?;
+    let command = match (
+        request.posting_state.as_deref(),
+        request.visibility.as_deref(),
+    ) {
+        (Some(posting_state), None) => TopicCommand::SetPostingState {
+            posting_state: PostingState::parse(posting_state).map_err(forum_reject_api_error)?,
+        },
+        (None, Some(visibility)) => TopicCommand::SetVisibility {
+            visibility: TopicVisibility::parse(visibility).map_err(forum_reject_api_error)?,
+        },
+        _ => {
+            return Err(ApiError::Reject {
                 status: StatusCode::BAD_REQUEST,
                 error: RejectCode::Internal,
                 message:
                     "discussion moderation must change exactly one of posting_state or visibility"
                         .to_string(),
-            }),
-        };
+            })
+        }
+    };
     let events =
-        community::decide_topic(Some(&topic_state), command).map_err(community_reject_api_error)?;
-    append_community_events(
+        forum::decide_topic(Some(&topic_state), command).map_err(forum_reject_api_error)?;
+    append_forum_events(
         &state.pool,
         topic,
         current.version,
@@ -867,7 +856,7 @@ async fn moderate_discussion_topic(
 }
 
 async fn submit_moderation_report(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     headers: HeaderMap,
     Json(request): Json<SubmitModerationReportRequest>,
 ) -> Result<(StatusCode, Json<ModerationReportReceipt>), ApiError> {
@@ -882,13 +871,10 @@ async fn submit_moderation_report(
             "report details must contain at most 1000 bytes",
         ));
     }
-    let target = community::ModerationTarget {
-        kind: community::ModerationTargetKind::parse(request.target_kind.as_str())
-            .map_err(moderation_reject_api_error)?,
-        scope_id: request.scope_id,
-        source_seq: request.source_seq,
+    let target = ModerationTarget {
+        public: content_reference::PublicContentRef::new(request.surface_id, request.source_seq),
     };
-    let reason = community::ReportReasonFamily::parse(request.reason_family.as_str())
+    let reason = ReportReasonFamily::parse(request.reason_family.as_str())
         .map_err(moderation_reject_api_error)?;
     let receipt = projections::submit_moderation_report(
         &state.pool,
@@ -905,7 +891,7 @@ async fn submit_moderation_report(
 }
 
 async fn moderation_report_receipt(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(report): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Json<ModerationReportReceipt>, ApiError> {
@@ -919,7 +905,7 @@ async fn moderation_report_receipt(
 }
 
 async fn moderation_cases(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Query(query): Query<ModerationCaseQuery>,
     headers: HeaderMap,
 ) -> Result<Json<ModerationCasePage>, ApiError> {
@@ -928,7 +914,7 @@ async fn moderation_cases(
     let status = match query.status.as_deref().unwrap_or("open") {
         "all" => None,
         value => {
-            community::ModerationCaseStatus::parse(value).map_err(moderation_reject_api_error)?;
+            ModerationCaseStatus::parse(value).map_err(moderation_reject_api_error)?;
             Some(value)
         }
     };
@@ -949,7 +935,7 @@ async fn moderation_cases(
 }
 
 async fn moderation_case(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(case): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Json<ModerationCaseDetail>, ApiError> {
@@ -962,7 +948,7 @@ async fn moderation_case(
 }
 
 async fn moderate_case(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(case): Path<Uuid>,
     headers: HeaderMap,
     Json(request): Json<ModerateCaseRequest>,
@@ -974,16 +960,16 @@ async fn moderate_case(
         .await?
         .ok_or_else(|| discussion_not_found("moderation case"))?;
     let command = match request.action.as_str() {
-        "hide" => community::ModerationCommand::Hide { reason },
-        "dismiss" => community::ModerationCommand::Dismiss { reason },
-        "restore" => community::ModerationCommand::Restore { reason },
+        "hide" => ModerationCommand::Hide { reason },
+        "dismiss" => ModerationCommand::Dismiss { reason },
+        "restore" => ModerationCommand::Restore { reason },
         _ => {
             return Err(moderation_bad_request(
                 "moderation action must be hide, dismiss, or restore",
             ))
         }
     };
-    let events = community::decide_moderation(Some(&current), command)
+    let events = trust_safety::decide_moderation(Some(&current), command)
         .map_err(moderation_reject_api_error)?;
     match projections::append_moderation_and_project_expected(
         &state.pool,
@@ -1044,11 +1030,9 @@ fn moderation_projection_api_error(error: projections::ProjectionError) -> ApiEr
     }
 }
 
-fn moderation_reject_api_error(reject: community::CommunityReject) -> ApiError {
+fn moderation_reject_api_error(reject: TrustSafetyReject) -> ApiError {
     match reject {
-        community::CommunityReject::InvalidModerationTarget
-        | community::CommunityReject::InvalidReportReason
-        | community::CommunityReject::InvalidModerationCaseStatus => {
+        TrustSafetyReject::InvalidReportReason | TrustSafetyReject::InvalidModerationCaseStatus => {
             moderation_bad_request(reject.to_string())
         }
         _ => discussion_conflict(reject.to_string().as_str()),
@@ -1064,37 +1048,37 @@ fn moderation_bad_request(message: impl Into<String>) -> ApiError {
 }
 
 async fn visible_discussion_topic(
-    state: &CommunityHttpState,
+    state: &PublicPlatformHttpState,
     topic_id: Uuid,
 ) -> Result<projections::DiscussionTopicRow, ApiError> {
     let topic = projections::discussion_topic_by_id(&state.pool, topic_id)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
-    if topic.visibility != community::TopicVisibility::Visible.as_str() {
+    if topic.visibility != TopicVisibility::Visible.as_str() {
         return Err(discussion_not_found("discussion topic"));
     }
     Ok(topic)
 }
 
 async fn authenticated_discussion_profile(
-    state: &CommunityHttpState,
+    state: &PublicPlatformHttpState,
     headers: &HeaderMap,
 ) -> Result<projections::ProfileEditorRow, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
     let principal_user_id = require_authorized_principal(&state.auth, token).await?;
     let profile = projections::profile_editor_by_principal(&state.pool, principal_user_id.as_str())
         .await?
-        .ok_or_else(|| discussion_conflict("create a community profile before posting"))?;
+        .ok_or_else(|| discussion_conflict("create a public profile before posting"))?;
     if profile.visibility != "public" {
         return Err(discussion_conflict(
-            "make the community profile public before posting publicly",
+            "make the public profile public before posting publicly",
         ));
     }
     Ok(profile)
 }
 
 async fn require_global_mod(
-    state: &CommunityHttpState,
+    state: &PublicPlatformHttpState,
     token: &str,
     action: &str,
 ) -> Result<String, ApiError> {
@@ -1162,25 +1146,23 @@ fn validate_discussion_text(value: &str, label: &str, max_len: usize) -> Result<
     Ok(text.to_string())
 }
 
-fn community_topic_state(
-    topic: &projections::DiscussionTopicRow,
-) -> Result<community::TopicState, ApiError> {
-    Ok(community::TopicState {
+fn forum_topic_state(topic: &projections::DiscussionTopicRow) -> Result<TopicState, ApiError> {
+    Ok(TopicState {
         topic_id: topic.topic_id,
         area_id: topic.area_id,
-        posting_state: community::PostingState::parse(topic.posting_state.as_str())
-            .map_err(community_reject_api_error)?,
-        visibility: community::TopicVisibility::parse(topic.visibility.as_str())
-            .map_err(community_reject_api_error)?,
+        posting_state: PostingState::parse(topic.posting_state.as_str())
+            .map_err(forum_reject_api_error)?,
+        visibility: TopicVisibility::parse(topic.visibility.as_str())
+            .map_err(forum_reject_api_error)?,
         version: topic.version,
     })
 }
 
-async fn append_community_events(
+async fn append_forum_events(
     pool: &PgPool,
     topic_id: Uuid,
     expected_version: i64,
-    events: Vec<community::TopicEvent>,
+    events: Vec<TopicEvent>,
     principal_user_id: String,
 ) -> Result<(), ApiError> {
     let occurred_at = unix_now_seconds();
@@ -1212,17 +1194,12 @@ async fn append_community_events(
     }
 }
 
-fn community_reject_api_error(reject: community::CommunityReject) -> ApiError {
+fn forum_reject_api_error(reject: ForumReject) -> ApiError {
     let status = match reject {
-        community::CommunityReject::InvalidPostingState
-        | community::CommunityReject::InvalidVisibility
-        | community::CommunityReject::InvalidQuotationTarget
-        | community::CommunityReject::InvalidQuotationExcerpt
-        | community::CommunityReject::TooManyQuotations
-        | community::CommunityReject::QuotationChainTooDeep
-        | community::CommunityReject::DuplicateQuotation => StatusCode::BAD_REQUEST,
-        community::CommunityReject::TopicNotFound
-        | community::CommunityReject::QuotationNotFound => StatusCode::NOT_FOUND,
+        ForumReject::InvalidPostingState | ForumReject::InvalidVisibility => {
+            StatusCode::BAD_REQUEST
+        }
+        ForumReject::TopicNotFound => StatusCode::NOT_FOUND,
         _ => StatusCode::CONFLICT,
     };
     ApiError::Reject {
@@ -1234,6 +1211,25 @@ fn community_reject_api_error(reject: community::CommunityReject) -> ApiError {
         } else {
             RejectCode::StreamConflict
         },
+        message: reject.to_string(),
+    }
+}
+
+fn content_reference_reject_api_error(
+    reject: content_reference::ContentReferenceReject,
+) -> ApiError {
+    let status = match reject {
+        content_reference::ContentReferenceReject::InvalidQuotationTarget
+        | content_reference::ContentReferenceReject::InvalidQuotationExcerpt
+        | content_reference::ContentReferenceReject::TooManyQuotations
+        | content_reference::ContentReferenceReject::QuotationChainTooDeep
+        | content_reference::ContentReferenceReject::DuplicateQuotation => StatusCode::BAD_REQUEST,
+        content_reference::ContentReferenceReject::QuotationNotFound => StatusCode::NOT_FOUND,
+        content_reference::ContentReferenceReject::InvalidPostKind => StatusCode::BAD_REQUEST,
+    };
+    ApiError::Reject {
+        status,
+        error: RejectCode::Internal,
         message: reject.to_string(),
     }
 }
@@ -1270,7 +1266,7 @@ struct UpdateProfileRequest {
 }
 
 async fn public_profile(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(handle): Path<String>,
 ) -> Result<Json<PublicProfile>, ApiError> {
     let profile = projections::public_profile_by_handle(&state.pool, handle.as_str())
@@ -1280,7 +1276,7 @@ async fn public_profile(
 }
 
 async fn current_profile_editor(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<ProfileEditor>, ApiError> {
     let principal_user_id = authenticated_profile_principal(&state, &headers).await?;
@@ -1291,7 +1287,7 @@ async fn current_profile_editor(
 }
 
 async fn profile_editor(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(handle): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<ProfileEditor>, ApiError> {
@@ -1304,7 +1300,7 @@ async fn profile_editor(
 }
 
 async fn create_profile(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     headers: HeaderMap,
     Json(request): Json<CreateProfileRequest>,
 ) -> Result<(StatusCode, Json<ProfileEditor>), ApiError> {
@@ -1356,7 +1352,7 @@ async fn create_profile(
 }
 
 async fn update_profile(
-    State(state): State<CommunityHttpState>,
+    State(state): State<PublicPlatformHttpState>,
     Path(handle): Path<String>,
     headers: HeaderMap,
     Json(request): Json<UpdateProfileRequest>,
@@ -1393,7 +1389,7 @@ async fn update_profile(
 }
 
 async fn authenticated_profile_principal(
-    state: &CommunityHttpState,
+    state: &PublicPlatformHttpState,
     headers: &HeaderMap,
 ) -> Result<String, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
