@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const scriptPath = fileURLToPath(import.meta.url);
 const defaultCacheNamespace = "fmarch-exact-image-rust-1.95";
+export const requiredExactImageEngine = "podman";
 
 export const exactImageTimingPhases = Object.freeze([
   "engine_probe",
@@ -158,21 +159,22 @@ function run(command, args, options = {}) {
   return result.stdout ?? "";
 }
 
-function containerBuildEnvironment(engine, env) {
-  return engine === "docker" ? { ...env, DOCKER_BUILDKIT: "1" } : env;
+export function resolveExactImageEngine(env = {}) {
+  const requested = env.FMARCH_CONTAINER_ENGINE;
+  if (requested && requested !== requiredExactImageEngine) {
+    throw new Error(
+      `FMARCH_CONTAINER_ENGINE=${requested} is not supported; ` +
+        `exact-image proof requires ${requiredExactImageEngine}`,
+    );
+  }
+  return requiredExactImageEngine;
 }
 
 function availableEngine(env) {
-  const requested = env.FMARCH_CONTAINER_ENGINE;
-  const candidates = requested ? [requested] : ["docker", "podman"];
-  for (const candidate of candidates) {
-    const probe = spawnSync(candidate, ["info"], { encoding: "utf8", stdio: "pipe" });
-    if (probe.status === 0) return candidate;
-  }
-  throw new Error(
-    `no working container engine found (tried ${candidates.join(", ")}); ` +
-      "set FMARCH_CONTAINER_ENGINE to the exact Docker-compatible engine",
-  );
+  const engine = resolveExactImageEngine(env);
+  const probe = spawnSync(engine, ["info"], { encoding: "utf8", stdio: "pipe" });
+  if (probe.status === 0) return engine;
+  throw new Error(`exact-image proof requires a working ${engine} engine`);
 }
 
 function writeReport(reportPath, evidence) {
@@ -269,7 +271,7 @@ export function runExactImageContentSmoke({ env = process.env, now } = {}) {
         "--build-arg",
         `FMARCH_CARGO_CACHE_NAMESPACE=${cache}`,
         ".",
-      ], { env: containerBuildEnvironment(engine, env) }),
+      ]),
     );
     const imageId = readFileSync(iidFile, "utf8").trim();
     if (!imageId) throw new Error("container build did not report an immutable image id");

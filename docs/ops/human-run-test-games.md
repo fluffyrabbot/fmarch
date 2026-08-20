@@ -11,15 +11,25 @@ Postgres must be reachable through `DATABASE_URL`. The default is:
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch
 ```
 
-With podman running, the repo-local service is:
+For the container-backed local database, fmarch requires both Podman and
+`podman-compose`; Docker is not a local prerequisite. Start the repo-local
+service through the wrapper, which verifies both tools and forces
+`PODMAN_COMPOSE_PROVIDER=podman-compose` before it invokes `podman compose`:
 
 ```sh
-podman compose up -d postgres
+npm run dev:postgres:podman -- up -d postgres
 ```
 
-If podman is unavailable, use the repo-local helper. It initializes a Postgres
-cluster under `target/local-postgres`, starts it on `127.0.0.1:5544`, creates the
-`fmarch` database if needed, and prints the exact `DATABASE_URL`:
+To inspect the resolved Compose configuration with that same provider policy:
+
+```sh
+npm run dev:postgres:podman -- config
+```
+
+The non-container repo-local helper remains available when a local Postgres
+cluster is preferred. It initializes a cluster under `target/local-postgres`,
+starts it on `127.0.0.1:5544`, creates the `fmarch` database if needed, and
+prints the exact `DATABASE_URL`:
 
 ```sh
 npm run dev:postgres -- start

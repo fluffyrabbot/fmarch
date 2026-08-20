@@ -920,8 +920,14 @@
     {
       "id": "proof:exact-image-content",
       "tier": "active",
-      "paths": ["tools/exact_image_content_smoke.mjs"],
+      "paths": ["tools/exact_image_content_smoke.mjs", "tools/exact_image_content_smoke.test.mjs"],
       "lanes": ["test:exact-image-content"]
+    },
+    {
+      "id": "proof:podman-compose",
+      "tier": "active",
+      "paths": ["tools/podman_compose.mjs", "tools/podman_compose.test.mjs"],
+      "lanes": ["test:dev-postgres-contract"]
     },
     {
       "id": "tools:proof-infra",
