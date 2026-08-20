@@ -83,6 +83,23 @@ export function validateTelemetrySource(source, label) {
   }
 }
 
+export function assertPinnedDockerfileBases(dockerfile, label) {
+  const stages = new Set();
+  for (const line of dockerfile.match(/^FROM .+$/gim) ?? []) {
+    const match = /^FROM\s+(\S+)(?:\s+AS\s+([A-Za-z0-9][A-Za-z0-9_.-]*))?$/i.exec(line);
+    assert.ok(match, `${label} has an invalid FROM instruction: ${line}`);
+    const [, base, stage] = match;
+    if (!stages.has(base)) {
+      assert.match(
+        base,
+        /@sha256:[a-f0-9]{64}$/,
+        `${label} external base must be pinned: ${line}`,
+      );
+    }
+    if (stage) stages.add(stage);
+  }
+}
+
 export async function validateSecurityReleaseBaseline() {
   const source = Object.fromEntries(
     await Promise.all(
@@ -133,9 +150,7 @@ export async function validateSecurityReleaseBaseline() {
     ["API", source.Dockerfile],
     ["frontend", source["Dockerfile.frontend"]],
   ]) {
-    for (const line of dockerfile.match(/^FROM .+$/gm) ?? []) {
-      assert.match(line, /@sha256:[a-f0-9]{64}(?:\s+AS\s+\w+)?$/, `${name} base must be pinned`);
-    }
+    assertPinnedDockerfileBases(dockerfile, name);
     assert.match(dockerfile, /org\.opencontainers\.image\.source=/);
     assert.match(dockerfile, /\nUSER (?:fmarch|node)\n/);
   }

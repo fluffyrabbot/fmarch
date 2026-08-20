@@ -3,6 +3,13 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  assertCompleteExactImageTiming,
+  createExactImageTiming,
+  exactImageTimingPhases,
+  parseExactImageArguments,
+} from "./exact_image_content_smoke.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 await contract();
@@ -41,19 +48,68 @@ async function contract() {
     ),
   );
 
+  assert.match(source.Dockerfile, /^# syntax=docker\/dockerfile:1\.7$/m);
+  assert.match(source.Dockerfile, /^FROM rust:[^\n]+@sha256:[a-f0-9]{64} AS chef$/m);
+  assert.match(source.Dockerfile, /^FROM chef AS planner$/m);
+  assert.match(source.Dockerfile, /^FROM chef AS builder$/m);
+  assert.match(
+    source.Dockerfile,
+    /cargo install --locked --version 0\.1\.78 cargo-chef/,
+  );
+  assert.match(source.Dockerfile, /cargo chef prepare --recipe-path recipe\.json/);
+  assert.match(source.Dockerfile, /COPY --from=planner \/app\/recipe\.json \.\/recipe\.json/);
+  assert.match(
+    source.Dockerfile,
+    /cargo chef cook --release --locked --package server --bins --recipe-path recipe\.json/,
+  );
   assert.match(source.Dockerfile, /cargo build --release --locked -p server --bins/);
-  assert.match(source.Dockerfile, /^FROM rust:[^\n]+@sha256:[a-f0-9]{64} AS builder$/m);
-  assert.match(source.Dockerfile, /^FROM debian:[^\n]+@sha256:[a-f0-9]{64} AS runtime$/m);
+  for (const target of ["/usr/local/cargo/registry", "/usr/local/cargo/git", "/app/target"]) {
+    assert.match(
+      source.Dockerfile,
+      new RegExp(
+        `--mount=type=cache,id=\\$\\{FMARCH_CARGO_CACHE_NAMESPACE\\}-[^,]+,target=${target.replaceAll("/", "\\/")}`,
+      ),
+    );
+  }
+  assert.match(source.Dockerfile, /^FROM debian:[^\n]+@sha256:[a-f0-9]{64} AS runtime-base$/m);
+  assert.match(source.Dockerfile, /^FROM runtime-base AS runtime$/m);
   assert.match(source.Dockerfile, /org\.opencontainers\.image\.source=/);
   assert.match(source.Dockerfile, /COPY docs \.\/docs/);
   assert.doesNotMatch(source.Dockerfile, /\/var\/lib\/fmarch\/media/);
   assert.match(source.Dockerfile, /apt-get install --yes --no-install-recommends ca-certificates/);
-  assert.match(source.Dockerfile, /COPY --from=builder \/app\/target\/release\/fmarch-migrate \/usr\/local\/bin\/fmarch-migrate/);
-  assert.match(source.Dockerfile, /COPY --from=builder \/app\/target\/release\/fmarch-schema-gate \/usr\/local\/bin\/fmarch-schema-gate/);
-  assert.match(source.Dockerfile, /COPY --from=builder \/app\/target\/release\/fmarch-event-key-admin \/usr\/local\/bin\/fmarch-event-key-admin/);
+  assert.match(source.Dockerfile, /COPY --from=builder \/out\/fmarch-migrate \/usr\/local\/bin\/fmarch-migrate/);
+  assert.match(source.Dockerfile, /COPY --from=builder \/out\/fmarch-schema-gate \/usr\/local\/bin\/fmarch-schema-gate/);
+  assert.match(source.Dockerfile, /COPY --from=builder \/out\/fmarch-event-key-admin \/usr\/local\/bin\/fmarch-event-key-admin/);
   assert.match(source.Dockerfile, /USER fmarch/);
   assert.match(source.Dockerfile, /CMD \["fmarch-server"\]/);
   assert.match(source[".dockerignore"], /^target$/m);
+  assert.match(source[".dockerignore"], /^\*\*\/target$/m);
+  let clock = 0;
+  const timing = createExactImageTiming({ now: () => clock });
+  for (const phase of exactImageTimingPhases) {
+    timing.measure(phase, () => {
+      clock += 7;
+    });
+  }
+  const timingSnapshot = timing.snapshot();
+  assert.equal(assertCompleteExactImageTiming(timingSnapshot), true);
+  assert.equal(timingSnapshot.total_milliseconds, 42);
+  assert.deepEqual(
+    timingSnapshot.phases.map((phase) => phase.milliseconds),
+    [7, 7, 7, 7, 7, 7],
+  );
+  const failedTiming = createExactImageTiming({ now: () => clock });
+  assert.throws(
+    () => failedTiming.measure("image_build", () => { throw new Error("expected failure"); }),
+    /expected failure/,
+  );
+  assert.throws(
+    () => assertCompleteExactImageTiming(failedTiming.snapshot()),
+    /failed during image_build/,
+  );
+  assert.deepEqual(parseExactImageArguments([]), { cacheProfile: false });
+  assert.deepEqual(parseExactImageArguments(["--cache-profile"]), { cacheProfile: true });
+  assert.throws(() => parseExactImageArguments(["--unknown"]), /unknown exact-image-content/);
   assert.match(source["railway.toml"], /healthcheckPath = "\/readyz"/);
   assert.match(source["railway.toml"], /preDeployCommand = "fmarch-schema-gate"/);
   assert.doesNotMatch(source["railway.toml"], /fmarch-migrate/);
