@@ -1,20 +1,29 @@
 import { spawn } from "node:child_process";
 import { appendFile, chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const targetRoot = path.join(repoRoot, "target");
-const artifactDir = path.join(targetRoot, "database-tls-boundary");
-const runtimeDir = await mkdtemp(path.join(targetRoot, "database-tls-runtime-"));
+// Direct invocations keep their long-lived evidence location.  Proof-lane runs
+// provide a unique artifact root, including the disposable TLS cluster and log.
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(targetRoot, "database-tls-boundary"),
+);
+await mkdir(artifactDir, { recursive: true });
+const runtimeDir = await mkdtemp(path.join(artifactDir, "runtime-"));
+// PostgreSQL's Unix-domain socket address has a 103-byte limit on Darwin.
+// Evidence can live in the run-scoped artifact tree; the disposable socket
+// itself needs this short, independently cleaned path.
+const socketDir = await mkdtemp(path.join(tmpdir(), "fmarch-tls-socket-"));
 const dataDir = path.join(runtimeDir, "postgres");
 const logPath = path.join(runtimeDir, "postgres.log");
 const reportPath = path.join(artifactDir, "report.json");
 let postgresRunning = false;
 
 try {
-  await mkdir(artifactDir, { recursive: true });
   const bindir = (await capture("pg_config", ["--bindir"])).trim();
   const initdb = path.join(bindir, "initdb");
   const pgCtl = path.join(bindir, "pg_ctl");
@@ -57,7 +66,7 @@ try {
       "ssl = on",
       `ssl_cert_file = '${postgresLiteral(certificate)}'`,
       `ssl_key_file = '${postgresLiteral(privateKey)}'`,
-      `unix_socket_directories = '${postgresLiteral(runtimeDir)}'`,
+      `unix_socket_directories = '${postgresLiteral(socketDir)}'`,
       "",
     ].join("\n"),
   );
@@ -146,6 +155,7 @@ try {
     // No server log exists when setup fails before PostgreSQL starts.
   }
   await rm(runtimeDir, { recursive: true, force: true });
+  await rm(socketDir, { recursive: true, force: true });
 }
 
 function postgresUrl({ username, password, port, database }) {

@@ -6382,6 +6382,11 @@ function assertRoleMobileViewportEvidence(roleEntries) {
 
       if (entry.commandResult === null) {
         assert.equal(scenario.id, "admin");
+        assert.equal(
+          runtimeScenario.commandFlowId,
+          null,
+          "only the deliberately live, commandless admin scenario may omit command evidence",
+        );
         continue;
       }
 

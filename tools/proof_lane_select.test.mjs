@@ -26,7 +26,9 @@ import {
   pruneUnknownLanes,
   runLanes,
   selectLanes,
+  usesRunnerOwnedPostgres,
   warmupCommand,
+  workspaceCrateGraph,
 } from './proof_lane_select.mjs';
 
 const manifest = loadManifest(MANIFEST_PATH);
@@ -267,7 +269,7 @@ test('every Rust crate change arms pinned strict workspace Clippy', () => {
 });
 
 test('generated artifacts have one owner, a writer, and exact freshness selection', () => {
-  assert.equal(manifest.version, 4);
+  assert.equal(manifest.version, 5);
   const outputOwners = new Map();
   const artifactLanes = Object.entries(manifest.lanes).filter(
     ([, lane]) => lane.inputs || lane.outputs || lane.write_command,
@@ -745,9 +747,10 @@ test('every manifest path entry exists in the repo', () => {
 });
 
 test('every workspace crate is covered by exactly one crate area', () => {
-  const crateDirs = readdirSync(join(REPO_ROOT, 'crates'), { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => d.name);
+  // A deleted/renamed crate directory can remain present in a dirty worktree
+  // with no Cargo package. The proof graph must model the actual workspace,
+  // rather than treating that filesystem residue as an executable crate.
+  const crateDirs = Object.keys(workspaceCrateGraph());
   const crateAreas = manifest.areas.filter((a) => a.crate).map((a) => a.crate);
   for (const crate of crateDirs) {
     assert.equal(
@@ -1134,6 +1137,25 @@ test('warm-up runs the lane command itself, never a build-only stand-in', () => 
     !executableSource.includes('--no-run'),
     'the build-only warm-up must not come back',
   );
+});
+
+test('direct timing paths refuse lanes that require runner-owned disposable Postgres', () => {
+  const fixtureManifest = {
+    lanes: {
+      pg: {
+        kind: 'shell',
+        command: 'cargo test -p pg',
+        execution: {
+          class: 'postgres',
+          timeout_seconds: 60,
+          argv: ['cargo', 'test', '-p', 'pg'],
+          resources: [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }],
+        },
+      },
+    },
+  };
+  assert.equal(usesRunnerOwnedPostgres(fixtureManifest.lanes.pg), true);
+  assert.throws(() => measureLane('pg', fixtureManifest), /runner-owned disposable Postgres/);
 });
 
 test('measurement records the warm run, not the compilation before it', () => {

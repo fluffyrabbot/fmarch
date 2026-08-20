@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  assertLocalProofEndpoint,
+  assertDisposableDatabaseName,
   applyUnixSocketDirectories,
   buildConfig,
   databaseUrl,
@@ -9,6 +11,7 @@ import {
   defaultPort,
   defaultUser,
   devPostgresListenerState,
+  disposableDatabaseConfig,
   parseArgs,
   pgCtlStartOptions,
   quotePostgresArg,
@@ -70,6 +73,24 @@ test("dev postgres config accepts environment overrides", () => {
   assert.equal(config.socketDir, "/tmp/fmarch-pg-sockets");
   assert.equal(config.logPath, "/tmp/fmarch-pg.log");
   assert.equal(databaseUrl(config), "postgres://alice:secret%20value@localhost:6544/scratch");
+});
+
+test("proof databases are generated, isolated names rooted in the repo-local cluster", () => {
+  const config = buildConfig({ pgBin: "/pg/bin" }, {});
+  const disposable = disposableDatabaseConfig(config, "fmarch_proof_run42_commands_pg");
+  assert.equal(disposable.database, "fmarch_proof_run42_commands_pg");
+  assert.equal(
+    databaseUrl(disposable),
+    "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch_proof_run42_commands_pg",
+  );
+  assert.doesNotThrow(() => assertDisposableDatabaseName("fmarch_proof_run42_commands_pg"));
+  assert.throws(() => assertDisposableDatabaseName("fmarch"), /generated fmarch_proof/);
+  assert.throws(() => assertDisposableDatabaseName("fmarch_proof_bad-name"), /generated fmarch_proof/);
+  assert.doesNotThrow(() => assertLocalProofEndpoint(config));
+  assert.throws(
+    () => assertLocalProofEndpoint({ ...config, host: "db.example.test" }),
+    /must be loopback/,
+  );
 });
 
 test("dev postgres keeps Unix sockets beside PGDATA, not in /run/postgresql", () => {

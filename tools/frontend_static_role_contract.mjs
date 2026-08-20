@@ -124,7 +124,9 @@ import {
 } from "./frontend_role_smoke_scenarios.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const artifactDir = path.join(repoRoot, "target", "frontend-static-role-contract");
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", "frontend-static-role-contract"),
+);
 const evidencePath = path.join(artifactDir, "role-contract.json");
 
 const evidence = {

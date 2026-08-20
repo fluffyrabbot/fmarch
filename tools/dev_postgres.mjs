@@ -15,7 +15,7 @@ export const defaultUser = "fmarch";
 export const defaultDatabase = "fmarch";
 export const defaultPassword = "fmarch";
 
-const pgCommands = ["pg_ctl", "initdb", "createdb", "pg_isready"];
+const pgCommands = ["pg_ctl", "initdb", "createdb", "dropdb", "pg_isready"];
 const pgBinCandidates = [
   process.env.PG_BIN,
   "/opt/homebrew/opt/postgresql@16/bin",
@@ -164,6 +164,86 @@ export function databaseUrl(config) {
   )}`;
 }
 
+// The proof-lane runner owns disposable databases through this small public
+// surface rather than reconstructing pg_ctl/createdb calls itself.  Keeping it
+// here means every proof database is tied to the repo-local cluster guard that
+// refuses to adopt an unrelated listener on the configured port.
+export async function startRepoLocalPostgres(config = buildConfig(), { signal } = {}) {
+  await startPostgres(config, { signal });
+  return config;
+}
+
+export function disposableDatabaseConfig(config, database) {
+  assertDisposableDatabaseName(database);
+  return { ...config, database };
+}
+
+export async function createDisposableDatabase(config, database, { ensureStarted = true, signal } = {}) {
+  const disposable = disposableDatabaseConfig(config, database);
+  throwIfAborted(signal);
+  if (ensureStarted) await startRepoLocalPostgres(config, { signal });
+  const result = await runPg(
+    config,
+    "createdb",
+    ["-h", config.host, "-p", String(config.port), "-U", config.user, database],
+    { allowFailure: true, signal },
+  );
+  const output = result.stderr + result.stdout;
+  if (result.code !== 0) {
+    if (/already exists/i.test(output)) {
+      throw new Error(`disposable proof database ${database} already exists; refuse to reuse stale lane state`);
+    }
+    throw new Error(output.trim() || `could not create disposable database ${database}`);
+  }
+  return disposable;
+}
+
+// Podman/Docker local proof setups expose the same fixed loopback endpoint as
+// the repo-owned cluster.  This uses that declared endpoint, never an ambient
+// DATABASE_URL, so disposable proof databases remain local even when a
+// container rather than pg_ctl owns port 5544.
+export async function createDisposableDatabaseAtLocalEndpoint(config, database, { signal } = {}) {
+  assertLocalProofEndpoint(config);
+  return await createDisposableDatabase(config, database, { ensureStarted: false, signal });
+}
+
+export async function dropDisposableDatabase(config, database, { signal } = {}) {
+  assertDisposableDatabaseName(database);
+  const result = await runPg(
+    config,
+    "dropdb",
+    [
+      "-h",
+      config.host,
+      "-p",
+      String(config.port),
+      "-U",
+      config.user,
+      "--if-exists",
+      "--force",
+      database,
+    ],
+    { allowFailure: true, signal },
+  );
+  if (result.code !== 0) {
+    throw new Error((result.stderr || result.stdout || `could not drop disposable database ${database}`).trim());
+  }
+}
+
+export function assertDisposableDatabaseName(database) {
+  if (!/^fmarch_proof_[a-z0-9_]{1,48}$/.test(database)) {
+    throw new Error(
+      `disposable database must be a generated fmarch_proof_<run>_<lane> identifier, got ${JSON.stringify(database)}`,
+    );
+  }
+}
+
+export function assertLocalProofEndpoint(config) {
+  if (!['127.0.0.1', '::1', 'localhost'].includes(config.host)) {
+    throw new Error(`proof database endpoint must be loopback, got ${config.host}`);
+  }
+}
+
 export function findPgBin(candidates = pgBinCandidates) {
   for (const candidate of candidates) {
     if (pgCommands.every((command) => existsSync(path.join(candidate, command)))) {
@@ -173,16 +253,17 @@ export function findPgBin(candidates = pgBinCandidates) {
   return null;
 }
 
-async function startPostgres(config) {
+async function startPostgres(config, { signal } = {}) {
+  throwIfAborted(signal);
   requirePgBin(config);
   await mkdir(path.dirname(config.logPath), { recursive: true });
-  await initIfNeeded(config);
+  await initIfNeeded(config, { signal });
 
-  if (await isOwnedServerRunning(config)) {
-    if (!(await isReady(config))) {
-      await waitForReady(config);
+  if (await isOwnedServerRunning(config, { signal })) {
+    if (!(await isReady(config, { signal }))) {
+      await waitForReady(config, { signal });
     }
-    await ensureDatabase(config);
+    await ensureDatabase(config, { signal });
     return;
   }
 
@@ -207,9 +288,9 @@ async function startPostgres(config) {
     "-o",
     pgCtlStartOptions(config),
     "start",
-  ]);
-  await waitForReady(config);
-  await ensureDatabase(config);
+  ], { signal });
+  await waitForReady(config, { signal });
+  await ensureDatabase(config, { signal });
 }
 
 async function stopPostgres(config, { allowStopped = false } = {}) {
@@ -254,7 +335,8 @@ async function printStatus(config) {
   console.log(`DATABASE_URL=${databaseUrl(config)}`);
 }
 
-async function initIfNeeded(config) {
+async function initIfNeeded(config, { signal } = {}) {
+  throwIfAborted(signal);
   if (existsSync(path.join(config.dataDir, "PG_VERSION"))) {
     return;
   }
@@ -267,7 +349,7 @@ async function initIfNeeded(config) {
     "--auth=trust",
     "--no-locale",
     "--encoding=UTF8",
-  ]);
+  ], { signal });
   await mkdir(config.socketDir, { recursive: true });
   await ensureSocketDirectoryConfig(config);
 }
@@ -297,12 +379,12 @@ async function ensureSocketDirectoryConfig(config) {
   }
 }
 
-async function ensureDatabase(config) {
+async function ensureDatabase(config, { signal } = {}) {
   const result = await runPg(
     config,
     "createdb",
     ["-h", config.host, "-p", String(config.port), "-U", config.user, config.database],
-    { allowFailure: true },
+    { allowFailure: true, signal },
   );
   const output = result.stderr + result.stdout;
   if (result.code !== 0 && !/already exists/i.test(output)) {
@@ -310,13 +392,14 @@ async function ensureDatabase(config) {
   }
 }
 
-async function waitForReady(config) {
+async function waitForReady(config, { signal } = {}) {
   const started = Date.now();
   while (Date.now() - started < 15_000) {
-    if (await isReady(config)) {
+    throwIfAborted(signal);
+    if (await isReady(config, { signal })) {
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await waitWithAbort(250, signal);
   }
   let logTail = "";
   try {
@@ -328,22 +411,22 @@ async function waitForReady(config) {
   throw new Error(`Postgres did not become ready at ${config.host}:${config.port}${logTail}`);
 }
 
-async function isReady(config) {
+async function isReady(config, { signal } = {}) {
   const result = await runPg(
     config,
     "pg_isready",
     ["-h", config.host, "-p", String(config.port), "-U", config.user, "-d", config.database],
-    { allowFailure: true },
+    { allowFailure: true, signal },
   );
   return result.code === 0;
 }
 
-async function isOwnedServerRunning(config) {
+async function isOwnedServerRunning(config, { signal } = {}) {
   const result = await runPg(
     config,
     "pg_ctl",
     ["-D", config.dataDir, "status"],
-    { allowFailure: true },
+    { allowFailure: true, signal },
   );
   return result.code === 0;
 }
@@ -391,13 +474,37 @@ function requirePgBin(config) {
 }
 
 async function runPg(config, command, args, options = {}) {
+  const { allowFailure = false, signal } = options;
+  throwIfAborted(signal);
   const result = await execFileResult(path.join(config.pgBin, command), args, {
     env: { ...process.env, PGPASSWORD: config.password },
+    signal,
   });
-  if (result.code !== 0 && !options.allowFailure) {
+  if (result.code !== 0 && !allowFailure) {
     throw new Error((result.stderr || result.stdout || `${command} failed`).trim());
   }
   return result;
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error ? signal.reason : new Error('Postgres operation aborted');
+  }
+}
+
+async function waitWithAbort(milliseconds, signal) {
+  throwIfAborted(signal);
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', aborted);
+      resolve();
+    }, milliseconds);
+    const aborted = () => {
+      clearTimeout(timer);
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Postgres operation aborted'));
+    };
+    signal?.addEventListener('abort', aborted, { once: true });
+  });
 }
 
 async function execFileResult(command, args, options = {}) {

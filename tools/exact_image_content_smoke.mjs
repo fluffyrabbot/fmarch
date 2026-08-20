@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const artifactDir = resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? join(repoRoot, 'target', 'exact-image-content'),
+);
+const reportPath = join(artifactDir, 'report.json');
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
-    cwd: new URL('..', import.meta.url),
+    cwd: repoRoot,
     encoding: 'utf8',
     stdio: options.capture ? 'pipe' : 'inherit',
   });
@@ -52,6 +59,7 @@ const checkScript = [
 ].join(' && ');
 
 try {
+  mkdirSync(artifactDir, { recursive: true });
   const hostOutput = run(
     'cargo',
     ['run', '--quiet', '-p', 'server', '--', '--check-content'],
@@ -112,22 +120,26 @@ try {
       `image content does not exactly match the host registry:\nhost=${hostOutput}\nimage=${first}`,
     );
   }
-  process.stdout.write(
-    `${JSON.stringify({
-      status: 'ok',
-      engine,
-      image_id: imageId,
-      runtime_uid: 10001,
-      event_key_admin_binary: true,
-      runtime_content_directories: false,
-      registry_hash: report.registry_hash,
-      host_registry_match: true,
-      exact_pack_refs: report.packs,
-      exact_program_refs: report.programs,
-      pack_count: report.pack_count,
-      program_count: report.program_count,
-    })}\n`,
-  );
+  const evidence = {
+    status: 'ok',
+    engine,
+    image_id: imageId,
+    runtime_uid: 10001,
+    event_key_admin_binary: true,
+    runtime_content_directories: false,
+    registry_hash: report.registry_hash,
+    host_registry_match: true,
+    exact_pack_refs: report.packs,
+    exact_program_refs: report.programs,
+    pack_count: report.pack_count,
+    program_count: report.program_count,
+  };
+  writeFileSync(reportPath, `${JSON.stringify(evidence, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(evidence)}\n`);
+} catch (error) {
+  mkdirSync(artifactDir, { recursive: true });
+  writeFileSync(reportPath, `${JSON.stringify({ status: 'failed', error: error.message }, null, 2)}\n`);
+  throw error;
 } finally {
   spawnSync(engine, ['image', 'rm', '--force', image], { stdio: 'ignore' });
   rmSync(scratch, { recursive: true, force: true });

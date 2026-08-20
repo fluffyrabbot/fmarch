@@ -17,12 +17,15 @@
 // CLI:
 //   node tools/proof_lane_select.mjs [--mode inner|push|sprint|full] [--base <ref>]
 //                                    [--changed <path> ...] [--json] [--list] [--run]
+//                                    [--jobs <positive integer>]
 //                                    [--record <lane-id>] [--regenerate <lane-id>]
 //                                    [--measure <lane-id> ...] [--measure-all]
 //
 // --changed bypasses git and supplies the changed set explicitly (also used by
-// the contract test). --run executes the selected lanes in cost order and stops
-// on the first failure while recording runtime observations under target/.
+// the contract test). --run executes the selected lanes in cost order. It is
+// serial by default; --jobs opts into the manifest-owned resource scheduler.
+// The scheduler writes one receipt under target/proof-lanes/runs/ and only
+// starts lanes whose hard dependencies and resource claims are satisfied.
 // --record deliberately promotes one observation into the tracked timing
 // baseline at docs/ops/proof-lane-timings.json.
 //
@@ -43,6 +46,12 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import {
+  expandHardDependencies,
+  runExecutionPlan,
+  validateExecutionManifest,
+} from './proof_lane_execution.mjs';
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFEST_PATH = join(REPO_ROOT, 'docs', 'ops', 'proof-lane-manifest.json');
@@ -291,6 +300,22 @@ export function laneExecutionKey(laneId, manifest) {
   return lane.execution_key ?? laneCommand(laneId, manifest).trim().replace(/\s+/g, ' ');
 }
 
+// `--run` gives these lanes a generated local database. The old serial
+// record/measure paths execute shell commands directly, so they must not be
+// allowed to inherit an arbitrary DATABASE_URL while this deliberate split
+// remains in place.
+export function usesRunnerOwnedPostgres(lane) {
+  return Boolean(lane?.execution?.resources?.some((resource) => resource.kind === 'postgres'));
+}
+
+function assertDirectMeasurementIsSafe(laneId, manifest) {
+  if (usesRunnerOwnedPostgres(manifest.lanes[laneId])) {
+    throw new Error(
+      `${laneId} requires runner-owned disposable Postgres; --record/--measure must use the scoped execution path`,
+    );
+  }
+}
+
 export function deduplicateLaneIds(laneIds, manifest) {
   const seen = new Set();
   const deduplicated = [];
@@ -318,9 +343,16 @@ export function orderedExecutionPlan(laneIds, manifest, timings = { lanes: {} })
       throw new Error(`proof lane ordering cycle includes ${laneId}`);
     }
     visiting.add(laneId);
-    for (const dependency of manifest.lanes[laneId]?.after ?? []) {
+    // `depends_on` is already expanded before this planner runs, but it also
+    // needs to constrain the human-readable cost plan.  `after` stays an
+    // optional order-only edge: unlike depends_on it never expands selection.
+    for (const dependency of [
+      ...(manifest.lanes[laneId]?.depends_on ?? []),
+      ...(manifest.lanes[laneId]?.after ?? []),
+    ]) {
       if (!manifest.lanes[dependency]) {
-        throw new Error(`proof lane ${laneId} orders after unknown lane ${dependency}`);
+        const field = manifest.lanes[laneId]?.depends_on?.includes(dependency) ? 'depends on' : 'orders after';
+        throw new Error(`proof lane ${laneId} ${field} unknown lane ${dependency}`);
       }
       if (selected.has(dependency)) visit(dependency);
     }
@@ -367,6 +399,7 @@ export function runLanes(
 }
 
 function recordLane(laneId, manifest) {
+  assertDirectMeasurementIsSafe(laneId, manifest);
   const command = laneCommand(laneId, manifest);
   console.log(`recording ${laneId}: ${command}`);
   const started = Date.now();
@@ -418,6 +451,7 @@ export function measureLane(
   manifest,
   { spawn = spawnSync, now = Date.now, log = console.log } = {},
 ) {
+  assertDirectMeasurementIsSafe(laneId, manifest);
   const command = laneCommand(laneId, manifest);
   const warmup = warmupCommand(command);
   const phase = (label, phaseCommand) => {
@@ -559,8 +593,8 @@ function formatSeconds(entry) {
     : `~${entry.seconds}s`;
 }
 
-function main(argv) {
-  const args = { mode: 'inner', changed: [], json: false, list: false, run: false, measure: [] };
+async function main(argv) {
+  const args = { mode: 'inner', changed: [], json: false, list: false, run: false, jobs: 1, measure: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--mode') args.mode = argv[++i];
@@ -569,6 +603,7 @@ function main(argv) {
     else if (arg === '--json') args.json = true;
     else if (arg === '--list') args.list = true;
     else if (arg === '--run') args.run = true;
+    else if (arg === '--jobs') args.jobs = Number(argv[++i]);
     else if (arg === '--record') args.record = argv[++i];
     else if (arg === '--measure') args.measure.push(argv[++i]);
     else if (arg === '--measure-all') args.measureAll = true;
@@ -578,9 +613,15 @@ function main(argv) {
   if (!['inner', 'push', 'sprint', 'full'].includes(args.mode)) {
     throw new Error(`unknown mode: ${args.mode}`);
   }
+  if (!Number.isSafeInteger(args.jobs) || args.jobs <= 0) {
+    throw new Error('--jobs must be a positive integer');
+  }
   const measuring = args.measureAll || args.measure.length > 0;
   if (args.run && (args.json || args.list || args.record || args.regenerate || measuring)) {
     throw new Error('--run cannot be combined with --json, --list, --record, --measure, or --regenerate');
+  }
+  if (args.jobs !== 1 && !args.run) {
+    throw new Error('--jobs is only valid with --run');
   }
   if (measuring && (args.json || args.list || args.record || args.regenerate)) {
     throw new Error('--measure cannot be combined with --json, --list, --record, or --regenerate');
@@ -590,6 +631,7 @@ function main(argv) {
   }
 
   const manifest = loadManifest();
+  validateExecutionManifest(manifest);
   if (measuring) {
     // Cheapest first, so a long sweep banks its easy lanes before the slow ones.
     const laneIds = args.measureAll
@@ -643,10 +685,17 @@ function main(argv) {
   }
 
   const selection = selectLanes({ changed, manifest, crateGraph, mode: args.mode });
-  const ordered = orderedExecutionPlan(selection.laneIds, manifest, timings);
+  const dependencyExpandedLaneIds = expandHardDependencies(selection.laneIds, manifest);
+  const ordered = orderedExecutionPlan(dependencyExpandedLaneIds, manifest, timings);
 
   if (args.json) {
-    console.log(JSON.stringify({ ...selection, changed, lanes: ordered.map((id) => ({ id, command: laneCommand(id, manifest), timing: timings.lanes[id] ?? null })) }, null, 2));
+    console.log(JSON.stringify({
+      ...selection,
+      directLaneIds: selection.laneIds,
+      laneIds: dependencyExpandedLaneIds,
+      changed,
+      lanes: ordered.map((id) => ({ id, command: laneCommand(id, manifest), timing: timings.lanes[id] ?? null })),
+    }, null, 2));
     return;
   }
 
@@ -672,15 +721,25 @@ function main(argv) {
     console.log(`frozen areas untouched, lanes skipped: ${selection.frozenSkipped.join(', ')}`);
   }
   if (args.run) {
-    runLanes(ordered, manifest, {
+    const observations = new Map();
+    const execution = await runExecutionPlan(ordered, manifest, {
+      jobs: args.jobs,
       onResult(laneId, entry) {
-        runtimeTimings.lanes[laneId] = entry;
-        writeTimings(RUNTIME_TIMINGS_PATH, runtimeTimings);
+        observations.set(laneId, entry);
       },
     });
+    for (const [laneId, entry] of observations) runtimeTimings.lanes[laneId] = entry;
+    writeTimings(RUNTIME_TIMINGS_PATH, runtimeTimings);
+    if (!execution.success) {
+      throw new Error(`proof failed: inspect ${execution.run.receiptPath}`);
+    }
+    console.log(`\nproof passed: ${ordered.length} lane(s) — receipt ${execution.run.receiptPath}`);
   }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main(process.argv.slice(2));
+  main(process.argv.slice(2)).catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
 }

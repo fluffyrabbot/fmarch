@@ -35,9 +35,15 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
-const artifactDir = path.join(repoRoot, "target", "frontend-route-state-render");
+const generatedFrontendAlias = "@fmarch-route-state-frontend";
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", "frontend-route-state-render"),
+);
 const evidencePath = path.join(artifactDir, "route-state-render.json");
-const tempEntryDir = path.join(frontendRoot, ".tmp-route-state-render");
+// Keep generated SSR entry modules beside the lane evidence. The former
+// frontend-root scratch directory made concurrent proof runs overwrite one
+// another before Vite could consume their entrypoints.
+const tempEntryDir = path.join(artifactDir, ".tmp-route-state-render");
 const bundleDir = path.join(artifactDir, "bundle");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const stampPath = path.join(artifactDir, "input-stamp.json");
@@ -56,10 +62,10 @@ if (
   process.exit(0);
 }
 
+await mkdir(artifactDir, { recursive: true });
 await rm(tempEntryDir, { recursive: true, force: true });
 await rm(bundleDir, { recursive: true, force: true });
 await mkdir(tempEntryDir, { recursive: true });
-await mkdir(artifactDir, { recursive: true });
 
 const entryPath = path.join(tempEntryDir, "entry.mjs");
 const appStoresPath = path.join(tempEntryDir, "app-stores.mjs");
@@ -81,6 +87,7 @@ try {
     plugins: [svelte()],
     resolve: {
       alias: {
+        [generatedFrontendAlias]: frontendRoot,
         $lib: path.join(frontendRoot, "src", "lib"),
         "$app/stores": appStoresPath,
         "$app/navigation": appNavigationPath,
@@ -3022,7 +3029,7 @@ export async function renderModeratorSlotLifecycleConfirmation() {
     },
   });
 }
-`;
+`.replaceAll("../src/", `${generatedFrontendAlias}/src/`);
 }
 
 function renderAppRootShellSource() {
@@ -3055,7 +3062,7 @@ function renderAppRootShellSource() {
 	    <HostPage {data} />
 	  {/if}
 	</RootLayout>
-	`;
+	`.replaceAll("../src/", `${generatedFrontendAlias}/src/`);
 }
 
 function renderAppStoresSource() {

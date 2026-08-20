@@ -42,7 +42,12 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
-const artifactDir = path.join(repoRoot, "target", "frontend-role-smoke");
+// A direct human invocation keeps the familiar target path.  The proof runner
+// supplies a run-scoped directory so concurrent proof runs cannot overwrite
+// screenshots or evidence that visual regression consumes.
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", "frontend-role-smoke"),
+);
 const evidencePath = path.join(artifactDir, "role-smoke.json");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const MEDIA_FIXTURE_PNG = Buffer.from(

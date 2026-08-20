@@ -39,7 +39,9 @@ import {
 } from "../frontend/src/routes/g/[game]/host/host-route-browser-bridge.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const artifactDir = path.join(repoRoot, "target", "frontend-route-live-contract");
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", "frontend-route-live-contract"),
+);
 const evidencePath = path.join(artifactDir, "route-live-contract.json");
 
 class FakeWebSocket {

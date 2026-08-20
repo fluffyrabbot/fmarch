@@ -5,17 +5,21 @@ import { fileURLToPath } from "node:url";
 import { samplePngScreenshot } from "./frontend_screenshot_pixels.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const artifactDir = path.join(repoRoot, "target", "frontend-role-smoke");
+// The runner wires this to the producer lane explicitly.  Retain the old
+// location for standalone `npm run test:frontend-visual-regression` use.
+const artifactDir = path.resolve(
+  process.env.FMARCH_ROLE_SMOKE_ARTIFACT_DIR ?? path.join(repoRoot, "target", "frontend-role-smoke"),
+);
 const baselineDir = path.join(repoRoot, "tools", "fixtures", "frontend-visual-baselines");
-const reportDir = path.join(repoRoot, "target", "frontend-visual-regression");
+const reportDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", "frontend-visual-regression"),
+);
 const reportPath = path.join(reportDir, "visual-regression.json");
+const roleSmokeEvidencePath = path.join(artifactDir, "role-smoke.json");
 const writeBaseline = process.argv.includes("--write");
 const selectedScreenshots = Object.freeze([
   "mobile-board-player.png",
   "mobile-admin.png",
-  "mobile-admin-confirmation.png",
-  "mobile-admin-pending.png",
-  "mobile-admin-interrupted.png",
   "mobile-player.png",
   "mobile-player-receipt.png",
   "mobile-player-composer-ack.png",
@@ -31,6 +35,21 @@ const selectedScreenshots = Object.freeze([
   "tablet-moderator.png",
   "desktop-admin.png",
 ]);
+
+// The live admin surface deliberately does not route destructive commands
+// through the deterministic browser mock. Its ordinary surface remains a
+// visual baseline, while command-state visuals stay covered by the player and
+// moderator flows that do produce verified pending/interrupted evidence.
+const roleSmokeEvidence = JSON.parse(await readFile(roleSmokeEvidencePath, "utf8"));
+assert.equal(roleSmokeEvidence.status, "passed", "role-smoke evidence must have passed");
+const declaredScreenshots = screenshotEvidencePaths(roleSmokeEvidence);
+for (const name of selectedScreenshots) {
+  const screenshotPath = path.join(artifactDir, name);
+  assert.ok(
+    declaredScreenshots.has(screenshotPath),
+    `${name} is not declared by the current role-smoke receipt; rerun the producer instead of reading stale screenshots`,
+  );
+}
 
 function baselineFileName(screenshotName) {
   return `${screenshotName.replace(/\.png$/, "")}.json`;
@@ -135,4 +154,27 @@ function compareSamples(name, expected, actual) {
     heightThreshold: 0.02,
     pixelThreshold: 0.015,
   };
+}
+
+function screenshotEvidencePaths(value) {
+  const paths = new Set();
+  const visit = (entry, key = "") => {
+    if (Array.isArray(entry)) {
+      for (const item of entry) visit(item);
+      return;
+    }
+    if (entry !== null && typeof entry === "object") {
+      for (const [childKey, child] of Object.entries(entry)) visit(child, childKey);
+      return;
+    }
+    if (
+      typeof entry === "string" &&
+      /screenshot$/i.test(key) &&
+      entry.endsWith(".png")
+    ) {
+      paths.add(path.resolve(repoRoot, entry));
+    }
+  };
+  visit(value);
+  return paths;
 }

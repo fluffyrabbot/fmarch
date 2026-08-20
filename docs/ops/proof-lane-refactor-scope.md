@@ -3,7 +3,9 @@
 Status: active; leaf execution and fast truthful selection delivered 2026-07-26;
 command proof cost boundaries and bounded generated-shrink execution delivered
 2026-08-06; physical command-target extraction and exact selector ownership
-delivered 2026-08-08.
+delivered 2026-08-08; manifest-v5 resource scheduling, run receipts, disposable
+local proof databases, and the role-smoke/visual artifact handoff delivered
+2026-08-20.
 
 ## Delivered foundation
 
@@ -14,9 +16,9 @@ lanes are represented directly in the manifest. Selection deduplicates by a
 canonical execution key after cost ordering, and the manifest contract rejects
 an npm leaf that invokes another declared leaf.
 
-The remaining work packages below are still intentionally open: structured
-receipts and resume, run-scoped Postgres and artifacts, and resource-aware
-scheduling.
+The remaining work packages below are intentionally narrowed: resume, migration
+of the remaining mutable npm proof artifacts, and measured expansion beyond the
+initial conservative resource capacities.
 
 The original command lane accumulated 365 tests and later measured 1,059s on a
 warm checkout. It is now four truthful leaves: hermetic unit/boundary tests,
@@ -69,7 +71,7 @@ leaves beside the work they contain.
 
 ## Target Model
 
-Move the manifest to version 2. Each lane declares:
+Move the manifest to version 5. Migrated lanes declare:
 
 - an argv-based command and explicit environment additions;
 - execution class: `hermetic`, `postgres`, `browser`, or `hosted`;
@@ -152,24 +154,39 @@ only for the same commit and manifest digest.
   prove ordinary-case edits do not arm the audit, audit-case edits do, and
   shared-support edits honestly arm both targets.
 
-### 5. Own Postgres as a run resource
+### 5. Own Postgres as a run resource — delivered conservatively 2026-08-20
 
-- Start or reuse the repo-local server once through `tools/dev_postgres.mjs`.
-- Create a run-scoped database, then create a lane-scoped database for every
-  mutating lane. Never point two lanes at the same database.
-- Pass `DATABASE_URL` explicitly and remove databases after success; retain and
-  name a failed database in the receipt for diagnosis.
-- Permit Postgres lanes to run concurrently only after lane-scoped isolation is
-  proven. Until then, serialize them with an explicit resource lock.
+- The runner uses the declared local loopback proof endpoint, or initializes the
+  repo-local server through `tools/dev_postgres.mjs` when that endpoint is
+  absent. It never adopts an arbitrary ambient `DATABASE_URL`.
+- Every migrated Cargo Postgres lane receives a generated
+  `fmarch_proof_<run>_<lane>` database and an injected `DATABASE_URL`; it is
+  removed on success and named in the receipt if retained after failure.
+- The local-endpoint guard applies to both `DATABASE_URL` and
+  `FMARCH_DEV_POSTGRES_*` overrides. Provisioning is bounded by the lane
+  deadline; a failed database cleanup is recorded as retained rather than
+  silently treated as removed.
+- Legacy `--record` and `--measure` intentionally refuse runner-owned
+  Postgres leaves until their scoped warm-up protocol exists; they must not
+  bypass disposal by inheriting an ambient connection URL.
+- The shared Cargo target and `postgres-admin` capacities are both one. This
+  proves isolation without prematurely claiming concurrent SQLx work is faster.
 
-### 6. Schedule by dependency and resource
+### 6. Schedule by dependency and resource — delivered conservatively 2026-08-20
 
-- Run hermetic Rust and Node lanes concurrently within a conservative worker
-  limit.
-- Serialize browser lanes that share screenshot/artifact directories until
-  those directories are also run-scoped.
-- Keep hosted evidence and production promotion outside local proof; local full
-  proof may validate their contracts but must not perform hosted mutations.
+- `--run` is serial by default; `--jobs N` is an opt-in scheduler bounded by
+  manifest locks. It expands `depends_on`, stops admitting work after a failure,
+  waits for already-started independent work, and writes a run receipt.
+- Named locks are cross-run filesystem admissions, not merely in-process
+  counters. A lane deadline covers resource provisioning as well as its child
+  process; POSIX children run in their own process group, which is drained on
+  timeout, interruption, or an orphaned wrapper exit before locks/DBs release.
+- Role smoke and visual regression now use distinct run-scoped artifact roots;
+  visual receives the exact producer path through a hard dependency. The TLS
+  proof also puts its temporary cluster and evidence under its lane root.
+- Unmigrated leaves conservatively claim the legacy lock. Hosted evidence and
+  production promotion remain outside parallel local proof until their mutable
+  database/artifact roots are migrated.
 
 ### 7. Keep canonical `--run` on the Darwin checkout
 
@@ -213,8 +230,8 @@ That is extra evidence beside Darwin push/sprint/full.
   declared 60-second budget.
 - A clean machine can run `npm run proof:lanes -- --mode full --run` without
   manually exporting `DATABASE_URL`.
-- Two simultaneous proof runs cannot share a writable database or artifact
-  directory.
+- Migrated lanes in two simultaneous proof runs cannot share a writable
+  database or declared artifact directory.
 - Killing and resuming a run never reuses success from a different commit,
   manifest, or dirty-state digest.
 - A lane failure prints one exact rerun command and preserves its diagnostic
@@ -228,12 +245,13 @@ That is extra evidence beside Darwin push/sprint/full.
 
 ## Recommended Implementation Order
 
-1. Introduce manifest-v2 dependencies/resources, timeouts, structured receipts,
-   `--only`, and commit-safe `--resume`.
-2. Add run-scoped Postgres and artifact directories, keeping execution serial.
-3. Enable bounded parallel scheduling only after isolation contracts pass.
-4. Measure a full sweep, update cost bands, and then simplify the compatibility
-   npm aliases that are no longer operationally useful.
+1. Migrate auth-invite, live-stack, mash-scale, and exact-image mutable roots to
+   runner-provided databases/artifact directories, removing their legacy lock.
+2. Add `--only` and commit-safe `--resume` on top of the existing receipt
+   schema.
+3. Run a measured Darwin jobs=2 sweep, then raise only capacities supported by
+   the receipt evidence.
+4. Simplify compatibility npm aliases that are no longer operationally useful.
 
 ## Non-Goals
 
