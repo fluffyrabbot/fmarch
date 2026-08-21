@@ -80,7 +80,7 @@ export function seedSetupCommandPlanForGame(game) {
       { AddSlot: { game, slot: row.slot } },
     ]),
     ...seededSetupRoster.flatMap((row) => [
-      ["host_h", { SeatPersona: { game, slot: row.slot, principal_user_id: row.user, public_name: row.user } }],
+      ["host_h", { SeatPersona: { game, slot: row.slot, principal_id: row.user, public_name: row.user } }],
       [
         "host_h",
         { AssignRole: { game, slot: row.slot, role_key: row.roleKey } },
@@ -310,13 +310,13 @@ export async function assignSetupSlot({
     commandKind: "SeatPersona",
     commandPredicate: (command) =>
       command?.slot === slotId &&
-      command?.principal_user_id === principalUserId &&
+      command?.principal_id === principalUserId &&
       command?.public_name === `Persona ${slotId}`,
     statePredicate: (setupState) =>
       setupState?.slots?.some(
         (slot) =>
           slot.slotId === slotId &&
-          slot.assignedPrincipalUserId === principalUserId,
+          slot.assignedPrincipalId === principalUserId,
       ),
   });
 }

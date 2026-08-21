@@ -2205,6 +2205,8 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
             .fetch_one(&pool)
             .await
             .unwrap();
+    let game_id = Uuid::new_v4();
+    let persona_id = Uuid::new_v4();
     let mut profile_tx = pool.begin().await.unwrap();
     let profile_claim_id = identity::insert_subject_claim(
         &mut profile_tx,
@@ -2235,12 +2237,41 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     .unwrap();
     sqlx::query("INSERT INTO public_profile (profile_id, handle, display_name, bio, created_seq, updated_seq, revision) VALUES ($1, 'erase_me', 'Alicia', 'private bio', 1, 1, 1)")
         .bind(profile_id).execute(&mut *profile_tx).await.unwrap();
+    let persona_scope_key = persona_id.to_string();
+    let persona_claim_id = identity::insert_subject_claim(
+        &mut profile_tx,
+        identity::SubjectId::from_uuid(subject_id),
+        "game_persona_presentation",
+        game_id,
+        Some(&persona_scope_key),
+        1,
+        &game_platform::GamePersonaPresentation {
+            public_name: game_platform::GamePersonaName::new("Alicia").unwrap(),
+        },
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO game_persona (game_id, persona_id, registered_seq) VALUES ($1, $2, 1)",
+    )
+    .bind(game_id)
+    .bind(persona_id)
+    .execute(&mut *profile_tx)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO game_persona_subject_binding (game_id, persona_id, subject_id, current_claim_id, lifecycle) VALUES ($1, $2, $3, $4, 'active')",
+    )
+    .bind(game_id)
+    .bind(persona_id)
+    .bind(subject_id)
+    .bind(persona_claim_id.as_uuid())
+    .execute(&mut *profile_tx)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO game_persona_public (game_id, persona_id, current_public_name, registered_seq, renamed_seq) VALUES ($1, $2, 'Alicia', 1, NULL)")
+        .bind(game_id).bind(persona_id).execute(&mut *profile_tx).await.unwrap();
     profile_tx.commit().await.unwrap();
-    let game_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO game_persona_private (game_id, persona_id, principal_user_id, registered_seq) VALUES ($1, 'gp_test', $2, 1)")
-        .bind(game_id).bind(principal.as_str()).execute(&pool).await.unwrap();
-    sqlx::query("INSERT INTO game_persona_public (game_id, persona_id, current_public_name, registered_seq, renamed_seq) VALUES ($1, 'gp_test', 'Alicia', 1, NULL)")
-        .bind(game_id).execute(&pool).await.unwrap();
 
     let response = post_json(
         &app,
@@ -2309,9 +2340,10 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     assert_eq!(redacted_alias.as_deref(), Some(pseudonym.as_str()));
     assert!(current_claim_id.is_none());
     let redacted_name: String = sqlx::query_scalar(
-        "SELECT replacement_public_name FROM game_persona_redaction WHERE game_id = $1 AND persona_id = 'gp_test'",
+        "SELECT replacement_public_name FROM game_persona_redaction WHERE game_id = $1 AND persona_id = $2",
     )
     .bind(game_id)
+    .bind(persona_id)
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -2364,23 +2396,18 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
             "MemberAuthorshipPseudonymized",
         ]
     );
-    // Profile replay resolves the subject tombstone directly and therefore
-    // must retain this redacted state; it must never reconstruct the former
-    // principal or a deleted private claim. Game projections still replay
-    // source facts, so the lifecycle rebuild re-applies their overlay.
-    sqlx::query("UPDATE game_persona_private SET principal_user_id = $2 WHERE game_id = $1 AND persona_id = 'gp_test'")
+    // Never attempt to restore authority: a redacted binding has no live
+    // private claim. Corrupt only the public overlay, then prove lifecycle
+    // replay re-derives it from the durable tombstone.
+    sqlx::query("UPDATE game_persona_public SET current_public_name = 'Alicia' WHERE game_id = $1 AND persona_id = $2")
         .bind(game_id)
-        .bind(principal.as_str())
+        .bind(persona_id)
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("UPDATE game_persona_public SET current_public_name = 'Alicia' WHERE game_id = $1 AND persona_id = 'gp_test'")
+    sqlx::query("DELETE FROM game_persona_redaction WHERE game_id = $1 AND persona_id = $2")
         .bind(game_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM game_persona_redaction WHERE game_id = $1 AND persona_id = 'gp_test'")
-        .bind(game_id)
+        .bind(persona_id)
         .execute(&pool)
         .await
         .unwrap();
@@ -2422,9 +2449,10 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     );
     assert_eq!(rebuilt_profile_binding.3, None);
     let rebuilt_persona_name: String = sqlx::query_scalar(
-        "SELECT current_public_name FROM game_persona_public WHERE game_id = $1 AND persona_id = 'gp_test'",
+        "SELECT current_public_name FROM game_persona_public WHERE game_id = $1 AND persona_id = $2",
     )
     .bind(game_id)
+    .bind(persona_id)
     .fetch_one(&pool)
     .await
     .unwrap();

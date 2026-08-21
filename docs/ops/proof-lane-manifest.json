@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "base_ref": "origin/main",
   "notes": [
     "Maps changed paths to the narrowest truthful proof-lane set. Consumed by tools/proof_lane_select.mjs.",
@@ -39,6 +39,7 @@
     "cargo:commands-audit": { "kind": "shell", "command": "RUST_MIN_STACK=8388608 DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test semantic_audit -- --test-threads=4", "execution": { "class": "postgres", "timeout_seconds": 1800, "argv": ["cargo", "test", "-p", "commands", "--test", "semantic_audit", "--", "--test-threads=4"], "env": { "RUST_MIN_STACK": "8388608" }, "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:operator-proof": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p operator_proof -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "operator_proof", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:game-platform": { "kind": "shell", "command": "cargo test -p game_platform --all-features" },
+    "cargo:game-persona-application": { "kind": "shell", "command": "cargo test -p game_persona_application" },
     "cargo:wire": { "kind": "shell", "command": "cargo test -p wire" },
     "check:wire-types": {
       "kind": "shell",
@@ -410,6 +411,13 @@
       "crate": "game_platform",
       "lanes": ["cargo:game-platform", "cargo:clippy-workspace"],
       "capabilities": ["product.mash.day-event-model"]
+    },
+    {
+      "id": "crate:game-persona-application",
+      "tier": "active",
+      "paths": ["crates/game_persona_application/"],
+      "crate": "game_persona_application",
+      "lanes": ["cargo:game-persona-application", "cargo:clippy-workspace"]
     },
     {
       "id": "crate:wire",

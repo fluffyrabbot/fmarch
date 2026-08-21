@@ -1099,7 +1099,7 @@ async fn thread_posts_delta_for_ws(
         .await
         .ok()?;
     }
-    game_http::current_thread_posts_delta(&state.pool, game, channel, principal_user_id)
+    game_http::current_thread_posts_delta(&state.pool, game, channel)
         .await
         .ok()
 }
@@ -1122,16 +1122,10 @@ async fn thread_posts_after_delta_for_ws(
         .await
         .ok()?;
     }
-    game_http::current_thread_posts_after_delta(
-        &state.pool,
-        game,
-        channel,
-        after_seq,
-        principal_user_id,
-    )
-    .await
-    .ok()
-    .flatten()
+    game_http::current_thread_posts_after_delta(&state.pool, game, channel, after_seq)
+        .await
+        .ok()
+        .flatten()
 }
 
 async fn post_citations_deltas_for_ws(
@@ -1157,15 +1151,9 @@ async fn post_citations_deltas_for_ws(
             return Vec::new();
         }
     }
-    game_http::current_post_citations_deltas(
-        &state.pool,
-        game,
-        channel,
-        principal_user_id,
-        extra_quoting_seqs,
-    )
-    .await
-    .unwrap_or_default()
+    game_http::current_post_citations_deltas(&state.pool, game, channel, extra_quoting_seqs)
+        .await
+        .unwrap_or_default()
 }
 
 async fn socket_has_host_console_interest(

@@ -134,7 +134,8 @@ export function stalePlayerPhaseClosurePostAckMatches(proof) {
       "dayVoteOutcomes",
     ]) &&
     proof?.projectedPost?.body === proof?.postBody &&
-    proof?.projectedPost?.authorSlot === "slot-7" &&
+    proof?.projectedPost?.author?.kind === "slot" &&
+    proof?.projectedPost?.author?.slotId === "slot-7" &&
     currentClosedCommandStateMatches(proof?.commandStateAfterAck) &&
     currentNoVoteControlsMatch({
       currentVote: proof?.currentVoteAfterAck,
@@ -144,7 +145,10 @@ export function stalePlayerPhaseClosurePostAckMatches(proof) {
     phaseClosureOutcomePresent(proof?.dayVoteOutcomesAfterAck) &&
     currentClosedApiCommandStateMatches(proof?.apiCommandStateAfterAck) &&
     proof?.apiThreadAfterAck?.posts?.some(
-      (post) => post.body === proof?.postBody && post.author_slot === "slot-7",
+      (post) =>
+        post.body === proof?.postBody &&
+        post.author?.kind === "slot" &&
+        post.author.slot_id === "slot-7",
     ) === true
   );
 }

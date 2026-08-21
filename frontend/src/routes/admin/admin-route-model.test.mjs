@@ -13054,7 +13054,7 @@ function setupCommandEvidenceFixture(game = "game-a") {
       command: {
         game,
         slot: "slot-7",
-        principal_user_id: "player-mira",
+        principal_id: "player-mira",
         public_name: "player-mira",
       },
     },

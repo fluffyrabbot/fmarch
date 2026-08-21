@@ -544,7 +544,7 @@ export function markdownSessionCard(card) {
         "",
         `Process replacement: ${card.verification.replacementConsole.processReplacement.statusMessage}`,
         "",
-        `Assigned principal: ${card.verification.replacementConsole.projectedReplacement.assignedPrincipalUserId}`,
+        `Assigned principal: ${card.verification.replacementConsole.projectedReplacement.assignedPrincipalId}`,
         "",
         `Replacement duplicate retry: ${card.verification.replacementConsole.replacementIdempotentRetry.retryReplacement.message}`,
         "",

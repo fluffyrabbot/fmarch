@@ -644,6 +644,7 @@ dependencies = [
  "content_registry",
  "domain",
  "eventstore",
+ "game_persona_application",
  "game_platform",
  "identity",
  "libc",
@@ -1179,6 +1180,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "game_persona_application"
+version = "0.1.0"
+dependencies = [
+ "eventstore",
+ "game_platform",
+ "identity",
+ "serde_json",
+ "sqlx",
+ "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
 name = "game_platform"
 version = "0.1.0"
 dependencies = [
@@ -1188,6 +1202,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "ts-rs",
+ "uuid",
 ]
 
 [[package]]
@@ -2197,6 +2212,7 @@ dependencies = [
  "commands",
  "domain",
  "eventstore",
+ "game_platform",
  "projections",
  "serde",
  "serde_json",
@@ -2397,6 +2413,7 @@ dependencies = [
  "domain",
  "eventstore",
  "forum",
+ "game_persona_application",
  "game_platform",
  "identity",
  "object_store",

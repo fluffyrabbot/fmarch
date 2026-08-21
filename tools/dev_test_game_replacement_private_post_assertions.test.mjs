@@ -36,7 +36,7 @@ const replacementResolvedPrivatePostProofFixture = () => ({
             ProcessReplacement: {
               slot: resolveScenario.actorSlot,
               outgoing_persona_id: "persona-outgoing",
-              incoming_principal_user_id: resolveScenario.replacementPrincipalUserId,
+              incoming_principal_id: resolveScenario.replacementPrincipalUserId,
             },
           },
         },
@@ -44,7 +44,7 @@ const replacementResolvedPrivatePostProofFixture = () => ({
     },
   },
   hostReplacementAfterProcess: {
-    assignedPrincipalUserId: resolveScenario.replacementPrincipalUserId,
+    assignedPrincipalId: resolveScenario.replacementPrincipalUserId,
   },
   commandStateBeforeClose: {
     actorSlot: resolveScenario.actorSlot,
@@ -93,7 +93,9 @@ const replacementResolvedPrivatePostProofFixture = () => ({
     channelId: resolveScenario.channelId,
     actorSlot: resolveScenario.actorSlot,
   },
-  projectedPost: { authorSlot: resolveScenario.actorSlot },
+  projectedPost: {
+    author: { kind: "slot", slotId: resolveScenario.actorSlot },
+  },
   apiThreadPostBodies: [resolveScenario.fixturePostBody],
   rowanPrivateIsolationAfterAck: {
     targetKillVisible: false,
@@ -170,7 +172,7 @@ const replacementCompletedPrivatePostProofFixture = () => ({
             ProcessReplacement: {
               slot: scenario.actorSlot,
               outgoing_persona_id: "persona-outgoing",
-              incoming_principal_user_id: scenario.replacementPrincipalUserId,
+              incoming_principal_id: scenario.replacementPrincipalUserId,
             },
           },
         },
@@ -178,7 +180,7 @@ const replacementCompletedPrivatePostProofFixture = () => ({
     },
   },
   hostReplacementAfterProcess: {
-    assignedPrincipalUserId: scenario.replacementPrincipalUserId,
+    assignedPrincipalId: scenario.replacementPrincipalUserId,
   },
   commandStateBeforeClose: {
     actorSlot: scenario.actorSlot,

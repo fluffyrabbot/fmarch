@@ -117,8 +117,8 @@ async fn seed_every_surface(pool: &PgPool, game: Uuid) {
     .await;
     sqlx::query(
         "INSERT INTO thread_view \
-         (game_id, source_seq, stream_seq, channel_id, author_slot, phase_id, body, body_private, occurred_at) \
-         VALUES ($1, 101, 1, 'private:mafia', 'slot_1', 'D01', NULL, $2, 1000)",
+         (game_id, source_seq, stream_seq, channel_id, author_kind, author_slot_id, phase_id, body, body_private, occurred_at) \
+         VALUES ($1, 101, 1, 'private:mafia', 'slot', 'slot_1', 'D01', NULL, $2, 1000)",
     )
     .bind(game)
     .bind(thread)

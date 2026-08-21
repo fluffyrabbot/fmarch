@@ -59,6 +59,7 @@ const privateChannelReconnectExpectation =
 const privateChannelInvalidActionRecovery =
   privateChannelInvalidActionRecoveryScenario();
 const staleCompletedPrivatePost = staleCompletedPrivatePostScenario();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const devTestGameArgs = [
   "--name",
@@ -791,7 +792,7 @@ assert.equal(
   "slot_2",
 );
 assert.equal(
-  session.verification.hostSetup.setupMutationCommand.assignedPrincipalUserId,
+  session.verification.hostSetup.setupMutationCommand.assignedPrincipalId,
   "setup-extra-player",
 );
 assert.equal(
@@ -799,7 +800,7 @@ assert.equal(
   "mafia_goon",
 );
 assert.equal(
-  session.verification.hostSetup.setupMutationCommand.finalSlot.assignedPrincipalUserId,
+  session.verification.hostSetup.setupMutationCommand.finalSlot.assignedPrincipalId,
   "setup-extra-player",
 );
 assert.equal(
@@ -1786,8 +1787,8 @@ assert.equal(
 );
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.playerThreadPost
-    .authorLabel,
-  "host",
+    .author?.kind,
+  "host_narrator",
 );
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.playerThreadPost.body,
@@ -1795,8 +1796,8 @@ assert.equal(
 );
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.apiThreadPost
-    .author_user,
-  "host",
+    .author?.kind,
+  "host_narrator",
 );
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.apiThreadPost.body,
@@ -2202,10 +2203,10 @@ assert.equal(
     .requestEnvelope.body.body.command.SubmitPost.actor_slot,
   "slot-7",
 );
-assert.equal(
+assert.deepEqual(
   session.verification.replacementConsole.replacementSessionRefresh.rowanProjectedPost
-    .authorSlot,
-  "slot-7",
+    .author,
+  { kind: "slot", slotId: "slot-7" },
 );
 assert.equal(
   session.verification.replacementConsole.replacementSessionRefresh
@@ -2352,11 +2353,11 @@ assert.equal(
 assert.match(
   session.verification.replacementConsole.invalidReplacementRecovery.invalidReplacement
     .requestEnvelope.body.body.command.ProcessReplacement.outgoing_persona_id,
-  /^gp_/,
+  UUID_PATTERN,
 );
 assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery.apiSlotAfterReject
-    .assigned_principal_user_id,
+    .assigned_principal_id,
   "player-mira",
 );
 assert.match(
@@ -2386,7 +2387,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery
-    .hostProjectionAfterReject.assignedPrincipalUserId,
+    .hostProjectionAfterReject.assignedPrincipalId,
   "player-mira",
 );
 assert.equal(
@@ -2436,11 +2437,11 @@ assert.equal(
 assert.match(
   session.verification.replacementConsole.processReplacement.commandStatus.requestEnvelope.body
     .body.command.ProcessReplacement.outgoing_persona_id,
-  /^gp_/,
+  UUID_PATTERN,
 );
 assert.equal(
   session.verification.replacementConsole.processReplacement.commandStatus.requestEnvelope.body
-    .body.command.ProcessReplacement.incoming_principal_user_id,
+    .body.command.ProcessReplacement.incoming_principal_id,
   "player-rowan",
 );
 assert.equal(
@@ -2448,7 +2449,7 @@ assert.equal(
   "slot-7",
 );
 assert.equal(
-  session.verification.replacementConsole.projectedReplacement.assignedPrincipalUserId,
+  session.verification.replacementConsole.projectedReplacement.assignedPrincipalId,
   "player-rowan",
 );
 assert.match(
@@ -2457,7 +2458,7 @@ assert.match(
 );
 assert.equal(session.verification.replacementConsole.apiSlot.slot_id, "slot-7");
 assert.equal(
-  session.verification.replacementConsole.apiSlot.assigned_principal_user_id,
+  session.verification.replacementConsole.apiSlot.assigned_principal_id,
   "player-rowan",
 );
 assert.equal(
@@ -2492,11 +2493,11 @@ assert.equal(
 assert.match(
   session.verification.replacementConsole.replacementIdempotentRetry.retryReplacement
     .requestEnvelope.body.body.command.ProcessReplacement.outgoing_persona_id,
-  /^gp_/,
+  UUID_PATTERN,
 );
 assert.equal(
   session.verification.replacementConsole.replacementIdempotentRetry
-    .hostProjectionAfterRetry.assignedPrincipalUserId,
+    .hostProjectionAfterRetry.assignedPrincipalId,
   "player-rowan",
 );
 assert.match(
@@ -2506,7 +2507,7 @@ assert.match(
 );
 assert.equal(
   session.verification.replacementConsole.replacementIdempotentRetry.apiSlotAfterRetry
-    .assigned_principal_user_id,
+    .assigned_principal_id,
   "player-rowan",
 );
 assert.equal(
@@ -2793,7 +2794,7 @@ assert.equal(
 assert.match(
   session.verification.replacementConsole.staleReplacementAfterSuccess.invalidReplacement
     .requestEnvelope.body.body.command.ProcessReplacement.outgoing_persona_id,
-  /^gp_/,
+  UUID_PATTERN,
 );
 assert.match(
   session.verification.replacementConsole.staleReplacementAfterSuccess.activityStatusText,
@@ -2823,12 +2824,12 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.staleReplacementAfterSuccess
-    .hostProjectionAfterReject.assignedPrincipalUserId,
+    .hostProjectionAfterReject.assignedPrincipalId,
   "player-rowan",
 );
 assert.equal(
   session.verification.replacementConsole.staleReplacementAfterSuccess.apiSlotAfterReject
-    .assigned_principal_user_id,
+    .assigned_principal_id,
   "player-rowan",
 );
 assert.equal(
@@ -2888,9 +2889,9 @@ assert.equal(
     .command.SubmitPost.actor_slot,
   "slot-7",
 );
-assert.equal(
-  session.verification.replacementConsole.incomingPlayer.rowanProjectedPost.authorSlot,
-  "slot-7",
+assert.deepEqual(
+  session.verification.replacementConsole.incomingPlayer.rowanProjectedPost.author,
+  { kind: "slot", slotId: "slot-7" },
 );
 assert.equal(
   session.verification.replacementConsole.incomingPlayer.vote.requestEnvelope.body.body
@@ -3454,7 +3455,7 @@ assert.equal(
   true,
 );
 assert.equal(
-  replacementPrivatePostRace.setupHostReplacement.assignedPrincipalUserId,
+  replacementPrivatePostRace.setupHostReplacement.assignedPrincipalId,
   "player-mira",
 );
 assert.equal(replacementPrivatePostRace.setupCommandState.actorSlot, "slot-7");
@@ -3470,7 +3471,7 @@ assert.equal(
 );
 assert.equal(
   replacementPrivatePostRace.replacement.requestEnvelope.body.body.command
-    .ProcessReplacement.incoming_principal_user_id,
+    .ProcessReplacement.incoming_principal_id,
   "player-rowan",
 );
 assert.equal(
@@ -3512,11 +3513,11 @@ assert.equal(
   false,
 );
 assert.equal(
-  replacementPrivatePostRace.hostReplacementAfterRace.assignedPrincipalUserId,
+  replacementPrivatePostRace.hostReplacementAfterRace.assignedPrincipalId,
   "player-rowan",
 );
 assert.equal(
-  replacementPrivatePostRace.apiSlotAfterRace.assigned_principal_user_id,
+  replacementPrivatePostRace.apiSlotAfterRace.assigned_principal_id,
   "player-rowan",
 );
 assert.equal(replacementPrivatePostRace.staleRoute.status, 403);
@@ -3531,7 +3532,7 @@ assert.equal(
   true,
 );
 assert.equal(
-  replacementVoteRace.setupHostReplacement.assignedPrincipalUserId,
+  replacementVoteRace.setupHostReplacement.assignedPrincipalId,
   replacementVoteRaceScenario.staleOutgoingPrincipalUserId,
 );
 assert.equal(replacementVoteRace.setupCommandState.actorSlot, replacementVoteRaceScenario.actorSlot);
@@ -3549,14 +3550,14 @@ assert.equal(
     .slot,
   replacementVoteRaceScenario.actorSlot,
 );
-assert.equal(
+assert.match(
   replacementVoteRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
-    .outgoing_persona_id.startsWith("gp_"),
-  true,
+    .outgoing_persona_id,
+  UUID_PATTERN,
 );
 assert.equal(
   replacementVoteRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
-    .incoming_principal_user_id,
+    .incoming_principal_id,
   replacementVoteRaceScenario.replacementPrincipalUserId,
 );
 assert.equal(
@@ -3583,11 +3584,11 @@ assert.equal(
   replacementVoteRaceScenario.rejectionError,
 );
 assert.equal(
-  replacementVoteRace.hostReplacementAfterRace.assignedPrincipalUserId,
+  replacementVoteRace.hostReplacementAfterRace.assignedPrincipalId,
   replacementVoteRaceScenario.replacementPrincipalUserId,
 );
 assert.equal(
-  replacementVoteRace.apiSlotAfterRace.assigned_principal_user_id,
+  replacementVoteRace.apiSlotAfterRace.assigned_principal_id,
   replacementVoteRaceScenario.replacementPrincipalUserId,
 );
 assert.equal(replacementActionRace.status, "passed");
@@ -3607,7 +3608,7 @@ assert.equal(
 assert.equal(replacementActionRace.setupHostPhase.id, replacementActionRaceScenario.phaseId);
 assert.equal(replacementActionRace.setupHostPhase.locked, false);
 assert.equal(
-  replacementActionRace.setupSlot.assigned_principal_user_id,
+  replacementActionRace.setupSlot.assigned_principal_id,
   replacementActionRaceScenario.staleOutgoingPrincipalUserId,
 );
 assert.equal(
@@ -3631,14 +3632,14 @@ assert.equal(
     .slot,
   replacementActionRaceScenario.actorSlot,
 );
-assert.equal(
+assert.match(
   replacementActionRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
-    .outgoing_persona_id.startsWith("gp_"),
-  true,
+    .outgoing_persona_id,
+  UUID_PATTERN,
 );
 assert.equal(
   replacementActionRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
-    .incoming_principal_user_id,
+    .incoming_principal_id,
   replacementActionRaceScenario.replacementPrincipalUserId,
 );
 assert.equal(
@@ -3689,7 +3690,7 @@ assert.equal(replacementActionRace.staleRetry.error, replacementActionRaceScenar
 assert.equal(replacementActionRace.hostPhaseAfterRace.id, replacementActionRaceScenario.phaseId);
 assert.equal(replacementActionRace.hostPhaseAfterRace.locked, false);
 assert.equal(
-  replacementActionRace.apiSlotAfterRace.assigned_principal_user_id,
+  replacementActionRace.apiSlotAfterRace.assigned_principal_id,
   replacementActionRaceScenario.replacementPrincipalUserId,
 );
 assert.equal(
@@ -3719,7 +3720,7 @@ assert.equal(
 assert.equal(replacementIncomingAction.setupHostPhase.id, replacementIncomingActionCase.phaseId);
 assert.equal(replacementIncomingAction.setupHostPhase.locked, false);
 assert.equal(
-  replacementIncomingAction.setupSlot.assigned_principal_user_id,
+  replacementIncomingAction.setupSlot.assigned_principal_id,
   replacementIncomingActionCase.staleOutgoingPrincipalUserId,
 );
 assert.equal(replacementIncomingAction.replacement.state, "ack");
@@ -3730,7 +3731,7 @@ assert.equal(
 );
 assert.equal(
   replacementIncomingAction.replacement.requestEnvelope.body.body.command.ProcessReplacement
-    .incoming_principal_user_id,
+    .incoming_principal_id,
   replacementIncomingActionCase.replacementPrincipalUserId,
 );
 assert.equal(
@@ -3824,7 +3825,7 @@ assert.equal(
 );
 assert.equal(
   replacementActionReconnect.replacement.requestEnvelope.body.body.command.ProcessReplacement
-    .incoming_principal_user_id,
+    .incoming_principal_id,
   replacementActionReconnectCase.replacementPrincipalUserId,
 );
 assert.equal(
@@ -3989,7 +3990,7 @@ assert.equal(
 );
 assert.equal(
   replacementStaleActionAfterResolve.replacement.requestEnvelope.body.body.command
-    .ProcessReplacement.incoming_principal_user_id,
+    .ProcessReplacement.incoming_principal_id,
   replacementStaleActionAfterResolveCase.replacementPrincipalUserId,
 );
 assert.equal(
@@ -4193,7 +4194,7 @@ assert.equal(
 );
 assert.equal(
   replacementStalePrivatePostAfterResolve.replacement.requestEnvelope.body.body.command
-    .ProcessReplacement.incoming_principal_user_id,
+    .ProcessReplacement.incoming_principal_id,
   "player-rowan",
 );
 assert.equal(
@@ -4387,7 +4388,7 @@ assert.equal(
 );
 assert.equal(
   replacementStalePrivatePostAfterComplete.replacement.requestEnvelope.body.body.command
-    .ProcessReplacement.incoming_principal_user_id,
+    .ProcessReplacement.incoming_principal_id,
   "player-rowan",
 );
 assert.equal(

@@ -2,6 +2,10 @@ import {
   GAME_CITATION_PREVIEW_LIMIT,
   buildGamePostQuoteView,
 } from "../../../lib/app/game-quotation-model.mjs";
+import {
+  gameThreadAuthorLabel,
+  normalizeGameThreadAuthor,
+} from "../../../lib/app/game-thread-author.mjs";
 import { buildPlayerThreadEmbedView } from "../../../lib/app/youtube-embed.mjs";
 
 export { GAME_CITATION_PREVIEW_LIMIT };
@@ -67,12 +71,15 @@ export function buildPublicGamePosts(posts = [], citationPages = {}) {
   const source = Array.isArray(posts) ? posts : [];
   return Object.freeze(
     source.map((post) => {
+      const author = normalizeGameThreadAuthor(post?.author);
       const quote = buildGamePostQuoteView(post, {
         posts: source,
         citations: citationPages[Number(post?.source_seq ?? post?.sourceSeq)] ?? null,
       });
       return Object.freeze({
         ...post,
+        author,
+        authorLabel: gameThreadAuthorLabel(author),
         embed: buildPlayerThreadEmbedView(
           post.embed,
           post.source_seq ?? post.sourceSeq,

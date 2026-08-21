@@ -31,6 +31,11 @@ use caps::{Capability, CapabilitySet, Principal};
 use content_reference::{self, ContentReferenceReject};
 use domain::pack::ItaSessionControlKind;
 use eventstore::{ActorId, EventInput};
+use game_persona_application::GamePersonaApplicationError;
+use game_platform::{
+    GamePersonaId, GamePersonaName, GamePersonaPresentation, OccupancyId, OccupancyTransitionId,
+    PrincipalId,
+};
 use projections::{append_and_project_in_tx, audit_rebuild, ProjectionError};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -70,12 +75,12 @@ macro_rules! seat_persona {
     };
     (game: $game:expr, slot: $slot:expr, user: $user:expr $(,)?) => {{
         let slot: String = $slot;
-        let principal_user_id: String = $user;
+        let principal_id: String = $user;
         let public_name = format!("Player {slot}");
         $crate::Command::SeatPersona {
             game: $game,
             public_name,
-            principal_user_id,
+            principal_id,
             slot,
         }
     }};
@@ -749,9 +754,9 @@ async fn handle_command(
         Command::SeatPersona {
             game,
             slot,
-            principal_user_id,
+            principal_id,
             public_name,
-        } => seat_persona(tx, principal, game, slot, principal_user_id, public_name).await,
+        } => seat_persona(tx, principal, game, slot, principal_id, public_name).await,
         Command::RenameGamePersona {
             game,
             persona_id,
@@ -960,7 +965,7 @@ async fn handle_command(
             game,
             slot,
             outgoing_persona_id,
-            incoming_principal_user_id,
+            incoming_principal_id,
         } => {
             process_replacement(
                 tx,
@@ -968,7 +973,7 @@ async fn handle_command(
                 game,
                 slot,
                 outgoing_persona_id,
-                incoming_principal_user_id,
+                incoming_principal_id,
             )
             .await
         }
@@ -2019,29 +2024,32 @@ async fn current_slot_lifecycle_status(
 async fn persona_id_for_principal(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-    principal_user_id: &str,
-) -> Result<Option<String>, Reject> {
-    sqlx::query_scalar(
-        "SELECT persona_id FROM game_persona_private \
-         WHERE game_id = $1 AND principal_user_id = $2",
+    principal_id: &str,
+) -> Result<Option<GamePersonaId>, Reject> {
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT binding.persona_id FROM game_persona_subject_binding AS binding \
+         JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id \
+         WHERE binding.game_id = $1 AND binding.lifecycle = 'active' \
+         AND subject.principal_user_id = $2",
     )
     .bind(game)
-    .bind(principal_user_id)
+    .bind(principal_id)
     .fetch_optional(&mut **tx)
     .await
+    .map(|persona_id| persona_id.map(GamePersonaId::from_uuid))
     .map_err(|error| Reject::Internal(error.to_string()))
 }
 
 async fn game_persona_exists(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-    persona_id: &str,
+    persona_id: GamePersonaId,
 ) -> Result<bool, Reject> {
     sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM game_persona_private WHERE game_id = $1 AND persona_id = $2)",
+        "SELECT EXISTS(SELECT 1 FROM game_persona WHERE game_id = $1 AND persona_id = $2)",
     )
     .bind(game)
-    .bind(persona_id)
+    .bind(persona_id.as_uuid())
     .fetch_one(&mut **tx)
     .await
     .map_err(|error| Reject::Internal(error.to_string()))
@@ -2051,8 +2059,8 @@ async fn persona_name_claim_owner(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     public_name: &str,
-) -> Result<Option<String>, Reject> {
-    sqlx::query_scalar(
+) -> Result<Option<GamePersonaId>, Reject> {
+    sqlx::query_scalar::<_, Uuid>(
         "SELECT persona_id FROM game_persona_name_claim \
          WHERE game_id = $1 AND normalized_name = $2",
     )
@@ -2060,6 +2068,7 @@ async fn persona_name_claim_owner(
     .bind(public_name.trim().to_lowercase())
     .fetch_optional(&mut **tx)
     .await
+    .map(|persona_id| persona_id.map(GamePersonaId::from_uuid))
     .map_err(|error| Reject::Internal(error.to_string()))
 }
 
@@ -2067,8 +2076,8 @@ async fn open_occupancy(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     slot: &str,
-) -> Result<Option<(String, String)>, Reject> {
-    sqlx::query_as::<_, (String, String)>(
+) -> Result<Option<(OccupancyId, GamePersonaId)>, Reject> {
+    sqlx::query_as::<_, (Uuid, Uuid)>(
         "SELECT occupancy_id, persona_id FROM slot_occupancy_epoch \
          WHERE game_id = $1 AND slot_id = $2 AND ended_seq IS NULL",
     )
@@ -2076,18 +2085,41 @@ async fn open_occupancy(
     .bind(slot)
     .fetch_optional(&mut **tx)
     .await
+    .map(|occupancy| {
+        occupancy.map(|(occupancy_id, persona_id)| {
+            (
+                OccupancyId::from_uuid(occupancy_id),
+                GamePersonaId::from_uuid(persona_id),
+            )
+        })
+    })
     .map_err(|error| Reject::Internal(error.to_string()))
 }
 
-fn generated_persona_name(slot: &str, persona_id: &str) -> String {
+fn generated_persona_name(slot: &str, persona_id: GamePersonaId) -> String {
     let suffix = persona_id
-        .rsplit('_')
-        .next()
-        .unwrap_or(persona_id)
+        .as_uuid()
+        .to_string()
         .chars()
         .take(8)
         .collect::<String>();
     format!("Player {slot} {suffix}")
+}
+
+fn persona_application_error(error: GamePersonaApplicationError) -> Reject {
+    match error {
+        GamePersonaApplicationError::PersonaAlreadyRegistered
+        | GamePersonaApplicationError::SubjectAlreadyBound
+        | GamePersonaApplicationError::PersonaNotFound
+        | GamePersonaApplicationError::PersonaUnavailable => Reject::InvalidTarget,
+        error => Reject::Internal(error.to_string()),
+    }
+}
+
+fn persona_presentation(public_name: String) -> Result<GamePersonaPresentation, Reject> {
+    Ok(GamePersonaPresentation {
+        public_name: GamePersonaName::new(public_name).map_err(|_| Reject::InvalidTarget)?,
+    })
 }
 
 async fn assign_slot_with_name(
@@ -2095,7 +2127,7 @@ async fn assign_slot_with_name(
     principal: &Principal,
     game: Uuid,
     slot: String,
-    user: String,
+    principal_id: String,
     public_name: Option<String>,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
@@ -2104,7 +2136,7 @@ async fn assign_slot_with_name(
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
-    if projections::spectator_membership(&mut **tx, game, &user).await? {
+    if projections::spectator_membership(&mut **tx, game, &principal_id).await? {
         return Err(Reject::InvalidTarget);
     }
     if projections::slot_occupant(&mut **tx, game, &slot)
@@ -2113,16 +2145,16 @@ async fn assign_slot_with_name(
     {
         return Err(Reject::InvalidTarget);
     }
-    let persona_id = persona_id_for_principal(tx, game, &user)
+    let persona_id = persona_id_for_principal(tx, game, &principal_id)
         .await?
-        .unwrap_or_else(|| format!("gp_{}", Uuid::new_v4()));
-    let is_new_persona = !game_persona_exists(tx, game, &persona_id).await?;
+        .unwrap_or_else(GamePersonaId::random);
+    let is_new_persona = !game_persona_exists(tx, game, persona_id).await?;
     let requested_public_name = public_name
         .as_deref()
         .map(str::trim)
         .filter(|name| !name.is_empty())
         .map(ToOwned::to_owned)
-        .unwrap_or_else(|| generated_persona_name(&slot, &persona_id));
+        .unwrap_or_else(|| generated_persona_name(&slot, persona_id));
     if is_new_persona
         && persona_name_claim_owner(tx, game, &requested_public_name)
             .await?
@@ -2130,33 +2162,36 @@ async fn assign_slot_with_name(
     {
         return Err(Reject::InvalidTarget);
     }
-    let transition_id = format!("ot_{}", Uuid::new_v4());
-    let occupancy_id = format!("oe_{}", Uuid::new_v4());
+    let transition_id = OccupancyTransitionId::random();
+    let occupancy_id = OccupancyId::random();
     let mut events = Vec::new();
     if is_new_persona {
-        // Bootstrap commands identify the private principal, but the durable
-        // game stream deliberately never exposes it as slot authorship. Until
-        // setup grows an explicit name field, use a slot-derived safe name.
-        events.push(EventInput::new(
-            "GamePersonaRegistered",
-            1,
-            serde_json::json!({
-                "persona_id": &persona_id,
-                "principal_user_id": &user,
-                "public_name": requested_public_name,
-            }),
-            ActorId::Host,
-            0,
-        ));
+        let target = PrincipalId::new(&principal_id).map_err(|_| Reject::InvalidTarget)?;
+        let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
+            .await
+            .map_err(|error| Reject::Internal(error.to_string()))?;
+        events.push(
+            game_persona_application::register(
+                tx,
+                game,
+                persona_id,
+                &target,
+                persona_presentation(requested_public_name)?,
+                ActorId::Host,
+                occurred_at,
+            )
+            .await
+            .map_err(persona_application_error)?,
+        );
     }
     events.push(EventInput::new(
         "SlotOccupancyStarted",
         1,
         serde_json::json!({
-            "transition_id": transition_id,
-            "occupancy_id": occupancy_id,
+            "transition_id": transition_id.as_uuid(),
+            "occupancy_id": occupancy_id.as_uuid(),
             "slot_id": &slot,
-            "persona_id": persona_id,
+            "persona_id": persona_id.as_uuid(),
             "reason": "initial",
         }),
         ActorId::Host,
@@ -2178,37 +2213,29 @@ async fn seat_persona(
     principal: &Principal,
     game: Uuid,
     slot: String,
-    principal_user_id: String,
+    principal_id: String,
     public_name: String,
 ) -> Result<Ack, Reject> {
     if public_name.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
-    assign_slot_with_name(
-        tx,
-        principal,
-        game,
-        slot,
-        principal_user_id,
-        Some(public_name),
-    )
-    .await
+    assign_slot_with_name(tx, principal, game, slot, principal_id, Some(public_name)).await
 }
 
 async fn rename_game_persona(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    persona_id: String,
+    persona_id: GamePersonaId,
     public_name: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
-    if persona_id.trim().is_empty() || public_name.trim().is_empty() {
+    if public_name.trim().is_empty() {
         return Err(Reject::InvalidTarget);
     }
-    if !game_persona_exists(tx, game, &persona_id).await? {
+    if !game_persona_exists(tx, game, persona_id).await? {
         return Err(Reject::InvalidTarget);
     }
     if let Some(owner) = persona_name_claim_owner(tx, game, &public_name).await? {
@@ -2216,21 +2243,20 @@ async fn rename_game_persona(
             return Err(Reject::InvalidTarget);
         }
     }
-    persist(
+    let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    let event = game_persona_application::rename(
         tx,
         game,
-        &[EventInput::new(
-            "GamePersonaRenamed",
-            1,
-            serde_json::json!({
-                "persona_id": persona_id,
-                "public_name": public_name.trim(),
-            }),
-            ActorId::Host,
-            0,
-        )],
+        persona_id,
+        persona_presentation(public_name)?,
+        ActorId::Host,
+        occurred_at,
     )
     .await
+    .map_err(persona_application_error)?;
+    persist(tx, game, &[event]).await
 }
 
 async fn assign_role(
@@ -2450,7 +2476,7 @@ pub(crate) fn build_host_notice(spec: HostNoticeSpec) -> Result<EventInput, Reje
     }
     let mut payload = serde_json::json!({
         "channel_id": channel_id,
-        "slot_or_user": { "user": "host" },
+        "author": { "kind": "host_narrator" },
         "body": body,
         "phase_id": phase_id,
     });
@@ -2480,20 +2506,14 @@ async fn decide_game_quotations(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
     channel_id: &str,
-    principal: &Principal,
     quotations: Vec<content_reference::Quotation>,
 ) -> Result<Vec<content_reference::Quotation>, Reject> {
     if quotations.is_empty() {
         return Ok(Vec::new());
     }
-    let thread = projections::quotation_thread_for_game_channel_in_tx(
-        tx,
-        game,
-        channel_id,
-        Some(principal.user_id()),
-    )
-    .await
-    .map_err(|error| Reject::Internal(error.to_string()))?;
+    let thread = projections::quotation_thread_for_game_channel_in_tx(tx, game, channel_id)
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
     let thread = content_reference::QuotationThreadState {
         thread: content_reference::PostRef {
             kind: match thread.thread.kind.as_str() {
@@ -2572,7 +2592,7 @@ async fn submit_post(
     require_channel_actor_can_post(tx, game, &channel_id, &actor_slot).await?;
     validate_thread_post_media(&media)?;
     validate_game_post_body(&body)?;
-    let quotations = decide_game_quotations(tx, game, &channel_id, principal, quotations).await?;
+    let quotations = decide_game_quotations(tx, game, &channel_id, quotations).await?;
     let embed = game_platform::embed::attach_embed_snapshot(
         game_platform::embed::decide_post_embed(&channel_id, embed_url.as_deref())
             .map_err(|_| Reject::InvalidTarget)?,
@@ -2586,15 +2606,15 @@ async fn submit_post(
         }
     }
     // A post is attributed to the SLOT (doc 01: post authorship attaches to the
-    // slot, not the user). `slot_or_user` carries the slot id so authorship
-    // survives a replacement. Phase id is recorded for partitioning.
+    // slot, not the user), so it survives a replacement. Phase id is recorded
+    // for partitioning.
     let phase = current_phase(tx, game).await?.unwrap_or_default();
     let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let mut payload = serde_json::json!({
         "channel_id": channel_id,
-        "slot_or_user": { "slot": actor_slot.clone() },
+        "author": { "kind": "slot", "slot_id": actor_slot.clone() },
         "body": body,
         "phase_id": phase,
     });
@@ -2698,7 +2718,7 @@ async fn publish_votecount(
         1,
         serde_json::json!({
             "channel_id": "main",
-            "slot_or_user": { "user": "host" },
+            "author": { "kind": "host_narrator" },
             "body": body,
             "phase_id": phase,
         }),
@@ -2718,7 +2738,7 @@ async fn official_votecount_already_published(
         "SELECT count(*) FROM thread_view \
          WHERE game_id = $1 \
            AND channel_id = 'main' \
-           AND author_user = 'host' \
+           AND author_kind = 'host_narrator' \
            AND phase_id = $2 \
            AND body = $3",
     )
@@ -2777,8 +2797,8 @@ async fn process_replacement(
     principal: &Principal,
     game: Uuid,
     slot: String,
-    outgoing_persona_id: String,
-    incoming_principal_user_id: String,
+    outgoing_persona_id: GamePersonaId,
+    incoming_principal_id: String,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
@@ -2796,36 +2816,42 @@ async fn process_replacement(
     if current_persona_id != outgoing_persona_id {
         return Err(Reject::InvalidTarget);
     }
-    if projections::spectator_membership(&mut **tx, game, &incoming_principal_user_id).await? {
+    if projections::spectator_membership(&mut **tx, game, &incoming_principal_id).await? {
         return Err(Reject::InvalidTarget);
     }
-    let incoming_persona_id = persona_id_for_principal(tx, game, &incoming_principal_user_id)
+    let incoming_persona_id = persona_id_for_principal(tx, game, &incoming_principal_id)
         .await?
-        .unwrap_or_else(|| format!("gp_{}", Uuid::new_v4()));
-    let transition_id = format!("ot_{}", Uuid::new_v4());
-    let incoming_occupancy_id = format!("oe_{}", Uuid::new_v4());
+        .unwrap_or_else(GamePersonaId::random);
+    let transition_id = OccupancyTransitionId::random();
+    let incoming_occupancy_id = OccupancyId::random();
     let mut events = Vec::new();
-    if !game_persona_exists(tx, game, &incoming_persona_id).await? {
-        events.push(EventInput::new(
-            "GamePersonaRegistered",
-            1,
-            serde_json::json!({
-                "persona_id": &incoming_persona_id,
-                "principal_user_id": &incoming_principal_user_id,
-                "public_name": generated_persona_name(&slot, &incoming_persona_id),
-            }),
-            ActorId::Host,
-            0,
-        ));
+    if !game_persona_exists(tx, game, incoming_persona_id).await? {
+        let target = PrincipalId::new(&incoming_principal_id).map_err(|_| Reject::InvalidTarget)?;
+        let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
+            .await
+            .map_err(|error| Reject::Internal(error.to_string()))?;
+        events.push(
+            game_persona_application::register(
+                tx,
+                game,
+                incoming_persona_id,
+                &target,
+                persona_presentation(generated_persona_name(&slot, incoming_persona_id))?,
+                ActorId::Host,
+                occurred_at,
+            )
+            .await
+            .map_err(persona_application_error)?,
+        );
     }
     events.push(EventInput::new(
         "SlotOccupancyEnded",
         1,
         serde_json::json!({
-            "transition_id": &transition_id,
-            "occupancy_id": outgoing_occupancy_id,
+            "transition_id": transition_id.as_uuid(),
+            "occupancy_id": outgoing_occupancy_id.as_uuid(),
             "slot_id": &slot,
-            "persona_id": outgoing_persona_id,
+            "persona_id": outgoing_persona_id.as_uuid(),
             "reason": "replaced",
         }),
         ActorId::Host,
@@ -2835,10 +2861,10 @@ async fn process_replacement(
         "SlotOccupancyStarted",
         1,
         serde_json::json!({
-            "transition_id": transition_id,
-            "occupancy_id": incoming_occupancy_id,
+            "transition_id": transition_id.as_uuid(),
+            "occupancy_id": incoming_occupancy_id.as_uuid(),
             "slot_id": slot,
-            "persona_id": incoming_persona_id,
+            "persona_id": incoming_persona_id.as_uuid(),
             "reason": "replacement",
         }),
         ActorId::Host,

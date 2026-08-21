@@ -118,14 +118,14 @@ export const mockStateProjections = Object.freeze({
       slots: [
         {
           slot_id: "slot-7",
-          assigned_principal_user_id: "player-mira",
+          assigned_principal_id: "player-mira",
           status: state.slotStatus,
           alive: state.slotStatus === "alive",
         },
       ],
       thread_posts: [
         {
-          author_slot: "slot-7",
+          author: { kind: "slot", slot_id: "slot-7" },
         },
       ],
       tasks: state.hostPromptPending
@@ -186,8 +186,7 @@ export const fixtureApiRoutes = Object.freeze([
         {
           source_seq: 445,
           stream_seq: 92,
-          author_slot: "slot-7",
-          author_user: "Mira",
+          author: { kind: "slot", slot_id: "slot-7" },
           body: "Browser smoke refreshed player post.",
           occurred_at: 1781938800,
           media: [
@@ -218,8 +217,7 @@ export const fixtureApiRoutes = Object.freeze([
         {
           source_seq: 444,
           stream_seq: 91,
-          author_slot: "host",
-          author_user: "Host",
+          author: { kind: "host_narrator" },
           body: "Official votecount for D01\n- slot_2: 1",
           occurred_at: 1781935200,
         },
@@ -273,8 +271,7 @@ export const fixtureApiRoutes = Object.freeze([
         {
           source_seq: 440,
           stream_seq: 88,
-          author_slot: "slot-3",
-          author_user: "Tamsin",
+          author: { kind: "slot", slot_id: "slot-3" },
           body: "Older context for the live thread.",
           occurred_at: 1781924400,
         },
@@ -315,8 +312,7 @@ export const privateChannelFixtureApiRoutes = Object.freeze([
         {
           source_seq: 446,
           stream_seq: 172,
-          author_slot: "slot-7",
-          author_user: "Mira",
+          author: { kind: "slot", slot_id: "slot-7" },
           body: "Browser smoke refreshed private channel post.",
           occurred_at: 1781939100,
         },

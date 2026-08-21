@@ -119,7 +119,7 @@ export function buildLiveStackProofSummary(
       status: rolePmReplacementStatus(rolePmReplacement),
       channelId: rolePmReplacement?.channelId ?? null,
       slotId: rolePmReplacement?.slotId ?? null,
-      incomingPrincipalUserId:
+      incomingPrincipalId:
         rolePmReplacement?.incoming?.principalUserId ?? null,
       incomingSubmitState:
         rolePmReplacement?.incoming?.submitOutcome?.state ?? null,
@@ -445,7 +445,7 @@ export function markdownLiveStackProofSummary(summary) {
     "| Surface | Status | Details |",
     "| --- | --- | --- |",
     `| reconnect | ${summary.reconnectRecovery.status} | state=${summary.reconnectRecovery.state ?? ""}, post=${summary.reconnectRecovery.recoveredSnapshotContainsPost} |`,
-    `| Role PM replacement | ${summary.rolePmReplacementLifecycle.status} | channel=${summary.rolePmReplacementLifecycle.channelId ?? ""}, incoming=${summary.rolePmReplacementLifecycle.incomingPrincipalUserId ?? ""}, live=${summary.rolePmReplacementLifecycle.commandLiveDeltaKind ?? ""}, reloadPosts=${summary.rolePmReplacementLifecycle.reloadedPostCount}, stale=${summary.rolePmReplacementLifecycle.stalePostReject ?? ""}, media=${summary.rolePmReplacementLifecycle.outgoingMediaStatus ?? ""}/${summary.rolePmReplacementLifecycle.outgoingMediaBodyBytes ?? ""} bytes |`,
+    `| Role PM replacement | ${summary.rolePmReplacementLifecycle.status} | channel=${summary.rolePmReplacementLifecycle.channelId ?? ""}, incoming=${summary.rolePmReplacementLifecycle.incomingPrincipalId ?? ""}, live=${summary.rolePmReplacementLifecycle.commandLiveDeltaKind ?? ""}, reloadPosts=${summary.rolePmReplacementLifecycle.reloadedPostCount}, stale=${summary.rolePmReplacementLifecycle.stalePostReject ?? ""}, media=${summary.rolePmReplacementLifecycle.outgoingMediaStatus ?? ""}/${summary.rolePmReplacementLifecycle.outgoingMediaBodyBytes ?? ""} bytes |`,
     `| Mason and Neighbor rooms | ${summary.additionalRoomLifecycle.status} | covered=${summary.additionalRoomLifecycle.coveredKinds.join(",")}, remaining=${summary.additionalRoomLifecycle.remainingKinds.join(",")}, rooms=${summary.additionalRoomLifecycle.rooms.map((room) => `${room.kind}:${room.status}:${room.encryptedStorage}`).join("; ")} |`,
     `| Dead chat | ${summary.deadChatLifecycle.status} | capability=${summary.deadChatLifecycle.derivedCapability ?? ""}, live=${summary.deadChatLifecycle.incomingInitialLiveDeltaKind ?? ""}/${summary.deadChatLifecycle.incomingCommandLiveDeltaKind ?? ""}, encrypted=${summary.deadChatLifecycle.encryptedStorage ?? ""}, stale=${summary.deadChatLifecycle.staleOutgoing}, living=${summary.deadChatLifecycle.living}, restored=${summary.deadChatLifecycle.restoredAlive} |`,
     `| Spectator room | ${summary.spectatorRoomLifecycle.status} | capability=${summary.spectatorRoomLifecycle.derivedCapability ?? ""}, preGrant=${summary.spectatorRoomLifecycle.preGrant}, live=${summary.spectatorRoomLifecycle.initialLiveDeltaKind ?? ""}/${summary.spectatorRoomLifecycle.liveDeltaKind ?? ""}, encrypted=${summary.spectatorRoomLifecycle.encryptedStorage ?? ""}, append=${summary.spectatorRoomLifecycle.appendReject ?? ""}, revoked=${summary.spectatorRoomLifecycle.revoked} |`,

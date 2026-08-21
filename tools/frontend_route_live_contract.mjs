@@ -207,7 +207,7 @@ async function provePlayerLiveRuntime() {
           {
             source_seq: 450,
             stream_seq: 50,
-            author_user: "host",
+            author: { kind: "host_narrator" },
             body: "Recovered official update",
             occurred_at: 1781928000,
           },
@@ -296,7 +296,7 @@ async function provePlayerLiveRuntime() {
           {
             source_seq: 445,
             stream_seq: 45,
-            author_user: "host",
+            author: { kind: "host_narrator" },
             body: "Live official votecount",
             occurred_at: 1781928000,
           },
@@ -379,12 +379,12 @@ async function proveModeratorLiveRuntime() {
         slots: [
           {
             slot_id: "slot-7",
-            assigned_principal_user_id: "Mira",
+            assigned_principal_id: "Mira",
             status: "modkilled",
             alive: false,
           },
         ],
-        thread_posts: [{ author_slot: "slot-7" }],
+        thread_posts: [{ author: { kind: "slot", slot_id: "slot-7" } }],
       },
       [data.hostVotecountEndpoint]: [
         {
@@ -464,7 +464,13 @@ async function provePlayerPageLifecycle() {
     ticketUrl: "wss://fmarch.local/ws?ticket=player-wake&audience=fmarch-live",
     refreshBody: {
       next_before_seq: 449,
-      posts: [{ source_seq: 451, author_user: "host", body: "Woke player thread" }],
+      posts: [
+        {
+          source_seq: 451,
+          author: { kind: "host_narrator" },
+          body: "Woke player thread",
+        },
+      ],
     },
     recoveredSeq: (snapshot) => snapshot.thread.posts[0].source_seq,
   });

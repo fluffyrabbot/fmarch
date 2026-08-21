@@ -366,7 +366,7 @@ function surfaceScenarios() {
         FIXTURE_THREAD_MEDIA_TEST_ID,
         "thread-post-media-boundary-442",
         "thread-post-permalink-442",
-        "thread-post-seat-442",
+        "thread-post-442",
         "player-private-link-notification-1",
         "player-live-status",
       ],

@@ -194,7 +194,7 @@ test("projection store applies live thread post envelopes into the player thread
     initialSnapshot: {
       thread: {
         nextBeforeSeq: 40,
-        posts: [{ seq: 42, authorLabel: "Mira", body: "before" }],
+        posts: [{ seq: 42, author: { kind: "slot", slotId: "slot-7" }, body: "before" }],
       },
     },
   });
@@ -212,7 +212,7 @@ test("projection store applies live thread post envelopes into the player thread
             {
               source_seq: 43,
               stream_seq: 9,
-              author_user: "host",
+              author: { kind: "host_narrator" },
               body: "Official votecount for D01",
               occurred_at: 1781928000,
               media: [
@@ -238,10 +238,10 @@ test("projection store applies live thread post envelopes into the player thread
 
   assert.equal(snapshot.thread.nextBeforeSeq, 40);
   assert.deepEqual(
-    snapshot.thread.posts.map((post) => [post.seq, post.authorLabel, post.body]),
+    snapshot.thread.posts.map((post) => [post.seq, post.author, post.body]),
     [
-      [42, "Mira", "before"],
-      [43, "host", "Official votecount for D01"],
+      [42, { kind: "slot", slotId: "slot-7" }, "before"],
+      [43, { kind: "host_narrator" }, "Official votecount for D01"],
     ],
   );
   assert.equal(

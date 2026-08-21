@@ -29,13 +29,11 @@ pub async fn handle_fixture_command(
 
 fn fixture_command_principal(command: &Command) -> Option<&str> {
     match command {
-        Command::SeatPersona {
-            principal_user_id, ..
-        }
+        Command::SeatPersona { principal_id, .. }
         | Command::ProcessReplacement {
-            incoming_principal_user_id: principal_user_id,
+            incoming_principal_id: principal_id,
             ..
-        } => Some(principal_user_id),
+        } => Some(principal_id),
         _ => None,
     }
 }
@@ -1497,14 +1495,14 @@ mod tests {
         let seat = Command::SeatPersona {
             game,
             slot: "slot_1".to_string(),
-            principal_user_id: "incoming-seat".to_string(),
+            principal_id: "incoming-seat".to_string(),
             public_name: "Incoming Seat".to_string(),
         };
         let replacement = Command::ProcessReplacement {
             game,
             slot: "slot_1".to_string(),
-            outgoing_persona_id: "gp-outgoing".to_string(),
-            incoming_principal_user_id: "incoming-replacement".to_string(),
+            outgoing_persona_id: game_platform::GamePersonaId::from_uuid(Uuid::from_u128(1)),
+            incoming_principal_id: "incoming-replacement".to_string(),
         };
         let ordinary = Command::AddSlot {
             game,

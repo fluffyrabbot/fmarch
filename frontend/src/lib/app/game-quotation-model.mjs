@@ -1,3 +1,8 @@
+import {
+  gameThreadAuthorLabel,
+  normalizeGameThreadAuthor,
+} from "./game-thread-author.mjs";
+
 export const GAME_QUOTATION_EXCERPT_BYTES = 1000;
 export const GAME_CITATION_PREVIEW_LIMIT = 5;
 export const GAME_MAX_QUOTATIONS = 8;
@@ -30,15 +35,8 @@ export function postSourceSeq(post) {
 }
 
 export function postAuthorLabel(post) {
-  const label =
-    post?.authorLabel ??
-    post?.author_user ??
-    post?.authorUser ??
-    post?.author?.display_name ??
-    post?.author_slot ??
-    post?.authorSlot ??
-    null;
-  return typeof label === "string" && label.trim() !== "" ? label : null;
+  const author = gameThreadAuthorLabel(normalizeGameThreadAuthor(post?.author));
+  return author === "Unknown" ? null : author;
 }
 
 export function attachQuoteSeqs(quoteSeqs, sourceSeq) {

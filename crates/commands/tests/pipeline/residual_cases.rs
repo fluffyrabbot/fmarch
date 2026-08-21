@@ -34,7 +34,7 @@ async fn named_persona_seating_and_rename_preserve_epoch_authority_and_name_clai
         Command::SeatPersona {
             game,
             slot: "slot_1".into(),
-            principal_user_id: "player_mira".into(),
+            principal_id: "player_mira".into(),
             public_name: "Mira".into(),
         },
     )
@@ -57,7 +57,7 @@ async fn named_persona_seating_and_rename_preserve_epoch_authority_and_name_clai
         &host,
         Command::RenameGamePersona {
             game,
-            persona_id: occupied[0].persona_id.clone(),
+            persona_id: current_slot_persona_id(&pool, game, "slot_1").await,
             public_name: "Rowan".into(),
         },
     )
@@ -74,7 +74,7 @@ async fn named_persona_seating_and_rename_preserve_epoch_authority_and_name_clai
         Command::SeatPersona {
             game,
             slot: "slot_2".into(),
-            principal_user_id: "player_lark".into(),
+            principal_id: "player_lark".into(),
             public_name: "rowan".into(),
         },
     )
@@ -662,14 +662,9 @@ async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool
 async fn game_creation_rejects_invalid_pack_precedence_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    let err = reject_game_creation_with_invalid_pack(
-        &pool,
-        game,
-        host_id,
-        "test_invalid_precedence",
-    )
-    .await
-    ;
+    let err =
+        reject_game_creation_with_invalid_pack(&pool, game, host_id, "test_invalid_precedence")
+            .await;
     assert!(
         matches!(
             err,
@@ -694,13 +689,9 @@ async fn game_creation_rejects_invalid_pack_precedence_before_append(pool: PgPoo
 async fn game_creation_rejects_unsupported_pack_versions_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
-    let err = reject_game_creation_with_invalid_pack(
-        &pool,
-        game,
-        host_id,
-        "test_unsupported_ir_version",
-    )
-    .await;
+    let err =
+        reject_game_creation_with_invalid_pack(&pool, game, host_id, "test_unsupported_ir_version")
+            .await;
     assert!(
         matches!(
             err,
@@ -730,9 +721,7 @@ async fn projection_rejects_same_pack_ref_with_drifted_artifact_bytes(pool: PgPo
     .await
     .expect_err("content hash drift must fail before the game is projected");
     assert!(
-        error
-            .to_string()
-            .contains("content hash mismatch"),
+        error.to_string().contains("content hash mismatch"),
         "unexpected pack-artifact rejection: {error:?}"
     );
     assert_eq!(
@@ -1592,13 +1581,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
 
     // Pre-replacement: S's ballot tallies for T.
     assert_eq!(tally_for(&pool, game, "D01", target).await, 1, "S voted T");
-    let outgoing_persona_id = projections::slot_occupancy(&pool, game)
-        .await
-        .expect("read current occupancy epoch")
-        .into_iter()
-        .find(|row| row.slot_id == slot)
-        .expect("slot has an open occupancy epoch")
-        .persona_id;
+    let outgoing_persona_id = current_slot_persona_id(&pool, game, slot).await;
 
     // ── THE REPLACEMENT: A's persona → B on the SAME slot id S ──
     handle(
@@ -1608,7 +1591,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
             game,
             slot: slot.into(),
             outgoing_persona_id,
-            incoming_principal_user_id: b.into(),
+            incoming_principal_id: b.into(),
         },
     )
     .await
@@ -1660,7 +1643,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
     let posts = stored_payloads(&pool, game, "PostSubmitted").await;
     assert_eq!(posts.len(), 1, "one post");
     assert_eq!(
-        posts[0]["slot_or_user"]["slot"], slot,
+        posts[0]["author"]["slot_id"], slot,
         "(b) post authorship is the SLOT id, untouched by replacement"
     );
 
@@ -1786,9 +1769,9 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 body: "alive principals cannot enter dead chat".into(),
                 media: Vec::new(),
                 quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        },
+                embed_url: None,
+                embed_snapshot: None,
+            },
         )
         .await
         .unwrap_err(),
@@ -1836,9 +1819,9 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 body: "dead main post".into(),
                 media: Vec::new(),
                 quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        },
+                embed_url: None,
+                embed_snapshot: None,
+            },
         )
         .await
         .unwrap_err(),
@@ -1856,9 +1839,9 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 body: "living outsider".into(),
                 media: Vec::new(),
                 quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        },
+                embed_url: None,
+                embed_snapshot: None,
+            },
         )
         .await
         .unwrap_err(),
@@ -1883,7 +1866,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
             game,
             slot: dead_slot.into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, dead_slot).await,
-            incoming_principal_user_id: incoming.into(),
+            incoming_principal_id: incoming.into(),
         },
     )
     .await
@@ -1903,9 +1886,9 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 body: "stale outgoing post".into(),
                 media: Vec::new(),
                 quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        },
+                embed_url: None,
+                embed_snapshot: None,
+            },
         )
         .await
         .unwrap_err(),
@@ -1975,9 +1958,9 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
                 body: "restored-alive dead post".into(),
                 media: Vec::new(),
                 quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        },
+                embed_url: None,
+                embed_snapshot: None,
+            },
         )
         .await
         .unwrap_err(),
@@ -2073,9 +2056,9 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
                 body: "spectator append".into(),
                 media: Vec::new(),
                 quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        },
+                embed_url: None,
+                embed_snapshot: None,
+            },
         )
         .await
         .unwrap_err(),
@@ -2175,7 +2158,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
                 game,
                 slot: slot.into(),
                 outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
-                incoming_principal_user_id: spectator.into(),
+                incoming_principal_id: spectator.into(),
             },
         )
         .await
@@ -2311,7 +2294,7 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
             game,
             slot: slot.into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
-            incoming_principal_user_id: incoming.into(),
+            incoming_principal_id: incoming.into(),
         },
     )
     .await
@@ -2366,7 +2349,15 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
         thread
             .posts
             .iter()
-            .map(|post| (post.author_slot.as_deref(), post.body.as_str()))
+            .map(|post| {
+                (
+                    match &post.author {
+                        projections::GameThreadAuthor::Slot { slot_id } => Some(slot_id.as_str()),
+                        _ => None,
+                    },
+                    post.body.as_str(),
+                )
+            })
             .collect::<Vec<_>>(),
         vec![
             (Some(slot), "Role PM history before replacement"),
@@ -2794,9 +2785,9 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
                 body: post_body.into(),
                 media: Vec::new(),
                 quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        },
+                embed_url: None,
+                embed_snapshot: None,
+            },
         )
         .await
     });
@@ -2811,7 +2802,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
                 game,
                 slot: slot.into(),
                 outgoing_persona_id: current_slot_persona_id(&replacement_pool, game, slot).await,
-                incoming_principal_user_id: incoming.into(),
+                incoming_principal_id: incoming.into(),
             },
         )
         .await
@@ -2882,7 +2873,8 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
             event.kind == "SlotOccupancyStarted" && event.payload["reason"] == "replacement"
         })
         .expect("replacement event exists");
-    assert_eq!(post_event.payload["slot_or_user"]["slot"], slot);
+    assert_eq!(post_event.payload["author"]["kind"], "slot");
+    assert_eq!(post_event.payload["author"]["slot_id"], slot);
     assert!(
         post_event.stream_seq < replacement_event.stream_seq,
         "post remains a legitimate Slot 7 write before replacement"
@@ -2933,7 +2925,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) 
                 game,
                 slot: slot.into(),
                 outgoing_persona_id: current_slot_persona_id(&replacement_pool, game, slot).await,
-                incoming_principal_user_id: incoming.into(),
+                incoming_principal_id: incoming.into(),
             },
         )
         .await
@@ -3106,7 +3098,7 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
                 game,
                 slot: slot.into(),
                 outgoing_persona_id: current_slot_persona_id(&replacement_pool, game, slot).await,
-                incoming_principal_user_id: incoming.into(),
+                incoming_principal_id: incoming.into(),
             },
         )
         .await
@@ -3263,7 +3255,7 @@ async fn incoming_replacement_can_submit_and_resolve_action(pool: PgPool) {
             game,
             slot: slot.into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
-            incoming_principal_user_id: incoming.into(),
+            incoming_principal_id: incoming.into(),
         },
     )
     .await
@@ -4349,7 +4341,7 @@ async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: 
             game,
             slot: "slot_a".into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_a").await,
-            incoming_principal_user_id: "user_z".into(),
+            incoming_principal_id: "user_z".into(),
         },
     )
     .await
@@ -4481,7 +4473,7 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
             game,
             slot: "slot_red".into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_red").await,
-            incoming_principal_user_id: "user_replacement_green".into(),
+            incoming_principal_id: "user_replacement_green".into(),
         },
     )
     .await
@@ -5156,9 +5148,9 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
                 body: "post-completion stale post".into(),
                 media: Vec::new(),
                 quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        },
+                embed_url: None,
+                embed_snapshot: None,
+            },
         ),
     ] {
         let err = match handle(&pool, &principal, command).await {
@@ -5249,9 +5241,9 @@ async fn concurrent_player_post_and_complete_game_serialize_terminal_boundary(po
                 body: "racing post against completion".into(),
                 media: Vec::new(),
                 quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        },
+                embed_url: None,
+                embed_snapshot: None,
+            },
         ),
     );
 
@@ -5480,7 +5472,7 @@ async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
     assert!(
         thread.posts.iter().any(|post| {
             post.phase_id == "D01"
-                && post.author_user.as_deref() == Some("system")
+                && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post.body.contains(
                     "Phase D01 announcement: slot_2 (instant_self_destruct), slot_1 (instant_self_destruct).",
                 )
@@ -12087,7 +12079,7 @@ async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(poo
         "SELECT count(*) FROM thread_view \
          WHERE game_id = $1 \
            AND channel_id = 'main' \
-           AND author_user = 'host' \
+           AND author_kind = 'host_narrator' \
            AND phase_id = 'D01' \
            AND body = 'Official votecount for D01\n- slot_2: 1'",
     )
@@ -12994,9 +12986,9 @@ async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
         body: "stable idempotent body".into(),
         media: Vec::new(),
         quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        };
+        embed_url: None,
+        embed_snapshot: None,
+    };
 
     let first = handle_idempotent(&pool, &user("user_a"), command_id, command.clone())
         .await
@@ -13054,9 +13046,9 @@ async fn cancellation_while_waiting_for_command_lock_rolls_back_receipt_and_tran
         body: "cancelled at command lock".into(),
         media: Vec::new(),
         quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        };
+        embed_url: None,
+        embed_snapshot: None,
+    };
 
     let mut blocker = pool.begin().await.unwrap();
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
@@ -13097,9 +13089,9 @@ async fn cancellation_during_projection_rolls_back_event_projection_receipt_and_
         body: body.into(),
         media: Vec::new(),
         quotations: Vec::new(),
-            embed_url: None,
-            embed_snapshot: None,
-        };
+        embed_url: None,
+        embed_snapshot: None,
+    };
     let lock_key = 41_009_i64;
     install_thread_view_insert_blocker(&pool, game, lock_key).await;
     let mut blocker = pool.acquire().await.unwrap();

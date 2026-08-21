@@ -260,8 +260,8 @@ export function replacementResolvedPrivatePostAckMatches(proof, scenario) {
     proof?.replacement?.serverEnvelope?.body?.kind === "Ack" &&
     replacement?.slot === scenario.actorSlot &&
     hasOpaquePersonaId(replacement?.outgoing_persona_id) &&
-    replacement?.incoming_principal_user_id === scenario.replacementPrincipalUserId &&
-    proof?.hostReplacementAfterProcess?.assignedPrincipalUserId ===
+    replacement?.incoming_principal_id === scenario.replacementPrincipalUserId &&
+    proof?.hostReplacementAfterProcess?.assignedPrincipalId ===
       scenario.replacementPrincipalUserId &&
     proof?.commandStateBeforeClose?.actorSlot === scenario.actorSlot &&
     proof?.commandStateBeforeClose?.actorStatus === "alive" &&
@@ -293,7 +293,8 @@ export function replacementResolvedPrivatePostAckMatches(proof, scenario) {
       requireActorStatus: true,
     }) &&
     channelContextMatches(proof?.channelContextAfterAck, scenario) &&
-    proof?.projectedPost?.authorSlot === scenario.actorSlot &&
+    proof?.projectedPost?.author?.kind === "slot" &&
+    proof?.projectedPost?.author?.slotId === scenario.actorSlot &&
     threadIncludesPost(proof?.apiThreadPostBodies, proof?.postBody) &&
     proof?.rowanPrivateIsolationAfterAck?.targetKillVisible === false &&
     proof?.rowanPrivateIsolationAfterAck?.actionResultVisible === false &&
@@ -375,8 +376,8 @@ export function replacementCompletedPrivatePostRejectMatches(
     proof?.replacement?.state === "ack" &&
     replacement?.slot === scenario.actorSlot &&
     hasOpaquePersonaId(replacement?.outgoing_persona_id) &&
-    replacement?.incoming_principal_user_id === scenario.replacementPrincipalUserId &&
-    proof?.hostReplacementAfterProcess?.assignedPrincipalUserId ===
+    replacement?.incoming_principal_id === scenario.replacementPrincipalUserId &&
+    proof?.hostReplacementAfterProcess?.assignedPrincipalId ===
       scenario.replacementPrincipalUserId &&
     proof?.commandStateBeforeClose?.actorSlot === scenario.actorSlot &&
     proof?.commandStateBeforeClose?.gameCompleted === false &&

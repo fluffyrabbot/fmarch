@@ -226,7 +226,7 @@ export function normalizeHostSetupState(raw, { game }) {
           slotId: normalizeId(slot.slot_id, "slot.slot_id"),
           personaId: normalizeOptionalText(slot.persona_id),
           publicName: normalizeOptionalText(slot.public_name),
-          assignedPrincipalUserId: normalizeOptionalText(slot.assigned_principal_user_id),
+          assignedPrincipalId: normalizeOptionalText(slot.assigned_principal_id),
           alive: slot.alive !== false,
           status: normalizeOptionalText(slot.status) ?? "alive",
           statusTags: Object.freeze(
@@ -314,12 +314,12 @@ export function buildHostSetupReadiness(setupState) {
 export function occupiedSetupInviteTargets(setupState) {
   return Object.freeze(
     setupState.slots
-      .filter((slot) => slot.assignedPrincipalUserId !== null)
+      .filter((slot) => slot.assignedPrincipalId !== null)
       .map((slot) =>
         Object.freeze({
           slotId: slot.slotId,
-          principalUserId: slot.assignedPrincipalUserId,
-          expectedOccupantUserId: slot.assignedPrincipalUserId,
+          principalUserId: slot.assignedPrincipalId,
+          expectedOccupantUserId: slot.assignedPrincipalId,
           targetLabel: `${slotLabel(slot.slotId)} / ${slot.publicName}`,
         }),
       ),
@@ -353,9 +353,9 @@ function hostSetupFixtureState({ game }) {
     slots: Object.freeze([
       Object.freeze({
         slot_id: "slot_1",
-        persona_id: "gp_mira",
+        persona_id: "00000000-0000-0000-0000-000000000701",
         public_name: "Mira",
-        assigned_principal_user_id: "player_mira",
+        assigned_principal_id: "player_mira",
         alive: true,
         status: "alive",
         status_tags: Object.freeze([]),
@@ -365,7 +365,7 @@ function hostSetupFixtureState({ game }) {
         slot_id: "slot_2",
         persona_id: null,
         public_name: null,
-        assigned_principal_user_id: null,
+        assigned_principal_id: null,
         alive: true,
         status: "alive",
         status_tags: Object.freeze([]),

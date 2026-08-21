@@ -122,7 +122,10 @@ const stalePostFixture = () => ({
       "dayVoteOutcomes",
     ],
   },
-  projectedPost: { body: "Stale phase closure post", authorSlot: "slot-7" },
+  projectedPost: {
+    body: "Stale phase closure post",
+    author: { kind: "slot", slotId: "slot-7" },
+  },
   commandStateAfterAck: {
     phase: { locked: true },
     voteTargets: [],
@@ -140,7 +143,12 @@ const stalePostFixture = () => ({
     current_vote: null,
   },
   apiThreadAfterAck: {
-    posts: [{ body: "Stale phase closure post", author_slot: "slot-7" }],
+    posts: [
+      {
+        body: "Stale phase closure post",
+        author: { kind: "slot", slot_id: "slot-7" },
+      },
+    ],
   },
 });
 

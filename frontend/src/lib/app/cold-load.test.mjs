@@ -193,8 +193,7 @@ test("normalizes thread and votecount projection payloads for the player view", 
           {
             source_seq: 13,
             stream_seq: 91,
-            author_slot: "slot-7",
-            author_user: "player-mira",
+            author: { kind: "slot", slot_id: "slot-7" },
             body: "##vote slot-2",
             occurred_at: 1781928000,
             media: [
@@ -222,8 +221,7 @@ test("normalizes thread and votecount projection payloads for the player view", 
         {
           seq: 13,
           streamSeq: 91,
-          authorSlot: "slot-7",
-          authorLabel: "player-mira",
+          author: { kind: "slot", slotId: "slot-7" },
           body: "##vote slot-2",
           quotations: [],
           citationCount: 0,
@@ -358,7 +356,7 @@ test("normalizes live and cold thread posts through the same media contract", ()
     normalizeThreadPost(
       {
         sourceSeq: 77,
-        authorUser: "host",
+        author: { kind: "host_narrator" },
         body: "visual receipt",
         media: [
           {
@@ -380,8 +378,7 @@ test("normalizes live and cold thread posts through the same media contract", ()
     {
       seq: 77,
       streamSeq: null,
-      authorSlot: null,
-      authorLabel: "host",
+      author: { kind: "host_narrator" },
       body: "visual receipt",
       quotations: [],
       citationCount: 0,

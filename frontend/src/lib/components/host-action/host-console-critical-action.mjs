@@ -39,8 +39,7 @@ export function buildHostConsoleCriticalActions(
   const lifecycleActions = buildSlotLifecycleActions(gameId, replacement);
   const replacementSlotId = replacement?.slotId ?? "slot-7";
   const outgoingPersonaId = replacement?.personaId ?? "";
-  const incomingPrincipalUserId =
-    replacement?.incomingPrincipalUserId ?? "player-rowan";
+  const incomingPrincipalId = replacement?.incomingPrincipalId ?? "player-rowan";
   const outgoingPublicName = replacement?.occupantLabel ?? "current persona";
   const actions = [
     ...deadlineActions,
@@ -57,7 +56,7 @@ export function buildHostConsoleCriticalActions(
         gameId,
         slotId: replacementSlotId,
         outgoingPersonaId,
-        incomingPrincipalUserId,
+        incomingPrincipalId,
       },
     }),
     ...phaseActions,

@@ -103,21 +103,70 @@ async fn seed_open_night_game_with_pack_artifact(
     slot_1_role: (&str, &str),
     slot_2_role: (&str, &str),
 ) -> Result<Vec<eventstore::StoredEvent>, projections::ProjectionError> {
+    // Project the game creation first. This preserves the pack-custody failure
+    // contract (a drifted artifact leaves neither game events nor orphaned
+    // persona claims), then prepares persona claims through the production
+    // application boundary before their canonical events are appended.
+    append_and_project(
+        pool,
+        game,
+        &[EventInput::new(
+            "GameCreated",
+            1,
+            serde_json::json!({
+                "host": host_id,
+                "pack_ref": &pack_artifact.pack_ref,
+                "pack_artifact": pack_artifact
+            }),
+            ActorId::Principal(host_id.to_string()),
+            0,
+        )],
+    )
+    .await?;
+
+    ensure_test_principals(pool, ["user_1", "user_2"]).await;
+    let first_persona = game_platform::GamePersonaId::from_uuid(Uuid::from_u128(1));
+    let second_persona = game_platform::GamePersonaId::from_uuid(Uuid::from_u128(2));
+    let (first_registered, second_registered) = {
+        let mut tx = pool.begin().await.expect("begin canonical persona fixture");
+        let first_registered = game_persona_application::register(
+            &mut tx,
+            game,
+            first_persona,
+            &game_platform::PrincipalId::new("user_1").expect("fixture principal"),
+            game_platform::GamePersonaPresentation {
+                public_name: game_platform::GamePersonaName::new("Player One")
+                    .expect("fixture persona name"),
+            },
+            ActorId::Host,
+            3,
+        )
+        .await
+        .expect("prepare first canonical persona event");
+        let second_registered = game_persona_application::register(
+            &mut tx,
+            game,
+            second_persona,
+            &game_platform::PrincipalId::new("user_2").expect("fixture principal"),
+            game_platform::GamePersonaPresentation {
+                public_name: game_platform::GamePersonaName::new("Player Two")
+                    .expect("fixture persona name"),
+            },
+            ActorId::Host,
+            5,
+        )
+        .await
+        .expect("prepare second canonical persona event");
+        tx.commit()
+            .await
+            .expect("commit canonical persona fixture claims");
+        (first_registered, second_registered)
+    };
+
     append_and_project(
         pool,
         game,
         &[
-            EventInput::new(
-                "GameCreated",
-                1,
-                serde_json::json!({
-                    "host": host_id,
-                    "pack_ref": &pack_artifact.pack_ref,
-                    "pack_artifact": pack_artifact
-                }),
-                ActorId::Principal(host_id.to_string()),
-                0,
-            ),
             EventInput::new(
                 "SlotAdded",
                 1,
@@ -132,17 +181,21 @@ async fn seed_open_night_game_with_pack_artifact(
                 ActorId::Host,
                 2,
             ),
-            EventInput::new("GamePersonaRegistered", 1, serde_json::json!({
-                "persona_id": "gp_user_1", "principal_user_id": "user_1", "public_name": "Player One"
-            }), ActorId::Host, 3),
+            first_registered,
             EventInput::new("SlotOccupancyStarted", 1, serde_json::json!({
-                "transition_id": "ot_seed_1", "occupancy_id": "oe_seed_1", "slot_id": "slot_1", "persona_id": "gp_user_1", "reason": "initial"
+                "transition_id": game_platform::OccupancyTransitionId::from_uuid(Uuid::from_u128(11)),
+                "occupancy_id": game_platform::OccupancyId::from_uuid(Uuid::from_u128(21)),
+                "slot_id": "slot_1",
+                "persona_id": first_persona,
+                "reason": "initial"
             }), ActorId::Host, 4),
-            EventInput::new("GamePersonaRegistered", 1, serde_json::json!({
-                "persona_id": "gp_user_2", "principal_user_id": "user_2", "public_name": "Player Two"
-            }), ActorId::Host, 5),
+            second_registered,
             EventInput::new("SlotOccupancyStarted", 1, serde_json::json!({
-                "transition_id": "ot_seed_2", "occupancy_id": "oe_seed_2", "slot_id": "slot_2", "persona_id": "gp_user_2", "reason": "initial"
+                "transition_id": game_platform::OccupancyTransitionId::from_uuid(Uuid::from_u128(12)),
+                "occupancy_id": game_platform::OccupancyId::from_uuid(Uuid::from_u128(22)),
+                "slot_id": "slot_2",
+                "persona_id": second_persona,
+                "reason": "initial"
             }), ActorId::Host, 6),
             EventInput::new(
                 "RoleAssigned",
@@ -803,8 +856,8 @@ async fn run_folded_minimizer_case(pool: &PgPool, case: FoldedMinimizerCase) -> 
         expected_setup_phases,
         require_projection_audit,
     } = case;
-    let fixture: serde_json::Value =
-        serde_json::from_str(&fixture_json).unwrap_or_else(|err| panic!("{stem} fixture parses: {err}"));
+    let fixture: serde_json::Value = serde_json::from_str(&fixture_json)
+        .unwrap_or_else(|err| panic!("{stem} fixture parses: {err}"));
     if let Some(expected_setup_phases) = expected_setup_phases {
         assert_eq!(
             fixture["setup_phases"].as_array().map_or(0, Vec::len),
@@ -848,13 +901,11 @@ async fn run_folded_minimizer_case(pool: &PgPool, case: FoldedMinimizerCase) -> 
         "{stem} semantic expectation count"
     );
     assert_eq!(
-        report["reduction"]["replay_success"],
-        true,
+        report["reduction"]["replay_success"], true,
         "{stem} reduction replay"
     );
     assert_eq!(
-        report["write_reduced"]["promoted_success_fixture"],
-        true,
+        report["write_reduced"]["promoted_success_fixture"], true,
         "{stem} promotion"
     );
     stem

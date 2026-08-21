@@ -196,7 +196,7 @@ async function seedSourceGame(apiBaseUrl) {
   ];
   const authenticatedPrincipals = new Set(seedPlan.map(([principalUserId]) => principalUserId));
   for (const [, command] of seedPlan) {
-    const seatedPrincipal = command.SeatPersona?.principal_user_id;
+    const seatedPrincipal = command.SeatPersona?.principal_id;
     if (typeof seatedPrincipal === "string" && seatedPrincipal !== "") {
       authenticatedPrincipals.add(seatedPrincipal);
     }
@@ -424,12 +424,19 @@ async function databaseFingerprint(url) {
         'game_personas', (
           SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY persona_id), '[]'::jsonb)
           FROM (
-            SELECT public.persona_id, public.current_public_name, private.principal_user_id
-            FROM game_persona_public public
-            JOIN game_persona_private private
-              ON private.game_id = public.game_id
-             AND private.persona_id = public.persona_id
-            WHERE public.game_id = ${sqlLiteral(game)}::uuid
+            SELECT root.persona_id,
+                   root.registered_seq,
+                   public.current_public_name,
+                   public.renamed_seq,
+                   binding.lifecycle AS binding_lifecycle
+            FROM game_persona root
+            JOIN game_persona_public public
+              ON public.game_id = root.game_id
+             AND public.persona_id = root.persona_id
+            LEFT JOIN game_persona_subject_binding binding
+              ON binding.game_id = root.game_id
+             AND binding.persona_id = root.persona_id
+            WHERE root.game_id = ${sqlLiteral(game)}::uuid
           ) rows
         ),
         'slot_occupancy_epochs', (
@@ -451,7 +458,7 @@ async function databaseFingerprint(url) {
         ),
         'thread_view', (
           SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY source_seq), '[]'::jsonb)
-          FROM (SELECT source_seq, stream_seq, channel_id, author_slot, author_user, phase_id, body, body_private FROM thread_view WHERE game_id = ${sqlLiteral(game)}::uuid) rows
+          FROM (SELECT source_seq, stream_seq, channel_id, author_kind, author_slot_id, phase_id, body, body_private FROM thread_view WHERE game_id = ${sqlLiteral(game)}::uuid) rows
         ),
         'private_channel_member', (
           SELECT COALESCE(jsonb_agg(to_jsonb(rows) ORDER BY channel_id, slot_id), '[]'::jsonb)

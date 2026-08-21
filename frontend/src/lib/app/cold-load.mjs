@@ -1,4 +1,5 @@
 import { normalizeDayEventRoom } from "./day-event-room.mjs";
+import { normalizeGameThreadAuthor } from "./game-thread-author.mjs";
 
 export const DEFAULT_SSR_FETCH_TIMEOUT_MS = 2000;
 
@@ -324,17 +325,11 @@ export function normalizeThreadPage(page, fallback) {
 
 export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
   const media = normalizeThreadPostMedia(post?.media);
+  const author = normalizeGameThreadAuthor(post?.author);
   return Object.freeze({
     seq: post?.source_seq ?? post?.sourceSeq ?? post?.seq ?? null,
     streamSeq: post?.stream_seq ?? post?.streamSeq ?? null,
-    authorSlot: post?.author_slot ?? post?.authorSlot ?? null,
-    authorLabel:
-      post?.author_user ??
-      post?.authorUser ??
-      post?.authorLabel ??
-      post?.author_slot ??
-      post?.authorSlot ??
-      "Unknown",
+    author,
     body: typeof post?.body === "string" ? post.body : "",
     quotations: normalizeQuotations(post?.quotations),
     citationCount: Number(post?.citation_count ?? post?.citationCount ?? 0),

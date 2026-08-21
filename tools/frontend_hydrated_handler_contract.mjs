@@ -617,14 +617,14 @@ function hostConsoleModkilledProjectionState() {
     slots: [
       {
         slot_id: "slot-7",
-        assigned_principal_user_id: "player-mira",
+        assigned_principal_id: "player-mira",
         status: "modkilled",
         alive: false,
       },
     ],
     thread_posts: [
       {
-        author_slot: "slot-7",
+        author: { kind: "slot", slot_id: "slot-7" },
       },
     ],
   };

@@ -262,7 +262,7 @@ function summarizeSeedSlots(plan) {
       const slotId = command.SeatPersona.slot;
       slots.set(slotId, {
         ...(slots.get(slotId) ?? { slotId }),
-        user: command.SeatPersona.principal_user_id,
+        user: command.SeatPersona.principal_id,
       });
     }
     if (command.AssignRole !== undefined) {

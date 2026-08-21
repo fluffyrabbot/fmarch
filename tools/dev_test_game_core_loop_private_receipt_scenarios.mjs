@@ -622,7 +622,8 @@ export function assertLivePrivateChannelSubmitPostAckOutcome({
     outcome?.currentReceipt?.actionId !== "submit_post" ||
     (outcome?.currentReceipt !== undefined &&
       outcome.currentReceipt?.state !== "ack") ||
-    outcome?.projectedPost?.authorSlot !== expectedActorSlot ||
+    outcome?.projectedPost?.author?.kind !== "slot" ||
+    outcome?.projectedPost?.author?.slotId !== expectedActorSlot ||
     outcome?.projectedPost?.body !== postBody ||
     outcome?.commandStateAfterAck?.phase?.phaseId !== expectedPhaseId ||
     outcome?.commandStateAfterAck?.phase?.locked !== expectedLocked ||
@@ -650,7 +651,9 @@ export function assertLivePrivateChannelSubmitPostAckOutcome({
     outcome?.apiCommandStateAfterAck?.current_vote !== null ||
     !outcome?.apiThreadAfterAck?.posts?.some(
       (post) =>
-        post.body === postBody && post.author_slot === expectedActorSlot,
+        post.body === postBody &&
+        post.author?.kind === "slot" &&
+        post.author.slot_id === expectedActorSlot,
     )
   ) {
     throwPrivateChannelScenarioAssertionError({

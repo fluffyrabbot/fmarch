@@ -101,7 +101,7 @@ test('runner max_parallel is a hard opt-in ceiling', async (t) => {
   );
 });
 
-test('manifest validation reserves resource-owned environment and validates the real v5 metadata', () => {
+test('manifest validation reserves resource-owned environment and validates the real v6 metadata', () => {
   assert.equal(validateExecutionManifest(loadManifest()), true);
   assert.throws(() => createRunContext({ runId: '..' }), /proof run id/);
   assert.throws(

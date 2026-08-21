@@ -527,8 +527,7 @@ test("player route data uses REST projection cold-loads when available", async (
           posts: [
             {
               source_seq: 99,
-              author_slot: "slot-7",
-              author_user: "player-mira",
+              author: { kind: "slot", slot_id: "slot-7" },
               body: "server thread post",
               occurred_at: 1781928000,
               media: [
@@ -700,9 +699,24 @@ test("player route model highlights the latest official host thread post", () =>
   assert.deepEqual(
     buildLiveOfficialPost({
       posts: [
-        { seq: 10, authorLabel: "host", body: "Official votecount for D01\n- slot_2: 1", meta: "live" },
-        { seq: 11, authorLabel: "Mira", body: "not official", meta: "now" },
-        { seq: 12, authorLabel: "host", body: "Official votecount for D02\nNo active ballots.", meta: "later" },
+        {
+          seq: 10,
+          author: { kind: "host_narrator" },
+          body: "Official votecount for D01\n- slot_2: 1",
+          meta: "live",
+        },
+        {
+          seq: 11,
+          author: { kind: "slot", slot_id: "slot-7" },
+          body: "not official",
+          meta: "now",
+        },
+        {
+          seq: 12,
+          author: { kind: "host_narrator" },
+          body: "Official votecount for D02\nNo active ballots.",
+          meta: "later",
+        },
       ],
     }),
     {
@@ -714,7 +728,7 @@ test("player route model highlights the latest official host thread post", () =>
   );
   assert.equal(
     buildLiveOfficialPost({
-      posts: [{ seq: 1, authorLabel: "host", body: "regular host note" }],
+      posts: [{ seq: 1, author: { kind: "host_narrator" }, body: "regular host note" }],
     }),
     null,
   );

@@ -2,6 +2,11 @@ import {
   buildGamePostQuoteView,
   excerptFromBody,
 } from "../../app/game-quotation-model.mjs";
+import {
+  gameThreadAuthorLabel,
+  isHostNarrator,
+  normalizeGameThreadAuthor,
+} from "../../app/game-thread-author.mjs";
 import { buildPlayerThreadEmbedView } from "../../app/youtube-embed.mjs";
 
 export const PLAYER_THREAD_MEDIA_CONTRACT = Object.freeze({
@@ -106,15 +111,6 @@ function pagerDisabledReason({ pending, hasOlder, threadPageStatus }) {
   return null;
 }
 
-export function buildPlayerThreadAuthorView(post = {}) {
-  const name = String(post?.authorLabel ?? "").trim() || "Unknown";
-  const seat = String(post?.authorSlot ?? "").trim();
-  return Object.freeze({
-    name,
-    seat: seat !== "" && seat !== name ? seat : null,
-  });
-}
-
 export function buildPlayerThreadPermalinkView(post = {}) {
   const seq = Number(post?.seq);
   if (!Number.isInteger(seq) || seq < 1) {
@@ -134,12 +130,14 @@ export function buildPlayerThreadPostViewModel(
   post = {},
   { posts = [], quoteEnabled = false } = {},
 ) {
+  const author = normalizeGameThreadAuthor(post?.author);
   const media = buildPlayerThreadMedia(post.media);
   const quote = buildGamePostQuoteView(post, { posts });
   const excerpt = excerptFromBody(post.body);
   return Object.freeze({
     ...post,
-    author: buildPlayerThreadAuthorView(post),
+    author,
+    authorLabel: gameThreadAuthorLabel(author),
     permalink: buildPlayerThreadPermalinkView(post),
     embed: buildPlayerThreadEmbedView(post.embed, post.seq),
     quotations: quote.quotations,
@@ -283,6 +281,6 @@ export function buildLiveOfficialPost(thread = {}) {
 }
 
 function isOfficialHostPost(post) {
-  const author = String(post?.authorLabel ?? post?.authorUser ?? "").toLowerCase();
-  return author === "host" && String(post?.body ?? "").startsWith("Official votecount");
+  return isHostNarrator(post?.author)
+    && String(post?.body ?? "").startsWith("Official votecount");
 }

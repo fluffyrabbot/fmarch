@@ -758,8 +758,8 @@ test("player route controller loads and merges older thread pages", async () => 
       return jsonResponse({
         next_before_seq: 10,
         posts: [
-          { source_seq: 40, author_user: "Ilya", body: "older" },
-          { source_seq: 44, author_user: "Mira", body: "stale" },
+          { source_seq: 40, author: { kind: "slot", slot_id: "slot-2" }, body: "older" },
+          { source_seq: 44, author: { kind: "slot", slot_id: "slot-7" }, body: "stale" },
         ],
       });
     },
@@ -767,8 +767,8 @@ test("player route controller loads and merges older thread pages", async () => 
     thread: {
       nextBeforeSeq: 41,
       posts: [
-        { seq: 44, authorLabel: "Mira", body: "current" },
-        { seq: 45, authorLabel: "Host", body: "latest" },
+        { seq: 44, author: { kind: "slot", slotId: "slot-7" }, body: "current" },
+        { seq: 45, author: { kind: "host_narrator" }, body: "latest" },
       ],
     },
   });
@@ -795,13 +795,15 @@ test("player route controller pages older posts from the active private channel"
       seenUrls.push(url);
       return jsonResponse({
         next_before_seq: null,
-        posts: [{ source_seq: 40, author_user: "Mira", body: "older role note" }],
+        posts: [{ source_seq: 40, author: { kind: "slot", slot_id: "slot-7" }, body: "older role note" }],
       });
     },
     projectionStore: fakeProjectionStore(),
     thread: {
       nextBeforeSeq: 41,
-      posts: [{ seq: 45, authorLabel: "Mira", body: "current role note" }],
+      posts: [
+        { seq: 45, author: { kind: "slot", slotId: "slot-7" }, body: "current role note" },
+      ],
     },
   });
 

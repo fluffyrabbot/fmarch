@@ -40,11 +40,12 @@ const EXPECTED_TABLES: &[&str] = &[
     "game_authority",
     "game_cohost_policy",
     "game_index",
+    "game_persona",
     "game_persona_name_claim",
     "game_persona_name_history",
-    "game_persona_private",
     "game_persona_public",
     "game_persona_redaction",
+    "game_persona_subject_binding",
     "game_private_citation",
     "game_result",
     "game_thread_visibility_change",
@@ -311,12 +312,13 @@ const EXPECTED_INDEXES: &[&str] = &[
     "game_index_public_page_idx",
     "game_persona_name_claim_pkey",
     "game_persona_name_history_pkey",
-    "game_persona_private_pkey",
-    "game_persona_private_principal_erasure_idx",
-    "game_persona_private_principal_idx",
-    "game_persona_private_subject_idx",
+    "game_persona_pkey",
     "game_persona_public_pkey",
     "game_persona_redaction_pkey",
+    "game_persona_subject_binding_erasure_idx",
+    "game_persona_subject_binding_pkey",
+    "game_persona_subject_binding_subject_erasure_idx",
+    "game_persona_subject_binding_subject_idx",
     "game_private_citation_pkey",
     "game_private_citation_quoted_idx",
     "game_result_pkey",
@@ -420,12 +422,12 @@ const EXPECTED_INDEXES: &[&str] = &[
     "subject_key_destruction_receipt_erasure_id_key",
     "subject_key_destruction_receipt_pkey",
     "subject_key_destruction_receipt_subject_id_key",
+    "subject_private_claim_id_subject_key",
     "subject_private_claim_pkey",
     "subject_private_claim_scope_idx",
     "subject_private_claim_subject_idx",
     "subject_tombstone_pkey",
     "subject_tombstone_replacement_alias_key",
-    "thread_view_author_user_idx",
     "thread_view_body_private_kid_idx",
     "thread_view_page_idx",
     "thread_view_pkey",
@@ -447,12 +449,11 @@ const EXPECTED_INDEXES: &[&str] = &[
 const EXPECTED_ERASURE_INDEX_DEFINITIONS: &[&str] = &[
     "auth_delivery_intent_principal_idx:CREATE INDEX auth_delivery_intent_principal_idx ON public.auth_delivery_intent USING btree (principal_user_id)",
     "auth_websocket_ticket_principal_idx:CREATE INDEX auth_websocket_ticket_principal_idx ON public.auth_websocket_ticket USING btree (principal_user_id)",
-    "game_persona_private_principal_erasure_idx:CREATE INDEX game_persona_private_principal_erasure_idx ON public.game_persona_private USING btree (principal_user_id)",
+    "game_persona_subject_binding_erasure_idx:CREATE INDEX game_persona_subject_binding_erasure_idx ON public.game_persona_subject_binding USING btree (subject_id) WHERE (lifecycle = 'active'::text)",
     "identity_lifecycle_audit_actor_idx:CREATE INDEX identity_lifecycle_audit_actor_idx ON public.identity_lifecycle_audit USING btree (actor_user_id)",
     "member_lifecycle_event_subject_idx:CREATE INDEX member_lifecycle_event_subject_idx ON public.member_lifecycle_event USING btree (subject_id)",
     "member_lifecycle_projection_subject_idx:CREATE INDEX member_lifecycle_projection_subject_idx ON public.member_lifecycle_projection USING btree (subject_id)",
     "member_personal_export_subject_idx:CREATE INDEX member_personal_export_subject_idx ON public.member_personal_export USING btree (subject_id)",
-    "thread_view_author_user_idx:CREATE INDEX thread_view_author_user_idx ON public.thread_view USING btree (author_user) WHERE (author_user IS NOT NULL)",
 ];
 
 const EXPECTED_CONSTRAINTS: &[&str] = &[
@@ -609,13 +610,20 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "game_index_pack_version_check:c",
     "game_index_pkey:p",
     "game_index_status_check:c",
+    "game_persona_name_claim_persona_fkey:f",
     "game_persona_name_claim_pkey:p",
+    "game_persona_name_history_persona_fkey:f",
     "game_persona_name_history_pkey:p",
-    "game_persona_private_current_claim_id_fkey:f",
-    "game_persona_private_pkey:p",
-    "game_persona_private_subject_id_fkey:f",
+    "game_persona_pkey:p",
+    "game_persona_public_persona_fkey:f",
     "game_persona_public_pkey:p",
+    "game_persona_redaction_persona_fkey:f",
     "game_persona_redaction_pkey:p",
+    "game_persona_subject_binding_claim_subject_fkey:f",
+    "game_persona_subject_binding_lifecycle_check:c",
+    "game_persona_subject_binding_persona_fkey:f",
+    "game_persona_subject_binding_pkey:p",
+    "game_persona_subject_binding_subject_fkey:f",
     "game_private_citation_pkey:p",
     "game_result_pkey:p",
     "game_thread_visibility_change_pkey:p",
@@ -716,6 +724,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "publication_surface_pkey:p",
     "sheriff_badge_pkey:p",
     "slot_effect_pkey:p",
+    "slot_occupancy_epoch_persona_fkey:f",
     "slot_occupancy_epoch_pkey:p",
     "slot_state_pkey:p",
     "slot_state_private_kid_fkey:f",
@@ -748,6 +757,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "subject_key_destruction_receipt_pkey:p",
     "subject_key_destruction_receipt_subject_id_fkey:f",
     "subject_key_destruction_receipt_subject_id_key:u",
+    "subject_private_claim_id_subject_key:u",
     "subject_private_claim_kind_check:c",
     "subject_private_claim_pkey:p",
     "subject_private_claim_scope_check:c",
@@ -756,7 +766,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "subject_tombstone_pkey:p",
     "subject_tombstone_replacement_alias_key:u",
     "subject_tombstone_subject_id_fkey:f",
-    "thread_view_author_present:c",
+    "thread_view_author_shape:c",
     "thread_view_body_private_kid_fkey:f",
     "thread_view_body_private_kid_shape:c",
     "thread_view_body_storage:c",
@@ -809,12 +819,11 @@ async fn erasure_support_indexes_have_exact_catalog_definitions(pool: PgPool) {
            AND indexname IN ( \
                'auth_delivery_intent_principal_idx', \
                'auth_websocket_ticket_principal_idx', \
-               'game_persona_private_principal_erasure_idx', \
+               'game_persona_subject_binding_erasure_idx', \
                'identity_lifecycle_audit_actor_idx', \
                'member_lifecycle_event_subject_idx', \
                'member_lifecycle_projection_subject_idx', \
-               'member_personal_export_subject_idx', \
-               'thread_view_author_user_idx' \
+               'member_personal_export_subject_idx' \
            ) \
          ORDER BY indexname",
     )
@@ -862,12 +871,11 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
            AND indexname IN ( \
                'auth_delivery_intent_principal_idx', \
                'auth_websocket_ticket_principal_idx', \
-               'game_persona_private_principal_erasure_idx', \
+               'game_persona_subject_binding_erasure_idx', \
                'identity_lifecycle_audit_actor_idx', \
                'member_lifecycle_event_subject_idx', \
                'member_lifecycle_projection_subject_idx', \
-               'member_personal_export_subject_idx', \
-               'thread_view_author_user_idx' \
+               'member_personal_export_subject_idx' \
            ) \
          ORDER BY indexname",
     )

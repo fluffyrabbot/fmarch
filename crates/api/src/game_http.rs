@@ -6,14 +6,14 @@ use super::auth_http::{
 };
 use super::command_http::command_reject_api_error;
 use super::{ApiError, ApiState};
-use crate::{live_projection, program_library, public_platform_http};
+use crate::{live_projection, program_library};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::get;
 use axum::{Json, Router};
 use caps::{Capability, Principal};
 use content_reference::{
-    self, PostKind as ContentPostKind, PostRef as ContentPostRef, DEFAULT_POST_CITATION_LIMIT,
+    PostKind as ContentPostKind, PostRef as ContentPostRef, DEFAULT_POST_CITATION_LIMIT,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
@@ -22,14 +22,14 @@ use std::sync::Arc;
 use uuid::Uuid;
 use wire::{
     DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
-    GameIndexEntry, GameIndexPage, HostConsoleAuthorityDelta, HostConsoleAuthorityKind,
-    HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
-    HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl, HostPromptDelta,
-    HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
+    GameIndexEntry, GameIndexPage, GameThreadAuthor, HostConsoleAuthorityDelta,
+    HostConsoleAuthorityKind, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
+    HostConsoleStateDelta, HostConsoleThreadPostDelta, HostDayEventDelta, HostPhaseControl,
+    HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution, HostPromptRecordedDecision,
     HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
     HostTaskUrgency, PlayerInvestigationResult, PlayerNotification, PostCitationPage,
-    PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, PublicGameThreadPage,
-    PublicPostCitationPage, Quotation, RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
+    PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, PublicGameThreadPage, Quotation,
+    RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -363,10 +363,7 @@ async fn public_game_thread(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     Query(query): Query<ThreadQuery>,
-    headers: HeaderMap,
 ) -> Result<Json<PublicGameThreadPage>, ApiError> {
-    let viewer_principal_user_id =
-        public_platform_http::optional_authenticated_member(&state.auth, &headers).await?;
     let game_row = projections::public_game_by_id(&state.pool, game)
         .await?
         .ok_or_else(|| ApiError::Reject {
@@ -379,7 +376,6 @@ async fn public_game_thread(
         game,
         query.before_seq,
         query.limit.unwrap_or(50),
-        viewer_principal_user_id.as_deref(),
     )
     .await?;
     Ok(Json(PublicGameThreadPage {
@@ -439,13 +435,12 @@ async fn channel_thread_view(
     )
     .await?;
 
-    let page = projections::thread_view_for_viewer(
+    let page = projections::thread_view_for_channel(
         &state.pool,
         game,
         channel.as_str(),
         query.before_seq,
         query.limit.unwrap_or(50),
-        Some(authorization.principal_user_id()),
     )
     .await?;
     Ok(Json(ThreadPage::from(page)))
@@ -460,10 +455,7 @@ async fn public_game_post_citations(
     State(state): State<GameHttpState>,
     Path((game, source_seq)): Path<(Uuid, i64)>,
     Query(query): Query<PostCitationQuery>,
-    headers: HeaderMap,
-) -> Result<Json<PublicPostCitationPage>, ApiError> {
-    let viewer_principal_user_id =
-        public_platform_http::optional_authenticated_member(&state.auth, &headers).await?;
+) -> Result<Json<PostCitationPage>, ApiError> {
     if projections::public_game_by_id(&state.pool, game)
         .await?
         .is_none()
@@ -474,13 +466,15 @@ async fn public_game_post_citations(
             message: "public game was not found".to_string(),
         });
     }
-    let page = projections::visible_public_incoming_citations(
+    let page = projections::visible_incoming_citations(
         &state.pool,
-        content_reference::PublicContentRef::new(game, source_seq),
-        viewer_principal_user_id.as_deref(),
-        query
-            .limit
-            .unwrap_or(content_reference::DEFAULT_POST_CITATION_LIMIT),
+        ContentPostRef {
+            kind: ContentPostKind::GamePost,
+            scope_id: game,
+            source_seq,
+        },
+        Some("main"),
+        query.limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
     )
     .await?
     .ok_or_else(|| ApiError::Reject {
@@ -488,7 +482,7 @@ async fn public_game_post_citations(
         error: RejectCode::NotAuthorized,
         message: "game post was not found".to_string(),
     })?;
-    Ok(Json(PublicPostCitationPage::from(page)))
+    Ok(Json(PostCitationPage::from(page)))
 }
 
 async fn channel_post_citations(
@@ -512,15 +506,7 @@ async fn channel_post_citations(
         Some(authorization.principal_user_id()),
     )
     .await?;
-    game_post_citations(
-        &state.pool,
-        game,
-        channel.as_str(),
-        source_seq,
-        Some(authorization.principal_user_id()),
-        query.limit,
-    )
-    .await
+    game_post_citations(&state.pool, game, channel.as_str(), source_seq, query.limit).await
 }
 
 async fn game_post_citations(
@@ -528,7 +514,6 @@ async fn game_post_citations(
     game: Uuid,
     channel_id: &str,
     source_seq: i64,
-    viewer_principal_user_id: Option<&str>,
     limit: Option<i64>,
 ) -> Result<Json<PostCitationPage>, ApiError> {
     let page = projections::visible_incoming_citations(
@@ -539,7 +524,6 @@ async fn game_post_citations(
             source_seq,
         },
         Some(channel_id),
-        viewer_principal_user_id,
         limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
     )
     .await?
@@ -555,13 +539,11 @@ pub(super) async fn current_thread_posts_delta(
     pool: &PgPool,
     game: Uuid,
     channel: &str,
-    viewer_principal_user_id: Option<&str>,
 ) -> Result<ProjectionDelta, projections::ProjectionError> {
     let page = if channel == "main" {
-        projections::public_thread_view(pool, game, None, 50, viewer_principal_user_id).await?
+        projections::public_thread_view(pool, game, None, 50).await?
     } else {
-        projections::thread_view_for_viewer(pool, game, channel, None, 50, viewer_principal_user_id)
-            .await?
+        projections::thread_view_for_channel(pool, game, channel, None, 50).await?
     };
     Ok(ProjectionDelta::ThreadPostsChanged(ThreadPostsDelta {
         game,
@@ -574,21 +556,11 @@ pub(super) async fn current_thread_posts_after_delta(
     game: Uuid,
     channel: &str,
     after_seq: i64,
-    viewer_principal_user_id: Option<&str>,
 ) -> Result<Option<ProjectionDelta>, projections::ProjectionError> {
     let page = if channel == "main" {
-        projections::public_thread_view_after(pool, game, after_seq, 50, viewer_principal_user_id)
-            .await?
+        projections::public_thread_view_after(pool, game, after_seq, 50).await?
     } else {
-        projections::thread_view_for_viewer_after(
-            pool,
-            game,
-            channel,
-            after_seq,
-            50,
-            viewer_principal_user_id,
-        )
-        .await?
+        projections::thread_view_for_channel_after(pool, game, channel, after_seq, 50).await?
     };
     if page.posts.is_empty() {
         return Ok(None);
@@ -605,14 +577,12 @@ pub(super) async fn current_post_citations_deltas(
     pool: &PgPool,
     game: Uuid,
     channel: &str,
-    viewer_principal_user_id: Option<&str>,
     extra_quoting_seqs: &[i64],
 ) -> Result<Vec<ProjectionDelta>, projections::ProjectionError> {
     let page = if channel == "main" {
-        projections::public_thread_view(pool, game, None, 50, viewer_principal_user_id).await?
+        projections::public_thread_view(pool, game, None, 50).await?
     } else {
-        projections::thread_view_for_viewer(pool, game, channel, None, 50, viewer_principal_user_id)
-            .await?
+        projections::thread_view_for_channel(pool, game, channel, None, 50).await?
     };
     let present_source_seqs: Vec<i64> = page.posts.iter().map(|post| post.source_seq).collect();
     let mut quoting_source_seqs = extra_quoting_seqs.to_vec();
@@ -629,7 +599,6 @@ pub(super) async fn current_post_citations_deltas(
         channel,
         &quoting_source_seqs,
         &present_source_seqs,
-        viewer_principal_user_id,
     )
     .await?;
     Ok(counts
@@ -1730,7 +1699,7 @@ pub struct HostConsoleSlotOccupancy {
     pub public_name: String,
     /// Host-only operational binding. Public game/read-model responses expose
     /// the persona fields above, never this principal.
-    pub assigned_principal_user_id: String,
+    pub assigned_principal_id: String,
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
@@ -1743,8 +1712,7 @@ pub struct HostConsoleSlotOccupancy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostConsoleThreadPost {
     pub stream_seq: i64,
-    pub author_slot: Option<String>,
-    pub author_user: Option<String>,
+    pub author: GameThreadAuthor,
     pub phase_id: String,
     pub body: String,
     #[serde(default)]
@@ -1836,7 +1804,7 @@ pub struct HostSetupSlotState {
     pub slot_id: String,
     pub persona_id: Option<String>,
     pub public_name: Option<String>,
-    pub assigned_principal_user_id: Option<String>,
+    pub assigned_principal_id: Option<String>,
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
@@ -1890,7 +1858,7 @@ impl From<HostConsoleSlotOccupancy> for HostConsoleSlotOccupancyDelta {
             occupancy_id: slot.occupancy_id,
             persona_id: slot.persona_id,
             public_name: slot.public_name,
-            assigned_principal_user_id: slot.assigned_principal_user_id,
+            assigned_principal_id: slot.assigned_principal_id,
             alive: slot.alive,
             status: slot.status,
             status_tags: slot.status_tags,
@@ -1906,8 +1874,7 @@ impl From<HostConsoleThreadPost> for HostConsoleThreadPostDelta {
     fn from(post: HostConsoleThreadPost) -> Self {
         HostConsoleThreadPostDelta {
             stream_seq: post.stream_seq,
-            author_slot: post.author_slot,
-            author_user: post.author_user,
+            author: post.author,
             phase_id: post.phase_id,
             body: post.body,
             quotations: post.quotations,
@@ -2053,7 +2020,7 @@ pub(super) async fn load_host_console_state(
         let slot_state = slot_states
             .iter()
             .find(|state| state.slot_id == row.slot_id);
-        let assigned_principal_user_id = assigned_principals
+        let assigned_principal_id = assigned_principals
             .get(&row.slot_id)
             .cloned()
             .unwrap_or_default();
@@ -2062,7 +2029,7 @@ pub(super) async fn load_host_console_state(
             occupancy_id: row.occupancy_id,
             persona_id: row.persona_id,
             public_name: row.public_name,
-            assigned_principal_user_id,
+            assigned_principal_id,
             alive: slot_state.map(|state| state.alive).unwrap_or(true),
             status: slot_state
                 .map(|state| state.status.clone())
@@ -2082,15 +2049,23 @@ pub(super) async fn load_host_console_state(
     // The host console is operational authority, not a moderation bypass.
     // Globally hidden public posts must disappear from every presentation of
     // the main thread, including host/global-operator HTTP and live snapshots.
-    let thread_posts = projections::public_thread_view(pool, game, None, limit.unwrap_or(25), None)
+    let thread_posts = projections::public_thread_view(pool, game, None, limit.unwrap_or(25))
         .await?
         .posts
         .into_iter()
-        .filter(|post| slot_id.is_none_or(|slot_id| post.author_slot.as_deref() == Some(slot_id)))
+        .filter(|post| {
+            slot_id.is_none_or(|slot_id| {
+                matches!(
+                    &post.author,
+                    projections::GameThreadAuthor::Slot {
+                        slot_id: author_slot_id
+                    } if author_slot_id == slot_id
+                )
+            })
+        })
         .map(|post| HostConsoleThreadPost {
             stream_seq: post.stream_seq,
-            author_slot: post.author_slot,
-            author_user: post.author_user,
+            author: post.author.into(),
             phase_id: post.phase_id,
             body: post.body,
             quotations: post.quotations.into_iter().map(Quotation::from).collect(),
@@ -2408,12 +2383,12 @@ async fn load_host_setup_state(
             let occupancy = slot_occupancy
                 .iter()
                 .find(|occupancy| occupancy.slot_id == slot.slot_id);
-            let assigned_principal_user_id = assigned_principals.get(&slot.slot_id).cloned();
+            let assigned_principal_id = assigned_principals.get(&slot.slot_id).cloned();
             HostSetupSlotState {
                 slot_id: slot.slot_id,
                 persona_id: occupancy.map(|occupancy| occupancy.persona_id.clone()),
                 public_name: occupancy.map(|occupancy| occupancy.public_name.clone()),
-                assigned_principal_user_id,
+                assigned_principal_id,
                 alive: slot.alive,
                 status: slot.status,
                 status_tags: slot.status_tags,

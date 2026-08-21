@@ -2045,7 +2045,7 @@ async function seedCheckedAuditGame() {
   ]) {
     await sendCommand("fixture_host", { AddSlot: { game: checkedAuditGame, slot } });
     await sendCommand("fixture_host", {
-      SeatPersona: { game: checkedAuditGame, slot, principal_user_id: user, public_name: user },
+      SeatPersona: { game: checkedAuditGame, slot, principal_id: user, public_name: user },
     });
     await sendCommand("fixture_host", {
       AssignRole: { game: checkedAuditGame, slot, role_key: role },
@@ -2090,7 +2090,7 @@ async function seedGame() {
     ["slot_6", "user_6", "vanilla_townie"],
   ]) {
     await sendCommand("host_h", { AddSlot: { game, slot } });
-    await sendCommand("host_h", { SeatPersona: { game, slot, principal_user_id: user, public_name: user } });
+    await sendCommand("host_h", { SeatPersona: { game, slot, principal_id: user, public_name: user } });
     await sendCommand("host_h", { AssignRole: { game, slot, role_key: role } });
   }
   await sendCommand("host_h", { StartGame: { game, phase: "D01" } });

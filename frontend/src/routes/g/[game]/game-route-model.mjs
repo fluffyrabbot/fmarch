@@ -689,8 +689,7 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
     posts: Object.freeze([
       Object.freeze({
         seq: 442,
-        authorSlot: "slot-2",
-        authorLabel: "Ilya",
+        author: Object.freeze({ kind: "slot", slotId: "slot-2" }),
         body: "Pressure stays here until the replacement answer lands.",
         meta: "2 min ago",
         media: Object.freeze([
@@ -716,8 +715,7 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
       }),
       Object.freeze({
         seq: 443,
-        authorSlot: "slot-7",
-        authorLabel: "Mira",
+        author: Object.freeze({ kind: "slot", slotId: "slot-7" }),
         body: "##vote slot-2",
         meta: "1 min ago",
       }),

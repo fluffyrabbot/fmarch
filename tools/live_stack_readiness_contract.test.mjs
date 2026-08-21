@@ -127,7 +127,7 @@ function liveStackReadinessFixture() {
               command: {
                 game: "game-a",
                 slot: "slot_1",
-                principal_user_id: "player_mira",
+                principal_id: "player_mira",
                 public_name: "player_mira",
               },
               streamSeqs: [2],

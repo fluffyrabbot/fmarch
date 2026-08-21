@@ -14,12 +14,12 @@ use uuid::Uuid;
 macro_rules! seat_persona {
     ($game:ident, slot: $slot:expr, user: $user:expr $(,)?) => {{
         let slot: String = $slot;
-        let principal_user_id: String = $user;
+        let principal_id: String = $user;
         let public_name = format!("Player {slot}");
         $crate::Command::SeatPersona {
             game: $game,
             public_name,
-            principal_user_id,
+            principal_id,
             slot,
         }
     }};
@@ -309,12 +309,12 @@ pub enum Command {
     SeatPersona {
         game: Uuid,
         slot: String,
-        principal_user_id: String,
+        principal_id: String,
         public_name: String,
     },
     RenameGamePersona {
         game: Uuid,
-        persona_id: String,
+        persona_id: Uuid,
         public_name: String,
     },
     AssignRole {
@@ -494,8 +494,8 @@ pub enum Command {
     ProcessReplacement {
         game: Uuid,
         slot: String,
-        outgoing_persona_id: String,
-        incoming_principal_user_id: String,
+        outgoing_persona_id: Uuid,
+        incoming_principal_id: String,
     },
 }
 
@@ -530,12 +530,12 @@ impl Command {
             Command::SeatPersona {
                 game,
                 slot,
-                principal_user_id,
+                principal_id,
                 public_name,
             } => commands::Command::SeatPersona {
                 game,
                 slot,
-                principal_user_id,
+                principal_id,
                 public_name,
             },
             Command::RenameGamePersona {
@@ -544,7 +544,7 @@ impl Command {
                 public_name,
             } => commands::Command::RenameGamePersona {
                 game,
-                persona_id,
+                persona_id: persona_id.into(),
                 public_name,
             },
             Command::AssignRole {
@@ -771,12 +771,12 @@ impl Command {
                 game,
                 slot,
                 outgoing_persona_id,
-                incoming_principal_user_id,
+                incoming_principal_id,
             } => commands::Command::ProcessReplacement {
                 game,
                 slot,
-                outgoing_persona_id,
-                incoming_principal_user_id,
+                outgoing_persona_id: outgoing_persona_id.into(),
+                incoming_principal_id,
             },
         };
         CommandDispatch::Direct(command)
@@ -1290,7 +1290,7 @@ pub struct HostConsoleSlotOccupancyDelta {
     pub occupancy_id: String,
     pub persona_id: String,
     pub public_name: String,
-    pub assigned_principal_user_id: String,
+    pub assigned_principal_id: String,
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
@@ -1303,8 +1303,7 @@ pub struct HostConsoleSlotOccupancyDelta {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct HostConsoleThreadPostDelta {
     pub stream_seq: i64,
-    pub author_slot: Option<String>,
-    pub author_user: Option<String>,
+    pub author: GameThreadAuthor,
     pub phase_id: String,
     pub body: String,
     #[serde(default)]
@@ -1529,13 +1528,30 @@ impl TryFrom<projections::DayVoteOutcomeRow> for DayVoteOutcomeDelta {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum GameThreadAuthor {
+    Slot { slot_id: String },
+    HostNarrator,
+    System,
+}
+
+impl From<projections::GameThreadAuthor> for GameThreadAuthor {
+    fn from(author: projections::GameThreadAuthor) -> Self {
+        match author {
+            projections::GameThreadAuthor::Slot { slot_id } => Self::Slot { slot_id },
+            projections::GameThreadAuthor::HostNarrator => Self::HostNarrator,
+            projections::GameThreadAuthor::System => Self::System,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ThreadPost {
     pub game: Uuid,
     pub source_seq: i64,
     pub stream_seq: i64,
     pub channel_id: String,
-    pub author_slot: Option<String>,
-    pub author_user: Option<String>,
+    pub author: GameThreadAuthor,
     pub phase_id: String,
     pub body: String,
     pub media: Vec<ThreadPostMedia>,
@@ -1795,8 +1811,7 @@ impl From<projections::ThreadPostRow> for ThreadPost {
             source_seq: row.source_seq,
             stream_seq: row.stream_seq,
             channel_id: row.channel_id,
-            author_slot: row.author_slot,
-            author_user: row.author_user,
+            author: row.author.into(),
             phase_id: row.phase_id,
             body: row.body,
             media,
@@ -2777,7 +2792,7 @@ pub mod typescript {
         CohostPermissionClass, Command, CommandMsg, DayEventNarrativeDelta, DayEventRoomDelta,
         DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea, DiscussionAuthor,
         DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, EmbedPoster,
-        EmbedProvider, EmbedSnapshot, GameIndexEntry, GameIndexPage, Hello,
+        EmbedProvider, EmbedSnapshot, GameIndexEntry, GameIndexPage, GameThreadAuthor, Hello,
         HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsoleDayEventsDelta,
         HostConsoleHeaderDelta, HostConsolePhaseStateDelta, HostConsoleSchedulerDelta,
         HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
@@ -2883,6 +2898,7 @@ pub mod typescript {
         push::<RejectMsg>(&mut out, &config);
         push::<VoteCountDelta>(&mut out, &config);
         push::<VoteCountClearedDelta>(&mut out, &config);
+        push::<GameThreadAuthor>(&mut out, &config);
         push::<ThreadPostsDelta>(&mut out, &config);
         push::<PostCitationsChangedDelta>(&mut out, &config);
         push::<DayVoteOutcomeDelta>(&mut out, &config);
@@ -3030,7 +3046,7 @@ mod host_console_patch_tests {
             occupancy_id: format!("{slot_id}-occ"),
             persona_id: format!("{slot_id}-persona"),
             public_name: slot_id.into(),
-            assigned_principal_user_id: "player".into(),
+            assigned_principal_id: "player".into(),
             alive,
             status: status.into(),
             status_tags: Vec::new(),
@@ -3044,12 +3060,38 @@ mod host_console_patch_tests {
     fn post(stream_seq: i64, body: &str) -> HostConsoleThreadPostDelta {
         HostConsoleThreadPostDelta {
             stream_seq,
-            author_slot: Some("slot-1".into()),
-            author_user: Some("player".into()),
+            author: GameThreadAuthor::Slot {
+                slot_id: "slot-1".into(),
+            },
             phase_id: "D01".into(),
             body: body.into(),
             quotations: Vec::new(),
         }
+    }
+
+    #[test]
+    fn game_thread_author_is_a_closed_tagged_union() {
+        assert_eq!(
+            serde_json::to_value(GameThreadAuthor::Slot {
+                slot_id: "slot-1".into(),
+            })
+            .unwrap(),
+            serde_json::json!({ "kind": "slot", "slot_id": "slot-1" })
+        );
+        assert!(
+            serde_json::from_value::<GameThreadAuthor>(serde_json::json!({
+                "kind": "profile",
+                "profile_id": "must-not-cross-the-game-boundary"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<GameThreadAuthor>(serde_json::json!({
+                "author_slot": "slot-1",
+                "author_user": "must-not-cross-the-game-boundary"
+            }))
+            .is_err()
+        );
     }
 
     #[test]

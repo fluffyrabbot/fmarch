@@ -269,13 +269,11 @@ pub async fn ensure_test_principals<'a>(
 
 async fn ensure_command_principals(pool: &PgPool, command: &Command) {
     let referenced = match command {
-        Command::SeatPersona {
-            principal_user_id, ..
-        } => Some(principal_user_id.as_str()),
+        Command::SeatPersona { principal_id, .. } => Some(principal_id.as_str()),
         Command::ProcessReplacement {
-            incoming_principal_user_id,
+            incoming_principal_id,
             ..
-        } => Some(incoming_principal_user_id.as_str()),
+        } => Some(incoming_principal_id.as_str()),
         _ => None,
     };
     if let Some(principal_user_id) = referenced {
@@ -300,18 +298,17 @@ pub async fn handle_idempotent(
     commands::handle_idempotent(pool, principal, command_id, command).await
 }
 
-/// Test boundary for direct projection fixtures. Any legacy logical event that
-/// carries a private principal first provisions its subject/key authority.
+/// Test boundary for direct projection fixtures. Profile fixtures that carry a
+/// private principal first provision its subject/key authority. Game personas
+/// must be prepared through the game-persona application boundary instead of
+/// putting a principal or presentation into an event payload.
 pub async fn append_and_project(
     pool: &PgPool,
     stream_id: Uuid,
     events: &[eventstore::EventInput],
 ) -> Result<Vec<eventstore::StoredEvent>, projections::ProjectionError> {
     for event in events {
-        if matches!(
-            event.kind.as_str(),
-            "GamePersonaRegistered" | "ProfileCreated" | "ProfileUpdated"
-        ) {
+        if matches!(event.kind.as_str(), "ProfileCreated" | "ProfileUpdated") {
             if let Some(principal_user_id) = event
                 .payload
                 .get("principal_user_id")
@@ -379,7 +376,7 @@ pub async fn setup_game_with_pack_and_denied(
         Command::SeatPersona {
             game,
             slot: slot.into(),
-            principal_user_id: occupant.into(),
+            principal_id: occupant.into(),
             public_name: format!("Persona {slot}"),
         },
     )
@@ -411,7 +408,11 @@ pub async fn setup_game_with_pack_and_denied(
 
 /// Read the current immutable occupancy epoch's persona. Replacement commands
 /// use this value as their concurrency target; principals are not slot ids.
-pub async fn current_slot_persona_id(pool: &PgPool, game: Uuid, slot: &str) -> String {
+pub async fn current_slot_persona_id(
+    pool: &PgPool,
+    game: Uuid,
+    slot: &str,
+) -> game_platform::GamePersonaId {
     projections::slot_occupancy(pool, game)
         .await
         .expect("read slot occupancy")
@@ -419,6 +420,8 @@ pub async fn current_slot_persona_id(pool: &PgPool, game: Uuid, slot: &str) -> S
         .find(|row| row.slot_id == slot)
         .expect("slot has an open occupancy epoch")
         .persona_id
+        .parse()
+        .expect("slot occupancy persona id is UUID-backed")
 }
 
 pub async fn add_vanilla_slot(pool: &PgPool, game: Uuid, host: &str, slot: &str) {

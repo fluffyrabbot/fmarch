@@ -1661,7 +1661,7 @@ async fn host_resolve_phase_carries_twilight_self_destruct_window(pool: PgPool) 
     assert!(
         thread.posts.iter().any(|post| {
             post.phase_id == "T01"
-                && post.author_user.as_deref() == Some("system")
+                && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post.body.contains(
                     "Phase T01 announcement: slot_2 (twilight_self_destruct), slot_1 (twilight_self_destruct).",
                 )
@@ -1852,7 +1852,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
     assert!(
         day_thread.posts.iter().any(|post| {
             post.phase_id == "D01"
-                && post.author_user.as_deref() == Some("system")
+                && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post.body.contains(
                     "Phase D01 announcement: slot_2 (self_destruct; template: mafiascum_self_destruct_death_v1; audience: public), slot_1 (self_destruct; template: mafiascum_self_destruct_death_v1; audience: public); template: mafiascum_day_death_v1; audience: public.",
                 )
@@ -2027,7 +2027,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
     assert!(
         night_thread.posts.iter().any(|post| {
             post.phase_id == "N01"
-                && post.author_user.as_deref() == Some("system")
+                && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post
                     .body
                     .contains("Phase N01 announcement: slot_2 (night_kill).")
@@ -18530,7 +18530,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgP
     assert!(
         thread.posts.iter().any(|post| {
             post.phase_id == "D01"
-                && post.author_user.as_deref() == Some("system")
+                && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post
                     .body
                     .contains("Phase D01 announcement: slot_4 (day_vigilante_kill; template: mafia_universe_day_action_death_v1; audience: public), slot_3 (day_vigilante_kill; template: mafia_universe_day_action_death_v1; audience: public); template: mafia_universe_day_death_v1; audience: public.")
@@ -18766,7 +18766,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: 
     assert!(
         thread.posts.iter().any(|post| {
             post.phase_id == "D01"
-                && post.author_user.as_deref() == Some("system")
+                && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post.body.contains(
                     "Phase D01 announcement: slot_4 (day_desperado), slot_2 (day_desperado); template: mafia_universe_day_death_v1; audience: public.",
                 )
@@ -25489,7 +25489,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
         .iter()
         .find(|post| {
             post.phase_id == "D02"
-                && post.author_user.as_deref() == Some("system")
+                && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post.body.contains("Day 2 announcement")
         })
         .expect("D02 resolution publishes a system announcement row");

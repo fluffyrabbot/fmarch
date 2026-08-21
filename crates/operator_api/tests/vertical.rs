@@ -39,11 +39,11 @@ use wire::{
 macro_rules! seat_persona {
     ($game:ident, slot: $slot:expr, user: $user:expr $(,)?) => {{
         let slot: String = $slot;
-        let principal_user_id: String = $user;
+        let principal_id: String = $user;
         Command::SeatPersona {
             game: $game,
-            public_name: principal_user_id.clone(),
-            principal_user_id,
+            public_name: principal_id.clone(),
+            principal_id,
             slot,
         }
     }};
@@ -188,13 +188,11 @@ async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
 
 async fn provision_fixture_command_principal(pool: &sqlx::PgPool, command: &commands::Command) {
     let principal_user_id = match command {
-        commands::Command::SeatPersona {
-            principal_user_id, ..
-        }
+        commands::Command::SeatPersona { principal_id, .. }
         | commands::Command::ProcessReplacement {
-            incoming_principal_user_id: principal_user_id,
+            incoming_principal_id: principal_id,
             ..
-        } => principal_user_id,
+        } => principal_id,
         _ => return,
     };
     ensure_test_principal(pool, principal_user_id).await;

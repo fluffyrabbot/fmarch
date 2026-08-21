@@ -569,7 +569,10 @@ test("live private-channel SubmitPost ACK outcome assertion covers refresh evide
       ],
     },
     currentReceipt: { actionId: "submit_post", state: "ack" },
-    projectedPost: { authorSlot: "slot-7", body: postBody },
+    projectedPost: {
+      author: { kind: "slot", slotId: "slot-7" },
+      body: postBody,
+    },
     commandStateAfterAck: {
       phase: { phaseId: "D01", locked: true },
       currentVote: null,
@@ -585,7 +588,7 @@ test("live private-channel SubmitPost ACK outcome assertion covers refresh evide
       vote_targets: [],
     },
     apiThreadAfterAck: {
-      posts: [{ author_slot: "slot-7", body: postBody }],
+      posts: [{ author: { kind: "slot", slot_id: "slot-7" }, body: postBody }],
     },
   };
 
@@ -605,7 +608,10 @@ test("live private-channel SubmitPost ACK outcome assertion covers refresh evide
       assertLivePrivateChannelSubmitPostAckOutcome({
         outcome: {
           ...outcome,
-          projectedPost: { authorSlot: "slot-7", body: "wrong" },
+          projectedPost: {
+            author: { kind: "slot", slotId: "slot-7" },
+            body: "wrong",
+          },
         },
         expectedGame: "game-a",
         postBody,

@@ -429,7 +429,7 @@ test("admin actions map to bootstrap wire command variants", () => {
       SeatPersona: {
         game: "00000000-0000-0000-0000-000000000123",
         slot: "slot_1",
-        principal_user_id: "player_mira",
+        principal_id: "player_mira",
         public_name: "Mira",
       },
     },

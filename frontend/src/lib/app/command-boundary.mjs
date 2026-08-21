@@ -152,7 +152,7 @@ export function buildAdminCommand({
         SeatPersona: Object.freeze({
           game: requiredString(game, "game"),
           slot: requiredString(slot, "slot"),
-          principal_user_id: requiredString(user, "user"),
+          principal_id: requiredString(user, "user"),
           public_name: requiredString(publicName, "publicName"),
         }),
       });

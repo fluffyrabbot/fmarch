@@ -20,12 +20,12 @@ use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, DiscussionThreadPage, DiscussionTopic,
-    DiscussionTopicPage, GameIndexPage, InvestigationResultBody, MemberMutePage, MemberMuteState,
-    ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt, PlayerInvestigationResult,
-    PlayerNotification, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicInboxPage,
-    PublicProfile, PublicSearchPage, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
-    SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget,
-    PROTOCOL_VERSION,
+    DiscussionTopicPage, GameIndexPage, GameThreadAuthor, InvestigationResultBody, MemberMutePage,
+    MemberMuteState, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
+    PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta,
+    PublicGameThreadPage, PublicInboxPage, PublicProfile, PublicSearchPage, RejectCode, RejectMsg,
+    ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage,
+    VoteTarget, PROTOCOL_VERSION,
 };
 
 fn test_pack_artifact(key: &str) -> content_registry::PackArtifactSnapshot {
@@ -1479,8 +1479,10 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
             Command::ProcessReplacement {
                 game,
                 slot: "slot_1".into(),
-                outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_1").await,
-                incoming_principal_user_id: incoming_principal.clone(),
+                outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_1")
+                    .await
+                    .as_uuid(),
+                incoming_principal_id: incoming_principal.clone(),
             },
         )
         .await,
@@ -1931,8 +1933,8 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                 Command::ProcessReplacement {
                     game,
                     slot: slot.into(),
-                    outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
-                    incoming_principal_user_id: incoming.into(),
+                    outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await.as_uuid(),
+                    incoming_principal_id: incoming.into(),
                 },
             )
             .await,
@@ -2309,8 +2311,10 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
             Command::ProcessReplacement {
                 game,
                 slot: dead_slot.into(),
-                outgoing_persona_id: current_slot_persona_id(&pool, game, dead_slot).await,
-                incoming_principal_user_id: incoming.clone(),
+                outgoing_persona_id: current_slot_persona_id(&pool, game, dead_slot)
+                    .await
+                    .as_uuid(),
+                incoming_principal_id: incoming.clone(),
             },
         )
         .await,
@@ -2736,7 +2740,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     assert!(thread
         .posts
         .iter()
-        .all(|post| post.author_user.as_deref() == Some("host")));
+        .all(|post| matches!(&post.author, GameThreadAuthor::HostNarrator)));
     assert_eq!(thread.posts[0].body, "Host notice for the spectator room");
     assert_eq!(thread.posts[1].body, "Live spectator notice");
     let media_url = thread.posts[0].media[0]
@@ -2946,13 +2950,11 @@ async fn post_command_with_command_id(
     command: Command,
 ) -> ServerEnvelope {
     let private_claim_principal = match &command {
-        Command::SeatPersona {
-            principal_user_id, ..
-        } => Some(principal_user_id.as_str()),
+        Command::SeatPersona { principal_id, .. } => Some(principal_id.as_str()),
         Command::ProcessReplacement {
-            incoming_principal_user_id,
+            incoming_principal_id,
             ..
-        } => Some(incoming_principal_user_id.as_str()),
+        } => Some(incoming_principal_id.as_str()),
         _ => None,
     };
     if let Some(private_claim_principal) = private_claim_principal {
@@ -3006,8 +3008,12 @@ fn expect_reject(envelope: ServerEnvelope, expected: RejectCode) {
     }
 }
 
-async fn current_slot_persona_id(pool: &sqlx::PgPool, game: Uuid, slot: &str) -> String {
-    sqlx::query_scalar(
+async fn current_slot_persona_id(
+    pool: &sqlx::PgPool,
+    game: Uuid,
+    slot: &str,
+) -> game_platform::GamePersonaId {
+    sqlx::query_scalar::<_, Uuid>(
         "SELECT persona_id FROM slot_occupancy_epoch \
          WHERE game_id = $1 AND slot_id = $2 AND ended_seq IS NULL",
     )
@@ -3015,6 +3021,7 @@ async fn current_slot_persona_id(pool: &sqlx::PgPool, game: Uuid, slot: &str) ->
     .bind(slot)
     .fetch_one(pool)
     .await
+    .map(game_platform::GamePersonaId::from_uuid)
     .expect("slot has one open persona occupancy epoch")
 }
 
@@ -3577,8 +3584,7 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
         .find(|post| post.body.starts_with("Official votecount for D01"))
         .expect("official votecount post");
 
-    assert_eq!(official.author_user.as_deref(), Some("host"));
-    assert_eq!(official.author_slot, None);
+    assert!(matches!(&official.author, GameThreadAuthor::HostNarrator));
     assert!(official.body.contains("- slot_2: 1"));
 }
 
@@ -3725,7 +3731,7 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     assert!(setup.slots[0]
         .persona_id
         .as_deref()
-        .is_some_and(|persona_id| persona_id.starts_with("gp_")));
+        .is_some_and(|persona_id| Uuid::parse_str(persona_id).is_ok()));
     assert!(setup.slots[0]
         .public_name
         .as_deref()
@@ -4632,7 +4638,7 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
                 ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref delta))
                     if delta.game == game
                         && delta.posts.iter().any(|post|
-                            post.author_user.as_deref() == Some("host")
+                            matches!(&post.author, GameThreadAuthor::HostNarrator)
                                 && post.body.starts_with("Official votecount for D01")
                                 && post.body.contains("- slot_2: 1")
                         )
@@ -5452,7 +5458,10 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
             .collect::<Vec<_>>(),
         vec!["two", "three"]
     );
-    assert_eq!(page.posts[0].author_slot.as_deref(), Some("slot_1"));
+    assert!(matches!(
+        &page.posts[0].author,
+        GameThreadAuthor::Slot { slot_id } if slot_id == "slot_1"
+    ));
     let before = page.next_before_seq.expect("older page cursor");
 
     let response = app
@@ -5494,8 +5503,8 @@ async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: s
     .unwrap();
     sqlx::query(
         "INSERT INTO thread_view \
-         (game_id, source_seq, stream_seq, channel_id, author_slot, author_user, phase_id, body, body_private, occurred_at) \
-         VALUES ($1, $2, $2, 'main', NULL, 'hidden_author', 'D01', 'moderated secret', NULL, 1781928000)",
+         (game_id, source_seq, stream_seq, channel_id, author_kind, author_slot_id, phase_id, body, body_private, occurred_at) \
+         VALUES ($1, $2, $2, 'main', 'host_narrator', NULL, 'D01', 'moderated secret', NULL, 1781928000)",
     )
     .bind(game)
     .bind(hidden_source_seq)
@@ -6468,7 +6477,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                 1,
                 serde_json::json!({
                     "channel_id": "main",
-                    "slot_or_user": { "slot": "slot_1" },
+                    "author": { "kind": "slot", "slot_id": "slot_1" },
                     "body": "reportable cobalt content",
                     "phase_id": "D01",
                     "media": [{
@@ -6485,7 +6494,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                 1,
                 serde_json::json!({
                     "channel_id": "private:role_pm:slot_1",
-                    "slot_or_user": { "slot": "slot_1" },
+                    "author": { "kind": "slot", "slot_id": "slot_1" },
                     "body": "private evidence is out of scope",
                     "phase_id": "D01"
                 }),
@@ -7098,31 +7107,65 @@ async fn profile_api_uses_enabled_accounts_and_principal_addressed_editing(pool:
 async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let game_text = game.to_string();
-    sqlx::query(
-        "INSERT INTO game_persona_private (game_id, persona_id, principal_user_id, registered_seq) \
-         VALUES ($1, 'persona_a', 'user_a', 1)",
+    let persona_id = Uuid::new_v4();
+    let mut connection = pool.acquire().await.unwrap();
+    identity::methods::ensure_principal(&mut connection, "user_a", &[], 1)
+        .await
+        .unwrap();
+    drop(connection);
+    let mut persona_tx = pool.begin().await.unwrap();
+    let subject_id = identity::ensure_active_subject(&mut persona_tx, "user_a", 1)
+        .await
+        .unwrap();
+    let persona_scope_key = persona_id.to_string();
+    let claim_id = identity::insert_subject_claim(
+        &mut persona_tx,
+        subject_id,
+        "game_persona_presentation",
+        game,
+        Some(&persona_scope_key),
+        1,
+        &game_platform::GamePersonaPresentation {
+            public_name: game_platform::GamePersonaName::new("User A").unwrap(),
+        },
     )
-    .bind(game)
-    .execute(&pool)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO game_persona_public (game_id, persona_id, current_public_name, registered_seq) \
-         VALUES ($1, 'persona_a', 'User A', 1)",
+        "INSERT INTO game_persona (game_id, persona_id, registered_seq) VALUES ($1, $2, 1)",
     )
     .bind(game)
-    .execute(&pool)
+    .bind(persona_id)
+    .execute(&mut *persona_tx)
     .await
     .unwrap();
+    sqlx::query("INSERT INTO game_persona_subject_binding (game_id, persona_id, subject_id, current_claim_id, lifecycle) VALUES ($1, $2, $3, $4, 'active')")
+        .bind(game)
+        .bind(persona_id)
+        .bind(subject_id.as_uuid())
+        .bind(claim_id.as_uuid())
+        .execute(&mut *persona_tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO game_persona_public (game_id, persona_id, current_public_name, registered_seq) VALUES ($1, $2, 'User A', 1)")
+        .bind(game)
+        .bind(persona_id)
+        .execute(&mut *persona_tx)
+        .await
+        .unwrap();
     sqlx::query(
         "INSERT INTO slot_occupancy_epoch \
          (game_id, occupancy_id, transition_id, slot_id, persona_id, began_seq, start_reason) \
-         VALUES ($1, 'occupancy_a', 'transition_a', 'slot_1', 'persona_a', 2, 'initial_seating')",
+         VALUES ($1, $2, $3, 'slot_1', $4, 2, 'initial_seating')",
     )
     .bind(game)
-    .execute(&pool)
+    .bind(Uuid::new_v4())
+    .bind(Uuid::new_v4())
+    .bind(persona_id)
+    .execute(&mut *persona_tx)
     .await
     .unwrap();
+    persona_tx.commit().await.unwrap();
     let mut member_tx = pool.begin().await.unwrap();
     let member_private = eventstore::encrypt_private_projection(
         &mut member_tx,
@@ -7172,8 +7215,8 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
         };
         sqlx::query(
             "INSERT INTO thread_view \
-             (game_id, source_seq, stream_seq, channel_id, author_slot, author_user, phase_id, body, body_private, occurred_at) \
-             VALUES ($1, $2, $2, $3, 'slot_1', NULL, 'D01', $4, $5, 1781928000)",
+             (game_id, source_seq, stream_seq, channel_id, author_kind, author_slot_id, phase_id, body, body_private, occurred_at) \
+             VALUES ($1, $2, $2, $3, 'slot', 'slot_1', 'D01', $4, $5, 1781928000)",
         )
         .bind(game)
         .bind(source_seq)
@@ -7497,7 +7540,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
             game,
             slot: "slot_1".into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_1").await,
-            incoming_principal_user_id: replacement_principal,
+            incoming_principal_id: replacement_principal,
         },
     )
     .await
@@ -7653,7 +7696,8 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
     );
     let payload = last_logical_event_payload(&pool, game, "PostSubmitted").await;
     assert_eq!(payload["channel_id"], "private:role_pm:slot_1");
-    assert_eq!(payload["slot_or_user"]["slot"], "slot_1");
+    assert_eq!(payload["author"]["kind"], "slot");
+    assert_eq!(payload["author"]["slot_id"], "slot_1");
     assert_eq!(payload["phase_id"], "D01");
     assert_eq!(payload["body"], "private role confirmation");
 
@@ -7990,8 +8034,10 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
             Command::ProcessReplacement {
                 game,
                 slot: "slot_7".into(),
-                outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_7").await,
-                incoming_principal_user_id: "player_rowan".into(),
+                outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_7")
+                    .await
+                    .as_uuid(),
+                incoming_principal_id: "player_rowan".into(),
             },
         )
         .await,
@@ -8022,16 +8068,14 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
     assert_eq!(state["phase"]["phase_id"], "D01");
     assert_eq!(state["phase"]["deadline"], 1_781_928_000);
     assert_eq!(state["slots"][0]["slot_id"], "slot_7");
-    assert_eq!(
-        state["slots"][0]["assigned_principal_user_id"],
-        "player_rowan"
-    );
+    assert_eq!(state["slots"][0]["assigned_principal_id"], "player_rowan");
     assert!(state["slots"][0]["persona_id"]
         .as_str()
-        .is_some_and(|persona_id| persona_id.starts_with("gp_")));
+        .is_some_and(|persona_id| Uuid::parse_str(persona_id).is_ok()));
     assert_eq!(state["slots"][0]["alive"], false);
     assert_eq!(state["slots"][0]["status"], "modkilled");
-    assert_eq!(state["thread_posts"][0]["author_slot"], "slot_7");
+    assert_eq!(state["thread_posts"][0]["author"]["kind"], "slot");
+    assert_eq!(state["thread_posts"][0]["author"]["slot_id"], "slot_7");
     assert_eq!(
         state["thread_posts"][0]["body"],
         "Slot 7 check-in before replacement"

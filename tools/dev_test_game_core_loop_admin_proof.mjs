@@ -5640,8 +5640,7 @@ async function installTargetResolutionReceiptBrowserRoutes(page) {
         {
           source_seq: 901,
           stream_seq: 901,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Night 1 has resolved.",
           occurred_at: 1781841600,
         },
@@ -5801,8 +5800,7 @@ async function installNormalResolutionPrivacyBrowserRoutes(page) {
         {
           source_seq: 901,
           stream_seq: 901,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Night 1 has resolved.",
           occurred_at: 1781841600,
         },
@@ -6629,8 +6627,7 @@ async function installDayVoteResolvedCommonRoutes(
         {
           source_seq: 902,
           stream_seq: 902,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Day 2 has resolved.",
           occurred_at: 1782014400,
         },
@@ -6682,8 +6679,7 @@ async function installNightActionResolutionCommonRoutes(
         {
           source_seq: 904,
           stream_seq: 904,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Night 2 has resolved.",
           occurred_at: 1782100800,
         },
@@ -6735,8 +6731,7 @@ async function installDayThreePlayerObservationRoutes(
         {
           source_seq: 906,
           stream_seq: 906,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Day 3 has opened.",
           occurred_at: 1782187200,
         },
@@ -6825,8 +6820,7 @@ async function installDayThreeVoteSubmissionBrowserRoutes(
         {
           source_seq: 906,
           stream_seq: 906,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Day 3 has opened.",
           occurred_at: 1782187200,
         },
@@ -6914,8 +6908,7 @@ async function installDayFourNoLynchVoteSubmissionBrowserRoutes(
         {
           source_seq: 911,
           stream_seq: 911,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Day 4 has opened.",
           occurred_at: 1782360000,
         },
@@ -7173,8 +7166,7 @@ async function installDayFiveNoLynchVoteSubmissionBrowserRoutes(
         {
           source_seq: 917,
           stream_seq: 917,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Day 5 has opened.",
           occurred_at: 1782532800,
         },
@@ -7353,8 +7345,7 @@ async function installNightFourNoActionBrowserRoutes(
         {
           source_seq: 914,
           stream_seq: 914,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Night 4 has opened.",
           occurred_at: 1782446400,
         },
@@ -7588,8 +7579,7 @@ async function installStaleNightFourActionRecoveryBrowserRoutes(
         {
           source_seq: rejected ? 917 : 916,
           stream_seq: rejected ? 917 : 916,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: rejected
             ? "Day 5 has opened."
             : "Night 4 has resolved but this client still has stale action controls.",
@@ -7691,8 +7681,7 @@ async function installStaleDayFiveVoteRecoveryBrowserRoutes(
         {
           source_seq: rejected ? 920 : 917,
           stream_seq: rejected ? 920 : 917,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: rejected
             ? "Night 5 has opened."
             : "Day 5 has opened but this client still has stale vote controls.",
@@ -7996,8 +7985,7 @@ async function installStaleCompletedGamePlayerCommandRecoveryBrowserRoutes(
         {
           source_seq: rejected ? 921 : 917,
           stream_seq: rejected ? 921 : 917,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: rejected
             ? "The game is complete."
             : "Day 5 has opened but this client still has stale controls.",
@@ -8067,8 +8055,7 @@ async function installPostDayThreePlayerBrowserRoutes(
         {
           source_seq: threadSeq,
           stream_seq: threadSeq,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: threadBody,
           occurred_at: 1782273600,
         },
@@ -8303,8 +8290,7 @@ async function installPostDayVoteAdvanceCommonRoutes(
         {
           source_seq: 903,
           stream_seq: 903,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Night 2 has opened.",
           occurred_at: 1782018000,
         },
@@ -9136,8 +9122,7 @@ async function installPrivateChannelBrowserRoutes(
         {
           source_seq: scenario.ackSeq,
           stream_seq: scenario.ackSeq,
-          author_slot: scenario.actorSlot,
-          author_user: "player_mira",
+          author: { kind: "slot", slot_id: scenario.actorSlot },
           body: privatePostBody,
           occurred_at: 1781928000,
         },
@@ -9213,8 +9198,7 @@ async function installPrivateChannelStalePostBrowserRoutes(
         {
           source_seq: 802,
           stream_seq: 802,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: scenario.currentThreadBody,
           occurred_at: 1782014400,
         },
@@ -9309,8 +9293,7 @@ async function installPrivateChannelInvalidActionBrowserRoutes(
         {
           source_seq: 901,
           stream_seq: 901,
-          author_slot: "host",
-          author_user: "host_h",
+          author: { kind: "host_narrator" },
           body: "Current private channel before invalid action reject",
           occurred_at: 1781928000,
         },
@@ -9419,8 +9402,7 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
               {
                 source_seq: 920,
                 stream_seq: 920,
-                author_slot: "slot-7",
-                author_user: "player_mira",
+                author: { kind: "slot", slot_id: "slot-7" },
                 body: "Stale private channel still accepts a local draft before completion refresh.",
                 occurred_at: 1782615600,
               },
@@ -9508,8 +9490,7 @@ function completedPrivateChannelThread({ roleUrl } = {}) {
       {
         source_seq: 921,
         stream_seq: 921,
-        author_slot: "host",
-        author_user: "host_h",
+        author: { kind: "host_narrator" },
         body: scenario.completedThreadBody,
         occurred_at: 1782619200,
       },
@@ -10244,7 +10225,7 @@ function hostLockedConsoleState({ deadline = null } = {}) {
     slots: [
       {
         slot_id: "slot-7",
-        assigned_principal_user_id: "player-mira",
+        assigned_principal_id: "player-mira",
         alive: true,
         status: "alive",
         status_tags: ["alive"],
@@ -10254,7 +10235,7 @@ function hostLockedConsoleState({ deadline = null } = {}) {
     thread_posts: [
       {
         seq: 41,
-        author_slot: "slot-7",
+        author: { kind: "slot", slot_id: "slot-7" },
       },
     ],
   };
@@ -10271,7 +10252,7 @@ function hostOpenConsoleState({ boundary, deadline = null }) {
     slots: [
       {
         slot_id: "slot-7",
-        assigned_principal_user_id: "player-mira",
+        assigned_principal_id: "player-mira",
         alive: true,
         status: "alive",
         status_tags: ["alive"],
@@ -10281,7 +10262,7 @@ function hostOpenConsoleState({ boundary, deadline = null }) {
     thread_posts: [
       {
         seq: 41,
-        author_slot: "slot-7",
+        author: { kind: "slot", slot_id: "slot-7" },
         body: boundary,
       },
     ],
@@ -10304,7 +10285,7 @@ function hostPhaseTransitionConsoleState({
     slots: [
       {
         slot_id: "slot-7",
-        assigned_principal_user_id: "player-mira",
+        assigned_principal_id: "player-mira",
         alive: true,
         status: "alive",
         status_tags: ["alive"],
@@ -10314,7 +10295,7 @@ function hostPhaseTransitionConsoleState({
     thread_posts: [
       {
         seq,
-        author_slot: "host",
+        author: { kind: "host_narrator" },
         body: boundary,
       },
     ],
@@ -10338,7 +10319,7 @@ function hostCompletedConsoleState({
     slots: [
       {
         slot_id: "slot-7",
-        assigned_principal_user_id: "player-mira",
+        assigned_principal_id: "player-mira",
         alive: true,
         status: "alive",
         status_tags: ["alive"],
@@ -10349,7 +10330,7 @@ function hostCompletedConsoleState({
       },
       {
         slot_id: "slot-5",
-        assigned_principal_user_id: "player-sage",
+        assigned_principal_id: "player-sage",
         alive: false,
         status: "dead",
         status_tags: ["dead"],
@@ -10362,7 +10343,7 @@ function hostCompletedConsoleState({
     thread_posts: [
       {
         seq,
-        author_slot: "host",
+        author: { kind: "host_narrator" },
         body: boundary,
       },
     ],

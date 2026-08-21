@@ -36,11 +36,11 @@ fn host_console_slot_assigned(body: &ServerMsg, principal_user_id: &str) -> bool
         ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(delta)) => delta
             .slots
             .iter()
-            .any(|slot| slot.assigned_principal_user_id == principal_user_id),
+            .any(|slot| slot.assigned_principal_id == principal_user_id),
         ServerMsg::Delta(wire::ProjectionDelta::HostConsoleSlotsChanged(delta)) => delta
             .slots
             .iter()
-            .any(|slot| slot.assigned_principal_user_id == principal_user_id),
+            .any(|slot| slot.assigned_principal_id == principal_user_id),
         _ => false,
     }
 }
@@ -960,7 +960,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
                     if delta
                         .slots
                         .iter()
-                        .any(|slot| slot.assigned_principal_user_id == "player_a")
+                        .any(|slot| slot.assigned_principal_id == "player_a")
             ) {
                 break;
             }

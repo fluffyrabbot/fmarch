@@ -12,7 +12,7 @@ export const baselineFilename = "0001_baseline.sql";
 // Deliberate greenfield rebaseline: foundational identity and public-platform
 // replacements belong in the no-user baseline rather than compatibility
 // migrations retaining the obsolete projection forms.
-export const baselineSha256 = "5a89c3fb1514e154b363368cc12fdca49992fd60821e39b6e955ba9d0e38aa4e";
+export const baselineSha256 = "9ca4de64b72e02e1130d361fa311e23de4ff0627a1c4a03491bd3b3772901cf7";
 
 const migrationFilenamePattern = /^(\d{4})_[a-z0-9_]+\.sql$/u;
 

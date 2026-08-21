@@ -55,7 +55,7 @@ export async function buildHostConsoleRouteData({
   const replacement = Object.freeze({
     slotId: "slot-7",
     occupantLabel: "player-mira",
-    assignedPrincipalUserId: "player-mira",
+    assignedPrincipalId: "player-mira",
     lifecycleLabel: "Alive",
     historyLabel: "Waiting for replacement command proof",
   });
@@ -247,7 +247,7 @@ export function buildHostInviteTargets({
 } = {}) {
   const slotId = normalizeSlotId(replacement.slotId ?? "slot-7");
   const occupant = normalizePrincipal(firstNonEmptyText(
-    replacement.assignedPrincipalUserId,
+    replacement.assignedPrincipalId,
     replacement.occupantLabel,
     "player-mira",
   ));

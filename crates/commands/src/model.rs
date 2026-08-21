@@ -150,13 +150,13 @@ pub enum Command {
     SeatPersona {
         game: Uuid,
         slot: String,
-        principal_user_id: String,
+        principal_id: String,
         public_name: String,
     },
     /// Change a game persona's public game-local name. Host-team (Setup class).
     RenameGamePersona {
         game: Uuid,
-        persona_id: String,
+        persona_id: game_platform::GamePersonaId,
         public_name: String,
     },
     /// Assign a role to a slot. Host-team (Setup class).
@@ -345,8 +345,8 @@ pub enum Command {
     ProcessReplacement {
         game: Uuid,
         slot: String,
-        outgoing_persona_id: String,
-        incoming_principal_user_id: String,
+        outgoing_persona_id: game_platform::GamePersonaId,
+        incoming_principal_id: String,
     },
 }
 

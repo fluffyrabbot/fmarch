@@ -720,8 +720,7 @@ async fn day_event_narratives_compile_publish_and_rebuild_as_host_notices(pool: 
         .posts;
     assert_eq!(notices.len(), 5);
     assert!(notices.iter().all(|post| post.channel_id == "main"
-        && post.author_user.as_deref() == Some("host")
-        && post.author_slot.is_none()));
+        && matches!(&post.author, projections::GameThreadAuthor::HostNarrator)));
     assert!(notices
         .iter()
         .any(|post| post.body == "Event event-narrative-cancelled cancelled: rain delay."));
@@ -915,7 +914,7 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
             game,
             slot: slot.into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
-            incoming_principal_user_id: incoming.into(),
+            incoming_principal_id: incoming.into(),
         },
     )
     .await

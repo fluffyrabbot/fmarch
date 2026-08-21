@@ -3,7 +3,6 @@ import { test } from "node:test";
 import {
   PLAYER_THREAD_MEDIA_CONTRACT,
   PLAYER_THREAD_PAGER_CONTRACT,
-  buildPlayerThreadAuthorView,
   buildPlayerThreadPagerViewModel,
   buildPlayerThreadPermalinkView,
   buildPlayerThreadViewModel,
@@ -20,19 +19,19 @@ test("player thread model highlights the latest official host votecount post", (
       posts: [
         {
           seq: 10,
-          authorLabel: "host",
+          author: { kind: "host_narrator" },
           body: "Official votecount for D01\n- slot_2: 1",
           meta: "live",
         },
         {
           seq: 11,
-          authorLabel: "Mira",
+          author: { kind: "slot", slotId: "slot-7" },
           body: "Official votecount for D02\n- slot_4: 1",
           meta: "player",
         },
         {
           seq: 12,
-          authorUser: "host",
+          author: { kind: "host_narrator" },
           body: "Official votecount for D03\nNo active ballots.",
           meta: "later",
         },
@@ -51,8 +50,8 @@ test("player thread model ignores non-host and non-official posts", () => {
   assert.equal(
     buildLiveOfficialPost({
       posts: [
-        { seq: 1, authorLabel: "host", body: "regular host note" },
-        { seq: 2, authorLabel: "Mira", body: "Official votecount for D01" },
+        { seq: 1, author: { kind: "host_narrator" }, body: "regular host note" },
+        { seq: 2, author: { kind: "slot", slotId: "slot-7" }, body: "Official votecount for D01" },
       ],
     }),
     null,
@@ -251,14 +250,14 @@ test("player thread model renders quote blocks and incoming citation disclosure"
       posts: [
         {
           seq: 12,
-          authorLabel: "Mira",
+          author: { kind: "slot", slotId: "slot-7" },
           body: "Alpha signal analysis",
           quotations: [],
           citationCount: 1,
         },
         {
           seq: 18,
-          authorLabel: "Rowan",
+          author: { kind: "slot", slotId: "slot-3" },
           body: "Answering that claim",
           quotations: [
             {
@@ -277,10 +276,11 @@ test("player thread model renders quote blocks and incoming citation disclosure"
   assert.equal(thread.posts[0].citationCount, 1);
   assert.equal(thread.posts[0].incomingCitations[0].sourceSeq, 18);
   assert.equal(thread.posts[1].quotations[0].excerpt, "Alpha signal");
-  assert.equal(thread.posts[1].quotations[0].authorLabel, "Mira");
+  assert.equal(thread.posts[1].quotations[0].authorLabel, "slot-7");
   assert.equal(thread.posts[1].quotations[0].href, "#thread-post-12");
   assert.equal(thread.quoteEnabled, true);
-  assert.deepEqual(thread.posts[0].author, { name: "Mira", seat: null });
+  assert.deepEqual(thread.posts[0].author, { kind: "slot", slotId: "slot-7" });
+  assert.equal(thread.posts[0].authorLabel, "slot-7");
   assert.deepEqual(thread.posts[0].permalink, {
     href: "#thread-post-12",
     testId: "thread-post-permalink-12",
@@ -290,21 +290,22 @@ test("player thread model renders quote blocks and incoming citation disclosure"
   });
 });
 
-test("player thread model names the seat when it differs from the author", () => {
-  assert.deepEqual(
-    buildPlayerThreadAuthorView({
-      authorLabel: "Mira",
-      authorSlot: "slot-7",
-    }),
-    { name: "Mira", seat: "slot-7" },
-  );
-  assert.deepEqual(
-    buildPlayerThreadAuthorView({
-      authorLabel: "slot-7",
-      authorSlot: "slot-7",
-    }),
-    { name: "slot-7", seat: null },
-  );
+test("player thread model renders tagged author attribution without person identity", () => {
+  const thread = buildPlayerThreadViewModel({
+    posts: [
+      { seq: 1, author: { kind: "slot", slotId: "slot-7" } },
+      { seq: 2, author: { kind: "host_narrator" } },
+      { seq: 3, author: { kind: "system" } },
+      { seq: 4, author: { kind: "slot", slotId: "  " } },
+    ],
+  });
+
+  assert.deepEqual(thread.posts.map((post) => post.authorLabel), [
+    "slot-7",
+    "Host",
+    "System",
+    "Unknown",
+  ]);
   assert.deepEqual(
     buildPlayerThreadPermalinkView({
       seq: 443,
@@ -319,14 +320,6 @@ test("player thread model names the seat when it differs from the author", () =>
     },
   );
   assert.equal(buildPlayerThreadPermalinkView({ seq: "pending" }), null);
-  assert.deepEqual(buildPlayerThreadAuthorView({}), {
-    name: "Unknown",
-    seat: null,
-  });
-  assert.deepEqual(buildPlayerThreadAuthorView({ authorLabel: "  ", authorSlot: "  " }), {
-    name: "Unknown",
-    seat: null,
-  });
 });
 
 test("player thread media withholds original-only images", () => {
@@ -341,7 +334,7 @@ test("player thread media withholds original-only images", () => {
     posts: [
       {
         seq: 7,
-        authorLabel: "Mira",
+        author: { kind: "slot", slotId: "slot-7" },
         body: "receipt attached",
         media: [
           {

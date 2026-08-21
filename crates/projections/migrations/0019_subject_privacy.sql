@@ -29,12 +29,19 @@ CREATE TABLE public.subject_private_claim (
     scope_key text,
     envelope jsonb NOT NULL,
     created_at bigint NOT NULL,
-    CONSTRAINT subject_private_claim_kind_check CHECK (claim_kind IN ('profile', 'game_persona')),
+    CONSTRAINT subject_private_claim_kind_check CHECK (claim_kind IN ('profile', 'game_persona_presentation')),
     CONSTRAINT subject_private_claim_scope_check CHECK (
         (claim_kind = 'profile' AND scope_key IS NULL)
-        OR (claim_kind = 'game_persona' AND scope_key IS NOT NULL AND length(scope_key) > 0)
+        OR (
+            claim_kind = 'game_persona_presentation'
+            AND scope_key IS NOT NULL
+            AND length(scope_key) > 0
+        )
     )
 );
+
+ALTER TABLE public.subject_private_claim
+    ADD CONSTRAINT subject_private_claim_id_subject_key UNIQUE (claim_id, subject_id);
 
 CREATE TABLE public.subject_tombstone (
     subject_id uuid PRIMARY KEY REFERENCES public.privacy_subject(subject_id) ON DELETE RESTRICT,
@@ -85,9 +92,19 @@ ALTER TABLE ONLY public.member_profile
         )
     );
 
-ALTER TABLE public.game_persona_private
-    ADD COLUMN subject_id uuid REFERENCES public.privacy_subject(subject_id) ON DELETE RESTRICT,
-    ADD COLUMN current_claim_id uuid REFERENCES public.subject_private_claim(claim_id) ON DELETE SET NULL;
+ALTER TABLE public.game_persona_subject_binding
+    ADD CONSTRAINT game_persona_subject_binding_subject_fkey
+        FOREIGN KEY (subject_id)
+        REFERENCES public.privacy_subject(subject_id)
+        ON DELETE RESTRICT,
+    ADD CONSTRAINT game_persona_subject_binding_claim_subject_fkey
+        FOREIGN KEY (current_claim_id, subject_id)
+        REFERENCES public.subject_private_claim(claim_id, subject_id)
+        ON DELETE RESTRICT,
+    ADD CONSTRAINT game_persona_subject_binding_lifecycle_check CHECK (
+        (lifecycle = 'active' AND current_claim_id IS NOT NULL)
+        OR (lifecycle = 'redacted' AND current_claim_id IS NULL)
+    );
 
 ALTER TABLE public.member_lifecycle_projection
     ADD COLUMN subject_id uuid REFERENCES public.privacy_subject(subject_id) ON DELETE RESTRICT;
@@ -113,8 +130,8 @@ CREATE INDEX subject_private_claim_subject_idx
 CREATE INDEX subject_private_claim_scope_idx
     ON public.subject_private_claim (claim_kind, scope_id, scope_key, created_at);
 CREATE INDEX member_profile_subject_idx ON public.member_profile (subject_id);
-CREATE INDEX game_persona_private_subject_idx
-    ON public.game_persona_private (subject_id, game_id, persona_id);
+CREATE INDEX game_persona_subject_binding_subject_erasure_idx
+    ON public.game_persona_subject_binding (subject_id, game_id, persona_id);
 
 CREATE FUNCTION public.subject_privacy_append_only_guard() RETURNS trigger
     LANGUAGE plpgsql

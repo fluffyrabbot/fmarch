@@ -1564,8 +1564,8 @@ async function proveRenderedPlayerSurface(bundle) {
   );
   assertIncludes(
     html,
-    'data-testid="thread-post-seat-442"',
-    "player thread seat",
+    'data-testid="thread-post-442"',
+    "player thread stable post identity",
   );
   assertIncludes(
     html,

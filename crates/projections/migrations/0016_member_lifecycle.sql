@@ -46,10 +46,14 @@ CREATE TABLE public.member_personal_export (
 -- persona-name history. Public presentation layers must prefer this name.
 CREATE TABLE public.game_persona_redaction (
     game_id uuid NOT NULL,
-    persona_id text NOT NULL,
+    persona_id uuid NOT NULL,
     replacement_public_name text NOT NULL,
     redacted_at bigint NOT NULL,
-    PRIMARY KEY (game_id, persona_id)
+    PRIMARY KEY (game_id, persona_id),
+    CONSTRAINT game_persona_redaction_persona_fkey
+        FOREIGN KEY (game_id, persona_id)
+        REFERENCES public.game_persona(game_id, persona_id)
+        ON DELETE RESTRICT
 );
 
 CREATE INDEX member_lifecycle_event_principal_seq_idx

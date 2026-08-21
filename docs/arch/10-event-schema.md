@@ -81,7 +81,7 @@ enum EventKind {
     RoleAssigned,           // logical body: { slot_id, role_key, alignment, role_effects }; whole body sealed (06)
 
     // ── Posting ──
-    PostSubmitted,          // logical body: { channel_id, slot_or_user, body, media, phase_id, quotations? }; whole body sealed (06, RFC 0002)
+    PostSubmitted,          // logical body: { channel_id, author, body, media, phase_id, quotations? }; whole body sealed (06, RFC 0002)
     PostEdited,             // { post_id, new_body_ref }   original recoverable
     PostRetracted,          // { post_id }
 
@@ -132,6 +132,12 @@ enum EventKind {
     ResolutionTrace,
 }
 ```
+
+For game-thread `PostSubmitted`, `author` is a closed, public game-author
+sum type: `{ kind: "slot", slot_id }` for player posts,
+`{ kind: "host_narrator" }` for official host notices and votecounts, or
+`{ kind: "system" }` for engine announcements. It is deliberately neither a
+credential principal nor a profile reference.
 
 `VoteSubmitted` / `ActionSubmitted` are the persisted form of a
 [Submission](09-engine-and-packs.md). `SubmitVote`/`WithdrawVote` and

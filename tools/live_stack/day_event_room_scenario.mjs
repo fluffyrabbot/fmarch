@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 export const DAY_EVENT_ROOM_SCOPE = "day-event-room";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function createDayEventRoomFixture({ randomUUID = crypto.randomUUID } = {}) {
   const eventId = "event-browser-room";
@@ -29,7 +30,7 @@ export async function seedDayEventRoom({ fixture, sendCommand }) {
       SeatPersona: {
         game: fixture.game,
         slot: fixture.outgoing.slotId,
-        principal_user_id: fixture.outgoing.principalUserId, public_name: fixture.outgoing.principalUserId,
+        principal_id: fixture.outgoing.principalUserId, public_name: fixture.outgoing.principalUserId,
       },
     },
     {
@@ -279,7 +280,7 @@ export async function driveDayEventRoomBrowser({
   const outgoingPersonaId = replacementHostState.slots?.find(
     (slot) => slot.slot_id === fixture.outgoing.slotId,
   )?.persona_id;
-  if (typeof outgoingPersonaId !== "string" || !outgoingPersonaId.startsWith("gp_")) {
+  if (typeof outgoingPersonaId !== "string" || !UUID_PATTERN.test(outgoingPersonaId)) {
     throw new Error(
       `DayEvent replacement lacked an opaque outgoing persona: ${JSON.stringify(replacementHostState.slots)}`,
     );
@@ -290,7 +291,7 @@ export async function driveDayEventRoomBrowser({
       game: fixture.game,
       slot: fixture.outgoing.slotId,
       outgoing_persona_id: outgoingPersonaId,
-      incoming_principal_user_id: fixture.incoming.principalUserId,
+      incoming_principal_id: fixture.incoming.principalUserId,
     },
   });
   await outgoingPage.evaluate(async () => {

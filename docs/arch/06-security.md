@@ -216,7 +216,7 @@ SpectatorOf(game)            read fixed spectator room; never grants a player sl
   the next capability resolution. It intentionally does not revoke the account session
   globally, because that credential may still have unrelated authority elsewhere.
 - Capabilities are derived from projections (`private_channel_member`, `spectator_membership`,
-  `slot_occupancy_epoch`, `game_persona_private`, `slot_state`) so they always reflect committed game state, never stale
+  `slot_occupancy_epoch`, `game_persona_subject_binding`, `privacy_subject`, `slot_state`) so they always reflect committed game state, never stale
   client claims.
 
 ## Visibility enforcement (defense in depth)

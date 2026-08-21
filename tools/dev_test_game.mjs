@@ -890,8 +890,8 @@ async function sendCommandResult(principalUserId, command) {
 
 async function ensureCommandTargetPrincipal(command) {
   const principalUserId =
-    command.SeatPersona?.principal_user_id ??
-    command.ProcessReplacement?.incoming_principal_user_id;
+    command.SeatPersona?.principal_id ??
+    command.ProcessReplacement?.incoming_principal_id;
   if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
     return;
   }
@@ -1506,10 +1506,10 @@ async function verifyDisposableHostSetupRosterRoleCommand({
 }) {
   const setupGame = crypto.randomUUID();
   const seed = await seedHostSetupRosterRoleGame({ setupGame });
-  const assignedPrincipalUserId = "setup-extra-player";
+  const assignedPrincipalId = "setup-extra-player";
   // The setup form accepts an exact principal identifier; seed that identity
   // so the authoritative assignment command can bind it to the slot.
-  await ensureLocalAccount({ principalUserId: assignedPrincipalUserId });
+  await ensureLocalAccount({ principalUserId: assignedPrincipalId });
   const setupSession = await createAccountLoginCredential({
     principalUserId: "host_h",
     returnTo: `/g/${setupGame}/setup`,
@@ -1616,7 +1616,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     const rosterRow = page.getByTestId(`host-setup-slot-${addedSlotId}`);
     await rosterRow
       .locator('input[name="principalUserId"]')
-      .fill(assignedPrincipalUserId);
+      .fill(assignedPrincipalId);
     await rosterRow.locator('input[name="publicName"]').fill(assignedPublicName);
     await rosterRow
       .getByRole("button", { name: "Assign player", exact: true })
@@ -1627,13 +1627,13 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       commandKind: "SeatPersona",
       commandPredicate: (command) =>
         command?.slot === addedSlotId &&
-        command?.principal_user_id === assignedPrincipalUserId &&
+        command?.principal_id === assignedPrincipalId &&
         command?.public_name === assignedPublicName,
       statePredicate: (state) =>
         (state?.slots ?? []).some(
           (slot) =>
             slot.slotId === addedSlotId &&
-            slot.assignedPrincipalUserId === assignedPrincipalUserId,
+            slot.assignedPrincipalId === assignedPrincipalId,
         ),
     });
 
@@ -1654,7 +1654,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
         (state?.slots ?? []).some(
           (slot) =>
             slot.slotId === addedSlotId &&
-            slot.assignedPrincipalUserId === assignedPrincipalUserId &&
+            slot.assignedPrincipalId === assignedPrincipalId &&
             slot.roleKey === assignedRoleKey,
         ),
     });
@@ -1674,7 +1674,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       initialState?.phase !== null ||
       duplicateAddSlotRecovery.error !== "InvalidTarget" ||
       duplicateSlotCountAfterReject !== 1 ||
-      finalSlot?.assignedPrincipalUserId !== assignedPrincipalUserId ||
+      finalSlot?.assignedPrincipalId !== assignedPrincipalId ||
       finalSlot?.roleKey !== assignedRoleKey ||
       finalReadiness?.summary !== "Ready to start" ||
       finalReadiness?.startAvailable !== true
@@ -1701,7 +1701,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       sessionPrincipalUserId: setupSession.principalUserId,
       seed,
       addedSlotId,
-      assignedPrincipalUserId,
+      assignedPrincipalId,
       assignedRoleKey,
       initialSummary,
       duplicateAddSlotRecovery: {
@@ -1739,7 +1739,7 @@ async function seedHostSetupRosterRoleGame({ setupGame }) {
     ["host_h", { AddSlot: { game: setupGame, slot: "slot_1" } }],
     [
       "host_h",
-      { SeatPersona: { game: setupGame, slot: "slot_1", principal_user_id: "setup-player-one", public_name: "Persona " + String("slot_1") } },
+      { SeatPersona: { game: setupGame, slot: "slot_1", principal_id: "setup-player-one", public_name: "Persona " + String("slot_1") } },
     ],
     [
       "host_h",
@@ -3066,15 +3066,15 @@ async function seedDayVoteResolutionGame({
     ["host_h", { AddSlot: { game, slot: "slot-3" } }],
     ["host_h", { AddSlot: { game, slot: "slot_4" } }],
     ["host_h", { AddSlot: { game, slot: "slot_5" } }],
-    ["host_h", { SeatPersona: { game, slot: "slot-7", principal_user_id: "player-mira", public_name: "Mira" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-7", principal_id: "player-mira", public_name: "Mira" } }],
     ["host_h", { AssignRole: { game, slot: "slot-7", role_key: slotSevenRoleKey } }],
-    ["host_h", { SeatPersona: { game, slot: "slot-2", principal_user_id: "player-target", public_name: "Target" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-2", principal_id: "player-target", public_name: "Target" } }],
     ["host_h", { AssignRole: { game, slot: "slot-2", role_key: "vanilla_townie" } }],
-    ["host_h", { SeatPersona: { game, slot: "slot-3", principal_user_id: "player-seed", public_name: "Seed" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-3", principal_id: "player-seed", public_name: "Seed" } }],
     ["host_h", { AssignRole: { game, slot: "slot-3", role_key: "vanilla_townie" } }],
-    ["host_h", { SeatPersona: { game, slot: "slot_4", principal_user_id: "player-goon-a", public_name: "Goon A" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot_4", principal_id: "player-goon-a", public_name: "Goon A" } }],
     ["host_h", { AssignRole: { game, slot: "slot_4", role_key: slotFourRoleKey } }],
-    ["host_h", { SeatPersona: { game, slot: "slot_5", principal_user_id: "player-goon-b", public_name: "Goon B" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot_5", principal_id: "player-goon-b", public_name: "Goon B" } }],
     ["host_h", { AssignRole: { game, slot: "slot_5", role_key: "vanilla_townie" } }],
     ["host_h", { StartGame: { game, phase: "D01" } }],
     [
@@ -3529,7 +3529,7 @@ async function seedHostDecidesTieGame({ game }) {
     ["host_h", { CreateGame: { game, pack: "epicmafia" } }],
     ...roster.flatMap(([slot, user]) => [
       ["host_h", { AddSlot: { game, slot } }],
-      ["host_h", { SeatPersona: { game, slot, principal_user_id: user, public_name: `Persona ${slot}` } }],
+      ["host_h", { SeatPersona: { game, slot, principal_id: user, public_name: `Persona ${slot}` } }],
       ["host_h", { AssignRole: { game, slot, role_key: "villager" } }],
     ]),
     ["host_h", { StartGame: { game, phase: "D01" } }],
@@ -3552,7 +3552,7 @@ async function seedEarliestReachedTieGame({ game }) {
     ["host_h", { CreateGame: { game, pack: "dev_test_earliest_reached" } }],
     ...roster.flatMap(([slot, user]) => [
       ["host_h", { AddSlot: { game, slot } }],
-      ["host_h", { SeatPersona: { game, slot, principal_user_id: user, public_name: `Persona ${slot}` } }],
+      ["host_h", { SeatPersona: { game, slot, principal_id: user, public_name: `Persona ${slot}` } }],
       ["host_h", { AssignRole: { game, slot, role_key: "citizen" } }],
     ]),
     ["host_h", { StartGame: { game, phase: "D01" } }],
@@ -3878,11 +3878,11 @@ async function seedDayVoteNoLynchGame({ game }) {
     ["host_h", { AddSlot: { game, slot: "slot-7" } }],
     ["host_h", { AddSlot: { game, slot: "slot-2" } }],
     ["host_h", { AddSlot: { game, slot: "slot_3" } }],
-    ["host_h", { SeatPersona: { game, slot: "slot-7", principal_user_id: "player-mira", public_name: "Mira" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-7", principal_id: "player-mira", public_name: "Mira" } }],
     ["host_h", { AssignRole: { game, slot: "slot-7", role_key: "vanilla_townie" } }],
-    ["host_h", { SeatPersona: { game, slot: "slot-2", principal_user_id: "player-seed", public_name: "Seed" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot-2", principal_id: "player-seed", public_name: "Seed" } }],
     ["host_h", { AssignRole: { game, slot: "slot-2", role_key: "vanilla_townie" } }],
-    ["host_h", { SeatPersona: { game, slot: "slot_3", principal_user_id: "player-target", public_name: "Target" } }],
+    ["host_h", { SeatPersona: { game, slot: "slot_3", principal_id: "player-target", public_name: "Target" } }],
     ["host_h", { AssignRole: { game, slot: "slot_3", role_key: "mafia_goon" } }],
     ["host_h", { StartGame: { game, phase: "D01" } }],
   ];
@@ -8801,7 +8801,8 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
         window.__fmarchPlayerProjection?.thread?.posts?.some(
           (post) =>
             post.body === expectedBody &&
-            post.authorSlot === "slot-7",
+            post.author?.kind === "slot" &&
+            post.author.slotId === "slot-7",
         ) &&
         window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
         window.__fmarchPlayerProjection?.commandState?.currentVote === null &&
@@ -10375,26 +10376,26 @@ async function seedHostPromptRecoveryGame({ promptGame, promptId }) {
     ["host_h", { AddSlot: { game: promptGame, slot: "slot_4" } }],
     ["host_h", { AddSlot: { game: promptGame, slot: "slot_5" } }],
     ["host_h", { AddSlot: { game: promptGame, slot: "slot_6" } }],
-    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_1", principal_user_id: "prompt-user-1", public_name: "Persona " + String("slot_1") } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_1", principal_id: "prompt-user-1", public_name: "Persona " + String("slot_1") } }],
     [
       "host_h",
       { AssignRole: { game: promptGame, slot: "slot_1", role_key: "beloved_princess" } },
     ],
-    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_2", principal_user_id: "prompt-user-2", public_name: "Persona " + String("slot_2") } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_2", principal_id: "prompt-user-2", public_name: "Persona " + String("slot_2") } }],
     [
       "host_h",
       { AssignRole: { game: promptGame, slot: "slot_2", role_key: "vanilla_townie" } },
     ],
-    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_3", principal_user_id: "prompt-user-3", public_name: "Persona " + String("slot_3") } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_3", principal_id: "prompt-user-3", public_name: "Persona " + String("slot_3") } }],
     [
       "host_h",
       { AssignRole: { game: promptGame, slot: "slot_3", role_key: "vanilla_townie" } },
     ],
-    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_4", principal_user_id: "prompt-user-4", public_name: "Persona " + String("slot_4") } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_4", principal_id: "prompt-user-4", public_name: "Persona " + String("slot_4") } }],
     ["host_h", { AssignRole: { game: promptGame, slot: "slot_4", role_key: "mafia_goon" } }],
-    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_5", principal_user_id: "prompt-user-5", public_name: "Persona " + String("slot_5") } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_5", principal_id: "prompt-user-5", public_name: "Persona " + String("slot_5") } }],
     ["host_h", { AssignRole: { game: promptGame, slot: "slot_5", role_key: "mafia_goon" } }],
-    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_6", principal_user_id: "prompt-user-6", public_name: "Persona " + String("slot_6") } }],
+    ["host_h", { SeatPersona: { game: promptGame, slot: "slot_6", principal_id: "prompt-user-6", public_name: "Persona " + String("slot_6") } }],
     [
       "host_h",
       { AssignRole: { game: promptGame, slot: "slot_6", role_key: "vanilla_townie" } },
@@ -11255,7 +11256,7 @@ async function seedHostCompleteRecoveryGame({ completeGame }) {
   const plan = [
     ["host_h", { CreateGame: { game: completeGame, pack: "mafiascum" } }],
     ["host_h", { AddSlot: { game: completeGame, slot: "slot-7" } }],
-    ["host_h", { SeatPersona: { game: completeGame, slot: "slot-7", principal_user_id: "player-mira", public_name: "Persona " + String("slot-7") } }],
+    ["host_h", { SeatPersona: { game: completeGame, slot: "slot-7", principal_id: "player-mira", public_name: "Persona " + String("slot-7") } }],
     ["host_h", { AssignRole: { game: completeGame, slot: "slot-7", role_key: "godfather" } }],
     ["host_h", { StartGame: { game: completeGame, phase: "D01" } }],
   ];
@@ -11279,7 +11280,7 @@ async function seedPlayerEndgameHistoryRecoveryGame({ completeGame }) {
         SeatPersona: {
           game: completeGame,
           slot: "slot-7",
-          principal_user_id: "player-mira",
+          principal_id: "player-mira",
           public_name: "Mira",
         },
       },
@@ -11301,7 +11302,7 @@ async function seedPlayerEndgameHistoryRecoveryGame({ completeGame }) {
         SeatPersona: {
           game: completeGame,
           slot: "slot-2",
-          principal_user_id: "player-target",
+          principal_id: "player-target",
           public_name: "Target",
         },
       },
@@ -11323,7 +11324,7 @@ async function seedPlayerEndgameHistoryRecoveryGame({ completeGame }) {
         SeatPersona: {
           game: completeGame,
           slot: "slot-3",
-          principal_user_id: "player-seed",
+          principal_id: "player-seed",
           public_name: "Seed",
         },
       },
@@ -12503,14 +12504,14 @@ async function verifyConcurrentHostPublishRace({
     await playerRacePage.waitForFunction(
       (body) =>
         (window.__fmarchPlayerProjection?.thread?.posts ?? []).some(
-          (post) => post.body === body && post.authorLabel === "host",
+          (post) => post.body === body && post.author?.kind === "host_narrator",
         ),
       expectedBody,
     );
     const playerOfficialPostCount = await playerRacePage.evaluate(
       (body) =>
         (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
-          (post) => post.body === body && post.authorLabel === "host",
+          (post) => post.body === body && post.author?.kind === "host_narrator",
         ).length,
       expectedBody,
     );
@@ -12519,7 +12520,8 @@ async function verifyConcurrentHostPublishRace({
       "player-mira",
     );
     const apiOfficialPosts = (apiThread.posts ?? []).filter(
-      (post) => post.body === expectedBody && post.author_user === "host",
+      (post) =>
+        post.body === expectedBody && post.author?.kind === "host_narrator",
     );
     const commandGames = outcomes.map(
       (outcome) =>
@@ -12640,7 +12642,7 @@ async function reloadConcurrentHostPublishRace({
     playerRacePage.waitForFunction(
       (body) =>
         (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
-          (post) => post.body === body && post.authorLabel === "host",
+          (post) => post.body === body && post.author?.kind === "host_narrator",
         ).length === 1,
       expectedBody,
     ),
@@ -12650,12 +12652,13 @@ async function reloadConcurrentHostPublishRace({
     "player-mira",
   );
   const apiOfficialPostCount = (apiThread.posts ?? []).filter(
-    (post) => post.body === expectedBody && post.author_user === "host",
+    (post) =>
+      post.body === expectedBody && post.author?.kind === "host_narrator",
   ).length;
   const playerOfficialPostCount = await playerRacePage.evaluate(
     (body) =>
       (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
-        (post) => post.body === body && post.authorLabel === "host",
+        (post) => post.body === body && post.author?.kind === "host_narrator",
       ).length,
     expectedBody,
   );
@@ -12748,14 +12751,14 @@ async function verifyHostVotecountPublication({
   await playerPage.waitForFunction(
     (body) =>
       window.__fmarchPlayerProjection?.thread?.posts?.some(
-        (post) => post.body === body && post.authorLabel === "host",
+        (post) => post.body === body && post.author?.kind === "host_narrator",
       ),
     expectedBody,
   );
   const playerThreadPost = await playerPage.evaluate(
     (body) =>
       window.__fmarchPlayerProjection?.thread?.posts?.find(
-        (post) => post.body === body && post.authorLabel === "host",
+        (post) => post.body === body && post.author?.kind === "host_narrator",
       ),
     expectedBody,
   );
@@ -12764,7 +12767,8 @@ async function verifyHostVotecountPublication({
     "player-mira",
   );
   const apiThreadPost = apiThread.posts?.find(
-    (post) => post.body === expectedBody && post.author_user === "host",
+    (post) =>
+      post.body === expectedBody && post.author?.kind === "host_narrator",
   );
   if (apiThreadPost === undefined) {
     throw new Error(
@@ -12876,7 +12880,7 @@ async function verifyStaleHostPublishAfterVotecountChange({
     await playerPage.waitForFunction(
       (body) =>
         window.__fmarchPlayerProjection?.thread?.posts?.some(
-          (post) => post.body === body && post.authorLabel === "host",
+          (post) => post.body === body && post.author?.kind === "host_narrator",
         ),
       expectedBody,
     );
@@ -12885,22 +12889,24 @@ async function verifyStaleHostPublishAfterVotecountChange({
       "player-mira",
     );
     const apiExpectedPosts = (apiThread.posts ?? []).filter(
-      (post) => post.body === expectedBody && post.author_user === "host",
+      (post) =>
+        post.body === expectedBody && post.author?.kind === "host_narrator",
     );
     const apiStalePosts = (apiThread.posts ?? []).filter(
-      (post) => post.body === staleBody && post.author_user === "host",
+      (post) =>
+        post.body === staleBody && post.author?.kind === "host_narrator",
     );
     const playerExpectedPostCount = await playerPage.evaluate(
       (body) =>
         (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
-          (post) => post.body === body && post.authorLabel === "host",
+          (post) => post.body === body && post.author?.kind === "host_narrator",
         ).length,
       expectedBody,
     );
     const playerStalePostCount = await playerPage.evaluate(
       (body) =>
         (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
-          (post) => post.body === body && post.authorLabel === "host",
+          (post) => post.body === body && post.author?.kind === "host_narrator",
         ).length,
       staleBody,
     );
@@ -13071,12 +13077,13 @@ async function submitStaleHostPublishRecovery({
     "player-mira",
   );
   const apiOfficialPosts = (apiThread.posts ?? []).filter(
-    (post) => post.body === expectedBody && post.author_user === "host",
+    (post) =>
+      post.body === expectedBody && post.author?.kind === "host_narrator",
   );
   const playerOfficialPostCount = await playerPage.evaluate(
     (body) =>
       (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
-        (post) => post.body === body && post.authorLabel === "host",
+        (post) => post.body === body && post.author?.kind === "host_narrator",
       ).length,
     expectedBody,
   );
@@ -13162,7 +13169,7 @@ async function submitStaleHostPublishAfterClearRecovery({
   await playerPage.waitForFunction(
     (body) =>
       window.__fmarchPlayerProjection?.thread?.posts?.some(
-        (post) => post.body === body && post.authorLabel === "host",
+        (post) => post.body === body && post.author?.kind === "host_narrator",
       ),
     expectedBody,
   );
@@ -13192,22 +13199,24 @@ async function submitStaleHostPublishAfterClearRecovery({
     "player-mira",
   );
   const apiExpectedPosts = (apiThread.posts ?? []).filter(
-    (post) => post.body === expectedBody && post.author_user === "host",
+    (post) =>
+      post.body === expectedBody && post.author?.kind === "host_narrator",
   );
   const apiStalePosts = (apiThread.posts ?? []).filter(
-    (post) => post.body === staleBody && post.author_user === "host",
+    (post) =>
+      post.body === staleBody && post.author?.kind === "host_narrator",
   );
   const playerExpectedPostCount = await playerPage.evaluate(
     (body) =>
       (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
-        (post) => post.body === body && post.authorLabel === "host",
+        (post) => post.body === body && post.author?.kind === "host_narrator",
       ).length,
     expectedBody,
   );
   const playerStalePostCount = await playerPage.evaluate(
     (body) =>
       (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
-        (post) => post.body === body && post.authorLabel === "host",
+        (post) => post.body === body && post.author?.kind === "host_narrator",
       ).length,
     staleBody,
   );
@@ -13730,7 +13739,7 @@ async function verifySeededReplacementConsole({
     await hostPage.waitForFunction(
       () =>
         window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
-        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
           "player-rowan",
     );
     const projectedReplacement = await hostPage.evaluate(
@@ -13831,7 +13840,7 @@ async function verifySeededReplacementConsole({
       redeemedInviteRecovery?.sessionCookiePresent !== false ||
       invalidReplacementRecovery?.status !== "passed" ||
       invalidReplacementRecovery?.reject?.error !== "InvalidTarget" ||
-      invalidReplacementRecovery?.apiSlotAfterReject?.assigned_principal_user_id !==
+      invalidReplacementRecovery?.apiSlotAfterReject?.assigned_principal_id !==
         "player-mira" ||
       invalidReplacementRecovery?.pendingAfterReject?.commandState?.actorStatus !==
         "pending_replacement" ||
@@ -13840,16 +13849,16 @@ async function verifySeededReplacementConsole({
       command?.ProcessReplacement?.game !== game ||
       command?.ProcessReplacement?.slot !== "slot-7" ||
       isOpaquePersonaId(command?.ProcessReplacement?.outgoing_persona_id) !== true ||
-      command?.ProcessReplacement?.incoming_principal_user_id !== "player-rowan" ||
+      command?.ProcessReplacement?.incoming_principal_id !== "player-rowan" ||
       projectedReplacement?.slotId !== "slot-7" ||
-      projectedReplacement?.assignedPrincipalUserId !== "player-rowan" ||
+      projectedReplacement?.assignedPrincipalId !== "player-rowan" ||
       !projectedReplacement?.historyLabel?.includes("slot-7") ||
       apiSlot?.slot_id !== "slot-7" ||
-      apiSlot?.assigned_principal_user_id !== "player-rowan" ||
+      apiSlot?.assigned_principal_id !== "player-rowan" ||
       replacementIdempotentRetry?.status !== "passed" ||
       replacementIdempotentRetry?.retryReplacement?.state !== "ack" ||
       replacementIdempotentRetry?.sameStreamSeqs !== true ||
-      replacementIdempotentRetry?.apiSlotAfterRetry?.assigned_principal_user_id !==
+      replacementIdempotentRetry?.apiSlotAfterRetry?.assigned_principal_id !==
         "player-rowan" ||
       staleHostInviteRecovery?.status !== "passed" ||
       staleHostInviteRecovery?.beforeSubmit?.principalUserId !== "player-mira" ||
@@ -13868,7 +13877,7 @@ async function verifySeededReplacementConsole({
       staleOutgoingPlayer?.buttonsDisabled !== true ||
       staleReplacementAfterSuccess?.status !== "passed" ||
       staleReplacementAfterSuccess?.reject?.error !== "InvalidTarget" ||
-      staleReplacementAfterSuccess?.apiSlotAfterReject?.assigned_principal_user_id !==
+      staleReplacementAfterSuccess?.apiSlotAfterReject?.assigned_principal_id !==
         "player-rowan" ||
       staleReplacementAfterSuccess?.staleOutgoingPlayer?.recoveredCommandState
         ?.actorStatus !== "replaced" ||
@@ -14347,8 +14356,8 @@ async function verifyInvalidReplacementRecovery({
     label: "Invalid replacement",
     objectLabel: "Slot 7 / player-rowan",
     outcomeLabel: "Reject invalid replacement",
-    outgoingPersonaId: `gp_${crypto.randomUUID()}`,
-    incomingPrincipalUserId: "player-rowan",
+    outgoingPersonaId: crypto.randomUUID(),
+    incomingPrincipalId: "player-rowan",
   });
   const apiStateAfterReject = await fetchHostConsoleState({
     apiBaseUrl,
@@ -14378,9 +14387,9 @@ async function verifyInvalidReplacementRecovery({
         ?.ProcessReplacement?.outgoing_persona_id,
     ) !== true ||
     replacementAttemptVisibleReject(attempt, invalidActionId) !== true ||
-    attempt.hostProjectionAfterReject?.assignedPrincipalUserId !== "player-mira" ||
+    attempt.hostProjectionAfterReject?.assignedPrincipalId !== "player-mira" ||
     apiSlotAfterReject?.slot_id !== "slot-7" ||
-    apiSlotAfterReject?.assigned_principal_user_id !== "player-mira" ||
+    apiSlotAfterReject?.assigned_principal_id !== "player-mira" ||
     pendingAfterReject.principalUserId !== "player-rowan" ||
     pendingAfterReject.capabilityKinds.length !== 0 ||
     pendingAfterReject.capabilityLabel !== `PendingReplacement(${game})` ||
@@ -14424,7 +14433,7 @@ async function verifyStaleReplacementAfterSuccess({
     objectLabel: "Slot 7 / player-mira",
     outcomeLabel: "Reject stale replacement",
     outgoingPersonaId: staleOutgoingPersonaId,
-    incomingPrincipalUserId: "player-rowan",
+    incomingPrincipalId: "player-rowan",
   });
   const apiStateAfterReject = await fetchHostConsoleState({
     apiBaseUrl,
@@ -14445,9 +14454,9 @@ async function verifyStaleReplacementAfterSuccess({
         ?.ProcessReplacement?.outgoing_persona_id,
     ) !== true ||
     replacementAttemptVisibleReject(attempt, staleActionId) !== true ||
-    attempt.hostProjectionAfterReject?.assignedPrincipalUserId !== "player-rowan" ||
+    attempt.hostProjectionAfterReject?.assignedPrincipalId !== "player-rowan" ||
     apiSlotAfterReject?.slot_id !== "slot-7" ||
-    apiSlotAfterReject?.assigned_principal_user_id !== "player-rowan" ||
+    apiSlotAfterReject?.assigned_principal_id !== "player-rowan" ||
     staleOutgoingPlayer?.recoveredCommandState?.actorStatus !== "replaced" ||
     staleOutgoingPlayer?.buttonsDisabled !== true
   ) {
@@ -14489,7 +14498,7 @@ async function verifyReplacementIdempotentRetry({
   await hostPage.waitForFunction(
     () =>
       window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
-      window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+      window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
         "player-rowan",
   );
   const hostProjectionAfterRetry = await hostPage.evaluate(
@@ -14512,13 +14521,13 @@ async function verifyReplacementIdempotentRetry({
     command?.ProcessReplacement?.game !== game ||
     command?.ProcessReplacement?.slot !== "slot-7" ||
     isOpaquePersonaId(command?.ProcessReplacement?.outgoing_persona_id) !== true ||
-    command?.ProcessReplacement?.incoming_principal_user_id !== "player-rowan" ||
+    command?.ProcessReplacement?.incoming_principal_id !== "player-rowan" ||
     sameStreamSeqs !== true ||
-    apiSlot?.assigned_principal_user_id !== "player-rowan" ||
+    apiSlot?.assigned_principal_id !== "player-rowan" ||
     apiSlotAfterRetry?.slot_id !== "slot-7" ||
-    apiSlotAfterRetry?.assigned_principal_user_id !== "player-rowan" ||
+    apiSlotAfterRetry?.assigned_principal_id !== "player-rowan" ||
     hostProjectionAfterRetry?.slotId !== "slot-7" ||
-    hostProjectionAfterRetry?.assignedPrincipalUserId !== "player-rowan" ||
+    hostProjectionAfterRetry?.assignedPrincipalId !== "player-rowan" ||
     !hostProjectionAfterRetry?.historyLabel?.includes("slot-7")
   ) {
     throw new Error(
@@ -14560,7 +14569,7 @@ async function dispatchHostReplacementAttempt({
   objectLabel,
   outcomeLabel,
   outgoingPersonaId,
-  incomingPrincipalUserId,
+  incomingPrincipalId,
 }) {
   await hostPage.evaluate(
     async ({
@@ -14570,7 +14579,7 @@ async function dispatchHostReplacementAttempt({
       objectLabel: browserObjectLabel,
       outcomeLabel: browserOutcomeLabel,
       outgoingPersonaId: browserOutgoingPersonaId,
-      incomingPrincipalUserId: browserIncomingPrincipalUserId,
+      incomingPrincipalId: browserIncomingPrincipalId,
     }) => {
       await window.__fmarchDispatchHostAction?.({
         type: "host-action/dispatch",
@@ -14583,7 +14592,7 @@ async function dispatchHostReplacementAttempt({
           gameId,
           slotId: "slot-7",
           outgoingPersonaId: browserOutgoingPersonaId,
-          incomingPrincipalUserId: browserIncomingPrincipalUserId,
+          incomingPrincipalId: browserIncomingPrincipalId,
         },
         confirmationTrace: {
           kind: "confirmation-command-trace",
@@ -14602,7 +14611,7 @@ async function dispatchHostReplacementAttempt({
       objectLabel,
       outcomeLabel,
       outgoingPersonaId,
-      incomingPrincipalUserId,
+      incomingPrincipalId,
     },
   );
   await hostPage.waitForFunction(
@@ -14809,7 +14818,10 @@ async function verifyIncomingReplacementPlayer({
     await page.waitForFunction(
       (expectedBody) =>
         window.__fmarchPlayerProjection?.thread?.posts?.some(
-          (post) => post.body === expectedBody && post.authorSlot === "slot-7",
+          (post) =>
+            post.body === expectedBody &&
+            post.author?.kind === "slot" &&
+            post.author.slotId === "slot-7",
         ),
       rowanPostBody,
     );
@@ -14876,7 +14888,8 @@ async function verifyIncomingReplacementPlayer({
       postStatus?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
       postStatus?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
         "slot-7" ||
-      rowanProjectedPost?.authorSlot !== "slot-7" ||
+      rowanProjectedPost?.author?.kind !== "slot" ||
+      rowanProjectedPost?.author?.slotId !== "slot-7" ||
       commandState?.voteTargets?.some(
         (target) =>
           target.kind === "slot" && target.slotId === replacementVoteTarget.slotId,
@@ -15024,7 +15037,10 @@ async function verifyReplacementStalePrivateChannel({
   await rowanPage.waitForFunction(
     (expectedBody) =>
       window.__fmarchPlayerProjection?.thread?.posts?.some(
-        (post) => post.body === expectedBody && post.authorSlot === "slot-7",
+        (post) =>
+          post.body === expectedBody &&
+          post.author?.kind === "slot" &&
+          post.author.slotId === "slot-7",
       ),
     rowanPostBody,
   );
@@ -15517,7 +15533,10 @@ async function verifyReplacementSessionRefreshRecovery({
   await page.waitForFunction(
     (expectedBody) =>
       window.__fmarchPlayerProjection?.thread?.posts?.some(
-        (post) => post.body === expectedBody && post.authorSlot === "slot-7",
+        (post) =>
+          post.body === expectedBody &&
+          post.author?.kind === "slot" &&
+          post.author.slotId === "slot-7",
       ),
     refreshPostBody,
   );
@@ -15564,7 +15583,8 @@ async function verifyReplacementSessionRefreshRecovery({
     postStatus?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
     postStatus?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
       "slot-7" ||
-    rowanProjectedPost?.authorSlot !== "slot-7" ||
+    rowanProjectedPost?.author?.kind !== "slot" ||
+    rowanProjectedPost?.author?.slotId !== "slot-7" ||
     privateReceiptIsolation.targetKillVisible !== false ||
     privateReceiptIsolation.actionResultVisible !== false
   ) {
@@ -19515,7 +19535,9 @@ async function verifyRoleReconnectRecovery({
     ({ expectedBody, expectedActorSlot }) =>
       window.__fmarchPlayerProjection?.thread?.posts?.some(
         (post) =>
-          post.body === expectedBody && post.authorSlot === expectedActorSlot,
+          post.body === expectedBody &&
+          post.author?.kind === "slot" &&
+          post.author.slotId === expectedActorSlot,
       ),
     { expectedBody: reconnectPostBody, expectedActorSlot: actorSlot },
   );
@@ -19539,7 +19561,10 @@ async function verifyRoleReconnectRecovery({
     postVisibleStatus,
     recoveredPostBody: reconnectPostBody,
     recoveredSnapshotContainsPost: recoveredProjection?.thread?.posts?.some(
-      (post) => post.body === reconnectPostBody && post.authorSlot === actorSlot,
+      (post) =>
+        post.body === reconnectPostBody &&
+        post.author?.kind === "slot" &&
+        post.author.slotId === actorSlot,
     ),
     recoveredCommandState: recoveredProjection?.commandState ?? null,
   };
@@ -20896,7 +20921,10 @@ async function verifyStalePlayerPostAfterPhaseClosure({
     await playerEntry.page.waitForFunction(
       (expectedBody) =>
         window.__fmarchPlayerProjection?.thread?.posts?.some(
-          (post) => post.body === expectedBody && post.authorSlot === "slot-7",
+          (post) =>
+            post.body === expectedBody &&
+            post.author?.kind === "slot" &&
+            post.author.slotId === "slot-7",
         ) &&
         window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
         window.__fmarchPlayerProjection?.commandState?.currentVote === null &&
@@ -20964,7 +20992,8 @@ async function verifyStalePlayerPostAfterPhaseClosure({
       dispatchPlan?.projectionRefreshKeys?.includes("votecount") !== true ||
       dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
       dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") !== true ||
-      projectedPost?.authorSlot !== "slot-7" ||
+      projectedPost?.author?.kind !== "slot" ||
+      projectedPost?.author?.slotId !== "slot-7" ||
       commandStateAfterAck?.phase?.phaseId !== "D01" ||
       commandStateAfterAck?.phase?.locked !== true ||
       commandStateAfterAck?.currentVote !== null ||
@@ -20988,7 +21017,10 @@ async function verifyStalePlayerPostAfterPhaseClosure({
       apiCommandStateAfterAck?.vote_targets?.length !== 0 ||
       apiCommandStateAfterAck?.current_vote !== null ||
       !apiThreadAfterAck.posts?.some(
-        (post) => post.body === postBody && post.author_slot === "slot-7",
+        (post) =>
+          post.body === postBody &&
+          post.author?.kind === "slot" &&
+          post.author.slot_id === "slot-7",
       ) ||
       normalizedVotecountRows(apiVotecountAfterAck).some(
         (row) => row.phaseId === "D01" && row.target === "slot-2" && row.count !== 3,
@@ -22138,7 +22170,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
       hostEntry.page.waitForFunction(
         ({ actorSlot, principalUserId }) =>
           window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-          window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+          window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
             principalUserId,
         {
           actorSlot: scenario.actorSlot,
@@ -22201,7 +22233,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
               game: raceGame,
               slot: scenario.actorSlot,
             }),
-            incoming_principal_user_id: scenario.replacementPrincipalUserId,
+            incoming_principal_id: scenario.replacementPrincipalUserId,
           },
         },
       }),
@@ -22229,7 +22261,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
       Number.isInteger(replacementSeq) &&
       postSeq < replacementSeq;
     if (
-      setupHostReplacement?.assignedPrincipalUserId !==
+      setupHostReplacement?.assignedPrincipalId !==
         scenario.staleOutgoingPrincipalUserId ||
       setupCommandState?.actorSlot !== scenario.actorSlot ||
       setupCommandState?.actorStatus !== "alive" ||
@@ -22251,7 +22283,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
           ?.outgoing_persona_id,
       ) !== true ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_id !== scenario.replacementPrincipalUserId ||
       post?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
         scenario.channelId ||
       post?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
@@ -22279,7 +22311,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
     await hostEntry.page.waitForFunction(
       ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
           principalUserId,
       {
         actorSlot: scenario.actorSlot,
@@ -22335,9 +22367,9 @@ async function verifyConcurrentReplacementPrivatePostRace({
             button.action?.startsWith("submit_action")) &&
           button.disabled === false,
       ) ||
-      hostReplacementAfterRace?.assignedPrincipalUserId !==
+      hostReplacementAfterRace?.assignedPrincipalId !==
         scenario.replacementPrincipalUserId ||
-      apiSlotAfterRace?.assigned_principal_user_id !== scenario.replacementPrincipalUserId ||
+      apiSlotAfterRace?.assigned_principal_id !== scenario.replacementPrincipalUserId ||
       staleRoute.status !== 403 ||
       staleRoute.responseStatus !== 403 ||
       !staleRoute.message.includes("requires scoped channel capability") ||
@@ -22453,7 +22485,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
     await hostEntry.page.waitForFunction(
       ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
           principalUserId,
       {
         actorSlot: scenario.actorSlot,
@@ -22473,7 +22505,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
             game: privatePostGame,
             slot: scenario.actorSlot,
           }),
-          incoming_principal_user_id: scenario.replacementPrincipalUserId,
+          incoming_principal_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -22486,7 +22518,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
     await hostEntry.page.waitForFunction(
       ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
           principalUserId,
       {
         actorSlot: scenario.actorSlot,
@@ -22587,7 +22619,10 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
     await replacementEntry.page.waitForFunction(
       ({ expectedBody, actorSlot }) =>
         window.__fmarchPlayerProjection?.thread?.posts?.some(
-          (post) => post.body === expectedBody && post.authorSlot === actorSlot,
+          (post) =>
+            post.body === expectedBody &&
+            post.author?.kind === "slot" &&
+            post.author.slotId === actorSlot,
         ) &&
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
         window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
@@ -22693,7 +22728,10 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
         window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
         window.__fmarchPlayerProjection?.thread?.posts?.some(
-          (post) => post.body === expectedPostBody && post.authorSlot === actorSlot,
+          (post) =>
+            post.body === expectedPostBody &&
+            post.author?.kind === "slot" &&
+            post.author.slotId === actorSlot,
         ) &&
         document
           .querySelector("[data-testid='player-command-channel-context']")
@@ -22753,7 +22791,9 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       ({ expectedBody, expectedActorSlot }) =>
         window.__fmarchPlayerProjection?.thread?.posts?.some(
           (post) =>
-            post.body === expectedBody && post.authorSlot === expectedActorSlot,
+            post.body === expectedBody &&
+            post.author?.kind === "slot" &&
+            post.author.slotId === expectedActorSlot,
         ) &&
         window.__fmarchPlayerProjection?.commandState?.actorSlot === expectedActorSlot &&
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
@@ -22821,7 +22861,8 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
         reconnectedProjection?.thread?.posts?.some(
           (post) =>
             post.body === reconnectPostBody &&
-            post.authorSlot === scenario.actorSlot,
+            post.author?.kind === "slot" &&
+            post.author.slotId === scenario.actorSlot,
         ) === true,
       reconnectChannelContextAfterRecovery,
       reconnectButtonsAfterRecovery,
@@ -22836,8 +22877,8 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
-      hostReplacementAfterProcess?.assignedPrincipalUserId !==
+        ?.incoming_principal_id !== scenario.replacementPrincipalUserId ||
+      hostReplacementAfterProcess?.assignedPrincipalId !==
         scenario.replacementPrincipalUserId ||
       commandStateBeforeClose?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeClose?.actorStatus !== "alive" ||
@@ -22880,7 +22921,8 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       channelContextAfterAck.channelId !== scenario.channelId ||
       channelContextAfterAck.actorSlot !== scenario.actorSlot ||
       channelContextAfterAck.actorStatus !== "alive" ||
-      projectedPost?.authorSlot !== scenario.actorSlot ||
+      projectedPost?.author?.kind !== "slot" ||
+      projectedPost?.author?.slotId !== scenario.actorSlot ||
       buttonsAfterAck.some((button) => button.action?.startsWith("submit_vote")) ||
       buttonsAfterAck.some(
         (button) => button.action === "withdraw_vote" && button.disabled === false,
@@ -23090,7 +23132,7 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
     await hostEntry.page.waitForFunction(
       ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
           principalUserId,
       {
         actorSlot: scenario.actorSlot,
@@ -23110,7 +23152,7 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
             game: completeGame,
             slot: scenario.actorSlot,
           }),
-          incoming_principal_user_id: scenario.replacementPrincipalUserId,
+          incoming_principal_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -23123,7 +23165,7 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
     await hostEntry.page.waitForFunction(
       ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
           principalUserId,
       {
         actorSlot: scenario.actorSlot,
@@ -23388,8 +23430,8 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
-      hostReplacementAfterProcess?.assignedPrincipalUserId !==
+        ?.incoming_principal_id !== scenario.replacementPrincipalUserId ||
+      hostReplacementAfterProcess?.assignedPrincipalId !==
         scenario.replacementPrincipalUserId ||
       commandStateBeforeClose?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeClose?.gameCompleted !== false ||
@@ -23614,7 +23656,7 @@ async function verifyConcurrentReplacementVoteRace({
       hostEntry.page.waitForFunction(
         ({ actorSlot, principalUserId }) =>
           window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-          window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+          window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
             principalUserId,
         {
           actorSlot: scenario.actorSlot,
@@ -23665,7 +23707,7 @@ async function verifyConcurrentReplacementVoteRace({
               game: raceGame,
               slot: scenario.actorSlot,
             }),
-            incoming_principal_user_id: scenario.replacementPrincipalUserId,
+            incoming_principal_id: scenario.replacementPrincipalUserId,
           },
         },
       }),
@@ -23693,7 +23735,7 @@ async function verifyConcurrentReplacementVoteRace({
       Number.isInteger(replacementSeq) &&
       voteSeq < replacementSeq;
     if (
-      setupHostReplacement?.assignedPrincipalUserId !==
+      setupHostReplacement?.assignedPrincipalId !==
         scenario.staleOutgoingPrincipalUserId ||
       setupCommandState?.actorSlot !== scenario.actorSlot ||
       setupCommandState?.actorStatus !== "alive" ||
@@ -23716,7 +23758,7 @@ async function verifyConcurrentReplacementVoteRace({
           ?.outgoing_persona_id,
       ) !== true ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_id !== scenario.replacementPrincipalUserId ||
       vote?.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !==
         scenario.actorSlot ||
       vote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
@@ -23744,7 +23786,7 @@ async function verifyConcurrentReplacementVoteRace({
     await hostEntry.page.waitForFunction(
       ({ actorSlot, principalUserId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
-        window.__fmarchHostProjection?.replacement?.assignedPrincipalUserId ===
+        window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
           principalUserId,
       {
         actorSlot: scenario.actorSlot,
@@ -23779,9 +23821,9 @@ async function verifyConcurrentReplacementVoteRace({
     if (
       commandStateAfterRace?.status !== 403 ||
       commandStateAfterRace?.error !== scenario.rejectionError ||
-      hostReplacementAfterRace?.assignedPrincipalUserId !==
+      hostReplacementAfterRace?.assignedPrincipalId !==
         scenario.replacementPrincipalUserId ||
-      apiSlotAfterRace?.assigned_principal_user_id !== scenario.replacementPrincipalUserId ||
+      apiSlotAfterRace?.assigned_principal_id !== scenario.replacementPrincipalUserId ||
       (voteAcked === true && targetVotecount?.count !== 1) ||
       (voteAcked === false && targetVotecount !== undefined)
     ) {
@@ -23962,7 +24004,7 @@ async function verifyConcurrentReplacementActionRace({
               game: raceGame,
               slot: scenario.actorSlot,
             }),
-            incoming_principal_user_id: scenario.replacementPrincipalUserId,
+            incoming_principal_id: scenario.replacementPrincipalUserId,
           },
         },
       }),
@@ -23992,7 +24034,7 @@ async function verifyConcurrentReplacementActionRace({
     if (
       setupHostPhase?.id !== scenario.phaseId ||
       setupHostPhase?.locked !== false ||
-      setupSlot?.assigned_principal_user_id !== scenario.staleOutgoingPrincipalUserId ||
+      setupSlot?.assigned_principal_id !== scenario.staleOutgoingPrincipalUserId ||
       setupCommandState?.actorSlot !== scenario.actorSlot ||
       setupCommandState?.actorStatus !== "alive" ||
       setupCommandState?.phase?.phaseId !== scenario.phaseId ||
@@ -24014,7 +24056,7 @@ async function verifyConcurrentReplacementActionRace({
           ?.outgoing_persona_id,
       ) !== true ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_id !== scenario.replacementPrincipalUserId ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
         scenario.actorSlot ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
@@ -24132,7 +24174,7 @@ async function verifyConcurrentReplacementActionRace({
       staleRetry?.state !== "reject" ||
       staleRetry?.error !== scenario.rejectionError ||
       staleRetry?.serverEnvelope?.body?.kind !== "Reject" ||
-      apiSlotAfterRace?.assigned_principal_user_id !== scenario.replacementPrincipalUserId ||
+      apiSlotAfterRace?.assigned_principal_id !== scenario.replacementPrincipalUserId ||
       apiCurrentCommandStateStatus.status !== 200 ||
       currentCommandStateAfterRace?.actor_slot !== scenario.actorSlot ||
       currentCommandStateAfterRace?.actor_status !== "alive" ||
@@ -24289,7 +24331,7 @@ async function verifyIncomingReplacementActionSubmission({
             game: actionGame,
             slot: scenario.actorSlot,
           }),
-          incoming_principal_user_id: scenario.replacementPrincipalUserId,
+          incoming_principal_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -24447,12 +24489,12 @@ async function verifyIncomingReplacementActionSubmission({
     if (
       setupHostPhase?.id !== scenario.phaseId ||
       setupHostPhase?.locked !== false ||
-      setupSlot?.assigned_principal_user_id !== scenario.staleOutgoingPrincipalUserId ||
+      setupSlot?.assigned_principal_id !== scenario.staleOutgoingPrincipalUserId ||
       replacement?.state !== "ack" ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_id !== scenario.replacementPrincipalUserId ||
       outgoingCommandStateAfterReplacement.status !== 403 ||
       outgoingCommandStateAfterReplacement.body?.error !== scenario.staleOutgoingError ||
       currentCommandStateBeforeAction?.actorSlot !== scenario.actorSlot ||
@@ -24636,7 +24678,7 @@ async function verifyReplacementActionReconnectRecovery({
             game: actionGame,
             slot: scenario.actorSlot,
           }),
-          incoming_principal_user_id: scenario.replacementPrincipalUserId,
+          incoming_principal_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -24779,7 +24821,7 @@ async function verifyReplacementActionReconnectRecovery({
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_id !== scenario.replacementPrincipalUserId ||
       commandStateBeforeAction?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeAction?.actions?.some(
         (candidate) => candidate.templateId === scenario.templateId,
@@ -24922,7 +24964,7 @@ async function verifyStaleReplacementActionAfterResolve({
               game: actionGame,
               slot: scenario.actorSlot,
             }),
-            incoming_principal_user_id: scenario.replacementPrincipalUserId,
+            incoming_principal_id: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -25100,7 +25142,7 @@ async function verifyStaleReplacementActionAfterResolve({
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
         scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_principal_user_id !== scenario.replacementPrincipalUserId ||
+        ?.incoming_principal_id !== scenario.replacementPrincipalUserId ||
       commandStateBeforeClose?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeClose?.actorStatus !== "alive" ||
       commandStateBeforeClose?.phase?.phaseId !== scenario.phaseId ||
@@ -26045,7 +26087,8 @@ async function fetchHostConsoleState({
 }
 
 const isOpaquePersonaId = (value) =>
-  typeof value === "string" && /^gp_[0-9a-f-]{36}$/i.test(value);
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 async function fetchCurrentSlotPersonaId({ apiBaseUrl, game, slot }) {
   const state = await fetchHostConsoleState({ apiBaseUrl, game, slot });

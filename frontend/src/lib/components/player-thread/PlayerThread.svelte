@@ -76,13 +76,7 @@
     >
       <header>
         <div class="player-surface__post-identity">
-          <strong>{post.author.name}</strong>
-          {#if post.author.seat !== null}
-            <span
-              class="player-surface__post-seat"
-              data-testid={`thread-post-seat-${post.seq}`}
-            >{post.author.seat}</span>
-          {/if}
+          <strong>{post.authorLabel}</strong>
         </div>
         <div class="player-surface__post-meta">
           {#if post.permalink !== null}
@@ -306,7 +300,6 @@
     min-inline-size: 0;
   }
 
-  .player-surface__post-seat,
   .player-surface__post-permalink {
     color: var(--fm-ink-subtle);
     font-size: 13px;

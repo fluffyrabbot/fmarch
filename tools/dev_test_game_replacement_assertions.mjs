@@ -6,7 +6,7 @@ export function replacementCommandEnvelopeMatches(commandStatus, scenario, game)
     command?.slot === scenario.actorSlot &&
     typeof command?.outgoing_persona_id === "string" &&
     command.outgoing_persona_id.trim() !== "" &&
-    command?.incoming_principal_user_id === scenario.replacementPrincipalUserId &&
+    command?.incoming_principal_id === scenario.replacementPrincipalUserId &&
     body?.principal_user_id === undefined
   );
 }
@@ -27,13 +27,13 @@ export function replacementCurrentOwnerMatches(
     (hostProjection === null ||
       ((hostProjection?.slotId === undefined ||
         hostProjection.slotId === scenario.actorSlot) &&
-        hostProjection?.assignedPrincipalUserId ===
+        hostProjection?.assignedPrincipalId ===
           scenario.replacementPrincipalUserId &&
         (hostProjection?.historyLabel === undefined ||
           hostProjection.historyLabel.includes(scenario.actorSlot)))) &&
     (apiSlot === null ||
       ((apiSlot?.slot_id === undefined || apiSlot.slot_id === scenario.actorSlot) &&
-        apiSlot?.assigned_principal_user_id === scenario.replacementPrincipalUserId))
+        apiSlot?.assigned_principal_id === scenario.replacementPrincipalUserId))
   );
 }
 

@@ -220,8 +220,9 @@ async fn resolve_with(
 
     let occupied_slots: BTreeSet<String> = sqlx::query(
         "SELECT o.slot_id FROM slot_occupancy_epoch o \
-         JOIN game_persona_private p ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
-         WHERE o.game_id = $1 AND p.principal_user_id = $2 AND o.ended_seq IS NULL ORDER BY o.slot_id",
+         JOIN game_persona_subject_binding binding ON binding.game_id = o.game_id AND binding.persona_id = o.persona_id AND binding.lifecycle = 'active' \
+         JOIN privacy_subject subject ON subject.subject_id = binding.subject_id \
+         WHERE o.game_id = $1 AND subject.principal_user_id = $2 AND o.ended_seq IS NULL ORDER BY o.slot_id",
     )
     .bind(game)
     .bind(user)
@@ -237,9 +238,10 @@ async fn resolve_with(
     let dead_occupant: bool = sqlx::query_scalar(
         "SELECT EXISTS(\
             SELECT 1 FROM slot_occupancy_epoch o \
-            JOIN game_persona_private p ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
+            JOIN game_persona_subject_binding binding ON binding.game_id = o.game_id AND binding.persona_id = o.persona_id AND binding.lifecycle = 'active' \
+            JOIN privacy_subject subject ON subject.subject_id = binding.subject_id \
             JOIN slot_state s ON s.game_id = o.game_id AND s.slot_id = o.slot_id \
-            WHERE o.game_id = $1 AND p.principal_user_id = $2 AND o.ended_seq IS NULL AND NOT s.alive\
+            WHERE o.game_id = $1 AND subject.principal_user_id = $2 AND o.ended_seq IS NULL AND NOT s.alive\
          )",
     )
     .bind(game)
@@ -253,8 +255,9 @@ async fn resolve_with(
     let channels = sqlx::query(
         "SELECT DISTINCT m.channel_id FROM private_channel_member m \
          JOIN slot_occupancy_epoch o ON o.game_id = m.game_id AND o.slot_id = m.slot_id AND o.ended_seq IS NULL \
-         JOIN game_persona_private p ON p.game_id = o.game_id AND p.persona_id = o.persona_id \
-         WHERE m.game_id = $1 AND p.principal_user_id = $2 ORDER BY m.channel_id",
+         JOIN game_persona_subject_binding binding ON binding.game_id = o.game_id AND binding.persona_id = o.persona_id AND binding.lifecycle = 'active' \
+         JOIN privacy_subject subject ON subject.subject_id = binding.subject_id \
+         WHERE m.game_id = $1 AND subject.principal_user_id = $2 ORDER BY m.channel_id",
     )
     .bind(game)
     .bind(user)

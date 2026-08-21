@@ -92,7 +92,7 @@ async function seed(api) {
   let id = 1;
   await command(api, id++, memberBootstrapToken, { CreateGame: { game, pack: "mafiascum" } });
   await command(api, id++, memberToken, { AddSlot: { game, slot: "slot_1" } });
-  await command(api, id++, memberToken, { SeatPersona: { game, slot: "slot_1", principal_user_id: member, public_name: member } });
+  await command(api, id++, memberToken, { SeatPersona: { game, slot: "slot_1", principal_id: member, public_name: member } });
   await command(api, id++, memberToken, { StartGame: { game, phase: "D01" } });
   await command(api, id++, memberToken, { SubmitPost: { game, channel_id: "main", actor_slot: "slot_1", body: "Cobalt moderation proof message", media: [] } });
   const page = await json(`${api}/games/${game}`);

@@ -219,3 +219,22 @@ test("scratch server proofs isolate disposable subject authorities from repo sta
     assert.match(source, /rm\(subjectKeyRoot, \{ recursive: true, force: true \}\)/);
   }
 });
+
+test("auth invite scratch proof owns a deterministic database capacity budget", async () => {
+  const source = await readFile("tools/auth_invite_role_proof.mjs", "utf8");
+
+  assert.match(
+    source,
+    /const scratchApiDatabaseCapacity = Object\.freeze\(\{\s*maxConnections: "32",\s*acquireTimeoutMs: "3000",\s*\}\);/s,
+  );
+  assert.match(
+    source,
+    /FMARCH_DB_MAX_CONNECTIONS:\s*scratchApiDatabaseCapacity\.maxConnections/,
+  );
+  assert.match(
+    source,
+    /FMARCH_DB_ACQUIRE_TIMEOUT_MS:\s*scratchApiDatabaseCapacity\.acquireTimeoutMs/,
+  );
+  assert.doesNotMatch(source, /process\.env\.FMARCH_DB_MAX_CONNECTIONS/);
+  assert.doesNotMatch(source, /process\.env\.FMARCH_DB_ACQUIRE_TIMEOUT_MS/);
+});

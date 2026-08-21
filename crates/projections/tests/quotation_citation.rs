@@ -194,7 +194,7 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
                 1,
                 serde_json::json!({
                     "channel_id": "main",
-                    "slot_or_user": { "slot": "slot_1" },
+                    "author": { "kind": "slot", "slot_id": "slot_1" },
                     "body": "Alpha signal analysis",
                     "phase_id": "D01"
                 }),
@@ -220,7 +220,7 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
             1,
             serde_json::json!({
                 "channel_id": "main",
-                "slot_or_user": { "slot": "slot_1" },
+                "author": { "kind": "slot", "slot_id": "slot_1" },
                 "body": "Answering that claim",
                 "phase_id": "D01",
                 "quotations": [{
@@ -246,9 +246,7 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     rebuild(&pool, game).await.unwrap();
     assert_eq!(before, public_citation_rows(&pool, game).await);
 
-    let page = public_thread_view(&pool, game, None, 10, None)
-        .await
-        .unwrap();
+    let page = public_thread_view(&pool, game, None, 10).await.unwrap();
     assert_eq!(page.posts.len(), 2);
     assert_eq!(page.posts[0].citation_count, 1);
     assert!(page.posts[0].quotations.is_empty());
@@ -262,7 +260,6 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
             source_seq: quoted_seq,
         },
         Some("main"),
-        None,
         5,
     )
     .await
@@ -276,7 +273,7 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
 
     let quoting_seq = page.posts[1].source_seq;
     let off_page =
-        off_page_game_citation_counts(&pool, game, "main", &[quoting_seq], &[quoting_seq], None)
+        off_page_game_citation_counts(&pool, game, "main", &[quoting_seq], &[quoting_seq])
             .await
             .unwrap();
     assert_eq!(off_page, vec![(quoted_seq, 1)]);
@@ -286,7 +283,6 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
         "main",
         &[quoting_seq],
         &[quoted_seq, quoting_seq],
-        None,
     )
     .await
     .unwrap()

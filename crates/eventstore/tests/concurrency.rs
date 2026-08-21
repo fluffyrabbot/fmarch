@@ -133,7 +133,7 @@ fn private_post(body: &str) -> EventInput {
         1,
         serde_json::json!({
             "channel_id": "private:mafia",
-            "slot_or_user": { "slot": "slot_1" },
+            "author": { "kind": "slot", "slot_id": "slot_1" },
             "body": body,
             "phase_id": "D01",
         }),

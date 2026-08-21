@@ -897,7 +897,7 @@ async fn assemble_personal_export(
     let profiles = personal_profile_export(tx, principal_user_id).await?;
     let personas = json_scalar(
         tx,
-        "SELECT jsonb_agg(jsonb_build_object('game_id', game_id, 'persona_id', persona_id, 'registered_seq', registered_seq) ORDER BY game_id, persona_id)::text FROM game_persona_private WHERE principal_user_id = $1",
+        "SELECT jsonb_agg(jsonb_build_object('game_id', persona.game_id, 'persona_id', persona.persona_id, 'registered_seq', persona.registered_seq) ORDER BY persona.game_id, persona.persona_id)::text FROM game_persona AS persona JOIN game_persona_subject_binding AS binding USING (game_id, persona_id) JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1 AND binding.lifecycle = 'active'",
         principal_user_id,
     )
     .await?;
@@ -999,24 +999,35 @@ async fn apply_retained_authorship_redaction(
         .bind(pseudonym)
         .execute(&mut **tx)
         .await?;
-    sqlx::query("INSERT INTO game_persona_redaction (game_id, persona_id, replacement_public_name, redacted_at) SELECT game_id, persona_id, $2, $3 FROM game_persona_private WHERE principal_user_id = $1 ON CONFLICT (game_id, persona_id) DO UPDATE SET replacement_public_name = EXCLUDED.replacement_public_name")
+    sqlx::query("INSERT INTO game_persona_redaction (game_id, persona_id, replacement_public_name, redacted_at) SELECT binding.game_id, binding.persona_id, $2, $3 FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1 ON CONFLICT (game_id, persona_id) DO UPDATE SET replacement_public_name = EXCLUDED.replacement_public_name")
         .bind(principal_user_id).bind(pseudonym).bind(redacted_at).execute(&mut **tx).await?;
-    sqlx::query("DELETE FROM game_persona_name_claim WHERE (game_id, persona_id) IN (SELECT game_id, persona_id FROM game_persona_private WHERE principal_user_id = $1)")
+    sqlx::query("DELETE FROM game_persona_name_claim WHERE (game_id, persona_id) IN (SELECT binding.game_id, binding.persona_id FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1)")
         .bind(principal_user_id).execute(&mut **tx).await?;
-    sqlx::query("UPDATE game_persona_name_history AS history SET public_name = $2 FROM game_persona_private AS private WHERE private.principal_user_id = $1 AND history.game_id = private.game_id AND history.persona_id = private.persona_id")
-        .bind(principal_user_id).bind(pseudonym).execute(&mut **tx).await?;
-    sqlx::query("UPDATE game_persona_public AS public SET current_public_name = redaction.replacement_public_name, renamed_seq = COALESCE(public.renamed_seq, public.registered_seq) FROM game_persona_redaction AS redaction WHERE public.game_id = redaction.game_id AND public.persona_id = redaction.persona_id AND redaction.replacement_public_name = $1")
-        .bind(pseudonym).execute(&mut **tx).await?;
+    // The randomized alias is public presentation, never an authority token,
+    // but it still owns its normalized game-local name. Retain that invariant
+    // after releasing the erased private names so a later command cannot make
+    // two public personae present as the same identity.
     sqlx::query(
-        "UPDATE game_persona_private SET principal_user_id = $2, current_claim_id = NULL WHERE principal_user_id = $1",
+        "INSERT INTO game_persona_name_claim (game_id, normalized_name, persona_id, first_claimed_seq) \
+         SELECT binding.game_id, lower(btrim($2)), binding.persona_id, persona.registered_seq \
+         FROM game_persona_subject_binding AS binding \
+         JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id \
+         JOIN game_persona AS persona USING (game_id, persona_id) \
+         WHERE subject.principal_user_id = $1",
     )
     .bind(principal_user_id)
     .bind(pseudonym)
     .execute(&mut **tx)
     .await?;
-    sqlx::query("UPDATE thread_view SET author_user = $2 WHERE author_user = $1")
+    sqlx::query("UPDATE game_persona_name_history AS history SET public_name = $2 FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1 AND history.game_id = binding.game_id AND history.persona_id = binding.persona_id")
+        .bind(principal_user_id).bind(pseudonym).execute(&mut **tx).await?;
+    sqlx::query("UPDATE game_persona_public AS public SET current_public_name = $2, renamed_seq = COALESCE(public.renamed_seq, public.registered_seq) FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1 AND public.game_id = binding.game_id AND public.persona_id = binding.persona_id")
+    .bind(principal_user_id)
+    .bind(pseudonym)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query("UPDATE game_persona_subject_binding AS binding SET lifecycle = 'redacted', current_claim_id = NULL FROM privacy_subject AS subject WHERE subject.principal_user_id = $1 AND subject.subject_id = binding.subject_id AND binding.lifecycle = 'active'")
         .bind(principal_user_id)
-        .bind(pseudonym)
         .execute(&mut **tx)
         .await?;
     Ok(())

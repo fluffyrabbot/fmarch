@@ -1642,7 +1642,7 @@ async fn subject_database_presence_batch(
                 UNION ALL SELECT 1 FROM member_lifecycle_projection WHERE subject_id = journal.subject_id
                 UNION ALL SELECT 1 FROM member_personal_export WHERE subject_id = journal.subject_id
                 UNION ALL SELECT 1 FROM member_profile WHERE subject_id = journal.subject_id
-                UNION ALL SELECT 1 FROM game_persona_private WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM game_persona_subject_binding WHERE subject_id = journal.subject_id
             )
         FROM UNNEST($1::uuid[]) AS journal(subject_id)
         LEFT JOIN privacy_subject AS subject USING (subject_id)
@@ -2092,7 +2092,6 @@ async fn finalize_subject_erasure(
         &mut tx,
         record.subject_id,
         &record.replacement_alias,
-        Some(principal),
         record.destroyed_at,
     )
     .await?;
@@ -2293,7 +2292,7 @@ pub async fn verify_or_bind_database_authority(
                 UNION ALL SELECT 1 FROM platform_principal
                 UNION ALL SELECT 1 FROM member_lifecycle_event
                 UNION ALL SELECT 1 FROM member_profile
-                UNION ALL SELECT 1 FROM game_persona_private
+                UNION ALL SELECT 1 FROM game_persona_subject_binding
                 UNION ALL SELECT 1 FROM events
             )
             "#,
@@ -2519,7 +2518,6 @@ async fn scrub_subject_projections(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     subject_id: SubjectId,
     alias: &str,
-    principal: Option<&str>,
     destroyed_at: i64,
 ) -> Result<(), SubjectPrivacyError> {
     let database_error = |error: sqlx::Error| SubjectPrivacyError::Storage(error.to_string());
@@ -2532,24 +2530,31 @@ async fn scrub_subject_projections(
         .bind(subject_id.as_uuid()).bind(alias).execute(&mut **tx).await.map_err(database_error)?;
     sqlx::query("DELETE FROM publication_surface WHERE surface_id IN (SELECT profile_id FROM member_profile WHERE subject_id = $1)")
         .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;
-    sqlx::query("DELETE FROM game_persona_name_claim WHERE (game_id, persona_id) IN (SELECT game_id, persona_id FROM game_persona_private WHERE subject_id = $1)")
+    sqlx::query("DELETE FROM game_persona_name_claim WHERE (game_id, persona_id) IN (SELECT game_id, persona_id FROM game_persona_subject_binding WHERE subject_id = $1)")
         .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;
-    sqlx::query("UPDATE game_persona_name_history AS history SET public_name = $2 FROM game_persona_private AS private WHERE private.subject_id = $1 AND history.game_id = private.game_id AND history.persona_id = private.persona_id")
+    // Keep the redaction alias in the public uniqueness projection while
+    // releasing the erased private presentation. It is deliberately not
+    // carried into any authority-bearing column.
+    sqlx::query(
+        "INSERT INTO game_persona_name_claim (game_id, normalized_name, persona_id, first_claimed_seq) \
+         SELECT binding.game_id, lower(btrim($2)), binding.persona_id, persona.registered_seq \
+         FROM game_persona_subject_binding AS binding \
+         JOIN game_persona AS persona USING (game_id, persona_id) \
+         WHERE binding.subject_id = $1",
+    )
+    .bind(subject_id.as_uuid())
+    .bind(alias)
+    .execute(&mut **tx)
+    .await
+    .map_err(database_error)?;
+    sqlx::query("UPDATE game_persona_name_history AS history SET public_name = $2 FROM game_persona_subject_binding AS binding WHERE binding.subject_id = $1 AND history.game_id = binding.game_id AND history.persona_id = binding.persona_id")
         .bind(subject_id.as_uuid()).bind(alias).execute(&mut **tx).await.map_err(database_error)?;
-    sqlx::query("UPDATE game_persona_public AS public SET current_public_name = $2, renamed_seq = COALESCE(public.renamed_seq, public.registered_seq) FROM game_persona_private AS private WHERE private.subject_id = $1 AND public.game_id = private.game_id AND public.persona_id = private.persona_id")
+    sqlx::query("UPDATE game_persona_public AS public SET current_public_name = $2, renamed_seq = COALESCE(public.renamed_seq, public.registered_seq) FROM game_persona_subject_binding AS binding WHERE binding.subject_id = $1 AND public.game_id = binding.game_id AND public.persona_id = binding.persona_id")
         .bind(subject_id.as_uuid()).bind(alias).execute(&mut **tx).await.map_err(database_error)?;
-    sqlx::query("INSERT INTO game_persona_redaction (game_id, persona_id, replacement_public_name, redacted_at) SELECT game_id, persona_id, $2, $3 FROM game_persona_private WHERE subject_id = $1 ON CONFLICT (game_id, persona_id) DO UPDATE SET replacement_public_name = EXCLUDED.replacement_public_name")
+    sqlx::query("INSERT INTO game_persona_redaction (game_id, persona_id, replacement_public_name, redacted_at) SELECT game_id, persona_id, $2, $3 FROM game_persona_subject_binding WHERE subject_id = $1 ON CONFLICT (game_id, persona_id) DO UPDATE SET replacement_public_name = EXCLUDED.replacement_public_name")
         .bind(subject_id.as_uuid()).bind(alias).bind(destroyed_at).execute(&mut **tx).await.map_err(database_error)?;
-    sqlx::query("UPDATE game_persona_private SET principal_user_id = $2, current_claim_id = NULL WHERE subject_id = $1")
-        .bind(subject_id.as_uuid()).bind(alias).execute(&mut **tx).await.map_err(database_error)?;
-    if let Some(principal) = principal {
-        sqlx::query("UPDATE thread_view SET author_user = $2 WHERE author_user = $1")
-            .bind(principal)
-            .bind(alias)
-            .execute(&mut **tx)
-            .await
-            .map_err(database_error)?;
-    }
+    sqlx::query("UPDATE game_persona_subject_binding SET lifecycle = 'redacted', current_claim_id = NULL WHERE subject_id = $1 AND lifecycle = 'active'")
+        .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;
     Ok(())
 }
 

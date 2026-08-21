@@ -1,11 +1,13 @@
 use eventstore::{ActorId, EventInput};
+use game_platform::{GamePersonaName, GamePersonaPresentation};
 use identity::{
     prepare_subject_authority_for_service, random_tombstone_alias, reconcile_subject_revocations,
     ConfiguredSubjectKeyAuthority, FilesystemSubjectKeyStore, ObjectSubjectKeyStore, SubjectId,
     SubjectKeyStore, SubjectPrivacyError, SubjectRevocationRecord,
 };
 use projections::{
-    append_and_project, public_profile_by_handle, rebuild as rebuild_game, rebuild_profile_stream,
+    append_and_project, append_and_project_in_tx, public_profile_by_handle,
+    rebuild as rebuild_game, rebuild_profile_stream,
 };
 use social::{
     PrincipalId, ProfileBio, ProfileDisplayName, ProfileHandle, ProfilePresentation,
@@ -19,6 +21,7 @@ use std::{
 use uuid::Uuid;
 
 static SUBJECT_KEY_ENV_LOCK: Mutex<()> = Mutex::new(());
+const GAME_PERSONA_PRESENTATION_CLAIM_KIND: &str = "game_persona_presentation";
 
 struct SubjectKeyEnvironment {
     prior: Option<String>,
@@ -60,6 +63,86 @@ async fn ensure_principal(pool: &sqlx::PgPool, principal: &str) {
     identity::methods::ensure_principal(&mut connection, principal, &[], 1)
         .await
         .unwrap();
+}
+
+/// Issue a sealed presentation claim before appending the canonical, reference-only
+/// persona event. Tests deliberately use the same boundary shape as production:
+/// a game stream never receives a credential principal or public name payload.
+async fn append_game_persona(
+    pool: &sqlx::PgPool,
+    game_id: Uuid,
+    persona_id: Uuid,
+    principal: &str,
+    public_name: &str,
+    occurred_at: i64,
+) {
+    let mut tx = pool.begin().await.unwrap();
+    let subject_id = identity::ensure_active_subject(&mut tx, principal, occurred_at)
+        .await
+        .unwrap();
+    let scope_key = persona_id.to_string();
+    let claim_id = identity::insert_subject_claim(
+        &mut tx,
+        subject_id,
+        GAME_PERSONA_PRESENTATION_CLAIM_KIND,
+        game_id,
+        Some(&scope_key),
+        occurred_at,
+        &GamePersonaPresentation {
+            public_name: GamePersonaName::new(public_name).unwrap(),
+        },
+    )
+    .await
+    .unwrap();
+    append_and_project_in_tx(
+        &mut tx,
+        game_id,
+        &[EventInput::new(
+            "GamePersonaRegistered",
+            1,
+            serde_json::json!({
+                "persona_id": persona_id,
+                "subject_id": subject_id.as_uuid(),
+                "claim_id": claim_id.as_uuid(),
+            }),
+            ActorId::Host,
+            occurred_at,
+        )],
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn raw_persona_identity_payload_is_rejected_before_event_persistence(pool: sqlx::PgPool) {
+    let game_id = Uuid::new_v4();
+    let error = append_and_project(
+        &pool,
+        game_id,
+        &[EventInput::new(
+            "GamePersonaRegistered",
+            1,
+            serde_json::json!({
+                "persona_id": Uuid::new_v4(),
+                "principal_user_id": "credential-principal-must-not-enter-game-history",
+                "public_name": "Private presentation must be sealed first",
+            }),
+            ActorId::Host,
+            1,
+        )],
+    )
+    .await
+    .expect_err("raw persona authority and presentation must be refused");
+
+    assert!(matches!(error, projections::ProjectionError::Privacy(_)));
+    assert!(
+        eventstore::load_stream(&pool, game_id)
+            .await
+            .unwrap()
+            .is_empty(),
+        "the append seam must reject legacy persona fields before writing history"
+    );
 }
 
 async fn create_test_profile(
@@ -305,6 +388,7 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
     let principal = format!("pending-redaction-{}", Uuid::new_v4().simple());
     let game_id = Uuid::new_v4();
     ensure_principal(&pool, &principal).await;
+    let persona_id = Uuid::new_v4();
     let profile_id = create_test_profile(
         &pool,
         &principal,
@@ -315,23 +399,15 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
         1,
     )
     .await;
-    append_and_project(
+    append_game_persona(
         &pool,
         game_id,
-        &[EventInput::new(
-            "GamePersonaRegistered",
-            1,
-            serde_json::json!({
-                "persona_id": "pending-persona",
-                "principal_user_id": principal,
-                "public_name": "Pending Persona Name",
-            }),
-            ActorId::Principal(principal.clone()),
-            1,
-        )],
+        persona_id,
+        &principal,
+        "Pending Persona Name",
+        1,
     )
-    .await
-    .unwrap();
+    .await;
 
     let pending = identity::request_member_erasure(&pool, &principal, 10)
         .await
@@ -381,15 +457,17 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
     assert_eq!(profile.current_claim_id, None);
     assert_eq!(profile.lifecycle, "redacted");
     let persona = sqlx::query(
-        "SELECT public.current_public_name, private.principal_user_id, private.current_claim_id FROM game_persona_public AS public JOIN game_persona_private AS private USING (game_id, persona_id) WHERE game_id = $1 AND persona_id = 'pending-persona'",
+        "SELECT public.current_public_name, binding.subject_id, binding.current_claim_id, binding.lifecycle FROM game_persona_public AS public JOIN game_persona_subject_binding AS binding USING (game_id, persona_id) WHERE game_id = $1 AND persona_id = $2",
     )
     .bind(game_id)
+    .bind(persona_id)
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(persona.get::<String, _>("current_public_name"), alias);
-    assert_eq!(persona.get::<String, _>("principal_user_id"), alias);
+    assert_eq!(persona.get::<Uuid, _>("subject_id"), subject_id.as_uuid());
     assert_eq!(persona.get::<Option<Uuid>, _>("current_claim_id"), None);
+    assert_eq!(persona.get::<String, _>("lifecycle"), "redacted");
 
     sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_user_id = $1")
         .bind(&principal)
@@ -412,23 +490,16 @@ async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::P
     let game_id = Uuid::new_v4();
     let principal = format!("persona-owner-{}", Uuid::new_v4().simple());
     ensure_principal(&pool, &principal).await;
-    append_and_project(
+    let persona_id = Uuid::new_v4();
+    append_game_persona(
         &pool,
         game_id,
-        &[EventInput::new(
-            "GamePersonaRegistered",
-            1,
-            serde_json::json!({
-                "persona_id": "gp-canary",
-                "principal_user_id": principal,
-                "public_name": "Canary Persona Name",
-            }),
-            ActorId::Principal(principal.clone()),
-            1,
-        )],
+        persona_id,
+        &principal,
+        "Canary Persona Name",
+        1,
     )
-    .await
-    .unwrap();
+    .await;
 
     let canonical = eventstore::load_stream(&pool, game_id).await.unwrap();
     assert_eq!(canonical.len(), 1);
@@ -461,15 +532,16 @@ async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::P
         .unwrap();
     rebuild_game(&pool, game_id).await.unwrap();
     let row = sqlx::query(
-        "SELECT public.current_public_name, private.principal_user_id, private.current_claim_id FROM game_persona_public AS public JOIN game_persona_private AS private USING (game_id, persona_id) WHERE public.game_id = $1 AND public.persona_id = 'gp-canary'",
+        "SELECT public.current_public_name, binding.current_claim_id, binding.lifecycle FROM game_persona_public AS public JOIN game_persona_subject_binding AS binding USING (game_id, persona_id) WHERE public.game_id = $1 AND public.persona_id = $2",
     )
     .bind(game_id)
+    .bind(persona_id)
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(row.get::<String, _>("current_public_name"), alias);
-    assert_eq!(row.get::<String, _>("principal_user_id"), alias);
     assert_eq!(row.get::<Option<Uuid>, _>("current_claim_id"), None);
+    assert_eq!(row.get::<String, _>("lifecycle"), "redacted");
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -479,23 +551,16 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
     ensure_principal(&pool, &principal).await;
 
     let replay_game = Uuid::new_v4();
-    append_and_project(
+    let replay_persona_id = Uuid::new_v4();
+    append_game_persona(
         &pool,
         replay_game,
-        &[EventInput::new(
-            "GamePersonaRegistered",
-            1,
-            serde_json::json!({
-                "persona_id": "gp-replay",
-                "principal_user_id": principal,
-                "public_name": "Replay Persona",
-            }),
-            ActorId::Principal(principal.clone()),
-            1,
-        )],
+        replay_persona_id,
+        &principal,
+        "Replay Persona",
+        1,
     )
-    .await
-    .unwrap();
+    .await;
     let subject_id: Uuid =
         sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
             .bind(&principal)
@@ -522,23 +587,17 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
     let claim_pool = pool.clone();
     let claim_principal = principal.clone();
     let claim_game = Uuid::new_v4();
+    let claim_persona_id = Uuid::new_v4();
     let claim = tokio::spawn(async move {
-        append_and_project(
+        append_game_persona(
             &claim_pool,
             claim_game,
-            &[EventInput::new(
-                "GamePersonaRegistered",
-                1,
-                serde_json::json!({
-                    "persona_id": "gp-new-claim",
-                    "principal_user_id": claim_principal,
-                    "public_name": "Concurrent Persona",
-                }),
-                ActorId::Principal(claim_principal.clone()),
-                2,
-            )],
+            claim_persona_id,
+            &claim_principal,
+            "Concurrent Persona",
+            2,
         )
-        .await
+        .await;
     });
     wait_for_lock_waiters(&pool, 2).await;
     subject_guard.commit().await.unwrap();
@@ -549,7 +608,7 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
     .await
     .expect("same-subject operations should complete without deadlock");
     replay.unwrap().unwrap();
-    claim.unwrap().unwrap();
+    claim.unwrap();
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -631,29 +690,23 @@ async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::P
     let game_id = Uuid::new_v4();
     let principal = format!("game-rebuild-erasure-{}", Uuid::new_v4().simple());
     ensure_principal(&pool, &principal).await;
-    append_and_project(
+    let persona_id = Uuid::new_v4();
+    append_game_persona(
         &pool,
         game_id,
-        &[EventInput::new(
-            "GamePersonaRegistered",
-            1,
-            serde_json::json!({
-                "persona_id": "gp-rebuild-erasure",
-                "principal_user_id": principal,
-                "public_name": "Game Race Real Name",
-            }),
-            ActorId::Principal(principal.clone()),
-            1,
-        )],
+        persona_id,
+        &principal,
+        "Game Race Real Name",
+        1,
     )
-    .await
-    .unwrap();
+    .await;
 
     let mut projection_guard = pool.begin().await.unwrap();
     sqlx::query(
-        "SELECT game_id FROM game_persona_public WHERE game_id = $1 AND persona_id = 'gp-rebuild-erasure' FOR UPDATE",
+        "SELECT game_id FROM game_persona_public WHERE game_id = $1 AND persona_id = $2 FOR UPDATE",
     )
     .bind(game_id)
+    .bind(persona_id)
     .fetch_one(&mut *projection_guard)
     .await
     .unwrap();
@@ -681,21 +734,19 @@ async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::P
 
     rebuild_game(&pool, game_id).await.unwrap();
     let row = sqlx::query(
-        "SELECT public.current_public_name, private.principal_user_id, private.current_claim_id FROM game_persona_public AS public JOIN game_persona_private AS private USING (game_id, persona_id) WHERE public.game_id = $1 AND public.persona_id = 'gp-rebuild-erasure'",
+        "SELECT public.current_public_name, binding.current_claim_id, binding.lifecycle FROM game_persona_public AS public JOIN game_persona_subject_binding AS binding USING (game_id, persona_id) WHERE public.game_id = $1 AND public.persona_id = $2",
     )
     .bind(game_id)
+    .bind(persona_id)
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(row.get::<String, _>("current_public_name"), alias);
-    assert_eq!(row.get::<String, _>("principal_user_id"), alias);
     assert_eq!(row.get::<Option<Uuid>, _>("current_claim_id"), None);
+    assert_eq!(row.get::<String, _>("lifecycle"), "redacted");
     assert!(!row
         .get::<String, _>("current_public_name")
         .contains("Game Race Real Name"));
-    assert!(!row
-        .get::<String, _>("principal_user_id")
-        .contains(&principal));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

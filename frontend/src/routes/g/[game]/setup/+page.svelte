@@ -323,7 +323,7 @@
                           type="text"
                           required
                           spellcheck="false"
-                          value={slot.assignedPrincipalUserId ?? ""}
+                          value={slot.assignedPrincipalId ?? ""}
                         />
                       </label>
                       <label class="fm-field">

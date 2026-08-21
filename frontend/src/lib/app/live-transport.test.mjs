@@ -294,7 +294,7 @@ test("creates thread patches from live thread post delta envelopes", () => {
               {
                 source_seq: 43,
                 stream_seq: 9,
-              author_user: "host",
+              author: { kind: "host_narrator" },
               body: "Official votecount for D01",
               occurred_at: 1781928000,
               media: [
@@ -324,7 +324,7 @@ test("creates thread patches from live thread post delta envelopes", () => {
           {
             seq: 42,
             body: "before",
-            authorLabel: "Mira",
+            author: { kind: "slot", slotId: "slot-7" },
             media: [
               {
                 id: "b".repeat(64),
@@ -349,10 +349,10 @@ test("creates thread patches from live thread post delta envelopes", () => {
 
   assert.equal(patch.thread.nextBeforeSeq, 40);
   assert.deepEqual(
-    patch.thread.posts.map((post) => [post.seq, post.authorLabel, post.body]),
+    patch.thread.posts.map((post) => [post.seq, post.author, post.body]),
     [
-      [42, "Mira", "before"],
-      [43, "host", "Official votecount for D01"],
+      [42, { kind: "slot", slotId: "slot-7" }, "before"],
+      [43, { kind: "host_narrator" }, "Official votecount for D01"],
     ],
   );
   assert.equal(
@@ -804,7 +804,7 @@ test("websocket delta frames can refresh dependent cold-load keys", async () => 
         body: {
           kind: "ThreadPostsChanged",
           body: {
-            posts: [{ source_seq: 77, author_user: "host", body: "Dawn" }],
+            posts: [{ source_seq: 77, author: { kind: "host_narrator" }, body: "Dawn" }],
           },
         },
       },

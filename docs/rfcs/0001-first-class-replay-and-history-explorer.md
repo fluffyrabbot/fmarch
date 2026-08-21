@@ -176,13 +176,14 @@ Cut directly from the current mutable slot-to-user payload shape to explicit fac
 ```rust
 struct GamePersonaRegistered {
     persona_id: GamePersonaId,
-    principal_user_id: PrincipalUserId, // private/platform presentation only
-    public_name: GamePersonaName,
+    subject_id: SubjectId,
+    claim_id: ClaimId, // sealed GamePersonaPresentation for this game/persona
 }
 
 struct GamePersonaRenamed {
     persona_id: GamePersonaId,
-    public_name: GamePersonaName,
+    subject_id: SubjectId,
+    claim_id: ClaimId, // a replacement sealed presentation, never a new owner
 }
 
 struct SlotOccupancyStarted {
@@ -492,14 +493,22 @@ It is navigation metadata, not durable identity.
 ### 1. First-class persona and occupancy projections
 
 Replace the live-only `slot_occupancy` shape with projections that preserve both the
-private authority binding and the full public occupancy history:
+private subject binding and the full public occupancy history. Canonical game events
+carry only UUID references; the public name lives in a sealed subject claim and is
+resolved at the application boundary before append:
 
 ```text
-game_persona_private
+game_persona
   game_id
   persona_id
-  principal_user_id
   registered_seq
+
+game_persona_subject_binding
+  game_id
+  persona_id
+  subject_id
+  current_claim_id          nullable only when redacted
+  lifecycle                 active | redacted
 
 game_persona_public
   game_id
@@ -535,7 +544,7 @@ game_persona_redaction
   game_id
   persona_id
   replacement_public_name
-  redacted_seq
+  redacted_at
 
 game_history_publication
   game_id
@@ -545,9 +554,11 @@ game_history_publication
 Use partial unique constraints for one open epoch per slot and one open epoch per
 persona. A current-occupancy query is a view/selector over open epochs, not a separately
 writable table. Capability resolution joins that private selector to
-`game_persona_private`; public history has no reason to query that table and joins only
-`game_persona_public`, persona id, and as-of name history. The physical split keeps a
-convenient public query from accidentally selecting a credential binding.
+`game_persona_subject_binding`, then `privacy_subject`; public history has no reason
+to query either authority table and joins only `game_persona_public`, persona id, and
+as-of name history. The physical split keeps a convenient public query from
+accidentally selecting a credential binding. Redaction clears `current_claim_id` and
+marks the binding redacted; an alias is public presentation only, never a principal.
 
 Name-claim ownership and rename history are synchronously projected from the game
 stream. The claim table has a unique `(game_id, normalized_name)` key and permits an
@@ -673,8 +684,8 @@ Illustrative response:
       {
         "slot_id": "slot-2",
         "occupancy": {
-          "occupancy_id": "occ_...",
-          "persona_id": "gp_...",
+          "occupancy_id": "00000000-0000-0000-0000-000000000002",
+          "persona_id": "00000000-0000-0000-0000-000000000001",
           "public_name": "Lark",
           "stint": 1
         },

@@ -218,9 +218,9 @@ test("setup state refresh bypasses cached browser state after command ack", asyn
         slots: [
           {
             slot_id: "slot_1",
-            persona_id: "gp_mira",
+            persona_id: "00000000-0000-0000-0000-000000000701",
             public_name: "Mira",
-            assigned_principal_user_id: "player_mira",
+            assigned_principal_id: "player_mira",
             alive: true,
             status: "alive",
             status_tags: [],

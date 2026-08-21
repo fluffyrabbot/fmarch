@@ -49,6 +49,15 @@ const eventArchiveKid =
 const authSourceSigningKey =
   process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
   "fmarch-auth-invite-role-proof-auth-source-signing-key-v1";
+// This disposable browser stack deliberately runs several independent request
+// paths alongside its live listener and lifecycle workers. Keep its capacity
+// budget owned by the proof rather than inheriting the application's
+// conservative defaults (or an ambient runner override); overload behavior is
+// covered by the dedicated capacity lane.
+const scratchApiDatabaseCapacity = Object.freeze({
+  maxConnections: "32",
+  acquireTimeoutMs: "3000",
+});
 const host = "127.0.0.1";
 const game = randomUUID();
 const rootAdminSessionToken = canonicalSessionToken(`invite-proof-root-admin-${game}`);
@@ -390,8 +399,8 @@ async function provisionSeedTargetAccounts({ apiBaseUrl, existingPrincipals }) {
   const targets = new Set();
   for (const [, command] of seedCommandPlanForGame(game)) {
     const principalUserId =
-      command.SeatPersona?.principal_user_id ??
-      command.ProcessReplacement?.incoming_principal_user_id;
+      command.SeatPersona?.principal_id ??
+      command.ProcessReplacement?.incoming_principal_id;
     if (typeof principalUserId === "string" && !existing.has(principalUserId)) {
       targets.add(principalUserId);
     }
@@ -3689,6 +3698,9 @@ async function startApi(applicationUrl) {
       FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "7",
       FMARCH_AUTH_REGISTRATION_SOURCE_LIMIT: "3",
       FMARCH_PASSWORD_MAX_IN_FLIGHT: "16",
+      FMARCH_DB_MAX_CONNECTIONS: scratchApiDatabaseCapacity.maxConnections,
+      FMARCH_DB_ACQUIRE_TIMEOUT_MS:
+        scratchApiDatabaseCapacity.acquireTimeoutMs,
       FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "2",
       FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS: "120",

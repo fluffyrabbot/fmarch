@@ -184,8 +184,8 @@ function fixturePublicGame(game) {
   return Object.freeze({
     game: Object.freeze({ game, pack: "mafiascum", status: "active", phase_id: "D02" }),
     posts: Object.freeze([
-      Object.freeze({ source_seq: 42, author_slot: "slot_2", author_user: "Ilya", body: "The public record stays readable when the game gets complicated.", occurred_at: 1784707200 }),
-      Object.freeze({ source_seq: 41, author_slot: "slot_7", author_user: "Mira", body: "One conversation, in chronological context.", occurred_at: 1784703600 }),
+      Object.freeze({ source_seq: 42, author: Object.freeze({ kind: "slot", slot_id: "slot_2" }), body: "The public record stays readable when the game gets complicated.", occurred_at: 1784707200 }),
+      Object.freeze({ source_seq: 41, author: Object.freeze({ kind: "slot", slot_id: "slot_7" }), body: "One conversation, in chronological context.", occurred_at: 1784703600 }),
     ]),
     next_before_seq: 41,
   });

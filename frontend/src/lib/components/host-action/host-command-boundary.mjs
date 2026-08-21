@@ -105,9 +105,9 @@ export function mapHostActionToWireCommand(actionEvent) {
             payload.outgoingPersonaId,
             "payload.outgoingPersonaId",
           ),
-          incoming_principal_user_id: requiredString(
-            payload.incomingPrincipalUserId,
-            "payload.incomingPrincipalUserId",
+          incoming_principal_id: requiredString(
+            payload.incomingPrincipalId,
+            "payload.incomingPrincipalId",
           ),
         }),
       });
@@ -313,7 +313,9 @@ export function projectHostConsoleState(state, fallback) {
   const slot = slots[0] ?? null;
   const posts = Array.isArray(state.thread_posts) ? state.thread_posts : [];
   const preservedSlotHistory =
-    slot !== null && posts.some((post) => post?.author_slot === slot.slot_id);
+    slot !== null && posts.some((post) =>
+      post?.author?.kind === "slot" && post.author.slot_id === slot.slot_id,
+    );
 
   return Object.freeze({
     authority: normalizeHostConsoleAuthority(state.authority, fallback.authority),
@@ -368,9 +370,9 @@ export function projectHostConsoleState(state, fallback) {
       slotId: slot?.slot_id ?? fallback.replacement.slotId,
       occupantLabel: slot?.public_name ?? fallback.replacement.occupantLabel,
       personaId: slot?.persona_id ?? fallback.replacement.personaId,
-      assignedPrincipalUserId:
-        slot?.assigned_principal_user_id
-        ?? fallback.replacement.assignedPrincipalUserId,
+      assignedPrincipalId:
+        slot?.assigned_principal_id
+        ?? fallback.replacement.assignedPrincipalId,
       lifecycleLabel:
         typeof slot?.status === "string"
           ? lifecycleLabel(slot.status, slot.alive)
@@ -903,7 +905,7 @@ function normalizeHostConsoleSlot(slot) {
     occupancy_id: String(slot?.occupancy_id ?? ""),
     persona_id: String(slot?.persona_id ?? ""),
     public_name: String(slot?.public_name ?? ""),
-    assigned_principal_user_id: String(slot?.assigned_principal_user_id ?? ""),
+    assigned_principal_id: String(slot?.assigned_principal_id ?? ""),
     alive: slot?.alive === true,
     status: String(slot?.status ?? "alive"),
     status_tags: Object.freeze(

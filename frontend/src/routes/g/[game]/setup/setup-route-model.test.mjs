@@ -47,9 +47,9 @@ test("host setup route data derives slot-bound principals, policy, invites, and 
         slots: [
           {
             slot_id: "slot_1",
-            persona_id: "gp_mira",
+            persona_id: "00000000-0000-0000-0000-000000000701",
             public_name: "Mira",
-            assigned_principal_user_id: "player_mira",
+            assigned_principal_id: "player_mira",
             alive: true,
             status: "alive",
             status_tags: [],
@@ -57,9 +57,9 @@ test("host setup route data derives slot-bound principals, policy, invites, and 
           },
           {
             slot_id: "slot_2",
-            persona_id: "gp_goon",
+            persona_id: "00000000-0000-0000-0000-000000000702",
             public_name: "Goon",
-            assigned_principal_user_id: "player_goon",
+            assigned_principal_id: "player_goon",
             alive: true,
             status: "alive",
             status_tags: [],
@@ -127,9 +127,9 @@ test("host setup readiness blocks StartGame until slots have occupants and roles
       slots: [
         {
           slot_id: "slot_1",
-          persona_id: "gp_mira",
+          persona_id: "00000000-0000-0000-0000-000000000701",
           public_name: "Mira",
-          assigned_principal_user_id: "player_mira",
+          assigned_principal_id: "player_mira",
           alive: true,
           status: "alive",
           status_tags: [],
@@ -139,7 +139,7 @@ test("host setup readiness blocks StartGame until slots have occupants and roles
           slot_id: "slot_2",
           persona_id: null,
           public_name: null,
-          assigned_principal_user_id: null,
+          assigned_principal_id: null,
           alive: true,
           status: "alive",
           status_tags: [],

@@ -186,12 +186,12 @@ async function seedReadFixtures({ psql, databaseUrl }) {
       ORDER BY pack_key, pack_version, content_hash
       LIMIT 1;
       INSERT INTO thread_view (
-        game_id, source_seq, stream_seq, channel_id, author_slot, author_user,
+        game_id, source_seq, stream_seq, channel_id, author_kind, author_slot_id,
         phase_id, body, body_private, occurred_at, media
       )
       SELECT '${largeThreadGame}', value, value,
              CASE WHEN value % 5 = 0 THEN 'main' ELSE 'private:capacity-' || (value % 4) END,
-             NULL, 'capacity-reader',
+             'host_narrator', NULL,
              'D01',
              CASE WHEN value % 5 = 0 THEN 'large thread fixture post ' || value ELSE NULL END,
              CASE WHEN value % 5 = 0 THEN NULL ELSE jsonb_build_object(
@@ -268,8 +268,8 @@ async function explainThreadPage({ psql, databaseUrl }) {
     psql,
     databaseUrl,
     `EXPLAIN (ANALYZE, FORMAT JSON)
-     SELECT game_id, source_seq, stream_seq, channel_id, author_slot,
-            author_user, phase_id, body, media, occurred_at
+     SELECT game_id, source_seq, stream_seq, channel_id, author_kind,
+            author_slot_id, phase_id, body, media, occurred_at
      FROM thread_view
      WHERE game_id = '${largeThreadGame}'
        AND channel_id = 'main'

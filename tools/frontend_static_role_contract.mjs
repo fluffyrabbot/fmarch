@@ -1556,7 +1556,8 @@ async function provePlayerSurface() {
   });
   const mediaPost = threadView.posts.find((post) => post.media.items.length > 0);
   assert.notEqual(mediaPost, undefined, "player fixture must include tablet media");
-  assert.deepEqual(mediaPost.author, { name: "Ilya", seat: "slot-2" });
+  assert.deepEqual(mediaPost.author, { kind: "slot", slotId: "slot-2" });
+  assert.equal(mediaPost.authorLabel, "slot-2");
   assert.deepEqual(mediaPost.permalink, {
     href: "#thread-post-442",
     testId: "thread-post-permalink-442",

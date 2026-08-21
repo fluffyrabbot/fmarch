@@ -410,8 +410,16 @@ async function provePlayerThreadPagerLifecycle() {
     fetchImpl: async () => jsonResponse({
       next_before_seq: null,
       posts: [
-        { source_seq: 430, author_user: "Rowan", body: "older one" },
-        { source_seq: 431, author_user: "Mira", body: "older two" },
+        {
+          source_seq: 430,
+          author: { kind: "slot", slot_id: "slot-3" },
+          body: "older one",
+        },
+        {
+          source_seq: 431,
+          author: { kind: "slot", slot_id: "slot-7" },
+          body: "older two",
+        },
       ],
     }),
     projectionStore: ackStore,
@@ -817,14 +825,14 @@ function hostConsoleModkilledProjectionState() {
     slots: [
       {
         slot_id: "slot-7",
-        assigned_principal_user_id: "player-mira",
+        assigned_principal_id: "player-mira",
         status: "modkilled",
         alive: false,
       },
     ],
     thread_posts: [
       {
-        author_slot: "slot-7",
+        author: { kind: "slot", slot_id: "slot-7" },
       },
     ],
   };

@@ -95,13 +95,11 @@ CREATE INDEX auth_delivery_intent_principal_idx
     ON public.auth_delivery_intent (principal_user_id);
 CREATE INDEX auth_websocket_ticket_principal_idx
     ON public.auth_websocket_ticket (principal_user_id);
-CREATE INDEX thread_view_author_user_idx
-    ON public.thread_view (author_user)
-    WHERE author_user IS NOT NULL;
 CREATE INDEX identity_lifecycle_audit_actor_idx
     ON public.identity_lifecycle_audit (actor_user_id);
-CREATE INDEX game_persona_private_principal_erasure_idx
-    ON public.game_persona_private (principal_user_id);
+CREATE INDEX game_persona_subject_binding_erasure_idx
+    ON public.game_persona_subject_binding (subject_id)
+    WHERE lifecycle = 'active';
 
 -- Restore reconciliation classifies authenticated journal subjects in one
 -- batched membership query. Foreign keys do not create their own indexes;

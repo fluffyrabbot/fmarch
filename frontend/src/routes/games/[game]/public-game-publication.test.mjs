@@ -26,7 +26,7 @@ test("public game posts keep stored excerpts when the original is off-page", () 
     [
       {
         source_seq: 8,
-        author_slot: "slot-2",
+        author: { kind: "slot", slot_id: "slot-2" },
         body: "Reply",
         quotations: [{ target: { source_seq: 3 }, excerpt: "gone" }],
         citation_count: 0,

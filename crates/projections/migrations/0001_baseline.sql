@@ -653,14 +653,29 @@ CREATE TABLE public.slot_effect (
 
 
 --
--- Name: game_persona_private; Type: TABLE; Schema: public; Owner: -
+-- Name: game_persona; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.game_persona_private (
+CREATE TABLE public.game_persona (
     game_id uuid NOT NULL,
-    persona_id text NOT NULL,
-    principal_user_id text NOT NULL,
+    persona_id uuid NOT NULL,
     registered_seq bigint NOT NULL
+);
+
+--
+-- Name: game_persona_subject_binding; Type: TABLE; Schema: public; Owner: -
+--
+
+-- A persona is public game history. Its live owner and sealed presentation are
+-- a separate privacy-bound record so redaction never turns an alias into an
+-- authority value. Foreign keys to subject/claim are installed in 0019 after
+-- the subject-private schema exists.
+CREATE TABLE public.game_persona_subject_binding (
+    game_id uuid NOT NULL,
+    persona_id uuid NOT NULL,
+    subject_id uuid NOT NULL,
+    current_claim_id uuid,
+    lifecycle text DEFAULT 'active'::text NOT NULL
 );
 
 --
@@ -669,7 +684,7 @@ CREATE TABLE public.game_persona_private (
 
 CREATE TABLE public.game_persona_public (
     game_id uuid NOT NULL,
-    persona_id text NOT NULL,
+    persona_id uuid NOT NULL,
     current_public_name text NOT NULL,
     registered_seq bigint NOT NULL,
     renamed_seq bigint
@@ -681,7 +696,7 @@ CREATE TABLE public.game_persona_public (
 
 CREATE TABLE public.game_persona_name_history (
     game_id uuid NOT NULL,
-    persona_id text NOT NULL,
+    persona_id uuid NOT NULL,
     effective_seq bigint NOT NULL,
     public_name text NOT NULL
 );
@@ -693,7 +708,7 @@ CREATE TABLE public.game_persona_name_history (
 CREATE TABLE public.game_persona_name_claim (
     game_id uuid NOT NULL,
     normalized_name text NOT NULL,
-    persona_id text NOT NULL,
+    persona_id uuid NOT NULL,
     first_claimed_seq bigint NOT NULL
 );
 
@@ -703,10 +718,10 @@ CREATE TABLE public.game_persona_name_claim (
 
 CREATE TABLE public.slot_occupancy_epoch (
     game_id uuid NOT NULL,
-    occupancy_id text NOT NULL,
-    transition_id text NOT NULL,
+    occupancy_id uuid NOT NULL,
+    transition_id uuid NOT NULL,
     slot_id text NOT NULL,
-    persona_id text NOT NULL,
+    persona_id uuid NOT NULL,
     began_seq bigint NOT NULL,
     ended_seq bigint,
     start_reason text NOT NULL,
@@ -760,13 +775,16 @@ CREATE TABLE public.thread_view (
     source_seq bigint NOT NULL,
     stream_seq bigint NOT NULL,
     channel_id text NOT NULL,
-    author_slot text,
-    author_user text,
+    author_kind text NOT NULL,
+    author_slot_id text,
     phase_id text NOT NULL,
     body text NOT NULL,
     occurred_at bigint NOT NULL,
     media jsonb DEFAULT '[]'::jsonb NOT NULL,
-    CONSTRAINT thread_view_author_present CHECK (((author_slot IS NOT NULL) OR (author_user IS NOT NULL)))
+    CONSTRAINT thread_view_author_shape CHECK (
+        (author_kind = 'slot' AND author_slot_id IS NOT NULL AND btrim(author_slot_id) <> '')
+        OR (author_kind IN ('host_narrator', 'system') AND author_slot_id IS NULL)
+    )
 );
 
 
@@ -1143,11 +1161,25 @@ ALTER TABLE ONLY public.slot_effect
 
 
 --
--- Name: game_persona_private game_persona_private_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: game_persona game_persona_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.game_persona_private
-    ADD CONSTRAINT game_persona_private_pkey PRIMARY KEY (game_id, persona_id);
+ALTER TABLE ONLY public.game_persona
+    ADD CONSTRAINT game_persona_pkey PRIMARY KEY (game_id, persona_id);
+
+
+--
+-- Name: game_persona_subject_binding game_persona_subject_binding_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.game_persona_subject_binding
+    ADD CONSTRAINT game_persona_subject_binding_pkey PRIMARY KEY (game_id, persona_id);
+
+ALTER TABLE ONLY public.game_persona_subject_binding
+    ADD CONSTRAINT game_persona_subject_binding_persona_fkey
+    FOREIGN KEY (game_id, persona_id)
+    REFERENCES public.game_persona(game_id, persona_id)
+    ON DELETE RESTRICT;
 
 
 --
@@ -1157,6 +1189,12 @@ ALTER TABLE ONLY public.game_persona_private
 ALTER TABLE ONLY public.game_persona_public
     ADD CONSTRAINT game_persona_public_pkey PRIMARY KEY (game_id, persona_id);
 
+ALTER TABLE ONLY public.game_persona_public
+    ADD CONSTRAINT game_persona_public_persona_fkey
+    FOREIGN KEY (game_id, persona_id)
+    REFERENCES public.game_persona(game_id, persona_id)
+    ON DELETE RESTRICT;
+
 
 --
 -- Name: game_persona_name_history game_persona_name_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1164,6 +1202,12 @@ ALTER TABLE ONLY public.game_persona_public
 
 ALTER TABLE ONLY public.game_persona_name_history
     ADD CONSTRAINT game_persona_name_history_pkey PRIMARY KEY (game_id, persona_id, effective_seq);
+
+ALTER TABLE ONLY public.game_persona_name_history
+    ADD CONSTRAINT game_persona_name_history_persona_fkey
+    FOREIGN KEY (game_id, persona_id)
+    REFERENCES public.game_persona(game_id, persona_id)
+    ON DELETE RESTRICT;
 
 
 --
@@ -1173,6 +1217,12 @@ ALTER TABLE ONLY public.game_persona_name_history
 ALTER TABLE ONLY public.game_persona_name_claim
     ADD CONSTRAINT game_persona_name_claim_pkey PRIMARY KEY (game_id, normalized_name);
 
+ALTER TABLE ONLY public.game_persona_name_claim
+    ADD CONSTRAINT game_persona_name_claim_persona_fkey
+    FOREIGN KEY (game_id, persona_id)
+    REFERENCES public.game_persona(game_id, persona_id)
+    ON DELETE RESTRICT;
+
 
 --
 -- Name: slot_occupancy_epoch slot_occupancy_epoch_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -1180,6 +1230,12 @@ ALTER TABLE ONLY public.game_persona_name_claim
 
 ALTER TABLE ONLY public.slot_occupancy_epoch
     ADD CONSTRAINT slot_occupancy_epoch_pkey PRIMARY KEY (game_id, occupancy_id);
+
+ALTER TABLE ONLY public.slot_occupancy_epoch
+    ADD CONSTRAINT slot_occupancy_epoch_persona_fkey
+    FOREIGN KEY (game_id, persona_id)
+    REFERENCES public.game_persona(game_id, persona_id)
+    ON DELETE RESTRICT;
 
 
 --
@@ -1505,10 +1561,11 @@ CREATE INDEX slot_effect_by_effect_idx ON public.slot_effect USING btree (game_i
 
 
 --
--- Name: game_persona_private_principal_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: game_persona_subject_binding_subject_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX game_persona_private_principal_idx ON public.game_persona_private USING btree (game_id, principal_user_id);
+CREATE UNIQUE INDEX game_persona_subject_binding_subject_idx
+    ON public.game_persona_subject_binding USING btree (game_id, subject_id);
 
 
 --

@@ -11599,7 +11599,7 @@ test("setup bootstrap scenario owns the seeded setup command grammar", () => {
       plan.some(
         ([, command]) =>
           command.SeatPersona?.slot === row.slot &&
-          command.SeatPersona?.principal_user_id === row.user,
+          command.SeatPersona?.principal_id === row.user,
       ),
     ),
   );
@@ -11679,7 +11679,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         command: {
           game: bootstrapGame,
           slot: "slot_1",
-          principal_user_id: "player-mira",
+          principal_id: "player-mira",
           public_name: "player-mira",
         },
         streamSeqs: [21],
@@ -11929,7 +11929,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           initialRoleKey: "vanilla_townie",
         },
         addedSlotId: "slot_2",
-        assignedPrincipalUserId: "setup-extra-player",
+        assignedPrincipalId: "setup-extra-player",
         assignedRoleKey: "mafia_goon",
         initialSummary: "Ready to start",
         duplicateAddSlotRecovery: {
@@ -11952,7 +11952,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         finalStartAvailable: true,
         finalSlot: {
           slotId: "slot_2",
-          assignedPrincipalUserId: "setup-extra-player",
+          assignedPrincipalId: "setup-extra-player",
           alive: true,
           status: "alive",
           statusTags: [],
@@ -11975,7 +11975,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             command: {
               game: "77777777-7777-4777-8777-777777777777",
               slot: "slot_2",
-              principal_user_id: "setup-extra-player",
+              principal_id: "setup-extra-player",
               public_name: "setup-extra-player",
             },
             streamSeqs: [6],
@@ -14125,7 +14125,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         rowanProjectedPost: {
-          authorSlot: "slot-7",
+          author: { kind: "slot", slotId: "slot-7" },
           body: "Replacement Rowan refreshed-session post from dev:test-game",
         },
         privateReceiptIsolation: {
@@ -14189,7 +14189,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     game,
                     slot: "slot-7",
                     outgoing_persona_id: "player-rowan",
-                    incoming_principal_user_id: "player-rowan",
+                    incoming_principal_id: "player-rowan",
                   },
                 },
               },
@@ -14225,11 +14225,11 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         hostProjectionAfterReject: {
           slotId: "slot-7",
-          assignedPrincipalUserId: "player-mira",
+          assignedPrincipalId: "player-mira",
         },
         apiSlotAfterReject: {
           slot_id: "slot-7",
-          assigned_principal_user_id: "player-mira",
+          assigned_principal_id: "player-mira",
         },
         pendingAfterReject: {
           principalUserId: "player-rowan",
@@ -14260,7 +14260,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     game,
                     slot: "slot-7",
                     outgoing_persona_id: "player-mira",
-                    incoming_principal_user_id: "player-rowan",
+                    incoming_principal_id: "player-rowan",
                   },
                 },
               },
@@ -14278,12 +14278,12 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       projectedReplacement: {
         slotId: "slot-7",
-        assignedPrincipalUserId: "player-rowan",
+        assignedPrincipalId: "player-rowan",
         historyLabel: "Slot slot-7 history preserved",
       },
       apiSlot: {
         slot_id: "slot-7",
-        assigned_principal_user_id: "player-rowan",
+        assigned_principal_id: "player-rowan",
       },
       replacementIdempotentRetry: {
         status: "passed",
@@ -14304,7 +14304,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     game,
                     slot: "slot-7",
                     outgoing_persona_id: "player-mira",
-                    incoming_principal_user_id: "player-rowan",
+                    incoming_principal_id: "player-rowan",
                   },
                 },
               },
@@ -14321,12 +14321,12 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         hostProjectionAfterRetry: {
           slotId: "slot-7",
-          assignedPrincipalUserId: "player-rowan",
+          assignedPrincipalId: "player-rowan",
           historyLabel: "Slot slot-7 history preserved",
         },
         apiSlotAfterRetry: {
           slot_id: "slot-7",
-          assigned_principal_user_id: "player-rowan",
+          assigned_principal_id: "player-rowan",
         },
       },
       staleHostInviteRecovery: {
@@ -14425,7 +14425,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     game,
                     slot: "slot-7",
                     outgoing_persona_id: "player-mira",
-                    incoming_principal_user_id: "player-rowan",
+                    incoming_principal_id: "player-rowan",
                   },
                 },
               },
@@ -14461,11 +14461,11 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         hostProjectionAfterReject: {
           slotId: "slot-7",
-          assignedPrincipalUserId: "player-rowan",
+          assignedPrincipalId: "player-rowan",
         },
         apiSlotAfterReject: {
           slot_id: "slot-7",
-          assigned_principal_user_id: "player-rowan",
+          assigned_principal_id: "player-rowan",
         },
         staleOutgoingPlayer: {
           recoveredCommandState: {
@@ -14509,7 +14509,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         rowanProjectedPost: {
-          authorSlot: "slot-7",
+          author: { kind: "slot", slotId: "slot-7" },
           body: "Replacement Rowan post from dev:test-game",
         },
         replacementVoteTarget: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
@@ -15165,7 +15165,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         projectedPost: {
           body: "Stale player post after D01 phase closure",
-          authorSlot: "slot-7",
+          author: { kind: "slot", slotId: "slot-7" },
         },
         commandStateAfterAck: {
           phase: { phaseId: "D01", locked: true },
@@ -15206,7 +15206,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           posts: [
             {
               body: "Stale player post after D01 phase closure",
-              author_slot: "slot-7",
+              author: { kind: "slot", slot_id: "slot-7" },
             },
           ],
         },
@@ -15690,7 +15690,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         game: "replacement-private-post-race-game-a",
         hostEntry: { capabilityKinds: ["HostOf"] },
         playerEntry: { capabilityKinds: ["SlotOccupant"] },
-        setupHostReplacement: { assignedPrincipalUserId: "player-mira" },
+        setupHostReplacement: { assignedPrincipalId: "player-mira" },
         setupCommandState: { actorSlot: "slot-7", actorStatus: "alive" },
         setupChannelContext: {
           channelId: "private:mafia_day_chat",
@@ -15727,7 +15727,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     game: "replacement-private-post-race-game-a",
                     slot: "slot-7",
                     outgoing_persona_id: "player-mira",
-                    incoming_principal_user_id: "player-rowan",
+                    incoming_principal_id: "player-rowan",
                   },
                 },
               },
@@ -15739,8 +15739,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         outcomeSummary: "private post seq 53 before replacement seq 54",
         commandStateAfterRace: { status: 403, error: "NotYourSlot" },
         buttonsAfterRace: [{ action: "submit_post", disabled: true }],
-        hostReplacementAfterRace: { assignedPrincipalUserId: "player-rowan" },
-        apiSlotAfterRace: { assigned_principal_user_id: "player-rowan" },
+        hostReplacementAfterRace: { assignedPrincipalId: "player-rowan" },
+        apiSlotAfterRace: { assigned_principal_id: "player-rowan" },
         staleRoute: {
           status: 403,
           responseStatus: 403,
@@ -15755,7 +15755,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         targetSlot: "slot-2",
         hostEntry: { capabilityKinds: ["HostOf"] },
         playerEntry: { capabilityKinds: ["SlotOccupant"] },
-        setupHostReplacement: { assignedPrincipalUserId: "player-mira" },
+        setupHostReplacement: { assignedPrincipalId: "player-mira" },
         setupCommandState: {
           actorSlot: "slot-7",
           actorStatus: "alive",
@@ -15792,7 +15792,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     game: "replacement-vote-race-game-a",
                     slot: "slot-7",
                     outgoing_persona_id: "player-mira",
-                    incoming_principal_user_id: "player-rowan",
+                    incoming_principal_id: "player-rowan",
                   },
                 },
               },
@@ -15803,8 +15803,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         replacementSeq: 54,
         outcomeSummary: "vote seq 53 before replacement seq 54",
         commandStateAfterRace: { status: 403, error: "NotYourSlot" },
-        hostReplacementAfterRace: { assignedPrincipalUserId: "player-rowan" },
-        apiSlotAfterRace: { assigned_principal_user_id: "player-rowan" },
+        hostReplacementAfterRace: { assignedPrincipalId: "player-rowan" },
+        apiSlotAfterRace: { assigned_principal_id: "player-rowan" },
         apiVotecountAfterRace: [
           {
             kind: "VoteCountChanged",
@@ -15821,7 +15821,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         playerEntry: { capabilityKinds: ["SlotOccupant"] },
         replacementEntry: { capabilityKinds: ["SlotOccupant"] },
         setupHostPhase: { id: "N01", locked: false },
-        setupSlot: { assigned_principal_user_id: "player-goon-a" },
+        setupSlot: { assigned_principal_id: "player-goon-a" },
         setupCommandState: {
           actorSlot: "slot_4",
           actorStatus: "alive",
@@ -15861,7 +15861,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     game: "replacement-action-race-game-a",
                     slot: "slot_4",
                     outgoing_persona_id: "player-goon-a",
-                    incoming_principal_user_id: "player-rowan",
+                    incoming_principal_id: "player-rowan",
                   },
                 },
               },
@@ -15878,7 +15878,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           serverEnvelope: { body: { kind: "Reject" } },
         },
         hostPhaseAfterRace: { id: "N01", locked: false },
-        apiSlotAfterRace: { assigned_principal_user_id: "player-rowan" },
+        apiSlotAfterRace: { assigned_principal_id: "player-rowan" },
         apiCurrentCommandStateStatus: { status: 200 },
         currentCommandStateAfterRace: {
           actor_slot: "slot_4",
@@ -15903,7 +15903,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         targetEntry: { capabilityKinds: ["SlotOccupant"] },
         setupHostPhase: { id: replacementIncomingActionCase.phaseId, locked: false },
         setupSlot: {
-          assigned_principal_user_id:
+          assigned_principal_id:
             replacementIncomingActionCase.staleOutgoingPrincipalUserId,
         },
         replacement: {
@@ -15918,7 +15918,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     slot: replacementIncomingActionCase.actorSlot,
                     outgoing_persona_id:
                       replacementIncomingActionCase.staleOutgoingPrincipalUserId,
-                    incoming_principal_user_id:
+                    incoming_principal_id:
                       replacementIncomingActionCase.replacementPrincipalUserId,
                   },
                 },
@@ -16003,7 +16003,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     slot: replacementActionReconnectCase.actorSlot,
                     outgoing_persona_id:
                       replacementActionReconnectCase.staleOutgoingPrincipalUserId,
-                    incoming_principal_user_id:
+                    incoming_principal_id:
                       replacementActionReconnectCase.replacementPrincipalUserId,
                   },
                 },
@@ -16118,7 +16118,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     outgoing_persona_id:
                       replacementStaleActionAfterResolveCase
                         .staleOutgoingPrincipalUserId,
-                    incoming_principal_user_id:
+                    incoming_principal_id:
                       replacementStaleActionAfterResolveCase
                         .replacementPrincipalUserId,
                   },
@@ -16255,7 +16255,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     slot: replacementResolvedPrivatePost.actorSlot,
                     outgoing_persona_id:
                       replacementResolvedPrivatePost.staleOutgoingPrincipalUserId,
-                    incoming_principal_user_id:
+                    incoming_principal_id:
                       replacementResolvedPrivatePost.replacementPrincipalUserId,
                   },
                 },
@@ -16264,7 +16264,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         hostReplacementAfterProcess: {
-          assignedPrincipalUserId: replacementResolvedPrivatePost.replacementPrincipalUserId,
+          assignedPrincipalId: replacementResolvedPrivatePost.replacementPrincipalUserId,
         },
         commandStateBeforeClose: {
           actorSlot: replacementResolvedPrivatePost.actorSlot,
@@ -16324,7 +16324,10 @@ test("session card and markdown include role credential URLs and tokens", async 
           actorSlot: replacementResolvedPrivatePost.actorSlot,
         },
         projectedPost: {
-          authorSlot: replacementResolvedPrivatePost.actorSlot,
+          author: {
+            kind: "slot",
+            slotId: replacementResolvedPrivatePost.actorSlot,
+          },
           body: replacementResolvedPrivatePost.fixturePostBody,
         },
         apiThreadPostBodies: [
@@ -16416,7 +16419,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                     game: replacementCompletedPrivatePost.gameFixtureId,
                     slot: replacementCompletedPrivatePost.actorSlot,
                     outgoing_persona_id: "persona-outgoing",
-                    incoming_principal_user_id:
+                    incoming_principal_id:
                       replacementCompletedPrivatePost.replacementPrincipalUserId,
                   },
                 },
@@ -16425,7 +16428,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         hostReplacementAfterProcess: {
-          assignedPrincipalUserId: replacementCompletedPrivatePost.replacementPrincipalUserId,
+          assignedPrincipalId: replacementCompletedPrivatePost.replacementPrincipalUserId,
         },
         commandStateBeforeClose: {
           actorSlot: replacementCompletedPrivatePost.actorSlot,
@@ -16631,11 +16634,11 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         playerThreadPost: {
           body: "Official votecount for D02\n- slot-3: 2",
-          authorLabel: "host",
+          author: { kind: "host_narrator" },
         },
         apiThreadPost: {
           body: "Official votecount for D02\n- slot-3: 2",
-          author_user: "host",
+          author: { kind: "host_narrator" },
         },
         activityStatusText: "Ack: stream seqs 47",
       },
@@ -21432,7 +21435,7 @@ function hostSetupProofFixture(game = "game-a") {
       command: {
         game,
         slot: "slot-7",
-        principal_user_id: "player-mira",
+        principal_id: "player-mira",
         public_name: "player-mira",
       },
       streamSeqs: [21],
@@ -21494,7 +21497,7 @@ function hostSetupProofFixture(game = "game-a") {
         roleUrl: "http://127.0.0.1:5173/g/setup-game-a/setup",
         sessionPrincipalUserId: "host_h",
         addedSlotId: "slot_2",
-        assignedPrincipalUserId: "setup-extra-player",
+        assignedPrincipalId: "setup-extra-player",
         assignedRoleKey: "mafia_goon",
         initialSummary: "Ready to start",
         duplicateAddSlotRecovery: {
@@ -21509,7 +21512,7 @@ function hostSetupProofFixture(game = "game-a") {
         finalStartAvailable: true,
         finalSlot: {
           slotId: "slot_2",
-          assignedPrincipalUserId: "setup-extra-player",
+          assignedPrincipalId: "setup-extra-player",
           roleKey: "mafia_goon",
         },
         commands: {

@@ -633,7 +633,7 @@ function hostSetupData() {
       slots: [
         {
           slotId: "slot_1",
-          assignedPrincipalUserId: "player_mira",
+          assignedPrincipalId: "player_mira",
           roleKey: "vanilla_townie",
         },
       ],

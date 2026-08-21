@@ -76,7 +76,7 @@
               data-testid={`public-game-post-${post.source_seq}`}
             >
               <header>
-                <strong id={`public-game-post-author-${post.source_seq}`}>{post.author_slot ?? post.author_user ?? "System"}</strong>
+                <strong id={`public-game-post-author-${post.source_seq}`}>{post.authorLabel}</strong>
                 <a id={`public-game-post-meta-${post.source_seq}`} href={`#thread-post-${post.source_seq}`}>#{post.source_seq} · {occurredAt(post.occurred_at)}</a>
               </header>
               {#each post.quotations as quotation}

@@ -25,8 +25,7 @@ test("public game route loads quote blocks and citation disclosure without a Quo
           posts: [
             {
               source_seq: 4,
-              author_slot: "slot-1",
-              author_user: "Ilya",
+              author: { kind: "slot", slot_id: "slot-1" },
               body: "Public signal",
               quotations: [],
               citation_count: 1,
@@ -34,8 +33,7 @@ test("public game route loads quote blocks and citation disclosure without a Quo
             },
             {
               source_seq: 8,
-              author_slot: "slot-2",
-              author_user: "Mira",
+              author: { kind: "slot", slot_id: "slot-2" },
               body: "Answering that claim",
               quotations: [{
                 target: { kind: "game_post", scope_id: "00000000-0000-0000-0000-000000000001", source_seq: 4 },
@@ -54,7 +52,7 @@ test("public game route loads quote blocks and citation disclosure without a Quo
   assert.equal(data.publicGame.posts[0].citationCount, 1);
   assert.equal(data.publicGame.posts[0].incomingCitations[0].sourceSeq, 8);
   assert.equal(data.publicGame.posts[1].quotations[0].excerpt, "Public signal");
-  assert.equal(data.publicGame.posts[1].quotations[0].authorLabel, "Ilya");
+  assert.equal(data.publicGame.posts[1].quotations[0].authorLabel, "slot-1");
   assert.ok(requests.some((url) => url.includes("/posts/4/citations?limit=5")));
   assert.equal(
     requests.some((url) => url.includes("quote=")),
@@ -72,7 +70,7 @@ test("public game route exposes only canonical public thread data", async () => 
       ok: true,
       json: async () => ({
         game: { game: "00000000-0000-0000-0000-000000000001", pack: "mafiascum", status: "active", phase_id: "day-1" },
-        posts: [{ source_seq: 4, author_slot: "slot-1", author_user: null, body: "Public signal", occurred_at: 5 }],
+        posts: [{ source_seq: 4, author: { kind: "slot", slot_id: "slot-1" }, body: "Public signal", occurred_at: 5 }],
         next_before_seq: 4,
       }),
     }),

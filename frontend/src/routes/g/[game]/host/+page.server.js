@@ -276,12 +276,12 @@ async function currentInviteTargetOccupant({
     ? state.slots.find((candidate) => candidate.slot_id === slotId)
     : null;
   if (
-    typeof slot?.assigned_principal_user_id !== "string"
-    || slot.assigned_principal_user_id.trim() === ""
+    typeof slot?.assigned_principal_id !== "string"
+    || slot.assigned_principal_id.trim() === ""
   ) {
     throw new Error(`host invite target projection missing ${slotId}`);
   }
-  return slot.assigned_principal_user_id;
+  return slot.assigned_principal_id;
 }
 
 function authInvitesUrl(env) {

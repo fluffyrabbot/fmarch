@@ -16,6 +16,8 @@ use domain::pack::{GrantKind, Pack, PhaseKind};
 use domain::state::{RevealState, SlotLifecycle, SlotState, StateSnapshot, Submission};
 use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
 use eventstore::{ActorId, EventInput, StoreError};
+use game_persona_application::GamePersonaPresentation;
+use game_platform::{GamePersonaId, GamePersonaName, PrincipalId as GamePrincipalId};
 use projections::{
     action_counters, action_grants, append_and_project, append_discussion_and_project,
     append_discussion_and_project_expected, audit_rebuild, day_vote_outcomes,
@@ -96,6 +98,60 @@ async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
     identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
         .await
         .unwrap();
+}
+
+async fn append_test_game_persona_registration(
+    pool: &sqlx::PgPool,
+    game: Uuid,
+    persona_id: GamePersonaId,
+    principal_id: &str,
+    public_name: &str,
+    occurred_at: i64,
+) {
+    let mut tx = pool.begin().await.unwrap();
+    let event = game_persona_application::register(
+        &mut tx,
+        game,
+        persona_id,
+        &GamePrincipalId::new(principal_id).unwrap(),
+        GamePersonaPresentation {
+            public_name: GamePersonaName::new(public_name).unwrap(),
+        },
+        ActorId::Host,
+        occurred_at,
+    )
+    .await
+    .unwrap();
+    projections::append_and_project_in_tx(&mut tx, game, &[event])
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+async fn append_test_game_persona_rename(
+    pool: &sqlx::PgPool,
+    game: Uuid,
+    persona_id: GamePersonaId,
+    public_name: &str,
+    occurred_at: i64,
+) {
+    let mut tx = pool.begin().await.unwrap();
+    let event = game_persona_application::rename(
+        &mut tx,
+        game,
+        persona_id,
+        GamePersonaPresentation {
+            public_name: GamePersonaName::new(public_name).unwrap(),
+        },
+        ActorId::Host,
+        occurred_at,
+    )
+    .await
+    .unwrap();
+    projections::append_and_project_in_tx(&mut tx, game, &[event])
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
 }
 
 fn test_profile_presentation(
@@ -277,7 +333,7 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
         1,
         serde_json::json!({
             "channel_id": "main",
-            "slot_or_user": { "slot": "slot_2" },
+            "author": { "kind": "slot", "slot_id": "slot_2" },
             "body": "I think slot 1 is caught.",
             "phase_id": "D01",
         }),
@@ -423,7 +479,12 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
     let player_post = thread
         .posts
         .iter()
-        .find(|post| post.author_slot.as_deref() == Some("slot_2"))
+        .find(|post| {
+            matches!(
+                &post.author,
+                projections::GameThreadAuthor::Slot { slot_id } if slot_id == "slot_2"
+            )
+        })
         .expect("slot_2 player post");
     assert_eq!(player_post.phase_id, "D01");
     assert_eq!(player_post.body, "I think slot 1 is caught.");
@@ -1561,7 +1622,7 @@ async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
             1,
             serde_json::json!({
                 "channel_id": "main",
-                "slot_or_user": { "slot": "slot_1" },
+                "author": { "kind": "slot", "slot_id": "slot_1" },
                 "body": body,
                 "phase_id": "D01",
                 "media": [{
@@ -1596,7 +1657,7 @@ async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
         1,
         serde_json::json!({
             "channel_id": "scum_chat",
-            "slot_or_user": { "slot": "slot_2" },
+            "author": { "kind": "slot", "slot_id": "slot_2" },
             "body": "private post",
             "phase_id": "D01",
         }),
@@ -1857,7 +1918,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
                 1,
                 serde_json::json!({
                     "channel_id": "main",
-                    "slot_or_user": { "slot": "slot_1" },
+                    "author": { "kind": "slot", "slot_id": "slot_1" },
                     "body": "Public signal from the game",
                     "phase_id": "D01"
                 }),
@@ -1869,7 +1930,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
                 1,
                 serde_json::json!({
                     "channel_id": "role_pm:slot_1",
-                    "slot_or_user": { "slot": "slot_1" },
+                    "author": { "kind": "slot", "slot_id": "slot_1" },
                     "body": "Private secret signal",
                     "phase_id": "D01"
                 }),
@@ -2012,7 +2073,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
                 1,
                 serde_json::json!({
                     "channel_id": "main",
-                    "slot_or_user": { "slot": "slot_1" },
+                    "author": { "kind": "slot", "slot_id": "slot_1" },
                     "body": "abusive zebra message",
                     "phase_id": "D01"
                 }),
@@ -2090,7 +2151,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
     )
     .await
     .unwrap();
-    assert!(projections::public_thread_view(&pool, game, None, 10, None)
+    assert!(projections::public_thread_view(&pool, game, None, 10)
         .await
         .unwrap()
         .posts
@@ -2133,7 +2194,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
     .await
     .unwrap();
     assert_eq!(
-        projections::public_thread_view(&pool, game, None, 10, None)
+        projections::public_thread_view(&pool, game, None, 10)
             .await
             .unwrap()
             .posts
@@ -2231,7 +2292,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
             1,
             serde_json::json!({
                 "channel_id": "main",
-                "slot_or_user": { "slot": "slot_1" },
+                "author": { "kind": "slot", "slot_id": "slot_1" },
                 "body": format!("report target {index}"),
                 "phase_id": "D01"
             }),
@@ -2240,7 +2301,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
         ));
     }
     append_and_project(&pool, game, &events).await.unwrap();
-    let posts = projections::public_thread_view(&pool, game, None, 20, None)
+    let posts = projections::public_thread_view(&pool, game, None, 20)
         .await
         .unwrap()
         .posts;
@@ -2598,16 +2659,28 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             1,
             serde_json::json!({
                 "channel_id": "main",
-                "slot_or_user": { "user": "game_author" },
+                "author": { "kind": "host_narrator" },
                 "body": "Game update",
                 "phase_id": "D01"
             }),
-            ActorId::Principal("game_author".into()),
+            ActorId::Host,
             18,
         )],
     )
     .await
     .unwrap();
+    let game_post_author_profile_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT author_profile_id FROM public_publication \
+         WHERE surface_id = $1 AND body = 'Game update' ORDER BY source_seq DESC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        game_post_author_profile_id, None,
+        "public game posts never carry profile attribution"
+    );
     let game_items = projections::public_inbox(&pool, "member_b", None, 20)
         .await
         .unwrap()
@@ -2615,7 +2688,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .into_iter()
         .filter(|item| item.surface_id == game)
         .count();
-    assert_eq!(game_items, 1);
+    assert_eq!(game_items, 0);
     rebuild(&pool, game).await.unwrap();
     assert_eq!(
         projections::public_inbox(&pool, "member_b", None, 20)
@@ -2625,8 +2698,65 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             .into_iter()
             .filter(|item| item.surface_id == game)
             .count(),
-        1
+        0
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn thread_author_must_match_stored_event_actor(pool: sqlx::PgPool) {
+    let forged_attributions = [
+        (
+            serde_json::json!({ "kind": "slot", "slot_id": "slot_2" }),
+            ActorId::Slot("slot_1".into()),
+            "a slot cannot claim another slot",
+        ),
+        (
+            serde_json::json!({ "kind": "host_narrator" }),
+            ActorId::Slot("slot_1".into()),
+            "a slot cannot claim host narration",
+        ),
+        (
+            serde_json::json!({ "kind": "system" }),
+            ActorId::Host,
+            "a host cannot claim system output",
+        ),
+    ];
+
+    for (author, actor, expectation) in forged_attributions {
+        let game = Uuid::new_v4();
+        let error = append_and_project(
+            &pool,
+            game,
+            &[EventInput::new(
+                "PostSubmitted",
+                1,
+                serde_json::json!({
+                    "channel_id": "main",
+                    "author": author,
+                    "body": "forged attribution",
+                    "phase_id": "D01",
+                }),
+                actor,
+                1,
+            )],
+        )
+        .await
+        .expect_err(expectation);
+
+        assert!(matches!(
+            error,
+            ProjectionError::Payload { ref kind, .. } if kind == "PostSubmitted"
+        ));
+        let persisted: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(game)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            persisted, 0,
+            "invalid attribution rolls back the event append"
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -2650,7 +2780,7 @@ async fn encrypted_private_events_still_fold_and_rebuild(pool: sqlx::PgPool) {
             1,
             serde_json::json!({
                 "channel_id": "private:mafia_day_chat",
-                "slot_or_user": { "slot": "slot_1" },
+                "author": { "kind": "slot", "slot_id": "slot_1" },
                 "body": "private night plan",
                 "phase_id": "D01",
             }),
@@ -3303,41 +3433,41 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
 ) {
     let game = Uuid::new_v4();
     let principal = format!("archive-persona-owner-{}", Uuid::new_v4().simple());
+    let persona_id = GamePersonaId::random();
     ensure_test_principal(&pool, &principal).await;
     append_and_project(
         &pool,
         game,
-        &[
-            EventInput::new(
-                "GameCreated",
-                1,
-                test_game_created_payload("export_host", "archived_removed_pack"),
-                ActorId::Principal("export_host".into()),
-                1,
-            ),
-            EventInput::new(
-                "GamePersonaRegistered",
-                1,
-                serde_json::json!({
-                    "persona_id": "portable-persona",
-                    "principal_user_id": principal,
-                    "public_name": "Source Persona Name",
-                }),
-                ActorId::Principal(principal.clone()),
-                2,
-            ),
-            EventInput::new(
-                "GamePersonaRenamed",
-                1,
-                serde_json::json!({
-                    "persona_id": "portable-persona",
-                    "public_name": "Latest Source Persona Name",
-                }),
-                ActorId::Principal(principal.clone()),
-                3,
-            ),
-            EventInput::new("GameCompleted", 1, serde_json::json!({}), ActorId::Host, 4),
-        ],
+        &[EventInput::new(
+            "GameCreated",
+            1,
+            test_game_created_payload("export_host", "archived_removed_pack"),
+            ActorId::Principal("export_host".into()),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    append_test_game_persona_registration(
+        &pool,
+        game,
+        persona_id,
+        &principal,
+        "Source Persona Name",
+        2,
+    )
+    .await;
+    append_test_game_persona_rename(&pool, game, persona_id, "Latest Source Persona Name", 3).await;
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "GameCompleted",
+            1,
+            serde_json::json!({}),
+            ActorId::Host,
+            4,
+        )],
     )
     .await
     .unwrap();
@@ -3544,21 +3674,18 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
         "isolated import must restore the exact self-contained artifact without registry lookup"
     );
     let imported_persona = sqlx::query(
-        "SELECT public.current_public_name, private.principal_user_id, private.subject_id, private.current_claim_id \
+        "SELECT public.current_public_name, binding.subject_id, binding.current_claim_id, binding.lifecycle \
          FROM game_persona_public AS public \
-         JOIN game_persona_private AS private USING (game_id, persona_id) \
-         WHERE public.game_id = $1 AND public.persona_id = 'portable-persona'",
+         LEFT JOIN game_persona_subject_binding AS binding USING (game_id, persona_id) \
+         WHERE public.game_id = $1 AND public.persona_id = $2",
     )
     .bind(game)
+    .bind(persona_id.as_uuid())
     .fetch_one(&target)
     .await
     .unwrap();
     assert_eq!(
         imported_persona.get::<String, _>("current_public_name"),
-        detached_alias
-    );
-    assert_eq!(
-        imported_persona.get::<String, _>("principal_user_id"),
         detached_alias
     );
     assert_ne!(
@@ -3570,6 +3697,7 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
         imported_persona.get::<Option<Uuid>, _>("current_claim_id"),
         None
     );
+    assert_eq!(imported_persona.get::<Option<String>, _>("lifecycle"), None);
     assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM privacy_subject")
             .fetch_one(&target)

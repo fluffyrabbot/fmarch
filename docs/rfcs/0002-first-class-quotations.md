@@ -255,8 +255,12 @@ Additive optional field on the existing kinds. No new event type.
 
 ```text
 DiscussionPostSubmitted  { body, author_profile_id, quotations? }
-PostSubmitted            { channel_id, slot_or_user, body, media?, phase_id, quotations? }
+PostSubmitted            { channel_id, author, body, media?, phase_id, quotations? }
 ```
+
+For a game post, `author` is closed and game-local: `{ kind: "slot",
+slot_id }`, `{ kind: "host_narrator" }`, or `{ kind: "system" }`. It never
+contains a profile or credential-principal identifier.
 
 Schema-evolution rule: missing `quotations` deserializes to `[]`. Do not bump
 the event version solely to add this field. Do not put incoming `quoted_by`
@@ -274,7 +278,7 @@ The community and game write models reject, they do not coerce:
 | Target kind/scope is not this thread | invalid quotation target |
 | Quoted `source_seq` does not exist in this thread | quotation not found |
 | Quoted `source_seq` ≥ the post being written | quotation not found |
-| Quoter cannot read the quoted post (hidden, muted author, private channel, wrong capability) | not authorized / quotation not found — same class as a missing post, do not leak existence of hidden or private posts |
+| Quoter cannot read the quoted post (hidden, private channel, wrong capability, or—on community posts—a muted profile) | not authorized / quotation not found — same class as a missing post, do not leak existence of hidden or private posts |
 | `excerpt` empty or over the excerpt budget | invalid quotation |
 | More quotations than the per-post cap | invalid quotation |
 | Quote-chain depth from any target exceeds the depth cap | invalid quotation |
@@ -331,9 +335,9 @@ post_citation
 ```
 
 Fold only from `DiscussionPostSubmitted` / `PostSubmitted` that carry
-quotations. Rebuild deletes and replays. Hidden or muted quoting posts are
-filtered at read time with the same overlays already used for thread pages
-(`moderation_target_state`, `profile_mute`, channel membership).
+quotations. Rebuild deletes and replays. Read-time visibility uses
+`moderation_target_state` and channel membership for game posts; community
+posts additionally use their profile-mute overlay.
 The index itself stores the edge, not the visibility decision.
 
 Reads:
@@ -436,12 +440,13 @@ Quoting is a read of the target plus a write of a new post. Authorize both.
   current mute and moderation overlays.
 - Hidden originals remain cited by stored excerpt; the live body is not
   re-fetched for unauthorized readers.
-- Mute hides both the quoting post and, for the muting reader, incoming
-  citations authored by the muted profile.
+- Community mute hides both the quoting post and, for the muting reader,
+  incoming citations authored by the muted profile.
 
 Credential principals never appear on quotation or citation DTOs.
-Community authorship stays profile-backed; game authorship stays
-slot-or-host.
+Community authorship stays profile-backed; game authorship is the closed
+`slot | host_narrator | system` model, with no public profile attribution or
+fanout.
 
 ## Chain provenance
 

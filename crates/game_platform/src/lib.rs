@@ -17,8 +17,8 @@ pub mod embed;
 pub mod persona;
 
 pub use persona::{
-    GamePersonaId, GamePersonaName, OccupancyEndReason, OccupancyId, OccupancyStartReason,
-    OccupancyTransitionId,
+    GamePersonaId, GamePersonaName, GamePersonaPresentation, OccupancyEndReason, OccupancyId,
+    OccupancyStartReason, OccupancyTransitionId,
 };
 
 #[derive(Debug, Clone, PartialEq, Error)]
