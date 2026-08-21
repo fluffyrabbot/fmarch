@@ -86,6 +86,11 @@ template references such as `${{Postgres.DATABASE_URL}}` are safe only on the
 environment-local migrator; that owner URL must never appear on API, frontend,
 or in a key-admin shell.
 
+The profile-handle blind-index key and its non-secret KID are API-only,
+environment-local variables. They must never be copied to the migrator,
+frontend, or key-admin shell, and staging and production must use different
+values and KIDs.
+
 The database authority split is fixed, not operator-selectable:
 
 | Process | Credential | Role/authority |
@@ -99,6 +104,15 @@ receives both bootstrap passwords but never a key-admin URL or event KEK. The
 key-admin URL and event KEKs exist together only in a protected ephemeral shell
 using `deploy/railway/key-admin.env.example`; they are not Railway service
 variables.
+
+The profile-handle blind-index key belongs only to the API process. It is not
+an event-encryption key and must not be reused for one. The current release
+process does not support rotating it in place: rotation is blocked until the
+dedicated maintenance reindex command lands. That command must drain profile
+writers, rewrite every active claim's `handle_hmac` in one transaction under the
+replacement key, atomically switch the API key and KID while traffic remains
+drained, then prove both owner reads and duplicate-handle rejection before
+retiring the prior key.
 
 The schema owner is confined to the one-shot migrator and owns the application
 schema, tables, sequences, functions, and `_sqlx_migrations`. ACL reconciliation
@@ -149,6 +163,10 @@ business integrity or plaintext confidentiality after API compromise.
    password held by the migrator; percent-encode the password when composing
    the URL and include exactly one secure `sslmode`. Do not copy the owner URL
    or either standalone password onto API.
+   Generate a distinct opaque `FMARCH_PROFILE_HANDLE_INDEX_KEY` of at least 32
+   bytes and a public `FMARCH_PROFILE_HANDLE_INDEX_KID`; add both to this API
+   service only. Release startup fails before readiness if either is missing or
+   malformed. Do not reuse the event wrapping or archive key.
 5. Add a Railway Bucket named `media`. Bind its S3 endpoint, bucket, region,
    access key, and secret key to both API replicas through Railway reference
    variables. Use the bucket's globally unique `BUCKET` value rather than its
@@ -308,6 +326,8 @@ operator environment alone receives `DATABASE_KEY_ADMIN_URL`; it is never a
 Railway service variable. The repository has examples and variable names, not
 secret values. The Rust API receives public WorkOS verification metadata, never
 the WorkOS API key, schema-owner URL, role-bootstrap passwords, or key-admin URL.
+It receives the environment-local profile-handle blind-index key and KID; that
+key is neither a frontend nor a migrator credential.
 
 Keep the following evidence packets in a private operator-controlled location outside this repository:
 

@@ -2,6 +2,7 @@
   import { navigating, page } from "$app/stores";
   import AppShell from "$lib/app/AppShell.svelte";
   import AppNavigationPending from "$lib/app/AppNavigationPending.svelte";
+  import { applyViewerPresentationToShell } from "$lib/app/app-shell-model.mjs";
 
   export let data;
 
@@ -10,13 +11,18 @@
   $: pageRouteData = $page.data?.shellOwner === "layout" ? $page.data : null;
   $: directRouteData = data?.shellOwner === "layout" ? data : null;
   $: layoutShell = (directRouteData ?? pageRouteData)?.shell ?? null;
+  $: presentedLayoutShell = applyViewerPresentationToShell(layoutShell, {
+    principalUserId: appSession.principalUserId,
+    viewerProfile: appSession.viewerProfile,
+  });
 </script>
 
-{#if layoutShell}
-  <AppShell shell={layoutShell}>
+{#if presentedLayoutShell}
+  <AppShell shell={presentedLayoutShell}>
     <AppNavigationPending
       path={pendingPath}
       principalUserId={appSession.principalUserId}
+      viewerProfile={appSession.viewerProfile}
       capabilities={appSession.resolvedCapabilities}
     />
 
@@ -26,6 +32,7 @@
   <AppNavigationPending
     path={pendingPath}
     principalUserId={appSession.principalUserId}
+    viewerProfile={appSession.viewerProfile}
     capabilities={appSession.resolvedCapabilities}
   />
 

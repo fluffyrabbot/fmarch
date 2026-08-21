@@ -77,7 +77,7 @@ const manifest = {
       roleNavTestId(surface),
     ),
     sessionTestId: APP_SHELL_CONTRACT.sessionTestId,
-    sessionPrincipalTestId: APP_SHELL_CONTRACT.sessionPrincipalTestId,
+    sessionViewerTestId: APP_SHELL_CONTRACT.sessionViewerTestId,
     sessionCapabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     sessionGameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     topbarTestId: APP_SHELL_CONTRACT.topbarTestId,

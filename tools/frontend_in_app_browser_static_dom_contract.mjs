@@ -164,8 +164,8 @@ function assertErrorSurfaceEvidence(root, scenario) {
   assertIncludes(textContent(panel), scenario.errorSurface.path, `${scenario.id} path`);
   assertIncludes(
     textContent(root),
-    scenario.errorSurface.sessionPrincipal,
-    `${scenario.id} principal`,
+    scenario.errorSurface.sessionViewer,
+    `${scenario.id} viewer`,
   );
   assertIncludes(
     textContent(root),
@@ -180,7 +180,7 @@ function assertErrorSurfaceEvidence(root, scenario) {
     actionHref: action.attrs.href,
     activeNavTestId: scenario.errorSurface.activeNavTestId,
     activeNavCurrent: activeNav.attrs["aria-current"],
-    sessionPrincipal: scenario.errorSurface.sessionPrincipal,
+    sessionViewer: scenario.errorSurface.sessionViewer,
     capabilitySummary: scenario.errorSurface.capabilitySummary,
   };
 }

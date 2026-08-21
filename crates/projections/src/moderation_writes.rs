@@ -126,7 +126,7 @@ fn moderation_event_inputs(
                 event.kind(),
                 1,
                 event.payload(),
-                eventstore::ActorId::User(actor_principal_id.to_string()),
+                eventstore::ActorId::Principal(actor_principal_id.to_string()),
                 occurred_at,
             )
         })

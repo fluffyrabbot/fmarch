@@ -294,9 +294,9 @@ export type ModerationCaseDetail = { case: ModerationCase, reports: Array<Modera
 
 export type ModerationCasePage = { cases: Array<ModerationCase>, next_cursor: string | null, };
 
-export type PublicProfile = { handle: string, display_name: string, bio: string, updated_seq: bigint, };
+export type PublicProfile = { handle: string, display_name: string, bio: string, revision: bigint, };
 
-export type ProfileEditor = { handle: string, display_name: string, bio: string, visibility: string, updated_seq: bigint, };
+export type ProfileEditor = { handle: string, display_name: string, bio: string, visibility: string, revision: bigint, };
 
 export type PlayerNotification = { game: string, phase_id: string, event_index: number, audience_slot: string, effect: string, status: string, };
 

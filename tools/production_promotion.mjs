@@ -84,6 +84,7 @@ export function validateSecretCustodyPolicy(policy) {
       "auth-source-signing",
       "event-runtime-wrap",
       "event-archive",
+      "profile-handle-index",
       "object-storage",
       "subject-key-authority",
       "workos",
@@ -138,6 +139,8 @@ export function validateDatabaseAuthorityVariables({
       "DATABASE_KEY_ADMIN_URL",
       "FMARCH_DATABASE_APPLICATION_PASSWORD",
       "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
+      "FMARCH_PROFILE_HANDLE_INDEX_KEY",
+      "FMARCH_PROFILE_HANDLE_INDEX_KID",
     ]) {
       assertSecretRelation(
         frontend[key] === undefined,
@@ -174,6 +177,8 @@ export function validateDatabaseAuthorityVariables({
       "FMARCH_EVENT_WRAP_KEYS",
       "FMARCH_EVENT_ARCHIVE_KEY",
       "FMARCH_EVENT_ARCHIVE_KEYS",
+      "FMARCH_PROFILE_HANDLE_INDEX_KEY",
+      "FMARCH_PROFILE_HANDLE_INDEX_KID",
       "AWS_ACCESS_KEY_ID",
       "AWS_SECRET_ACCESS_KEY",
       "FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID",
@@ -386,6 +391,8 @@ export function validateHostedVariables({
         "FMARCH_EVENT_WRAP_KID",
         "FMARCH_EVENT_ARCHIVE_KEY",
         "FMARCH_EVENT_ARCHIVE_KID",
+        "FMARCH_PROFILE_HANDLE_INDEX_KEY",
+        "FMARCH_PROFILE_HANDLE_INDEX_KID",
         "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
         "FMARCH_SUBJECT_AUTHORITY_ENDPOINT",
         "FMARCH_SUBJECT_AUTHORITY_REGION",
@@ -435,6 +442,8 @@ export function validateHostedVariables({
         "FMARCH_EVENT_WRAP_KID",
         "FMARCH_EVENT_ARCHIVE_KEY",
         "FMARCH_EVENT_ARCHIVE_KID",
+        "FMARCH_PROFILE_HANDLE_INDEX_KEY",
+        "FMARCH_PROFILE_HANDLE_INDEX_KID",
         "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
         "FMARCH_SUBJECT_AUTHORITY_ENDPOINT",
         "FMARCH_SUBJECT_AUTHORITY_REGION",
@@ -552,6 +561,10 @@ export function validateHostedVariables({
     productionApi.FMARCH_EVENT_ARCHIVE_KEY !== stagingApi.FMARCH_EVENT_ARCHIVE_KEY,
     "production and staging must not share the event archive key",
   );
+  assertSecretRelation(
+    productionApi.FMARCH_PROFILE_HANDLE_INDEX_KEY !== stagingApi.FMARCH_PROFILE_HANDLE_INDEX_KEY,
+    "production and staging must not share the profile-handle index key",
+  );
   for (const [label, variables] of [
     ["staging", stagingApi],
     ["production", productionApi],
@@ -559,6 +572,11 @@ export function validateHostedVariables({
     assertSecretRelation(
       variables.FMARCH_EVENT_WRAP_KEY !== variables.FMARCH_EVENT_ARCHIVE_KEY,
       `${label} event wrapping and archive keys must be separate`,
+    );
+    assertSecretRelation(
+      variables.FMARCH_PROFILE_HANDLE_INDEX_KEY !== variables.FMARCH_EVENT_WRAP_KEY &&
+        variables.FMARCH_PROFILE_HANDLE_INDEX_KEY !== variables.FMARCH_EVENT_ARCHIVE_KEY,
+      `${label} profile-handle index key must be distinct from event keys`,
     );
   }
   assertSecretRelation(
@@ -673,6 +691,11 @@ export function validateHostedVariables({
       stagingApi.FMARCH_EVENT_ARCHIVE_KID,
     ],
     [
+      "profile-handle index KID",
+      productionApi.FMARCH_PROFILE_HANDLE_INDEX_KID,
+      stagingApi.FMARCH_PROFILE_HANDLE_INDEX_KID,
+    ],
+    [
       "object-storage credential KID",
       productionApi.FMARCH_OBJECT_STORAGE_CREDENTIAL_KID,
       stagingApi.FMARCH_OBJECT_STORAGE_CREDENTIAL_KID,
@@ -705,6 +728,15 @@ export function validateHostedVariables({
     );
   }
   for (const [label, value] of [
+    ["staging profile-handle index key", stagingApi.FMARCH_PROFILE_HANDLE_INDEX_KEY],
+    ["production profile-handle index key", productionApi.FMARCH_PROFILE_HANDLE_INDEX_KEY],
+  ]) {
+    assertSecretRelation(
+      isStrongOpaqueSecret(value),
+      `${label} must be a non-placeholder value of at least 32 characters`,
+    );
+  }
+  for (const [label, value] of [
     ["staging event wrapping key", stagingApi.FMARCH_EVENT_WRAP_KEY],
     ["production event wrapping key", productionApi.FMARCH_EVENT_WRAP_KEY],
     ["staging event archive key", stagingApi.FMARCH_EVENT_ARCHIVE_KEY],
@@ -718,10 +750,14 @@ export function validateHostedVariables({
 }
 
 function isStrongWorkosCookiePassword(value) {
+  return isStrongOpaqueSecret(value) && !/cookie[\s_-]*password/iu.test(value);
+}
+
+function isStrongOpaqueSecret(value) {
   if (typeof value !== "string" || value.length < 32 || value !== value.trim()) {
     return false;
   }
-  return !/(?:replace[\s_-]*me|change[\s_-]*me|placeholder|example|cookie[\s_-]*password|at[\s_-]*least[\s_-]*32|\$\{\{?[^}]+\}?\})/iu.test(
+  return !/(?:replace[\s_-]*me|change[\s_-]*me|placeholder|example|at[\s_-]*least[\s_-]*32|\$\{\{?[^}]+\}?\})/iu.test(
     value,
   );
 }

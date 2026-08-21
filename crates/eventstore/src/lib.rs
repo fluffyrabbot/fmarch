@@ -30,15 +30,22 @@ pub use upcaster::upcast;
 ///
 /// RULING (doc 10 left the JSON shape unspecified): adjacently-tagged
 /// `{ "type": <variant>, "id": <uuid-or-omitted> }`. The engine only ever emits
-/// `Slot`/`System`; `User`/`Host` appear only on platform events. Slot/User ids
-/// are strings in `domain` (`SlotId`), so we carry them as strings here.
+/// `Slot`/`System`; platform events distinguish a credential
+/// [`Principal`](Self::Principal) from the pseudonymous
+/// [`PrivacySubject`](Self::PrivacySubject) used after private claims have been
+/// sealed. They must never share a catch-all `User(String)` variant.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "id")]
 pub enum ActorId {
     Slot(String),
     Host,
     System,
-    User(String),
+    /// An authenticated platform principal. This remains an opaque string until
+    /// the repository-wide UUID principal-key cutover.
+    Principal(String),
+    /// A privacy/erasure subject. It is deliberately not a principal and cannot
+    /// be used for authorization.
+    PrivacySubject(Uuid),
 }
 
 /// An event ready to be appended. `stream_seq` is assigned by the store

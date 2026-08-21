@@ -116,6 +116,8 @@ test("hosted variables require isolated production identity credentials", () => 
     FMARCH_EVENT_WRAP_KID: "staging-wrap-v1",
     FMARCH_EVENT_ARCHIVE_KEY: "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
     FMARCH_EVENT_ARCHIVE_KID: "staging-archive-v1",
+    FMARCH_PROFILE_HANDLE_INDEX_KEY: "staging-profile-index-key-material-00000001",
+    FMARCH_PROFILE_HANDLE_INDEX_KID: "staging-profile-index-v1",
     FMARCH_OBJECT_STORAGE_CREDENTIAL_KID: "staging-storage-2026-08-04",
     FMARCH_SUBJECT_AUTHORITY_ENDPOINT: "https://staging-subjects.example.test",
     FMARCH_SUBJECT_AUTHORITY_REGION: "auto",
@@ -167,6 +169,8 @@ test("hosted variables require isolated production identity credentials", () => 
     FMARCH_EVENT_WRAP_KID: "production-wrap-v1",
     FMARCH_EVENT_ARCHIVE_KEY: "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ=",
     FMARCH_EVENT_ARCHIVE_KID: "production-archive-v1",
+    FMARCH_PROFILE_HANDLE_INDEX_KEY: "production-profile-index-key-material-000001",
+    FMARCH_PROFILE_HANDLE_INDEX_KID: "production-profile-index-v1",
     FMARCH_OBJECT_STORAGE_CREDENTIAL_KID: "production-storage-2026-08-04",
     FMARCH_SUBJECT_AUTHORITY_ENDPOINT: "https://production-subjects.example.test",
     FMARCH_SUBJECT_AUTHORITY_REGION: "auto",
@@ -430,6 +434,28 @@ test("hosted variables require isolated production identity credentials", () => 
     () =>
       validateHostedVariables({
         ...ready,
+        productionFrontend: {
+          ...productionFrontend,
+          FMARCH_PROFILE_HANDLE_INDEX_KEY: productionApi.FMARCH_PROFILE_HANDLE_INDEX_KEY,
+        },
+      }),
+    /frontend must not receive FMARCH_PROFILE_HANDLE_INDEX_KEY/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionMigrator: {
+          ...productionMigrator,
+          FMARCH_PROFILE_HANDLE_INDEX_KID: productionApi.FMARCH_PROFILE_HANDLE_INDEX_KID,
+        },
+      }),
+    /migrator must not receive FMARCH_PROFILE_HANDLE_INDEX_KID/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
         productionApi: {
           ...productionApi,
           PGOPTIONS: "-c search_path=attacker,public",
@@ -495,6 +521,17 @@ test("hosted variables require isolated production identity credentials", () => 
         },
       }),
     /canonical padded base64 encoding exactly 32 bytes/,
+  );
+  assert.throws(
+    () =>
+      validateHostedVariables({
+        ...ready,
+        productionApi: {
+          ...productionApi,
+          FMARCH_PROFILE_HANDLE_INDEX_KEY: "replace_me______________________",
+        },
+      }),
+    /profile-handle index key.*at least 32 characters/,
   );
   assert.throws(
     () =>
@@ -637,6 +674,11 @@ test("secret custody policy names owners, consumers, rotation, and retirement", 
       ["auth-source-signing", "FMARCH_AUTH_SOURCE_SIGNING_KEY", "FMARCH_AUTH_SOURCE_SIGNING_KID"],
       ["event-runtime-wrap", "FMARCH_EVENT_WRAP_KEY", "FMARCH_EVENT_WRAP_KID"],
       ["event-archive", "FMARCH_EVENT_ARCHIVE_KEY", "FMARCH_EVENT_ARCHIVE_KID"],
+      [
+        "profile-handle-index",
+        "FMARCH_PROFILE_HANDLE_INDEX_KEY",
+        "FMARCH_PROFILE_HANDLE_INDEX_KID",
+      ],
       ["object-storage", "AWS_SECRET_ACCESS_KEY", "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID"],
       [
         "subject-key-authority",

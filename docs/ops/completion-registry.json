@@ -1689,7 +1689,7 @@
       "title": "User profiles",
       "execution_class": "code",
       "status": "complete",
-      "summary": "Profiles use durable public and owner-only projections, enabled-account editing, explicit public or members-only visibility, and a seeded Chromium proof.",
+      "summary": "Profiles use an active-owner/redacted-attribution model, encrypted private claims, revision-checked owner editing, explicit public or private visibility, and a seeded Chromium proof.",
       "complete_when": [
         "A user can view and edit an authorization-safe profile, with durable projection state and browser proof."
       ],

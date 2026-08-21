@@ -115,7 +115,7 @@ async fn seed_open_night_game_with_pack_artifact(
                     "pack_ref": &pack_artifact.pack_ref,
                     "pack_artifact": pack_artifact
                 }),
-                ActorId::User(host_id.to_string()),
+                ActorId::Principal(host_id.to_string()),
                 0,
             ),
             EventInput::new(

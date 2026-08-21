@@ -418,6 +418,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     }
     eventstore::require_secure_event_encryption_configuration()?;
+    profile_application::require_profile_handle_index_configuration()?;
     let auth_source_key = env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY").ok();
     if auth_source_key
         .as_deref()

@@ -5,11 +5,13 @@
 
   export let path = null;
   export let principalUserId = null;
+  export let viewerProfile = null;
   export let capabilities = [];
 
   $: view = buildNavigationPendingData({
     path,
     principalUserId,
+    viewerProfile,
     capabilities,
   });
 </script>
@@ -22,7 +24,7 @@
     data-surface={view.surface}
     data-path={view.path}
     data-active-nav-testid={view.activeNavTestId}
-    data-session-principal={view.sessionPrincipal}
+    data-session-viewer={view.sessionViewer}
     data-capability-summary={view.capabilitySummary}
     aria-label={view.label}
   >

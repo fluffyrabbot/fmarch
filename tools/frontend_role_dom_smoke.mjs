@@ -136,7 +136,7 @@ async function proveRouteErrorSurface(bundle) {
     "route error message",
   );
   assertIncludes(html, "/g/midsummer/c/private%3Arole_pm%3Aslot-7", "route error path");
-  assertIncludes(html, "player_mira", "route error session principal");
+  assertIncludes(html, "Your account", "route error session viewer");
   assertIncludes(
     html,
     "ChannelMember + SlotOccupant",
@@ -161,7 +161,7 @@ async function proveRouteErrorSurface(bundle) {
     actionTestId: "route-error-action",
     actionHref: "/",
     activeNavTestId: roleNavTestId("player"),
-    sessionPrincipal: "player_mira",
+    sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
     message: "Channel private:role_pm:slot-7 is not visible.",
     touchTargets,
@@ -494,8 +494,8 @@ function assertAppShell(html, { id, role }) {
   );
   assertIncludes(
     html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionPrincipalTestId}"`,
-    `${id} shell session principal`,
+    `data-testid="${APP_SHELL_CONTRACT.sessionViewerTestId}"`,
+    `${id} shell session viewer`,
   );
   assertIncludes(
     html,

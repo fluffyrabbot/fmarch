@@ -6247,7 +6247,7 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
                 "title": "Subscription API",
                 "description": "Watched updates"
             }),
-            eventstore::ActorId::User("moderator".into()),
+            eventstore::ActorId::Principal("moderator".into()),
             1,
         )],
     )
@@ -6453,7 +6453,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                     "pack_ref": pack_artifact.pack_ref.clone(),
                     "pack_artifact": pack_artifact,
                 }),
-                eventstore::ActorId::User("host".into()),
+                eventstore::ActorId::Principal("host".into()),
                 1,
             ),
             eventstore::EventInput::new(
@@ -6918,7 +6918,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn profile_api_uses_enabled_accounts_and_denies_cross_account_editing(pool: sqlx::PgPool) {
+async fn profile_api_uses_enabled_accounts_and_principal_addressed_editing(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool);
     let (owner_token, owner_principal) =
         create_media_upload_account_session(&app, "profile-owner").await;
@@ -6936,10 +6936,17 @@ async fn profile_api_uses_enabled_accounts_and_denies_cross_account_editing(pool
         )
         .await
         .unwrap();
-    assert_eq!(created.status(), StatusCode::CREATED);
-    let editor: ProfileEditor =
-        serde_json::from_slice(&to_bytes(created.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let created_status = created.status();
+    let created_body = to_bytes(created.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        created_status,
+        StatusCode::CREATED,
+        "create profile response: {}",
+        String::from_utf8_lossy(&created_body)
+    );
+    let editor: ProfileEditor = serde_json::from_slice(&created_body).unwrap();
     assert_eq!(editor.handle, "owner_profile");
+    assert_eq!(editor.revision, 1);
 
     let public = app
         .clone()
@@ -6958,7 +6965,30 @@ async fn profile_api_uses_enabled_accounts_and_denies_cross_account_editing(pool
     assert_eq!(public.display_name, "Owner Profile");
     assert!(!String::from_utf8_lossy(&bytes).contains(owner_principal.as_str()));
 
-    let denied = app
+    let other_without_profile = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/profiles/me")
+                .header("authorization", format!("Bearer {other_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "display_name": "Takeover",
+                        "bio": "No",
+                        "visibility": "public",
+                        "expected_revision": editor.revision,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(other_without_profile.status(), StatusCode::NOT_FOUND);
+
+    let legacy_targeted_edit = app
         .clone()
         .oneshot(
             Request::builder()
@@ -6966,29 +6996,91 @@ async fn profile_api_uses_enabled_accounts_and_denies_cross_account_editing(pool
                 .uri("/profiles/owner_profile")
                 .header("authorization", format!("Bearer {other_token}"))
                 .header("content-type", "application/json")
-                .body(Body::from(
-                    r#"{"display_name":"Takeover","bio":"No","visibility":"public"}"#,
-                ))
+                .body(Body::from("{}"))
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        legacy_targeted_edit.status(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
 
     let updated = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("PUT")
-                .uri("/profiles/owner_profile")
+                .uri("/profiles/me")
                 .header("authorization", format!("Bearer {owner_token}"))
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"display_name":"Owner Profile","bio":"Private bio","visibility":"members"}"#))
+                .body(Body::from(
+                    serde_json::json!({
+                        "display_name": "Owner Profile",
+                        "bio": "Private bio",
+                        "visibility": "private",
+                        "expected_revision": editor.revision,
+                    })
+                    .to_string(),
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(updated.status(), StatusCode::OK);
+    let updated: ProfileEditor =
+        serde_json::from_slice(&to_bytes(updated.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(updated.visibility, "private");
+    assert_eq!(updated.revision, editor.revision + 1);
+
+    let stale = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/profiles/me")
+                .header("authorization", format!("Bearer {owner_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "display_name": "Stale edit",
+                        "bio": "Must not overwrite the newer profile",
+                        "visibility": "private",
+                        "expected_revision": editor.revision,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+    let stale: RejectMsg =
+        serde_json::from_slice(&to_bytes(stale.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(stale.error, RejectCode::StreamConflict);
+
+    let owner_editor = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/profiles/me/editor")
+                .header("authorization", format!("Bearer {owner_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(owner_editor.status(), StatusCode::OK);
+    let owner_editor: ProfileEditor = serde_json::from_slice(
+        &to_bytes(owner_editor.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(owner_editor.visibility, "private");
+    assert_eq!(owner_editor.revision, updated.revision);
+
     let hidden = app
         .oneshot(
             Request::builder()

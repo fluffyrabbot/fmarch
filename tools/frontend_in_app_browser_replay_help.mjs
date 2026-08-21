@@ -57,7 +57,7 @@ assert.deepEqual(routeErrorScenario.errorSurface, {
   panelTestId: "route-error-panel",
   actionHref: "/",
   activeNavTestId: "role-nav-player",
-  sessionPrincipal: "player_mira",
+  sessionViewer: "Your account",
   capabilitySummary: "ChannelMember + SlotOccupant",
 });
 

@@ -35,15 +35,15 @@ try {
     const created = await createProfile(owner, frontend);
     const publicView = await provePublic(anonymous, frontend);
     const edited = await editProfile(owner, frontend);
-    const denied = await proveDenied(other, frontend);
-    const privacy = await makeMembersOnly(owner, anonymous, frontend);
+    const ownerScope = await proveOwnerScope(other, frontend);
+    const privacy = await makePrivate(owner, anonymous, frontend);
     const evidence = {
       version: 1, proof: "profile-role-proof", status: "passed", scope: "local-profile-role-proof",
       releaseReady: false, productionReady: false,
-      proofBoundary: "Local scratch-Postgres, local Rust API, two real local account sessions, SvelteKit profile role URLs, and Chromium proof. It proves owner profile creation and edit/reload, anonymous public view, members-only withdrawal, and denied cross-account editing. It does not prove hosted privacy, moderation, retention, legal policy, direct messages, follower graphs, search, ranking, recommendations, or release readiness.",
-      roleUrl: `${frontend}/u/owner_profile/edit`, created, publicView, edited, denied, privacy,
+      proofBoundary: "Local scratch-Postgres, local Rust API, two real local account sessions, SvelteKit profile role URLs, and Chromium proof. It proves owner profile creation and revision-aware edit/reload through the sole owner route, anonymous public view, private-profile withdrawal, and that a second account resolves its own profile state rather than an owner-addressed editor. It does not prove hosted privacy, moderation, retention, legal policy, direct messages, follower graphs, search, ranking, recommendations, or release readiness.",
+      roleUrl: `${frontend}/profile/edit`, created, publicView, edited, ownerScope, privacy,
     };
-    if (evidence.created.status !== "passed" || evidence.publicView.status !== "passed" || evidence.edited.reloadBio !== "Updated public bio." || evidence.denied.statusCode !== 403 || evidence.privacy.unavailable !== true) throw new Error("profile proof contract drifted");
+    if (evidence.created.status !== "passed" || evidence.publicView.status !== "passed" || evidence.edited.reloadBio !== "Updated public bio." || !/^(?:0|[1-9][0-9]*)$/u.test(evidence.edited.expectedRevision) || evidence.ownerScope.createSurface !== true || evidence.privacy.unavailable !== true) throw new Error("profile proof contract drifted");
     await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
     console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
   } finally { await owner.close(); await other.close(); await anonymous.close(); }
@@ -75,7 +75,7 @@ async function createProfile(context, frontend) {
   try {
     await page.goto(`${frontend}/profile/edit`, { waitUntil: "networkidle" });
     await page.getByTestId("profile-handle").fill("owner_profile"); await page.getByTestId("profile-display-name").fill("Owner Profile"); await page.getByTestId("profile-bio").fill("Opening public bio.");
-    await Promise.all([page.waitForURL(/\/u\/owner_profile\/edit/, { timeout: 15000 }), page.getByTestId("profile-create-submit").click()]);
+    await page.getByTestId("profile-create-submit").click();
     await page.getByTestId("profile-editor-surface").waitFor({ state: "visible" });
     return { status: "passed", editorTestId: "profile-editor-surface" };
   } finally { await page.close(); }
@@ -91,21 +91,26 @@ async function provePublic(context, frontend) {
 async function editProfile(context, frontend) {
   const page = await context.newPage({ viewport: { width: 1024, height: 768 } });
   try {
-    await page.goto(`${frontend}/u/owner_profile/edit`, { waitUntil: "networkidle" });
+    await page.goto(`${frontend}/profile/edit`, { waitUntil: "networkidle" });
+    const expectedRevision = await page.getByTestId("profile-expected-revision").inputValue();
     await page.getByTestId("profile-bio").fill("Updated public bio.");
     await Promise.all([page.waitForLoadState("networkidle"), page.getByTestId("profile-update-submit").click()]);
     await page.reload({ waitUntil: "networkidle" });
-    return { status: "passed", reloadBio: await page.getByTestId("profile-bio").inputValue() };
+    return { status: "passed", expectedRevision, reloadBio: await page.getByTestId("profile-bio").inputValue() };
   } finally { await page.close(); }
 }
-async function proveDenied(context, frontend) {
+async function proveOwnerScope(context, frontend) {
   const page = await context.newPage();
-  try { const response = await page.goto(`${frontend}/u/owner_profile/edit`, { waitUntil: "networkidle" }); return { status: "passed", statusCode: response?.status() ?? 0 }; } finally { await page.close(); }
+  try {
+    await page.goto(`${frontend}/profile/edit`, { waitUntil: "networkidle" });
+    await page.getByTestId("profile-create-surface").waitFor({ state: "visible" });
+    return { status: "passed", createSurface: true };
+  } finally { await page.close(); }
 }
-async function makeMembersOnly(owner, anonymous, frontend) {
+async function makePrivate(owner, anonymous, frontend) {
   const editor = await owner.newPage(); const publicPage = await anonymous.newPage();
   try {
-    await editor.goto(`${frontend}/u/owner_profile/edit`, { waitUntil: "networkidle" }); await editor.getByTestId("profile-visibility").selectOption("members");
+    await editor.goto(`${frontend}/profile/edit`, { waitUntil: "networkidle" }); await editor.getByTestId("profile-visibility").selectOption("private");
     await Promise.all([editor.waitForLoadState("networkidle"), editor.getByTestId("profile-update-submit").click()]);
     await publicPage.goto(`${frontend}/u/owner_profile`, { waitUntil: "networkidle" }); await publicPage.getByTestId("profile-public-unavailable").waitFor({ state: "visible" });
     return { status: "passed", unavailable: true, testId: "profile-public-unavailable" };

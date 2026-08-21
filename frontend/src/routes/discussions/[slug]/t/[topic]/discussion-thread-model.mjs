@@ -1,3 +1,5 @@
+import { buildCommunityAuthorView } from "../../../../../lib/app/community-author-model.mjs";
+
 export const DISCUSSION_QUOTATION_EXCERPT_BYTES = 1000;
 export const DISCUSSION_CITATION_PREVIEW_LIMIT = 5;
 export const DISCUSSION_MAX_QUOTATIONS = 8;
@@ -41,11 +43,13 @@ export function buildAttachedQuotations({ posts = [], quoteSeqs = [], topicId })
     if (post === undefined || excerpt === "") {
       continue;
     }
+    const author = buildCommunityAuthorView(post?.author);
     attached.push(
       Object.freeze({
         sourceSeq: Number(seq),
         excerpt,
-        authorLabel: post.author?.display_name ?? "Archived member",
+        author,
+        authorLabel: author.label,
         target: Object.freeze({
           kind: "discussion_post",
           scope_id: String(topicId),
@@ -140,7 +144,7 @@ export function buildDiscussionPostView(post, { posts = [], citations = null } =
           sourceSeq,
           excerpt,
           href: `#post-${sourceSeq}`,
-          authorLabel: original?.author?.display_name ?? null,
+          authorLabel: original === undefined ? null : buildCommunityAuthorView(original.author).label,
           originalUnavailable: original === undefined,
         });
       })
@@ -165,7 +169,7 @@ export function buildDiscussionPostView(post, { posts = [], citations = null } =
   );
   return Object.freeze({
     sourceSeq: Number(post?.source_seq),
-    author: post?.author ?? null,
+    author: buildCommunityAuthorView(post?.author),
     body: typeof post?.body === "string" ? post.body : "",
     createdAt: post?.created_at ?? null,
     quotations,

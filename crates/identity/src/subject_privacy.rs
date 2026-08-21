@@ -1340,7 +1340,7 @@ pub async fn open_subject_claim<T: for<'de> Deserialize<'de>>(
 
 pub fn random_tombstone_alias() -> String {
     let random = Uuid::new_v4().simple().to_string();
-    format!("Former member {random}")
+    format!("former-member-{random}")
 }
 
 /// Reapply the external revocation authority after any database restore.
@@ -1641,7 +1641,7 @@ async fn subject_database_presence_batch(
                 UNION ALL SELECT 1 FROM member_lifecycle_event WHERE subject_id = journal.subject_id
                 UNION ALL SELECT 1 FROM member_lifecycle_projection WHERE subject_id = journal.subject_id
                 UNION ALL SELECT 1 FROM member_personal_export WHERE subject_id = journal.subject_id
-                UNION ALL SELECT 1 FROM profile_editor WHERE subject_id = journal.subject_id
+                UNION ALL SELECT 1 FROM member_profile WHERE subject_id = journal.subject_id
                 UNION ALL SELECT 1 FROM game_persona_private WHERE subject_id = journal.subject_id
             )
         FROM UNNEST($1::uuid[]) AS journal(subject_id)
@@ -2085,13 +2085,9 @@ async fn finalize_subject_erasure(
         )));
     }
 
-    // Remove every sealed presentation/owner claim. Canonical events retain
-    // only opaque ids and rebuild through the tombstone branch.
-    sqlx::query("DELETE FROM subject_private_claim WHERE subject_id = $1")
-        .bind(record.subject_id.as_uuid())
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    // Redact the retained projections before deleting their claims. An active
+    // profile requires a current claim, so deleting first would transiently
+    // violate the active/redacted shape invariant through the FK's SET NULL.
     scrub_subject_projections(
         &mut tx,
         record.subject_id,
@@ -2100,6 +2096,13 @@ async fn finalize_subject_erasure(
         record.destroyed_at,
     )
     .await?;
+    // Canonical events retain only opaque ids and rebuild through the
+    // tombstone branch once no sealed owner/presentation claim remains.
+    sqlx::query("DELETE FROM subject_private_claim WHERE subject_id = $1")
+        .bind(record.subject_id.as_uuid())
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     reconcile_member_lifecycle(&mut tx, record, principal).await?;
     sqlx::query("DELETE FROM member_personal_export WHERE principal_user_id = $1")
         .bind(principal)
@@ -2289,7 +2292,7 @@ pub async fn verify_or_bind_database_authority(
                 SELECT 1 FROM privacy_subject
                 UNION ALL SELECT 1 FROM platform_principal
                 UNION ALL SELECT 1 FROM member_lifecycle_event
-                UNION ALL SELECT 1 FROM profile_editor
+                UNION ALL SELECT 1 FROM member_profile
                 UNION ALL SELECT 1 FROM game_persona_private
                 UNION ALL SELECT 1 FROM events
             )
@@ -2520,11 +2523,14 @@ async fn scrub_subject_projections(
     destroyed_at: i64,
 ) -> Result<(), SubjectPrivacyError> {
     let database_error = |error: sqlx::Error| SubjectPrivacyError::Storage(error.to_string());
-    sqlx::query("UPDATE profile_public AS public SET handle = CONCAT('former-member-', REPLACE(public.profile_id::text, '-', '')), display_name = $2, bio = '', visibility = 'public' FROM profile_editor AS editor WHERE editor.profile_id = public.profile_id AND editor.subject_id = $1")
+    // A redacted identity retains only its non-authorizing attribution alias.
+    // Delete the public materialization rather than carrying an alias through
+    // a current-profile table, and clear every active ownership lookup token.
+    sqlx::query("DELETE FROM public_profile WHERE profile_id IN (SELECT profile_id FROM member_profile WHERE subject_id = $1)")
+        .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;
+    sqlx::query("UPDATE member_profile SET active_principal_id = NULL, lifecycle = 'redacted', redacted_alias = $2, current_claim_id = NULL, handle_hmac = NULL WHERE subject_id = $1")
         .bind(subject_id.as_uuid()).bind(alias).execute(&mut **tx).await.map_err(database_error)?;
-    sqlx::query("UPDATE profile_editor SET principal_user_id = $2, current_claim_id = NULL WHERE subject_id = $1")
-        .bind(subject_id.as_uuid()).bind(alias).execute(&mut **tx).await.map_err(database_error)?;
-    sqlx::query("DELETE FROM publication_surface WHERE surface_id IN (SELECT profile_id FROM profile_editor WHERE subject_id = $1)")
+    sqlx::query("DELETE FROM publication_surface WHERE surface_id IN (SELECT profile_id FROM member_profile WHERE subject_id = $1)")
         .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;
     sqlx::query("DELETE FROM game_persona_name_claim WHERE (game_id, persona_id) IN (SELECT game_id, persona_id FROM game_persona_private WHERE subject_id = $1)")
         .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;
@@ -2673,6 +2679,17 @@ mod tests {
             Err(error) => panic!("expected configuration error, found {error}"),
             Ok(_) => panic!("expected configuration error"),
         }
+    }
+
+    #[test]
+    fn tombstone_alias_uses_the_canonical_profile_redaction_form() {
+        let alias = random_tombstone_alias();
+        let suffix = alias
+            .strip_prefix("former-member-")
+            .expect("tombstone aliases use the profile redaction prefix");
+        assert_eq!(suffix.len(), 32);
+        assert_eq!(suffix, suffix.to_ascii_lowercase());
+        Uuid::parse_str(suffix).expect("tombstone alias suffix is a UUID");
     }
 
     #[test]

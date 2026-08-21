@@ -3,14 +3,6 @@ const CAPABILITY_LABELS = Object.freeze({
   GlobalMod: "Community moderator",
 });
 
-export function humanizePrincipal(value) {
-  if (value === null || value === undefined || String(value).trim() === "") {
-    return "Signed out";
-  }
-  const principal = String(value).trim();
-  return principal.startsWith("@") ? principal : `@${principal}`;
-}
-
 export function humanizeCapabilityLabel(value) {
   if (value === null || value === undefined || String(value).trim() === "") {
     return "Standard access";
@@ -53,19 +45,6 @@ export function sessionContextLabel({ game = null, capabilities = [] } = {}) {
     return gameLabel === null ? "Spectator" : `Watching ${gameLabel}`;
   }
   return gameLabel === null ? "Account" : gameLabel;
-}
-
-export function principalInitials(value) {
-  if (value === null || value === undefined || String(value).trim() === "") {
-    return "?";
-  }
-  const parts = String(value)
-    .replace(/^@/, "")
-    .split(/[^a-zA-Z0-9]+/)
-    .filter(Boolean);
-  return (parts.length === 1 ? parts[0].slice(0, 2) : parts.map((part) => part[0]).join(""))
-    .slice(0, 2)
-    .toUpperCase();
 }
 
 function humanizeSingleCapability(value) {

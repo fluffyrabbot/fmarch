@@ -1,5 +1,6 @@
 import { normalizeCapabilities } from "../app/capabilities.mjs";
 import { fetchTimeoutSignal, ssrFetchTimeoutMs } from "../app/cold-load.mjs";
+import { normalizeViewerProfile } from "../app/viewer-presentation-model.mjs";
 import { serverApiBaseUrl } from "./api-base.mjs";
 
 export const SESSION_COOKIE_NAME = "fmarch_session";
@@ -259,9 +260,13 @@ function normalizeSessionPayload(payload, context = null) {
     : Array.isArray(payload.capabilities)
       ? payload.capabilities
       : [];
+  const viewerProfile = normalizeViewerProfile(
+    payload.viewerProfile ?? payload.viewer_profile ?? null,
+  );
 
   return Object.freeze({
     principalUserId,
+    ...(viewerProfile === null ? {} : { viewerProfile }),
     ...(payload.rotation_required === true ? { rotationRequired: true } : {}),
     resolvedCapabilities: normalizeCapabilities(
       rawCapabilities.map((capability) =>

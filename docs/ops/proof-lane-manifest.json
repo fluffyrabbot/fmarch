@@ -69,6 +69,7 @@
     },
     "cargo:public-platform": { "kind": "shell", "command": "cargo test -p attention -p social -p trust_safety -p forum -p content_reference" },
     "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p identity -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "identity", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:profile-application": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p profile_application -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "profile_application", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:media": { "kind": "shell", "command": "cargo test -p media" },
     "cargo:api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p api -- --test-threads=4", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "api", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:operator_api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p operator_api -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "operator_api", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
@@ -485,6 +486,14 @@
       "tier": "active",
       "paths": ["crates/identity/tests/"],
       "lanes": ["cargo:identity", "cargo:clippy-workspace"]
+    },
+    {
+      "id": "crate:profile-application",
+      "tier": "active",
+      "paths": ["crates/profile_application/"],
+      "crate": "profile_application",
+      "lanes": ["cargo:profile-application", "cargo:clippy-workspace"],
+      "also_triggers": ["crate:projections", "crate:identity"]
     },
     {
       "id": "crate:media",

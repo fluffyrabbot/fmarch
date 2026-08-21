@@ -27,8 +27,12 @@
             <p class="fm-eyebrow">{topic.posting_state}</p>
             <h2>{topic.title}</h2>
             <p>
-              {topic.post_count} posts
-              {#if topic.author} · started by <a href={`/u/${encodeURIComponent(topic.author.handle)}`}>{topic.author.display_name}</a>{/if}
+              {topic.post_count} posts · started by
+              {#if topic.author.kind === "profile"}
+                <a href={topic.author.href}>{topic.author.label}</a>
+              {:else}
+                {topic.author.label}
+              {/if}
             </p>
             <a class="fm-touch-button fm-touch-button--secondary" href={`/discussions/${encodeURIComponent(discussion.area.slug)}/t/${encodeURIComponent(topic.topic)}`} data-testid={`discussion-topic-open-${topic.topic}`}>
               Open topic

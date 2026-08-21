@@ -99,6 +99,7 @@ dependencies = [
  "media",
  "object_store",
  "png",
+ "profile_application",
  "projections",
  "reqwest 0.12.28",
  "serde",
@@ -2352,6 +2353,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "profile_application"
+version = "0.1.0"
+dependencies = [
+ "eventstore",
+ "hmac 0.12.1",
+ "identity",
+ "projections",
+ "serde_json",
+ "sha2 0.10.9",
+ "social",
+ "sqlx",
+ "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
 name = "profiling"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2383,6 +2400,7 @@ dependencies = [
  "game_platform",
  "identity",
  "object_store",
+ "profile_application",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -3029,6 +3047,7 @@ dependencies = [
  "media",
  "operator_api",
  "percent-encoding",
+ "profile_application",
  "projections",
  "serde_json",
  "sqlx",
@@ -3161,6 +3180,7 @@ dependencies = [
 name = "social"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "serde_json",
  "thiserror 1.0.69",
  "uuid",

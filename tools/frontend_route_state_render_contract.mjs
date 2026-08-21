@@ -160,7 +160,7 @@ try {
       mainTargetId: APP_SHELL_CONTRACT.mainTargetId,
       mainTargetTestId: APP_SHELL_CONTRACT.mainTargetTestId,
       sessionTestId: APP_SHELL_CONTRACT.sessionTestId,
-      sessionPrincipalTestId: APP_SHELL_CONTRACT.sessionPrincipalTestId,
+      sessionViewerTestId: APP_SHELL_CONTRACT.sessionViewerTestId,
       sessionCapabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
       sessionGameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
       topbarTestId: APP_SHELL_CONTRACT.topbarTestId,
@@ -720,8 +720,8 @@ async function proveRenderedRouteErrorSurface(bundle) {
   );
   assertIncludes(
     html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionPrincipalTestId}">@player_mira`,
-    "route error session principal",
+    `data-testid="${APP_SHELL_CONTRACT.sessionViewerTestId}">Your account`,
+    "route error session viewer",
   );
   assertIncludes(
     html,
@@ -745,7 +745,7 @@ async function proveRenderedRouteErrorSurface(bundle) {
     actionTestId: "route-error-action",
     actionHref: "/",
     activeNavTestId: roleNavTestId("player"),
-    sessionPrincipal: "player_mira",
+    sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
     message: "Channel private:role_pm:slot-7 is not visible.",
     htmlBytes: Buffer.byteLength(html),
@@ -807,7 +807,7 @@ async function proveRenderedRouteLoadingSurface(bundle) {
     statusTestId: "route-state-status-player-loading",
     actionTestId: "route-state-action-player-loading",
     activeNavTestId: roleNavTestId("player"),
-    sessionPrincipal: "player_mira",
+    sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
     htmlBytes: Buffer.byteLength(html),
   };
@@ -841,8 +841,8 @@ async function proveRenderedNavigationPendingLayer(bundle) {
   );
   assertIncludes(
     html,
-    'data-session-principal="@player_mira"',
-    "navigation pending session principal",
+    'data-session-viewer="Your account"',
+    "navigation pending session viewer",
   );
   assertIncludes(
     html,
@@ -872,7 +872,7 @@ async function proveRenderedNavigationPendingLayer(bundle) {
     rootTestId: "app-navigation-pending",
     statusTestId: "app-navigation-pending-status",
     activeNavTestId: roleNavTestId("player"),
-    sessionPrincipal: "player_mira",
+    sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
     hiddenHtmlBytes: Buffer.byteLength(hidden.html),
     htmlBytes: Buffer.byteLength(html),
@@ -2024,8 +2024,8 @@ function assertAppShellSession(html, label) {
   );
   assertIncludes(
     html,
-    `data-testid="${APP_SHELL_CONTRACT.sessionPrincipalTestId}"`,
-    `${label} shell session principal`,
+    `data-testid="${APP_SHELL_CONTRACT.sessionViewerTestId}"`,
+    `${label} shell session viewer`,
   );
   assertIncludes(
     html,
@@ -2159,7 +2159,7 @@ function assertRenderedShellNav({ id, render, html, expectedNav }) {
         blockedReason: item.blockedReason,
       })),
     sessionTestId: APP_SHELL_CONTRACT.sessionTestId,
-    sessionPrincipalTestId: APP_SHELL_CONTRACT.sessionPrincipalTestId,
+    sessionViewerTestId: APP_SHELL_CONTRACT.sessionViewerTestId,
     sessionCapabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     sessionGameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     shellComponentCount,
@@ -2422,54 +2422,63 @@ function fixtureRouteInput({ token, game = "midsummer" }) {
 	  return {
 	    principalUserId: data.session?.principalUserId ??
 	      data.operator?.principalUserId ??
-	      (data.shell?.session?.principalLabel === "Signed out"
-	        ? null
-	        : data.shell?.session?.principalLabel ?? null),
+	      data.player?.principalUserId ??
+	      data.commandPrincipalUserId ??
+	      null,
+	    viewerProfile: data.session?.viewerProfile ?? null,
 	    resolvedCapabilities: data.session?.resolvedCapabilities ?? [],
 	  };
 	}
 
-	function renderWithRootLayout({ page, data, url = "http://localhost/" }) {
+	function renderWithRootLayout({ page, data, url = "http://localhost/", appSession = null }) {
 	  const rootData = rootRouteData(data);
-	  const appSession = appSessionForData(rootData);
+	  const resolvedAppSession = appSession ?? appSessionForData(rootData);
 	  setPage({
 	    status: 200,
 	    error: null,
 	    url: new URL(url),
 	    data: {
 	      ...rootData,
-	      appSession,
+	      appSession: resolvedAppSession,
 	    },
 	  });
 	  return render(AppRootShell, {
 	    props: {
 	      page,
 	      data: rootData,
-	      layoutData: { ...rootData, appSession },
+	      layoutData: { ...rootData, appSession: resolvedAppSession },
 	    },
 	  });
 	}
 
 export async function renderBoardSurface() {
-	  const data = buildBoardRouteData({
-    principalUserId: "admin_a",
-    capabilities: [
+	  const appSession = {
+	    principalUserId: "admin_a",
+	    resolvedCapabilities: [
       { kind: "GlobalAdmin" },
       { kind: "HostOf", game: "midsummer" },
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
-    ],
+	    ],
+	  };
+	  const data = buildBoardRouteData({
+	    principalUserId: appSession.principalUserId,
+	    capabilities: appSession.resolvedCapabilities,
 		gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 	  });
-	  return renderWithRootLayout({ page: "board", data });
+	  return renderWithRootLayout({ page: "board", data, appSession });
 	}
 
 export async function renderBoardPlayerSurface() {
+	  const appSession = fixtureRouteInput({ token: "fixture-player" });
 	  const data = buildBoardRouteData({
-    ...fixtureRouteInput({ token: "fixture-player" }),
+	    ...appSession,
 		gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 	  });
-	  return renderWithRootLayout({ page: "board", data });
+	  return renderWithRootLayout({ page: "board", data, appSession: {
+	    principalUserId: appSession.principalUserId,
+	    resolvedCapabilities: appSession.capabilities,
+	  } });
 	}
 
 export async function renderRouteErrorSurface() {
@@ -2531,15 +2540,19 @@ export async function renderNavigationPendingLayerHidden() {
 }
 
 export async function renderScenario(role, state) {
-	  if (role === "board") {
+	if (role === "board") {
+	    const fixture = fixtureRouteInput({ token: "fixture-player" });
 	    const data = {
 	      ...buildBoardRouteData({
-	        ...fixtureRouteInput({ token: "fixture-player" }),
+	        ...fixture,
 	        gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 	      }),
 	      routeState: buildRouteStateRouteData({ surface: "board", state }),
 	    };
-	    return renderWithRootLayout({ page: "board", data });
+	    return renderWithRootLayout({ page: "board", data, appSession: {
+	      principalUserId: fixture.principalUserId,
+	      resolvedCapabilities: fixture.capabilities,
+	    } });
 	  }
 
   if (role === "admin") {

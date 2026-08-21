@@ -78,7 +78,7 @@ use identity::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use social::{self};
+use social::{self, ProfilePresentation, ProfileVisibility, RedactedProfileAlias};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -790,20 +790,9 @@ pub struct PublicProfileRow {
     pub display_name: String,
     pub bio: String,
     pub visibility: String,
-    pub updated_seq: i64,
-}
-
-/// Owner-only profile editor state. This is never returned by public profile
-/// reads and is authorization-checked at the API boundary.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProfileEditorRow {
-    pub profile_id: Uuid,
-    pub principal_user_id: String,
-    pub handle: String,
-    pub display_name: String,
-    pub bio: String,
-    pub visibility: String,
-    pub updated_seq: i64,
+    /// Per-profile stream revision. It is safe to use as an optimistic write
+    /// precondition; global event sequence is not.
+    pub revision: i64,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -1293,20 +1282,26 @@ async fn fold_event(
                 },
             )
             .await?;
-            let public_author_profile_id =
-                if public_main {
-                    match notification_author.as_deref() {
-                        Some(principal_user_id) => sqlx::query_scalar(
-                            "SELECT profile_id FROM profile_editor WHERE principal_user_id = $1",
+            let public_author_profile_id = if public_main {
+                match notification_author.as_deref() {
+                    Some(principal_user_id) => {
+                        sqlx::query_scalar(
+                            r#"
+                            SELECT public.profile_id
+                            FROM public_profile AS public
+                            JOIN member_profile AS profile ON profile.profile_id = public.profile_id
+                            WHERE profile.active_principal_id = $1 AND profile.lifecycle = 'active'
+                            "#,
                         )
                         .bind(principal_user_id)
                         .fetch_optional(&mut **tx)
-                        .await?,
-                        None => None,
+                        .await?
                     }
-                } else {
-                    None
-                };
+                    None => None,
+                }
+            } else {
+                None
+            };
             record_game_private_citations(
                 tx,
                 PostRef {
@@ -2739,14 +2734,6 @@ async fn fold_inner(
 // ───────────────────────── public API ─────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ProfilePrivateClaim {
-    principal_user_id: String,
-    handle: String,
-    display_name: String,
-    bio: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 struct GamePersonaPrivateClaim {
     principal_user_id: String,
     public_name: String,
@@ -3120,130 +3107,8 @@ fn canonical_subject_event(
     payload: serde_json::Value,
 ) -> EventInput {
     let mut canonical = canonical_event(event, payload);
-    canonical.actor = eventstore::ActorId::User(subject_id.to_string());
+    canonical.actor = eventstore::ActorId::PrivacySubject(subject_id.as_uuid());
     canonical
-}
-
-async fn canonicalize_profile_events(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    stream_id: Uuid,
-    events: &[EventInput],
-) -> Result<(Vec<EventInput>, HashMap<Uuid, ProfilePrivateClaim>), ProjectionError> {
-    let mut current: Option<(SubjectId, ProfilePrivateClaim)> = None;
-    let mut canonical = Vec::with_capacity(events.len());
-    let mut opened_claims = HashMap::new();
-    for event in events {
-        match event.kind.as_str() {
-            "ProfileCreated" if event.payload.get("claim_id").is_none() => {
-                let principal_user_id =
-                    str_field(&event.payload, "principal_user_id", &event.kind)?;
-                let claim = ProfilePrivateClaim {
-                    principal_user_id: principal_user_id.clone(),
-                    handle: str_field(&event.payload, "handle", &event.kind)?,
-                    display_name: str_field(&event.payload, "display_name", &event.kind)?,
-                    bio: str_field(&event.payload, "bio", &event.kind)?,
-                };
-                let visibility = str_field(&event.payload, "visibility", &event.kind)?;
-                let subject_id =
-                    ensure_active_subject(tx, &principal_user_id, event.occurred_at).await?;
-                let claim_id = insert_subject_claim(
-                    tx,
-                    subject_id,
-                    "profile",
-                    stream_id,
-                    None,
-                    event.occurred_at,
-                    &claim,
-                )
-                .await?;
-                opened_claims.insert(claim_id.as_uuid(), claim.clone());
-                canonical.push(canonical_subject_event(
-                    event,
-                    subject_id,
-                    serde_json::json!({
-                        "subject_id": subject_id,
-                        "claim_id": claim_id,
-                        "visibility": visibility,
-                    }),
-                ));
-                current = Some((subject_id, claim));
-            }
-            "ProfileUpdated" if event.payload.get("claim_id").is_none() => {
-                let (subject_id, mut claim) = match current.clone() {
-                    Some(current) => current,
-                    None => load_current_profile_claim(tx, stream_id).await?,
-                };
-                claim.display_name = str_field(&event.payload, "display_name", &event.kind)?;
-                claim.bio = str_field(&event.payload, "bio", &event.kind)?;
-                let visibility = str_field(&event.payload, "visibility", &event.kind)?;
-                let claim_id = insert_subject_claim(
-                    tx,
-                    subject_id,
-                    "profile",
-                    stream_id,
-                    None,
-                    event.occurred_at,
-                    &claim,
-                )
-                .await?;
-                opened_claims.insert(claim_id.as_uuid(), claim.clone());
-                canonical.push(canonical_subject_event(
-                    event,
-                    subject_id,
-                    serde_json::json!({
-                        "subject_id": subject_id,
-                        "claim_id": claim_id,
-                        "visibility": visibility,
-                    }),
-                ));
-                current = Some((subject_id, claim));
-            }
-            "ProfileCreated" | "ProfileUpdated" => {
-                let subject_id =
-                    SubjectId::from_uuid(uuid_field(&event.payload, "subject_id", &event.kind)?);
-                let claim_id =
-                    ClaimId::from_uuid(uuid_field(&event.payload, "claim_id", &event.kind)?);
-                let visibility = str_field(&event.payload, "visibility", &event.kind)?;
-                canonical.push(canonical_subject_event(
-                    event,
-                    subject_id,
-                    serde_json::json!({
-                        "subject_id": subject_id,
-                        "claim_id": claim_id,
-                        "visibility": visibility,
-                    }),
-                ));
-            }
-            _ => canonical.push(event.clone()),
-        }
-    }
-    Ok((canonical, opened_claims))
-}
-
-async fn load_current_profile_claim(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    stream_id: Uuid,
-) -> Result<(SubjectId, ProfilePrivateClaim), ProjectionError> {
-    let row = sqlx::query(
-        "SELECT subject_id, current_claim_id FROM profile_editor WHERE profile_id = $1",
-    )
-    .bind(stream_id)
-    .fetch_optional(&mut **tx)
-    .await?
-    .ok_or_else(|| {
-        ProjectionError::Privacy("profile has no private subject binding".to_string())
-    })?;
-    let subject_id =
-        SubjectId::from_uuid(row.try_get::<Uuid, _>("subject_id").map_err(|_| {
-            ProjectionError::Privacy("profile subject binding is missing".to_string())
-        })?);
-    let claim_id =
-        ClaimId::from_uuid(row.try_get::<Uuid, _>("current_claim_id").map_err(|_| {
-            ProjectionError::Privacy("profile current claim is missing".to_string())
-        })?);
-    let claim =
-        open_active_subject_claim(tx, subject_id, claim_id, "profile", stream_id, None).await?;
-    Ok((subject_id, claim))
 }
 
 async fn canonicalize_game_events(
@@ -3484,13 +3349,13 @@ pub async fn member_mute_state(
         SELECT profile.profile_id, profile.handle, profile.display_name,
                COALESCE(mute.active, FALSE) AS muted,
                COALESCE(mute.updated_seq, 0) AS updated_seq
-        FROM profile_public AS profile
-        JOIN profile_editor AS owner ON owner.profile_id = profile.profile_id
+        FROM public_profile AS profile
+        JOIN member_profile AS owner ON owner.profile_id = profile.profile_id
         LEFT JOIN profile_mute AS mute
           ON mute.principal_user_id = $1
          AND mute.target_profile_id = profile.profile_id
         WHERE profile.handle = $2
-          AND (profile.visibility = 'public' OR mute.relationship_id IS NOT NULL)
+          AND owner.lifecycle = 'active'
         "#,
     )
     .bind(principal_user_id)
@@ -3522,8 +3387,10 @@ pub async fn member_mutes(
                 SELECT mute.relationship_id, mute.target_profile_id, mute.updated_seq,
                        profile.handle, profile.display_name
                 FROM profile_mute AS mute
-                JOIN profile_public AS profile ON profile.profile_id = mute.target_profile_id
-                WHERE mute.principal_user_id = $1 AND mute.active
+        JOIN public_profile AS profile ON profile.profile_id = mute.target_profile_id
+        JOIN member_profile AS owner ON owner.profile_id = profile.profile_id
+        WHERE mute.principal_user_id = $1 AND mute.active
+          AND owner.lifecycle = 'active'
                   AND (mute.updated_seq < $2 OR
                        (mute.updated_seq = $2 AND mute.relationship_id < $3))
                 ORDER BY mute.updated_seq DESC, mute.relationship_id DESC
@@ -3543,8 +3410,10 @@ pub async fn member_mutes(
                 SELECT mute.relationship_id, mute.target_profile_id, mute.updated_seq,
                        profile.handle, profile.display_name
                 FROM profile_mute AS mute
-                JOIN profile_public AS profile ON profile.profile_id = mute.target_profile_id
+                JOIN public_profile AS profile ON profile.profile_id = mute.target_profile_id
+                JOIN member_profile AS owner ON owner.profile_id = profile.profile_id
                 WHERE mute.principal_user_id = $1 AND mute.active
+                  AND owner.lifecycle = 'active'
                 ORDER BY mute.updated_seq DESC, mute.relationship_id DESC
                 LIMIT $2
                 "#,
@@ -3639,7 +3508,7 @@ async fn fold_subscription_event(
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
     let principal_user_id = match &event.actor {
-        eventstore::ActorId::User(principal) => principal,
+        eventstore::ActorId::Principal(principal) => principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
@@ -3742,7 +3611,7 @@ async fn fold_member_mute_event(
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
     let principal_user_id = match &event.actor {
-        eventstore::ActorId::User(principal) => principal,
+        eventstore::ActorId::Principal(principal) => principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
@@ -3843,7 +3712,7 @@ async fn fold_moderation_event(
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
     let actor = match &event.actor {
-        eventstore::ActorId::User(principal) => principal.clone(),
+        eventstore::ActorId::Principal(principal) => principal.clone(),
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
@@ -4220,9 +4089,9 @@ async fn backfill_subscription_inbox(
          AND (period.ended_seq IS NULL OR period.ended_seq > publication.source_seq)
         WHERE subscription.subscription_id = $1
           AND NOT EXISTS (
-              SELECT 1 FROM profile_editor AS author
+              SELECT 1 FROM member_profile AS author
               WHERE author.profile_id = publication.author_profile_id
-                AND author.principal_user_id = subscription.principal_user_id
+                AND author.active_principal_id = subscription.principal_user_id
           )
         ON CONFLICT (subscription_id, source_seq) DO NOTHING
         "#,
@@ -4336,7 +4205,7 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
             let author_principal_id = match &event.actor {
-                eventstore::ActorId::User(principal) => Some(principal.as_str()),
+                eventstore::ActorId::Principal(principal) => Some(principal.as_str()),
                 _ => None,
             };
             publications::record_publication(
@@ -4418,37 +4287,59 @@ async fn discussion_author_profile_id(
     else {
         return Ok(None);
     };
-    Ok(
-        sqlx::query_scalar("SELECT profile_id FROM profile_editor WHERE principal_user_id = $1")
-            .bind(principal_user_id)
-            .fetch_optional(&mut **tx)
-            .await?,
+    Ok(sqlx::query_scalar(
+        r#"
+            SELECT profile.profile_id
+            FROM public_profile AS profile
+            JOIN member_profile AS owner ON owner.profile_id = profile.profile_id
+            WHERE owner.active_principal_id = $1 AND owner.lifecycle = 'active'
+            "#,
     )
+    .bind(principal_user_id)
+    .fetch_optional(&mut **tx)
+    .await?)
 }
 
-/// Append a profile stream and synchronously fold its public and owner-only
-/// read models in the same transaction.
-pub async fn append_profile_and_project(
-    pool: &PgPool,
+/// Append profile events that have already crossed the profile application
+/// boundary. The event payload may contain only subject/claim references,
+/// visibility, and the opaque handle reservation; callers must seal the typed
+/// presentation first. Keeping this function canonical-only prevents a
+/// projection from becoming an accidental owner of raw profile validation,
+/// principal bindings, or encrypted-claim creation.
+pub async fn append_canonical_profile_and_project_expected_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     stream_id: Uuid,
+    expected_stream_seq: i64,
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
-    let mut tx = pool.begin().await?;
-    let stored = append_profile_and_project_in_tx(&mut tx, stream_id, events).await?;
-    tx.commit().await?;
+    for event in events {
+        validate_canonical_profile_event(event)?;
+    }
+    let stored =
+        eventstore::append_expected_in_tx(tx, stream_id, expected_stream_seq, events).await?;
+    for event in &stored {
+        fold_profile_event(tx, stream_id, event).await?;
+    }
     Ok(stored)
 }
 
-pub async fn append_profile_and_project_in_tx(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+/// Transaction-owning convenience form of
+/// [`append_canonical_profile_and_project_expected_in_tx`].
+pub async fn append_canonical_profile_and_project_expected(
+    pool: &PgPool,
     stream_id: Uuid,
+    expected_stream_seq: i64,
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
-    let (canonical, opened_claims) = canonicalize_profile_events(tx, stream_id, events).await?;
-    let stored = append_in_tx(tx, stream_id, &canonical).await?;
-    for event in &stored {
-        fold_profile_event(tx, stream_id, event, Some(&opened_claims)).await?;
-    }
+    let mut tx = pool.begin().await?;
+    let stored = append_canonical_profile_and_project_expected_in_tx(
+        &mut tx,
+        stream_id,
+        expected_stream_seq,
+        events,
+    )
+    .await?;
+    tx.commit().await?;
     Ok(stored)
 }
 
@@ -4460,16 +4351,15 @@ pub async fn rebuild_profile_stream(pool: &PgPool, stream_id: Uuid) -> Result<()
         return Ok(());
     }
     prelock_rebuild_subject_owners(&mut tx, &events).await?;
-    sqlx::query("DELETE FROM profile_editor WHERE profile_id = $1")
-        .bind(stream_id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("DELETE FROM profile_public WHERE profile_id = $1")
+    // `member_profile` is the durable target of discussions and mute
+    // relationships.  Do not delete that identity root during a replay: fold
+    // the stream back into it with upserts so outside references remain valid.
+    sqlx::query("DELETE FROM public_profile WHERE profile_id = $1")
         .bind(stream_id)
         .execute(&mut *tx)
         .await?;
     for event in &events {
-        fold_profile_event(&mut tx, stream_id, event, None).await?;
+        fold_profile_event(&mut tx, stream_id, event).await?;
     }
     tx.commit().await?;
     Ok(())
@@ -4479,137 +4369,316 @@ async fn fold_profile_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     stream_id: Uuid,
     event: &StoredEvent,
-    opened_claims: Option<&HashMap<Uuid, ProfilePrivateClaim>>,
 ) -> Result<(), ProjectionError> {
     match event.kind.as_str() {
-        "ProfileCreated" => {
-            let subject_id =
-                SubjectId::from_uuid(uuid_field(&event.payload, "subject_id", &event.kind)?);
+        "ProfileCreated" | "ProfileUpdated" => {
+            let subject_id = canonical_profile_subject(event)?;
             let claim_id = ClaimId::from_uuid(uuid_field(&event.payload, "claim_id", &event.kind)?);
-            let requested_visibility = str_field(&event.payload, "visibility", &event.kind)?;
-            let (claim, erased_alias): (ProfilePrivateClaim, Option<String>) =
-                match subject_tombstone_alias(tx, subject_id).await? {
-                    Some(alias) => (
-                        ProfilePrivateClaim {
-                            principal_user_id: alias.clone(),
-                            handle: tombstone_profile_handle(stream_id),
-                            display_name: alias.clone(),
-                            bio: String::new(),
+            let handle_hmac = canonical_profile_handle_hmac(&event.payload, &event.kind)?;
+            let requested_visibility = parse_profile_visibility(&event.payload, &event.kind)?;
+            let tombstone_alias = subject_tombstone_alias(tx, subject_id).await?;
+            match tombstone_alias {
+                Some(alias) => {
+                    project_redacted_profile(tx, stream_id, subject_id, &alias, event).await?;
+                }
+                None => {
+                    let presentation: ProfilePresentation = open_active_subject_claim(
+                        tx, subject_id, claim_id, "profile", stream_id, None,
+                    )
+                    .await?;
+                    if presentation.visibility != requested_visibility {
+                        return Err(ProjectionError::Privacy(
+                            "canonical profile visibility does not match its sealed claim"
+                                .to_string(),
+                        ));
+                    }
+                    let active_principal_id: String = sqlx::query_scalar(
+                        "SELECT principal_user_id FROM privacy_subject WHERE subject_id = $1 AND lifecycle_state = 'active'",
+                    )
+                    .bind(subject_id.as_uuid())
+                    .fetch_optional(&mut **tx)
+                    .await?
+                    .ok_or_else(|| {
+                        ProjectionError::Privacy(
+                            "active profile subject has no active principal binding".to_string(),
+                        )
+                    })?;
+                    project_active_profile(
+                        tx,
+                        ActiveProfileProjection {
+                            profile_id: stream_id,
+                            subject_id,
+                            claim_id,
+                            active_principal_id: &active_principal_id,
+                            handle_hmac: &handle_hmac,
+                            presentation: &presentation,
+                            source_seq: event.seq,
+                            revision: event.stream_seq,
                         },
-                        Some(alias),
-                    ),
-                    None => (
-                        match opened_claims.and_then(|claims| claims.get(&claim_id.as_uuid())) {
-                            Some(claim) => claim.clone(),
-                            None => {
-                                open_active_subject_claim(
-                                    tx, subject_id, claim_id, "profile", stream_id, None,
-                                )
-                                .await?
-                            }
-                        },
-                        None,
-                    ),
-                };
-            let visibility = erased_alias
-                .as_ref()
-                .map(|_| "public")
-                .unwrap_or(requested_visibility.as_str());
-            sqlx::query(
-                r#"
-                INSERT INTO profile_public
-                    (profile_id, handle, display_name, bio, visibility, created_seq, updated_seq)
-                VALUES ($1, $2, $3, $4, $5, $6, $6)
-                "#,
-            )
-            .bind(stream_id)
-            .bind(&claim.handle)
-            .bind(&claim.display_name)
-            .bind(&claim.bio)
-            .bind(visibility)
-            .bind(event.seq)
-            .execute(&mut **tx)
-            .await?;
-            sqlx::query(
-                "INSERT INTO profile_editor (profile_id, principal_user_id, last_edit_seq, subject_id, current_claim_id) VALUES ($1, $2, $3, $4, $5)",
-            )
-            .bind(stream_id)
-            .bind(&claim.principal_user_id)
-            .bind(event.seq)
-            .bind(subject_id.as_uuid())
-            .bind(if erased_alias.is_some() {
-                None
-            } else {
-                Some(claim_id.as_uuid())
-            })
-            .execute(&mut **tx)
-            .await?;
+                    )
+                    .await?;
+                }
+            }
         }
-        "ProfileUpdated" => {
-            let subject_id =
-                SubjectId::from_uuid(uuid_field(&event.payload, "subject_id", &event.kind)?);
-            let claim_id = ClaimId::from_uuid(uuid_field(&event.payload, "claim_id", &event.kind)?);
-            let requested_visibility = str_field(&event.payload, "visibility", &event.kind)?;
-            let (claim, erased) = match subject_tombstone_alias(tx, subject_id).await? {
-                Some(alias) => (
-                    ProfilePrivateClaim {
-                        principal_user_id: alias.clone(),
-                        handle: tombstone_profile_handle(stream_id),
-                        display_name: alias,
-                        bio: String::new(),
-                    },
-                    true,
-                ),
-                None => (
-                    match opened_claims.and_then(|claims| claims.get(&claim_id.as_uuid())) {
-                        Some(claim) => claim.clone(),
-                        None => {
-                            open_active_subject_claim(
-                                tx, subject_id, claim_id, "profile", stream_id, None,
-                            )
-                            .await?
-                        }
-                    },
-                    false,
-                ),
-            };
-            let visibility = if erased {
-                "public"
-            } else {
-                requested_visibility.as_str()
-            };
-            sqlx::query(
-                "UPDATE profile_public SET handle = $2, display_name = $3, bio = $4, visibility = $5, updated_seq = $6 WHERE profile_id = $1",
-            )
-            .bind(stream_id)
-            .bind(&claim.handle)
-            .bind(&claim.display_name)
-            .bind(&claim.bio)
-            .bind(visibility)
-            .bind(event.seq)
-            .execute(&mut **tx)
-            .await?;
-            sqlx::query("UPDATE profile_editor SET principal_user_id = $2, last_edit_seq = $3, subject_id = $4, current_claim_id = $5 WHERE profile_id = $1")
-                .bind(stream_id)
-            .bind(&claim.principal_user_id)
-            .bind(event.seq)
-            .bind(subject_id.as_uuid())
-            .bind(if erased {
-                None
-            } else {
-                Some(claim_id.as_uuid())
-            })
-                .execute(&mut **tx)
-                .await?;
+        "ProfileRedacted" => {
+            let subject_id = canonical_profile_subject(event)?;
+            let alias = str_field(&event.payload, "retained_alias", &event.kind)?;
+            RedactedProfileAlias::parse(alias.as_str()).map_err(|error| {
+                ProjectionError::Privacy(format!(
+                    "invalid canonical profile redaction alias: {error}"
+                ))
+            })?;
+            project_redacted_profile(tx, stream_id, subject_id, &alias, event).await?;
         }
-        _ => {}
+        _ => {
+            return Err(ProjectionError::Privacy(format!(
+                "non-profile event {} passed to profile projection",
+                event.kind
+            )));
+        }
     }
     publications::record_profile_surface(tx, stream_id, event.seq, event.occurred_at).await?;
     Ok(())
 }
 
-fn tombstone_profile_handle(profile_id: Uuid) -> String {
-    format!("former-member-{}", profile_id.simple())
+fn canonical_profile_subject(event: &StoredEvent) -> Result<SubjectId, ProjectionError> {
+    for prohibited in ["principal_user_id", "handle", "display_name", "bio"] {
+        if event.payload.get(prohibited).is_some() {
+            return Err(ProjectionError::Privacy(format!(
+                "canonical profile event {} contains prohibited raw {prohibited}",
+                event.kind
+            )));
+        }
+    }
+    let subject_id = SubjectId::from_uuid(uuid_field(&event.payload, "subject_id", &event.kind)?);
+    match &event.actor {
+        eventstore::ActorId::PrivacySubject(actor_subject)
+            if *actor_subject == subject_id.as_uuid() =>
+        {
+            Ok(subject_id)
+        }
+        _ => Err(ProjectionError::Privacy(
+            "canonical profile event actor must be its privacy subject".to_string(),
+        )),
+    }
+}
+
+fn validate_canonical_profile_event(event: &EventInput) -> Result<(), ProjectionError> {
+    match event.kind.as_str() {
+        "ProfileCreated" | "ProfileUpdated" => {
+            for prohibited in ["principal_user_id", "handle", "display_name", "bio"] {
+                if event.payload.get(prohibited).is_some() {
+                    return Err(ProjectionError::Privacy(format!(
+                        "profile application must seal {prohibited} before appending"
+                    )));
+                }
+            }
+            let subject_id = uuid_field(&event.payload, "subject_id", &event.kind)?;
+            uuid_field(&event.payload, "claim_id", &event.kind)?;
+            canonical_profile_handle_hmac(&event.payload, &event.kind)?;
+            parse_profile_visibility(&event.payload, &event.kind)?;
+            match &event.actor {
+                eventstore::ActorId::PrivacySubject(actor_subject)
+                    if *actor_subject == subject_id =>
+                {
+                    Ok(())
+                }
+                _ => Err(ProjectionError::Privacy(
+                    "canonical profile event actor must be its privacy subject".to_string(),
+                )),
+            }
+        }
+        "ProfileRedacted" => {
+            let subject_id = uuid_field(&event.payload, "subject_id", &event.kind)?;
+            if event.payload.get("handle_hmac").is_some() {
+                return Err(ProjectionError::Privacy(
+                    "redacted profile events must not retain handle hmacs".to_string(),
+                ));
+            }
+            let alias = str_field(&event.payload, "retained_alias", &event.kind)?;
+            RedactedProfileAlias::parse(alias.as_str()).map_err(|error| {
+                ProjectionError::Privacy(format!(
+                    "invalid canonical profile redaction alias: {error}"
+                ))
+            })?;
+            match &event.actor {
+                eventstore::ActorId::PrivacySubject(actor_subject)
+                    if *actor_subject == subject_id =>
+                {
+                    Ok(())
+                }
+                _ => Err(ProjectionError::Privacy(
+                    "canonical profile event actor must be its privacy subject".to_string(),
+                )),
+            }
+        }
+        _ => Err(ProjectionError::Privacy(format!(
+            "non-profile event {} passed to profile projection",
+            event.kind
+        ))),
+    }
+}
+
+fn parse_profile_visibility(
+    payload: &serde_json::Value,
+    kind: &str,
+) -> Result<ProfileVisibility, ProjectionError> {
+    str_field(payload, "visibility", kind)?
+        .parse::<ProfileVisibility>()
+        .map_err(|error| ProjectionError::Privacy(format!("invalid profile visibility: {error}")))
+}
+
+/// Decode the opaque handle reservation supplied by the profile application.
+/// It stays JSON-safe in the event envelope and compact in the projection;
+/// the plaintext handle never crosses this boundary for private profiles.
+fn canonical_profile_handle_hmac(
+    payload: &serde_json::Value,
+    kind: &str,
+) -> Result<Vec<u8>, ProjectionError> {
+    let encoded = str_field(payload, "handle_hmac", kind)?;
+    let bytes = encoded.as_bytes();
+    if bytes.len() != 64
+        || !bytes
+            .iter()
+            .copied()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(ProjectionError::Privacy(format!(
+            "canonical profile handle_hmac for {kind} must be 64 lower-case hex characters"
+        )));
+    }
+    let mut decoded = Vec::with_capacity(32);
+    for pair in bytes.chunks_exact(2) {
+        let high = lowercase_hex_nibble(pair[0]).expect("validated lower-case hex");
+        let low = lowercase_hex_nibble(pair[1]).expect("validated lower-case hex");
+        decoded.push((high << 4) | low);
+    }
+    Ok(decoded)
+}
+
+fn lowercase_hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        _ => None,
+    }
+}
+
+/// The fully-opened profile state that may be materialized into the read
+/// models. Keeping this boundary explicit prevents the projection helper from
+/// depending on the canonical event envelope after validation and claim
+/// opening have completed.
+struct ActiveProfileProjection<'a> {
+    profile_id: Uuid,
+    subject_id: SubjectId,
+    claim_id: ClaimId,
+    active_principal_id: &'a str,
+    handle_hmac: &'a [u8],
+    presentation: &'a ProfilePresentation,
+    source_seq: i64,
+    revision: i64,
+}
+
+async fn project_active_profile(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    profile: ActiveProfileProjection<'_>,
+) -> Result<(), ProjectionError> {
+    // `member_profile` is the identity root. It retains only ownership,
+    // encrypted-claim linkage, and the opaque handle reservation. Materialize
+    // plaintext only in the dependent public view.
+    sqlx::query(
+        r#"
+        INSERT INTO member_profile
+            (profile_id, active_principal_id, handle_hmac, lifecycle, redacted_alias,
+             created_seq, updated_seq, revision, subject_id, current_claim_id)
+        VALUES ($1, $2, $3, 'active', NULL, $4, $4, $5, $6, $7)
+        ON CONFLICT (profile_id) DO UPDATE
+        SET active_principal_id = EXCLUDED.active_principal_id,
+            handle_hmac = EXCLUDED.handle_hmac,
+            lifecycle = 'active',
+            redacted_alias = NULL,
+            updated_seq = EXCLUDED.updated_seq,
+            revision = EXCLUDED.revision,
+            subject_id = EXCLUDED.subject_id,
+            current_claim_id = EXCLUDED.current_claim_id
+        "#,
+    )
+    .bind(profile.profile_id)
+    .bind(profile.active_principal_id)
+    .bind(profile.handle_hmac)
+    .bind(profile.source_seq)
+    .bind(profile.revision)
+    .bind(profile.subject_id.as_uuid())
+    .bind(profile.claim_id.as_uuid())
+    .execute(&mut **tx)
+    .await?;
+    if profile.presentation.visibility == ProfileVisibility::Public {
+        sqlx::query(
+            r#"
+            INSERT INTO public_profile
+                (profile_id, handle, display_name, bio, created_seq, updated_seq, revision)
+            VALUES ($1, $2, $3, $4, $5, $5, $6)
+            ON CONFLICT (profile_id) DO UPDATE
+            SET handle = EXCLUDED.handle,
+                display_name = EXCLUDED.display_name,
+                bio = EXCLUDED.bio,
+                updated_seq = EXCLUDED.updated_seq,
+                revision = EXCLUDED.revision
+            "#,
+        )
+        .bind(profile.profile_id)
+        .bind(profile.presentation.handle.as_str())
+        .bind(profile.presentation.display_name.as_str())
+        .bind(profile.presentation.bio.as_str())
+        .bind(profile.source_seq)
+        .bind(profile.revision)
+        .execute(&mut **tx)
+        .await?;
+    } else {
+        sqlx::query("DELETE FROM public_profile WHERE profile_id = $1")
+            .bind(profile.profile_id)
+            .execute(&mut **tx)
+            .await?;
+    }
+    Ok(())
+}
+
+async fn project_redacted_profile(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    subject_id: SubjectId,
+    alias: &str,
+    event: &StoredEvent,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO member_profile
+            (profile_id, active_principal_id, handle_hmac, lifecycle, redacted_alias,
+             created_seq, updated_seq, revision, subject_id, current_claim_id)
+        VALUES ($1, NULL, NULL, 'redacted', $2, $3, $3, $4, $5, NULL)
+        ON CONFLICT (profile_id) DO UPDATE
+        SET active_principal_id = NULL,
+            handle_hmac = NULL,
+            lifecycle = 'redacted',
+            redacted_alias = EXCLUDED.redacted_alias,
+            updated_seq = EXCLUDED.updated_seq,
+            revision = EXCLUDED.revision,
+            subject_id = EXCLUDED.subject_id,
+            current_claim_id = NULL
+        "#,
+    )
+    .bind(stream_id)
+    .bind(alias)
+    .bind(event.seq)
+    .bind(event.stream_seq)
+    .bind(subject_id.as_uuid())
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query("DELETE FROM public_profile WHERE profile_id = $1")
+        .bind(stream_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }
 
 /// Rebuild a game's projections from the log: truncate this game's projection
@@ -7600,7 +7669,7 @@ pub async fn discussion_topics(
                        topic.version, author.profile_id AS author_profile_id,
                        author.handle AS author_handle, author.display_name AS author_display_name
                 FROM discussion_topic AS topic
-                LEFT JOIN profile_public AS author ON author.profile_id = topic.author_profile_id
+                LEFT JOIN public_profile AS author ON author.profile_id = topic.author_profile_id
                 WHERE topic.area_id = $1
                   AND topic.visibility = 'visible'
                   AND (topic.updated_seq < $2 OR (topic.updated_seq = $2 AND topic.topic_id < $3))
@@ -7633,7 +7702,7 @@ pub async fn discussion_topics(
                        topic.version, author.profile_id AS author_profile_id,
                        author.handle AS author_handle, author.display_name AS author_display_name
                 FROM discussion_topic AS topic
-                LEFT JOIN profile_public AS author ON author.profile_id = topic.author_profile_id
+                LEFT JOIN public_profile AS author ON author.profile_id = topic.author_profile_id
                 WHERE topic.area_id = $1 AND topic.visibility = 'visible'
                   AND NOT EXISTS (
                       SELECT 1 FROM profile_mute AS mute
@@ -7690,7 +7759,7 @@ pub async fn discussion_topic_by_id(
                topic.version, author.profile_id AS author_profile_id,
                author.handle AS author_handle, author.display_name AS author_display_name
         FROM discussion_topic AS topic
-        LEFT JOIN profile_public AS author ON author.profile_id = topic.author_profile_id
+        LEFT JOIN public_profile AS author ON author.profile_id = topic.author_profile_id
         WHERE topic.topic_id = $1
         "#,
     )
@@ -7736,7 +7805,7 @@ pub async fn discussion_posts(
                      )
                ) AS citation_count
         FROM discussion_post AS post
-        LEFT JOIN profile_public AS author ON author.profile_id = post.author_profile_id
+        LEFT JOIN public_profile AS author ON author.profile_id = post.author_profile_id
         JOIN public_publication AS publication
           ON publication.surface_id = post.topic_id AND publication.source_seq = post.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = publication.surface_id
@@ -7853,12 +7922,12 @@ pub async fn quotation_thread_for_game_channel_in_tx(
                AND NOT EXISTS (
                    SELECT 1
                    FROM profile_mute AS mute
-                   JOIN profile_editor AS author
+                   JOIN member_profile AS author
                      ON author.profile_id = mute.target_profile_id
                    WHERE $3::text IS NOT NULL
                      AND mute.principal_user_id = $3
                      AND mute.active
-                     AND author.principal_user_id = thread_view.author_user
+                     AND author.active_principal_id = thread_view.author_user
                ) AS visible
         FROM thread_view
         WHERE game_id = $1 AND channel_id = $2
@@ -8107,12 +8176,12 @@ async fn game_post_is_visible(
               AND NOT EXISTS (
                   SELECT 1
                   FROM profile_mute AS mute
-                  JOIN profile_editor AS author
+                  JOIN member_profile AS author
                     ON author.profile_id = mute.target_profile_id
                   WHERE $5::text IS NOT NULL
                     AND mute.principal_user_id = $5
                     AND mute.active
-                    AND author.principal_user_id = thread_view.author_user
+                    AND author.active_principal_id = thread_view.author_user
               )
         )
         "#,
@@ -8155,12 +8224,12 @@ async fn game_citation_count(
           AND NOT EXISTS (
               SELECT 1
               FROM profile_mute AS mute
-              JOIN profile_editor AS author
+              JOIN member_profile AS author
                 ON author.profile_id = mute.target_profile_id
               WHERE $5::text IS NOT NULL
                 AND mute.principal_user_id = $5
                 AND mute.active
-                AND author.principal_user_id = quoting.author_user
+                AND author.active_principal_id = quoting.author_user
           )
         "#,
     )
@@ -8271,12 +8340,12 @@ async fn game_citation_rows(
           AND NOT EXISTS (
               SELECT 1
               FROM profile_mute AS mute
-              JOIN profile_editor AS author
+              JOIN member_profile AS author
                 ON author.profile_id = mute.target_profile_id
               WHERE $5::text IS NOT NULL
                 AND mute.principal_user_id = $5
                 AND mute.active
-                AND author.principal_user_id = quoting.author_user
+                AND author.active_principal_id = quoting.author_user
           )
         ORDER BY citation.quoting_source_seq DESC
         LIMIT $6
@@ -8666,14 +8735,20 @@ fn discussion_author_row(row: &sqlx::postgres::PgRow) -> Option<DiscussionAuthor
     })
 }
 
-/// Read a public profile only when its owner explicitly selected public
-/// visibility. This query does not select the owning principal.
+/// Read public profile material. The table's existence is the visibility
+/// proof: private and redacted profiles have no plaintext projection row.
 pub async fn public_profile_by_handle(
     pool: &PgPool,
     handle: &str,
 ) -> Result<Option<PublicProfileRow>, ProjectionError> {
     let row = sqlx::query(
-        "SELECT profile_id, handle, display_name, bio, visibility, updated_seq FROM profile_public WHERE handle = $1 AND visibility = 'public'",
+        r#"
+        SELECT public.profile_id, public.handle, public.display_name,
+               public.bio, public.revision
+        FROM public_profile AS public
+        JOIN member_profile AS profile ON profile.profile_id = public.profile_id
+        WHERE public.handle = $1 AND profile.lifecycle = 'active'
+        "#,
     )
     .bind(handle)
     .fetch_optional(pool)
@@ -8681,61 +8756,25 @@ pub async fn public_profile_by_handle(
     Ok(row.map(public_profile_row))
 }
 
-/// Read owner-only editor state by its stable public handle.
-pub async fn profile_editor_by_handle(
-    pool: &PgPool,
-    handle: &str,
-) -> Result<Option<ProfileEditorRow>, ProjectionError> {
-    let row = sqlx::query(
-        r#"
-        SELECT public.profile_id, editor.principal_user_id, public.handle,
-               public.display_name, public.bio, public.visibility, public.updated_seq
-        FROM profile_public AS public
-        JOIN profile_editor AS editor ON editor.profile_id = public.profile_id
-        WHERE public.handle = $1
-        "#,
-    )
-    .bind(handle)
-    .fetch_optional(pool)
-    .await?;
-    Ok(row.map(|row| ProfileEditorRow {
-        profile_id: row.get("profile_id"),
-        principal_user_id: row.get("principal_user_id"),
-        handle: row.get("handle"),
-        display_name: row.get("display_name"),
-        bio: row.get("bio"),
-        visibility: row.get("visibility"),
-        updated_seq: row.get("updated_seq"),
-    }))
-}
-
-/// Read owner-only editor state for the authenticated principal's current
-/// profile, if they have created one.
-pub async fn profile_editor_by_principal(
+/// Resolve only the public-attribution identifier for an active principal.
+/// This intentionally exposes neither owner profile plaintext nor private
+/// profile existence to caller-facing application code.
+pub async fn public_profile_id_by_principal(
     pool: &PgPool,
     principal_user_id: &str,
-) -> Result<Option<ProfileEditorRow>, ProjectionError> {
-    let row = sqlx::query(
+) -> Result<Option<Uuid>, ProjectionError> {
+    sqlx::query_scalar(
         r#"
-        SELECT public.profile_id, editor.principal_user_id, public.handle,
-               public.display_name, public.bio, public.visibility, public.updated_seq
-        FROM profile_editor AS editor
-        JOIN profile_public AS public ON public.profile_id = editor.profile_id
-        WHERE editor.principal_user_id = $1
+        SELECT public.profile_id
+        FROM public_profile AS public
+        JOIN member_profile AS profile ON profile.profile_id = public.profile_id
+        WHERE profile.active_principal_id = $1 AND profile.lifecycle = 'active'
         "#,
     )
     .bind(principal_user_id)
     .fetch_optional(pool)
-    .await?;
-    Ok(row.map(|row| ProfileEditorRow {
-        profile_id: row.get("profile_id"),
-        principal_user_id: row.get("principal_user_id"),
-        handle: row.get("handle"),
-        display_name: row.get("display_name"),
-        bio: row.get("bio"),
-        visibility: row.get("visibility"),
-        updated_seq: row.get("updated_seq"),
-    }))
+    .await
+    .map_err(ProjectionError::from)
 }
 
 fn public_profile_row(row: sqlx::postgres::PgRow) -> PublicProfileRow {
@@ -8744,8 +8783,8 @@ fn public_profile_row(row: sqlx::postgres::PgRow) -> PublicProfileRow {
         handle: row.get("handle"),
         display_name: row.get("display_name"),
         bio: row.get("bio"),
-        visibility: row.get("visibility"),
-        updated_seq: row.get("updated_seq"),
+        visibility: "public".to_string(),
+        revision: row.get("revision"),
     }
 }
 
@@ -8872,12 +8911,12 @@ async fn thread_view_for_channel_with_visibility(
           AND NOT EXISTS (
               SELECT 1
               FROM profile_mute AS mute
-              JOIN profile_editor AS author
+              JOIN member_profile AS author
                 ON author.profile_id = mute.target_profile_id
               WHERE $6::text IS NOT NULL
                 AND mute.principal_user_id = $6
                 AND mute.active
-                AND author.principal_user_id = thread_view.author_user
+                AND author.active_principal_id = thread_view.author_user
           )
         ORDER BY
           CASE WHEN $8::BOOLEAN THEN source_seq END DESC,

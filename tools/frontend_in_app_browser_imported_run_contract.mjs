@@ -201,7 +201,7 @@ function assertImportedInteractions(run) {
     actionHref: "/",
     activeNavTestId: "role-nav-player",
     activeNavCurrent: "page",
-    sessionPrincipal: "player_mira",
+    sessionViewer: "Your account",
     capabilitySummary: "ChannelMember + SlotOccupant",
   });
   const playerDisclosure = run.interactions.find(

@@ -182,12 +182,23 @@ without credential principals; hidden topics are excluded, and the topic index u
 with a public profile. Moderation transitions require `GlobalMod` or `GlobalAdmin`, also backed
 by an enabled account, resolved at the API boundary.
 
-Profiles likewise use a dedicated append-only stream per profile. `ProfileCreated` and
-`ProfileUpdated` synchronously maintain two projections: `profile_public`, which never stores or
-returns the owner principal, and `profile_editor`, which binds that profile to its owner for
-authenticated editing. Public reads require `public` visibility; the owner-only editor read and
-write paths require a live enabled account session. This keeps the privacy control durable and
-replayable rather than treating it as frontend-only display state.
+Profiles likewise use a dedicated append-only stream per profile, but a profile is not a user
+record. The pure `social::profile` model separates an opaque `PrincipalId` (authorization), a
+`PrivacySubjectId` (erasure), a `ProfileId` (social identity), and a `RedactedProfileAlias`
+(retained attribution). `profile_application` validates a typed command, seals the editable
+presentation into a subject-private claim, and appends only subject/claim references with a
+`PrivacySubject` actor. Projections never receive raw profile input or create private claims.
+
+`member_profile` is the durable profile identity used by discussion authorship. While active it
+binds `active_principal_id`, a current private claim, and a keyed blind handle index; after
+redaction all three are cleared and only `redacted_alias` remains. `public_profile` is a dependent
+plaintext materialization that exists only for active `public` profiles. Public reads, publication/
+search materialization, current discussion attribution, and mute targets use that table. `private`
+is owner-only and decrypts through `profile_application`; it has no plaintext profile projection.
+There is deliberately no `members` string until an explicit audience model exists. A private or
+redacted transition deletes the public row and its surface in the same transaction, so it cannot
+leave stale searchable data, public attribution, or mute relationships behind. Profile updates
+carry the stream `revision` they read and append against that expected version.
 
 Public search is a synchronous, rebuildable projection rather than an independent source of
 truth. Visible discussion topics/posts, public profiles, active/completed game metadata, and

@@ -6,6 +6,7 @@ test("root layout exposes resolved session context for error surfaces", () => {
   const data = load({
     locals: {
       principalUserId: "player_mira",
+      viewerProfile: null,
       resolvedCapabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       ],
@@ -15,6 +16,7 @@ test("root layout exposes resolved session context for error surfaces", () => {
   assert.deepEqual(data, {
     appSession: {
       principalUserId: "player_mira",
+      viewerProfile: null,
       resolvedCapabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       ],
@@ -26,6 +28,7 @@ test("root layout fails closed without authenticated locals", () => {
   assert.deepEqual(load({ locals: {} }), {
     appSession: {
       principalUserId: null,
+      viewerProfile: null,
       resolvedCapabilities: [],
     },
   });

@@ -1252,7 +1252,7 @@ async fn create_game(
             "pack_artifact": pack_artifact,
             "cohost_denied": denied,
         }),
-        ActorId::User(host.clone()),
+        ActorId::Principal(host.clone()),
         0,
     );
     persist(tx, game, &[ev]).await
@@ -4257,7 +4257,7 @@ pub async fn audit_engine_snapshot_identity_boundary(
 fn stream_platform_user_ids(stream: &[eventstore::StoredEvent]) -> Vec<String> {
     let mut user_ids = BTreeSet::new();
     for ev in stream {
-        if let ActorId::User(user_id) = &ev.actor {
+        if let ActorId::Principal(user_id) = &ev.actor {
             user_ids.insert(user_id.clone());
         }
         collect_platform_user_ids(&ev.payload, &mut user_ids);

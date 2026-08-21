@@ -3,10 +3,9 @@ import { phaseThemeKey } from "./phase-theme.mjs";
 import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
 import {
-  humanizePrincipal,
-  principalInitials,
   sessionContextLabel,
 } from "./presentation-copy.mjs";
+import { buildViewerPresentation } from "./viewer-presentation-model.mjs";
 
 export const APP_SHELL_CONTRACT = Object.freeze({
   component: "fm-app-shell",
@@ -17,7 +16,7 @@ export const APP_SHELL_CONTRACT = Object.freeze({
   mainTargetId: "fm-main",
   mainTargetTestId: "app-shell-main-target",
   sessionTestId: "app-shell-session",
-  sessionPrincipalTestId: "app-shell-session-principal",
+  sessionViewerTestId: "app-shell-session-viewer",
   sessionCapabilityTestId: "app-shell-session-capabilities",
   sessionGameTestId: "app-shell-session-game",
   topbarTestId: "app-shell-topbar",
@@ -62,6 +61,7 @@ export function buildAppShell({
   game = null,
   activeSurface,
   principalUserId = null,
+  viewerProfile = null,
   capabilities = [],
   phase = null,
 }) {
@@ -71,6 +71,7 @@ export function buildAppShell({
   const session = buildSessionSummary({
     game,
     principalUserId,
+    viewerProfile,
     capabilities,
   });
 
@@ -144,13 +145,36 @@ export function buildAppShell({
     game,
     phase: phaseThemeKey(phase),
     session,
-    sessionLabel: session.principalLabel,
+    sessionLabel: session.viewerLabel,
     surfaces,
+  });
+}
+
+// Route loaders own surface/access state, while the root layout owns the
+// viewer summary that is shared across surfaces. Re-presenting the shell here
+// keeps a social profile optional without making public profile data part of
+// the authority/session model.
+export function applyViewerPresentationToShell(
+  shell,
+  { principalUserId = null, viewerProfile = null } = {},
+) {
+  if (shell === null || typeof shell !== "object" || shell.session === null || typeof shell.session !== "object") {
+    return shell;
+  }
+  const session = withViewerPresentation(
+    shell.session,
+    buildViewerPresentation({ principalUserId, profile: viewerProfile }),
+  );
+  return Object.freeze({
+    ...shell,
+    session,
+    sessionLabel: session.viewerLabel,
   });
 }
 
 export function buildBoardRouteData({
   principalUserId = null,
+  viewerProfile = null,
   capabilities = [],
   gameIndexPage = null,
 } = {}) {
@@ -160,6 +184,7 @@ export function buildBoardRouteData({
     game,
     activeSurface: "board",
     principalUserId,
+    viewerProfile,
     capabilities,
   });
 
@@ -333,6 +358,7 @@ export function buildRouteErrorData({
   message = "The requested surface is unavailable.",
   path = "/",
   principalUserId = null,
+  viewerProfile = null,
   capabilities = [],
 } = {}) {
   const route = classifyRoutePath(path);
@@ -340,6 +366,7 @@ export function buildRouteErrorData({
     game: route.game,
     activeSurface: route.activeSurface,
     principalUserId,
+    viewerProfile,
     capabilities,
   });
 
@@ -359,6 +386,7 @@ export function buildRouteErrorData({
 export function buildRouteLoadingData({
   path = "/",
   principalUserId = null,
+  viewerProfile = null,
   capabilities = [],
 } = {}) {
   const route = classifyRoutePath(path);
@@ -366,6 +394,7 @@ export function buildRouteLoadingData({
     game: route.game,
     activeSurface: route.activeSurface,
     principalUserId,
+    viewerProfile,
     capabilities,
   });
 
@@ -382,6 +411,7 @@ export function buildRouteLoadingData({
 export function buildNavigationPendingData({
   path = null,
   principalUserId = null,
+  viewerProfile = null,
   capabilities = [],
 } = {}) {
   if (path === null || path === undefined) {
@@ -391,6 +421,7 @@ export function buildNavigationPendingData({
   const loading = buildRouteLoadingData({
     path,
     principalUserId,
+    viewerProfile,
     capabilities,
   });
 
@@ -405,7 +436,7 @@ export function buildNavigationPendingData({
     title: loading.routeState.title,
     message: loading.routeState.message,
     activeNavTestId: roleNavTestId(loading.routeState.surface),
-    sessionPrincipal: loading.shell.session.principalLabel,
+    sessionViewer: loading.shell.session.viewerLabel,
     capabilitySummary: loading.shell.session.capabilitySummary,
     status: Object.freeze({
       ...loading.routeState.status,
@@ -422,7 +453,7 @@ function surfaceSummary({ surface, game, capabilities }) {
   };
 }
 
-function buildSessionSummary({ game, principalUserId, capabilities }) {
+function buildSessionSummary({ game, principalUserId, viewerProfile, capabilities }) {
   const normalizedCapabilities = Array.isArray(capabilities) ? capabilities : [];
   const capabilityKinds = Object.freeze(
     [...new Set(
@@ -433,32 +464,29 @@ function buildSessionSummary({ game, principalUserId, capabilities }) {
         .filter((kind) => kind.length > 0),
     )].sort(),
   );
-  const principalLabel = humanizePrincipal(principalUserId);
-
-  return Object.freeze({
+  return withViewerPresentation({
     testId: APP_SHELL_CONTRACT.sessionTestId,
-    principalTestId: APP_SHELL_CONTRACT.sessionPrincipalTestId,
+    viewerTestId: APP_SHELL_CONTRACT.sessionViewerTestId,
     capabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     gameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
-    state:
-      principalUserId === null || principalUserId === undefined
-        ? "signed-out"
-        : "signed-in",
-    href:
-      principalUserId === null || principalUserId === undefined
-        ? "/auth/login"
-        : "/auth/account/security",
-    actionLabel:
-      principalUserId === null || principalUserId === undefined
-        ? "Sign in"
-        : "Manage account security",
-    principalLabel,
-    initials: principalInitials(principalUserId),
     contextLabel: sessionContextLabel({ game, capabilities: normalizedCapabilities }),
     gameLabel: game === null || game === undefined ? "No game" : String(game),
     capabilityCount: normalizedCapabilities.length,
     capabilityKinds,
     capabilitySummary: summarizeCapabilityKinds(capabilityKinds),
+  }, buildViewerPresentation({ principalUserId, profile: viewerProfile }));
+}
+
+function withViewerPresentation(session, viewer) {
+  return Object.freeze({
+    ...session,
+    state: viewer.state,
+    href: viewer.state === "signed-out" ? "/auth/login" : "/auth/account/security",
+    actionLabel:
+      viewer.state === "signed-out" ? "Sign in" : "Manage account security",
+    viewer,
+    viewerLabel: viewer.label,
+    initials: viewer.initials,
   });
 }
 

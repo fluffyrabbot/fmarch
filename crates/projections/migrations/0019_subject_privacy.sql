@@ -53,9 +53,37 @@ CREATE TABLE public.subject_key_destruction_receipt (
         CHECK (key_fingerprint_sha256 ~ '^[0-9a-f]{64}$')
 );
 
-ALTER TABLE public.profile_editor
+ALTER TABLE public.member_profile
     ADD COLUMN subject_id uuid REFERENCES public.privacy_subject(subject_id) ON DELETE RESTRICT,
     ADD COLUMN current_claim_id uuid REFERENCES public.subject_private_claim(claim_id) ON DELETE SET NULL;
+
+ALTER TABLE public.member_profile
+    ALTER COLUMN subject_id SET NOT NULL;
+
+ALTER TABLE ONLY public.member_profile
+    ADD CONSTRAINT member_profile_active_principal_id_fkey
+        FOREIGN KEY (active_principal_id)
+        REFERENCES public.platform_principal(principal_user_id)
+        ON DELETE RESTRICT,
+    ADD CONSTRAINT member_profile_subject_id_key UNIQUE (subject_id),
+    ADD CONSTRAINT member_profile_active_redacted_shape_check CHECK (
+        (
+            lifecycle = 'active'
+            AND active_principal_id IS NOT NULL
+            AND current_claim_id IS NOT NULL
+            AND handle_hmac IS NOT NULL
+            AND octet_length(handle_hmac) = 32
+            AND redacted_alias IS NULL
+        )
+        OR
+        (
+            lifecycle = 'redacted'
+            AND active_principal_id IS NULL
+            AND current_claim_id IS NULL
+            AND handle_hmac IS NULL
+            AND redacted_alias IS NOT NULL
+        )
+    );
 
 ALTER TABLE public.game_persona_private
     ADD COLUMN subject_id uuid REFERENCES public.privacy_subject(subject_id) ON DELETE RESTRICT,
@@ -84,7 +112,7 @@ CREATE INDEX subject_private_claim_subject_idx
     ON public.subject_private_claim (subject_id, created_at, claim_id);
 CREATE INDEX subject_private_claim_scope_idx
     ON public.subject_private_claim (claim_kind, scope_id, scope_key, created_at);
-CREATE INDEX profile_editor_subject_idx ON public.profile_editor (subject_id);
+CREATE INDEX member_profile_subject_idx ON public.member_profile (subject_id);
 CREATE INDEX game_persona_private_subject_idx
     ON public.game_persona_private (subject_id, game_id, persona_id);
 

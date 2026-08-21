@@ -20,6 +20,7 @@ test("handle rotates an overdue browser session before resolving the route", asy
   assert.equal(observed.requests[2].url, "/auth/session?game=game-1");
   assert.equal(observed.set.value, "fmss_rotated-token");
   assert.equal(event.locals.principalUserId, "host_h");
+  assert.equal(event.locals.viewerProfile, null);
   assert.equal(event.locals.resolvedCapabilities[0].kind, "HostOf");
 });
 
@@ -31,6 +32,7 @@ test("handle clears a concurrently stale browser session instead of serving it",
   await handle({ event, resolve: async () => new Response("ok") });
   assert.deepEqual(observed.deleted, { name: "fmarch_session", options: { path: "/" } });
   assert.equal(event.locals.principalUserId, null);
+  assert.equal(event.locals.viewerProfile, null);
   assert.deepEqual(event.locals.resolvedCapabilities, []);
 });
 

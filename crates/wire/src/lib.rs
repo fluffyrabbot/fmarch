@@ -2337,7 +2337,7 @@ pub struct PublicProfile {
     pub handle: String,
     pub display_name: String,
     pub bio: String,
-    pub updated_seq: i64,
+    pub revision: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2346,7 +2346,7 @@ pub struct ProfileEditor {
     pub display_name: String,
     pub bio: String,
     pub visibility: String,
-    pub updated_seq: i64,
+    pub revision: i64,
 }
 
 impl From<projections::PublicProfileRow> for PublicProfile {
@@ -2355,19 +2355,7 @@ impl From<projections::PublicProfileRow> for PublicProfile {
             handle: profile.handle,
             display_name: profile.display_name,
             bio: profile.bio,
-            updated_seq: profile.updated_seq,
-        }
-    }
-}
-
-impl From<projections::ProfileEditorRow> for ProfileEditor {
-    fn from(profile: projections::ProfileEditorRow) -> Self {
-        ProfileEditor {
-            handle: profile.handle,
-            display_name: profile.display_name,
-            bio: profile.bio,
-            visibility: profile.visibility,
-            updated_seq: profile.updated_seq,
+            revision: profile.revision,
         }
     }
 }

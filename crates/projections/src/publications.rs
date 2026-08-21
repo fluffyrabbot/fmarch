@@ -87,16 +87,24 @@ pub(super) async fn record_profile_surface(
     updated_seq: i64,
     occurred_at: i64,
 ) -> Result<(), ProjectionError> {
-    let row = sqlx::query(
-        "SELECT handle, display_name, bio, visibility FROM profile_public WHERE profile_id = $1",
-    )
-    .bind(profile_id)
-    .fetch_one(&mut **tx)
-    .await?;
+    let Some(row) =
+        sqlx::query("SELECT handle, display_name, bio FROM public_profile WHERE profile_id = $1")
+            .bind(profile_id)
+            .fetch_optional(&mut **tx)
+            .await?
+    else {
+        // Private and redacted profiles have no public materialization at all.
+        // Deleting the surface cascades its publications/citations, so a
+        // privacy transition cannot leave stale searchable material behind.
+        sqlx::query("DELETE FROM publication_surface WHERE surface_id = $1")
+            .bind(profile_id)
+            .execute(&mut **tx)
+            .await?;
+        return Ok(());
+    };
     let handle: String = row.get("handle");
     let display_name: String = row.get("display_name");
     let bio: String = row.get("bio");
-    let visible: bool = row.get::<String, _>("visibility") == "public";
     sqlx::query(
         r#"
         INSERT INTO publication_surface (surface_id, search_group, title, href, visible, updated_seq)
@@ -109,7 +117,7 @@ pub(super) async fn record_profile_surface(
     .bind(profile_id)
     .bind(display_name)
     .bind(format!("/u/{handle}"))
-    .bind(visible)
+    .bind(true)
     .bind(updated_seq)
     .execute(&mut **tx)
     .await?;

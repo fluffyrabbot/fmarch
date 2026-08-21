@@ -27,7 +27,12 @@ const rootOwnedLoaders = Object.freeze([
 test("app route pages render surfaces only under the root-owned app shell", async () => {
   const rootLayout = await readWorkspaceFile("frontend/src/routes/+layout.svelte");
   assert.match(rootLayout, /import AppShell from "\$lib\/app\/AppShell\.svelte";/u);
-  assert.match(rootLayout, /<AppShell shell=\{layoutShell\}>/u);
+  assert.match(
+    rootLayout,
+    /applyViewerPresentationToShell\(layoutShell,/u,
+    "the root shell must present an explicit viewer profile rather than a raw principal",
+  );
+  assert.match(rootLayout, /<AppShell shell=\{presentedLayoutShell\}>/u);
 
   for (const routePage of appRoutePages) {
     const source = await readWorkspaceFile(routePage);

@@ -72,6 +72,26 @@ test("opaque session cookie resolves principal and scoped host capabilities thro
   ]);
 });
 
+test("session may carry an explicit viewer profile without treating it as authority", async () => {
+  const session = await resolveAuthenticatedSession({
+    cookies: cookieJar("opaque-token"),
+    request: requestFor("/community"),
+    env: {},
+    fetchImpl: async () => jsonResponse({
+      principal_user_id: "principal-opaque-7",
+      viewer_profile: { handle: "mira-r", display_name: "Mira Rowan" },
+      capabilities: [],
+    }),
+  });
+
+  assert.equal(session.principalUserId, "principal-opaque-7");
+  assert.deepEqual(session.viewerProfile, {
+    handle: "mira-r",
+    displayName: "Mira Rowan",
+    href: "/u/mira-r",
+  });
+});
+
 test("missing cookie, non-host route, or rejected lookup leaves locals unauthenticated", async () => {
   assert.deepEqual(
     await resolveAuthenticatedSession({

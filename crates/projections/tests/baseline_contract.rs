@@ -56,6 +56,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "member_lifecycle_event",
     "member_lifecycle_projection",
     "member_personal_export",
+    "member_profile",
     "moderation_case",
     "moderation_case_history",
     "moderation_report",
@@ -69,11 +70,10 @@ const EXPECTED_TABLES: &[&str] = &[
     "post_policy",
     "privacy_subject",
     "private_channel_member",
-    "profile_editor",
     "profile_mute",
-    "profile_public",
     "public_citation",
     "public_inbox_item",
+    "public_profile",
     "public_publication",
     "public_watch",
     "public_watch_period",
@@ -178,6 +178,38 @@ const EXPECTED_PACK_ARTIFACT_COLUMNS: &[&str] = &[
     "pack_version:bigint",
     "artifact_schema_version:smallint",
     "canonical_json:text",
+];
+
+const EXPECTED_MEMBER_PROFILE_COLUMNS: &[&str] = &[
+    "profile_id:uuid",
+    "active_principal_id:text",
+    "handle_hmac:bytea",
+    "lifecycle:text",
+    "redacted_alias:text",
+    "created_seq:bigint",
+    "updated_seq:bigint",
+    "revision:bigint",
+    "subject_id:uuid",
+    "current_claim_id:uuid",
+];
+
+const EXPECTED_PUBLIC_PROFILE_COLUMNS: &[&str] = &[
+    "profile_id:uuid",
+    "handle:text",
+    "display_name:text",
+    "bio:text",
+    "created_seq:bigint",
+    "updated_seq:bigint",
+    "revision:bigint",
+];
+
+const EXPECTED_PROFILE_MUTE_COLUMNS: &[&str] = &[
+    "relationship_id:uuid",
+    "principal_user_id:text",
+    "target_profile_id:uuid",
+    "active:boolean",
+    "updated_seq:bigint",
+    "version:bigint",
 ];
 
 const EXPECTED_INDEXES: &[&str] = &[
@@ -312,6 +344,11 @@ const EXPECTED_INDEXES: &[&str] = &[
     "member_personal_export_pkey",
     "member_personal_export_principal_requested_idx",
     "member_personal_export_subject_idx",
+    "member_profile_active_principal_id_key",
+    "member_profile_handle_hmac_key",
+    "member_profile_pkey",
+    "member_profile_subject_id_key",
+    "member_profile_subject_idx",
     "moderation_case_history_case_idx",
     "moderation_case_history_pkey",
     "moderation_case_pkey",
@@ -340,20 +377,16 @@ const EXPECTED_INDEXES: &[&str] = &[
     "private_channel_member_pkey",
     "private_channel_member_private_kid_idx",
     "private_channel_member_slot_idx",
-    "profile_editor_pkey",
-    "profile_editor_principal_user_id_key",
-    "profile_editor_subject_idx",
     "profile_mute_member_page_idx",
     "profile_mute_member_target_key",
     "profile_mute_pkey",
     "profile_mute_target_idx",
-    "profile_public_handle_key",
-    "profile_public_pkey",
-    "profile_public_visible_handle_idx",
     "public_citation_pkey",
     "public_citation_quoted_page_idx",
     "public_inbox_item_page_idx",
     "public_inbox_item_pkey",
+    "public_profile_handle_key",
+    "public_profile_pkey",
     "public_publication_author_idx",
     "public_publication_pkey",
     "public_publication_surface_page_idx",
@@ -612,6 +645,15 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "member_personal_export_principal_user_id_fkey:f",
     "member_personal_export_seq_check:c",
     "member_personal_export_subject_id_fkey:f",
+    "member_profile_active_principal_id_fkey:f",
+    "member_profile_active_principal_id_key:u",
+    "member_profile_active_redacted_shape_check:c",
+    "member_profile_current_claim_id_fkey:f",
+    "member_profile_handle_hmac_key:u",
+    "member_profile_lifecycle_check:c",
+    "member_profile_pkey:p",
+    "member_profile_subject_id_fkey:f",
+    "member_profile_subject_id_key:u",
     "moderation_case_history_case_id_fkey:f",
     "moderation_case_history_pkey:p",
     "moderation_case_pkey:p",
@@ -651,23 +693,18 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "private_channel_member_pkey:p",
     "private_channel_member_private_kid_fkey:f",
     "private_channel_member_private_kid_present:c",
-    "profile_editor_current_claim_id_fkey:f",
-    "profile_editor_pkey:p",
-    "profile_editor_principal_user_id_key:u",
-    "profile_editor_profile_id_fkey:f",
-    "profile_editor_subject_id_fkey:f",
     "profile_mute_member_target_key:u",
     "profile_mute_pkey:p",
     "profile_mute_target_profile_id_fkey:f",
     "profile_mute_version_check:c",
-    "profile_public_handle_key:u",
-    "profile_public_pkey:p",
-    "profile_public_visibility_check:c",
     "public_citation_pkey:p",
     "public_citation_quoted_fkey:f",
     "public_citation_quoting_fkey:f",
     "public_inbox_item_pkey:p",
     "public_inbox_item_subscription_id_fkey:f",
+    "public_profile_handle_key:u",
+    "public_profile_pkey:p",
+    "public_profile_profile_id_fkey:f",
     "public_publication_pkey:p",
     "public_publication_surface_id_fkey:f",
     "public_watch_member_target_key:u",
@@ -859,6 +896,26 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     .expect("read baseline constraint inventory");
     assert_inventory("constraint", &constraints, EXPECTED_CONSTRAINTS);
 
+    let mute_target_table: String = sqlx::query_scalar(
+        "SELECT target_relation.relname \
+         FROM pg_constraint AS constraint_row \
+         JOIN pg_class AS target_relation ON target_relation.oid = constraint_row.confrelid \
+         WHERE constraint_row.conname = 'profile_mute_target_profile_id_fkey'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("read profile mute target relation");
+    assert_eq!(mute_target_table, "public_profile");
+    let mute_target_delete_action: String = sqlx::query_scalar(
+        "SELECT confdeltype::text \
+         FROM pg_constraint \
+         WHERE conname = 'profile_mute_target_profile_id_fkey'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("read profile mute target delete action");
+    assert_eq!(mute_target_delete_action, "c");
+
     let not_valid_constraints: Vec<String> = sqlx::query_scalar(
         "SELECT constraint_row.conname \
          FROM pg_constraint AS constraint_row \
@@ -991,6 +1048,51 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
         "pack artifact column",
         &pack_artifact_columns,
         EXPECTED_PACK_ARTIFACT_COLUMNS,
+    );
+
+    let member_profile_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'member_profile' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read member profile column inventory");
+    assert_inventory(
+        "member profile column",
+        &member_profile_columns,
+        EXPECTED_MEMBER_PROFILE_COLUMNS,
+    );
+
+    let public_profile_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'public_profile' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read public profile column inventory");
+    assert_inventory(
+        "public profile column",
+        &public_profile_columns,
+        EXPECTED_PUBLIC_PROFILE_COLUMNS,
+    );
+
+    let profile_mute_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'profile_mute' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read profile mute column inventory");
+    assert_inventory(
+        "profile mute column",
+        &profile_mute_columns,
+        EXPECTED_PROFILE_MUTE_COLUMNS,
     );
 }
 

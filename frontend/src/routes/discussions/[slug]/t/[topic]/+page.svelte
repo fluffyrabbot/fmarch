@@ -47,10 +47,10 @@
       {#each discussion.posts as post}
         <article id={`post-${post.sourceSeq}`} class="discussion-post" data-testid={`discussion-post-${post.sourceSeq}`}>
           <header>
-            {#if post.author}
-              <a href={`/u/${encodeURIComponent(post.author.handle)}`}><strong>{post.author.display_name}</strong></a>
+            {#if post.author.kind === "profile"}
+              <a href={post.author.href}><strong>{post.author.label}</strong></a>
             {:else}
-              <strong>Archived member</strong>
+              <strong>{post.author.label}</strong>
             {/if}
             <a class="discussion-post__permalink" href={`#post-${post.sourceSeq}`} aria-label={`Permalink to post ${post.sourceSeq}`}>
               #{post.sourceSeq} · {occurredAt(post.createdAt)}

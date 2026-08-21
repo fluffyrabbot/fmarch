@@ -2199,10 +2199,43 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     let token = registered["session_token"].as_str().unwrap().to_string();
 
     let profile_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO profile_public (profile_id, handle, display_name, bio, visibility, created_seq, updated_seq) VALUES ($1, 'erase-me', 'Alicia', 'private bio', 'public', 1, 1)")
-        .bind(profile_id).execute(&pool).await.unwrap();
-    sqlx::query("INSERT INTO profile_editor (profile_id, principal_user_id, last_edit_seq) VALUES ($1, $2, 1)")
-        .bind(profile_id).bind(principal.as_str()).execute(&pool).await.unwrap();
+    let subject_id: Uuid =
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
+            .bind(principal.as_str())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let mut profile_tx = pool.begin().await.unwrap();
+    let profile_claim_id = identity::insert_subject_claim(
+        &mut profile_tx,
+        identity::SubjectId::from_uuid(subject_id),
+        "profile",
+        profile_id,
+        None,
+        1,
+        &serde_json::json!({
+            "handle": "erase_me",
+            "display_name": "Alicia",
+            "bio": "private bio",
+            "visibility": "public",
+        }),
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO member_profile (profile_id, active_principal_id, lifecycle, redacted_alias, created_seq, updated_seq, revision, subject_id, current_claim_id, handle_hmac) VALUES ($1, $2, 'active', NULL, 1, 1, 1, $3, $4, $5)",
+    )
+    .bind(profile_id)
+    .bind(principal.as_str())
+    .bind(subject_id)
+    .bind(profile_claim_id.as_uuid())
+    .bind(vec![7_u8; 32])
+    .execute(&mut *profile_tx)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO public_profile (profile_id, handle, display_name, bio, created_seq, updated_seq, revision) VALUES ($1, 'erase_me', 'Alicia', 'private bio', 1, 1, 1)")
+        .bind(profile_id).execute(&mut *profile_tx).await.unwrap();
+    profile_tx.commit().await.unwrap();
     let game_id = Uuid::new_v4();
     sqlx::query("INSERT INTO game_persona_private (game_id, persona_id, principal_user_id, registered_seq) VALUES ($1, 'gp_test', $2, 1)")
         .bind(game_id).bind(principal.as_str()).execute(&pool).await.unwrap();
@@ -2249,16 +2282,32 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     assert_eq!(principal_status, "disabled");
     assert_eq!(method_status, "disabled");
     assert!(account_disabled.is_some());
-    let (handle, display_name, bio): (String, String, String) = sqlx::query_as(
-        "SELECT handle, display_name, bio FROM profile_public WHERE profile_id = $1",
+    let public_profile_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM public_profile WHERE profile_id = $1)")
+            .bind(profile_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        !public_profile_exists,
+        "erasure must remove the public profile materialization"
+    );
+    let (active_principal_id, lifecycle, redacted_alias, current_claim_id): (
+        Option<String>,
+        String,
+        Option<String>,
+        Option<Uuid>,
+    ) = sqlx::query_as(
+        "SELECT active_principal_id, lifecycle, redacted_alias, current_claim_id FROM member_profile WHERE profile_id = $1",
     )
     .bind(profile_id)
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert!(handle.starts_with("former-member-"));
-    assert_eq!(display_name, pseudonym);
-    assert!(bio.is_empty());
+    assert!(active_principal_id.is_none());
+    assert_eq!(lifecycle, "redacted");
+    assert_eq!(redacted_alias.as_deref(), Some(pseudonym.as_str()));
+    assert!(current_claim_id.is_none());
     let redacted_name: String = sqlx::query_scalar(
         "SELECT replacement_public_name FROM game_persona_redaction WHERE game_id = $1 AND persona_id = 'gp_test'",
     )
@@ -2315,19 +2364,10 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
             "MemberAuthorshipPseudonymized",
         ]
     );
-    // Simulate a normal profile/game projection rebuild restoring source facts;
-    // lifecycle rebuild must reapply the retained-data overlay deterministically.
-    sqlx::query("UPDATE profile_public SET handle = 'erase-me', display_name = 'Alicia', bio = 'private bio' WHERE profile_id = $1")
-        .bind(profile_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query("UPDATE profile_editor SET principal_user_id = $2 WHERE profile_id = $1")
-        .bind(profile_id)
-        .bind(principal.as_str())
-        .execute(&pool)
-        .await
-        .unwrap();
+    // Profile replay resolves the subject tombstone directly and therefore
+    // must retain this redacted state; it must never reconstruct the former
+    // principal or a deleted private claim. Game projections still replay
+    // source facts, so the lifecycle rebuild re-applies their overlay.
     sqlx::query("UPDATE game_persona_private SET principal_user_id = $2 WHERE game_id = $1 AND persona_id = 'gp_test'")
         .bind(game_id)
         .bind(principal.as_str())
@@ -2356,13 +2396,31 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     assert_eq!(rebuilt.status, identity::MemberLifecycleStatus::Erased);
     assert_eq!(rebuilt.last_seq, 5);
     assert_eq!(rebuilt.pseudonym.as_deref(), Some(pseudonym.as_str()));
-    let rebuilt_profile_name: String =
-        sqlx::query_scalar("SELECT display_name FROM profile_public WHERE profile_id = $1")
+    let rebuilt_public_profile_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM public_profile WHERE profile_id = $1)")
             .bind(profile_id)
             .fetch_one(&pool)
             .await
             .unwrap();
-    assert_eq!(rebuilt_profile_name, pseudonym);
+    assert!(
+        !rebuilt_public_profile_exists,
+        "lifecycle rebuild must not rematerialize an erased public profile"
+    );
+    let rebuilt_profile_binding: (Option<String>, String, Option<String>, Option<Uuid>) =
+        sqlx::query_as(
+            "SELECT active_principal_id, lifecycle, redacted_alias, current_claim_id FROM member_profile WHERE profile_id = $1",
+        )
+        .bind(profile_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rebuilt_profile_binding.0, None);
+    assert_eq!(rebuilt_profile_binding.1, "redacted");
+    assert_eq!(
+        rebuilt_profile_binding.2.as_deref(),
+        Some(pseudonym.as_str())
+    );
+    assert_eq!(rebuilt_profile_binding.3, None);
     let rebuilt_persona_name: String = sqlx::query_scalar(
         "SELECT current_public_name FROM game_persona_public WHERE game_id = $1 AND persona_id = 'gp_test'",
     )

@@ -2,6 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../../lib/app/capabilities.mjs";
+import { buildCommunityAuthorView } from "../../../lib/app/community-author-model.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
@@ -35,7 +36,12 @@ export async function load({ params, locals, cookies, fetch, url }) {
     discussion: {
       status: "ready",
       area: area.area,
-      topics: Array.isArray(area.topics) ? area.topics : [],
+      topics: Array.isArray(area.topics)
+        ? area.topics.map((topic) => Object.freeze({
+            ...topic,
+            author: buildCommunityAuthorView(topic?.author),
+          }))
+        : [],
       nextCursor: optionalText(area.next_cursor),
       canPost: profile !== null,
       hasSession: typeof locals.principalUserId === "string",

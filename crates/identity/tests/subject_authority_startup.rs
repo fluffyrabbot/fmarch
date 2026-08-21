@@ -2,7 +2,8 @@ use bytes::Bytes;
 use futures_util::stream::BoxStream;
 use identity::{
     prepare_subject_authority_for_service, process_pending_subject_erasures_with_store,
-    reconcile_subject_revocations_with_store, request_member_erasure_with_store,
+    random_tombstone_alias, reconcile_subject_revocations_with_store,
+    request_member_erasure_with_store,
     subject_privacy::reconcile_subject_revocations_with_store_and_preflight_query_count,
     verify_active_subject_keys, verify_or_bind_database_authority, ConfiguredSubjectKeyAuthority,
     MemberLifecycleStatus, ObjectSubjectKeyStore, SubjectId, SubjectKeyStore, SubjectPrivacyError,
@@ -545,7 +546,7 @@ async fn repeat_startup_authenticates_journal_without_redeleting_reconciled_keys
         inner.create(subject_id).await.unwrap();
         let record = SubjectRevocationRecord {
             subject_id,
-            replacement_alias: format!("Former member {}", Uuid::new_v4().simple()),
+            replacement_alias: random_tombstone_alias(),
             destroyed_at: 9 + ordinal as i64,
             key_fingerprint_sha256: inner.fingerprint(subject_id).await.unwrap(),
             receipt_id: Uuid::new_v4(),
@@ -667,7 +668,7 @@ async fn claim_that_owns_identity_locks_first_commits_then_startup_scrubs_it(poo
         .unwrap();
     let record = SubjectRevocationRecord {
         subject_id,
-        replacement_alias: format!("Former member {}", Uuid::new_v4().simple()),
+        replacement_alias: random_tombstone_alias(),
         destroyed_at: 9,
         key_fingerprint_sha256: authority.fingerprint(subject_id).await.unwrap(),
         receipt_id: Uuid::new_v4(),
@@ -740,7 +741,7 @@ async fn startup_commits_identity_cutoff_before_authority_io_and_rejects_overlap
     inner.create(subject_id).await.unwrap();
     let record = SubjectRevocationRecord {
         subject_id,
-        replacement_alias: format!("Former member {}", Uuid::new_v4().simple()),
+        replacement_alias: random_tombstone_alias(),
         destroyed_at: 9,
         key_fingerprint_sha256: inner.fingerprint(subject_id).await.unwrap(),
         receipt_id: Uuid::new_v4(),
@@ -839,7 +840,7 @@ async fn startup_accepts_external_history_created_after_the_restored_database_sn
     inner.create(subject_id).await.unwrap();
     let record = SubjectRevocationRecord {
         subject_id,
-        replacement_alias: format!("Former member {}", Uuid::new_v4().simple()),
+        replacement_alias: random_tombstone_alias(),
         destroyed_at: 9,
         key_fingerprint_sha256: inner.fingerprint(subject_id).await.unwrap(),
         receipt_id: Uuid::new_v4(),
@@ -876,7 +877,7 @@ async fn startup_rejects_partial_subject_history_without_a_canonical_owner(pool:
     inner.create(subject_id).await.unwrap();
     let record = SubjectRevocationRecord {
         subject_id,
-        replacement_alias: format!("Former member {}", Uuid::new_v4().simple()),
+        replacement_alias: random_tombstone_alias(),
         destroyed_at: 9,
         key_fingerprint_sha256: inner.fingerprint(subject_id).await.unwrap(),
         receipt_id: Uuid::new_v4(),

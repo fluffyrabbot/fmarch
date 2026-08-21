@@ -199,6 +199,8 @@ async function contract() {
     "FMARCH_EVENT_WRAP_KEYS",
     "FMARCH_EVENT_ARCHIVE_KEY",
     "FMARCH_EVENT_ARCHIVE_KEYS",
+    "FMARCH_PROFILE_HANDLE_INDEX_KEY",
+    "FMARCH_PROFILE_HANDLE_INDEX_KID",
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
     "FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID",
@@ -222,11 +224,11 @@ async function contract() {
   assert.match(source["deploy/railway/key-admin.env.example"], /^FMARCH_EVENT_ARCHIVE_KEY=/m);
   assert.doesNotMatch(
     source["deploy/railway/key-admin.env.example"],
-    /^(?:DATABASE_URL|DATABASE_MIGRATION_URL|FMARCH_DATABASE_APPLICATION_PASSWORD|FMARCH_DATABASE_KEY_ADMIN_PASSWORD)=/m,
+    /^(?:DATABASE_URL|DATABASE_MIGRATION_URL|FMARCH_DATABASE_APPLICATION_PASSWORD|FMARCH_DATABASE_KEY_ADMIN_PASSWORD|FMARCH_PROFILE_HANDLE_INDEX_KEY|FMARCH_PROFILE_HANDLE_INDEX_KID)=/m,
   );
   assert.doesNotMatch(
     source["deploy/railway/frontend.env.example"],
-    /^(?:DATABASE_URL|DATABASE_MIGRATION_URL|DATABASE_KEY_ADMIN_URL|FMARCH_DATABASE_APPLICATION_PASSWORD|FMARCH_DATABASE_KEY_ADMIN_PASSWORD)=/m,
+    /^(?:DATABASE_URL|DATABASE_MIGRATION_URL|DATABASE_KEY_ADMIN_URL|FMARCH_DATABASE_APPLICATION_PASSWORD|FMARCH_DATABASE_KEY_ADMIN_PASSWORD|FMARCH_PROFILE_HANDLE_INDEX_KEY|FMARCH_PROFILE_HANDLE_INDEX_KID)=/m,
   );
   assert.match(source["deploy/railway/api.env.example"], /AWS_ENDPOINT_URL=\$\{\{media\.ENDPOINT\}\}/);
   assert.match(source["deploy/railway/api.env.example"], /AWS_ACCESS_KEY_ID=\$\{\{media\.ACCESS_KEY_ID\}\}/);
@@ -307,6 +309,14 @@ async function contract() {
   );
   assert.doesNotMatch(source["deploy/railway/api.env.example"], /FMARCH_DEV_AUTH/);
   assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_PROFILE_HANDLE_INDEX_KEY=<required-at-least-32-byte-opaque-secret>$/m,
+  );
+  assert.match(
+    source["deploy/railway/api.env.example"],
+    /^FMARCH_PROFILE_HANDLE_INDEX_KID=staging-YYYY-MM-DD$/m,
+  );
+  assert.match(
     source["deploy/railway/frontend.env.example"],
     /^ORIGIN=https:\/\/fmarch-frontend-staging\.up\.railway\.app$/m,
   );
@@ -343,6 +353,7 @@ async function contract() {
       "auth-source-signing",
       "event-runtime-wrap",
       "event-archive",
+      "profile-handle-index",
       "object-storage",
       "subject-key-authority",
       "workos",
@@ -353,6 +364,10 @@ async function contract() {
   assert.match(source["crates/server/src/main.rs"], /format!\("\[::\]:\{port\}"\)/);
   assert.doesNotMatch(source["crates/server/src/main.rs"], /\.run\(&pool\)\.await/);
   assert.match(source["crates/server/src/main.rs"], /ensure_schema_ready\(&pool\)/);
+  assert.match(
+    source["crates/server/src/main.rs"],
+    /require_profile_handle_index_configuration\(\)\?/,
+  );
   assert.match(
     source["crates/server/src/main.rs"],
     /classic authentication requires FMARCH_IDENTITY_DELIVERY_ENDPOINT/,

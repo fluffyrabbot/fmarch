@@ -264,7 +264,7 @@ async function proveAppShellContract() {
   assert.equal(APP_SHELL_CONTRACT.mainTargetId, "fm-main");
   assert.equal(APP_SHELL_CONTRACT.mainTargetTestId, "app-shell-main-target");
   assert.equal(APP_SHELL_CONTRACT.sessionTestId, "app-shell-session");
-  assert.equal(APP_SHELL_CONTRACT.sessionPrincipalTestId, "app-shell-session-principal");
+  assert.equal(APP_SHELL_CONTRACT.sessionViewerTestId, "app-shell-session-viewer");
   assert.equal(APP_SHELL_CONTRACT.sessionCapabilityTestId, "app-shell-session-capabilities");
   assert.equal(APP_SHELL_CONTRACT.sessionGameTestId, "app-shell-session-game");
   assert.equal(APP_SHELL_CONTRACT.topbarTestId, "app-shell-topbar");
@@ -274,14 +274,21 @@ async function proveAppShellContract() {
   assert.equal(APP_SHELL_CONTRACT.stickyRailGapPx, 16);
   assert.deepEqual(data.shell.session, {
     testId: APP_SHELL_CONTRACT.sessionTestId,
-    principalTestId: APP_SHELL_CONTRACT.sessionPrincipalTestId,
+    viewerTestId: APP_SHELL_CONTRACT.sessionViewerTestId,
     capabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     gameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     state: "signed-in",
     href: "/auth/account/security",
     actionLabel: "Manage account security",
-    principalLabel: "@player_mira",
-    initials: "PM",
+    viewer: {
+      state: "signed-in",
+      kind: "account",
+      label: "Your account",
+      initials: "YA",
+      profile: null,
+    },
+    viewerLabel: "Your account",
+    initials: "YA",
     contextLabel: "Playing midsummer",
     gameLabel: "midsummer",
     capabilityCount: 1,
@@ -331,7 +338,7 @@ async function proveAppShellContract() {
     mainTargetId: APP_SHELL_CONTRACT.mainTargetId,
     mainTargetTestId: APP_SHELL_CONTRACT.mainTargetTestId,
     sessionTestId: APP_SHELL_CONTRACT.sessionTestId,
-    sessionPrincipalTestId: APP_SHELL_CONTRACT.sessionPrincipalTestId,
+    sessionViewerTestId: APP_SHELL_CONTRACT.sessionViewerTestId,
     sessionCapabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     sessionGameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     topbarTestId: APP_SHELL_CONTRACT.topbarTestId,

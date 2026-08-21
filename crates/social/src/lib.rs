@@ -1,5 +1,15 @@
 //! Public-profile relationships and their private reader overlays.
 
+pub mod profile;
+
+pub use profile::{
+    decide_profile, fold_profile_event, ActiveProfile, PrincipalId, PrivacySubjectId, ProfileBio,
+    ProfileCommand, ProfileDecisionError, ProfileDisplayName, ProfileEdit, ProfileEvent,
+    ProfileFoldError, ProfileHandle, ProfileId, ProfileLifecycle, ProfileOwner,
+    ProfilePresentation, ProfileRevision, ProfileState, ProfileValueError, ProfileVisibility,
+    RedactedProfile, RedactedProfileAlias, PROFILE_CREATED, PROFILE_REDACTED, PROFILE_UPDATED,
+};
+
 use thiserror::Error;
 use uuid::Uuid;
 

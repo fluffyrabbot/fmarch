@@ -891,12 +891,10 @@ async fn assemble_personal_export(
         principal_user_id,
     )
     .await?;
-    let profiles = json_scalar(
-        tx,
-        "SELECT jsonb_agg(jsonb_build_object('profile_id', public.profile_id, 'handle', public.handle, 'display_name', public.display_name, 'bio', public.bio, 'visibility', public.visibility) ORDER BY public.profile_id)::text FROM profile_public AS public JOIN profile_editor AS editor ON editor.profile_id = public.profile_id WHERE editor.principal_user_id = $1",
-        principal_user_id,
-    )
-    .await?;
+    // A private profile is deliberately absent from the public projection.
+    // Personal export is the owner-authorized path, so open its current sealed
+    // claim instead of treating a read model as an authority for private data.
+    let profiles = personal_profile_export(tx, principal_user_id).await?;
     let personas = json_scalar(
         tx,
         "SELECT jsonb_agg(jsonb_build_object('game_id', game_id, 'persona_id', persona_id, 'registered_seq', registered_seq) ORDER BY game_id, persona_id)::text FROM game_persona_private WHERE principal_user_id = $1",
@@ -908,9 +906,61 @@ async fn assemble_personal_export(
         "principal_user_id": principal_user_id,
         "accounts": account.unwrap_or_else(|| serde_json::json!([])),
         "authentication_methods": methods.unwrap_or_else(|| serde_json::json!([])),
-        "profiles": profiles.unwrap_or_else(|| serde_json::json!([])),
+        "profiles": profiles,
         "game_personas": personas.unwrap_or_else(|| serde_json::json!([])),
     }))
+}
+
+async fn personal_profile_export(
+    tx: &mut Transaction<'_, Postgres>,
+    principal_user_id: &str,
+) -> Result<serde_json::Value, IdentityFlowError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT profile_id, subject_id, current_claim_id
+        FROM member_profile
+        WHERE active_principal_id = $1 AND lifecycle = 'active'
+        ORDER BY profile_id
+        "#,
+    )
+    .bind(principal_user_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    let mut profiles = Vec::with_capacity(rows.len());
+    for row in rows {
+        let profile_id: Uuid = row.try_get("profile_id")?;
+        let subject_id = SubjectId::from_uuid(row.try_get("subject_id")?);
+        let claim_id = ClaimId::from_uuid(
+            row.try_get::<Option<Uuid>, _>("current_claim_id")?
+                .ok_or_else(|| {
+                    IdentityFlowError::Internal(
+                        "active profile is missing its current private claim".to_string(),
+                    )
+                })?,
+        );
+        let presentation: serde_json::Value =
+            crate::open_active_subject_claim(tx, subject_id, claim_id, "profile", profile_id, None)
+                .await
+                .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+        let object = presentation.as_object().ok_or_else(|| {
+            IdentityFlowError::Internal("profile private claim is not an object".to_string())
+        })?;
+        for field in ["handle", "display_name", "bio", "visibility"] {
+            if !object.get(field).is_some_and(serde_json::Value::is_string) {
+                return Err(IdentityFlowError::Internal(format!(
+                    "profile private claim is missing string field {field}"
+                )));
+            }
+        }
+        profiles.push(serde_json::json!({
+            "profile_id": profile_id,
+            "handle": object["handle"],
+            "display_name": object["display_name"],
+            "bio": object["bio"],
+            "visibility": object["visibility"],
+        }));
+    }
+    Ok(serde_json::Value::Array(profiles))
 }
 
 async fn json_scalar(
@@ -937,12 +987,14 @@ async fn apply_retained_authorship_redaction(
     pseudonym: &str,
     redacted_at: i64,
 ) -> Result<(), IdentityFlowError> {
-    // Public authorship remains coherent without retaining account/profile labels.
-    sqlx::query("UPDATE profile_public SET handle = CONCAT('former-member-', REPLACE(profile_id::text, '-', '')), display_name = $2, bio = '', visibility = 'public' WHERE profile_id IN (SELECT profile_id FROM profile_editor WHERE principal_user_id = $1)")
-        .bind(principal_user_id).bind(pseudonym).execute(&mut **tx).await?;
-    sqlx::query("DELETE FROM publication_surface WHERE surface_id IN (SELECT profile_id FROM profile_editor WHERE principal_user_id = $1)")
+    // Public materialization is removed, not pseudonymized in place. Retained
+    // attribution lives only on the redacted identity root; it cannot leak a
+    // former private profile through a live public profile join.
+    sqlx::query("DELETE FROM public_profile WHERE profile_id IN (SELECT profile_id FROM member_profile WHERE active_principal_id = $1 AND lifecycle = 'active')")
         .bind(principal_user_id).execute(&mut **tx).await?;
-    sqlx::query("UPDATE profile_editor SET principal_user_id = $2, current_claim_id = NULL WHERE principal_user_id = $1")
+    sqlx::query("DELETE FROM publication_surface WHERE surface_id IN (SELECT profile_id FROM member_profile WHERE active_principal_id = $1 AND lifecycle = 'active')")
+        .bind(principal_user_id).execute(&mut **tx).await?;
+    sqlx::query("UPDATE member_profile SET active_principal_id = NULL, lifecycle = 'redacted', redacted_alias = $2, current_claim_id = NULL, handle_hmac = NULL WHERE active_principal_id = $1 AND lifecycle = 'active'")
         .bind(principal_user_id)
         .bind(pseudonym)
         .execute(&mut **tx)

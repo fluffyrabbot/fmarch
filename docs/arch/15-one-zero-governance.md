@@ -133,8 +133,9 @@ The existing capability and encrypted-event model remains governing. The local
   announcer style is the sole inline-style exception and is authorized by its
   exact hash;
 - an environment-isolated custody, version-marker, rotation, deployment, and
-  retirement contract for auth-source signing, event encryption, object-store,
-  and WorkOS credentials in `docs/ops/release-secret-custody.json`;
+  retirement contract for auth-source signing, event encryption, the
+  profile-handle blind index, object-store, and WorkOS credentials in
+  `docs/ops/release-secret-custody.json`;
 - lockfile-enforced builds and digest-pinned OCI base images carrying source
   provenance labels;
 - source checks that reject concrete identity, raw error, and request-path

@@ -5,8 +5,11 @@ use identity::{
     SubjectKeyStore, SubjectPrivacyError, SubjectRevocationRecord,
 };
 use projections::{
-    append_and_project, append_profile_and_project, profile_editor_by_principal,
-    rebuild as rebuild_game, rebuild_profile_stream,
+    append_and_project, public_profile_by_handle, rebuild as rebuild_game, rebuild_profile_stream,
+};
+use social::{
+    PrincipalId, ProfileBio, ProfileDisplayName, ProfileHandle, ProfilePresentation,
+    ProfileVisibility,
 };
 use sqlx::Row;
 use std::{
@@ -59,6 +62,72 @@ async fn ensure_principal(pool: &sqlx::PgPool, principal: &str) {
         .unwrap();
 }
 
+async fn create_test_profile(
+    pool: &sqlx::PgPool,
+    principal: &str,
+    handle: &str,
+    display_name: &str,
+    bio: &str,
+    visibility: ProfileVisibility,
+    occurred_at: i64,
+) -> Uuid {
+    let presentation = ProfilePresentation::new(
+        ProfileHandle::new(handle).unwrap(),
+        ProfileDisplayName::new(display_name).unwrap(),
+        ProfileBio::new(bio).unwrap(),
+        visibility,
+    );
+    profile_application::create_profile(
+        pool,
+        PrincipalId::new(principal).unwrap(),
+        presentation,
+        occurred_at,
+    )
+    .await
+    .unwrap()
+    .as_uuid()
+}
+
+struct MemberProfileMetadata {
+    active_principal_id: Option<String>,
+    handle_hmac: Option<Vec<u8>>,
+    redacted_alias: Option<String>,
+    current_claim_id: Option<Uuid>,
+    lifecycle: String,
+    revision: i64,
+}
+
+async fn member_profile_metadata(pool: &sqlx::PgPool, profile_id: Uuid) -> MemberProfileMetadata {
+    let row = sqlx::query(
+        "SELECT active_principal_id, handle_hmac, redacted_alias, current_claim_id, lifecycle, revision FROM member_profile WHERE profile_id = $1",
+    )
+    .bind(profile_id)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    MemberProfileMetadata {
+        active_principal_id: row.get("active_principal_id"),
+        handle_hmac: row.get("handle_hmac"),
+        redacted_alias: row.get("redacted_alias"),
+        current_claim_id: row.get("current_claim_id"),
+        lifecycle: row.get("lifecycle"),
+        revision: row.get("revision"),
+    }
+}
+
+async fn assert_no_public_profile(pool: &sqlx::PgPool, profile_id: Uuid) {
+    assert!(
+        !sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS (SELECT 1 FROM public_profile WHERE profile_id = $1)",
+        )
+        .bind(profile_id)
+        .fetch_one(pool)
+        .await
+        .unwrap(),
+        "private and redacted profiles must have no public plaintext row",
+    );
+}
+
 async fn wait_for_lock_waiters(pool: &sqlx::PgPool, expected: i64) {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
@@ -102,29 +171,37 @@ async fn object_authority(
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
-    let profile_id = Uuid::new_v4();
     let principal = format!("member-{}", Uuid::new_v4().simple());
     ensure_principal(&pool, &principal).await;
-    let handle = format!("private-{}", &Uuid::new_v4().simple().to_string()[..12]);
-    append_profile_and_project(
+    let handle = format!("private_{}", &Uuid::new_v4().simple().to_string()[..12]);
+    let profile_id = create_test_profile(
         &pool,
-        profile_id,
-        &[EventInput::new(
-            "ProfileCreated",
-            1,
-            serde_json::json!({
-                "principal_user_id": principal,
-                "handle": handle,
-                "display_name": "Canary Real Name",
-                "bio": "canary private biography",
-                "visibility": "members",
-            }),
-            ActorId::User(principal.clone()),
-            1,
-        )],
+        &principal,
+        &handle,
+        "Canary Real Name",
+        "canary private biography",
+        ProfileVisibility::Private,
+        1,
     )
-    .await
-    .unwrap();
+    .await;
+    assert!(public_profile_by_handle(&pool, &handle)
+        .await
+        .unwrap()
+        .is_none());
+    let active = member_profile_metadata(&pool, profile_id).await;
+    assert_eq!(
+        active.active_principal_id.as_deref(),
+        Some(principal.as_str())
+    );
+    assert_eq!(active.lifecycle, "active");
+    assert_eq!(active.redacted_alias, None);
+    assert!(active.current_claim_id.is_some());
+    assert_eq!(active.revision, 1);
+    assert_eq!(
+        active.handle_hmac.as_deref().map(<[u8]>::len),
+        Some(32),
+        "the active private profile retains only an opaque handle reservation",
+    );
 
     let canonical = eventstore::load_stream(&pool, profile_id).await.unwrap();
     assert_eq!(canonical.len(), 1);
@@ -136,15 +213,26 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
             .keys()
             .map(String::as_str)
             .collect::<std::collections::BTreeSet<_>>(),
-        ["claim_id", "subject_id", "visibility"]
+        ["claim_id", "handle_hmac", "subject_id", "visibility"]
             .into_iter()
             .collect()
+    );
+    let handle_hmac = canonical[0].payload["handle_hmac"]
+        .as_str()
+        .expect("canonical profile event carries an opaque handle reservation");
+    assert_eq!(handle_hmac.len(), 64);
+    assert!(
+        handle_hmac
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')),
+        "the profile event must retain only lower-case hexadecimal handle metadata"
     );
     assert!(!canonical[0].payload.to_string().contains(&principal));
     assert!(!matches!(
         &canonical[0].actor,
-        ActorId::User(user) if user == &principal
+        ActorId::Principal(user) if user == &principal
     ));
+    assert!(matches!(&canonical[0].actor, ActorId::PrivacySubject(_)));
 
     let raw_event: (i64, Vec<u8>, Vec<u8>) = sqlx::query_as(
         "SELECT stream_key_epoch, sealed_nonce, sealed_body FROM events WHERE stream_id = $1",
@@ -177,7 +265,7 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
 
     let erased = identity::erase_member(&pool, &principal, 10).await.unwrap();
     let alias = erased.pseudonym.unwrap();
-    assert!(alias.starts_with("Former member "));
+    assert!(alias.starts_with("former-member-"));
     assert!(!alias.contains(&principal));
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
@@ -201,49 +289,32 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
     assert_eq!(rebuilt_lifecycle.pseudonym.as_deref(), Some(alias.as_str()));
 
     rebuild_profile_stream(&pool, profile_id).await.unwrap();
-    let row = sqlx::query(
-        "SELECT public.handle, public.display_name, public.bio, editor.principal_user_id, editor.current_claim_id FROM profile_public AS public JOIN profile_editor AS editor USING (profile_id) WHERE public.profile_id = $1",
-    )
-    .bind(profile_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(row.get::<String, _>("display_name"), alias);
-    assert_eq!(row.get::<String, _>("bio"), "");
-    assert_eq!(row.get::<String, _>("principal_user_id"), alias);
-    assert_eq!(row.get::<Option<Uuid>, _>("current_claim_id"), None);
-    assert_eq!(
-        row.get::<String, _>("handle"),
-        format!("former-member-{}", profile_id.simple())
-    );
+    assert_no_public_profile(&pool, profile_id).await;
+    let redacted = member_profile_metadata(&pool, profile_id).await;
+    assert_eq!(redacted.active_principal_id, None);
+    assert_eq!(redacted.handle_hmac, None);
+    assert_eq!(redacted.redacted_alias, Some(alias));
+    assert_eq!(redacted.current_claim_id, None);
+    assert_eq!(redacted.lifecycle, "redacted");
+    assert_eq!(redacted.revision, 1);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
     let principal = format!("pending-redaction-{}", Uuid::new_v4().simple());
-    let profile_id = Uuid::new_v4();
     let game_id = Uuid::new_v4();
     ensure_principal(&pool, &principal).await;
-    append_profile_and_project(
+    let profile_id = create_test_profile(
         &pool,
-        profile_id,
-        &[EventInput::new(
-            "ProfileCreated",
-            1,
-            serde_json::json!({
-                "principal_user_id": principal,
-                "handle": "pending-private-handle",
-                "display_name": "Pending Private Name",
-                "bio": "pending private biography",
-                "visibility": "members",
-            }),
-            ActorId::User(principal.clone()),
-            1,
-        )],
+        &principal,
+        "pending_private_handle",
+        "Pending Private Name",
+        "pending private biography",
+        ProfileVisibility::Private,
+        1,
     )
-    .await
-    .unwrap();
+    .await;
     append_and_project(
         &pool,
         game_id,
@@ -255,7 +326,7 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
                 "principal_user_id": principal,
                 "public_name": "Pending Persona Name",
             }),
-            ActorId::User(principal.clone()),
+            ActorId::Principal(principal.clone()),
             1,
         )],
     )
@@ -302,17 +373,13 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
 
     rebuild_profile_stream(&pool, profile_id).await.unwrap();
     rebuild_game(&pool, game_id).await.unwrap();
-    let profile = sqlx::query(
-        "SELECT public.display_name, public.bio, editor.principal_user_id, editor.current_claim_id FROM profile_public AS public JOIN profile_editor AS editor USING (profile_id) WHERE profile_id = $1",
-    )
-    .bind(profile_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(profile.get::<String, _>("display_name"), alias);
-    assert_eq!(profile.get::<String, _>("bio"), "");
-    assert_eq!(profile.get::<String, _>("principal_user_id"), alias);
-    assert_eq!(profile.get::<Option<Uuid>, _>("current_claim_id"), None);
+    assert_no_public_profile(&pool, profile_id).await;
+    let profile = member_profile_metadata(&pool, profile_id).await;
+    assert_eq!(profile.active_principal_id, None);
+    assert_eq!(profile.handle_hmac, None);
+    assert_eq!(profile.redacted_alias, Some(alias.clone()));
+    assert_eq!(profile.current_claim_id, None);
+    assert_eq!(profile.lifecycle, "redacted");
     let persona = sqlx::query(
         "SELECT public.current_public_name, private.principal_user_id, private.current_claim_id FROM game_persona_public AS public JOIN game_persona_private AS private USING (game_id, persona_id) WHERE game_id = $1 AND persona_id = 'pending-persona'",
     )
@@ -356,7 +423,7 @@ async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::P
                 "principal_user_id": principal,
                 "public_name": "Canary Persona Name",
             }),
-            ActorId::User(principal.clone()),
+            ActorId::Principal(principal.clone()),
             1,
         )],
     )
@@ -384,7 +451,7 @@ async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::P
         .contains("Canary Persona Name"));
     assert!(!matches!(
         &canonical[0].actor,
-        ActorId::User(actor) if actor == &principal
+        ActorId::Principal(actor) if actor == &principal
     ));
 
     let alias = identity::erase_member(&pool, &principal, 10)
@@ -423,7 +490,7 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
                 "principal_user_id": principal,
                 "public_name": "Replay Persona",
             }),
-            ActorId::User(principal.clone()),
+            ActorId::Principal(principal.clone()),
             1,
         )],
     )
@@ -467,7 +534,7 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
                     "principal_user_id": claim_principal,
                     "public_name": "Concurrent Persona",
                 }),
-                ActorId::User(claim_principal.clone()),
+                ActorId::Principal(claim_principal.clone()),
                 2,
             )],
         )
@@ -488,35 +555,25 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn profile_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
-    let profile_id = Uuid::new_v4();
     let principal = format!("profile-rebuild-erasure-{}", Uuid::new_v4().simple());
     ensure_principal(&pool, &principal).await;
-    append_profile_and_project(
+    let profile_id = create_test_profile(
         &pool,
-        profile_id,
-        &[EventInput::new(
-            "ProfileCreated",
-            1,
-            serde_json::json!({
-                "principal_user_id": principal,
-                "handle": "profile-race-canary",
-                "display_name": "Profile Race Real Name",
-                "bio": "profile race private biography",
-                "visibility": "members",
-            }),
-            ActorId::User(principal.clone()),
-            1,
-        )],
+        &principal,
+        "profile_race_canary",
+        "Profile Race Real Name",
+        "profile race private biography",
+        ProfileVisibility::Private,
+        1,
     )
-    .await
-    .unwrap();
+    .await;
 
-    // Hold a projection row after rebuild's preceding profile_editor delete.
-    // Replay must already own principal -> subject before it reaches this row;
-    // erasure therefore waits at the canonical boundary instead of holding the
-    // subject while waiting for replay's projection locks.
+    // Hold the private profile root. Replay must already own principal ->
+    // subject before it reaches this row; erasure therefore waits at the
+    // canonical boundary instead of holding the subject while waiting for
+    // replay's projection locks.
     let mut projection_guard = pool.begin().await.unwrap();
-    sqlx::query("SELECT profile_id FROM profile_public WHERE profile_id = $1 FOR UPDATE")
+    sqlx::query("SELECT profile_id FROM member_profile WHERE profile_id = $1 FOR UPDATE")
         .bind(profile_id)
         .fetch_one(&mut *projection_guard)
         .await
@@ -547,26 +604,20 @@ async fn profile_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx
     // A second replay proves the erased overlay is stable and cannot be
     // replaced with claim plaintext after key destruction.
     rebuild_profile_stream(&pool, profile_id).await.unwrap();
-    let row = sqlx::query(
-        "SELECT public.handle, public.display_name, public.bio, editor.principal_user_id, editor.current_claim_id FROM profile_public AS public JOIN profile_editor AS editor USING (profile_id) WHERE public.profile_id = $1",
-    )
-    .bind(profile_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(row.get::<String, _>("display_name"), alias);
-    assert_eq!(row.get::<String, _>("bio"), "");
-    assert_eq!(row.get::<String, _>("principal_user_id"), alias);
-    assert_eq!(row.get::<Option<Uuid>, _>("current_claim_id"), None);
+    assert_no_public_profile(&pool, profile_id).await;
+    let row = member_profile_metadata(&pool, profile_id).await;
+    assert_eq!(row.active_principal_id, None);
+    assert_eq!(row.handle_hmac, None);
+    assert_eq!(row.redacted_alias, Some(alias));
+    assert_eq!(row.current_claim_id, None);
+    assert_eq!(row.lifecycle, "redacted");
     let projection = format!(
-        "{}:{}:{}",
-        row.get::<String, _>("handle"),
-        row.get::<String, _>("display_name"),
-        row.get::<String, _>("bio")
+        "{:?}:{:?}:{:?}",
+        row.active_principal_id, row.handle_hmac, row.redacted_alias
     );
     for canary in [
         principal.as_str(),
-        "profile-race-canary",
+        "profile_race_canary",
         "Profile Race Real Name",
         "profile race private biography",
     ] {
@@ -591,7 +642,7 @@ async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::P
                 "principal_user_id": principal,
                 "public_name": "Game Race Real Name",
             }),
-            ActorId::User(principal.clone()),
+            ActorId::Principal(principal.clone()),
             1,
         )],
     )
@@ -650,28 +701,18 @@ async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::P
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn active_subject_with_missing_external_key_fails_rebuild_closed(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
-    let profile_id = Uuid::new_v4();
     let principal = format!("missing-key-{}", Uuid::new_v4().simple());
     ensure_principal(&pool, &principal).await;
-    append_profile_and_project(
+    let profile_id = create_test_profile(
         &pool,
-        profile_id,
-        &[EventInput::new(
-            "ProfileCreated",
-            1,
-            serde_json::json!({
-                "principal_user_id": principal,
-                "handle": "missing-key-canary",
-                "display_name": "Missing Key",
-                "bio": "private",
-                "visibility": "public",
-            }),
-            ActorId::User(principal.clone()),
-            1,
-        )],
+        &principal,
+        "missing_key_canary",
+        "Missing Key",
+        "Private profile details",
+        ProfileVisibility::Public,
+        1,
     )
-    .await
-    .unwrap();
+    .await;
     let subject_id: Uuid =
         sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
             .bind(&principal)
@@ -685,7 +726,16 @@ async fn active_subject_with_missing_external_key_fails_rebuild_closed(pool: sql
         .unwrap();
 
     assert!(rebuild_profile_stream(&pool, profile_id).await.is_err());
-    assert!(profile_editor_by_principal(&pool, &principal)
+    let active = member_profile_metadata(&pool, profile_id).await;
+    assert_eq!(
+        active.active_principal_id.as_deref(),
+        Some(principal.as_str())
+    );
+    assert_eq!(active.lifecycle, "active");
+    assert_eq!(active.redacted_alias, None);
+    assert!(active.current_claim_id.is_some());
+    assert_eq!(active.handle_hmac.as_deref().map(<[u8]>::len), Some(32));
+    assert!(public_profile_by_handle(&pool, "missing_key_canary")
         .await
         .unwrap()
         .is_some());
@@ -694,29 +744,19 @@ async fn active_subject_with_missing_external_key_fails_rebuild_closed(pool: sql
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
-    let profile_id = Uuid::new_v4();
     let principal = format!("restored-owner-{}", Uuid::new_v4().simple());
     ensure_principal(&pool, &principal).await;
     let account_id = format!("restored-account-{}", Uuid::new_v4().simple());
-    append_profile_and_project(
+    let profile_id = create_test_profile(
         &pool,
-        profile_id,
-        &[EventInput::new(
-            "ProfileCreated",
-            1,
-            serde_json::json!({
-                "principal_user_id": principal,
-                "handle": "restore-canary",
-                "display_name": "Restored Real Name",
-                "bio": "restored private bio",
-                "visibility": "public",
-            }),
-            ActorId::User(principal.clone()),
-            1,
-        )],
+        &principal,
+        "restore_canary",
+        "Restored Real Name",
+        "restored private bio",
+        ProfileVisibility::Public,
+        1,
     )
-    .await
-    .unwrap();
+    .await;
     sqlx::query("INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, global_capabilities) VALUES ($1,$2,'secret-hash',1,'{}'::text[])")
         .bind(&account_id).bind(&principal).execute(&pool).await.unwrap();
     let subject_id = SubjectId::from_uuid(
@@ -749,19 +789,16 @@ async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool
         .as_deref(),
         Some(principal.as_str())
     );
-    let profile = sqlx::query(
-        "SELECT public.display_name, public.bio, editor.principal_user_id, editor.current_claim_id FROM profile_public AS public JOIN profile_editor AS editor USING (profile_id) WHERE public.profile_id = $1",
-    )
-    .bind(profile_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    assert_no_public_profile(&pool, profile_id).await;
+    let profile = member_profile_metadata(&pool, profile_id).await;
+    assert_eq!(profile.active_principal_id, None);
+    assert_eq!(profile.handle_hmac, None);
     assert_eq!(
-        profile.get::<String, _>("display_name"),
-        record.replacement_alias
+        profile.redacted_alias,
+        Some(record.replacement_alias.clone())
     );
-    assert_eq!(profile.get::<String, _>("bio"), "");
-    assert_eq!(profile.get::<Option<Uuid>, _>("current_claim_id"), None);
+    assert_eq!(profile.current_claim_id, None);
+    assert_eq!(profile.lifecycle, "redacted");
     let account = sqlx::query(
         "SELECT account_id, disabled_at, password_hash FROM auth_account WHERE principal_user_id = $1",
     )
@@ -967,7 +1004,7 @@ async fn already_deactivated_member_can_complete_erasure(pool: sqlx::PgPool) {
     let erased = identity::erase_member(&pool, &principal, 3).await.unwrap();
     assert_eq!(erased.status, identity::MemberLifecycleStatus::Erased);
     assert_eq!(erased.last_seq, 4);
-    assert!(erased.pseudonym.unwrap().starts_with("Former member "));
+    assert!(erased.pseudonym.unwrap().starts_with("former-member-"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

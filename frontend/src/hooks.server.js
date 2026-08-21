@@ -37,6 +37,7 @@ export async function fmarchIdentityHandle({ event, resolve }) {
   }
 
   event.locals.principalUserId = session.principalUserId;
+  event.locals.viewerProfile = session.viewerProfile ?? null;
   event.locals.resolvedCapabilities = session.resolvedCapabilities;
 
   return resolve(event);

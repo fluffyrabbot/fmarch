@@ -191,6 +191,7 @@ export async function validateSecurityReleaseBaseline() {
         "FMARCH_AUTH_SOURCE_SIGNING_KID",
         "FMARCH_EVENT_WRAP_KID",
         "FMARCH_EVENT_ARCHIVE_KID",
+        "FMARCH_PROFILE_HANDLE_INDEX_KID",
         "FMARCH_OBJECT_STORAGE_CREDENTIAL_KID",
         "FMARCH_WORKOS_CREDENTIAL_KID",
       ],

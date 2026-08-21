@@ -3,6 +3,7 @@ pub mod error;
 pub mod member_lifecycle;
 pub mod methods;
 pub mod password;
+pub mod private_claims;
 pub mod session;
 pub mod subject_privacy;
 pub mod token;
@@ -21,6 +22,9 @@ pub use member_lifecycle::{
     apply_member_lifecycle, create_personal_export, erase_member, load_personal_export,
     rebuild_member_lifecycle, request_member_erasure, request_member_erasure_with_store,
     MemberLifecycleSnapshot, PersonalExport,
+};
+pub use private_claims::{
+    ensure_active_subject, insert_subject_claim, open_active_subject_claim, PrivateClaimError,
 };
 pub use session::{
     AuthorizationContext, CompletedWorkosLogout, IssuedSession, LogoutSessionState, RotatedSession,

@@ -583,29 +583,34 @@ CREATE TABLE public.private_channel_member (
 
 
 --
--- Name: profile_editor; Type: TABLE; Schema: public; Owner: -
+-- Name: member_profile; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.profile_editor (
+CREATE TABLE public.member_profile (
     profile_id uuid NOT NULL,
-    principal_user_id text NOT NULL,
-    last_edit_seq bigint NOT NULL
+    active_principal_id text,
+    handle_hmac bytea,
+    lifecycle text DEFAULT 'active'::text NOT NULL,
+    redacted_alias text,
+    created_seq bigint NOT NULL,
+    updated_seq bigint NOT NULL,
+    revision bigint NOT NULL,
+    CONSTRAINT member_profile_lifecycle_check CHECK ((lifecycle = ANY (ARRAY['active'::text, 'redacted'::text])))
 );
 
 
 --
--- Name: profile_public; Type: TABLE; Schema: public; Owner: -
+-- Name: public_profile; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.profile_public (
+CREATE TABLE public.public_profile (
     profile_id uuid NOT NULL,
     handle text NOT NULL,
     display_name text NOT NULL,
     bio text NOT NULL,
-    visibility text NOT NULL,
     created_seq bigint NOT NULL,
     updated_seq bigint NOT NULL,
-    CONSTRAINT profile_public_visibility_check CHECK ((visibility = ANY (ARRAY['public'::text, 'members'::text])))
+    revision bigint NOT NULL
 );
 
 
@@ -1081,35 +1086,43 @@ ALTER TABLE ONLY public.private_channel_member
 
 
 --
--- Name: profile_editor profile_editor_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: member_profile member_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.profile_editor
-    ADD CONSTRAINT profile_editor_pkey PRIMARY KEY (profile_id);
-
-
---
--- Name: profile_editor profile_editor_principal_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.profile_editor
-    ADD CONSTRAINT profile_editor_principal_user_id_key UNIQUE (principal_user_id);
+ALTER TABLE ONLY public.member_profile
+    ADD CONSTRAINT member_profile_pkey PRIMARY KEY (profile_id);
 
 
 --
--- Name: profile_public profile_public_handle_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: member_profile member_profile_active_principal_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.profile_public
-    ADD CONSTRAINT profile_public_handle_key UNIQUE (handle);
+ALTER TABLE ONLY public.member_profile
+    ADD CONSTRAINT member_profile_active_principal_id_key UNIQUE (active_principal_id);
 
 
 --
--- Name: profile_public profile_public_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: member_profile member_profile_handle_hmac_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.profile_public
-    ADD CONSTRAINT profile_public_pkey PRIMARY KEY (profile_id);
+ALTER TABLE ONLY public.member_profile
+    ADD CONSTRAINT member_profile_handle_hmac_key UNIQUE (handle_hmac);
+
+
+--
+-- Name: public_profile public_profile_handle_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.public_profile
+    ADD CONSTRAINT public_profile_handle_key UNIQUE (handle);
+
+
+--
+-- Name: public_profile public_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.public_profile
+    ADD CONSTRAINT public_profile_pkey PRIMARY KEY (profile_id);
 
 
 
@@ -1477,13 +1490,6 @@ CREATE INDEX private_channel_member_slot_idx ON public.private_channel_member US
 
 
 --
--- Name: profile_public_visible_handle_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX profile_public_visible_handle_idx ON public.profile_public USING btree (handle) WHERE (visibility = 'public'::text);
-
-
-
 --
 -- Name: sheriff_badge_owner_idx; Type: INDEX; Schema: public; Owner: -
 --
@@ -1590,7 +1596,7 @@ ALTER TABLE ONLY public.auth_invite
 --
 
 ALTER TABLE ONLY public.discussion_post
-    ADD CONSTRAINT discussion_post_author_profile_id_fkey FOREIGN KEY (author_profile_id) REFERENCES public.profile_public(profile_id) DEFERRABLE INITIALLY DEFERRED;
+    ADD CONSTRAINT discussion_post_author_profile_id_fkey FOREIGN KEY (author_profile_id) REFERENCES public.member_profile(profile_id) DEFERRABLE INITIALLY DEFERRED;
 
 
 --
@@ -1614,15 +1620,15 @@ ALTER TABLE ONLY public.discussion_topic
 --
 
 ALTER TABLE ONLY public.discussion_topic
-    ADD CONSTRAINT discussion_topic_author_profile_id_fkey FOREIGN KEY (author_profile_id) REFERENCES public.profile_public(profile_id) DEFERRABLE INITIALLY DEFERRED;
+    ADD CONSTRAINT discussion_topic_author_profile_id_fkey FOREIGN KEY (author_profile_id) REFERENCES public.member_profile(profile_id) DEFERRABLE INITIALLY DEFERRED;
 
 
 --
--- Name: profile_editor profile_editor_profile_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: public_profile public_profile_profile_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.profile_editor
-    ADD CONSTRAINT profile_editor_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profile_public(profile_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.public_profile
+    ADD CONSTRAINT public_profile_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.member_profile(profile_id) ON DELETE CASCADE;
 
 
 --

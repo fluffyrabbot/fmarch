@@ -18,15 +18,19 @@ use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
 use eventstore::{ActorId, EventInput, StoreError};
 use projections::{
     action_counters, action_grants, append_and_project, append_discussion_and_project,
-    append_discussion_and_project_expected, append_profile_and_project, audit_rebuild,
-    day_vote_outcomes, discussion_area_by_slug, discussion_posts, discussion_topic_by_id,
-    discussion_topics, game_index, host_phase_controls, host_prompts, operator_game_index,
-    phase_state, player_notifications, profile_editor_by_handle, public_profile_by_handle,
-    public_search, rebuild, rebuild_discussion_stream, rebuild_moderation_stream,
-    rebuild_profile_stream, reconcile_database_authority, slot_effects, slot_state, votecount,
-    ProjectionError, PublicSearchFilter, APPLICATION_DATABASE_ROLE, LIVE_EVENT_NOTIFY_CHANNEL,
+    append_discussion_and_project_expected, audit_rebuild, day_vote_outcomes,
+    discussion_area_by_slug, discussion_posts, discussion_topic_by_id, discussion_topics,
+    game_index, host_phase_controls, host_prompts, operator_game_index, phase_state,
+    player_notifications, public_profile_by_handle, public_search, rebuild,
+    rebuild_discussion_stream, rebuild_moderation_stream, rebuild_profile_stream,
+    reconcile_database_authority, slot_effects, slot_state, votecount, ProjectionError,
+    PublicSearchFilter, APPLICATION_DATABASE_ROLE, LIVE_EVENT_NOTIFY_CHANNEL,
 };
 use sha2::{Digest, Sha256};
+use social::{
+    PrincipalId, ProfileBio, ProfileDisplayName, ProfileEdit, ProfileHandle, ProfileId,
+    ProfilePresentation, ProfileRevision, ProfileVisibility,
+};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, PgPool, Row};
 use trust_safety::{self, ModerationCommand, ModerationTarget, ReportReasonFamily};
@@ -92,6 +96,71 @@ async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
     identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
         .await
         .unwrap();
+}
+
+fn test_profile_presentation(
+    handle: &str,
+    display_name: &str,
+    bio: &str,
+    visibility: ProfileVisibility,
+) -> ProfilePresentation {
+    ProfilePresentation::new(
+        ProfileHandle::new(handle).unwrap(),
+        ProfileDisplayName::new(display_name).unwrap(),
+        ProfileBio::new(bio).unwrap(),
+        visibility,
+    )
+}
+
+async fn create_test_profile(
+    pool: &sqlx::PgPool,
+    principal: &str,
+    handle: &str,
+    display_name: &str,
+    bio: &str,
+    visibility: ProfileVisibility,
+    occurred_at: i64,
+) -> Uuid {
+    profile_application::create_profile(
+        pool,
+        PrincipalId::new(principal).unwrap(),
+        test_profile_presentation(handle, display_name, bio, visibility),
+        occurred_at,
+    )
+    .await
+    .unwrap()
+    .as_uuid()
+}
+
+/// A typed profile update fixture keeps the test seam aligned with the
+/// application boundary instead of passing a positional collection of values.
+struct TestProfileUpdate<'a> {
+    profile_id: Uuid,
+    principal: &'a str,
+    expected_revision: u64,
+    edit: ProfileEdit,
+    occurred_at: i64,
+}
+
+fn test_profile_edit(display_name: &str, bio: &str, visibility: ProfileVisibility) -> ProfileEdit {
+    ProfileEdit::new(
+        ProfileDisplayName::new(display_name).unwrap(),
+        ProfileBio::new(bio).unwrap(),
+        visibility,
+    )
+}
+
+async fn update_test_profile(pool: &sqlx::PgPool, update: TestProfileUpdate<'_>) {
+    profile_application::update_profile(
+        pool,
+        ProfileId::from_uuid(update.profile_id),
+        PrincipalId::new(update.principal).unwrap(),
+        ProfileRevision::new(update.expected_revision),
+        update.edit,
+        update.occurred_at,
+    )
+    .await
+    .unwrap();
 }
 
 fn load_pack() -> Pack {
@@ -1595,7 +1664,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
                 "GameCreated",
                 1,
                 test_game_created_payload("host_active", "mafiascum"),
-                ActorId::User("host_active".into()),
+                ActorId::Principal("host_active".into()),
                 100,
             ),
             EventInput::new(
@@ -1624,7 +1693,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
                 "GameCreated",
                 1,
                 test_game_created_payload("host_completed", "mafia_universe"),
-                ActorId::User("host_completed".into()),
+                ActorId::Principal("host_completed".into()),
                 90,
             ),
             EventInput::new(
@@ -1652,7 +1721,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
             "GameCreated",
             1,
             test_game_created_payload("host_setup", "epicmafia"),
-            ActorId::User("host_setup".into()),
+            ActorId::Principal("host_setup".into()),
             150,
         )],
     )
@@ -1716,30 +1785,20 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sqlx::PgPool) {
-    let profile = Uuid::from_u128(41);
     let area = Uuid::from_u128(42);
     let topic = Uuid::from_u128(43);
     let game = Uuid::from_u128(44);
     ensure_test_principal(&pool, "signal_member").await;
-    append_profile_and_project(
+    let profile = create_test_profile(
         &pool,
-        profile,
-        &[EventInput::new(
-            "ProfileCreated",
-            1,
-            serde_json::json!({
-                "principal_user_id": "signal_member",
-                "handle": "signal_member",
-                "display_name": "Signal Member",
-                "bio": "Studies public signals",
-                "visibility": "public"
-            }),
-            ActorId::User("signal_member".into()),
-            1,
-        )],
+        "signal_member",
+        "signal_member",
+        "Signal Member",
+        "Studies public signals",
+        ProfileVisibility::Public,
+        1,
     )
-    .await
-    .unwrap();
+    .await;
     append_discussion_and_project(
         &pool,
         area,
@@ -1747,7 +1806,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
             "DiscussionAreaCreated",
             1,
             serde_json::json!({ "slug": "theory", "title": "Theory", "description": "Public analysis" }),
-            ActorId::User("moderator".into()),
+            ActorId::Principal("moderator".into()),
             2,
         )],
     )
@@ -1761,14 +1820,14 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
                 "DiscussionTopicCreated",
                 1,
                 serde_json::json!({ "area_id": area, "title": "Signal theory", "author_profile_id": profile }),
-                ActorId::User("signal_member".into()),
+                ActorId::Principal("signal_member".into()),
                 3,
             ),
             EventInput::new(
                 "DiscussionPostSubmitted",
                 1,
                 serde_json::json!({ "body": "Alpha signal analysis", "author_profile_id": profile }),
-                ActorId::User("signal_member".into()),
+                ActorId::Principal("signal_member".into()),
                 4,
             ),
         ],
@@ -1783,7 +1842,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
                 "GameCreated",
                 1,
                 test_game_created_payload("host", "signal_pack"),
-                ActorId::User("host".into()),
+                ActorId::Principal("host".into()),
                 5,
             ),
             EventInput::new(
@@ -1868,7 +1927,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
             "DiscussionTopicVisibilityChanged",
             1,
             serde_json::json!({ "visibility": "hidden" }),
-            ActorId::User("moderator".into()),
+            ActorId::Principal("moderator".into()),
             9,
         )],
     )
@@ -1887,23 +1946,21 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     .results
     .is_empty());
 
-    append_profile_and_project(
+    update_test_profile(
         &pool,
-        profile,
-        &[EventInput::new(
-            "ProfileUpdated",
-            1,
-            serde_json::json!({
-                "display_name": "Signal Member",
-                "bio": "Studies public signals",
-                "visibility": "members"
-            }),
-            ActorId::User("signal_member".into()),
-            10,
-        )],
+        TestProfileUpdate {
+            profile_id: profile,
+            principal: "signal_member",
+            expected_revision: 1,
+            edit: test_profile_edit(
+                "Signal Member",
+                "Studies public signals",
+                ProfileVisibility::Private,
+            ),
+            occurred_at: 10,
+        },
     )
-    .await
-    .unwrap();
+    .await;
     assert!(public_search(
         &pool,
         "signal",
@@ -1940,7 +1997,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
                 "GameCreated",
                 1,
                 test_game_created_payload("host", "moderation_pack"),
-                ActorId::User("host".into()),
+                ActorId::Principal("host".into()),
                 1,
             ),
             EventInput::new(
@@ -2157,7 +2214,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
             "GameCreated",
             1,
             test_game_created_payload("host", "moderation_limit"),
-            ActorId::User("host".into()),
+            ActorId::Principal("host".into()),
             1,
         ),
         EventInput::new(
@@ -2223,29 +2280,19 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(pool: PgPool) {
-    let profile = Uuid::new_v4();
     let area = Uuid::new_v4();
     let topic = Uuid::new_v4();
     ensure_test_principal(&pool, "author_a").await;
-    append_profile_and_project(
+    let profile = create_test_profile(
         &pool,
-        profile,
-        &[EventInput::new(
-            "ProfileCreated",
-            1,
-            serde_json::json!({
-                "principal_user_id": "author_a",
-                "handle": "author_a",
-                "display_name": "Author A",
-                "bio": "",
-                "visibility": "public"
-            }),
-            ActorId::User("author_a".into()),
-            1,
-        )],
+        "author_a",
+        "author_a",
+        "Author A",
+        "Writes community updates",
+        ProfileVisibility::Public,
+        1,
     )
-    .await
-    .unwrap();
+    .await;
     append_discussion_and_project(
         &pool,
         area,
@@ -2253,7 +2300,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             "DiscussionAreaCreated",
             1,
             serde_json::json!({ "slug": "watch", "title": "Watch", "description": "Updates" }),
-            ActorId::User("moderator".into()),
+            ActorId::Principal("moderator".into()),
             2,
         )],
     )
@@ -2267,14 +2314,14 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
                 "DiscussionTopicCreated",
                 1,
                 serde_json::json!({ "area_id": area, "title": "Watched topic", "author_profile_id": profile }),
-                ActorId::User("author_a".into()),
+                ActorId::Principal("author_a".into()),
                 3,
             ),
             EventInput::new(
                 "DiscussionPostSubmitted",
                 1,
                 serde_json::json!({ "body": "Opening post", "author_profile_id": profile }),
-                ActorId::User("author_a".into()),
+                ActorId::Principal("author_a".into()),
                 4,
             ),
         ],
@@ -2304,7 +2351,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             "DiscussionPostSubmitted",
             1,
             serde_json::json!({ "body": "First watched reply", "author_profile_id": profile }),
-            ActorId::User("author_a".into()),
+            ActorId::Principal("author_a".into()),
             6,
         )],
     )
@@ -2362,7 +2409,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             "DiscussionPostSubmitted",
             1,
             serde_json::json!({ "body": "Moderated watched reply", "author_profile_id": profile }),
-            ActorId::User("author_a".into()),
+            ActorId::Principal("author_a".into()),
             8,
         )],
     )
@@ -2468,7 +2515,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             "DiscussionPostSubmitted",
             1,
             serde_json::json!({ "body": "Unwatched reply", "author_profile_id": profile }),
-            ActorId::User("author_a".into()),
+            ActorId::Principal("author_a".into()),
             13,
         )],
     )
@@ -2525,7 +2572,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
                 "GameCreated",
                 1,
                 test_game_created_payload("host", "watch_pack"),
-                ActorId::User("host".into()),
+                ActorId::Principal("host".into()),
                 15,
             ),
             EventInput::new(
@@ -2555,7 +2602,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
                 "body": "Game update",
                 "phase_id": "D01"
             }),
-            ActorId::User("game_author".into()),
+            ActorId::Principal("game_author".into()),
             18,
         )],
     )
@@ -2726,31 +2773,21 @@ async fn append_and_project_notifies_live_channel_after_commit(pool: sqlx::PgPoo
 /// public-safe projection boundary from game streams.
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(pool: sqlx::PgPool) {
-    let member_profile = Uuid::from_u128(100);
     let area = Uuid::from_u128(101);
     let visible_topic = Uuid::from_u128(102);
     let hidden_topic = Uuid::from_u128(103);
 
     ensure_test_principal(&pool, "member").await;
-    append_profile_and_project(
+    let member_profile = create_test_profile(
         &pool,
-        member_profile,
-        &[EventInput::new(
-            "ProfileCreated",
-            1,
-            serde_json::json!({
-                "principal_user_id": "member",
-                "handle": "member",
-                "display_name": "Member",
-                "bio": "Community member",
-                "visibility": "public"
-            }),
-            ActorId::User("member".into()),
-            1,
-        )],
+        "member",
+        "member",
+        "Member",
+        "Community member",
+        ProfileVisibility::Public,
+        1,
     )
-    .await
-    .unwrap();
+    .await;
     append_discussion_and_project(
         &pool,
         area,
@@ -2762,7 +2799,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
                 "title": "General",
                 "description": "Public discussion"
             }),
-            ActorId::User("moderator".into()),
+            ActorId::Principal("moderator".into()),
             1,
         )],
     )
@@ -2780,14 +2817,14 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
                     "title": "Welcome",
                     "author_profile_id": member_profile
                 }),
-                ActorId::User("member".into()),
+                ActorId::Principal("member".into()),
                 2,
             ),
             EventInput::new(
                 "DiscussionPostSubmitted",
                 1,
                 serde_json::json!({ "body": "First public post", "author_profile_id": member_profile }),
-                ActorId::User("member".into()),
+                ActorId::Principal("member".into()),
                 3,
             ),
         ],
@@ -2806,14 +2843,14 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
                     "title": "Hidden",
                     "author_profile_id": member_profile
                 }),
-                ActorId::User("member".into()),
+                ActorId::Principal("member".into()),
                 4,
             ),
             EventInput::new(
                 "DiscussionTopicVisibilityChanged",
                 1,
                 serde_json::json!({ "visibility": "hidden" }),
-                ActorId::User("moderator".into()),
+                ActorId::Principal("moderator".into()),
                 5,
             ),
         ],
@@ -2849,7 +2886,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
             "DiscussionTopicPostingStateChanged",
             1,
             serde_json::json!({ "posting_state": "locked" }),
-            ActorId::User("moderator".into()),
+            ActorId::Principal("moderator".into()),
             6,
         )],
     )
@@ -2863,7 +2900,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
             "DiscussionPostSubmitted",
             1,
             serde_json::json!({ "body": "stale reply", "author_profile_id": member_profile }),
-            ActorId::User("member".into()),
+            ActorId::Principal("member".into()),
             7,
         )],
     )
@@ -2920,40 +2957,30 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool: sqlx::PgPool) {
-    let reader_profile = Uuid::from_u128(140);
-    let target_profile = Uuid::from_u128(141);
     let area = Uuid::from_u128(142);
     let topic = Uuid::from_u128(143);
-    for (profile, principal, handle, display_name) in [
-        (reader_profile, "reader", "reader", "Reader"),
-        (
-            target_profile,
-            "orchid_author",
-            "orchid-author",
-            "Orchid Author",
-        ),
-    ] {
-        ensure_test_principal(&pool, principal).await;
-        append_profile_and_project(
-            &pool,
-            profile,
-            &[EventInput::new(
-                "ProfileCreated",
-                1,
-                serde_json::json!({
-                    "principal_user_id": principal,
-                    "handle": handle,
-                    "display_name": display_name,
-                    "bio": if principal == "reader" { "Reader profile" } else { "Orchid public profile" },
-                    "visibility": "public"
-                }),
-                ActorId::User(principal.into()),
-                1,
-            )],
-        )
-        .await
-        .unwrap();
-    }
+    ensure_test_principal(&pool, "reader").await;
+    let _reader_profile = create_test_profile(
+        &pool,
+        "reader",
+        "reader",
+        "Reader",
+        "Reader profile",
+        ProfileVisibility::Public,
+        1,
+    )
+    .await;
+    ensure_test_principal(&pool, "orchid_author").await;
+    let target_profile = create_test_profile(
+        &pool,
+        "orchid_author",
+        "orchid_author",
+        "Orchid Author",
+        "Orchid public profile",
+        ProfileVisibility::Public,
+        1,
+    )
+    .await;
     append_discussion_and_project(
         &pool,
         area,
@@ -2965,7 +2992,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
                 "title": "Orchids",
                 "description": "Orchid discussion"
             }),
-            ActorId::User("moderator".into()),
+            ActorId::Principal("moderator".into()),
             2,
         )],
     )
@@ -2983,7 +3010,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
                     "title": "Orchid signals",
                     "author_profile_id": target_profile
                 }),
-                ActorId::User("orchid_author".into()),
+                ActorId::Principal("orchid_author".into()),
                 3,
             ),
             EventInput::new(
@@ -2993,7 +3020,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
                     "body": "Opening orchid signal",
                     "author_profile_id": target_profile
                 }),
-                ActorId::User("orchid_author".into()),
+                ActorId::Principal("orchid_author".into()),
                 4,
             ),
         ],
@@ -3020,7 +3047,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
                 "body": "Watched orchid reply",
                 "author_profile_id": target_profile
             }),
-            ActorId::User("orchid_author".into()),
+            ActorId::Principal("orchid_author".into()),
             6,
         )],
     )
@@ -3034,12 +3061,12 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         1
     );
 
-    let muted = projections::mute_public_profile(&pool, "reader", "orchid-author", 7)
+    let muted = projections::mute_public_profile(&pool, "reader", "orchid_author", 7)
         .await
         .unwrap();
     assert!(muted.muted);
     assert!(matches!(
-        projections::mute_public_profile(&pool, "reader", "orchid-author", 8).await,
+        projections::mute_public_profile(&pool, "reader", "orchid_author", 8).await,
         Err(ProjectionError::AlreadyMuted)
     ));
     assert!(matches!(
@@ -3114,31 +3141,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         1
     );
 
-    append_profile_and_project(
-        &pool,
-        target_profile,
-        &[EventInput::new(
-            "ProfileUpdated",
-            1,
-            serde_json::json!({
-                "display_name": "Orchid Author",
-                "bio": "Orchid public profile",
-                "visibility": "members"
-            }),
-            ActorId::User("orchid_author".into()),
-            9,
-        )],
-    )
-    .await
-    .unwrap();
-    assert!(
-        projections::member_mute_state(&pool, "reader", "orchid-author")
-            .await
-            .unwrap()
-            .muted
-    );
-
-    let unmuted = projections::unmute_public_profile(&pool, "reader", "orchid-author", 10)
+    let unmuted = projections::unmute_public_profile(&pool, "reader", "orchid_author", 9)
         .await
         .unwrap();
     assert!(!unmuted.muted);
@@ -3158,7 +3161,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         1
     );
     assert!(matches!(
-        projections::unmute_public_profile(&pool, "reader", "orchid-author", 11).await,
+        projections::unmute_public_profile(&pool, "reader", "orchid_author", 10).await,
         Err(ProjectionError::NotMuted)
     ));
     projections::rebuild_member_mute_stream(&pool, relationship_id)
@@ -3169,63 +3172,129 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         .unwrap()
         .members
         .is_empty());
+
+    let remuted = projections::mute_public_profile(&pool, "reader", "orchid_author", 11)
+        .await
+        .unwrap();
+    assert!(remuted.muted);
+    update_test_profile(
+        &pool,
+        TestProfileUpdate {
+            profile_id: target_profile,
+            principal: "orchid_author",
+            expected_revision: 1,
+            edit: test_profile_edit(
+                "Orchid Author",
+                "Orchid public profile",
+                ProfileVisibility::Private,
+            ),
+            occurred_at: 12,
+        },
+    )
+    .await;
+    assert!(public_profile_by_handle(&pool, "orchid_author")
+        .await
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM profile_mute WHERE principal_user_id = 'reader' AND target_profile_id = $1",
+        )
+        .bind(target_profile)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0,
+        "a private profile has no remaining public mute target",
+    );
+    assert!(projections::member_mutes(&pool, "reader", None, 20)
+        .await
+        .unwrap()
+        .members
+        .is_empty());
+    assert!(matches!(
+        projections::member_mute_state(&pool, "reader", "orchid_author").await,
+        Err(ProjectionError::MuteTargetNotPublic)
+    ));
+    assert!(matches!(
+        projections::mute_public_profile(&pool, "reader", "orchid_author", 13).await,
+        Err(ProjectionError::MuteTargetNotPublic)
+    ));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn profile_projection_keeps_owner_state_private_and_rebuildable(pool: sqlx::PgPool) {
-    let profile = Uuid::from_u128(201);
     ensure_test_principal(&pool, "owner_a").await;
-    append_profile_and_project(
+    let profile = create_test_profile(
         &pool,
-        profile,
-        &[
-            EventInput::new(
-                "ProfileCreated",
-                1,
-                serde_json::json!({
-                    "principal_user_id": "owner_a",
-                    "handle": "owner_a",
-                    "display_name": "Owner A",
-                    "bio": "Opening profile",
-                    "visibility": "public"
-                }),
-                ActorId::User("owner_a".into()),
-                1,
-            ),
-            EventInput::new(
-                "ProfileUpdated",
-                1,
-                serde_json::json!({
-                    "display_name": "Owner A",
-                    "bio": "Updated profile",
-                    "visibility": "members"
-                }),
-                ActorId::User("owner_a".into()),
-                2,
-            ),
-        ],
+        "owner_a",
+        "owner_a",
+        "Owner A",
+        "Opening profile",
+        ProfileVisibility::Public,
+        1,
     )
-    .await
-    .unwrap();
+    .await;
+    update_test_profile(
+        &pool,
+        TestProfileUpdate {
+            profile_id: profile,
+            principal: "owner_a",
+            expected_revision: 1,
+            edit: test_profile_edit("Owner A", "Updated profile", ProfileVisibility::Private),
+            occurred_at: 2,
+        },
+    )
+    .await;
     assert!(public_profile_by_handle(&pool, "owner_a")
         .await
         .unwrap()
         .is_none());
-    let editor = profile_editor_by_handle(&pool, "owner_a")
+    let metadata = sqlx::query(
+        "SELECT active_principal_id, handle_hmac, current_claim_id, lifecycle, redacted_alias, revision FROM member_profile WHERE profile_id = $1",
+    )
+    .bind(profile)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        metadata.get::<Option<String>, _>("active_principal_id"),
+        Some("owner_a".to_string())
+    );
+    assert_eq!(metadata.get::<String, _>("lifecycle"), "active");
+    assert_eq!(metadata.get::<Option<String>, _>("redacted_alias"), None);
+    assert!(metadata
+        .get::<Option<Uuid>, _>("current_claim_id")
+        .is_some());
+    let handle_hmac = metadata
+        .get::<Option<Vec<u8>>, _>("handle_hmac")
+        .expect("active profiles retain only an opaque handle reservation");
+    assert_eq!(handle_hmac.len(), 32);
+    assert_eq!(metadata.get::<i64, _>("revision"), 2);
+    rebuild_profile_stream(&pool, profile).await.unwrap();
+    assert!(public_profile_by_handle(&pool, "owner_a")
         .await
         .unwrap()
-        .unwrap();
-    assert_eq!(editor.principal_user_id, "owner_a");
-    assert_eq!(editor.bio, "Updated profile");
-    rebuild_profile_stream(&pool, profile).await.unwrap();
+        .is_none());
+    let rebuilt = sqlx::query(
+        "SELECT active_principal_id, handle_hmac, current_claim_id, lifecycle, redacted_alias, revision FROM member_profile WHERE profile_id = $1",
+    )
+    .bind(profile)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(
-        profile_editor_by_handle(&pool, "owner_a")
-            .await
-            .unwrap()
-            .unwrap()
-            .visibility,
-        "members"
+        rebuilt.get::<Option<String>, _>("active_principal_id"),
+        Some("owner_a".to_string())
     );
+    assert_eq!(rebuilt.get::<String, _>("lifecycle"), "active");
+    assert_eq!(rebuilt.get::<Option<String>, _>("redacted_alias"), None);
+    assert!(rebuilt.get::<Option<Uuid>, _>("current_claim_id").is_some());
+    assert_eq!(
+        rebuilt.get::<Option<Vec<u8>>, _>("handle_hmac"),
+        Some(handle_hmac)
+    );
+    assert_eq!(rebuilt.get::<i64, _>("revision"), 2);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -3243,7 +3312,7 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
                 "GameCreated",
                 1,
                 test_game_created_payload("export_host", "archived_removed_pack"),
-                ActorId::User("export_host".into()),
+                ActorId::Principal("export_host".into()),
                 1,
             ),
             EventInput::new(
@@ -3254,7 +3323,7 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
                     "principal_user_id": principal,
                     "public_name": "Source Persona Name",
                 }),
-                ActorId::User(principal.clone()),
+                ActorId::Principal(principal.clone()),
                 2,
             ),
             EventInput::new(
@@ -3264,7 +3333,7 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
                     "persona_id": "portable-persona",
                     "public_name": "Latest Source Persona Name",
                 }),
-                ActorId::User(principal.clone()),
+                ActorId::Principal(principal.clone()),
                 3,
             ),
             EventInput::new("GameCompleted", 1, serde_json::json!({}), ActorId::Host, 4),

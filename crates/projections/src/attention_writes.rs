@@ -136,7 +136,7 @@ async fn append_subscription_events(
                 event.kind(),
                 1,
                 event.payload(),
-                eventstore::ActorId::User(principal_user_id.to_string()),
+                eventstore::ActorId::Principal(principal_user_id.to_string()),
                 occurred_at,
             )
         })

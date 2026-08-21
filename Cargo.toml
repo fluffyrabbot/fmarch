@@ -6,6 +6,7 @@ members = [
     "crates/content_reference",
     "crates/attention",
     "crates/social",
+    "crates/profile_application",
     "crates/trust_safety",
     "crates/forum",
     "crates/domain",

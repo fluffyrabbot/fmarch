@@ -168,7 +168,7 @@ export const COMMAND_SCENARIOS = Object.freeze([
       panelTestId: "route-error-panel",
       actionHref: "/",
       activeNavTestId: roleNavTestId("player"),
-      sessionPrincipal: "player_mira",
+      sessionViewer: "Your account",
       capabilitySummary: "ChannelMember + SlotOccupant",
     },
   },

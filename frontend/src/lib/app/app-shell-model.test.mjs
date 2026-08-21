@@ -5,6 +5,7 @@ import {
   APP_SHELL_CONTRACT,
   APP_NAVIGATION_PENDING_CONTRACT,
   BOARD_ROUTE_CONTRACT,
+  applyViewerPresentationToShell,
   buildNavigationPendingData,
   buildAppShell,
   buildBoardRouteData,
@@ -29,7 +30,7 @@ test("app shell builds role navigation from resolved capabilities", () => {
     phase: { id: "N02", label: "Night 2" },
   });
 
-  assert.equal(shell.sessionLabel, "@player_mira");
+  assert.equal(shell.sessionLabel, "Your account");
   assert.equal(shell.phase, "night");
   assert.equal(
     buildAppShell({ activeSurface: "board" }).phase,
@@ -37,14 +38,21 @@ test("app shell builds role navigation from resolved capabilities", () => {
   );
   assert.deepEqual(shell.session, {
     testId: "app-shell-session",
-    principalTestId: "app-shell-session-principal",
+    viewerTestId: "app-shell-session-viewer",
     capabilityTestId: "app-shell-session-capabilities",
     gameTestId: "app-shell-session-game",
     state: "signed-in",
     href: "/auth/account/security",
     actionLabel: "Manage account security",
-    principalLabel: "@player_mira",
-    initials: "PM",
+    viewer: {
+      state: "signed-in",
+      kind: "account",
+      label: "Your account",
+      initials: "YA",
+      profile: null,
+    },
+    viewerLabel: "Your account",
+    initials: "YA",
     contextLabel: "Playing midsummer",
     gameLabel: "midsummer",
     capabilityCount: 2,
@@ -63,7 +71,7 @@ test("app shell builds role navigation from resolved capabilities", () => {
   assert.equal(APP_SHELL_CONTRACT.mainTargetId, "fm-main");
   assert.equal(APP_SHELL_CONTRACT.mainTargetTestId, "app-shell-main-target");
   assert.equal(APP_SHELL_CONTRACT.sessionTestId, "app-shell-session");
-  assert.equal(APP_SHELL_CONTRACT.sessionPrincipalTestId, "app-shell-session-principal");
+  assert.equal(APP_SHELL_CONTRACT.sessionViewerTestId, "app-shell-session-viewer");
   assert.equal(APP_SHELL_CONTRACT.sessionCapabilityTestId, "app-shell-session-capabilities");
   assert.equal(APP_SHELL_CONTRACT.sessionGameTestId, "app-shell-session-game");
   assert.equal(APP_SHELL_CONTRACT.topbarTestId, "app-shell-topbar");
@@ -116,13 +124,20 @@ test("app shell session summary models signed-out and multi-capability states", 
   assert.equal(shell.sessionLabel, "Signed out");
   assert.deepEqual(shell.session, {
     testId: APP_SHELL_CONTRACT.sessionTestId,
-    principalTestId: APP_SHELL_CONTRACT.sessionPrincipalTestId,
+    viewerTestId: APP_SHELL_CONTRACT.sessionViewerTestId,
     capabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     gameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     state: "signed-out",
     href: "/auth/login",
     actionLabel: "Sign in",
-    principalLabel: "Signed out",
+    viewer: {
+      state: "signed-out",
+      kind: "anonymous",
+      label: "Signed out",
+      initials: "?",
+      profile: null,
+    },
+    viewerLabel: "Signed out",
     initials: "?",
     contextLabel: "Site admin",
     gameLabel: "No game",
@@ -130,6 +145,28 @@ test("app shell session summary models signed-out and multi-capability states", 
     capabilityKinds: ["GlobalAdmin", "HostOf", "SlotOccupant"],
     capabilitySummary: "GlobalAdmin + 2 roles",
   });
+});
+
+test("app shell presents an explicit viewer profile without exposing the principal", () => {
+  const shell = buildAppShell({
+    activeSurface: "board",
+    principalUserId: "principal-opaque-7",
+    viewerProfile: { handle: "mira-r", display_name: "Mira Rowan" },
+  });
+
+  assert.equal(shell.session.viewer.kind, "profile");
+  assert.equal(shell.session.viewerLabel, "Mira Rowan");
+  assert.equal(shell.session.viewer.profile.href, "/u/mira-r");
+  assert.equal(JSON.stringify(shell.session).includes("principal-opaque-7"), false);
+
+  const republished = applyViewerPresentationToShell(
+    buildAppShell({ activeSurface: "board", principalUserId: "principal-opaque-7" }),
+    {
+      principalUserId: "principal-opaque-7",
+      viewerProfile: { handle: "mira-r", displayName: "Mira Rowan" },
+    },
+  );
+  assert.equal(republished.session.viewerLabel, "Mira Rowan");
 });
 
 test("board route is an app surface with capability-gated role actions", () => {
@@ -298,7 +335,7 @@ test("route error state keeps failed paths inside the shared app shell", () => {
     ],
   });
   assert.equal(playerError.shell.activeSurface, "player");
-  assert.equal(playerError.shell.session.principalLabel, "@player_mira");
+  assert.equal(playerError.shell.session.viewerLabel, "Your account");
   assert.equal(playerError.shell.session.capabilitySummary, "ChannelMember + SlotOccupant");
   assert.equal(playerError.shell.surfaces.find((surface) => surface.id === "player").navigation, "link");
   assert.equal(playerError.error.title, "Route not found");
@@ -374,7 +411,7 @@ test("navigation pending data exposes route-aware status without a duplicate she
     "Fetching thread, channel, votecount, deadline, and private projection state.",
   );
   assert.equal(pending.activeNavTestId, "role-nav-player");
-  assert.equal(pending.sessionPrincipal, "@player_mira");
+  assert.equal(pending.sessionViewer, "Your account");
   assert.equal(pending.capabilitySummary, "ChannelMember + SlotOccupant");
   assert.equal(pending.status.state, "pending");
   assert.equal(pending.status.testId, APP_NAVIGATION_PENDING_CONTRACT.statusTestId);

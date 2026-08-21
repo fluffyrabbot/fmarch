@@ -463,7 +463,7 @@ async function proveErrorSurfaceContract(page, scenario, viewport) {
   const text = await root.textContent();
   for (const expected of [
     scenario.errorSurface.path,
-    scenario.errorSurface.sessionPrincipal,
+    scenario.errorSurface.sessionViewer,
     scenario.errorSurface.capabilitySummary,
   ]) {
     if (!text?.includes(expected)) {
@@ -480,7 +480,7 @@ async function proveErrorSurfaceContract(page, scenario, viewport) {
     actionHref: href,
     activeNavTestId: scenario.errorSurface.activeNavTestId,
     activeNavCurrent,
-    sessionPrincipal: scenario.errorSurface.sessionPrincipal,
+    sessionViewer: scenario.errorSurface.sessionViewer,
     capabilitySummary: scenario.errorSurface.capabilitySummary,
   };
 }

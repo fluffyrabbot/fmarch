@@ -102,12 +102,13 @@
       href={shell.session.href}
       data-testid={shell.session.testId}
       data-state={shell.session.state}
+      data-viewer-kind={shell.session.viewer.kind}
       data-capability-count={shell.session.capabilityCount}
       aria-label={shell.session.actionLabel}
     >
       <span class="fm-app-shell__avatar" aria-hidden="true">{shell.session.initials}</span>
       <span class="fm-app-shell__session-copy">
-        <span data-testid={shell.session.principalTestId}>{shell.session.principalLabel}</span>
+        <span data-testid={shell.session.viewerTestId}>{shell.session.viewerLabel}</span>
         <small>{shell.session.contextLabel}</small>
       </span>
       <span class="fm-sr-only" data-testid={shell.session.gameTestId}>{shell.session.gameLabel}</span>

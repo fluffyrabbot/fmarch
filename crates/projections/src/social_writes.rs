@@ -36,24 +36,19 @@ async fn change_public_profile_mute(
     let mut tx = pool.begin().await?;
     let target = sqlx::query(
         r#"
-        SELECT profile.profile_id, owner.principal_user_id AS owner_principal_user_id
-        FROM profile_public AS profile
-        JOIN profile_editor AS owner ON owner.profile_id = profile.profile_id
-        LEFT JOIN profile_mute AS existing
-          ON existing.principal_user_id = $2
-         AND existing.target_profile_id = profile.profile_id
+        SELECT profile.profile_id, owner.active_principal_id AS owner_principal_id
+        FROM public_profile AS profile
+        JOIN member_profile AS owner ON owner.profile_id = profile.profile_id
         WHERE profile.handle = $1
-          AND (profile.visibility = 'public' OR (NOT $3 AND existing.relationship_id IS NOT NULL))
+          AND owner.lifecycle = 'active'
         "#,
     )
     .bind(target_handle)
-    .bind(principal_user_id)
-    .bind(mute)
     .fetch_optional(&mut *tx)
     .await?
     .ok_or(ProjectionError::MuteTargetNotPublic)?;
     let target_profile_id: Uuid = target.get("profile_id");
-    if target.get::<String, _>("owner_principal_user_id") == principal_user_id {
+    if target.get::<String, _>("owner_principal_id") == principal_user_id {
         return Err(ProjectionError::CannotMuteSelf);
     }
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
@@ -131,7 +126,7 @@ async fn append_member_mute_events(
                 event.kind(),
                 1,
                 event.payload(),
-                eventstore::ActorId::User(principal_user_id.to_string()),
+                eventstore::ActorId::Principal(principal_user_id.to_string()),
                 occurred_at,
             )
         })

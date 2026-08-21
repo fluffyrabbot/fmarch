@@ -3,17 +3,12 @@ import test from "node:test";
 
 import {
   humanizeCapabilityLabel,
-  humanizePrincipal,
-  principalInitials,
   sessionContextLabel,
 } from "./presentation-copy.mjs";
 
-test("presentation copy translates technical identity and capability values", () => {
-  assert.equal(humanizePrincipal("alice"), "@alice");
-  assert.equal(humanizePrincipal("@alice"), "@alice");
+test("presentation copy translates capability values without formatting principals as handles", () => {
   assert.equal(humanizeCapabilityLabel("HostOf(solstice)"), "Hosting solstice");
   assert.equal(humanizeCapabilityLabel("GlobalAdmin"), "Site administrator");
-  assert.equal(principalInitials("alice-example"), "AE");
 });
 
 test("session context only describes access for the current game", () => {
