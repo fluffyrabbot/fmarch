@@ -4,9 +4,9 @@
 //! validation, projection-reference authorization, and immutable response
 //! metadata. Command-side media normalization remains with command preparation.
 
-use super::auth_http::{bearer_token, require_method_authorization};
+use super::auth_http::MethodAuthenticated;
 use super::game_http::require_channel_thread_access;
-use super::{acquire_workload_slot, unauthorized_session, unix_now_seconds, ApiError, ApiState};
+use super::{acquire_workload_slot, unix_now_seconds, ApiError, ApiState};
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
@@ -65,12 +65,11 @@ enum DeclaredUploadFormat {
 
 async fn media_upload(
     State(state): State<ApiState>,
+    MethodAuthenticated(authorization): MethodAuthenticated,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<impl IntoResponse, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let authorization = require_method_authorization(&state.auth, token).await?;
-    let principal_id = authorization.principal_id;
+    let principal_id = authorization.context.principal_id;
     let _media_permit = acquire_workload_slot(
         &state.media_slots,
         "media processing capacity is exhausted; retry shortly",
@@ -265,11 +264,10 @@ struct ThreadMediaAsset {
 async fn media_thread_variant(
     State(state): State<ApiState>,
     Path((game, channel, source_seq, content_id, asset)): Path<(Uuid, String, i64, String, String)>,
+    MethodAuthenticated(authorization): MethodAuthenticated,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let authorization = require_method_authorization(&state.auth, token).await?;
-    let principal_id = authorization.principal_id;
+    let principal_id = authorization.context.principal_id;
     if channel != "main" {
         require_channel_thread_access(&state.pool, game, channel.as_str(), Some(principal_id))
             .await?;

@@ -1,10 +1,11 @@
 //! Authenticated YouTube oEmbed lookup. Command decisioning stays in `commands`;
 //! this boundary fetches a write-time snapshot before the game lock is taken.
 
-use super::auth_http::{bearer_token, require_method_authorization};
-use super::{unauthorized_session, ApiError, ApiState};
+use super::auth_http::MethodAuthenticated;
+use super::ApiError;
+use super::ApiState;
 use axum::extract::State;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
@@ -148,11 +149,9 @@ struct ResolveYoutubeEmbedResponse {
 
 async fn resolve_youtube_embed(
     State(state): State<ApiState>,
-    headers: HeaderMap,
+    _method_authenticated: MethodAuthenticated,
     Json(body): Json<ResolveYoutubeEmbedRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_method_authorization(&state.auth, token).await?;
     let embed = resolve_youtube_snapshot(&state.embed_lookup, "main", &body.url)
         .await
         .map_err(|_| ApiError::Reject {

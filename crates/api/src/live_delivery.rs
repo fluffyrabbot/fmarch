@@ -7,15 +7,15 @@
 //! game-read adapters.
 
 use super::auth_http::{
-    authorization_context, bearer_token, hash_session_token, unauthorized_session,
-    unix_now_seconds, AuthHttpState, AuthorizationContext,
+    hash_session_token, unauthorized_session, unix_now_seconds, AuthHttpState,
+    AuthenticatedRequest, AuthorizationContext,
 };
 use super::authentication::enforce_public_request_limit;
 use super::live_projection::{self, LiveProjectionPublisher, LiveProjectionReceive};
 use super::{capacity_unavailable_response, game_http, ApiError, ApiState};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Query, State};
-use axum::http::HeaderMap;
+use axum::extract::{FromRef, Query, State};
+
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -201,6 +201,12 @@ pub(super) struct LiveDeliveryState {
     live_event_wake: GameEventWakeHub,
 }
 
+impl FromRef<LiveDeliveryState> for AuthHttpState {
+    fn from_ref(state: &LiveDeliveryState) -> Self {
+        state.auth.clone()
+    }
+}
+
 impl LiveDeliveryState {
     fn new(state: &ApiState) -> Self {
         Self {
@@ -278,12 +284,10 @@ fn authorization_kind(authorization: &AuthorizationContext) -> &'static str {
 
 async fn create_websocket_ticket(
     State(state): State<LiveDeliveryState>,
-    headers: HeaderMap,
+    authorization: AuthenticatedRequest,
     Json(request): Json<CreateWebsocketTicket>,
 ) -> Result<Json<WebsocketTicketResponse>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let authorization = authorization_context(&state.auth, token).await?;
-    let principal_id = authorization.principal_id;
+    let principal_id = authorization.context.principal_id;
     let ticket_scope =
         hash_session_token(format!("websocket-ticket-principal:{principal_id}").as_str());
     enforce_public_request_limit(
@@ -341,12 +345,12 @@ async fn create_websocket_ticket(
     }
 
     let issued_at = unix_now_seconds();
-    if authorization.expires_at <= issued_at {
+    if authorization.context.expires_at <= issued_at {
         return Err(unauthorized_session());
     }
     let expires_at = issued_at
         .saturating_add(state.auth.websocket_ticket_ttl.as_secs() as i64)
-        .min(authorization.expires_at);
+        .min(authorization.context.expires_at);
     let ticket = format!("ws-ticket-{}-{}", Uuid::new_v4(), Uuid::new_v4());
     sqlx::query(
         r#"
@@ -359,9 +363,14 @@ async fn create_websocket_ticket(
         "#,
     )
     .bind(hash_session_token(ticket.as_str()))
-    .bind(authorization_kind(&authorization))
-    .bind(authorization.session_reference)
-    .bind(authorization.idle_expires_at.min(authorization.expires_at))
+    .bind(authorization_kind(&authorization.context))
+    .bind(authorization.context.session_reference)
+    .bind(
+        authorization
+            .context
+            .idle_expires_at
+            .min(authorization.context.expires_at),
+    )
     .bind(principal_id.as_uuid())
     .bind(audience)
     .bind(request.game)

@@ -161,6 +161,31 @@ The source boundary contract protects those dependency directions. URLs,
 methods, JSON and wire shapes, ordering, cursor semantics, visibility rules,
 capability decisions, export contents, and audience filters remain unchanged.
 
+## Closed API boundary: authenticated-request extractors
+
+`crates/api/src/auth_http.rs` owns the transport-level authentication
+extractors. `AuthenticatedRequest` and `AccountAuthenticatedRequest` carry the
+canonical bearer credential plus its validated session context (the two
+variants preserve each route family's exact missing-credential rejection),
+and `MethodAuthenticated` adds the active-sign-in-method requirement.
+`FromRef` projections live with each state owner (`ApiState`, `GameHttpState`,
+`PublicPlatformHttpState`, `CommandHttpState`, `LiveDeliveryState`), so no
+handler parses the `Authorization` header by hand.
+
+`game_http::GameAuthorization` is itself an extractor over the session
+context, except for the two channel routes whose contract deliberately orders
+the unknown-channel 404 ahead of any 401; those call
+`GameAuthorization::authorize(&state, &headers)` after their guard.
+
+Raw-token flows intentionally stay manual: provider access-token verification,
+row-locked `validate_session_for_update` revalidations (password rotation,
+recovery, method linking), session rotation, logout locking, the WebSocket
+session gate, and `command()`'s envelope-shaped rejection path with its
+conditional game-creation admin recheck. The former
+`require_authorized_principal`/`require_method_authorization` helpers are
+deleted; URLs, status codes, audit labels, transaction boundaries, and
+rejection semantics remain unchanged.
+
 ## Closed API boundary: command submission and completed-game import
 
 `crates/api/src/command_http.rs` owns `/commands` and `/games/import`, wire

@@ -65,7 +65,7 @@ fn command_http_has_one_typed_owner_without_decision_or_publication_drift() {
         ".lookup_variant_set(",
         "crate::embed_http::resolve_youtube_snapshot(",
         "require_global_admin(&state.auth, token, \"game creation\")",
-        "require_global_admin(&state.auth, token, \"completed-game import\")",
+        "require_global_admin(&state.auth, &request.bearer, \"completed-game import\")",
         "LiveProjectionChangeSet {",
         ".live_projection",
         ".publish(",

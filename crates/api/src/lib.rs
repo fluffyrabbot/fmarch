@@ -41,7 +41,7 @@ use live_delivery::GameEventWakeHub;
 use live_projection::LiveProjectionPublisher;
 
 use crate::identity_delivery::{IdentityDeliveryError, IdentityDeliveryGateway};
-use axum::extract::State;
+use axum::extract::{FromRef, State};
 use axum::http::header::RETRY_AFTER;
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -77,6 +77,12 @@ pub struct ApiState {
     websocket_poll_interval: Duration,
     live_event_wake: GameEventWakeHub,
     embed_lookup: embed_http::YoutubeSnapshotLookup,
+}
+
+impl FromRef<ApiState> for AuthHttpState {
+    fn from_ref(state: &ApiState) -> Self {
+        state.auth.clone()
+    }
 }
 
 const REGISTRATION_SESSION_TTL_SECONDS: i64 = 60 * 60 * 24 * 7;

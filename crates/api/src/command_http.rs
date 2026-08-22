@@ -6,11 +6,12 @@
 //! `commands`; live update assembly and publication remain in `live_projection`.
 
 use super::auth_http::{
-    authorization_context, bearer_token, require_global_admin, unauthorized_session, AuthHttpState,
+    authorization_context, bearer_token, require_global_admin, unauthorized_session,
+    AuthHttpState, AuthenticatedRequest,
 };
 use super::live_projection::{self, LiveProjectionChangeSet, LiveProjectionPublisher};
 use super::{program_library, ApiError, ApiState};
-use axum::extract::State;
+use axum::extract::{FromRef, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
@@ -33,6 +34,12 @@ pub(super) struct CommandHttpState {
     variant_limits: VariantLimits,
     live_projection: LiveProjectionPublisher,
     embed_lookup: crate::embed_http::YoutubeSnapshotLookup,
+}
+
+impl FromRef<CommandHttpState> for AuthHttpState {
+    fn from_ref(state: &CommandHttpState) -> Self {
+        state.auth.clone()
+    }
 }
 
 impl CommandHttpState {
@@ -307,11 +314,10 @@ fn command_api_error_response(id: u64, error: ApiError) -> Response {
 
 async fn import_completed_game_export(
     State(state): State<CommandHttpState>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
     Json(export): Json<projections::CompletedGameExport>,
 ) -> Result<Json<projections::ProjectionAuditReport>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_global_admin(&state.auth, token, "completed-game import").await?;
+    require_global_admin(&state.auth, &request.bearer, "completed-game import").await?;
     Ok(Json(
         projections::import_completed_game_export(&state.pool, &export).await?,
     ))

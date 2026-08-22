@@ -2,13 +2,16 @@
 
 use super::auth_http::{
     authorization_context, bearer_token, require_global_admin, require_global_operator,
-    unauthorized_session, unix_now_seconds, AuthHttpState, AuthorizationContext,
+    unauthorized_session, unix_now_seconds, AuthHttpState, AuthenticatedRequest,
+    AuthorizationContext,
 };
 use super::command_http::command_reject_api_error;
 use super::{ApiError, ApiState};
 use crate::{live_projection, program_library};
-use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
+use axum::http::request::Parts;
+use axum::http::HeaderMap;
+use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use caps::{Capability, Principal};
@@ -37,6 +40,12 @@ use wire::{
 pub(super) struct GameHttpState {
     pool: PgPool,
     auth: AuthHttpState,
+}
+
+impl FromRef<GameHttpState> for AuthHttpState {
+    fn from_ref(state: &GameHttpState) -> Self {
+        state.auth.clone()
+    }
 }
 
 impl GameHttpState {
@@ -118,13 +127,28 @@ impl GameAuthorization {
     }
 }
 
-async fn required_game_authorization(
-    state: &GameHttpState,
-    headers: &HeaderMap,
-) -> Result<GameAuthorization, ApiError> {
-    let token = bearer_token(headers).ok_or_else(unauthorized_session)?;
-    let context = authorization_context(&state.auth, token).await?;
-    Ok(GameAuthorization::from_context(&context))
+impl GameAuthorization {
+    /// Authorizes from raw headers for the two channel routes whose contract
+    /// deliberately answers unknown-channel requests with 404 before any
+    /// credential check can answer 401.
+    async fn authorize(state: &GameHttpState, headers: &HeaderMap) -> Result<Self, ApiError> {
+        let token = bearer_token(headers).ok_or_else(unauthorized_session)?;
+        let context = authorization_context(&state.auth, token).await?;
+        Ok(Self::from_context(&context))
+    }
+}
+
+impl<S> FromRequestParts<S> for GameAuthorization
+where
+    AuthHttpState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let request = AuthenticatedRequest::from_request_parts(parts, state).await?;
+        Ok(Self::from_context(&request.context))
+    }
 }
 
 async fn votecount(
@@ -250,9 +274,9 @@ async fn endgame_summary(
 async fn completed_game_export(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    headers: HeaderMap,
+    authorization: GameAuthorization,
+
 ) -> Result<Json<projections::CompletedGameExport>, ApiError> {
-    let authorization = required_game_authorization(&state, &headers).await?;
     let capabilities = caps::resolve(
         &state.pool,
         &Principal::authenticated(authorization.principal_id()),
@@ -333,10 +357,9 @@ async fn game_index(
 async fn admin_game_index(
     State(state): State<GameHttpState>,
     Query(query): Query<GameIndexQuery>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
 ) -> Result<Json<GameIndexPage>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_global_operator(&state.auth, token, "admin game discovery").await?;
+    require_global_operator(&state.auth, &request.bearer, "admin game discovery").await?;
     let cursor = query
         .cursor
         .as_deref()
@@ -351,10 +374,9 @@ async fn admin_game_index(
 
 async fn admin_game_bootstrap(
     State(state): State<GameHttpState>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
 ) -> Result<Json<AdminGameBootstrapResponse>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_global_admin(&state.auth, token, "game bootstrap").await?;
+    require_global_admin(&state.auth, &request.bearer, "game bootstrap").await?;
     Ok(Json(AdminGameBootstrapResponse {
         packs: product_pack_catalog()?,
     }))
@@ -427,7 +449,7 @@ async fn channel_thread_view(
             message: "the public main thread is available only at /games/{game}".to_string(),
         });
     }
-    let authorization = required_game_authorization(&state, &headers).await?;
+    let authorization = GameAuthorization::authorize(&state, &headers).await?;
     require_channel_thread_access(
         &state.pool,
         game,
@@ -499,7 +521,7 @@ async fn channel_post_citations(
             message: "the public main thread is available only at /games/{game}".to_string(),
         });
     }
-    let authorization = required_game_authorization(&state, &headers).await?;
+    let authorization = GameAuthorization::authorize(&state, &headers).await?;
     require_channel_thread_access(
         &state.pool,
         game,
@@ -654,9 +676,9 @@ pub(super) async fn require_channel_thread_access(
 async fn player_notifications(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    headers: HeaderMap,
+    authorization: GameAuthorization,
+
 ) -> Result<Json<Vec<PlayerNotification>>, ApiError> {
-    let authorization = required_game_authorization(&state, &headers).await?;
     Ok(Json(
         player_notifications_for_principal(&state.pool, game, authorization.principal_id()).await?,
     ))
@@ -665,9 +687,9 @@ async fn player_notifications(
 async fn player_investigation_results(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    headers: HeaderMap,
+    authorization: GameAuthorization,
+
 ) -> Result<Json<Vec<PlayerInvestigationResult>>, ApiError> {
-    let authorization = required_game_authorization(&state, &headers).await?;
     Ok(Json(
         player_investigation_results_for_principal(&state.pool, game, authorization.principal_id())
             .await?,
@@ -837,9 +859,9 @@ async fn player_command_state(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     Query(query): Query<PlayerCommandStateQuery>,
-    headers: HeaderMap,
+    authorization: GameAuthorization,
+
 ) -> Result<Json<PlayerCommandStateResponse>, ApiError> {
-    let authorization = required_game_authorization(&state, &headers).await?;
     let caps = caps::resolve(
         &state.pool,
         &Principal::authenticated(authorization.principal_id()),
@@ -1881,9 +1903,9 @@ impl From<HostConsoleThreadPost> for HostConsoleThreadPostDelta {
 async fn host_phase_controls(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    headers: HeaderMap,
+    authorization: GameAuthorization,
+
 ) -> Result<Json<Vec<HostPhaseControl>>, ApiError> {
-    let authorization = required_game_authorization(&state, &headers).await?;
     require_host_audit_access(
         &state.pool,
         game,
@@ -1904,9 +1926,9 @@ async fn host_phase_controls(
 async fn host_prompts(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    headers: HeaderMap,
+    authorization: GameAuthorization,
+
 ) -> Result<Json<Vec<HostPrompt>>, ApiError> {
-    let authorization = required_game_authorization(&state, &headers).await?;
     require_host_audit_access(
         &state.pool,
         game,
@@ -1928,9 +1950,9 @@ async fn host_console_state(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     Query(query): Query<HostConsoleStateQuery>,
-    headers: HeaderMap,
+    authorization: GameAuthorization,
+
 ) -> Result<Json<HostConsoleStateResponse>, ApiError> {
-    let authorization = required_game_authorization(&state, &headers).await?;
     let authority = resolve_host_console_authority(&state.pool, game, &authorization)
         .await?
         .ok_or_else(|| ApiError::Reject {
@@ -1974,9 +1996,9 @@ pub async fn load_host_console_state_for_principal(
 async fn host_setup_state(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
-    headers: HeaderMap,
+    authorization: GameAuthorization,
+
 ) -> Result<Json<HostSetupStateResponse>, ApiError> {
-    let authorization = required_game_authorization(&state, &headers).await?;
     require_host_audit_access(
         &state.pool,
         game,

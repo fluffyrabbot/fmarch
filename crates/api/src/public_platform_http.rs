@@ -1,14 +1,15 @@
 //! Public-platform discovery, discussion, moderation, watch, and profile HTTP boundary.
 
 use super::auth_http::{
-    authorization_context, bearer_token, require_authorized_principal, unauthorized_account,
-    unauthorized_session, unix_now_seconds, AuthHttpState,
+    authorization_context, bearer_token, unauthorized_account, unix_now_seconds,
+    AccountAuthenticatedRequest, AuthHttpState, AuthenticatedRequest,
 };
 use super::{ApiError, ApiState};
 use attention::WatchTarget;
-use axum::extract::{Path, Query, State};
+use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
 use axum::http::header::AUTHORIZATION;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::request::Parts;
+use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use content_reference::{self, Quotation, DEFAULT_POST_CITATION_LIMIT};
@@ -40,6 +41,12 @@ use wire::{
 pub(super) struct PublicPlatformHttpState {
     pool: PgPool,
     auth: AuthHttpState,
+}
+
+impl FromRef<PublicPlatformHttpState> for AuthHttpState {
+    fn from_ref(state: &PublicPlatformHttpState) -> Self {
+        state.auth.clone()
+    }
 }
 
 impl PublicPlatformHttpState {
@@ -135,9 +142,8 @@ struct MemberMuteQuery {
 async fn subscription_target_state(
     State(state): State<PublicPlatformHttpState>,
     Path(surface_id): Path<Uuid>,
-    headers: HeaderMap,
+    MemberAuthentication(principal_id): MemberAuthentication,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let target = subscription_target(surface_id);
     Ok(Json(
         projections::subscription_target_state(&state.pool, principal_id, target)
@@ -150,9 +156,8 @@ async fn subscription_target_state(
 async fn subscribe_to_target(
     State(state): State<PublicPlatformHttpState>,
     Path(surface_id): Path<Uuid>,
-    headers: HeaderMap,
+    MemberAuthentication(principal_id): MemberAuthentication,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let target = subscription_target(surface_id);
     let state = projections::subscribe_to_public_target(
         &state.pool,
@@ -168,9 +173,8 @@ async fn subscribe_to_target(
 async fn unsubscribe_from_target(
     State(state): State<PublicPlatformHttpState>,
     Path(surface_id): Path<Uuid>,
-    headers: HeaderMap,
+    MemberAuthentication(principal_id): MemberAuthentication,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let target = subscription_target(surface_id);
     let state = projections::unsubscribe_from_public_target(
         &state.pool,
@@ -186,10 +190,9 @@ async fn unsubscribe_from_target(
 async fn advance_subscription_read(
     State(state): State<PublicPlatformHttpState>,
     Path(surface_id): Path<Uuid>,
-    headers: HeaderMap,
+    MemberAuthentication(principal_id): MemberAuthentication,
     Json(request): Json<AdvanceSubscriptionReadRequest>,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let target = subscription_target(surface_id);
     let state = projections::advance_subscription_read_cursor(
         &state.pool,
@@ -206,9 +209,8 @@ async fn advance_subscription_read(
 async fn public_inbox(
     State(state): State<PublicPlatformHttpState>,
     Query(query): Query<PublicInboxQuery>,
-    headers: HeaderMap,
+    MemberAuthentication(principal_id): MemberAuthentication,
 ) -> Result<Json<PublicInboxPage>, ApiError> {
-    let principal_id = authenticated_member(&state.auth, &headers).await?;
     if query.before_seq.is_some_and(|seq| seq <= 0) {
         return Err(subscription_bad_request(
             "inbox before_seq must be a positive event sequence",
@@ -229,9 +231,8 @@ async fn public_inbox(
 async fn member_mutes(
     State(state): State<PublicPlatformHttpState>,
     Query(query): Query<MemberMuteQuery>,
-    headers: HeaderMap,
+    MemberAuthentication(principal_id): MemberAuthentication,
 ) -> Result<Json<MemberMutePage>, ApiError> {
-    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let cursor = query
         .cursor
         .as_deref()
@@ -255,9 +256,8 @@ async fn member_mutes(
 async fn member_mute_state(
     State(state): State<PublicPlatformHttpState>,
     Path(handle): Path<String>,
-    headers: HeaderMap,
+    MemberAuthentication(principal_id): MemberAuthentication,
 ) -> Result<Json<MemberMuteState>, ApiError> {
-    let principal_id = authenticated_member(&state.auth, &headers).await?;
     Ok(Json(
         projections::member_mute_state(&state.pool, principal_id, handle.as_str())
             .await
@@ -269,9 +269,8 @@ async fn member_mute_state(
 async fn mute_public_profile(
     State(state): State<PublicPlatformHttpState>,
     Path(handle): Path<String>,
-    headers: HeaderMap,
+    MemberAuthentication(principal_id): MemberAuthentication,
 ) -> Result<Json<MemberMuteState>, ApiError> {
-    let principal_id = authenticated_member(&state.auth, &headers).await?;
     Ok(Json(
         projections::mute_public_profile(
             &state.pool,
@@ -288,9 +287,8 @@ async fn mute_public_profile(
 async fn unmute_public_profile(
     State(state): State<PublicPlatformHttpState>,
     Path(handle): Path<String>,
-    headers: HeaderMap,
+    MemberAuthentication(principal_id): MemberAuthentication,
 ) -> Result<Json<MemberMuteState>, ApiError> {
-    let principal_id = authenticated_member(&state.auth, &headers).await?;
     Ok(Json(
         projections::unmute_public_profile(
             &state.pool,
@@ -304,23 +302,68 @@ async fn unmute_public_profile(
     ))
 }
 
-async fn authenticated_member(
-    auth: &AuthHttpState,
-    headers: &HeaderMap,
-) -> Result<PrincipalId, ApiError> {
-    let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    require_authorized_principal(auth, token).await
+/// Extractor form of the member-authentication rule shared by every
+/// resource-owning public-platform surface.
+struct MemberAuthentication(PrincipalId);
+
+impl<S> FromRequestParts<S> for MemberAuthentication
+where
+    AuthHttpState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let request = AccountAuthenticatedRequest::from_request_parts(parts, state).await?;
+        Ok(Self(request.context.principal_id))
+    }
 }
 
-pub(super) async fn optional_authenticated_member(
-    auth: &AuthHttpState,
-    headers: &HeaderMap,
-) -> Result<Option<PrincipalId>, ApiError> {
-    if !headers.contains_key(AUTHORIZATION) {
-        return Ok(None);
+/// Anonymous-or-member resolution for public read surfaces: an absent
+/// Authorization header means anonymous; a present but invalid credential
+/// still rejects with the account-unauthorized error.
+struct OptionalMemberAuthentication(Option<PrincipalId>);
+
+impl<S> FromRequestParts<S> for OptionalMemberAuthentication
+where
+    AuthHttpState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        if !parts.headers.contains_key(AUTHORIZATION) {
+            return Ok(Self(None));
+        }
+        let auth = AuthHttpState::from_ref(state);
+        let token =
+            bearer_token(&parts.headers).ok_or_else(unauthorized_account)?.to_string();
+        let context = authorization_context(&auth, &token).await?;
+        Ok(Self(Some(context.principal_id)))
     }
-    let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    require_authorized_principal(auth, token).await.map(Some)
+}
+
+/// Member authentication that also resolves the caller's public profile, so
+/// discussion write surfaces cannot post without one.
+struct DiscussionProfileAuthentication(AuthenticatedDiscussionProfile);
+
+impl FromRequestParts<PublicPlatformHttpState> for DiscussionProfileAuthentication {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &PublicPlatformHttpState,
+    ) -> Result<Self, Self::Rejection> {
+        let request = AccountAuthenticatedRequest::from_request_parts(parts, state).await?;
+        let principal_id = request.context.principal_id;
+        let profile_id = projections::public_profile_id_by_principal(&state.pool, principal_id)
+            .await?
+            .ok_or_else(|| discussion_conflict("create a public profile before posting publicly"))?;
+        Ok(Self(AuthenticatedDiscussionProfile {
+            profile_id,
+            principal_id,
+        }))
+    }
 }
 
 fn parse_member_mute_cursor(value: &str) -> Result<projections::MemberMuteCursor, ApiError> {
@@ -423,9 +466,8 @@ fn subscription_bad_request(message: &str) -> ApiError {
 async fn public_search(
     State(state): State<PublicPlatformHttpState>,
     Query(query): Query<PublicSearchQuery>,
-    headers: HeaderMap,
+    OptionalMemberAuthentication(viewer_principal_id): OptionalMemberAuthentication,
 ) -> Result<Json<PublicSearchPage>, ApiError> {
-    let viewer_principal_id = optional_authenticated_member(&state.auth, &headers).await?;
     let normalized_query = query.q.trim();
     if normalized_query.chars().count() < 2 || normalized_query.chars().count() > 200 {
         return Err(ApiError::Reject {
@@ -601,9 +643,8 @@ async fn discussion_area_topics(
     State(state): State<PublicPlatformHttpState>,
     Path(slug): Path<String>,
     Query(query): Query<DiscussionPageQuery>,
-    headers: HeaderMap,
+    OptionalMemberAuthentication(viewer_principal_id): OptionalMemberAuthentication,
 ) -> Result<Json<DiscussionTopicPage>, ApiError> {
-    let viewer_principal_id = optional_authenticated_member(&state.auth, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
@@ -633,9 +674,8 @@ async fn discussion_topic_thread(
     State(state): State<PublicPlatformHttpState>,
     Path((slug, topic)): Path<(String, Uuid)>,
     Query(query): Query<DiscussionPostQuery>,
-    headers: HeaderMap,
+    OptionalMemberAuthentication(viewer_principal_id): OptionalMemberAuthentication,
 ) -> Result<Json<DiscussionThreadPage>, ApiError> {
-    let viewer_principal_id = optional_authenticated_member(&state.auth, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
@@ -661,11 +701,11 @@ async fn discussion_topic_thread(
 
 async fn create_discussion_area(
     State(state): State<PublicPlatformHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<CreateDiscussionAreaRequest>,
 ) -> Result<(StatusCode, Json<DiscussionArea>), ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_id = require_global_mod(&state, token, "discussion area creation").await?;
+    let principal_id = require_global_mod(&state, &auth.bearer, "discussion area creation").await?;
+
     let slug = validate_discussion_slug(request.slug.as_str())?;
     let title = validate_discussion_text(request.title.as_str(), "discussion area title", 160)?;
     let description = validate_discussion_text(
@@ -708,10 +748,9 @@ async fn create_discussion_area(
 async fn create_discussion_topic(
     State(state): State<PublicPlatformHttpState>,
     Path(slug): Path<String>,
-    headers: HeaderMap,
+    DiscussionProfileAuthentication(profile): DiscussionProfileAuthentication,
     Json(request): Json<CreateDiscussionTopicRequest>,
 ) -> Result<(StatusCode, Json<DiscussionTopic>), ApiError> {
-    let profile = authenticated_discussion_profile(&state, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
@@ -739,10 +778,9 @@ async fn create_discussion_topic(
 async fn create_discussion_post(
     State(state): State<PublicPlatformHttpState>,
     Path(topic): Path<Uuid>,
-    headers: HeaderMap,
+    DiscussionProfileAuthentication(profile): DiscussionProfileAuthentication,
     Json(request): Json<CreateDiscussionPostRequest>,
 ) -> Result<(StatusCode, Json<DiscussionTopic>), ApiError> {
-    let profile = authenticated_discussion_profile(&state, &headers).await?;
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
@@ -790,10 +828,9 @@ async fn discussion_post_citations(
     State(state): State<PublicPlatformHttpState>,
     Path((topic, source_seq)): Path<(Uuid, i64)>,
     Query(query): Query<PostCitationQuery>,
-    headers: HeaderMap,
+    OptionalMemberAuthentication(viewer_principal_id): OptionalMemberAuthentication,
 ) -> Result<Json<PublicPostCitationPage>, ApiError> {
     let _topic = visible_discussion_topic(&state, topic).await?;
-    let viewer_principal_id = optional_authenticated_member(&state.auth, &headers).await?;
     let page = projections::visible_public_incoming_citations(
         &state.pool,
         content_reference::PublicContentRef::new(topic, source_seq),
@@ -808,11 +845,10 @@ async fn discussion_post_citations(
 async fn moderate_discussion_topic(
     State(state): State<PublicPlatformHttpState>,
     Path(topic): Path<Uuid>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<ModerateDiscussionTopicRequest>,
 ) -> Result<Json<DiscussionTopic>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_id = require_global_mod(&state, token, "discussion moderation").await?;
+    let principal_id = require_global_mod(&state, &auth.bearer, "discussion moderation").await?;
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
@@ -848,11 +884,11 @@ async fn moderate_discussion_topic(
 
 async fn submit_moderation_report(
     State(state): State<PublicPlatformHttpState>,
-    headers: HeaderMap,
-    Json(request): Json<SubmitModerationReportRequest>,
+    request: AccountAuthenticatedRequest,
+    Json(request_body): Json<SubmitModerationReportRequest>,
 ) -> Result<(StatusCode, Json<ModerationReportReceipt>), ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_account)?;
-    let principal_id = require_authorized_principal(&state.auth, token).await?;
+    let principal_id = request.context.principal_id;
+    let request = request_body;
     if request.source_seq <= 0 {
         return Err(moderation_bad_request("report source_seq must be positive"));
     }
@@ -884,10 +920,9 @@ async fn submit_moderation_report(
 async fn moderation_report_receipt(
     State(state): State<PublicPlatformHttpState>,
     Path(report): Path<Uuid>,
-    headers: HeaderMap,
+    request: AccountAuthenticatedRequest,
 ) -> Result<Json<ModerationReportReceipt>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_account)?;
-    let principal_id = require_authorized_principal(&state.auth, token).await?;
+    let principal_id = request.context.principal_id;
     let receipt = projections::moderation_report_receipt(&state.pool, report, principal_id)
         .await?
         .ok_or_else(|| discussion_not_found("moderation report receipt"))?;
@@ -897,10 +932,9 @@ async fn moderation_report_receipt(
 async fn moderation_cases(
     State(state): State<PublicPlatformHttpState>,
     Query(query): Query<ModerationCaseQuery>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
 ) -> Result<Json<ModerationCasePage>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_global_mod(&state, token, "moderation queue access").await?;
+    require_global_mod(&state, &auth.bearer, "moderation queue access").await?;
     let status = match query.status.as_deref().unwrap_or("open") {
         "all" => None,
         value => {
@@ -927,10 +961,9 @@ async fn moderation_cases(
 async fn moderation_case(
     State(state): State<PublicPlatformHttpState>,
     Path(case): Path<Uuid>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
 ) -> Result<Json<ModerationCaseDetail>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_global_mod(&state, token, "moderation case access").await?;
+    require_global_mod(&state, &auth.bearer, "moderation case access").await?;
     let detail = projections::moderation_case_by_id(&state.pool, case)
         .await?
         .ok_or_else(|| discussion_not_found("moderation case"))?;
@@ -940,11 +973,10 @@ async fn moderation_case(
 async fn moderate_case(
     State(state): State<PublicPlatformHttpState>,
     Path(case): Path<Uuid>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<ModerateCaseRequest>,
 ) -> Result<Json<ModerationCaseDetail>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_id = require_global_mod(&state, token, "moderation case action").await?;
+    let principal_id = require_global_mod(&state, &auth.bearer, "moderation case action").await?;
     let reason = validate_discussion_text(request.reason.as_str(), "moderation reason", 500)?;
     let current = projections::moderation_case_state(&state.pool, case)
         .await?
@@ -1053,21 +1085,6 @@ async fn visible_discussion_topic(
 struct AuthenticatedDiscussionProfile {
     profile_id: Uuid,
     principal_id: PrincipalId,
-}
-
-async fn authenticated_discussion_profile(
-    state: &PublicPlatformHttpState,
-    headers: &HeaderMap,
-) -> Result<AuthenticatedDiscussionProfile, ApiError> {
-    let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    let principal_id = require_authorized_principal(&state.auth, token).await?;
-    let profile_id = projections::public_profile_id_by_principal(&state.pool, principal_id)
-        .await?
-        .ok_or_else(|| discussion_conflict("create a public profile before posting publicly"))?;
-    Ok(AuthenticatedDiscussionProfile {
-        profile_id,
-        principal_id,
-    })
 }
 
 async fn require_global_mod(
@@ -1271,9 +1288,8 @@ async fn public_profile(
 
 async fn current_member_profile(
     State(state): State<PublicPlatformHttpState>,
-    headers: HeaderMap,
+    MemberAuthentication(owner): MemberAuthentication,
 ) -> Result<Json<ProfileEditor>, ApiError> {
-    let owner = authenticated_profile_principal(&state, &headers).await?;
     let profile = profile_application::owner_profile(&state.pool, &owner)
         .await
         .map_err(profile_application_api_error)?
@@ -1283,10 +1299,9 @@ async fn current_member_profile(
 
 async fn create_profile(
     State(state): State<PublicPlatformHttpState>,
-    headers: HeaderMap,
+    MemberAuthentication(owner): MemberAuthentication,
     Json(request): Json<CreateProfileRequest>,
 ) -> Result<(StatusCode, Json<ProfileEditor>), ApiError> {
-    let owner = authenticated_profile_principal(&state, &headers).await?;
     let presentation = profile_presentation_from_input(
         request.handle.as_str(),
         request.display_name.as_str(),
@@ -1308,10 +1323,9 @@ async fn create_profile(
 
 async fn update_profile(
     State(state): State<PublicPlatformHttpState>,
-    headers: HeaderMap,
+    MemberAuthentication(owner): MemberAuthentication,
     Json(request): Json<UpdateProfileRequest>,
 ) -> Result<Json<ProfileEditor>, ApiError> {
-    let owner = authenticated_profile_principal(&state, &headers).await?;
     let profile = profile_application::owner_profile(&state.pool, &owner)
         .await
         .map_err(profile_application_api_error)?
@@ -1337,14 +1351,6 @@ async fn update_profile(
         .map_err(profile_application_api_error)?
         .ok_or_else(profile_not_found)?;
     Ok(Json(profile_editor_from_owner(profile)?))
-}
-
-async fn authenticated_profile_principal(
-    state: &PublicPlatformHttpState,
-    headers: &HeaderMap,
-) -> Result<PrincipalId, ApiError> {
-    let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    require_authorized_principal(&state.auth, token).await
 }
 
 fn profile_presentation_from_input(

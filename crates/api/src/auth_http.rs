@@ -11,8 +11,9 @@ use crate::identity_delivery::{
     process_identity_delivery_intent, IdentityDeliveryGateway, IdentityDeliveryKind,
     LocalDeterministicIdentityDeliveryGateway,
 };
-use axum::extract::{Path, Query, State};
+use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
 use axum::http::header::AUTHORIZATION;
+use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -163,6 +164,76 @@ pub(super) async fn authorization_context(
     .await?)
 }
 
+/// Extractor-resolved request authorization: the canonical bearer credential
+/// together with its validated session context. Handlers declare this
+/// extractor instead of hand-parsing the `Authorization` header. A missing
+/// or malformed credential rejects with the session-unauthorized error.
+pub(super) struct AuthenticatedRequest {
+    pub(super) bearer: String,
+    pub(super) context: AuthorizationContext,
+}
+
+impl<S> FromRequestParts<S> for AuthenticatedRequest
+where
+    AuthHttpState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth = AuthHttpState::from_ref(state);
+        let bearer =
+            bearer_token(&parts.headers).ok_or_else(unauthorized_session)?.to_string();
+        let context = authorization_context(&auth, &bearer).await?;
+        Ok(Self { bearer, context })
+    }
+}
+
+/// Session authorization that additionally requires an active sign-in method.
+/// Resource-owning account surfaces must not admit methodless development or
+/// delegated-admin sessions; a missing credential rejects with the
+/// session-unauthorized error and a methodless context with the
+/// account-unauthorized error.
+pub(super) struct MethodAuthenticated(pub(super) AuthenticatedRequest);
+
+impl<S> FromRequestParts<S> for MethodAuthenticated
+where
+    AuthHttpState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let inner = AuthenticatedRequest::from_request_parts(parts, state).await?;
+        if inner.context.method.is_none() {
+            return Err(unauthorized_account());
+        }
+        Ok(Self(inner))
+    }
+}
+
+/// Session authorization whose missing or malformed credential rejects with
+/// the account-unauthorized error used by resource-owning member surfaces.
+pub(super) struct AccountAuthenticatedRequest {
+    pub(super) context: AuthorizationContext,
+}
+
+impl<S> FromRequestParts<S> for AccountAuthenticatedRequest
+where
+    AuthHttpState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth = AuthHttpState::from_ref(state);
+        let bearer =
+            bearer_token(&parts.headers).ok_or_else(unauthorized_account)?.to_string();
+        let context = authorization_context(&auth, &bearer).await?;
+        Ok(Self { context })
+    }
+}
+
 fn identity_api_error(error: IdentityError) -> ApiError {
     match error {
         IdentityError::ProviderUnavailable(_) => {
@@ -178,27 +249,6 @@ fn identity_api_error(error: IdentityError) -> ApiError {
         }
         _ => unauthorized_session(),
     }
-}
-
-pub(super) async fn require_authorized_principal(
-    state: &AuthHttpState,
-    token: &str,
-) -> Result<PrincipalId, ApiError> {
-    Ok(authorization_context(state, token).await?.principal_id)
-}
-
-/// Require a real, currently active sign-in method in addition to a valid
-/// canonical session. Resource-owning account surfaces must not admit
-/// methodless development or delegated-admin sessions.
-pub(super) async fn require_method_authorization(
-    state: &AuthHttpState,
-    token: &str,
-) -> Result<AuthorizationContext, ApiError> {
-    let context = authorization_context(state, token).await?;
-    if context.method.is_none() {
-        return Err(unauthorized_account());
-    }
-    Ok(context)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -782,11 +832,10 @@ struct IdentityLifecycleAuditResponse {
 async fn auth_session(
     State(state): State<AuthHttpState>,
     Query(query): Query<AuthSessionQuery>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let now = unix_now_seconds();
-    let identity = authorization_context(&state, token).await?;
+    let identity = request.context;
     let mut response = auth_session_response(
         &state,
         identity.principal_id,
@@ -845,11 +894,10 @@ async fn create_dev_auth_session(
 
 async fn create_auth_session_grant(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<CreateAuthSessionGrant>,
 ) -> Result<Json<AuthSessionResponse>, ApiError> {
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let caller = authorization_context(&state, caller_token).await?;
+    let caller = auth.context;
     if !caller
         .global_capabilities
         .iter()
@@ -897,12 +945,11 @@ async fn create_auth_session_grant(
 
 async fn create_auth_account(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<CreateAuthAccount>,
 ) -> Result<Json<AuthAccountResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_principal_id = require_global_admin(&state, caller_token, "account creation").await?;
+    let actor_principal_id = require_global_admin(&state, &auth.bearer, "account creation").await?;
 
     let account_id = request.account_id.trim();
     let password = request.password.as_str();
@@ -1710,10 +1757,9 @@ struct MemberPersonalExportResponse {
 
 async fn create_member_personal_export(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
 ) -> Result<Json<MemberPersonalExportResponse>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let identity = authorization_context(&state, token).await?;
+    let identity = request.context;
     let now = unix_now_seconds();
     require_recent_authentication(&identity, now)?;
     let export = identity::create_personal_export(&state.pool, &identity.principal_id, now).await?;
@@ -1730,10 +1776,9 @@ async fn create_member_personal_export(
 async fn download_member_personal_export(
     State(state): State<AuthHttpState>,
     Path(export_id): Path<Uuid>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
 ) -> Result<Json<MemberPersonalExportResponse>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let identity = authorization_context(&state, token).await?;
+    let identity = request.context;
     let export = identity::load_personal_export(
         &state.pool,
         &identity.principal_id,
@@ -1758,11 +1803,10 @@ async fn download_member_personal_export(
 
 async fn deactivate_member_account(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<DeactivateMemberAccount>,
 ) -> Result<Json<MemberLifecycleResponse>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let identity = authorization_context(&state, token).await?;
+    let identity = auth.context;
     let now = unix_now_seconds();
     require_recent_authentication(&identity, now)?;
     let reason = request.reason.trim();
@@ -1791,10 +1835,9 @@ async fn deactivate_member_account(
 
 async fn erase_member_account(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
 ) -> Result<(StatusCode, Json<MemberLifecycleResponse>), ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let identity = authorization_context(&state, token).await?;
+    let identity = request.context;
     let now = unix_now_seconds();
     require_recent_authentication(&identity, now)?;
     let pending =
@@ -1811,10 +1854,9 @@ async fn erase_member_account(
 
 async fn list_account_methods(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
 ) -> Result<Json<AccountMethodsResponse>, ApiError> {
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let identity = authorization_context(&state, token).await?;
+    let identity = request.context;
     let methods = identity::methods::list_methods(&state.pool, &identity.principal_id)
         .await?
         .into_iter()
@@ -1858,12 +1900,11 @@ const METHOD_RECOVERY_CODE_TTL_SECONDS: i64 = 60 * 60 * 24 * 180;
 
 async fn add_classic_method(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<AddClassicMethod>,
 ) -> Result<Json<AddClassicMethodResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let identity = authorization_context(&state, token).await?;
+    let identity = auth.context;
     let now = unix_now_seconds();
     require_recent_authentication(&identity, now)?;
     let login_name = normalize_registration_account_id(request.login_name.as_str())?;
@@ -1876,7 +1917,7 @@ async fn add_classic_method(
 
     let mut tx = state.pool.begin().await?;
     let locked_identity =
-        identity::session::validate_session_for_update(&mut tx, token, &state.session_policy)
+        identity::session::validate_session_for_update(&mut tx, &auth.bearer, &state.session_policy)
             .await?;
     require_recent_authentication(&locked_identity, now)?;
     if locked_identity.principal_id != identity.principal_id {
@@ -2010,7 +2051,7 @@ struct AddWorkosMethodResponse {
 
 async fn add_workos_method(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<AddWorkosMethod>,
 ) -> Result<Json<AddWorkosMethodResponse>, ApiError> {
     let verifier = state
@@ -2021,8 +2062,7 @@ async fn add_workos_method(
             error: RejectCode::NotAuthorized,
             message: "workos authentication is not configured".to_string(),
         })?;
-    let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let identity = authorization_context(&state, token).await?;
+    let identity = auth.context;
     let verification_now = unix_now_seconds();
     require_recent_authentication(&identity, verification_now)?;
     let provider_assertion = request.provider_assertion.trim();
@@ -2044,7 +2084,7 @@ async fn add_workos_method(
     let mut tx = state.pool.begin().await?;
     identity::workos::lock_subject_advisory(&mut tx, verified.subject.as_str()).await?;
     let locked_identity =
-        identity::session::validate_session_for_update(&mut tx, token, &state.session_policy)
+        identity::session::validate_session_for_update(&mut tx, &auth.bearer, &state.session_policy)
             .await?;
     let now = unix_now_seconds();
     require_recent_authentication(&locked_identity, now)?;
@@ -2884,12 +2924,11 @@ async fn recover_auth_account(
 
 async fn disable_auth_account(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<DisableAuthAccount>,
 ) -> Result<Json<AuthAccountLifecycleResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_principal_id = require_global_admin(&state, caller_token, "account disable").await?;
+    let actor_principal_id = require_global_admin(&state, &auth.bearer, "account disable").await?;
     let account_id = request.account_id.trim();
     if account_id.is_empty() {
         return Err(ApiError::Reject {
@@ -3021,12 +3060,11 @@ async fn disable_auth_account(
 
 async fn enable_auth_account(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<EnableAuthAccount>,
 ) -> Result<Json<AuthAccountLifecycleResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_principal_id = require_global_admin(&state, caller_token, "account enable").await?;
+    let actor_principal_id = require_global_admin(&state, &auth.bearer, "account enable").await?;
     let account_id = request.account_id.trim();
     if account_id.is_empty() {
         return Err(ApiError::Reject {
@@ -3297,12 +3335,10 @@ async fn logout_auth_session(
 
 async fn revoke_auth_session(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<RevokeAuthSession>,
 ) -> Result<Json<AuthLifecycleResponse>, ApiError> {
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_principal_id =
-        require_global_admin(&state, caller_token, "session revocation").await?;
+    let actor_principal_id = require_global_admin(&state, &auth.bearer, "session revocation").await?;
 
     let token = request.token.trim();
     if token.is_empty() {
@@ -3372,12 +3408,11 @@ async fn revoke_auth_session(
 
 async fn create_auth_invite(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<CreateAuthInvite>,
 ) -> Result<Json<AuthInviteResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let caller = authorization_context(&state, caller_token).await?;
+    let caller = auth.context;
     let caller_is_global_admin = caller
         .global_capabilities
         .iter()
@@ -3712,13 +3747,11 @@ async fn redeem_auth_invite(
 
 async fn revoke_auth_invite(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    auth: AuthenticatedRequest,
     Json(request): Json<RevokeAuthInvite>,
 ) -> Result<Json<AuthLifecycleResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_principal_id =
-        require_global_admin(&state, caller_token, "invite revocation").await?;
+    let actor_principal_id = require_global_admin(&state, &auth.bearer, "invite revocation").await?;
 
     let invite_token = request.invite_token.trim();
     if invite_token.is_empty() {
@@ -3787,11 +3820,10 @@ async fn revoke_auth_invite(
 async fn admin_auth_delivery_queue(
     State(state): State<AuthHttpState>,
     Query(query): Query<AuthDeliveryQueueQuery>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
 ) -> Result<Json<AuthDeliveryQueueResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_global_operator(&state, caller_token, "auth delivery queue").await?;
+    require_global_operator(&state, &request.bearer, "auth delivery queue").await?;
     let now = unix_now_seconds();
     let limit = query.limit.unwrap_or(100).clamp(1, 200);
     let deliveries = sqlx::query_as::<_, AuthDeliveryQueueRow>(
@@ -3855,12 +3887,11 @@ async fn admin_auth_delivery_queue(
 
 async fn retry_auth_delivery_intent(
     State(state): State<AuthHttpState>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
     Path(delivery_id): Path<Uuid>,
 ) -> Result<Json<AuthDeliveryRetryResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_principal_id = require_global_admin(&state, caller_token, "delivery retry").await?;
+    let actor_principal_id = require_global_admin(&state, &request.bearer, "delivery retry").await?;
     let now = unix_now_seconds();
     let receipt = process_identity_delivery_intent(
         &state.pool,
@@ -3891,10 +3922,9 @@ async fn retry_auth_delivery_intent(
 async fn identity_lifecycle_audit(
     State(state): State<AuthHttpState>,
     Query(query): Query<IdentityLifecycleAuditQuery>,
-    headers: HeaderMap,
+    request: AuthenticatedRequest,
 ) -> Result<Json<IdentityLifecycleAuditResponse>, ApiError> {
-    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_global_admin(&state, caller_token, "identity lifecycle audit").await?;
+    require_global_admin(&state, &request.bearer, "identity lifecycle audit").await?;
 
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let rows = sqlx::query_as::<
