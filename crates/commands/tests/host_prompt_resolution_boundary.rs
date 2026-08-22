@@ -4,6 +4,7 @@ use std::path::PathBuf;
 fn host_prompt_resolution_has_one_typed_owner_without_admission_or_persistence_drift() {
     let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
     let composition_root = std::fs::read_to_string(source_root.join("lib.rs")).unwrap();
+    let operator_audit = std::fs::read_to_string(source_root.join("operator_audit.rs")).unwrap();
     let prompt_owner =
         std::fs::read_to_string(source_root.join("host_prompt_resolution.rs")).unwrap();
 
@@ -11,8 +12,9 @@ fn host_prompt_resolution_has_one_typed_owner_without_admission_or_persistence_d
     assert!(composition_root.contains("admit_host_prompt_resolution("));
     assert!(composition_root.contains("host_prompt_resolution::HostPromptResolutionContext::new("));
     assert!(composition_root.contains("host_prompt_resolution::HostPromptResolutionRequest {"));
-    assert!(composition_root
-        .contains("host_prompt_resolution::rerun_stored_host_prompt(game, prefix)?"));
+    // The stored-host-prompt replay seam is consumed by the operator audit
+    // family, not by the ordinary pipeline composition root.
+    assert!(operator_audit.contains("host_prompt_resolution::rerun_stored_host_prompt(game, prefix)?"));
 
     for owned_symbol in [
         "struct HostPromptResolutionRequest",
