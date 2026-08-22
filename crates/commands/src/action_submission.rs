@@ -331,7 +331,7 @@ async fn validate_action_submission(
             .any(|counter| {
                 counter.slot_id == request.actor_slot
                     && counter.counter_id == counter_id
-                    && counter.phase_kind == phase_kind_name(phase_kind)
+                    && counter.phase_kind == phase_kind.name()
                     && phase_number as i32 <= counter.phase_number + i32::from(cooldown_cycles)
             });
         if on_cooldown {
@@ -649,14 +649,6 @@ fn ita_session_for_phase(
         Some(day) => day == phase_number,
         None => true,
     })
-}
-
-fn phase_kind_name(phase_kind: domain::pack::PhaseKind) -> &'static str {
-    match phase_kind {
-        domain::pack::PhaseKind::Day => "Day",
-        domain::pack::PhaseKind::Night => "Night",
-        domain::pack::PhaseKind::Twilight => "Twilight",
-    }
 }
 
 fn activation_gate_reason(

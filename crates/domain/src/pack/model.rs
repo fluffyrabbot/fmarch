@@ -1776,6 +1776,26 @@ pub enum PhaseKind {
     Twilight,
 }
 
+impl PhaseKind {
+    /// The single-character phase-identifier code (`D`, `N`, `T`).
+    pub const fn code(self) -> &'static str {
+        match self {
+            PhaseKind::Day => "D",
+            PhaseKind::Night => "N",
+            PhaseKind::Twilight => "T",
+        }
+    }
+
+    /// The serialized kind name used across packs, events, and wire payloads.
+    pub const fn name(self) -> &'static str {
+        match self {
+            PhaseKind::Day => "Day",
+            PhaseKind::Night => "Night",
+            PhaseKind::Twilight => "Twilight",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultOverride {
     #[serde(flatten)]

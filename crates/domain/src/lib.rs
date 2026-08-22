@@ -10,6 +10,7 @@ pub mod ir;
 pub(crate) mod json;
 pub(crate) use json::json_atom;
 pub mod pack;
+pub mod phase;
 pub mod resolver;
 pub mod state;
 
