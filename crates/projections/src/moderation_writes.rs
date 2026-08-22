@@ -4,6 +4,7 @@
 //! `trust_safety` domain to decide, appends the case events, and folds them.
 
 use eventstore::EventInput;
+use principal::PrincipalId;
 use sqlx::postgres::PgPool;
 use sqlx::Row;
 use trust_safety::{
@@ -23,7 +24,7 @@ pub async fn submit_moderation_report(
     pool: &PgPool,
     target: ModerationTarget,
     report_id: Uuid,
-    reporter_principal_id: &str,
+    reporter_principal_id: PrincipalId,
     reason: ReportReasonFamily,
     details: String,
     occurred_at: i64,
@@ -40,7 +41,7 @@ pub async fn submit_moderation_report(
     let recent: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM moderation_report WHERE reporter_principal_id = $1 AND submitted_at >= $2",
     )
-    .bind(reporter_principal_id)
+    .bind(reporter_principal_id.as_uuid())
     .bind(occurred_at.saturating_sub(86_400))
     .fetch_one(&mut *tx)
     .await?;
@@ -54,7 +55,7 @@ pub async fn submit_moderation_report(
             "SELECT EXISTS(SELECT 1 FROM moderation_report WHERE case_id = $1 AND reporter_principal_id = $2 AND reason_family = $3 AND active)",
         )
         .bind(state.case_id)
-        .bind(reporter_principal_id)
+        .bind(reporter_principal_id.as_uuid())
         .bind(reason.as_str())
         .fetch_one(&mut *tx)
         .await?;
@@ -100,7 +101,7 @@ pub async fn append_moderation_and_project_expected(
     case_id: Uuid,
     expected_stream_seq: i64,
     events: Vec<ModerationEvent>,
-    actor_principal_id: &str,
+    actor_principal_id: PrincipalId,
     occurred_at: i64,
 ) -> Result<(), ProjectionError> {
     let inputs = moderation_event_inputs(events, actor_principal_id, occurred_at);
@@ -116,7 +117,7 @@ pub async fn append_moderation_and_project_expected(
 
 fn moderation_event_inputs(
     events: Vec<ModerationEvent>,
-    actor_principal_id: &str,
+    actor_principal_id: PrincipalId,
     occurred_at: i64,
 ) -> Vec<EventInput> {
     events
@@ -126,7 +127,7 @@ fn moderation_event_inputs(
                 event.kind(),
                 1,
                 event.payload(),
-                eventstore::ActorId::Principal(actor_principal_id.to_string()),
+                eventstore::ActorId::Principal(actor_principal_id),
                 occurred_at,
             )
         })

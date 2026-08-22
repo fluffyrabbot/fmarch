@@ -34,7 +34,7 @@ async fn named_persona_seating_and_rename_preserve_epoch_authority_and_name_clai
         Command::SeatPersona {
             game,
             slot: "slot_1".into(),
-            principal_id: "player_mira".into(),
+            principal_id: fixture_principal_id("player_mira"),
             public_name: "Mira".into(),
         },
     )
@@ -47,9 +47,8 @@ async fn named_persona_seating_and_rename_preserve_epoch_authority_and_name_clai
     assert_eq!(
         projections::slot_occupant(&pool, game, "slot_1")
             .await
-            .unwrap()
-            .as_deref(),
-        Some("player_mira")
+            .unwrap(),
+        Some(fixture_principal_id("player_mira"))
     );
 
     handle(
@@ -74,7 +73,7 @@ async fn named_persona_seating_and_rename_preserve_epoch_authority_and_name_clai
         Command::SeatPersona {
             game,
             slot: "slot_2".into(),
-            principal_id: "player_lark".into(),
+            principal_id: fixture_principal_id("player_lark"),
             public_name: "rowan".into(),
         },
     )
@@ -328,7 +327,7 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -1342,7 +1341,7 @@ async fn resolve_phase_folds_three_faction_elimination_win_and_rebuild(pool: PgP
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -1591,7 +1590,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
             game,
             slot: slot.into(),
             outgoing_persona_id,
-            incoming_principal_id: b.into(),
+            incoming_principal_id: fixture_principal_id(b),
         },
     )
     .await
@@ -1728,7 +1727,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -1866,7 +1865,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
             game,
             slot: dead_slot.into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, dead_slot).await,
-            incoming_principal_id: incoming.into(),
+            incoming_principal_id: fixture_principal_id(incoming),
         },
     )
     .await
@@ -2009,32 +2008,19 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
             &user("not_host"),
             Command::GrantSpectator {
                 game,
-                user: spectator.into(),
+                principal_id: fixture_principal_id(spectator),
             },
         )
         .await
         .unwrap_err(),
         Reject::NotHost,
     );
-    assert_eq!(
-        handle(
-            &pool,
-            &user(host),
-            Command::GrantSpectator {
-                game,
-                user: " ".into(),
-            },
-        )
-        .await
-        .unwrap_err(),
-        Reject::InvalidTarget,
-    );
     handle(
         &pool,
         &user(host),
         Command::GrantSpectator {
             game,
-            user: spectator.into(),
+            principal_id: fixture_principal_id(spectator),
         },
     )
     .await
@@ -2096,7 +2082,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: spectator.into(),
+                user: spectator,
             },
         )
         .await
@@ -2110,7 +2096,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
         commands::seat_persona! {
             game,
             slot: slot.into(),
-            user: player.into(),
+            user: player,
         },
     )
     .await
@@ -2121,7 +2107,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
             &user(host),
             Command::GrantSpectator {
                 game,
-                user: player.into(),
+                principal_id: fixture_principal_id(player),
             },
         )
         .await
@@ -2158,7 +2144,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
                 game,
                 slot: slot.into(),
                 outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
-                incoming_principal_id: spectator.into(),
+                incoming_principal_id: fixture_principal_id(spectator),
             },
         )
         .await
@@ -2196,7 +2182,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
             .unwrap(),
         vec![projections::SpectatorMembershipRow {
             game_id: game,
-            user_id: spectator.into(),
+            principal_id: fixture_principal_id(spectator),
         }],
     );
     assert_eq!(
@@ -2213,7 +2199,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
         &user(host),
         Command::RevokeSpectator {
             game,
-            user: spectator.into(),
+            principal_id: fixture_principal_id(spectator),
         },
     )
     .await
@@ -2228,7 +2214,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
             &user(host),
             Command::RevokeSpectator {
                 game,
-                user: spectator.into(),
+                principal_id: fixture_principal_id(spectator),
             },
         )
         .await
@@ -2294,7 +2280,7 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
             game,
             slot: slot.into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
-            incoming_principal_id: incoming.into(),
+            incoming_principal_id: fixture_principal_id(incoming),
         },
     )
     .await
@@ -2667,7 +2653,7 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -2802,7 +2788,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
                 game,
                 slot: slot.into(),
                 outgoing_persona_id: current_slot_persona_id(&replacement_pool, game, slot).await,
-                incoming_principal_id: incoming.into(),
+                incoming_principal_id: fixture_principal_id(incoming),
             },
         )
         .await
@@ -2925,7 +2911,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) 
                 game,
                 slot: slot.into(),
                 outgoing_persona_id: current_slot_persona_id(&replacement_pool, game, slot).await,
-                incoming_principal_id: incoming.into(),
+                incoming_principal_id: fixture_principal_id(incoming),
             },
         )
         .await
@@ -3044,7 +3030,7 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot_id.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -3098,7 +3084,7 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
                 game,
                 slot: slot.into(),
                 outgoing_persona_id: current_slot_persona_id(&replacement_pool, game, slot).await,
-                incoming_principal_id: incoming.into(),
+                incoming_principal_id: fixture_principal_id(incoming),
             },
         )
         .await
@@ -3220,7 +3206,7 @@ async fn incoming_replacement_can_submit_and_resolve_action(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot_id.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -3255,7 +3241,7 @@ async fn incoming_replacement_can_submit_and_resolve_action(pool: PgPool) {
             game,
             slot: slot.into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
-            incoming_principal_id: incoming.into(),
+            incoming_principal_id: fixture_principal_id(incoming),
         },
     )
     .await
@@ -3370,7 +3356,7 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
         &user("host_h"),
         Command::AddCohost {
             game,
-            user: "user_c".into(),
+            principal_id: fixture_principal_id("user_c"),
         },
     )
     .await
@@ -3396,8 +3382,15 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
         .find(|event| event.kind == "DeadlineExtended" && event.payload["at"] == 1000)
         .expect("cohost deadline event");
     assert_eq!(event.causation_id, Some(cohost_command_id));
+    assert_eq!(event.actor, ActorId::Host);
     assert_eq!(event.meta["command_id"], cohost_command_id.to_string());
-    assert_eq!(event.meta["principal_user_id"], "user_c");
+    assert_eq!(
+        event.meta["initiator"],
+        serde_json::json!({
+            "kind": "principal",
+            "principal_id": fixture_principal_id("user_c"),
+        })
+    );
     assert_eq!(event.meta["command_kind"], "ExtendDeadline");
     assert_eq!(event.meta["authority_used"], format!("CohostOf({game})"));
     assert_eq!(event.meta["source"], "host_command");
@@ -3411,7 +3404,7 @@ async fn cohost_default_full_game_run_and_structural_stays_host_only(pool: PgPoo
         &user("host_h"),
         Command::AddCohost {
             game,
-            user: "user_c".into(),
+            principal_id: fixture_principal_id("user_c"),
         },
     )
     .await
@@ -3432,7 +3425,14 @@ async fn cohost_default_full_game_run_and_structural_stays_host_only(pool: PgPoo
         .into_iter()
         .find(|event| event.kind == "ResolutionApplied")
         .expect("cohost resolution event");
-    assert_eq!(resolved.meta["principal_user_id"], "user_c");
+    assert_eq!(resolved.actor, ActorId::System);
+    assert_eq!(
+        resolved.meta["initiator"],
+        serde_json::json!({
+            "kind": "principal",
+            "principal_id": fixture_principal_id("user_c"),
+        })
+    );
     assert_eq!(resolved.meta["command_kind"], "ResolvePhase");
     assert_eq!(resolved.meta["authority_used"], format!("CohostOf({game})"));
     assert_eq!(resolved.meta["source"], "host_command");
@@ -3448,7 +3448,7 @@ async fn cohost_default_full_game_run_and_structural_stays_host_only(pool: PgPoo
         &user("user_c"),
         Command::AddCohost {
             game,
-            user: "user_d".into(),
+            principal_id: fixture_principal_id("user_d"),
         },
     )
     .await
@@ -3460,7 +3460,7 @@ async fn cohost_default_full_game_run_and_structural_stays_host_only(pool: PgPoo
         &user("host_h"),
         Command::AddCohost {
             game,
-            user: "user_d".into(),
+            principal_id: fixture_principal_id("user_d"),
         },
     )
     .await
@@ -3476,7 +3476,7 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
         &user("host_h"),
         Command::AddCohost {
             game,
-            user: "user_c".into(),
+            principal_id: fixture_principal_id("user_c"),
         },
     )
     .await
@@ -3513,7 +3513,13 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
     for (index, event) in planned.iter().enumerate() {
         assert_eq!(event.actor, ActorId::Host);
         assert_eq!(event.meta["source"], "host_fiat");
-        assert_eq!(event.meta["principal_user_id"], "user_c");
+        assert_eq!(
+            event.meta["initiator"],
+            serde_json::json!({
+                "kind": "principal",
+                "principal_id": fixture_principal_id("user_c"),
+            })
+        );
         assert_eq!(event.meta["authority_used"], format!("CohostOf({game})"));
         assert_eq!(
             event.meta["effect_plan_reason"],
@@ -3856,7 +3862,7 @@ async fn host_fiat_vote_weight_grant_hammers_from_folded_snapshot(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -4040,7 +4046,7 @@ async fn cohost_denied_lifecycle_and_effect_spec_while_deadline_still_allowed(po
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -4082,7 +4088,7 @@ async fn cohost_denied_lifecycle_and_effect_spec_while_deadline_still_allowed(po
         &user("host_h"),
         Command::AddCohost {
             game,
-            user: "user_c".into(),
+            principal_id: fixture_principal_id("user_c"),
         },
     )
     .await
@@ -4151,7 +4157,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
         &user("host_h"),
         Command::AddCohost {
             game,
-            user: "user_c".into(),
+            principal_id: fixture_principal_id("user_c"),
         },
     )
     .await
@@ -4295,7 +4301,7 @@ async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -4341,7 +4347,7 @@ async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: 
             game,
             slot: "slot_a".into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_a").await,
-            incoming_principal_id: "user_z".into(),
+            incoming_principal_id: fixture_principal_id("user_z"),
         },
     )
     .await
@@ -4412,7 +4418,7 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
         &host,
         Command::AddCohost {
             game,
-            user: "user_cohost_beta".into(),
+            principal_id: fixture_principal_id("user_cohost_beta"),
         },
     )
     .await
@@ -4438,7 +4444,7 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -4473,7 +4479,7 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
             game,
             slot: "slot_red".into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_red").await,
-            incoming_principal_id: "user_replacement_green".into(),
+            incoming_principal_id: fixture_principal_id("user_replacement_green"),
         },
     )
     .await
@@ -4496,32 +4502,35 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
 
     assert_eq!(audit.phase_id, "D01");
     assert_eq!(audit.snapshot_slot_ids, vec!["slot_blue", "slot_red"]);
-    for expected_user in [
+    for expected_principal in [
         "user_host_alpha",
         "user_cohost_beta",
         "user_replacement_green",
     ] {
         assert!(
             audit
-                .stream_user_ids
+                .stream_principal_ids
                 .iter()
-                .any(|user| user == expected_user),
-            "audit should discover {expected_user} in stream identities: {audit:?}"
+                .any(|principal_id| *principal_id == fixture_principal_id(expected_principal)),
+            "audit should discover {expected_principal} in stream identities: {audit:?}"
         );
     }
     for private_principal in ["user_player_red", "user_player_blue"] {
         assert!(
-            !audit.stream_user_ids.iter().any(|user| user == private_principal),
+            !audit
+                .stream_principal_ids
+                .iter()
+                .any(|principal_id| *principal_id == fixture_principal_id(private_principal)),
             "subject-owned seating claims must keep {private_principal} out of the durable game stream: {audit:?}"
         );
     }
     assert!(
-        audit.leaked_user_ids.is_empty(),
-        "engine snapshot leaked platform users into resolver input: {audit:?}"
+        audit.leaked_principal_ids.is_empty(),
+        "engine snapshot leaked platform principals into resolver input: {audit:?}"
     );
     assert!(
         audit.slot_only,
-        "engine snapshot should preserve slot ids while excluding user identities: {audit:?}"
+        "engine snapshot should preserve slot ids while excluding platform principals: {audit:?}"
     );
 }
 
@@ -4562,7 +4571,7 @@ async fn stored_game_stream_loads_phase_metadata_deadline_and_pack_policy(pool: 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -4670,7 +4679,7 @@ async fn stored_game_stream_loads_slot_lifecycle_and_pack_visible_status_tags(po
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -4825,7 +4834,7 @@ async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: P
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -5010,7 +5019,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -5128,7 +5137,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
         "duplicate CompleteGame must not append another GameCompleted event"
     );
     for (label, principal, command) in [
-        ("host lock", host.clone(), Command::LockThread { game }),
+        ("host lock", host, Command::LockThread { game }),
         (
             "player vote",
             user("user_1"),
@@ -5324,7 +5333,7 @@ async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -5553,7 +5562,7 @@ async fn host_resolve_phase_reveals_killed_slot_without_endgame(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -5713,7 +5722,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -6199,7 +6208,7 @@ async fn host_advance_phase_wraps_night_to_next_day_from_pack_cadence(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -6307,7 +6316,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -6548,7 +6557,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -6978,7 +6987,7 @@ async fn action_submission_rejects_invalid_target_shape_state_and_window(pool: P
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -7199,7 +7208,7 @@ async fn action_submission_rejects_day_specific_action_in_night_window(pool: PgP
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -8283,7 +8292,7 @@ async fn submit_vote_hammer_uses_folded_vote_weight_grant(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -8464,7 +8473,7 @@ async fn host_prompt_skip_next_day_rejects_unsupported_pack_cadence(pool: PgPool
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -8611,7 +8620,7 @@ async fn host_resolve_phase_loads_action_submissions_from_stream(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -8825,7 +8834,7 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -9014,7 +9023,7 @@ async fn action_submission_requires_open_matching_phase(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -9150,7 +9159,7 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -9615,7 +9624,7 @@ async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -9838,7 +9847,7 @@ async fn action_submission_rejects_disabled_endgame_threshold_before_append(pool
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -9931,7 +9940,7 @@ async fn action_submission_rejects_lost_team_kill_with_teammate_alive(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10024,7 +10033,7 @@ async fn action_submission_rejects_recluse_team_kill_with_non_recluse_teammate_a
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10121,7 +10130,7 @@ async fn action_submission_allows_simultaneous_duplicate_base_template(pool: PgP
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10273,7 +10282,7 @@ async fn action_submission_rejects_inactive_novice_and_activated_actions(pool: P
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10428,7 +10437,7 @@ async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10696,7 +10705,7 @@ async fn action_submission_spends_inventor_item_grant(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10954,7 +10963,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -11573,7 +11582,7 @@ async fn concurrent_cohost_deadline_and_host_resolve_phase_serializes_deadline_b
         &user("host_h"),
         Command::AddCohost {
             game,
-            user: "cohost_c".into(),
+            principal_id: fixture_principal_id("cohost_c"),
         },
     )
     .await
@@ -11913,7 +11922,7 @@ async fn concurrent_player_action_and_host_advance_phase_rejects_late_action(poo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -12398,7 +12407,7 @@ async fn slot_lifecycle_death_clears_current_ballots_by_and_for_slot(pool: PgPoo
         commands::seat_persona! {
             game,
             slot: "slot_2".into(),
-            user: "user_b".into(),
+            user: "user_b",
         },
     )
     .await
@@ -12490,7 +12499,7 @@ async fn submit_vote_hammer_locks_phase_when_threshold_is_reached(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -12736,7 +12745,7 @@ async fn no_lynch_votes_resolve_to_official_engine_outcome(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -12865,7 +12874,7 @@ async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool)
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -13019,9 +13028,9 @@ async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
 
     let receipt = sqlx::query(
         "SELECT octet_length(command_fingerprint) AS fingerprint_bytes, stream_seqs \
-         FROM command_receipt WHERE principal_user_id = $1 AND command_id = $2",
+         FROM command_receipt WHERE principal_id = $1 AND command_id = $2",
     )
-    .bind("user_a")
+    .bind(fixture_principal_id("user_a").as_uuid())
     .bind(command_id)
     .fetch_one(&pool)
     .await

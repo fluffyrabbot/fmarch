@@ -15,7 +15,7 @@ test("viewer presentation never turns an authority principal into public profile
     profile: null,
   });
 
-  assert.deepEqual(buildViewerPresentation({ principalUserId: "principal-opaque-7" }), {
+  assert.deepEqual(buildViewerPresentation({ principalId: "principal-opaque-7" }), {
     state: "signed-in",
     kind: "account",
     label: "Your account",
@@ -26,7 +26,7 @@ test("viewer presentation never turns an authority principal into public profile
 
 test("viewer presentation accepts an explicit social-profile summary only", () => {
   const presentation = buildViewerPresentation({
-    principalUserId: "principal-opaque-7",
+    principalId: "principal-opaque-7",
     profile: { handle: "mira-r", display_name: "Mira Rowan" },
   });
 

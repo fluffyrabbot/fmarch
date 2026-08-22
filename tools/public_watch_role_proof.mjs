@@ -6,10 +6,8 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(root, "frontend");
@@ -196,7 +194,7 @@ async function seed(api) {
     [operator, ["GlobalAdmin", "GlobalMod"]],
   ]) {
     const session = await json(`${api}/auth/dev-session`, post({
-      principal_user_id: principal,
+      principal_id: fixturePrincipalAuthorityId(principal),
       expires_at: 4_102_444_800,
       global_capabilities: globals,
     }));
@@ -213,7 +211,7 @@ async function seed(api) {
     await json(`${api}/auth/accounts`, post({
       account_id: account,
       password: "correct horse battery staple",
-      principal_user_id: principal,
+      principal_id: fixturePrincipalAuthorityId(principal),
       global_capabilities: globals,
     }, operatorToken));
   }
@@ -349,7 +347,7 @@ async function startApi(applicationUrl) {
   const base = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media");
   await mkdir(mediaRoot, { recursive: true });
-  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...applicationDatabaseEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] });
+  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] });
   apiProcess.stdout.on("data", (chunk) => { apiOutput += chunk; });
   apiProcess.stderr.on("data", (chunk) => { apiOutput += chunk; });
   const deadline = Date.now() + 240_000;

@@ -844,7 +844,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.cohostConsole.extendDeadline.commandStatus.requestEnvelope.body.body
-    .principal_user_id,
+    .principal_id,
   undefined,
 );
 assert.equal(
@@ -863,7 +863,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.cohostConsole.hostOnlyResolveReject.requestEnvelope.body.body
-    .principal_user_id,
+    .principal_id,
   undefined,
 );
 assert.equal(
@@ -1586,7 +1586,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.actionLoop.d02VoteNightTransition.d03TerminalVoteSubmission
-    .requestEnvelope.body.body.principal_user_id,
+    .requestEnvelope.body.body.principal_id,
   undefined,
 );
 assert.equal(
@@ -1946,17 +1946,17 @@ assert.equal(
 );
 assert.equal(
   session.verification.deadPlayerRecovery.directVote.requestEnvelope.body.body
-    .principal_user_id,
+    .principal_id,
   undefined,
 );
 assert.equal(
   session.verification.deadPlayerRecovery.directPost.requestEnvelope.body.body
-    .principal_user_id,
+    .principal_id,
   undefined,
 );
 assert.equal(
   session.verification.deadPlayerRecovery.directAction.requestEnvelope.body.body
-    .principal_user_id,
+    .principal_id,
   undefined,
 );
 assert.equal(
@@ -1981,7 +1981,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.playerActionBoundary.directFactionalKill.requestEnvelope.body.body
-    .principal_user_id,
+    .principal_id,
   undefined,
 );
 assert.equal(
@@ -2001,12 +2001,12 @@ assert.equal(
   "Slot 7 / player-rowan",
 );
 assert.equal(
-  session.verification.replacementConsole.hostIssuedInvite.session.principalUserId,
+  session.verification.replacementConsole.hostIssuedInvite.session.principalId,
   "player-rowan",
 );
 assert.equal(
   session.verification.replacementConsole.hostIssuedInvite.session.issuedBy
-    .principalUserId,
+    .principalId,
   "host_h",
 );
 assert.equal(
@@ -2031,7 +2031,7 @@ assert.equal(
   "passed",
 );
 assert.equal(
-  session.verification.replacementConsole.pendingIncomingPlayer.principalUserId,
+  session.verification.replacementConsole.pendingIncomingPlayer.principalId,
   "player-rowan",
 );
 assert.equal(
@@ -2137,7 +2137,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.replacementSessionRefresh.session
-    .principalUserId,
+    .principalId,
   "player-rowan",
 );
 assert.equal(
@@ -2167,7 +2167,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.replacementSessionRefresh.browserEntry
-    .principalUserId,
+    .principalId,
   "player-rowan",
 );
 assert.equal(
@@ -2195,7 +2195,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.replacementSessionRefresh.postStatus
-    .requestEnvelope.body.body.principal_user_id,
+    .requestEnvelope.body.body.principal_id,
   undefined,
 );
 assert.equal(
@@ -2277,7 +2277,7 @@ assert.equal(
   "passed",
 );
 assert.equal(
-  session.verification.replacementConsole.replacementReconnectRecovery.principalUserId,
+  session.verification.replacementConsole.replacementReconnectRecovery.principalId,
   "player-rowan",
 );
 assert.equal(
@@ -2309,7 +2309,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.replacementReconnectRecovery
-    .reconnectCommand.principalUserId,
+    .reconnectCommand.principalId,
   "player-rowan",
 );
 assert.equal(
@@ -2347,7 +2347,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery.invalidReplacement
-    .requestEnvelope.body.body.principal_user_id,
+    .requestEnvelope.body.body.principal_id,
   undefined,
 );
 assert.match(
@@ -2392,7 +2392,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery.pendingAfterReject
-    .principalUserId,
+    .principalId,
   "player-rowan",
 );
 assert.equal(
@@ -2426,7 +2426,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.processReplacement.commandStatus.requestEnvelope.body
-    .body.principal_user_id,
+    .body.principal_id,
   undefined,
 );
 assert.equal(
@@ -2677,7 +2677,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.stalePrivateChannel.rowanPost
-    .requestEnvelope.body.body.principal_user_id,
+    .requestEnvelope.body.body.principal_id,
   undefined,
 );
 assert.equal(
@@ -2842,7 +2842,7 @@ assert.equal(
     .buttonsDisabled,
   true,
 );
-assert.equal(session.verification.sessions.replacementPlayer.principalUserId, "player-rowan");
+assert.equal(session.verification.sessions.replacementPlayer.principalId, "player-rowan");
 assert(
   session.verification.sessions.replacementPlayer.capabilityKinds.includes("SlotOccupant"),
 );
@@ -2851,7 +2851,7 @@ assert.equal(
   "passed",
 );
 assert.equal(
-  session.verification.replacementConsole.incomingPlayer.browserEntry.principalUserId,
+  session.verification.replacementConsole.incomingPlayer.browserEntry.principalId,
   "player-rowan",
 );
 assert(
@@ -2881,7 +2881,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.replacementConsole.incomingPlayer.postStatus.requestEnvelope.body.body
-    .principal_user_id,
+    .principal_id,
   undefined,
 );
 assert.equal(
@@ -2895,7 +2895,7 @@ assert.deepEqual(
 );
 assert.equal(
   session.verification.replacementConsole.incomingPlayer.vote.requestEnvelope.body.body
-    .principal_user_id,
+    .principal_id,
   undefined,
 );
 assert.equal(
@@ -3754,7 +3754,7 @@ assert.equal(
 );
 assert.equal(replacementIncomingAction.action.state, "ack");
 assert.equal(
-  replacementIncomingAction.action.requestEnvelope.body.body.principal_user_id,
+  replacementIncomingAction.action.requestEnvelope.body.body.principal_id,
   undefined,
 );
 assert.equal(
@@ -3840,7 +3840,7 @@ assert.equal(
 );
 assert.equal(replacementActionReconnect.action.state, "ack");
 assert.equal(
-  replacementActionReconnect.action.requestEnvelope.body.body.principal_user_id,
+  replacementActionReconnect.action.requestEnvelope.body.body.principal_id,
   undefined,
 );
 assert.equal(
@@ -3892,7 +3892,7 @@ assert.equal(
 );
 assert.equal(replacementActionReconnect.reconnect.status, "passed");
 assert.equal(
-  replacementActionReconnect.reconnect.principalUserId,
+  replacementActionReconnect.reconnect.principalId,
   replacementActionReconnectCase.replacementPrincipalUserId,
 );
 assert.equal(
@@ -3914,7 +3914,7 @@ assert.equal(
 );
 assert.equal(replacementActionReconnect.reconnect.recoveredSnapshotContainsPost, true);
 assert.equal(
-  replacementActionReconnect.reconnect.reconnectCommand.principalUserId,
+  replacementActionReconnect.reconnect.reconnectCommand.principalId,
   replacementActionReconnectCase.replacementPrincipalUserId,
 );
 assert.equal(
@@ -4303,7 +4303,7 @@ assert.equal(
 );
 assert.equal(
   replacementStalePrivatePostAfterResolve.privateReconnectAfterAck.reconnectCommand
-    .principalUserId,
+    .principalId,
   "player-rowan",
 );
 assert.equal(

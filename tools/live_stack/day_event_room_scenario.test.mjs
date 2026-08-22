@@ -6,6 +6,7 @@ import {
   createDayEventRoomSessions,
   seedDayEventRoom,
 } from "./day_event_room_scenario.mjs";
+import { principalFixtureId } from "../principal_fixture.mjs";
 
 test("DayEvent room fixture owns stable scenario identity and fresh credentials", () => {
   const ids = ["game-id", "outgoing-token-id", "incoming-token-id"];
@@ -31,15 +32,15 @@ test("DayEvent room seeding preserves the full command-owned lifecycle boundary"
   const observed = [];
   const seed = await seedDayEventRoom({
     fixture,
-    sendCommand: async (principalUserId, command) => {
-      observed.push({ principalUserId, command });
+    sendCommand: async (principalId, command) => {
+      observed.push({ principalId, command });
       return { sequence: observed.length };
     },
   });
 
   assert.equal(observed.length, 7);
   assert.deepEqual(
-    observed.map(({ principalUserId }) => principalUserId),
+    observed.map(({ principalId }) => principalId),
     Array(7).fill("host_h"),
   );
   assert.deepEqual(observed[0].command, {
@@ -69,25 +70,25 @@ test("DayEvent room sessions are created through the enabled-account boundary", 
     fixture,
     createAccountSession: async (input) => {
       observed.push(input);
-      return { principalUserId: input.principalUserId };
+      return { principalId: input.principalId };
     },
   });
 
   assert.deepEqual(
-    observed.map(({ label, principalUserId }) => ({ label, principalUserId })),
+    observed.map(({ label, principalId }) => ({ label, principalId })),
     [
       {
         label: "day-event-room-outgoing",
-        principalUserId: "event-room-outgoing",
+        principalId: principalFixtureId("event-room-outgoing"),
       },
       {
         label: "day-event-room-incoming",
-        principalUserId: "event-room-incoming",
+        principalId: principalFixtureId("event-room-incoming"),
       },
     ],
   );
-  assert.equal(sessions.outgoing.principalUserId, "event-room-outgoing");
-  assert.equal(sessions.incoming.principalUserId, "event-room-incoming");
+  assert.equal(sessions.outgoing.principalId, principalFixtureId("event-room-outgoing"));
+  assert.equal(sessions.incoming.principalId, principalFixtureId("event-room-incoming"));
 });
 
 function sequence(values) {

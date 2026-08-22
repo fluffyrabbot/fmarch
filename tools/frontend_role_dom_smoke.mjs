@@ -19,8 +19,10 @@ import {
 import {
   HOST_TASK_WORKSPACE_CONTRACT,
 } from "../frontend/src/lib/components/host-action/host-task-workspace.mjs";
+import { principalFixtureId } from "./principal_fixture.mjs";
 
 const FIXTURE_THREAD_MEDIA_TEST_ID = `thread-post-media-${"e".repeat(64)}`;
+const HOST_PRINCIPAL_ID = principalFixtureId("host_h");
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-role-dom-smoke");
 const evidencePath = path.join(artifactDir, "dom-smoke.json");
@@ -475,7 +477,7 @@ function surfaceScenarios() {
         'data-component="host-task-workspace"',
         'data-component="host-command-activity"',
         'data-game-id="midsummer"',
-        'data-principal-user-id="host_h"',
+        `data-principal-id="${HOST_PRINCIPAL_ID}"`,
         'data-capability-label="HostOf(midsummer)"',
         'data-command-endpoint="/commands"',
       ],

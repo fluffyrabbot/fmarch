@@ -32,6 +32,7 @@
     "cargo:domain": { "kind": "shell", "command": "cargo test -p domain" },
     "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p eventstore -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "eventstore", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p projections -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "projections", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:principal": { "kind": "shell", "command": "cargo test -p principal" },
     "cargo:caps": { "kind": "shell", "command": "cargo test -p caps" },
     "cargo:commands-unit": { "kind": "shell", "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary --test day_runtime_boundary" },
     "cargo:commands-pg": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test pipeline -- --test-threads=4", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "commands", "--test", "pipeline", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
@@ -70,6 +71,7 @@
     },
     "cargo:public-platform": { "kind": "shell", "command": "cargo test -p attention -p social -p trust_safety -p forum -p content_reference" },
     "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p identity -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "identity", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:profile-handle-index": { "kind": "shell", "command": "cargo test -p profile_handle_index" },
     "cargo:profile-application": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p profile_application -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "profile_application", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:media": { "kind": "shell", "command": "cargo test -p media" },
     "cargo:api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p api -- --test-threads=4", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "api", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
@@ -133,6 +135,13 @@
       "paths": ["crates/content_registry/"],
       "crate": "content_registry",
       "lanes": ["cargo:content-registry", "cargo:clippy-workspace", "test:exact-image-content"]
+    },
+    {
+      "id": "crate:principal",
+      "tier": "active",
+      "paths": ["crates/principal/"],
+      "crate": "principal",
+      "lanes": ["cargo:principal", "cargo:clippy-workspace"]
     },
     {
       "id": "crate:domain",
@@ -494,6 +503,13 @@
       "tier": "active",
       "paths": ["crates/identity/tests/"],
       "lanes": ["cargo:identity", "cargo:clippy-workspace"]
+    },
+    {
+      "id": "crate:profile-handle-index",
+      "tier": "active",
+      "paths": ["crates/profile_handle_index/"],
+      "crate": "profile_handle_index",
+      "lanes": ["cargo:profile-handle-index", "cargo:clippy-workspace"]
     },
     {
       "id": "crate:profile-application",

@@ -381,10 +381,12 @@ const HOSTED_IDENTITY_PROOF_GRAPH_EDGES = Object.freeze({
 });
 const HOSTED_EVIDENCE_LANE_DEMO_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
+const ADMIN_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000004";
+const MOD_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000002";
 
 test("admin route data exposes setup, audit, and escalation work surfaces", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
   });
 
@@ -422,11 +424,11 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
   assert.deepEqual(data.command.cohost, {
     action: "add_cohost",
     game: "midsummer",
-    user: "cohost_c",
+    principalId: "cohost_c",
   });
   assert.deepEqual(data.command.sessionGrant, {
     action: "grant_session",
-    principalUserId: "mod_a",
+    principalId: "mod_a",
     expiresAt: 4102444800,
     globalCapabilities: ["GlobalMod"],
   });
@@ -514,7 +516,7 @@ test("admin recovery gate summary fails closed", () => {
 test("admin audit detail data stays inside the admin SPA shell", async () => {
   const data = await buildAdminAuditDetailData({
     audit: "proof-runs",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
   });
 
@@ -552,7 +554,7 @@ test("admin audit detail overview href preserves the inspected game", async () =
   const data = await buildAdminAuditDetailData({
     audit: "proof-runs",
     game: "solstice",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
   });
 
@@ -567,7 +569,7 @@ test("admin audit detail overview href preserves the inspected game", async () =
 test("admin audit detail data fails closed for unknown audit rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: "missing-proof",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
   });
 
@@ -597,12 +599,12 @@ test("admin recovery gate action reads the machine operator report", async () =>
       });
     },
     locals: {
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       resolvedCapabilities: [{ kind: "GlobalMod" }],
     },
     request: formRequest({
       game: "midsummer",
-      principalUserId: "ignored_form_user",
+      principalId: "ignored_form_user",
     }),
   });
 
@@ -625,12 +627,12 @@ test("admin recovery gate action surfaces backend rejection", async () => {
         { ok: false, status: 403 },
       ),
     locals: {
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     request: formRequest({
       game: "midsummer",
-      principalUserId: "admin_a",
+      principalId: "admin_a",
     }),
   });
 
@@ -649,12 +651,12 @@ test("admin recovery gate action requires admin surface authority", async () => 
       throw new Error("unauthorized recovery check must not call backend");
     },
     locals: {
-      principalUserId: "host_h",
+      principalId: "host_h",
       resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
     },
     request: formRequest({
       game: "midsummer",
-      principalUserId: "host_h",
+      principalId: "host_h",
     }),
   });
 
@@ -673,7 +675,7 @@ test("admin session grant action requires GlobalAdmin", async () => {
       resolvedCapabilities: [{ kind: "GlobalMod" }],
     },
     request: formRequest({
-      principalUserId: "mod_a",
+      principalId: MOD_PRINCIPAL_ID,
       expiresAt: "4102444800",
       globalCapability: "GlobalMod",
     }),
@@ -698,7 +700,7 @@ test("admin session grant action posts the authenticated API request", async () 
         body: JSON.parse(init.body),
       };
       return jsonResponse({
-        principal_user_id: "mod_a",
+        principal_id: MOD_PRINCIPAL_ID,
         capabilities: [{ kind: "GlobalMod" }],
         session_token: "fmss_backend-issued-session",
       });
@@ -707,7 +709,7 @@ test("admin session grant action posts the authenticated API request", async () 
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     request: formRequest({
-      principalUserId: "mod_a",
+      principalId: MOD_PRINCIPAL_ID,
       expiresAt: "4102444800",
       globalCapability: "GlobalMod",
     }),
@@ -719,18 +721,37 @@ test("admin session grant action posts the authenticated API request", async () 
     authorization: "Bearer admin-session",
     contentType: "application/json",
     body: {
-      principal_user_id: "mod_a",
+      principal_id: MOD_PRINCIPAL_ID,
       expires_at: 4102444800,
       global_capabilities: ["GlobalMod"],
     },
   });
   assert.equal(result.id, "session-grants");
   assert.equal(result.state, "ack");
-  assert.equal(result.message, "Granted GlobalMod to mod_a");
+  assert.equal(result.message, `Granted GlobalMod to ${MOD_PRINCIPAL_ID}`);
   assert.equal(result.sessionToken, "fmss_backend-issued-session");
 });
 
 test("admin session grant action rejects malformed grant payloads before the API", async () => {
+  const invalidPrincipal = await actions.grantSession({
+    cookies: { get: () => "admin-session" },
+    fetch: async () => {
+      throw new Error("noncanonical session grant principal must not call the API");
+    },
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      principalId: "mod_a",
+      expiresAt: "4102444800",
+      globalCapability: "GlobalMod",
+    }),
+  });
+
+  assert.equal(invalidPrincipal.status, 400);
+  assert.equal(invalidPrincipal.data.id, "session-grants");
+  assert.equal(invalidPrincipal.data.message, "Session grant principal must be a canonical UUID");
+
   const invalidExpiry = await actions.grantSession({
     cookies: { get: () => "admin-session" },
     fetch: async () => {
@@ -740,7 +761,7 @@ test("admin session grant action rejects malformed grant payloads before the API
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     request: formRequest({
-      principalUserId: "mod_a",
+      principalId: MOD_PRINCIPAL_ID,
       expiresAt: "later",
       globalCapability: "GlobalMod",
     }),
@@ -763,7 +784,7 @@ test("admin session grant action rejects malformed grant payloads before the API
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     request: formRequest({
-      principalUserId: "mod_a",
+      principalId: MOD_PRINCIPAL_ID,
       expiresAt: "4102444800",
       globalCapability: ["GlobalMod", "GlobalAdmin"],
     }),
@@ -790,7 +811,7 @@ test("admin session grant action surfaces API rejection", async () => {
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     request: formRequest({
-      principalUserId: "mod_a",
+      principalId: MOD_PRINCIPAL_ID,
       expiresAt: "4102444800",
       globalCapability: "GlobalMod",
     }),
@@ -802,9 +823,33 @@ test("admin session grant action surfaces API rejection", async () => {
   assert.equal(result.data.message, "session grants require GlobalAdmin");
 });
 
+test("admin session grant action rejects a malformed principal in the API response", async () => {
+  const result = await actions.grantSession({
+    cookies: { get: () => "admin-session" },
+    fetch: async () =>
+      jsonResponse({
+        principal_id: "mod_a",
+        capabilities: [{ kind: "GlobalMod" }],
+        session_token: "fmss_backend-issued-session",
+      }),
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      principalId: MOD_PRINCIPAL_ID,
+      expiresAt: "4102444800",
+      globalCapability: "GlobalMod",
+    }),
+  });
+
+  assert.equal(result.status, 502);
+  assert.equal(result.data.id, "session-grants");
+  assert.equal(result.data.message, "Auth service returned a malformed session grant");
+});
+
 test("admin route data uses operator proof status when available", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     fetchImpl: async () =>
       jsonResponse({
@@ -829,7 +874,7 @@ test("admin route data uses operator proof status when available", async () => {
 test("admin route data exposes identity lifecycle audit when admin session is present", async () => {
   const observed = [];
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: ADMIN_PRINCIPAL_ID,
     capabilities: [{ kind: "GlobalAdmin" }],
     sessionToken: "admin-session",
     fetchImpl: async (url, init) => {
@@ -852,6 +897,11 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
       .authorization,
     "Bearer admin-session",
   );
+  assert.equal(
+    observed.find((item) => item.url.startsWith("/auth/identity-lifecycle-audit"))
+      .url,
+    `/auth/identity-lifecycle-audit?principal_id=${ADMIN_PRINCIPAL_ID}&limit=50`,
+  );
   assert.equal(identity.label, "Identity lifecycle");
   assert.equal(identity.status, "13 lifecycle audit events available");
   assert.equal(identity.authority, "GlobalAdmin");
@@ -873,11 +923,11 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
   ]);
   assert.equal(
     identity.href,
-    "/admin/audit/identity-lifecycle?game=midsummer&principal_user_id=host_h",
+    `/admin/audit/identity-lifecycle?game=midsummer&principal_id=${ADMIN_PRINCIPAL_ID}`,
   );
   assert.equal(
     identity.inspectHref,
-    "/admin/audit/identity-lifecycle?game=midsummer&principal_user_id=host_h",
+    `/admin/audit/identity-lifecycle?game=midsummer&principal_id=${ADMIN_PRINCIPAL_ID}`,
   );
   assert.deepEqual(
     identity.entries.map((entry) => entry.eventKind),
@@ -902,7 +952,7 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
 test("admin identity lifecycle detail data carries audit event rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: "identity-lifecycle",
-    principalUserId: "admin_a",
+    principalId: ADMIN_PRINCIPAL_ID,
     capabilities: [{ kind: "GlobalAdmin" }],
     sessionToken: "admin-session",
     fetchImpl: async (url) =>
@@ -921,8 +971,8 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
   assert.deepEqual(
     data.audit.entries.map((entry) => [
       entry.eventKind,
-      entry.principalUserId,
-      entry.actorUserId,
+      entry.principalId,
+      entry.actorPrincipalId,
     ]),
     [
       ["account_created", "host_h", "admin_a"],
@@ -942,7 +992,7 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
   );
   assert.deepEqual(data.audit.accountControls, {
     accountId: "host@example.test",
-    principalUserId: "host_h",
+    principalId: ADMIN_PRINCIPAL_ID,
     currentDisabled: false,
     disableAction: "?/disableAccount",
     enableAction: "?/enableAccount",
@@ -952,7 +1002,7 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
 
 test("admin route data exposes local ops artifacts as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     opsArtifacts: localOpsArtifactsFixture(),
   });
@@ -983,7 +1033,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   });
 
   const unsupportedVersion = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     opsArtifacts: { ...localOpsArtifactsFixture(), version: 2 },
   });
@@ -995,7 +1045,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
 
 test("admin route data exposes local hosted ops signals as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedOpsSignals: localHostedOpsSignalsFixture(),
   });
@@ -1022,7 +1072,7 @@ test("admin route data exposes local hosted ops signals as a native audit row", 
 
 test("admin route data exposes real hosted observability handoff as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedOpsSignals: localHostedOpsSignalsFixture(),
     realHostedObservabilityHandoff:
@@ -1143,7 +1193,7 @@ test("admin route data exposes real hosted observability handoff as a native aud
 
 test("admin route data exposes hosted target preflight as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedTargetPreflight: localHostedTargetPreflightFixture(),
   });
@@ -1254,7 +1304,7 @@ test("admin hosted target preflight detail data carries raw-capture pass summary
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.hostedTargetPreflight,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedTargetPreflight: passedPreflight,
   });
@@ -1286,7 +1336,7 @@ test("admin hosted target preflight detail data carries raw-capture pass summary
 
 test("admin route data exposes hosted evidence lane as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedEvidenceLane: localHostedEvidenceLaneFixture(),
     hostedEvidenceLaneDemoProof: localHostedEvidenceLaneDemoProofFixture(),
@@ -1473,7 +1523,7 @@ test("admin hosted evidence lane detail data carries real-capture pass summary",
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.hostedEvidenceLane,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedEvidenceLane: passedLane,
     hostedEvidenceLaneDemoProof: localHostedEvidenceLaneDemoProofFixture(),
@@ -1506,7 +1556,7 @@ test("admin hosted evidence lane detail data carries real-capture pass summary",
 
 test("admin route data exposes hosted identity evidence as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedIdentityEvidence: localHostedIdentityEvidenceFixture(),
     hostedIdentityProgressionSummary:
@@ -2144,7 +2194,7 @@ test("admin audit detail page renders local prerequisite rows from route data", 
 
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedConcurrentRaceMatrix: hostedConcurrentRaceMatrixFixture(),
     hostedOpsSignals: localHostedOpsSignalsFixture(),
@@ -2237,7 +2287,7 @@ test("admin hosted-facing audit inventory carries shared handoff paths where req
 
 test("admin route data exposes local spine manifest as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     spineManifest: spineManifestFixture(),
   });
@@ -2307,7 +2357,7 @@ test("admin route rejects noncontiguous spine manifest phase progress", async ()
   const spineManifest = spineManifestFixture();
   spineManifest.commands.adminSpine.phases[1].startStep += 1;
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     spineManifest,
   });
@@ -2321,7 +2371,7 @@ test("admin route rejects noncontiguous spine manifest phase progress", async ()
 test("admin local spine manifest detail data carries manifest check rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.spineManifest,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     spineManifest: spineManifestFixture(),
   });
@@ -2374,7 +2424,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
 
 test("admin route data exposes local admin spine proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     adminSpineProof: adminSpineProofFixture(),
     adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
@@ -2436,7 +2486,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
 test("admin local admin spine detail data carries aggregate proof rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.adminSpine,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     adminSpineProof: adminSpineProofFixture(),
     adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
@@ -2695,7 +2745,7 @@ test("admin local admin spine detail uses registry terminal receipt row contract
     const receipt = receiptFixtures[contract.terminalBatchesKey];
     const data = await buildAdminAuditDetailData({
       audit: localAdminAuditIds.adminSpine,
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       capabilities: [{ kind: "GlobalAdmin" }],
       adminSpineProof: adminSpineProofFixture(),
       adminSpineTerminalBatches: {
@@ -2744,7 +2794,7 @@ test("admin local admin spine detail uses registry terminal receipt row contract
 test("admin route data exposes local proof graph as a native audit row", async () => {
   const proofGraph = proofGraphFixture();
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofGraph,
   });
@@ -2885,7 +2935,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   const proofGraph = proofGraphFixture();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.proofGraph,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofGraph,
   });
@@ -3063,7 +3113,7 @@ test("admin local proof graph detail keeps duplicate terminal receipt proof ids 
   const proofGraph = proofGraphWithDuplicateTerminalReceiptProofIds();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.proofGraph,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofGraph,
   });
@@ -3088,7 +3138,7 @@ test("admin local proof graph detail keeps duplicate terminal receipt proof ids 
 
 test("admin route data exposes local race coverage as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     raceCoverage: raceCoverageFixture(),
   });
@@ -3125,7 +3175,7 @@ test("admin route data exposes local race coverage as a native audit row", async
 test("admin local race coverage detail data carries race cell rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.raceCoverage,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     raceCoverage: raceCoverageFixture(),
   });
@@ -3145,7 +3195,7 @@ test("admin local race coverage detail data carries race cell rows", async () =>
 
 test("admin route data exposes local hosted matrix as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedConcurrentRaceMatrix: hostedConcurrentRaceMatrixFixture(),
   });
@@ -3319,7 +3369,7 @@ test("admin route data exposes local hosted matrix as a native audit row", async
 test("admin local hosted matrix detail data carries progress and gap rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.hostedConcurrentRaceMatrix,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedConcurrentRaceMatrix: hostedConcurrentRaceMatrixFixture(),
   });
@@ -3475,7 +3525,7 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
 
 test("admin route data exposes local proof freshness as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofFreshness: proofFreshnessFixture(),
     nextAction: nextActionFixture(),
@@ -3552,7 +3602,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
 test("admin local proof freshness detail data carries stale and missing rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.proofFreshness,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofFreshness: proofFreshnessFixture({
       status: "blocked",
@@ -3624,7 +3674,7 @@ test("admin route data exposes local next action as a native audit row", async (
     coreLoopRecoveryDestinationCoverageFixture();
   const phaseLocalSnapshots = phaseLocalNextActionSnapshotsFixture();
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionInput,
     proofGraph: proofGraphFixture(),
@@ -3973,7 +4023,7 @@ test("admin route data exposes local next action as a native audit row", async (
 
 test("admin route data exposes recovery-hook spine drilldowns", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       unproven: invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture({
@@ -4016,7 +4066,7 @@ test("admin route data exposes recovery-hook spine drilldowns", async () => {
 test("admin route data exposes local readiness dependency next action", async () => {
   const localCheck = proofGraphHandoffLocalCheckFixture();
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -4079,7 +4129,7 @@ test("admin route data exposes local readiness dependency next action", async ()
 test("admin route data exposes proof graph next-action handoff dependency", async () => {
   const localCheck = proofGraphNextActionHandoffLocalCheckFixture();
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -4153,7 +4203,7 @@ test("admin route data exposes real-hosted observability selected dependency edg
     actionStatus: "blocked",
   };
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -4192,7 +4242,7 @@ test("admin route data exposes seed proof-lane coverage drift next action", asyn
     unclassifiedLaneIds: ["new-production-proof-lane"],
   });
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -4253,7 +4303,7 @@ test("admin route data exposes proof graph destination-summary drift next action
   const proofGraphDestinationSummary =
     proofGraphDestinationSummaryActionFixture();
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofFreshness: proofFreshnessFixture(),
     nextAction: nextActionFixture({
@@ -4360,7 +4410,7 @@ test("admin local next action detail data carries hosted evidence handoff checkl
   const unproven = hostedEvidenceLaneUnprovenFixture();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       command: "npm run test:dev-test-game-hosted-evidence-lane",
@@ -4494,7 +4544,7 @@ test("admin local next action detail data carries hosted identity progression la
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       command: HOSTED_IDENTITY_EVIDENCE_COMMAND,
@@ -4585,7 +4635,7 @@ test("admin local next action detail data carries hosted identity operator recom
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       command: HOSTED_IDENTITY_OPERATOR_COMMAND,
@@ -4694,7 +4744,7 @@ test("admin local next action detail data carries hosted identity operator recom
 test("admin local next action detail data carries recovery check rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -4744,7 +4794,7 @@ test("admin local next action detail data carries recovery check rows", async ()
 test("admin local next action detail data carries host setup artifact recovery row", async () => {
   const roleData = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -4802,7 +4852,7 @@ test("admin local next action detail data carries host setup artifact recovery r
   );
   const adminData = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -4854,7 +4904,7 @@ test("admin local next action detail distinguishes frontend setup workbench read
     frontendSetupWorkbenchReadinessFixture();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -4973,7 +5023,7 @@ test("admin local next action detail data exposes hosted identity sequence defer
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -5083,7 +5133,7 @@ test("admin local next action detail data carries harness stability drift rows",
   const stabilityTrace = stabilityTraceFixture({ stability });
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       actionStatus: "blocked",
@@ -5135,7 +5185,7 @@ test("admin local next action detail data carries harness stability drift rows",
 
 test("admin route data exposes local hardening proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun: proofRunFixture(),
   });
@@ -5176,7 +5226,7 @@ test("admin proof-run fixture lane inventory follows shared audit lists", () => 
 
 test("admin route data exposes local player recovery proof as a focused audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun: proofRunFixture(),
   });
@@ -5220,7 +5270,7 @@ test("admin route data exposes local player recovery proof as a focused audit ro
 
 test("admin route data exposes local core loop proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun: proofRunFixture(),
   });
@@ -5419,7 +5469,7 @@ test("admin core loop completed-game coverage flags stale shared-case totals", a
   };
 
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun,
   });
@@ -5436,7 +5486,7 @@ test("admin core loop completed-game coverage flags stale shared-case totals", a
 test("admin local core loop detail data carries lane rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.coreLoop,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun: proofRunFixture(),
   });
@@ -6011,7 +6061,7 @@ test("admin local core loop renders the validated earliest-reached tie as a spin
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.coreLoop,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun,
   });
@@ -6044,7 +6094,7 @@ test("admin local core loop renders the validated earliest-reached tie as a spin
 test("admin local player recovery detail data carries focused lane rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.playerRecovery,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun: proofRunFixture(),
   });
@@ -6119,7 +6169,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
 test("admin local hardening detail data carries lane rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.hardening,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun: proofRunFixture(),
   });
@@ -6174,7 +6224,7 @@ test("admin local hardening detail data carries lane rows", async () => {
 test("admin local ops artifact detail data carries check rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.opsArtifacts,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     opsArtifacts: localOpsArtifactsFixture(),
   });
@@ -6200,7 +6250,7 @@ test("admin local ops artifact detail data carries check rows", async () => {
 test("admin local hosted ops signals detail data carries signal rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.hostedOpsSignals,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedOpsSignals: localHostedOpsSignalsFixture(),
   });
@@ -6218,7 +6268,7 @@ test("admin local hosted ops signals detail data carries signal rows", async () 
 test("admin real hosted observability handoff detail data carries blocked evidence rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.realHostedObservabilityHandoff,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     realHostedObservabilityHandoff:
       localRealHostedObservabilityHandoffFixture(),
@@ -6301,7 +6351,7 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
   const preflight = localHostedTargetPreflightFixture();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.hostedTargetPreflight,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedTargetPreflight: preflight,
   });
@@ -6384,7 +6434,7 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
 test("admin hosted evidence lane detail data carries blocked setup rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.hostedEvidenceLane,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedEvidenceLane: localHostedEvidenceLaneFixture(),
     hostedEvidenceLaneDemoProof: localHostedEvidenceLaneDemoProofFixture(),
@@ -6764,7 +6814,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
   const seedCoverage = seedProofLaneCoverageFixture();
   const seedCoverageCounts = seedProofLaneCoverageCountSummary(seedCoverage);
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     seedFixtureSummary: seedFixtureSummaryFixture(),
   });
@@ -6801,7 +6851,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   const seedCoverageCounts = seedProofLaneCoverageCountSummary(seedCoverage);
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.seedFixtures,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     seedFixtureSummary: seedFixtureSummaryFixture(),
   });
@@ -6841,7 +6891,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
 
 test("admin route data exposes local release readiness as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     releaseReadinessChecklist: releaseReadinessChecklistFixture(),
   });
@@ -6949,7 +6999,7 @@ test("admin route data exposes local release readiness as a native audit row", a
 test("admin local release readiness detail data carries checks and unproven rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.releaseReadiness,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     releaseReadinessChecklist: releaseReadinessChecklistFixture(),
   });
@@ -7102,7 +7152,7 @@ test("admin local release readiness links to selected next-action operator hando
   const unproven = hostedEvidenceLaneUnprovenFixture();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.releaseReadiness,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     releaseReadinessChecklist: releaseReadinessChecklistFixture(),
     nextAction: nextActionFixture({
@@ -7139,7 +7189,7 @@ test("admin local release readiness links to selected next-action operator hando
 
 test("admin route data exposes local host setup proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     releaseReadinessChecklist: releaseReadinessChecklistFixture(),
   });
@@ -7181,7 +7231,7 @@ test("admin route data exposes local host setup proof as a native audit row", as
 test("admin local host setup proof detail data carries setup command evidence rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.hostSetupProof,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     releaseReadinessChecklist: releaseReadinessChecklistFixture(),
   });
@@ -7224,7 +7274,7 @@ test("admin local host setup proof detail data carries setup command evidence ro
 test("admin local release runbook detail data routes hosted identity handoff to evidence intake", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.releaseRunbook,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     releaseRunbook: {
       version: 1,
@@ -7326,7 +7376,7 @@ test("admin local release readiness flags replacement coverage drift", async () 
 
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.releaseReadiness,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     releaseReadinessChecklist: checklist,
   });
@@ -7363,7 +7413,7 @@ test("admin local release readiness flags replacement coverage drift", async () 
 
 test("admin route data exposes local backup restore proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     backupRestoreProof: backupRestoreProofFixture(),
   });
@@ -7407,7 +7457,7 @@ test("admin route data exposes local backup restore proof as a native audit row"
 test("admin local backup restore detail data carries checks and restored sessions", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.backupRestore,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     backupRestoreProof: backupRestoreProofFixture(),
   });
@@ -7433,7 +7483,7 @@ test("admin local backup restore detail data carries checks and restored session
 
 test("admin route data exposes local identity adapter proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     identityAdapterProof: identityAdapterProofFixture(),
   });
@@ -7518,7 +7568,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       clickedThroughFromHostRoleUrl: true,
     },
     accountLogin: {
-      principalUserId: "host_h",
+      principalId: "host_h",
       accountId: "host@example.test",
       sameRoleSurface: true,
       cookieValuePrefix: "fmss_",
@@ -7549,7 +7599,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
     },
     accountRegistration: {
       accountId: "registered@example.test",
-      principalUserId: "registered-user",
+      principalId: "registered-user",
       registrationRoleUrl:
         "/auth/register?account=registered%40example.test&returnTo=%2Fg%2Fgame-a",
       securityRoleUrl:
@@ -7596,14 +7646,14 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       revokedSessionCount: 1,
       adminControlSurface: {
         detailRoleUrl:
-          "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+          "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
         controlsTestId: "admin-identity-account-controls",
         visitedDetailRoleUrl: true,
         staleConflictStatusText:
           "stale account lifecycle state for host@example.test; refresh and use current account controls before enable",
         reloadRecoveryStatus: "disabled",
         reloadRecoveryDetailRoleUrl:
-          "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+          "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
         reloadRecoveryTargetText: "host@example.test host_h disabled",
       },
       rawPasswordStored: false,
@@ -7649,7 +7699,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
 test("admin local identity adapter detail data carries lifecycle checks and role rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.identityAdapter,
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     identityAdapterProof: identityAdapterProofFixture(),
   });
@@ -7684,7 +7734,7 @@ test("admin local identity adapter detail data carries lifecycle checks and role
 test("admin load accepts GlobalMod escalation authority", async () => {
   const data = await load({
     locals: {
-      principalUserId: "mod_a",
+      principalId: "mod_a",
       resolvedCapabilities: [{ kind: "GlobalMod" }],
     },
     url: new URL("http://localhost/admin?game=midsummer"),
@@ -7701,7 +7751,7 @@ test("admin load rejects game-scoped host authority", async () => {
     async () =>
       await load({
         locals: {
-          principalUserId: "host_h",
+          principalId: "host_h",
           resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
         },
         url: new URL("http://localhost/admin?game=midsummer"),
@@ -7711,12 +7761,29 @@ test("admin load rejects game-scoped host authority", async () => {
   );
 });
 
+test("admin load rejects a noncanonical principal_id query before loading identity data", async () => {
+  await assert.rejects(
+    async () =>
+      await load({
+        locals: {
+          principalId: "admin_a",
+          resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+        },
+        url: new URL("http://localhost/admin?principal_id=admin_a"),
+        fetch: async () => {
+          throw new Error("noncanonical principal_id must not reach the API");
+        },
+      }),
+    (err) => err.status === 400 && err.body.message === "principal_id must be a canonical UUID",
+  );
+});
+
 test("admin load redirects signed-out visitors to account login", async () => {
   await assert.rejects(
     async () =>
       await load({
         locals: {
-          principalUserId: null,
+          principalId: null,
           resolvedCapabilities: [],
         },
         url: new URL("http://localhost/admin?game=midsummer"),
@@ -7747,32 +7814,32 @@ function identityLifecycleAuditFixture() {
         id: 1,
         event_at: 98,
         event_kind: "account_created",
-        actor_user_id: "admin_a",
-        principal_user_id: "host_h",
+        actor_principal_id: "admin_a",
+        principal_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
         id: 2,
         event_at: 99,
         event_kind: "account_disabled",
-        actor_user_id: "admin_a",
-        principal_user_id: "host_h",
+        actor_principal_id: "admin_a",
+        principal_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
         id: 3,
         event_at: 100,
         event_kind: "account_enabled",
-        actor_user_id: "admin_a",
-        principal_user_id: "host_h",
+        actor_principal_id: "admin_a",
+        principal_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
         id: 4,
         event_at: 101,
         event_kind: "account_password_rotated",
-        actor_user_id: "host_h",
-        principal_user_id: "host_h",
+        actor_principal_id: "host_h",
+        principal_id: "host_h",
         metadata: {
           account_id: "host@example.test",
           password_algorithm: "argon2id",
@@ -7782,72 +7849,72 @@ function identityLifecycleAuditFixture() {
         id: 5,
         event_at: 102,
         event_kind: "account_recovery_credential_issued",
-        actor_user_id: "host_h",
-        principal_user_id: "host_h",
+        actor_principal_id: "host_h",
+        principal_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
         id: 6,
         event_at: 103,
         event_kind: "account_recovery_credential_revoked",
-        actor_user_id: "host_h",
-        principal_user_id: "host_h",
+        actor_principal_id: "host_h",
+        principal_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
         id: 7,
         event_at: 104,
         event_kind: "account_recovery_rejected",
-        actor_user_id: null,
-        principal_user_id: "host_h",
+        actor_principal_id: null,
+        principal_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
         id: 8,
         event_at: 105,
         event_kind: "account_recovered",
-        actor_user_id: "host_h",
-        principal_user_id: "host_h",
+        actor_principal_id: "host_h",
+        principal_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
         id: 13,
         event_at: 106,
         event_kind: "auth_attempt_rate_limited",
-        actor_user_id: null,
-        principal_user_id: "host_h",
+        actor_principal_id: null,
+        principal_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
         id: 9,
         event_at: 99,
         event_kind: "account_session_created",
-        actor_user_id: "host_h",
-        principal_user_id: "host_h",
+        actor_principal_id: "host_h",
+        principal_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
         id: 10,
         event_at: 100,
         event_kind: "session_rotated",
-        actor_user_id: "host_h",
-        principal_user_id: "host_h",
+        actor_principal_id: "host_h",
+        principal_id: "host_h",
         metadata: { global_capability_count: 0 },
       },
       {
         id: 11,
         event_at: 101,
         event_kind: "session_revoked",
-        actor_user_id: "admin_a",
-        principal_user_id: "host_h",
+        actor_principal_id: "admin_a",
+        principal_id: "host_h",
         metadata: {},
       },
       {
         id: 12,
         event_at: 102,
         event_kind: "invite_revoked",
-        actor_user_id: "admin_a",
-        principal_user_id: "host_h",
+        actor_principal_id: "admin_a",
+        principal_id: "host_h",
         metadata: {},
       },
     ],
@@ -10650,14 +10717,14 @@ function hostedConcurrentRaceMatrixFixture() {
       roleSurfaces: [
         {
           role: "host",
-          principalUserId: "host_h",
+          principalId: "host_h",
           expectedCapabilityKind: "HostOf",
           directUrl: "/g/midsummer/host",
           returnTo: "/g/midsummer/host",
         },
         {
           role: "player",
-          principalUserId: "player_p",
+          principalId: "player_p",
           expectedCapabilityKind: "PlayerSlot",
           directUrl: "/g/midsummer/player",
           returnTo: "/g/midsummer/player",
@@ -13288,7 +13355,7 @@ function identityAdapterProofFixture() {
         registrationSurfaceTestId: "auth-registration-classic-surface",
         securitySurfaceTestId: "account-security-surface",
         accountId: "registered@example.test",
-        principalUserId: "registered-user",
+        principalId: "registered-user",
         sessionCookiePrefix: "fmss_",
         sessionHasNoGameCapabilities: true,
         gameRolePendingReplacement: true,
@@ -13318,7 +13385,7 @@ function identityAdapterProofFixture() {
       },
       accountLogin: {
         status: "passed",
-        principalUserId: "host_h",
+        principalId: "host_h",
         accountId: "host@example.test",
         capabilityKinds: ["HostOf"],
         sameRoleSurface: true,
@@ -13398,14 +13465,14 @@ function identityAdapterProofFixture() {
         adminControlSurface: {
           status: "passed",
           detailRoleUrl:
-            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
           controlsTestId: "admin-identity-account-controls",
           visitedDetailRoleUrl: true,
           staleConflictStatusText:
             "stale account lifecycle state for host@example.test; refresh and use current account controls before enable",
           reloadRecoveryStatus: "disabled",
           reloadRecoveryDetailRoleUrl:
-            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
           reloadRecoveryTargetText: "host@example.test host_h disabled",
         },
         disabledStatus: "disabled",
@@ -13444,7 +13511,7 @@ function identityAdapterProofFixture() {
     accounts: {
       host: {
         accountId: "host@example.test",
-        principalUserId: "host_h",
+        principalId: "host_h",
         globalCapabilities: [],
       },
     },
@@ -13481,7 +13548,7 @@ function formRequest(fields) {
 
 test("anonymous admin access resolves a forbidden route instead of throwing", async () => {
   const data = await buildAdminRouteData({
-    principalUserId: null,
+    principalId: null,
     capabilities: [],
   });
   assert.equal(data.access.allowed, false);

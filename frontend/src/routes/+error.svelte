@@ -7,7 +7,7 @@
     status: $page.status,
     message: $page.error?.message,
     path: $page.url?.pathname,
-    principalUserId: $page.data?.appSession?.principalUserId,
+    principalId: $page.data?.appSession?.principalId,
     viewerProfile: $page.data?.appSession?.viewerProfile,
     capabilities: $page.data?.appSession?.resolvedCapabilities,
   });

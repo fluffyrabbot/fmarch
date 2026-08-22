@@ -12,7 +12,7 @@
   $: directRouteData = data?.shellOwner === "layout" ? data : null;
   $: layoutShell = (directRouteData ?? pageRouteData)?.shell ?? null;
   $: presentedLayoutShell = applyViewerPresentationToShell(layoutShell, {
-    principalUserId: appSession.principalUserId,
+    principalId: appSession.principalId,
     viewerProfile: appSession.viewerProfile,
   });
 </script>
@@ -21,7 +21,7 @@
   <AppShell shell={presentedLayoutShell}>
     <AppNavigationPending
       path={pendingPath}
-      principalUserId={appSession.principalUserId}
+      principalId={appSession.principalId}
       viewerProfile={appSession.viewerProfile}
       capabilities={appSession.resolvedCapabilities}
     />
@@ -31,7 +31,7 @@
 {:else}
   <AppNavigationPending
     path={pendingPath}
-    principalUserId={appSession.principalUserId}
+    principalId={appSession.principalId}
     viewerProfile={appSession.viewerProfile}
     capabilities={appSession.resolvedCapabilities}
   />

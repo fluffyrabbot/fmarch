@@ -46,7 +46,7 @@ const apiServer = https.createServer(
       response.end(
         JSON.stringify({
           status: "logged_out",
-          principal_user_id: "admin_a",
+          principal_id: "admin_a",
           provider_logout_url: providerLogoutUrl,
         }),
       );

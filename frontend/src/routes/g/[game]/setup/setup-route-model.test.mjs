@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { FIXTURE_PRINCIPAL_IDS } from "../../../../lib/principal-id.mjs";
 import {
   buildHostSetupReadiness,
   buildHostSetupRouteData,
@@ -9,11 +10,14 @@ import {
 } from "./setup-route-model.mjs";
 
 const game = "00000000-0000-0000-0000-000000000123";
+const HOST_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.hostH;
+const PLAYER_MIRA_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.setupPlayerMira;
+const PLAYER_GOON_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.setupPlayerGoon;
 
 test("host setup route data derives slot-bound principals, policy, invites, and readiness", async () => {
   const data = await buildHostSetupRouteData({
     game,
-    principalUserId: "host_h",
+    principalId: HOST_PRINCIPAL_ID,
     sessionToken: "host-session",
     capabilities: [{ kind: "HostOf", game }],
     fetchImpl: async (url, init) => {
@@ -39,7 +43,7 @@ test("host setup route data derives slot-bound principals, policy, invites, and 
         accounts: [
           {
             account_id: "directory-secret@example.test",
-            principal_user_id: "directory-secret-principal",
+            principal_id: "directory-secret-principal",
             label: "GLOBAL ACCOUNT DIRECTORY SENTINEL",
           },
         ],
@@ -49,7 +53,7 @@ test("host setup route data derives slot-bound principals, policy, invites, and 
             slot_id: "slot_1",
             persona_id: "00000000-0000-0000-0000-000000000701",
             public_name: "Mira",
-            assigned_principal_id: "player_mira",
+            assigned_principal_id: PLAYER_MIRA_PRINCIPAL_ID,
             alive: true,
             status: "alive",
             status_tags: [],
@@ -59,7 +63,7 @@ test("host setup route data derives slot-bound principals, policy, invites, and 
             slot_id: "slot_2",
             persona_id: "00000000-0000-0000-0000-000000000702",
             public_name: "Goon",
-            assigned_principal_id: "player_goon",
+            assigned_principal_id: PLAYER_GOON_PRINCIPAL_ID,
             alive: true,
             status: "alive",
             status_tags: [],
@@ -106,8 +110,8 @@ test("host setup route data derives slot-bound principals, policy, invites, and 
     ["Slot 1 / Mira", "Slot 2 / Goon"],
   );
   assert.deepEqual(
-    occupiedSetupInviteTargets(data.setupState).map((target) => target.principalUserId),
-    ["player_mira", "player_goon"],
+    occupiedSetupInviteTargets(data.setupState).map((target) => target.principalId),
+    [PLAYER_MIRA_PRINCIPAL_ID, PLAYER_GOON_PRINCIPAL_ID],
   );
 });
 
@@ -129,7 +133,7 @@ test("host setup readiness blocks StartGame until slots have occupants and roles
           slot_id: "slot_1",
           persona_id: "00000000-0000-0000-0000-000000000701",
           public_name: "Mira",
-          assigned_principal_id: "player_mira",
+          assigned_principal_id: PLAYER_MIRA_PRINCIPAL_ID,
           alive: true,
           status: "alive",
           status_tags: [],
@@ -166,6 +170,30 @@ test("host setup readiness blocks StartGame until slots have occupants and roles
       ["start-phase", "ready"],
     ],
   );
+});
+
+test("setup projection excludes text labels from invite authority targets", () => {
+  const setupState = normalizeHostSetupState(
+    {
+      game,
+      slots: [
+        {
+          slot_id: "slot_1",
+          persona_id: "00000000-0000-0000-0000-000000000701",
+          public_name: "Mira",
+          assigned_principal_id: "player_mira",
+          alive: true,
+          status: "alive",
+          status_tags: [],
+          role_key: "vanilla_townie",
+        },
+      ],
+    },
+    { game },
+  );
+
+  assert.equal(setupState.slots[0].assignedPrincipalId, null);
+  assert.deepEqual(occupiedSetupInviteTargets(setupState), []);
 });
 
 test("host setup preserves pack-derived program compatibility diagnostics", () => {
@@ -278,7 +306,7 @@ test("host setup route data exposes same-origin browser refresh URL", async () =
   const fetched = [];
   const data = await buildHostSetupRouteData({
     game,
-    principalUserId: "host_h",
+    principalId: HOST_PRINCIPAL_ID,
     capabilities: [{ kind: "HostOf", game }],
     apiBaseUrl: "http://127.0.0.1:8787",
     fetchImpl: async (url) => {

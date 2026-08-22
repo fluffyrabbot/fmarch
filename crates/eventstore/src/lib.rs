@@ -11,6 +11,7 @@
 //! trigger that rejects either at the database level (doc 02). Runtime KEK
 //! rotation updates only the wrapping envelope in `event_stream_keys`.
 
+use principal::PrincipalId;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
@@ -40,9 +41,9 @@ pub enum ActorId {
     Slot(String),
     Host,
     System,
-    /// An authenticated platform principal. This remains an opaque string until
-    /// the repository-wide UUID principal-key cutover.
-    Principal(String),
+    /// An authenticated platform principal. This is the canonical UUID-backed
+    /// authority identifier, never an account or provider subject.
+    Principal(PrincipalId),
     /// A privacy/erasure subject. It is deliberately not a principal and cannot
     /// be used for authorization.
     PrivacySubject(Uuid),

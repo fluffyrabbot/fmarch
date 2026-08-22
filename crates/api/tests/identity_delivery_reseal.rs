@@ -2,6 +2,7 @@ use api::identity_delivery::{
     count_delivery_credential_envelopes_by_kid, delivery_aad,
     reseal_identity_delivery_credentials_batch, IdentityDeliveryKind,
 };
+use principal::PrincipalId;
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::sync::{Mutex, MutexGuard};
@@ -70,20 +71,27 @@ enum DeliveryState {
 }
 
 async fn seed_account(pool: &PgPool) {
-    sqlx::query(
-        "INSERT INTO platform_principal \
-         (principal_user_id, status, global_capabilities, created_at) \
-         VALUES ('reseal-user', 'active', '{}', 1)",
+    let principal_id = PrincipalId::fixture("reseal-user");
+    let mut connection = pool.acquire().await.unwrap();
+    identity::methods::ensure_principal(&mut connection, &principal_id, &[], 1)
+        .await
+        .unwrap();
+    let method_id = identity::methods::create_method(
+        &mut connection,
+        &principal_id,
+        identity::MethodKind::ClassicPassword,
+        1,
     )
-    .execute(pool)
     .await
     .unwrap();
     sqlx::query(
         "INSERT INTO auth_account \
-         (account_id, principal_user_id, password_hash, created_at, global_capabilities) \
-         VALUES ('reseal@example.test', 'reseal-user', 'unused', 1, '{}')",
+         (account_id, principal_id, method_id, password_hash, created_at, global_capabilities) \
+         VALUES ('reseal@example.test', $1, $2, 'unused', 1, '{}')",
     )
-    .execute(pool)
+    .bind(principal_id.as_uuid())
+    .bind(method_id)
+    .execute(&mut *connection)
     .await
     .unwrap();
 }
@@ -95,6 +103,7 @@ async fn seed_delivery(
     state: DeliveryState,
     credential: &str,
 ) {
+    let principal_id = PrincipalId::fixture("reseal-user");
     let envelope = if matches!(state, DeliveryState::Cancelled) {
         None
     } else {
@@ -139,21 +148,22 @@ async fn seed_delivery(
     sqlx::query(
         r#"
         INSERT INTO auth_delivery_intent (
-            delivery_id, delivery_kind, account_id, principal_user_id,
+            delivery_id, delivery_kind, account_id, principal_id,
             credential_hash, credential_expires_at, credential_envelope,
             status, attempt_count, next_attempt_at, delivered_at, last_error,
             created_at, updated_at, provider_id, outcome_kind, outcome_code,
             provider_receipt_id, claim_token, claim_expires_at
         )
         VALUES (
-            $1, $2, 'reseal@example.test', 'reseal-user', $3, 1_000, $4,
-            $5, 0, $6, NULL, $7, 10, 10, 'local-deterministic', $8, $7,
-            NULL, $9, $10
+            $1, $2, 'reseal@example.test', $3, $4, 1_000, $5,
+            $6, 0, $7, NULL, $8, 10, 10, 'local-deterministic', $9, $8,
+            NULL, $10, $11
         )
         "#,
     )
     .bind(delivery_id)
     .bind(kind.as_str())
+    .bind(principal_id.as_uuid())
     .bind(format!("hash-{delivery_id}"))
     .bind(envelope)
     .bind(status)

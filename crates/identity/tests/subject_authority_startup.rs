@@ -6,8 +6,8 @@ use identity::{
     request_member_erasure_with_store,
     subject_privacy::reconcile_subject_revocations_with_store_and_preflight_query_count,
     verify_active_subject_keys, verify_or_bind_database_authority, ConfiguredSubjectKeyAuthority,
-    MemberLifecycleStatus, ObjectSubjectKeyStore, SubjectId, SubjectKeyStore, SubjectPrivacyError,
-    SubjectRevocationRecord,
+    MemberLifecycleStatus, ObjectSubjectKeyStore, PrincipalId, SubjectId, SubjectKeyStore,
+    SubjectPrivacyError, SubjectRevocationRecord,
 };
 use object_store::{
     path::Path as ObjectPath, CopyOptions, GetOptions, GetResult, ListResult, MultipartUpload,
@@ -374,22 +374,22 @@ fn object_authority() -> (ObjectSubjectKeyStore, Arc<ObjectRequestCounts>) {
 async fn provision_subject(
     pool: &sqlx::PgPool,
     key_store: &dyn SubjectKeyStore,
-    label: &str,
-) -> (String, SubjectId) {
-    let principal = format!("{label}-{}", Uuid::new_v4().simple());
+    _label: &str,
+) -> (PrincipalId, SubjectId) {
+    let principal = PrincipalId::random();
     let subject_id = SubjectId::random();
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(pool)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at) VALUES ($1, $2, 1)",
+        "INSERT INTO privacy_subject (subject_id, principal_id, created_at) VALUES ($1, $2, 1)",
     )
     .bind(subject_id.as_uuid())
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(pool)
     .await
     .unwrap();
@@ -481,9 +481,11 @@ async fn unbound_database_with_pre_subject_identity_data_refuses_new_authority(p
         [53_u8; 32],
     );
     let manifest = authority.bootstrap().await.unwrap();
+    let orphan_principal = PrincipalId::fixture("orphaned-pre-subject-principal");
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ('orphaned-pre-subject-principal', 'active', '{}'::text[], 1)",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
     )
+    .bind(orphan_principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
@@ -526,20 +528,20 @@ async fn repeat_startup_authenticates_journal_without_redeleting_reconciled_keys
 
     const REVOCATION_COUNT: usize = 17;
     for ordinal in 0..REVOCATION_COUNT {
-        let principal = format!("repeat-startup-{}", Uuid::new_v4().simple());
+        let principal = PrincipalId::random();
         let subject_id = SubjectId::random();
         sqlx::query(
-            "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
+            "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
         )
-        .bind(&principal)
+        .bind(principal.as_uuid())
         .execute(&pool)
         .await
         .unwrap();
         sqlx::query(
-            "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at) VALUES ($1, $2, 1)",
+            "INSERT INTO privacy_subject (subject_id, principal_id, created_at) VALUES ($1, $2, 1)",
         )
         .bind(subject_id.as_uuid())
-        .bind(&principal)
+        .bind(principal.as_uuid())
         .execute(&pool)
         .await
         .unwrap();
@@ -633,20 +635,20 @@ async fn repeat_startup_authenticates_journal_without_redeleting_reconciled_keys
 async fn claim_that_owns_identity_locks_first_commits_then_startup_scrubs_it(pool: sqlx::PgPool) {
     let (authority, _) = object_authority();
     authority.bootstrap().await.unwrap();
-    let principal = format!("claim-first-{}", Uuid::new_v4().simple());
+    let principal = PrincipalId::random();
     let subject_id = SubjectId::random();
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at) VALUES ($1, $2, 1)",
+        "INSERT INTO privacy_subject (subject_id, principal_id, created_at) VALUES ($1, $2, 1)",
     )
     .bind(subject_id.as_uuid())
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
@@ -656,8 +658,8 @@ async fn claim_that_owns_identity_locks_first_commits_then_startup_scrubs_it(poo
     // journal became visible. It already owns the canonical principal ->
     // subject pair, so reconciliation must wait and scrub its committed row.
     let mut claim = pool.begin().await.unwrap();
-    sqlx::query("SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE")
-        .bind(&principal)
+    sqlx::query("SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
+        .bind(principal.as_uuid())
         .fetch_one(&mut *claim)
         .await
         .unwrap();
@@ -721,20 +723,20 @@ async fn startup_commits_identity_cutoff_before_authority_io_and_rejects_overlap
     verify_or_bind_database_authority(&pool, &manifest)
         .await
         .unwrap();
-    let principal = format!("startup-first-{}", Uuid::new_v4().simple());
+    let principal = PrincipalId::random();
     let subject_id = SubjectId::random();
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at) VALUES ($1, $2, 1)",
+        "INSERT INTO privacy_subject (subject_id, principal_id, created_at) VALUES ($1, $2, 1)",
     )
     .bind(subject_id.as_uuid())
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
@@ -767,13 +769,13 @@ async fn startup_commits_identity_cutoff_before_authority_io_and_rejects_overlap
         .expect("startup should reach key destruction after committing the identity cutoff");
 
     let claim_pool = pool.clone();
-    let claim_principal = principal.clone();
+    let claim_principal = principal;
     let claim = tokio::spawn(async move {
         let mut tx = claim_pool.begin().await.unwrap();
         let status: String = sqlx::query_scalar(
-            "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+            "SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE",
         )
-        .bind(&claim_principal)
+        .bind(claim_principal.as_uuid())
         .fetch_one(&mut *tx)
         .await
         .unwrap();
@@ -781,9 +783,9 @@ async fn startup_commits_identity_cutoff_before_authority_io_and_rejects_overlap
             return false;
         }
         let lifecycle: String = sqlx::query_scalar(
-            "SELECT lifecycle_state FROM privacy_subject WHERE principal_user_id = $1 FOR UPDATE",
+            "SELECT lifecycle_state FROM privacy_subject WHERE principal_id = $1 FOR UPDATE",
         )
-        .bind(&claim_principal)
+        .bind(claim_principal.as_uuid())
         .fetch_one(&mut *tx)
         .await
         .unwrap();
@@ -884,7 +886,7 @@ async fn startup_rejects_partial_subject_history_without_a_canonical_owner(pool:
     };
     inner.record_revocation(&record).await.unwrap();
     sqlx::query(
-        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at) VALUES ($1, NULL, 1)",
+        "INSERT INTO privacy_subject (subject_id, principal_id, created_at) VALUES ($1, NULL, 1)",
     )
     .bind(subject_id.as_uuid())
     .execute(&pool)
@@ -927,7 +929,7 @@ async fn request_fingerprints_before_owner_locks_and_commits_the_cutoff_afterwar
     };
 
     let request_pool = pool.clone();
-    let request_principal = principal.clone();
+    let request_principal = principal;
     let request_store = store.clone();
     let request = tokio::spawn(async move {
         request_member_erasure_with_store(&request_pool, &request_store, &request_principal, 10)
@@ -938,13 +940,11 @@ async fn request_fingerprints_before_owner_locks_and_commits_the_cutoff_afterwar
         .expect("request should fingerprint before its owner transaction");
 
     let mut observer = pool.begin().await.unwrap();
-    sqlx::query(
-        "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE NOWAIT",
-    )
-    .bind(&principal)
-    .fetch_one(&mut *observer)
-    .await
-    .expect("authority fingerprinting must not hold the principal lock");
+    sqlx::query("SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE NOWAIT")
+        .bind(principal.as_uuid())
+        .fetch_one(&mut *observer)
+        .await
+        .expect("authority fingerprinting must not hold the principal lock");
     sqlx::query(
         "SELECT lifecycle_state FROM privacy_subject WHERE subject_id = $1 FOR UPDATE NOWAIT",
     )
@@ -973,9 +973,9 @@ async fn request_fingerprints_before_owner_locks_and_commits_the_cutoff_afterwar
     );
     assert_eq!(
         sqlx::query_scalar::<_, String>(
-            "SELECT status FROM platform_principal WHERE principal_user_id = $1",
+            "SELECT status FROM platform_principal WHERE principal_id = $1",
         )
-        .bind(&principal)
+        .bind(principal.as_uuid())
         .fetch_one(&pool)
         .await
         .unwrap(),

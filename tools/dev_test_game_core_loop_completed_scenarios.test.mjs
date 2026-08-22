@@ -1151,7 +1151,7 @@ test("core-loop proof fixture module builds shared host and player proof shapes"
     visitedRolePath: "/g/game-a",
     slotField: "actionPlayerSlot",
     slot: "slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     phaseId: "N05",
     phaseState: "open",
     actorAlive: true,
@@ -1184,7 +1184,7 @@ test("core-loop proof fixture module derives seeded role URLs and endpoints", ()
     roleUrlSuffix: "?private=notification-1",
     slotField: "survivorSlot",
     slot: "slot-5",
-    principalUserId: "player_sage",
+    principalId: "player_sage",
     phaseId: "D05",
     phaseState: "open",
     actorAlive: false,
@@ -1277,13 +1277,13 @@ test("completed-game scenario module derives shared assertion cases", () => {
       proof: scenario.proof,
       sourceRoleUrl: scenario.sourceRoleUrl,
       expectedSlot: scenario.expectedSlot,
-      principalUserId: scenario.principalUserId,
+      principalId: scenario.principalId,
     })),
     completedPlayerReloadCases().map((scenario) => ({
       proof: { id: `reload:${scenario.proofField}` },
       sourceRoleUrl: roleUrlsByField[scenario.sourceRoleUrlField],
       expectedSlot: scenario.expectedSlot,
-      principalUserId: scenario.principalUserId,
+      principalId: scenario.principalId,
     })),
   );
 

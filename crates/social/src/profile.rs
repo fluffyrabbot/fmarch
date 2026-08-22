@@ -15,6 +15,7 @@
 
 use std::{fmt, str::FromStr};
 
+pub use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -84,70 +85,6 @@ macro_rules! uuid_id {
             }
         }
     };
-}
-
-/// Stable, opaque authorization identity for an active profile owner.
-///
-/// Principal storage is presently text-backed across the platform. This value
-/// object prevents it from being confused with a profile, privacy subject, or
-/// redaction alias while leaving the eventual repo-wide UUID re-key explicit.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
-pub struct PrincipalId(String);
-
-impl PrincipalId {
-    /// Validate and normalize an opaque principal identifier.
-    pub fn new(value: impl AsRef<str>) -> Result<Self, ProfileValueError> {
-        let normalized = value.as_ref().trim();
-        if normalized.is_empty() {
-            return Err(ProfileValueError::InvalidPrincipalId);
-        }
-        Ok(Self(normalized.to_owned()))
-    }
-
-    /// The normalized opaque principal identifier.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    /// Consume this value into its normalized opaque representation.
-    pub fn into_inner(self) -> String {
-        self.0
-    }
-}
-
-impl TryFrom<String> for PrincipalId {
-    type Error = ProfileValueError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::new(value)
-    }
-}
-
-impl From<PrincipalId> for String {
-    fn from(value: PrincipalId) -> Self {
-        value.into_inner()
-    }
-}
-
-impl FromStr for PrincipalId {
-    type Err = ProfileValueError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Self::new(value)
-    }
-}
-
-impl AsRef<str> for PrincipalId {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl fmt::Display for PrincipalId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(formatter)
-    }
 }
 
 uuid_id!(
@@ -756,8 +693,6 @@ pub enum ProfileFoldError {
 /// Validation failures for profile value objects.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum ProfileValueError {
-    #[error("principal ID must not be blank")]
-    InvalidPrincipalId,
     #[error("profile handle must be 3 to 32 lowercase letters, digits, or underscores")]
     InvalidHandle,
     #[error("profile display name must contain 1 to 80 bytes")]
@@ -889,7 +824,7 @@ mod tests {
     use super::*;
 
     fn principal(value: u128) -> PrincipalId {
-        PrincipalId::new(format!("principal-{value}")).unwrap()
+        PrincipalId::from_uuid(Uuid::from_u128(value))
     }
 
     fn subject(value: u128) -> PrivacySubjectId {
@@ -933,11 +868,7 @@ mod tests {
     }
 
     #[test]
-    fn values_normalize_at_the_domain_boundary() {
-        assert_eq!(
-            PrincipalId::new("  principal-1  ").unwrap().as_str(),
-            "principal-1"
-        );
+    fn profile_values_normalize_at_the_domain_boundary() {
         assert_eq!(
             ProfileHandle::new("  Example_User  ").unwrap().as_str(),
             "example_user"
@@ -958,10 +889,6 @@ mod tests {
 
     #[test]
     fn values_reject_the_old_alias_and_unimplemented_members_audience() {
-        assert_eq!(
-            PrincipalId::new("  "),
-            Err(ProfileValueError::InvalidPrincipalId)
-        );
         assert_eq!(
             ProfileHandle::new("former-member-00000000000000000000000000000003"),
             Err(ProfileValueError::InvalidHandle)

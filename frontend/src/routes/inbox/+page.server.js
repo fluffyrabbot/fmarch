@@ -5,7 +5,7 @@ import { accessTokenForRequest } from "../../lib/server/session-capabilities.mjs
 
 export async function load({ cookies, locals, fetch, url }) {
   const token = accessTokenForRequest({ locals, cookies });
-  if (typeof token !== "string" || token.trim() === "" || typeof locals.principalUserId !== "string") {
+  if (typeof token !== "string" || token.trim() === "" || typeof locals.principalId !== "string") {
     throw error(401, "Inbox requires an authenticated account");
   }
   const search = new URLSearchParams({ limit: "50" });
@@ -23,7 +23,7 @@ export async function load({ cookies, locals, fetch, url }) {
     shellOwner: "layout",
     shell: buildAppShell({
       activeSurface: "inbox",
-      principalUserId: locals.principalUserId,
+      principalId: locals.principalId,
       capabilities: locals.resolvedCapabilities,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({

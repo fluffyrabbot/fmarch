@@ -7,6 +7,7 @@ import {
   localDatabaseAuthority,
   localDatabaseRoleNames,
   migrationDatabaseEnvironment,
+  serverRuntimeEnvironment,
 } from "./run_fmarch_migrations.mjs";
 
 const migrationHarnessCallers = Object.freeze([
@@ -92,7 +93,33 @@ test("application child environment carries no migration or key-admin authority"
   assert.equal(env.DATABASE_KEY_ADMIN_URL, undefined);
   assert.equal(env.FMARCH_DATABASE_APPLICATION_PASSWORD, undefined);
   assert.equal(env.FMARCH_DATABASE_KEY_ADMIN_PASSWORD, undefined);
+  assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KEY, undefined);
+  assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KID, undefined);
+  assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
   assertPostgresOwnerEnvironmentRemoved(env);
+});
+
+test("server child environment owns only active profile handle-index custody", () => {
+  const defaults = serverRuntimeEnvironment({
+    applicationUrl: "postgres://fmarch_application:application@localhost/fmarch",
+    env: { KEEP: "yes" },
+  });
+  assert.equal(defaults.FMARCH_PROFILE_HANDLE_INDEX_KEY, "fmarch-local-profile-index-key-material-v1");
+  assert.equal(defaults.FMARCH_PROFILE_HANDLE_INDEX_KID, "local-profile-index-v1");
+  assert.equal(defaults.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
+
+  const explicit = serverRuntimeEnvironment({
+    applicationUrl: "postgres://fmarch_application:application@localhost/fmarch",
+    env: {
+      ...contaminatedEnvironment(),
+      FMARCH_PROFILE_HANDLE_INDEX_KEY: "proof-profile-index-key-material-00000001",
+      FMARCH_PROFILE_HANDLE_INDEX_KID: "proof-profile-index-v1",
+      FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY: "retired-profile-index-key-material-0000002",
+    },
+  });
+  assert.equal(explicit.FMARCH_PROFILE_HANDLE_INDEX_KEY, "proof-profile-index-key-material-00000001");
+  assert.equal(explicit.FMARCH_PROFILE_HANDLE_INDEX_KID, "proof-profile-index-v1");
+  assert.equal(explicit.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
 });
 
 test("key-admin child environment carries neither runtime nor migration authority", () => {
@@ -107,6 +134,9 @@ test("key-admin child environment carries neither runtime nor migration authorit
   assert.equal(env.DATABASE_MIGRATION_URL, undefined);
   assert.equal(env.FMARCH_DATABASE_APPLICATION_PASSWORD, undefined);
   assert.equal(env.FMARCH_DATABASE_KEY_ADMIN_PASSWORD, undefined);
+  assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KEY, undefined);
+  assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KID, undefined);
+  assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
   assertPostgresOwnerEnvironmentRemoved(env);
 });
 
@@ -125,17 +155,22 @@ test("migrator child environment carries no runtime, key-admin, or ambient libpq
   assert.equal(env.KEEP, "yes");
   assert.equal(env.DATABASE_URL, undefined);
   assert.equal(env.DATABASE_KEY_ADMIN_URL, undefined);
+  assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KEY, undefined);
+  assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KID, undefined);
+  assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
   assertPostgresOwnerEnvironmentRemoved(env);
 });
 
-test("every local migrator caller gives spawned servers only application authority", () => {
+test("every local migrator caller gives each child only its required authority", () => {
   for (const filename of migrationHarnessCallers) {
     const source = readFileSync(new URL(filename, import.meta.url), "utf8");
     assert.match(source, /runFmarchMigrations\(\{/u, `${filename} must run the migrator`);
     assert.match(
       source,
-      /applicationDatabaseEnvironment\(\{/u,
-      `${filename} must sanitize its server environment`,
+      filename === "mash_scale_acceptance.mjs"
+        ? /applicationDatabaseEnvironment\(\{/u
+        : /serverRuntimeEnvironment\(\{/u,
+      `${filename} must construct the right least-authority child environment`,
     );
     assert.doesNotMatch(
       source,
@@ -202,6 +237,9 @@ function contaminatedEnvironment() {
     DATABASE_KEY_ADMIN_URL: "postgres://key-admin/admin",
     FMARCH_DATABASE_APPLICATION_PASSWORD: "application-password",
     FMARCH_DATABASE_KEY_ADMIN_PASSWORD: "key-admin-password",
+    FMARCH_PROFILE_HANDLE_INDEX_KEY: "ambient-profile-index-key-material-0000001",
+    FMARCH_PROFILE_HANDLE_INDEX_KID: "ambient-profile-index-v1",
+    FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY: "ambient-rotation-secret-material-00000002",
     ...Object.fromEntries(
       ambientPostgresVariables.map((key) => [key, `attacker-controlled-${key}`]),
     ),

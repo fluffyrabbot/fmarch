@@ -24,7 +24,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
     shellOwner: "layout",
     shell: buildAppShell({
       activeSurface: "community",
-      principalUserId: locals.principalUserId,
+      principalId: locals.principalId,
       capabilities: locals.resolvedCapabilities,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
@@ -44,7 +44,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
         : [],
       nextCursor: optionalText(area.next_cursor),
       canPost: profile !== null,
-      hasSession: typeof locals.principalUserId === "string",
+      hasSession: typeof locals.principalId === "string",
       canModerate: hasCapability({
         capabilities: locals.resolvedCapabilities,
         kind: "GlobalMod",
@@ -77,7 +77,7 @@ function unavailableData(slug, locals) {
     shellOwner: "layout",
     shell: buildAppShell({
       activeSurface: "community",
-      principalUserId: locals.principalUserId,
+      principalId: locals.principalId,
       capabilities: locals.resolvedCapabilities,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
@@ -92,7 +92,7 @@ function unavailableData(slug, locals) {
       topics: [],
       nextCursor: null,
       canPost: false,
-      hasSession: typeof locals.principalUserId === "string",
+      hasSession: typeof locals.principalId === "string",
       canModerate: false,
     },
   };

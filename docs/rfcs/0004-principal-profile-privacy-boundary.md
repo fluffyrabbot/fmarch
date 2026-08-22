@@ -40,9 +40,12 @@ All new profile decisions use typed `PrincipalId`, `PrivacySubjectId`,
 `PrivacySubject` variants; it no longer permits a subject UUID to masquerade
 as a user string.
 
-The first cut makes `PrincipalId` an opaque value at every boundary. The
-immediately following baseline reset changes its physical storage and all
-principal-bearing projections to UUIDs in one repository-wide operation.
+`PrincipalId` is UUID-backed and opaque at every boundary. The greenfield
+rebaseline stores every canonical authority-bearing principal relation as a
+PostgreSQL `uuid`, including role, receipt, invite, session, profile-owner,
+moderation, subscription, and audit attribution fields. Provider subjects,
+provider-session IDs, account/login names, and token hashes remain dedicated
+adapter values rather than alternate principal encodings.
 
 ### 2. Profile lifecycle is explicit
 
@@ -115,7 +118,7 @@ reads.
    development databases.
 4. Re-key every principal-bearing storage and wire surface to UUIDs in a
    dedicated second rebaseline, including game authority/personas, sessions,
-   credentials, moderation, subscriptions, and fixtures.
+   credentials, moderation, subscriptions, audit attribution, and fixtures.
 5. Prove the resulting boundaries with profile/privacy, identity, game, and
    browser lanes before updating the local proof baseline.
 

@@ -201,7 +201,7 @@
       class="host-task-workspace__command-context fm-proof-disclosure"
       data-testid={view.commandContext.testId}
       data-game-id={view.commandContext.gameId}
-      data-principal-user-id={view.commandContext.principalUserId}
+      data-principal-id={view.commandContext.principalId}
       data-capability-label={view.commandContext.capabilityLabel}
       data-command-endpoint={view.commandContext.commandEndpoint}
     >

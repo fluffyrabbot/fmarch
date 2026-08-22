@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { load } from "./+page.server.js";
 
-const locals = { principalUserId: null, resolvedCapabilities: [] };
+const locals = { principalId: null, resolvedCapabilities: [] };
 
 test("public search preserves filter, ranked result links, and stable cursor", async () => {
   const requests = [];

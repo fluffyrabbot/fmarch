@@ -134,7 +134,7 @@ export function assertNightThreeProgressionBrowserProof({
     ],
     [
       proof?.n03ActionSubmission?.requestEnvelope?.body?.body
-        ?.principal_user_id === undefined,
+        ?.principal_id === undefined,
       "night three action included a client-supplied principal",
     ],
     [

@@ -1,4 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
+import {
+  fixturePrincipalAuthorityId,
+  fixturePrincipalTransport,
+  requirePrincipalAuthorityId,
+} from "../principal_fixture.mjs";
 
 export function createLiveStackAuth({
   apiBaseUrl,
@@ -13,9 +18,14 @@ export function createLiveStackAuth({
   const createAuthAccount = async ({
     accountId,
     password,
-    principalUserId,
+    principalId,
     globalCapabilities = [],
   }) => {
+    const authorityPrincipalId = fixturePrincipalAuthorityId(principalId);
+    requirePrincipalAuthorityId(
+      authorityPrincipalId,
+      "auth account transport",
+    );
     await fetchJson(`${apiBaseUrl}/auth/accounts`, {
       method: "POST",
       headers: {
@@ -25,16 +35,17 @@ export function createLiveStackAuth({
       body: JSON.stringify({
         account_id: accountId,
         password,
-        principal_user_id: principalUserId,
+        principal_id: authorityPrincipalId,
         global_capabilities: globalCapabilities,
       }),
     });
   };
 
-  const createAccountSession = async ({ principalUserId, label, accountId: requestedAccountId }) => {
+  const createAccountSession = async ({ principalId, label, accountId: requestedAccountId }) => {
+    const authorityPrincipalId = fixturePrincipalAuthorityId(principalId);
     const accountId = requestedAccountId ?? `live-stack-${label}-${uuid()}@example.test`;
     const password = `live-stack account password ${uuid()}`;
-    await createAuthAccount({ accountId, password, principalUserId });
+    await createAuthAccount({ accountId, password, principalId: authorityPrincipalId });
     const session = await fetchJson(`${apiBaseUrl}/auth/accounts/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -45,7 +56,7 @@ export function createLiveStackAuth({
     });
     return {
       accountId,
-      principalUserId: session.principal_user_id,
+      principalId: session.principal_id,
       sessionToken: requiredSessionToken(session),
       capabilityKinds: (session.capabilities ?? []).map(
         (capability) => capability.kind,
@@ -55,15 +66,16 @@ export function createLiveStackAuth({
   };
 
   const createGrantedSession = async ({
-    principalUserId,
+    principalId,
     globalCapabilities = [],
   }) => {
-    const accountId = `live-stack-grant-${principalUserId}-${uuid()}@example.test`;
+    const authorityPrincipalId = fixturePrincipalAuthorityId(principalId);
+    const accountId = `live-stack-grant-${authorityPrincipalId}-${uuid()}@example.test`;
     const password = `live-stack grant password ${uuid()}`;
     await createAuthAccount({
       accountId,
       password,
-      principalUserId,
+      principalId: authorityPrincipalId,
       globalCapabilities,
     });
     const session = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
@@ -73,14 +85,17 @@ export function createLiveStackAuth({
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        principal_user_id: principalUserId,
+        principal_id: requirePrincipalAuthorityId(
+          authorityPrincipalId,
+          "session grant transport",
+        ),
         expires_at: 4102444800,
         global_capabilities: globalCapabilities,
       }),
     });
     return {
       accountId,
-      principalUserId: session.principal_user_id,
+      principalId: session.principal_id,
       sessionToken: requiredSessionToken(session),
       capabilityKinds: (session.capabilities ?? []).map(
         (capability) => capability.kind,
@@ -113,11 +128,12 @@ export function createLiveStackCommandSender({
   requireFunction(nextEnvelopeId, "nextEnvelopeId");
   requireFunction(sessionTokenForPrincipal, "sessionTokenForPrincipal");
 
-  return async function sendCommand(principalUserId, command) {
-    const sessionToken = sessionTokenForPrincipal(principalUserId);
+  return async function sendCommand(principalId, command) {
+    const sessionToken = sessionTokenForPrincipal(principalId);
     if (typeof sessionToken !== "string" || sessionToken.trim() === "") {
-      throw new Error(`live-stack command actor has no session: ${principalUserId}`);
+      throw new Error(`live-stack command actor has no session: ${principalId}`);
     }
+    const transportCommand = fixturePrincipalTransport(command, "command transport");
     const response = await fetchJson(`${apiBaseUrl}/commands`, {
       method: "POST",
       headers: {
@@ -131,7 +147,7 @@ export function createLiveStackCommandSender({
           kind: "Command",
           body: {
             command_id: uuid(),
-            command,
+            command: transportCommand,
           },
         },
       }),
@@ -140,7 +156,7 @@ export function createLiveStackCommandSender({
       throw new Error(`seed command rejected: ${JSON.stringify(response)}`);
     }
     return {
-      principalUserId,
+      principalId,
       command,
       streamSeqs: response.body.body.stream_seqs,
     };

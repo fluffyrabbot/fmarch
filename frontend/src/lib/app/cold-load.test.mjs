@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   authenticatedGameReadUrl,
+  adminIdentityLifecycleAuditHref,
   dayVoteOutcomesUrl,
   hostVotecountUrl,
   hostPromptsUrl,
+  identityLifecycleAuditUrl,
   loadAdminColdData,
   loadHostColdData,
   loadPlayerColdData,
@@ -77,6 +79,8 @@ const FALLBACK = Object.freeze({
     boundary: "fallback command state",
   }),
 });
+
+const ADMIN_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000004";
 
 test("cold-load URLs keep the public main thread and private channel boundaries distinct", () => {
   assert.equal(
@@ -152,7 +156,7 @@ test("cold-load URLs keep the public main thread and private channel boundaries 
   ];
   for (const url of authenticatedReads) {
     assert.equal(
-      new URL(url, "https://app.example").searchParams.has("principal_user_id"),
+      new URL(url, "https://app.example").searchParams.has("principal_id"),
       false,
       `${url} must derive its principal exclusively from the authenticated session`,
     );
@@ -164,7 +168,7 @@ test("player cold-load uses channel-scoped thread endpoint for private channel r
   await loadPlayerColdData({
     game: "midsummer",
     activeChannel: "private:role_pm:slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     actorSlot: "slot-7",
     fallback: FALLBACK,
     fetchImpl: async (url) => {
@@ -407,7 +411,7 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
   const seen = [];
   const data = await loadPlayerColdData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     actorSlot: "slot_4",
     fallback: FALLBACK,
     fetchImpl: async (url) => {
@@ -617,7 +621,7 @@ test("player cold-load skips private scoped endpoints without a principal", asyn
   const seen = [];
   const data = await loadPlayerColdData({
     game: "midsummer",
-    principalUserId: null,
+    principalId: null,
     fallback: FALLBACK,
     fetchImpl: async (url) => {
       seen.push(url);
@@ -641,7 +645,7 @@ test("player cold-load skips player-private endpoints without an actor slot", as
   const data = await loadPlayerColdData({
     game: "midsummer",
     activeChannel: "spectator",
-    principalUserId: "spectator_s",
+    principalId: "spectator_s",
     actorSlot: null,
     fallback: {
       ...FALLBACK,
@@ -667,7 +671,7 @@ test("player cold-load skips player-private endpoints without an actor slot", as
 test("admin cold-load maps operator proof status when available", async () => {
   const data = await loadAdminColdData({
     game: "midsummer",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     sessionToken: "session-token",
     fallback: FALLBACK,
     fetchImpl: async (url, init) => {
@@ -707,7 +711,7 @@ test("admin cold-load maps operator proof status when available", async () => {
 test("admin cold-load maps real operator proof status families", async () => {
   const data = await loadAdminColdData({
     game: "midsummer",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     fallback: FALLBACK,
     fetchImpl: async () =>
       jsonResponse({
@@ -737,6 +741,52 @@ test("admin cold-load maps real operator proof status families", async () => {
       href: "/games/midsummer/operator/proof-runs",
     },
   ]);
+});
+
+test("admin identity lifecycle reads are restricted to canonical principal UUIDs", async () => {
+  const textLabelCalls = [];
+  await loadAdminColdData({
+    game: "midsummer",
+    principalId: "admin_a",
+    identityPrincipalId: "host_h",
+    sessionToken: "admin-session",
+    fallback: FALLBACK,
+    fetchImpl: async (url) => {
+      textLabelCalls.push(String(url));
+      return jsonResponse({ rows: [] });
+    },
+  });
+  assert.deepEqual(textLabelCalls, ["/games/midsummer/operator/proof-runs/status"]);
+
+  const principalCalls = [];
+  await loadAdminColdData({
+    game: "midsummer",
+    principalId: ADMIN_PRINCIPAL_ID,
+    sessionToken: "admin-session",
+    fallback: FALLBACK,
+    fetchImpl: async (url) => {
+      principalCalls.push(String(url));
+      return jsonResponse(
+        String(url).startsWith("/auth/identity-lifecycle-audit")
+          ? { entries: [] }
+          : { rows: [] },
+      );
+    },
+  });
+  assert.equal(
+    principalCalls.includes(
+      `/auth/identity-lifecycle-audit?principal_id=${ADMIN_PRINCIPAL_ID}&limit=50`,
+    ),
+    true,
+  );
+  assert.throws(
+    () => identityLifecycleAuditUrl({ principalId: "host_h" }),
+    /canonical UUID/,
+  );
+  assert.throws(
+    () => adminIdentityLifecycleAuditHref({ game: "midsummer", principalId: "host_h" }),
+    /canonical UUID/,
+  );
 });
 
 test("host cold-load maps durable prompt rows and votecount for moderator controls", async () => {
@@ -776,7 +826,7 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
       if (url.includes("host-console-state")) {
         return jsonResponse({
           authority: {
-            principal_user_id: "host_h",
+            principal_id: "host_h",
             capability: "HostOf",
             allowed_classes: ["phase_resolve", "deadline"],
             denied_classes: [],
@@ -979,7 +1029,7 @@ test("loadPlayerColdData threads the timeout budget into every projection fetch"
   };
   await loadPlayerColdData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     actorSlot: "slot-7",
     fetchImpl,
     apiBaseUrl: "",

@@ -11,10 +11,11 @@ import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+  fixturePrincipalAuthorityId,
+  fixturePrincipalTransport,
+} from "./principal_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -126,15 +127,15 @@ async function proveEmptyBoard(frontendBaseUrl) {
 }
 
 async function seedPublicGames(apiBaseUrl) {
-  const hostPrincipalUserId = "board_index_host";
+  const hostPrincipalAlias = "board_index_host";
   const games = [];
   for (let index = 0; index < pageSize + 1; index += 1) {
     const game = randomUUID();
     const pack = index % 2 === 0 ? "mafiascum" : "mafia_universe";
-    await sendCommand(apiBaseUrl, index * 3 + 1, hostPrincipalUserId, {
+    await sendCommand(apiBaseUrl, index * 3 + 1, hostPrincipalAlias, {
       CreateGame: { game, pack },
     });
-    await sendCommand(apiBaseUrl, index * 3 + 2, hostPrincipalUserId, {
+    await sendCommand(apiBaseUrl, index * 3 + 2, hostPrincipalAlias, {
       StartGame: { game, phase: "D01" },
     });
     games.push({ game, pack });
@@ -144,7 +145,7 @@ async function seedPublicGames(apiBaseUrl) {
   if (completed === undefined) {
     throw new Error("seeded game index did not return a public game to complete");
   }
-  await sendCommand(apiBaseUrl, pageSize * 3 + 3, hostPrincipalUserId, {
+  await sendCommand(apiBaseUrl, pageSize * 3 + 3, hostPrincipalAlias, {
     CompleteGame: { game: completed.game },
   });
   return {
@@ -152,20 +153,20 @@ async function seedPublicGames(apiBaseUrl) {
     count: games.length,
     completedGame: completed.game,
     activeGameCount: games.length - 1,
-    hostPrincipalUserId,
+    hostPrincipalAlias,
   };
 }
 
 async function proveSeededBoard({ frontendBaseUrl, apiBaseUrl, seeded }) {
   const firstApiPage = await fetchJson(`${apiBaseUrl}/games?limit=${pageSize}`);
-  assertPublicApiPage(firstApiPage, pageSize, seeded.hostPrincipalUserId);
+  assertPublicApiPage(firstApiPage, pageSize, seeded.hostPrincipalAlias);
   if (firstApiPage.next_cursor === null) {
     throw new Error("public game index did not expose a cursor for the older seeded game");
   }
   const olderApiPage = await fetchJson(
     `${apiBaseUrl}/games?limit=${pageSize}&cursor=${encodeURIComponent(firstApiPage.next_cursor)}`,
   );
-  assertPublicApiPage(olderApiPage, 1, seeded.hostPrincipalUserId);
+  assertPublicApiPage(olderApiPage, 1, seeded.hostPrincipalAlias);
   if (olderApiPage.next_cursor !== null) {
     throw new Error("final public game index page unexpectedly exposed another cursor");
   }
@@ -183,7 +184,7 @@ async function proveSeededBoard({ frontendBaseUrl, apiBaseUrl, seeded }) {
     if (!lifecycleText.includes("ACTIVE") || !lifecycleText.includes("COMPLETED")) {
       throw new Error("public game index did not render active and completed lifecycle labels");
     }
-    assertNoPrivateBoardText(firstBody, seeded.hostPrincipalUserId);
+    assertNoPrivateBoardText(firstBody, seeded.hostPrincipalAlias);
     const older = page.getByTestId("board-game-index-older");
     await Promise.all([
       page.waitForURL(/\?cursor=/, { timeout: 15000 }),
@@ -233,7 +234,7 @@ async function proveInvalidCursorRecovery(frontendBaseUrl) {
   }
 }
 
-function assertPublicApiPage(page, expectedCount, hostPrincipalUserId) {
+function assertPublicApiPage(page, expectedCount, hostPrincipalAlias) {
   if (!Array.isArray(page?.games) || page.games.length !== expectedCount) {
     throw new Error(`public game index page shape drifted: ${JSON.stringify(page)}`);
   }
@@ -249,15 +250,15 @@ function assertPublicApiPage(page, expectedCount, hostPrincipalUserId) {
     if (
       !["active", "completed"].includes(game.status) ||
       Object.keys(game).some((key) => !allowedKeys.has(key)) ||
-      JSON.stringify(game).includes(hostPrincipalUserId)
+      JSON.stringify(game).includes(hostPrincipalAlias)
     ) {
       throw new Error(`public game index leaked or drifted: ${JSON.stringify(game)}`);
     }
   }
 }
 
-function assertNoPrivateBoardText(text, hostPrincipalUserId) {
-  for (const privateValue of [hostPrincipalUserId, "slot_", "private:", "role_key"]) {
+function assertNoPrivateBoardText(text, hostPrincipalAlias) {
+  for (const privateValue of [hostPrincipalAlias, "slot_", "private:", "role_key"]) {
     if (text.includes(privateValue)) {
       throw new Error(`public board leaked private game data: ${privateValue}`);
     }
@@ -329,7 +330,7 @@ async function startApi(applicationUrl) {
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...applicationDatabaseEnvironment({ applicationUrl }),
+      ...serverRuntimeEnvironment({ applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_DEV_AUTH: "1",
@@ -376,8 +377,8 @@ async function startFrontend(apiBaseUrl) {
 
 // The strict wire rejects any actor field in the envelope; seed commands act
 // as a principal by presenting that principal's dev session as the bearer.
-async function seedSessionToken(apiBaseUrl, principalUserId) {
-  const cached = seedSessionTokens.get(principalUserId);
+async function seedSessionToken(apiBaseUrl, principalId) {
+  const cached = seedSessionTokens.get(principalId);
   if (cached !== undefined) {
     return cached;
   }
@@ -385,20 +386,20 @@ async function seedSessionToken(apiBaseUrl, principalUserId) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      principal_user_id: principalUserId,
+      principal_id: fixturePrincipalAuthorityId(principalId),
       expires_at: 4_102_444_800,
       global_capabilities: ["GlobalAdmin"],
     }),
   });
   if (typeof session.session_token !== "string" || session.session_token === "") {
-    throw new Error(`dev session for ${principalUserId} returned no session_token`);
+    throw new Error(`dev session for ${principalId} returned no session_token`);
   }
-  seedSessionTokens.set(principalUserId, session.session_token);
+  seedSessionTokens.set(principalId, session.session_token);
   return session.session_token;
 }
 
-async function sendCommand(apiBaseUrl, id, principalUserId, command) {
-  const sessionToken = await seedSessionToken(apiBaseUrl, principalUserId);
+async function sendCommand(apiBaseUrl, id, principalId, command) {
+  const sessionToken = await seedSessionToken(apiBaseUrl, principalId);
   const result = await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
     headers: {
@@ -410,7 +411,10 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
       id,
       body: {
         kind: "Command",
-        body: { command_id: randomUUID(), command },
+        body: {
+          command_id: randomUUID(),
+          command: fixturePrincipalTransport(command, "game index command transport"),
+        },
       },
     }),
   });

@@ -20,7 +20,7 @@ function normalizeDelivery(delivery) {
     id,
     kind,
     accountId: nonemptyString(delivery.account_id) ?? "unknown account",
-    principalUserId: nonemptyString(delivery.principal_user_id) ?? "unknown principal",
+    principalId: nonemptyString(delivery.principal_id) ?? "unknown principal",
     status,
     statusLabel: status.replaceAll("_", " "),
     attemptCount: Number.isInteger(delivery.attempt_count) ? delivery.attempt_count : 0,

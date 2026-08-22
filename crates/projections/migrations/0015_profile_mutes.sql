@@ -2,7 +2,7 @@
 
 CREATE TABLE public.profile_mute (
     relationship_id uuid NOT NULL,
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     target_profile_id uuid NOT NULL,
     active boolean NOT NULL,
     updated_seq bigint NOT NULL,
@@ -14,13 +14,13 @@ ALTER TABLE ONLY public.profile_mute
     ADD CONSTRAINT profile_mute_pkey PRIMARY KEY (relationship_id);
 ALTER TABLE ONLY public.profile_mute
     ADD CONSTRAINT profile_mute_member_target_key
-    UNIQUE (principal_user_id, target_profile_id);
+    UNIQUE (principal_id, target_profile_id);
 ALTER TABLE ONLY public.profile_mute
     ADD CONSTRAINT profile_mute_target_profile_id_fkey
     FOREIGN KEY (target_profile_id) REFERENCES public.public_profile(profile_id)
     ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;
 
 CREATE INDEX profile_mute_member_page_idx
-    ON public.profile_mute (principal_user_id, active, updated_seq DESC, relationship_id DESC);
+    ON public.profile_mute (principal_id, active, updated_seq DESC, relationship_id DESC);
 CREATE INDEX profile_mute_target_idx
     ON public.profile_mute (target_profile_id, active);

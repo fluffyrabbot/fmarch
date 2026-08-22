@@ -68,7 +68,7 @@ export function buildAdminReadinessStripViewModel({
         value: operator.capabilityLabel
           ? humanizeCapabilityLabel(operator.capabilityLabel)
           : "No administrator access",
-        detail: operator.principalUserId ? `Signed in as @${operator.principalUserId}` : "Signed out",
+        detail: operator.principalId ? `Signed in as @${operator.principalId}` : "Signed out",
         status: Object.freeze({
           state: isAdminAuthority(operator.capabilityLabel) ? "ack" : "reject",
           message: isAdminAuthority(operator.capabilityLabel)
@@ -314,7 +314,7 @@ export function buildAdminRecoveryPanelViewModel({
   tasks = [],
   commandStatuses = {},
   game,
-  principalUserId,
+  principalId,
 } = {}) {
   return Object.freeze({
     root: Object.freeze({
@@ -348,7 +348,7 @@ export function buildAdminRecoveryPanelViewModel({
           form: Object.freeze({
             action: "?/checkRecoveryGate",
             game,
-            principalUserId,
+            principalId,
           }),
         });
       }),

@@ -10,7 +10,7 @@ test("login chooser preserves only local return paths", () => {
     }),
     {
       chooser: {
-        principalUserId: null,
+        principalId: null,
         accountId: "",
         returnTo: "/admin",
         workosAvailable: false,
@@ -21,14 +21,14 @@ test("login chooser preserves only local return paths", () => {
 
   assert.deepEqual(
     load({
-      locals: { principalUserId: "admin_a" },
+      locals: { principalId: "admin_a" },
       url: new URL(
         "http://localhost/auth/login?returnTo=/auth/login%3FreturnTo%3D/admin",
       ),
     }),
     {
       chooser: {
-        principalUserId: "admin_a",
+        principalId: "admin_a",
         accountId: "",
         returnTo: "/",
         workosAvailable: false,
@@ -46,7 +46,7 @@ test("login chooser preserves only local return paths", () => {
     }),
     {
       chooser: {
-        principalUserId: null,
+        principalId: null,
         accountId: "host@example.test",
         returnTo: "/g/midsummer/host",
         workosAvailable: false,

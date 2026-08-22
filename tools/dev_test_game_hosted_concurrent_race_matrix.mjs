@@ -777,7 +777,7 @@ function roleSurfacesFromSession(sessionArtifact) {
     .filter(([, session]) => typeof session?.directUrl === "string")
     .map(([role, session]) => ({
       role,
-      principalUserId: String(session.principalUserId ?? ""),
+      principalId: String(session.principalId ?? ""),
       expectedCapabilityKind: String(session.expectedCapabilityKind ?? ""),
       directUrl: session.directUrl,
       returnTo: String(session.returnTo ?? ""),

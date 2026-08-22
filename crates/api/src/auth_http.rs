@@ -18,6 +18,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use caps::{Capability, Principal};
 use identity::{AccessTokenVerifier, IdentityError, MemberLifecycleCommand};
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgConnection, PgPool};
 use sqlx::{Executor, Postgres};
@@ -182,8 +183,8 @@ fn identity_api_error(error: IdentityError) -> ApiError {
 pub(super) async fn require_authorized_principal(
     state: &AuthHttpState,
     token: &str,
-) -> Result<String, ApiError> {
-    Ok(authorization_context(state, token).await?.principal_user_id)
+) -> Result<PrincipalId, ApiError> {
+    Ok(authorization_context(state, token).await?.principal_id)
 }
 
 /// Require a real, currently active sign-in method in addition to a valid
@@ -207,7 +208,7 @@ struct AuthSessionQuery {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthSessionResponse {
-    principal_user_id: String,
+    principal_id: PrincipalId,
     capabilities: Vec<CapabilityGrant>,
     #[serde(skip_serializing_if = "Option::is_none")]
     session_token: Option<String>,
@@ -224,7 +225,7 @@ struct AuthSessionResponse {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateDevAuthSession {
-    principal_user_id: String,
+    principal_id: PrincipalId,
     expires_at: i64,
     #[serde(default)]
     global_capabilities: Vec<String>,
@@ -233,7 +234,7 @@ struct CreateDevAuthSession {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateAuthSessionGrant {
-    principal_user_id: String,
+    principal_id: PrincipalId,
     expires_at: i64,
     #[serde(default)]
     global_capabilities: Vec<String>,
@@ -243,7 +244,7 @@ struct CreateAuthSessionGrant {
 struct CreateAuthAccount {
     account_id: String,
     password: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     #[serde(default)]
     global_capabilities: Vec<String>,
 }
@@ -251,7 +252,7 @@ struct CreateAuthAccount {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthAccountResponse {
     account_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     global_capabilities: Vec<String>,
 }
 
@@ -281,13 +282,13 @@ pub async fn bootstrap_workos_global_admin(
         tx.commit().await.map_err(|error| error.to_string())?;
         return Ok(false);
     }
-    let existing = sqlx::query_as::<_, (String, bool)>(
+    let existing = sqlx::query_as::<_, (Uuid, bool)>(
         r#"
-        SELECT identity.principal_user_id,
+        SELECT identity.principal_id,
                principal.global_capabilities @> ARRAY['GlobalAdmin']::TEXT[]
         FROM external_identity AS identity
         JOIN platform_principal AS principal
-          ON principal.principal_user_id = identity.principal_user_id
+          ON principal.principal_id = identity.principal_id
         WHERE identity.provider = 'workos' AND identity.subject = $1
         "#,
     )
@@ -295,29 +296,35 @@ pub async fn bootstrap_workos_global_admin(
     .fetch_optional(&mut *tx)
     .await
     .map_err(|error| error.to_string())?;
-    let (principal_user_id, already_admin) = match existing {
-        Some(existing) => existing,
+    let (principal_id, already_admin) = match existing {
+        Some((principal_id, already_admin)) => {
+            (PrincipalId::from_uuid(principal_id), already_admin)
+        }
         None => {
-            let principal_user_id = format!("principal-{}", Uuid::new_v4());
-            sqlx::query(
-                "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ($1, 'active', '{}'::TEXT[], $2, NULL)",
+            let principal_id = PrincipalId::random();
+            identity::methods::ensure_principal(&mut tx, &principal_id, &[], now)
+                .await
+                .map_err(|error| error.to_string())?;
+            let method_id = identity::methods::create_method(
+                &mut tx,
+                &principal_id,
+                identity::MethodKind::Workos,
+                now,
             )
-            .bind(principal_user_id.as_str())
-            .bind(now)
-            .execute(&mut *tx)
             .await
             .map_err(|error| error.to_string())?;
             sqlx::query(
-                "INSERT INTO external_identity (provider, subject, principal_user_id, display_label, created_at, last_seen_at) VALUES ('workos', $1, $2, $3, $4, $4)",
+                "INSERT INTO external_identity (provider, subject, principal_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, $4, $4, $5)",
             )
             .bind(workos_user_id)
-            .bind(principal_user_id.as_str())
+            .bind(principal_id.as_uuid())
             .bind(display_label.map(str::trim).filter(|label| !label.is_empty()))
             .bind(now)
+            .bind(method_id)
             .execute(&mut *tx)
             .await
             .map_err(|error| error.to_string())?;
-            (principal_user_id, false)
+            (principal_id, false)
         }
     };
     if already_admin {
@@ -325,23 +332,23 @@ pub async fn bootstrap_workos_global_admin(
         return Ok(false);
     }
     sqlx::query(
-        "UPDATE platform_principal SET global_capabilities = array_append(global_capabilities, 'GlobalAdmin') WHERE principal_user_id = $1",
+        "UPDATE platform_principal SET global_capabilities = array_append(global_capabilities, 'GlobalAdmin') WHERE principal_id = $1",
     )
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
     .execute(&mut *tx)
     .await
     .map_err(|error| error.to_string())?;
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
-            event_at, event_kind, actor_user_id, principal_user_id,
+            event_at, event_kind, actor_principal_id, principal_id,
             token_hash, related_token_hash, metadata
         )
         VALUES ($1, 'workos_admin_bootstrapped', NULL, $2, NULL, NULL, $3::JSONB)
         "#,
     )
     .bind(now)
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(serde_json::json!({ "provider": "workos", "subject": workos_user_id }).to_string())
     .execute(&mut *tx)
     .await
@@ -384,68 +391,77 @@ pub async fn bootstrap_classic_global_admin(
         tx.commit().await.map_err(|error| error.to_string())?;
         return Ok(false);
     }
-    let existing = sqlx::query_scalar::<_, String>(
-        "SELECT principal_user_id FROM auth_account WHERE account_id = $1 AND disabled_at IS NULL",
+    let existing = sqlx::query_scalar::<_, Uuid>(
+        "SELECT principal_id FROM auth_account WHERE account_id = $1 AND disabled_at IS NULL",
     )
     .bind(login_name)
     .fetch_optional(&mut *tx)
     .await
     .map_err(|error| error.to_string())?;
-    let principal_user_id = match existing {
-        Some(principal_user_id) => principal_user_id,
+    let principal_id = match existing {
+        Some(principal_id) => PrincipalId::from_uuid(principal_id),
         None => {
-            let principal_user_id = format!("principal-{}", Uuid::new_v4());
+            let principal_id = PrincipalId::random();
+            identity::methods::ensure_principal(&mut tx, &principal_id, &[], now)
+                .await
+                .map_err(|error| error.to_string())?;
+            let method_id = identity::methods::create_method(
+                &mut tx,
+                &principal_id,
+                identity::MethodKind::ClassicPassword,
+                now,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
             sqlx::query(
                 r#"
                 INSERT INTO auth_account (
-                    account_id, principal_user_id, password_hash, created_at, disabled_at,
+                    account_id, principal_id, method_id, password_hash, created_at, disabled_at,
                     global_capabilities
                 )
-                VALUES ($1, $2, $3, $4, NULL, ARRAY['GlobalAdmin'])
+                VALUES ($1, $2, $3, $4, $5, NULL, ARRAY['GlobalAdmin'])
                 "#,
             )
             .bind(login_name)
-            .bind(principal_user_id.as_str())
+            .bind(principal_id.as_uuid())
+            .bind(method_id)
             .bind(&password_hash)
             .bind(now)
             .execute(&mut *tx)
             .await
             .map_err(|error| error.to_string())?;
-            principal_user_id
+            principal_id
         }
     };
-    identity::methods::link_classic_method(
-        &mut tx,
-        login_name,
-        principal_user_id.as_str(),
-        &["GlobalAdmin".to_string()],
-        now,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
+    // A fresh account establishes its classic method before its detail row.
+    // Existing accounts already carry an immutable method reference; only
+    // touch it here, never lazily upgrade a malformed row.
+    identity::methods::touch_active_classic_method(&mut tx, login_name, &principal_id, now)
+        .await
+        .map_err(|error| error.to_string())?;
     sqlx::query(
         r#"
         UPDATE platform_principal
         SET global_capabilities = array_append(global_capabilities, 'GlobalAdmin')
-        WHERE principal_user_id = $1
+        WHERE principal_id = $1
           AND NOT (global_capabilities @> ARRAY['GlobalAdmin']::TEXT[])
         "#,
     )
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
     .execute(&mut *tx)
     .await
     .map_err(|error| error.to_string())?;
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
-            event_at, event_kind, actor_user_id, principal_user_id,
+            event_at, event_kind, actor_principal_id, principal_id,
             token_hash, related_token_hash, metadata
         )
         VALUES ($1, 'admin_bootstrapped', NULL, $2, NULL, NULL, $3::JSONB)
         "#,
     )
     .bind(now)
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
     .bind(
         serde_json::json!({ "method_kind": "classic_password", "account_id": login_name })
             .to_string(),
@@ -467,7 +483,7 @@ struct RegisterAuthAccount {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthAccountRegistrationResponse {
     account_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     session_token: String,
     expires_at: i64,
 }
@@ -490,7 +506,7 @@ struct RotateAuthAccountPassword {
 struct AuthAccountPasswordRotationResponse {
     status: String,
     account_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     revoked_session_count: i64,
     password_algorithm: String,
 }
@@ -518,7 +534,7 @@ struct AuthAccountRecoveryCredentialResponse {
     recovery_id: Uuid,
     recovery_token: String,
     account_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     expires_at: i64,
     delivery_id: Uuid,
     delivery_status: String,
@@ -540,7 +556,7 @@ struct AuthAccountRecoveryCredentialLifecycleResponse {
     status: String,
     recovery_id: Uuid,
     account_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -556,7 +572,7 @@ struct AuthAccountRecoveryResponse {
     status: String,
     recovery_id: Uuid,
     account_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     revoked_session_count: i64,
     password_algorithm: String,
     session_token: String,
@@ -580,7 +596,7 @@ struct EnableAuthAccount {
 struct AuthAccountLifecycleResponse {
     status: String,
     account_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     disabled_at: Option<i64>,
     revoked_session_count: i64,
 }
@@ -598,7 +614,7 @@ struct RevokeAuthSession {
 struct CreateAuthInvite {
     invite_token: String,
     account_id: String,
-    expected_principal_user_id: String,
+    expected_principal_id: PrincipalId,
     expires_at: i64,
     game: Option<Uuid>,
     #[serde(default)]
@@ -608,11 +624,11 @@ struct CreateAuthInvite {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthInviteResponse {
     account_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     expires_at: i64,
     game: Option<Uuid>,
     global_capabilities: Vec<String>,
-    invited_by_user_id: String,
+    invited_by_principal_id: PrincipalId,
     delivery_id: Uuid,
     delivery_status: String,
     delivery_attempt_count: i32,
@@ -647,12 +663,12 @@ struct AuthDeliveryQueueQuery {
     limit: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthDeliveryQueueEntry {
     delivery_id: Uuid,
     delivery_kind: String,
     account_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     status: String,
     attempt_count: i32,
     provider_id: String,
@@ -663,6 +679,45 @@ struct AuthDeliveryQueueEntry {
     created_at: i64,
     updated_at: i64,
     retry_eligible: bool,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+struct AuthDeliveryQueueRow {
+    delivery_id: Uuid,
+    delivery_kind: String,
+    account_id: String,
+    principal_id: Uuid,
+    status: String,
+    attempt_count: i32,
+    provider_id: String,
+    outcome_kind: String,
+    outcome_code: Option<String>,
+    next_attempt_at: Option<i64>,
+    credential_expires_at: i64,
+    created_at: i64,
+    updated_at: i64,
+    retry_eligible: bool,
+}
+
+impl From<AuthDeliveryQueueRow> for AuthDeliveryQueueEntry {
+    fn from(row: AuthDeliveryQueueRow) -> Self {
+        Self {
+            delivery_id: row.delivery_id,
+            delivery_kind: row.delivery_kind,
+            account_id: row.account_id,
+            principal_id: PrincipalId::from_uuid(row.principal_id),
+            status: row.status,
+            attempt_count: row.attempt_count,
+            provider_id: row.provider_id,
+            outcome_kind: row.outcome_kind,
+            outcome_code: row.outcome_code,
+            next_attempt_at: row.next_attempt_at,
+            credential_expires_at: row.credential_expires_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            retry_eligible: row.retry_eligible,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -686,13 +741,13 @@ struct RevokeAuthInvite {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AuthLifecycleResponse {
     status: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct LogoutAuthSessionResponse {
     status: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     /// A browser navigation target generated from the trusted WorkOS `sid`.
     /// Classic sessions omit it; no provider identifier is exposed directly.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -701,7 +756,7 @@ struct LogoutAuthSessionResponse {
 
 #[derive(Debug, Clone, Deserialize)]
 struct IdentityLifecycleAuditQuery {
-    principal_user_id: Option<String>,
+    principal_id: Option<PrincipalId>,
     limit: Option<i64>,
 }
 
@@ -710,8 +765,12 @@ struct IdentityLifecycleAuditEntry {
     id: i64,
     event_at: i64,
     event_kind: String,
-    actor_user_id: Option<String>,
-    principal_user_id: String,
+    actor_principal_id: Option<PrincipalId>,
+    principal_id: Option<PrincipalId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    redacted_actor_alias: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    redacted_principal_alias: Option<String>,
     metadata: serde_json::Value,
 }
 
@@ -730,7 +789,7 @@ async fn auth_session(
     let identity = authorization_context(&state, token).await?;
     let mut response = auth_session_response(
         &state,
-        identity.principal_user_id,
+        identity.principal_id,
         query.game,
         identity.global_capabilities,
     )
@@ -755,13 +814,6 @@ async fn create_dev_auth_session(
         });
     }
 
-    if request.principal_user_id.trim().is_empty() {
-        return Err(ApiError::Reject {
-            status: StatusCode::BAD_REQUEST,
-            error: RejectCode::Internal,
-            message: "dev auth session requires principal_user_id".to_string(),
-        });
-    }
     let global_capabilities = normalize_dev_global_capabilities(&request.global_capabilities)?;
 
     let now = unix_now_seconds();
@@ -769,11 +821,10 @@ async fn create_dev_auth_session(
         .expires_at
         .min(state.session_policy.classic_expiry(now));
     let mut tx = state.pool.begin().await?;
-    identity::methods::ensure_principal(&mut tx, request.principal_user_id.as_str(), &[], now)
-        .await?;
-    lock_active_authentication_owner(&mut tx, request.principal_user_id.as_str()).await?;
+    identity::methods::ensure_principal(&mut tx, &request.principal_id, &[], now).await?;
+    lock_active_authentication_owner(&mut tx, &request.principal_id).await?;
     let spec = identity::SessionSpec {
-        principal_user_id: request.principal_user_id.as_str(),
+        principal_id: &request.principal_id,
         session_capabilities: &global_capabilities,
         authenticated_via_method_id: None,
         assurance: identity::Assurance::Dev,
@@ -786,7 +837,7 @@ async fn create_dev_auth_session(
     tx.commit().await?;
 
     let mut response =
-        auth_session_response(&state, request.principal_user_id, None, global_capabilities).await?;
+        auth_session_response(&state, request.principal_id, None, global_capabilities).await?;
     response.session_token = Some(issued.session_token);
     response.expires_at = Some(issued.expires_at);
     Ok(Json(response))
@@ -811,27 +862,19 @@ async fn create_auth_session_grant(
         });
     }
 
-    if request.principal_user_id.trim().is_empty() {
-        return Err(ApiError::Reject {
-            status: StatusCode::BAD_REQUEST,
-            error: RejectCode::Internal,
-            message: "session grant requires principal_user_id".to_string(),
-        });
-    }
     let global_capabilities = normalize_global_capabilities(&request.global_capabilities)?;
 
     let now = unix_now_seconds();
     let mut tx = state.pool.begin().await?;
-    identity::methods::ensure_principal(&mut tx, request.principal_user_id.as_str(), &[], now)
-        .await?;
-    lock_active_authentication_owner(&mut tx, request.principal_user_id.as_str()).await?;
+    identity::methods::ensure_principal(&mut tx, &request.principal_id, &[], now).await?;
+    lock_active_authentication_owner(&mut tx, &request.principal_id).await?;
     let expires_at = request
         .expires_at
         .min(state.session_policy.classic_expiry(now));
     let issued = identity::session::issue_session(
         &mut tx,
         identity::SessionSpec {
-            principal_user_id: request.principal_user_id.as_str(),
+            principal_id: &request.principal_id,
             session_capabilities: &global_capabilities,
             authenticated_via_method_id: None,
             assurance: identity::Assurance::AdminGrant,
@@ -846,7 +889,7 @@ async fn create_auth_session_grant(
     tx.commit().await?;
 
     let mut response =
-        auth_session_response(&state, request.principal_user_id, None, global_capabilities).await?;
+        auth_session_response(&state, request.principal_id, None, global_capabilities).await?;
     response.session_token = Some(issued.session_token);
     response.expires_at = Some(issued.expires_at);
     Ok(Json(response))
@@ -859,17 +902,16 @@ async fn create_auth_account(
 ) -> Result<Json<AuthAccountResponse>, ApiError> {
     require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_user_id = require_global_admin(&state, caller_token, "account creation").await?;
+    let actor_principal_id = require_global_admin(&state, caller_token, "account creation").await?;
 
     let account_id = request.account_id.trim();
     let password = request.password.as_str();
-    let principal_user_id = request.principal_user_id.trim();
-    if account_id.is_empty() || password.trim().is_empty() || principal_user_id.is_empty() {
+    let principal_id = request.principal_id;
+    if account_id.is_empty() || password.trim().is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
-            message: "account creation requires account_id, password, and principal_user_id"
-                .to_string(),
+            message: "account creation requires account_id, password, and principal_id".to_string(),
         });
     }
     validate_new_account_password(password)?;
@@ -881,22 +923,32 @@ async fn create_auth_account(
     let now = unix_now_seconds();
     let password_hash = hash_account_password(password).await?;
     let mut tx = state.pool.begin().await?;
+    identity::methods::ensure_principal(&mut tx, &principal_id, &global_capabilities, now).await?;
+    let method_id = identity::methods::create_method(
+        &mut tx,
+        &principal_id,
+        identity::MethodKind::ClassicPassword,
+        now,
+    )
+    .await?;
     let inserted = sqlx::query(
         r#"
         INSERT INTO auth_account (
             account_id,
-            principal_user_id,
+            principal_id,
+            method_id,
             password_hash,
             created_at,
             disabled_at,
             global_capabilities
         )
-        VALUES ($1, $2, $3, $4, NULL, $5)
+        VALUES ($1, $2, $3, $4, $5, NULL, $6)
         ON CONFLICT (account_id) DO NOTHING
         "#,
     )
     .bind(account_id)
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
+    .bind(method_id)
     .bind(&password_hash)
     .bind(now)
     .bind(&global_capabilities)
@@ -911,22 +963,13 @@ async fn create_auth_account(
         });
     }
 
-    identity::methods::link_classic_method(
-        &mut tx,
-        account_id,
-        principal_user_id,
-        &global_capabilities,
-        now,
-    )
-    .await?;
-
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -935,8 +978,8 @@ async fn create_auth_account(
         "#,
     )
     .bind(now)
-    .bind(actor_user_id.as_str())
-    .bind(principal_user_id)
+    .bind(actor_principal_id.as_uuid())
+    .bind(principal_id.as_uuid())
     .bind(
         serde_json::json!({
             "account_id": account_id,
@@ -950,7 +993,7 @@ async fn create_auth_account(
 
     Ok(Json(AuthAccountResponse {
         account_id: account_id.to_string(),
-        principal_user_id: principal_user_id.to_string(),
+        principal_id,
         global_capabilities,
     }))
 }
@@ -973,25 +1016,35 @@ async fn register_auth_account(
     let now = unix_now_seconds();
     let expires_at =
         (now + REGISTRATION_SESSION_TTL_SECONDS).min(state.session_policy.classic_expiry(now));
-    let principal_user_id = format!("registered-{}", Uuid::new_v4());
+    let principal_id = PrincipalId::random();
     let password_hash = hash_account_password(password).await?;
     let mut tx = state.pool.begin().await?;
+    identity::methods::ensure_principal(&mut tx, &principal_id, &[], now).await?;
+    let method_id = identity::methods::create_method(
+        &mut tx,
+        &principal_id,
+        identity::MethodKind::ClassicPassword,
+        now,
+    )
+    .await?;
     let inserted = sqlx::query(
         r#"
         INSERT INTO auth_account (
             account_id,
-            principal_user_id,
+            principal_id,
+            method_id,
             password_hash,
             created_at,
             disabled_at,
             global_capabilities
         )
-        VALUES ($1, $2, $3, $4, NULL, '{}')
+        VALUES ($1, $2, $3, $4, $5, NULL, '{}')
         ON CONFLICT (account_id) DO NOTHING
         "#,
     )
     .bind(account_id.as_str())
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
+    .bind(method_id)
     .bind(&password_hash)
     .bind(now)
     .execute(&mut *tx)
@@ -1004,18 +1057,10 @@ async fn register_auth_account(
         });
     }
 
-    let method_id = identity::methods::link_classic_method(
-        &mut tx,
-        account_id.as_str(),
-        principal_user_id.as_str(),
-        &[],
-        now,
-    )
-    .await?;
     let issued = identity::session::issue_session(
         &mut tx,
         identity::SessionSpec {
-            principal_user_id: principal_user_id.as_str(),
+            principal_id: &principal_id,
             session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
@@ -1051,8 +1096,8 @@ async fn register_auth_account(
             INSERT INTO identity_lifecycle_audit (
                 event_at,
                 event_kind,
-                actor_user_id,
-                principal_user_id,
+                actor_principal_id,
+                principal_id,
                 token_hash,
                 related_token_hash,
                 metadata
@@ -1062,8 +1107,8 @@ async fn register_auth_account(
         )
         .bind(now)
         .bind(event_kind)
-        .bind(principal_user_id.as_str())
-        .bind(principal_user_id.as_str())
+        .bind(principal_id.as_uuid())
+        .bind(principal_id.as_uuid())
         .bind(&session_hash)
         .bind(metadata.to_string())
         .execute(&mut *tx)
@@ -1073,7 +1118,7 @@ async fn register_auth_account(
 
     Ok(Json(AuthAccountRegistrationResponse {
         account_id,
-        principal_user_id,
+        principal_id,
         session_token: issued.session_token,
         expires_at,
     }))
@@ -1117,9 +1162,9 @@ async fn classic_password_session(
     )?;
     let attempt_scope = enforce_auth_attempt_limit(state, headers, account_id).await?;
 
-    let account = sqlx::query_as::<_, (String, String, Vec<String>)>(
+    let account = sqlx::query_as::<_, (Uuid, String)>(
         r#"
-        SELECT principal_user_id, password_hash, global_capabilities
+        SELECT principal_id, password_hash
         FROM auth_account
         WHERE account_id = $1
           AND disabled_at IS NULL
@@ -1128,41 +1173,41 @@ async fn classic_password_session(
     .bind(account_id)
     .fetch_optional(&state.pool)
     .await?;
-    let Some(account) = account else {
+    let Some((account_principal_id, account_password_hash)) = account else {
         consume_dummy_password_verification(password).await?;
         record_failed_auth_attempt(state, &attempt_scope, account_id, "account-login").await?;
         return Err(unauthorized_account());
     };
 
-    if !verify_account_password(account.1.as_str(), password).await? {
+    if !verify_account_password(account_password_hash.as_str(), password).await? {
         record_failed_auth_attempt(state, &attempt_scope, account_id, "account-login").await?;
         return Err(unauthorized_account());
     }
 
+    let account_principal_id = PrincipalId::from_uuid(account_principal_id);
     let mut tx = state.pool.begin().await?;
-    let owner = lock_active_authentication_owner(&mut tx, account.0.as_str()).await?;
-    let revalidated_account = sqlx::query_as::<_, (String, Vec<String>)>(
+    let owner = lock_active_authentication_owner(&mut tx, &account_principal_id).await?;
+    let revalidated_password_hash = sqlx::query_scalar::<_, String>(
         r#"
-        SELECT password_hash, global_capabilities
+        SELECT password_hash
         FROM auth_account
         WHERE account_id = $1
-          AND principal_user_id = $2
+          AND principal_id = $2
           AND disabled_at IS NULL
         "#,
     )
     .bind(account_id)
-    .bind(account.0.as_str())
+    .bind(account_principal_id.as_uuid())
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_account)?;
-    if revalidated_account.0 != account.1 {
+    if revalidated_password_hash != account_password_hash {
         return Err(unauthorized_account());
     }
-    let method_id = identity::methods::link_classic_method(
+    let method_id = identity::methods::touch_active_classic_method(
         &mut tx,
         account_id,
-        account.0.as_str(),
-        &revalidated_account.1,
+        &account_principal_id,
         now,
     )
     .await?;
@@ -1170,7 +1215,7 @@ async fn classic_password_session(
     let issued = identity::session::issue_session(
         &mut tx,
         identity::SessionSpec {
-            principal_user_id: account.0.as_str(),
+            principal_id: &account_principal_id,
             session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
@@ -1190,8 +1235,8 @@ async fn classic_password_session(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -1200,8 +1245,8 @@ async fn classic_password_session(
         "#,
     )
     .bind(now)
-    .bind(account.0.as_str())
-    .bind(account.0.as_str())
+    .bind(account_principal_id.as_uuid())
+    .bind(account_principal_id.as_uuid())
     .bind(session_hash)
     .bind(
         serde_json::json!({
@@ -1216,8 +1261,13 @@ async fn classic_password_session(
     clear_auth_attempt_failures(&mut tx, &attempt_scope).await?;
     tx.commit().await?;
 
-    let mut response =
-        auth_session_response(state, account.0, None, principal_global_capabilities).await?;
+    let mut response = auth_session_response(
+        state,
+        account_principal_id,
+        None,
+        principal_global_capabilities,
+    )
+    .await?;
     response.session_token = Some(issued.session_token);
     response.expires_at = Some(issued.expires_at);
     response.idle_expires_at = Some(issued.idle_expires_at);
@@ -1310,7 +1360,7 @@ async fn completed_workos_link_method(
     conn: &mut PgConnection,
     verified: &identity::VerifiedIdentity,
     provider_assertion: &str,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     linking_session_hash: &str,
     now: i64,
 ) -> Result<Option<Uuid>, ApiError> {
@@ -1329,22 +1379,22 @@ async fn completed_workos_link_method(
         JOIN external_identity AS external_identity
           ON external_identity.provider = 'workos'
          AND external_identity.subject = provider_session.subject
-         AND external_identity.principal_user_id = provider_session.principal_user_id
+         AND external_identity.principal_id = provider_session.principal_id
          AND external_identity.method_id = provider_session.method_id
         JOIN authentication_method AS method
           ON method.method_id = provider_session.method_id
-         AND method.principal_user_id = provider_session.principal_user_id
+         AND method.principal_id = provider_session.principal_id
          AND method.kind = 'workos'
          AND method.status = 'active'
         WHERE provider_session.provider_session_id = $1
           AND provider_session.subject = $2
-          AND provider_session.principal_user_id = $3
+          AND provider_session.principal_id = $3
           AND provider_session.status = 'logged_out'
         "#,
     )
     .bind(verified.session_id.as_str())
     .bind(verified.subject.as_str())
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(verified.session_id.fingerprint())
     .bind(identity::token::hash_token(provider_assertion))
     .bind(linking_session_hash)
@@ -1380,7 +1430,7 @@ async fn claim_workos_provider_session(
         INSERT INTO workos_provider_session (
             provider_session_id,
             subject,
-            principal_user_id,
+            principal_id,
             method_id,
             status,
             created_at,
@@ -1400,14 +1450,14 @@ async fn claim_workos_provider_session(
             )
         WHERE workos_provider_session.status = 'active'
           AND workos_provider_session.subject = EXCLUDED.subject
-          AND workos_provider_session.principal_user_id = EXCLUDED.principal_user_id
+          AND workos_provider_session.principal_id = EXCLUDED.principal_id
           AND workos_provider_session.method_id = EXCLUDED.method_id
         RETURNING provider_session_id
         "#,
     )
     .bind(verified.session_id.as_str())
     .bind(verified.subject.as_str())
-    .bind(resolution.principal_user_id.as_str())
+    .bind(resolution.principal_id.as_uuid())
     .bind(resolution.method_id)
     .bind(now)
     .bind(verified.expires_at)
@@ -1450,7 +1500,7 @@ async fn claim_workos_provider_session(
 async fn end_workos_provider_session(
     conn: &mut PgConnection,
     session_id: &identity::WorkosSessionId,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     method_id: Uuid,
     sampled_now: i64,
     reason: &'static str,
@@ -1461,7 +1511,7 @@ async fn end_workos_provider_session(
         SET status = 'logged_out',
             logged_out_at = GREATEST($1, last_seen_at)
         WHERE provider_session_id = $2
-          AND principal_user_id = $3
+          AND principal_id = $3
           AND method_id = $4
           AND status = 'active'
         RETURNING logged_out_at
@@ -1469,7 +1519,7 @@ async fn end_workos_provider_session(
     )
     .bind(sampled_now)
     .bind(session_id.as_str())
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(method_id)
     .fetch_optional(&mut *conn)
     .await?;
@@ -1562,7 +1612,7 @@ async fn create_auth_session(
             let issued = identity::session::issue_session(
                 &mut tx,
                 identity::SessionSpec {
-                    principal_user_id: resolution.principal_user_id.as_str(),
+                    principal_id: &resolution.principal_id,
                     session_capabilities: &[],
                     authenticated_via_method_id: Some(resolution.method_id),
                     assurance: identity::Assurance::ExternalSso,
@@ -1577,15 +1627,15 @@ async fn create_auth_session(
             sqlx::query(
                 r#"
                 INSERT INTO identity_lifecycle_audit (
-                    event_at, event_kind, actor_user_id, principal_user_id,
+                    event_at, event_kind, actor_principal_id, principal_id,
                     token_hash, related_token_hash, metadata
                 )
                 VALUES ($1, 'session_created', $2, $3, $4, NULL, $5::JSONB)
                 "#,
             )
             .bind(now)
-            .bind(resolution.principal_user_id.as_str())
-            .bind(resolution.principal_user_id.as_str())
+            .bind(resolution.principal_id.as_uuid())
+            .bind(resolution.principal_id.as_uuid())
             .bind(issued.token_hash.as_str())
             .bind(
                 serde_json::json!({
@@ -1600,7 +1650,7 @@ async fn create_auth_session(
 
             let mut response = auth_session_response(
                 &state,
-                resolution.principal_user_id,
+                resolution.principal_id,
                 None,
                 resolution.global_capabilities,
             )
@@ -1629,7 +1679,7 @@ struct AccountMethodEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AccountMethodsResponse {
-    principal_user_id: String,
+    principal_id: PrincipalId,
     methods: Vec<AccountMethodEntry>,
 }
 
@@ -1642,7 +1692,7 @@ struct DeactivateMemberAccount {
 #[derive(Debug, Clone, Serialize)]
 struct MemberLifecycleResponse {
     status: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pseudonym: Option<String>,
 }
@@ -1651,7 +1701,7 @@ struct MemberLifecycleResponse {
 struct MemberPersonalExportResponse {
     status: String,
     export_id: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     requested_at: i64,
     expires_at: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1666,13 +1716,11 @@ async fn create_member_personal_export(
     let identity = authorization_context(&state, token).await?;
     let now = unix_now_seconds();
     require_recent_authentication(&identity, now)?;
-    let export =
-        identity::create_personal_export(&state.pool, identity.principal_user_id.as_str(), now)
-            .await?;
+    let export = identity::create_personal_export(&state.pool, &identity.principal_id, now).await?;
     Ok(Json(MemberPersonalExportResponse {
         status: "ready".to_string(),
         export_id: export.export_id,
-        principal_user_id: export.principal_user_id,
+        principal_id: export.principal_id,
         requested_at: export.requested_at,
         expires_at: export.expires_at,
         artifact: Some(export.artifact),
@@ -1688,7 +1736,7 @@ async fn download_member_personal_export(
     let identity = authorization_context(&state, token).await?;
     let export = identity::load_personal_export(
         &state.pool,
-        identity.principal_user_id.as_str(),
+        &identity.principal_id,
         export_id,
         unix_now_seconds(),
     )
@@ -1701,7 +1749,7 @@ async fn download_member_personal_export(
     Ok(Json(MemberPersonalExportResponse {
         status: "ready".to_string(),
         export_id: export.export_id,
-        principal_user_id: export.principal_user_id,
+        principal_id: export.principal_id,
         requested_at: export.requested_at,
         expires_at: export.expires_at,
         artifact: Some(export.artifact),
@@ -1727,7 +1775,7 @@ async fn deactivate_member_account(
     }
     let status = identity::apply_member_lifecycle(
         &state.pool,
-        identity.principal_user_id.as_str(),
+        &identity.principal_id,
         MemberLifecycleCommand::Deactivate {
             reason: reason.to_string(),
         },
@@ -1736,7 +1784,7 @@ async fn deactivate_member_account(
     .await?;
     Ok(Json(MemberLifecycleResponse {
         status: status.as_str().to_string(),
-        principal_user_id: identity.principal_user_id,
+        principal_id: identity.principal_id,
         pseudonym: None,
     }))
 }
@@ -1750,13 +1798,12 @@ async fn erase_member_account(
     let now = unix_now_seconds();
     require_recent_authentication(&identity, now)?;
     let pending =
-        identity::request_member_erasure(&state.pool, identity.principal_user_id.as_str(), now)
-            .await?;
+        identity::request_member_erasure(&state.pool, &identity.principal_id, now).await?;
     Ok((
         StatusCode::ACCEPTED,
         Json(MemberLifecycleResponse {
             status: pending.status.as_str().to_string(),
-            principal_user_id: pending.principal_user_id,
+            principal_id: pending.principal_id,
             pseudonym: pending.pseudonym,
         }),
     ))
@@ -1768,7 +1815,7 @@ async fn list_account_methods(
 ) -> Result<Json<AccountMethodsResponse>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let identity = authorization_context(&state, token).await?;
-    let methods = identity::methods::list_methods(&state.pool, identity.principal_user_id.as_str())
+    let methods = identity::methods::list_methods(&state.pool, &identity.principal_id)
         .await?
         .into_iter()
         .map(|method| AccountMethodEntry {
@@ -1782,7 +1829,7 @@ async fn list_account_methods(
         })
         .collect();
     Ok(Json(AccountMethodsResponse {
-        principal_user_id: identity.principal_user_id,
+        principal_id: identity.principal_id,
         methods,
     }))
 }
@@ -1799,7 +1846,7 @@ struct AddClassicMethodResponse {
     status: String,
     method_id: Uuid,
     login_name: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     recovery_codes: Vec<String>,
     recovery_codes_expire_at: i64,
     session_token: String,
@@ -1832,22 +1879,30 @@ async fn add_classic_method(
         identity::session::validate_session_for_update(&mut tx, token, &state.session_policy)
             .await?;
     require_recent_authentication(&locked_identity, now)?;
-    if locked_identity.principal_user_id != identity.principal_user_id {
+    if locked_identity.principal_id != identity.principal_id {
         return Err(unauthorized_session());
     }
     let identity = locked_identity;
+    let method_id = identity::methods::create_method(
+        &mut tx,
+        &identity.principal_id,
+        identity::MethodKind::ClassicPassword,
+        now,
+    )
+    .await?;
     let inserted = sqlx::query(
         r#"
         INSERT INTO auth_account (
-            account_id, principal_user_id, password_hash, created_at, disabled_at,
+            account_id, principal_id, method_id, password_hash, created_at, disabled_at,
             global_capabilities
         )
-        VALUES ($1, $2, $3, $4, NULL, '{}')
+        VALUES ($1, $2, $3, $4, $5, NULL, '{}')
         ON CONFLICT (account_id) DO NOTHING
         "#,
     )
     .bind(login_name.as_str())
-    .bind(identity.principal_user_id.as_str())
+    .bind(identity.principal_id.as_uuid())
+    .bind(method_id)
     .bind(&password_hash)
     .bind(now)
     .execute(&mut *tx)
@@ -1859,15 +1914,6 @@ async fn add_classic_method(
             message: "account already exists".to_string(),
         });
     }
-    let method_id = identity::methods::link_classic_method(
-        &mut tx,
-        login_name.as_str(),
-        identity.principal_user_id.as_str(),
-        &[],
-        now,
-    )
-    .await?;
-
     let recovery_expires_at = now + METHOD_RECOVERY_CODE_TTL_SECONDS;
     let mut recovery_codes = Vec::with_capacity(METHOD_RECOVERY_CODE_COUNT);
     for _ in 0..METHOD_RECOVERY_CODE_COUNT {
@@ -1898,7 +1944,7 @@ async fn add_classic_method(
     let issued = identity::session::issue_session(
         &mut tx,
         identity::SessionSpec {
-            principal_user_id: identity.principal_user_id.as_str(),
+            principal_id: &identity.principal_id,
             session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
@@ -1914,7 +1960,7 @@ async fn add_classic_method(
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
-            event_at, event_kind, actor_user_id, principal_user_id,
+            event_at, event_kind, actor_principal_id, principal_id,
             token_hash, related_token_hash, metadata
         )
         VALUES ($1, $2, $3, $4, $5, NULL, $6::JSONB)
@@ -1922,8 +1968,8 @@ async fn add_classic_method(
     )
     .bind(now)
     .bind("method_added")
-    .bind(identity.principal_user_id.as_str())
-    .bind(identity.principal_user_id.as_str())
+    .bind(identity.principal_id.as_uuid())
+    .bind(identity.principal_id.as_uuid())
     .bind(issued.token_hash.as_str())
     .bind(
         serde_json::json!({
@@ -1941,7 +1987,7 @@ async fn add_classic_method(
         status: "added".to_string(),
         method_id,
         login_name,
-        principal_user_id: identity.principal_user_id,
+        principal_id: identity.principal_id,
         recovery_codes,
         recovery_codes_expire_at: recovery_expires_at,
         session_token: issued.session_token,
@@ -1958,7 +2004,7 @@ struct AddWorkosMethod {
 struct AddWorkosMethodResponse {
     status: String,
     method_id: Uuid,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     provider_logout_url: String,
 }
 
@@ -2002,14 +2048,14 @@ async fn add_workos_method(
             .await?;
     let now = unix_now_seconds();
     require_recent_authentication(&locked_identity, now)?;
-    if locked_identity.principal_user_id != identity.principal_user_id {
+    if locked_identity.principal_id != identity.principal_id {
         return Err(unauthorized_session());
     }
     if let Some(method_id) = completed_workos_link_method(
         &mut tx,
         &verified,
         provider_assertion,
-        locked_identity.principal_user_id.as_str(),
+        &locked_identity.principal_id,
         locked_identity.session_reference.as_str(),
         now,
     )
@@ -2018,7 +2064,7 @@ async fn add_workos_method(
         let response = AddWorkosMethodResponse {
             status: "attached".to_string(),
             method_id,
-            principal_user_id: locked_identity.principal_user_id,
+            principal_id: locked_identity.principal_id,
             provider_logout_url: identity::workos::logout_url(&verified.session_id),
         };
         tx.commit().await?;
@@ -2031,7 +2077,7 @@ async fn add_workos_method(
     let resolution = match identity::workos::attach_subject_under_advisory_lock(
         &mut tx,
         &verified,
-        locked_identity.principal_user_id.as_str(),
+        &locked_identity.principal_id,
         now,
     )
     .await
@@ -2055,7 +2101,7 @@ async fn add_workos_method(
     let provider_logout_url = end_workos_provider_session(
         &mut tx,
         &verified.session_id,
-        resolution.principal_user_id.as_str(),
+        &resolution.principal_id,
         resolution.method_id,
         now,
         "link_completed",
@@ -2064,15 +2110,15 @@ async fn add_workos_method(
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
-            event_at, event_kind, actor_user_id, principal_user_id,
+            event_at, event_kind, actor_principal_id, principal_id,
             token_hash, related_token_hash, metadata
         )
         VALUES ($1, 'method_attached', $2, $3, $4, NULL, $5::JSONB)
         "#,
     )
     .bind(now)
-    .bind(locked_identity.principal_user_id.as_str())
-    .bind(locked_identity.principal_user_id.as_str())
+    .bind(locked_identity.principal_id.as_uuid())
+    .bind(locked_identity.principal_id.as_uuid())
     .bind(locked_identity.session_reference.as_str())
     .bind(
         serde_json::json!({
@@ -2087,7 +2133,7 @@ async fn add_workos_method(
     Ok(Json(AddWorkosMethodResponse {
         status: "attached".to_string(),
         method_id: resolution.method_id,
-        principal_user_id: resolution.principal_user_id,
+        principal_id: resolution.principal_id,
         provider_logout_url,
     }))
 }
@@ -2097,7 +2143,7 @@ struct DisableMethodResponse {
     status: String,
     method_id: Uuid,
     kind: String,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     revoked_session_count: i64,
 }
 
@@ -2113,25 +2159,20 @@ async fn disable_account_method(
             .await?;
     let now = unix_now_seconds();
     require_recent_authentication(&identity, now)?;
-    let disabled = identity::methods::disable_method(
-        &mut tx,
-        identity.principal_user_id.as_str(),
-        method_id,
-        now,
-    )
-    .await?;
+    let disabled =
+        identity::methods::disable_method(&mut tx, &identity.principal_id, method_id, now).await?;
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
-            event_at, event_kind, actor_user_id, principal_user_id,
+            event_at, event_kind, actor_principal_id, principal_id,
             token_hash, related_token_hash, metadata
         )
         VALUES ($1, 'method_disabled', $2, $3, $4, NULL, $5::JSONB)
         "#,
     )
     .bind(now)
-    .bind(identity.principal_user_id.as_str())
-    .bind(identity.principal_user_id.as_str())
+    .bind(identity.principal_id.as_uuid())
+    .bind(identity.principal_id.as_uuid())
     .bind(identity.session_reference.as_str())
     .bind(
         serde_json::json!({
@@ -2148,7 +2189,7 @@ async fn disable_account_method(
         status: "disabled".to_string(),
         method_id: disabled.method_id,
         kind: disabled.kind.as_str().to_string(),
-        principal_user_id: identity.principal_user_id,
+        principal_id: identity.principal_id,
         revoked_session_count: disabled.revoked_session_count as i64,
     }))
 }
@@ -2194,7 +2235,7 @@ async fn rotate_auth_account_password(
         &state.session_policy,
     )
     .await?;
-    let caller_principal_user_id = authenticated_account_principal_for_update(
+    let caller_principal_id = authenticated_account_principal_for_update(
         &mut tx,
         &authorization,
         account_id,
@@ -2212,13 +2253,13 @@ async fn rotate_auth_account_password(
         r#"
         UPDATE auth_session
         SET revoked_at = $1
-        WHERE principal_user_id = $2
+        WHERE principal_id = $2
           AND revoked_at IS NULL
           AND expires_at > $1
         "#,
     )
     .bind(now)
-    .bind(caller_principal_user_id.as_str())
+    .bind(caller_principal_id.as_uuid())
     .execute(&mut *tx)
     .await?
     .rows_affected() as i64;
@@ -2227,8 +2268,8 @@ async fn rotate_auth_account_password(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -2237,8 +2278,8 @@ async fn rotate_auth_account_password(
         "#,
     )
     .bind(now)
-    .bind(caller_principal_user_id.as_str())
-    .bind(caller_principal_user_id.as_str())
+    .bind(caller_principal_id.as_uuid())
+    .bind(caller_principal_id.as_uuid())
     .bind(authorization.session_reference)
     .bind(
         serde_json::json!({
@@ -2255,7 +2296,7 @@ async fn rotate_auth_account_password(
     Ok(Json(AuthAccountPasswordRotationResponse {
         status: "rotated".to_string(),
         account_id: account_id.to_string(),
-        principal_user_id: caller_principal_user_id,
+        principal_id: caller_principal_id,
         revoked_session_count,
         password_algorithm: "argon2id".to_string(),
     }))
@@ -2298,7 +2339,7 @@ async fn issue_auth_account_recovery_credential(
         &state.session_policy,
     )
     .await?;
-    let principal_user_id = authenticated_account_principal_for_update(
+    let principal_id = authenticated_account_principal_for_update(
         &mut tx,
         &authorization,
         account_id,
@@ -2331,8 +2372,8 @@ async fn issue_auth_account_recovery_credential(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -2341,8 +2382,8 @@ async fn issue_auth_account_recovery_credential(
         "#,
     )
     .bind(now)
-    .bind(principal_user_id.as_str())
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
+    .bind(principal_id.as_uuid())
     .bind(&recovery_hash)
     .bind(
         serde_json::json!({
@@ -2360,7 +2401,7 @@ async fn issue_auth_account_recovery_credential(
         &AuthCredentialDeliveryRequest {
             delivery_kind: IdentityDeliveryKind::Recovery,
             account_id,
-            principal_user_id: principal_user_id.as_str(),
+            principal_id: &principal_id,
             credential_hash: recovery_hash.as_str(),
             credential_material: recovery_token.as_str(),
             credential_expires_at: request.expires_at,
@@ -2375,7 +2416,7 @@ async fn issue_auth_account_recovery_credential(
         recovery_id,
         recovery_token,
         account_id: account_id.to_string(),
-        principal_user_id,
+        principal_id,
         expires_at: request.expires_at,
         delivery_id: delivery.delivery_id,
         delivery_status: delivery.status,
@@ -2395,7 +2436,7 @@ async fn request_auth_account_recovery(
     let account_id = normalize_registration_account_id(request.account_id.as_str())?;
     enforce_recovery_request_limit(&state, &headers, account_id.as_str()).await?;
 
-    let Some(discovered_principal_user_id) =
+    let Some(discovered_principal_id) =
         discover_account_principal(&state.pool, account_id.as_str()).await?
     else {
         return Ok(Json(AuthAccountRecoveryRequestResponse {
@@ -2409,9 +2450,7 @@ async fn request_auth_account_recovery(
     let recovery_token = format!("account-recovery-{}-{}", Uuid::new_v4(), Uuid::new_v4());
     let recovery_hash = hash_session_token(recovery_token.as_str());
     let mut tx = state.pool.begin().await?;
-    if let Err(error) =
-        lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await
-    {
+    if let Err(error) = lock_active_authentication_owner(&mut tx, &discovered_principal_id).await {
         if matches!(
             &error,
             ApiError::Reject {
@@ -2426,25 +2465,26 @@ async fn request_auth_account_recovery(
         }
         return Err(error);
     }
-    let account = sqlx::query_as::<_, (String, String)>(
+    let account = sqlx::query_as::<_, (String, Uuid)>(
         r#"
-        SELECT account_id, principal_user_id
+        SELECT account_id, principal_id
         FROM auth_account
         WHERE account_id = $1
-          AND principal_user_id = $2
+          AND principal_id = $2
           AND disabled_at IS NULL
         "#,
     )
     .bind(account_id.as_str())
-    .bind(discovered_principal_user_id.as_str())
+    .bind(discovered_principal_id.as_uuid())
     .fetch_optional(&mut *tx)
     .await?;
-    let Some((account_id, principal_user_id)) = account else {
+    let Some((account_id, principal_id)) = account else {
         tx.rollback().await?;
         return Ok(Json(AuthAccountRecoveryRequestResponse {
             status: "accepted".to_string(),
         }));
     };
+    let principal_id = PrincipalId::from_uuid(principal_id);
     let rotated_recovery_hashes = sqlx::query_scalar::<_, String>(
         r#"
         UPDATE auth_account_recovery_credential
@@ -2496,8 +2536,8 @@ async fn request_auth_account_recovery(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -2506,7 +2546,7 @@ async fn request_auth_account_recovery(
         "#,
     )
     .bind(now)
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
     .bind(recovery_hash.as_str())
     .bind(
         serde_json::json!({
@@ -2525,7 +2565,7 @@ async fn request_auth_account_recovery(
         &AuthCredentialDeliveryRequest {
             delivery_kind: IdentityDeliveryKind::Recovery,
             account_id: account_id.as_str(),
-            principal_user_id: principal_user_id.as_str(),
+            principal_id: &principal_id,
             credential_hash: recovery_hash.as_str(),
             credential_material: recovery_token.as_str(),
             credential_expires_at: expires_at,
@@ -2566,7 +2606,7 @@ async fn revoke_auth_account_recovery_credential(
         &state.session_policy,
     )
     .await?;
-    let principal_user_id = authenticated_account_principal_for_update(
+    let principal_id = authenticated_account_principal_for_update(
         &mut tx,
         &authorization,
         account_id,
@@ -2593,7 +2633,7 @@ async fn revoke_auth_account_recovery_credential(
     cancel_auth_delivery_intent(
         &mut tx,
         recovery_hash.as_str(),
-        Some(principal_user_id.as_str()),
+        Some(&principal_id),
         "credential_revoked",
         now,
     )
@@ -2603,8 +2643,8 @@ async fn revoke_auth_account_recovery_credential(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -2613,8 +2653,8 @@ async fn revoke_auth_account_recovery_credential(
         "#,
     )
     .bind(now)
-    .bind(principal_user_id.as_str())
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
+    .bind(principal_id.as_uuid())
     .bind(recovery_hash)
     .bind(
         serde_json::json!({
@@ -2631,7 +2671,7 @@ async fn revoke_auth_account_recovery_credential(
         status: "revoked".to_string(),
         recovery_id: request.recovery_id,
         account_id: account_id.to_string(),
-        principal_user_id,
+        principal_id,
     }))
 }
 
@@ -2668,9 +2708,9 @@ async fn recover_auth_account(
     let now = unix_now_seconds();
     let recovery_hash = hash_session_token(recovery_token);
     let mut tx = state.pool.begin().await?;
-    let discovered_principal_user_id = sqlx::query_scalar::<_, String>(
+    let discovered_principal_id = sqlx::query_scalar::<_, Uuid>(
         r#"
-        SELECT account.principal_user_id
+        SELECT account.principal_id
         FROM auth_account_recovery_credential AS recovery
         JOIN auth_account AS account USING (account_id)
         WHERE recovery.account_id = $1
@@ -2681,7 +2721,7 @@ async fn recover_auth_account(
     .bind(&recovery_hash)
     .fetch_optional(&mut *tx)
     .await?;
-    let Some(discovered_principal_user_id) = discovered_principal_user_id else {
+    let Some(discovered_principal_id) = discovered_principal_id else {
         tx.rollback().await?;
         consume_dummy_password_verification(new_password).await?;
         record_account_recovery_rejection(&state.pool, account_id, recovery_hash.as_str(), now)
@@ -2689,9 +2729,8 @@ async fn recover_auth_account(
         record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-recovery").await?;
         return Err(unauthorized_account_recovery());
     };
-    if let Err(error) =
-        lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await
-    {
+    let discovered_principal_id = PrincipalId::from_uuid(discovered_principal_id);
+    if let Err(error) = lock_active_authentication_owner(&mut tx, &discovered_principal_id).await {
         if !matches!(
             &error,
             ApiError::Reject {
@@ -2708,11 +2747,10 @@ async fn recover_auth_account(
         record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-recovery").await?;
         return Err(unauthorized_account_recovery());
     }
-    let credential = sqlx::query_as::<_, (Uuid, String, Vec<String>)>(
+    let credential = sqlx::query_as::<_, (Uuid, Uuid)>(
         r#"
         SELECT recovery.recovery_id,
-               account.principal_user_id,
-               account.global_capabilities
+               account.principal_id
         FROM auth_account_recovery_credential AS recovery
         JOIN auth_account AS account
           ON account.account_id = recovery.account_id
@@ -2722,16 +2760,16 @@ async fn recover_auth_account(
           AND recovery.revoked_at IS NULL
           AND recovery.expires_at > $3
           AND account.disabled_at IS NULL
-          AND account.principal_user_id = $4
+          AND account.principal_id = $4
         "#,
     )
     .bind(account_id)
     .bind(&recovery_hash)
     .bind(now)
-    .bind(discovered_principal_user_id.as_str())
+    .bind(discovered_principal_id.as_uuid())
     .fetch_optional(&mut *tx)
     .await?;
-    let Some((recovery_id, principal_user_id, account_global_capabilities)) = credential else {
+    let Some((recovery_id, principal_id)) = credential else {
         tx.rollback().await?;
         consume_dummy_password_verification(new_password).await?;
         record_account_recovery_rejection(&state.pool, account_id, recovery_hash.as_str(), now)
@@ -2739,6 +2777,7 @@ async fn recover_auth_account(
         record_failed_auth_attempt(&state, &attempt_scope, account_id, "account-recovery").await?;
         return Err(unauthorized_account_recovery());
     };
+    let principal_id = PrincipalId::from_uuid(principal_id);
 
     let password_hash = hash_account_password(new_password).await?;
     sqlx::query(
@@ -2755,7 +2794,7 @@ async fn recover_auth_account(
     cancel_auth_delivery_intent(
         &mut tx,
         recovery_hash.as_str(),
-        Some(principal_user_id.as_str()),
+        Some(&principal_id),
         "credential_consumed",
         now,
     )
@@ -2769,28 +2808,23 @@ async fn recover_auth_account(
         r#"
         UPDATE auth_session
         SET revoked_at = $1
-        WHERE principal_user_id = $2
+        WHERE principal_id = $2
           AND revoked_at IS NULL
           AND expires_at > $1
         "#,
     )
     .bind(now)
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
     .execute(&mut *tx)
     .await?
     .rows_affected() as i64;
-    let method_id = identity::methods::link_classic_method(
-        &mut tx,
-        account_id,
-        principal_user_id.as_str(),
-        &account_global_capabilities,
-        now,
-    )
-    .await?;
+    let method_id =
+        identity::methods::touch_active_classic_method(&mut tx, account_id, &principal_id, now)
+            .await?;
     let issued = identity::session::issue_session(
         &mut tx,
         identity::SessionSpec {
-            principal_user_id: principal_user_id.as_str(),
+            principal_id: &principal_id,
             session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
@@ -2809,8 +2843,8 @@ async fn recover_auth_account(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -2819,8 +2853,8 @@ async fn recover_auth_account(
         "#,
     )
     .bind(now)
-    .bind(principal_user_id.as_str())
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
+    .bind(principal_id.as_uuid())
     .bind(&recovery_hash)
     .bind(
         serde_json::json!({
@@ -2840,7 +2874,7 @@ async fn recover_auth_account(
         status: "recovered".to_string(),
         recovery_id,
         account_id: account_id.to_string(),
-        principal_user_id,
+        principal_id,
         revoked_session_count,
         password_algorithm: "argon2id".to_string(),
         session_token: issued.session_token,
@@ -2855,7 +2889,7 @@ async fn disable_auth_account(
 ) -> Result<Json<AuthAccountLifecycleResponse>, ApiError> {
     require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_user_id = require_global_admin(&state, caller_token, "account disable").await?;
+    let actor_principal_id = require_global_admin(&state, caller_token, "account disable").await?;
     let account_id = request.account_id.trim();
     if account_id.is_empty() {
         return Err(ApiError::Reject {
@@ -2866,24 +2900,25 @@ async fn disable_auth_account(
     }
 
     let now = unix_now_seconds();
-    let discovered_principal_user_id = discover_account_principal(&state.pool, account_id)
+    let discovered_principal_id = discover_account_principal(&state.pool, account_id)
         .await?
         .ok_or_else(account_not_found)?;
     let mut tx = state.pool.begin().await?;
-    lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await?;
-    let account = sqlx::query_as::<_, (String, Option<i64>, Option<Uuid>)>(
+    lock_active_authentication_owner(&mut tx, &discovered_principal_id).await?;
+    let account = sqlx::query_as::<_, (Uuid, Option<i64>, Uuid)>(
         r#"
-        SELECT principal_user_id, disabled_at, method_id
+        SELECT principal_id, disabled_at, method_id
         FROM auth_account
         WHERE account_id = $1
-          AND principal_user_id = $2
+          AND principal_id = $2
         "#,
     )
     .bind(account_id)
-    .bind(discovered_principal_user_id.as_str())
+    .bind(discovered_principal_id.as_uuid())
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(account_not_found)?;
+    let account_principal_id = PrincipalId::from_uuid(account.0);
     reject_stale_account_lifecycle(
         request.expected_disabled,
         account.1.is_some(),
@@ -2902,28 +2937,26 @@ async fn disable_auth_account(
             now
         }
     };
-    if let Some(method_id) = account.2 {
-        let updated = sqlx::query(
-            r#"
+    let updated = sqlx::query(
+        r#"
             UPDATE authentication_method
             SET status = 'disabled',
                 disabled_at = COALESCE(disabled_at, $2)
             WHERE method_id = $1
-              AND principal_user_id = $3
+              AND principal_id = $3
             "#,
-        )
-        .bind(method_id)
-        .bind(now)
-        .bind(account.0.as_str())
-        .execute(&mut *tx)
-        .await?;
-        if updated.rows_affected() != 1 {
-            return Err(ApiError::Reject {
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-                error: RejectCode::Internal,
-                message: "classic account method ownership is invalid".to_string(),
-            });
-        }
+    )
+    .bind(account.2)
+    .bind(now)
+    .bind(account_principal_id.as_uuid())
+    .execute(&mut *tx)
+    .await?;
+    if updated.rows_affected() != 1 {
+        return Err(ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: "classic account method ownership is invalid".to_string(),
+        });
     }
     let revoked_session_count = sqlx::query(
         r#"
@@ -2933,12 +2966,12 @@ async fn disable_auth_account(
           AND expires_at > $1
           AND (
               ($3::UUID IS NOT NULL AND authenticated_via_method_id = $3)
-              OR ($3::UUID IS NULL AND principal_user_id = $2)
+              OR ($3::UUID IS NULL AND principal_id = $2)
           )
         "#,
     )
     .bind(now)
-    .bind(account.0.as_str())
+    .bind(account_principal_id.as_uuid())
     .bind(account.2)
     .execute(&mut *tx)
     .await?
@@ -2949,8 +2982,8 @@ async fn disable_auth_account(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -2959,8 +2992,8 @@ async fn disable_auth_account(
         "#,
     )
     .bind(now)
-    .bind(actor_user_id.as_str())
-    .bind(account.0.as_str())
+    .bind(actor_principal_id.as_uuid())
+    .bind(account_principal_id.as_uuid())
     .bind(
         serde_json::json!({
             "account_id": account_id,
@@ -2980,7 +3013,7 @@ async fn disable_auth_account(
             "disabled".to_string()
         },
         account_id: account_id.to_string(),
-        principal_user_id: account.0,
+        principal_id: account_principal_id,
         disabled_at: Some(disabled_at),
         revoked_session_count,
     }))
@@ -2993,7 +3026,7 @@ async fn enable_auth_account(
 ) -> Result<Json<AuthAccountLifecycleResponse>, ApiError> {
     require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_user_id = require_global_admin(&state, caller_token, "account enable").await?;
+    let actor_principal_id = require_global_admin(&state, caller_token, "account enable").await?;
     let account_id = request.account_id.trim();
     if account_id.is_empty() {
         return Err(ApiError::Reject {
@@ -3004,24 +3037,25 @@ async fn enable_auth_account(
     }
 
     let now = unix_now_seconds();
-    let discovered_principal_user_id = discover_account_principal(&state.pool, account_id)
+    let discovered_principal_id = discover_account_principal(&state.pool, account_id)
         .await?
         .ok_or_else(account_not_found)?;
     let mut tx = state.pool.begin().await?;
-    lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await?;
-    let account = sqlx::query_as::<_, (String, Option<i64>, Option<Uuid>)>(
+    lock_active_authentication_owner(&mut tx, &discovered_principal_id).await?;
+    let account = sqlx::query_as::<_, (Uuid, Option<i64>, Uuid)>(
         r#"
-        SELECT principal_user_id, disabled_at, method_id
+        SELECT principal_id, disabled_at, method_id
         FROM auth_account
         WHERE account_id = $1
-          AND principal_user_id = $2
+          AND principal_id = $2
         "#,
     )
     .bind(account_id)
-    .bind(discovered_principal_user_id.as_str())
+    .bind(discovered_principal_id.as_uuid())
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(account_not_found)?;
+    let account_principal_id = PrincipalId::from_uuid(account.0);
     reject_stale_account_lifecycle(
         request.expected_disabled,
         account.1.is_some(),
@@ -3035,26 +3069,24 @@ async fn enable_auth_account(
             .execute(&mut *tx)
             .await?;
     }
-    if let Some(method_id) = account.2 {
-        let updated = sqlx::query(
-            r#"
+    let updated = sqlx::query(
+        r#"
             UPDATE authentication_method
             SET status = 'active', disabled_at = NULL
             WHERE method_id = $1
-              AND principal_user_id = $2
+              AND principal_id = $2
             "#,
-        )
-        .bind(method_id)
-        .bind(account.0.as_str())
-        .execute(&mut *tx)
-        .await?;
-        if updated.rows_affected() != 1 {
-            return Err(ApiError::Reject {
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-                error: RejectCode::Internal,
-                message: "classic account method ownership is invalid".to_string(),
-            });
-        }
+    )
+    .bind(account.2)
+    .bind(account_principal_id.as_uuid())
+    .execute(&mut *tx)
+    .await?;
+    if updated.rows_affected() != 1 {
+        return Err(ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: "classic account method ownership is invalid".to_string(),
+        });
     }
 
     sqlx::query(
@@ -3062,8 +3094,8 @@ async fn enable_auth_account(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -3072,8 +3104,8 @@ async fn enable_auth_account(
         "#,
     )
     .bind(now)
-    .bind(actor_user_id.as_str())
-    .bind(account.0.as_str())
+    .bind(actor_principal_id.as_uuid())
+    .bind(account_principal_id.as_uuid())
     .bind(
         serde_json::json!({
             "account_id": account_id,
@@ -3093,7 +3125,7 @@ async fn enable_auth_account(
             "already_enabled".to_string()
         },
         account_id: account_id.to_string(),
-        principal_user_id: account.0,
+        principal_id: account_principal_id,
         disabled_at: None,
         revoked_session_count: 0,
     }))
@@ -3109,7 +3141,7 @@ async fn rotate_auth_session(
         identity::session::rotate_session(&state.pool, caller_token, &state.session_policy).await?;
     let mut response = auth_session_response(
         &state,
-        rotated.context.principal_user_id,
+        rotated.context.principal_id,
         None,
         rotated.context.global_capabilities,
     )
@@ -3141,14 +3173,14 @@ async fn logout_auth_session(
                     JOIN workos_provider_session_tombstone AS tombstone
                       ON tombstone.provider_session_hash = $4
                     WHERE provider_session.provider_session_id = $1
-                      AND provider_session.principal_user_id = $2
+                      AND provider_session.principal_id = $2
                       AND provider_session.method_id = $3
                       AND provider_session.status = 'logged_out'
                 )
                 "#,
             )
             .bind(completed.workos_session_id.as_str())
-            .bind(completed.principal_user_id.as_str())
+            .bind(completed.principal_id.as_uuid())
             .bind(completed.method_id)
             .bind(completed.workos_session_id.fingerprint())
             .fetch_one(&mut *tx)
@@ -3158,7 +3190,7 @@ async fn logout_auth_session(
             }
             let response = LogoutAuthSessionResponse {
                 status: "logged_out".to_string(),
-                principal_user_id: completed.principal_user_id,
+                principal_id: completed.principal_id,
                 provider_logout_url: Some(identity::workos::logout_url(
                     &completed.workos_session_id,
                 )),
@@ -3179,7 +3211,7 @@ async fn logout_auth_session(
                 end_workos_provider_session(
                     &mut tx,
                     workos_session_id,
-                    authorization.principal_user_id.as_str(),
+                    &authorization.principal_id,
                     method_id,
                     now,
                     "logout",
@@ -3197,13 +3229,13 @@ async fn logout_auth_session(
             r#"
             UPDATE auth_session
             SET revoked_at = $1
-            WHERE principal_user_id = $2
+            WHERE principal_id = $2
               AND workos_session_id = $3
               AND revoked_at IS NULL
             "#,
         )
         .bind(now)
-        .bind(authorization.principal_user_id.as_str())
+        .bind(authorization.principal_id.as_uuid())
         .bind(workos_session_id.as_str())
         .execute(&mut *tx)
         .await?
@@ -3238,8 +3270,8 @@ async fn logout_auth_session(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -3248,8 +3280,8 @@ async fn logout_auth_session(
         "#,
     )
     .bind(now)
-    .bind(authorization.principal_user_id.as_str())
-    .bind(authorization.principal_user_id.as_str())
+    .bind(authorization.principal_id.as_uuid())
+    .bind(authorization.principal_id.as_uuid())
     .bind(authorization.session_reference.as_str())
     .bind(audit_metadata.to_string())
     .execute(&mut *tx)
@@ -3258,7 +3290,7 @@ async fn logout_auth_session(
 
     Ok(Json(LogoutAuthSessionResponse {
         status: "logged_out".to_string(),
-        principal_user_id: authorization.principal_user_id,
+        principal_id: authorization.principal_id,
         provider_logout_url,
     }))
 }
@@ -3269,7 +3301,8 @@ async fn revoke_auth_session(
     Json(request): Json<RevokeAuthSession>,
 ) -> Result<Json<AuthLifecycleResponse>, ApiError> {
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_user_id = require_global_admin(&state, caller_token, "session revocation").await?;
+    let actor_principal_id =
+        require_global_admin(&state, caller_token, "session revocation").await?;
 
     let token = request.token.trim();
     if token.is_empty() {
@@ -3281,39 +3314,41 @@ async fn revoke_auth_session(
     }
     let now = unix_now_seconds();
     let token_hash = hash_session_token(token);
-    let discovered_principal_user_id = sqlx::query_scalar::<_, String>(
-        "SELECT principal_user_id FROM auth_session WHERE token_hash = $1",
+    let discovered_principal_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT principal_id FROM auth_session WHERE token_hash = $1",
     )
     .bind(&token_hash)
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(unauthorized_session)?;
+    let discovered_principal_id = PrincipalId::from_uuid(discovered_principal_id);
     let mut tx = state.pool.begin().await?;
-    lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await?;
-    let principal_user_id = sqlx::query_scalar::<_, String>(
+    lock_active_authentication_owner(&mut tx, &discovered_principal_id).await?;
+    let principal_id = sqlx::query_scalar::<_, Uuid>(
         r#"
         UPDATE auth_session
         SET revoked_at = $1
         WHERE token_hash = $2
-          AND principal_user_id = $3
+          AND principal_id = $3
           AND revoked_at IS NULL
           AND expires_at > $1
-        RETURNING principal_user_id
+        RETURNING principal_id
         "#,
     )
     .bind(now)
     .bind(&token_hash)
-    .bind(discovered_principal_user_id.as_str())
+    .bind(discovered_principal_id.as_uuid())
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_session)?;
+    let principal_id = PrincipalId::from_uuid(principal_id);
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -3322,8 +3357,8 @@ async fn revoke_auth_session(
         "#,
     )
     .bind(now)
-    .bind(actor_user_id.as_str())
-    .bind(principal_user_id.as_str())
+    .bind(actor_principal_id.as_uuid())
+    .bind(principal_id.as_uuid())
     .bind(token_hash)
     .execute(&mut *tx)
     .await?;
@@ -3331,7 +3366,7 @@ async fn revoke_auth_session(
 
     Ok(Json(AuthLifecycleResponse {
         status: "revoked".to_string(),
-        principal_user_id,
+        principal_id,
     }))
 }
 
@@ -3347,16 +3382,16 @@ async fn create_auth_invite(
         .global_capabilities
         .iter()
         .any(|capability| capability == "GlobalAdmin");
-    let invited_by_user_id = caller.principal_user_id;
+    let invited_by_principal_id = caller.principal_id;
 
     let invite_token = request.invite_token.trim();
     let account_id = request.account_id.trim();
-    let expected_principal_user_id = request.expected_principal_user_id.trim();
-    if invite_token.is_empty() || account_id.is_empty() || expected_principal_user_id.is_empty() {
+    let expected_principal_id = request.expected_principal_id;
+    if invite_token.is_empty() || account_id.is_empty() {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
             error: RejectCode::Internal,
-            message: "invite requires invite_token, account_id, and expected_principal_user_id"
+            message: "invite requires invite_token, account_id, and expected_principal_id"
                 .to_string(),
         });
     }
@@ -3388,7 +3423,7 @@ async fn create_auth_invite(
         }
         let caps = caps::resolve(
             &state.pool,
-            &Principal::user(invited_by_user_id.as_str()),
+            &Principal::authenticated(invited_by_principal_id),
             game,
         )
         .await?;
@@ -3400,9 +3435,9 @@ async fn create_auth_invite(
             });
         }
     }
-    let account_principal_user_id = sqlx::query_scalar::<_, String>(
+    let account_principal_id = sqlx::query_scalar::<_, Uuid>(
         r#"
-        SELECT principal_user_id
+        SELECT principal_id
         FROM auth_account
         WHERE account_id = $1
           AND disabled_at IS NULL
@@ -3412,7 +3447,8 @@ async fn create_auth_invite(
     .fetch_optional(&state.pool)
     .await?
     .ok_or_else(unauthorized_account)?;
-    if account_principal_user_id != expected_principal_user_id {
+    let account_principal_id = PrincipalId::from_uuid(account_principal_id);
+    if account_principal_id != expected_principal_id {
         return Err(ApiError::Reject {
             status: StatusCode::CONFLICT,
             error: RejectCode::StreamConflict,
@@ -3428,14 +3464,14 @@ async fn create_auth_invite(
         INSERT INTO auth_invite (
             token_hash,
             account_id,
-            principal_user_id,
+            principal_id,
             game,
             created_at,
             expires_at,
             redeemed_at,
             redeemed_session_token_hash,
             global_capabilities,
-            invited_by_user_id
+            invited_by_principal_id
         )
         VALUES ($1, $2, $3, $4, $5, $6, NULL, NULL, $7, $8)
         ON CONFLICT (token_hash) DO NOTHING
@@ -3443,12 +3479,12 @@ async fn create_auth_invite(
     )
     .bind(&invite_hash)
     .bind(account_id)
-    .bind(account_principal_user_id.as_str())
+    .bind(account_principal_id.as_uuid())
     .bind(request.game)
     .bind(now)
     .bind(request.expires_at)
     .bind(&global_capabilities)
-    .bind(&invited_by_user_id)
+    .bind(invited_by_principal_id.as_uuid())
     .execute(&mut *tx)
     .await?;
 
@@ -3466,7 +3502,7 @@ async fn create_auth_invite(
         &AuthCredentialDeliveryRequest {
             delivery_kind: IdentityDeliveryKind::Invite,
             account_id,
-            principal_user_id: account_principal_user_id.as_str(),
+            principal_id: &account_principal_id,
             credential_hash: invite_hash.as_str(),
             credential_material: invite_token,
             credential_expires_at: request.expires_at,
@@ -3478,11 +3514,11 @@ async fn create_auth_invite(
 
     Ok(Json(AuthInviteResponse {
         account_id: account_id.to_string(),
-        principal_user_id: account_principal_user_id,
+        principal_id: account_principal_id,
         expires_at: request.expires_at,
         game: request.game,
         global_capabilities,
-        invited_by_user_id,
+        invited_by_principal_id,
         delivery_id: delivery.delivery_id,
         delivery_status: delivery.status,
         delivery_attempt_count: delivery.attempt_count,
@@ -3519,30 +3555,29 @@ async fn redeem_auth_invite(
     let now = unix_now_seconds();
     let invite_hash = hash_session_token(invite_token);
     let mut tx = state.pool.begin().await?;
-    let discovered_principal_user_id = sqlx::query_scalar::<_, String>(
+    let discovered_principal_id = sqlx::query_scalar::<_, Uuid>(
         r#"
-        SELECT invite.principal_user_id
+        SELECT invite.principal_id
         FROM auth_invite AS invite
         JOIN auth_account AS account
           ON account.account_id = invite.account_id
         WHERE invite.token_hash = $1
           AND invite.account_id = $2
-          AND account.principal_user_id = invite.principal_user_id
+          AND account.principal_id = invite.principal_id
         "#,
     )
     .bind(&invite_hash)
     .bind(account_id)
     .fetch_optional(&mut *tx)
     .await?;
-    let Some(discovered_principal_user_id) = discovered_principal_user_id else {
+    let Some(discovered_principal_id) = discovered_principal_id else {
         tx.rollback().await?;
         consume_dummy_password_verification(password).await?;
         record_failed_auth_attempt(&state, &attempt_scope, account_id, "invite-redemption").await?;
         return Err(unauthorized_invite());
     };
-    if let Err(error) =
-        lock_active_authentication_owner(&mut tx, discovered_principal_user_id.as_str()).await
-    {
+    let discovered_principal_id = PrincipalId::from_uuid(discovered_principal_id);
+    if let Err(error) = lock_active_authentication_owner(&mut tx, &discovered_principal_id).await {
         if !matches!(
             &error,
             ApiError::Reject {
@@ -3557,9 +3592,9 @@ async fn redeem_auth_invite(
         record_failed_auth_attempt(&state, &attempt_scope, account_id, "invite-redemption").await?;
         return Err(unauthorized_invite());
     }
-    let invite = sqlx::query_as::<_, (String, i64, Vec<String>, String)>(
+    let invite = sqlx::query_as::<_, (Uuid, i64, Vec<String>, String)>(
         r#"
-        SELECT invite.principal_user_id,
+        SELECT invite.principal_id,
                invite.expires_at,
                invite.global_capabilities,
                account.password_hash
@@ -3572,22 +3607,30 @@ async fn redeem_auth_invite(
           AND invite.revoked_at IS NULL
           AND invite.expires_at > $3
           AND account.disabled_at IS NULL
-          AND account.principal_user_id = invite.principal_user_id
-          AND invite.principal_user_id = $4
+          AND account.principal_id = invite.principal_id
+          AND invite.principal_id = $4
         "#,
     )
     .bind(&invite_hash)
     .bind(account_id)
     .bind(now)
-    .bind(discovered_principal_user_id.as_str())
+    .bind(discovered_principal_id.as_uuid())
     .fetch_optional(&mut *tx)
     .await?;
-    let Some(invite) = invite else {
+    let Some((invite_principal_id, invite_expires_at, invite_capabilities, invite_password_hash)) =
+        invite
+    else {
         tx.rollback().await?;
         consume_dummy_password_verification(password).await?;
         record_failed_auth_attempt(&state, &attempt_scope, account_id, "invite-redemption").await?;
         return Err(unauthorized_invite());
     };
+    let invite = (
+        PrincipalId::from_uuid(invite_principal_id),
+        invite_expires_at,
+        invite_capabilities,
+        invite_password_hash,
+    );
 
     if !verify_account_password(invite.3.as_str(), password).await? {
         tx.rollback().await?;
@@ -3595,19 +3638,13 @@ async fn redeem_auth_invite(
         return Err(unauthorized_invite());
     }
 
-    let method_id = identity::methods::link_classic_method(
-        &mut tx,
-        account_id,
-        invite.0.as_str(),
-        &invite.2,
-        now,
-    )
-    .await?;
+    let method_id =
+        identity::methods::touch_active_classic_method(&mut tx, account_id, &invite.0, now).await?;
     let session_expires_at = state.session_policy.classic_expiry(now);
     let issued = identity::session::issue_session(
         &mut tx,
         identity::SessionSpec {
-            principal_user_id: invite.0.as_str(),
+            principal_id: &invite.0,
             session_capabilities: &invite.2,
             authenticated_via_method_id: Some(method_id),
             assurance: identity::Assurance::Password,
@@ -3637,7 +3674,7 @@ async fn redeem_auth_invite(
     cancel_auth_delivery_intent(
         &mut tx,
         invite_hash.as_str(),
-        Some(invite.0.as_str()),
+        Some(&invite.0),
         "invite_redeemed",
         now,
     )
@@ -3647,8 +3684,8 @@ async fn redeem_auth_invite(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -3657,8 +3694,8 @@ async fn redeem_auth_invite(
         "#,
     )
     .bind(now)
-    .bind(invite.0.as_str())
-    .bind(invite.0.as_str())
+    .bind(invite.0.as_uuid())
+    .bind(invite.0.as_uuid())
     .bind(&invite_hash)
     .bind(&session_hash)
     .bind(serde_json::json!({ "account_id": account_id }).to_string())
@@ -3680,7 +3717,8 @@ async fn revoke_auth_invite(
 ) -> Result<Json<AuthLifecycleResponse>, ApiError> {
     require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_user_id = require_global_admin(&state, caller_token, "invite revocation").await?;
+    let actor_principal_id =
+        require_global_admin(&state, caller_token, "invite revocation").await?;
 
     let invite_token = request.invite_token.trim();
     if invite_token.is_empty() {
@@ -3693,7 +3731,7 @@ async fn revoke_auth_invite(
     let now = unix_now_seconds();
     let invite_hash = hash_session_token(invite_token);
     let mut tx = state.pool.begin().await?;
-    let principal_user_id = sqlx::query_scalar::<_, String>(
+    let principal_id = sqlx::query_scalar::<_, Uuid>(
         r#"
         UPDATE auth_invite
         SET revoked_at = $1
@@ -3701,7 +3739,7 @@ async fn revoke_auth_invite(
           AND redeemed_at IS NULL
           AND revoked_at IS NULL
           AND expires_at > $1
-        RETURNING principal_user_id
+        RETURNING principal_id
         "#,
     )
     .bind(now)
@@ -3709,10 +3747,11 @@ async fn revoke_auth_invite(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_invite)?;
+    let principal_id = PrincipalId::from_uuid(principal_id);
     cancel_auth_delivery_intent(
         &mut tx,
         invite_hash.as_str(),
-        Some(actor_user_id.as_str()),
+        Some(&actor_principal_id),
         "invite_revoked",
         now,
     )
@@ -3722,8 +3761,8 @@ async fn revoke_auth_invite(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -3732,8 +3771,8 @@ async fn revoke_auth_invite(
         "#,
     )
     .bind(now)
-    .bind(actor_user_id.as_str())
-    .bind(principal_user_id.as_str())
+    .bind(actor_principal_id.as_uuid())
+    .bind(principal_id.as_uuid())
     .bind(invite_hash)
     .execute(&mut *tx)
     .await?;
@@ -3741,7 +3780,7 @@ async fn revoke_auth_invite(
 
     Ok(Json(AuthLifecycleResponse {
         status: "revoked".to_string(),
-        principal_user_id,
+        principal_id,
     }))
 }
 
@@ -3755,12 +3794,12 @@ async fn admin_auth_delivery_queue(
     require_global_operator(&state, caller_token, "auth delivery queue").await?;
     let now = unix_now_seconds();
     let limit = query.limit.unwrap_or(100).clamp(1, 200);
-    let deliveries = sqlx::query_as::<_, AuthDeliveryQueueEntry>(
+    let deliveries = sqlx::query_as::<_, AuthDeliveryQueueRow>(
         r#"
         SELECT delivery.delivery_id,
                delivery.delivery_kind,
                delivery.account_id,
-               delivery.principal_user_id,
+               delivery.principal_id,
                delivery.status,
                delivery.attempt_count,
                delivery.provider_id,
@@ -3809,7 +3848,9 @@ async fn admin_auth_delivery_queue(
     .bind(limit)
     .fetch_all(&state.pool)
     .await?;
-    Ok(Json(AuthDeliveryQueueResponse { deliveries }))
+    Ok(Json(AuthDeliveryQueueResponse {
+        deliveries: deliveries.into_iter().map(Into::into).collect(),
+    }))
 }
 
 async fn retry_auth_delivery_intent(
@@ -3819,13 +3860,13 @@ async fn retry_auth_delivery_intent(
 ) -> Result<Json<AuthDeliveryRetryResponse>, ApiError> {
     require_classic_enabled(&state)?;
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let actor_user_id = require_global_admin(&state, caller_token, "delivery retry").await?;
+    let actor_principal_id = require_global_admin(&state, caller_token, "delivery retry").await?;
     let now = unix_now_seconds();
     let receipt = process_identity_delivery_intent(
         &state.pool,
         state.identity_delivery_gateway.as_ref(),
         delivery_id,
-        actor_user_id.as_str(),
+        &actor_principal_id,
         "auth_delivery_retried",
         now,
     )
@@ -3856,21 +3897,35 @@ async fn identity_lifecycle_audit(
     require_global_admin(&state, caller_token, "identity lifecycle audit").await?;
 
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
-    let rows = sqlx::query_as::<_, (i64, i64, String, Option<String>, String, String)>(
+    let rows = sqlx::query_as::<
+        _,
+        (
+            i64,
+            i64,
+            String,
+            Option<Uuid>,
+            Option<Uuid>,
+            Option<String>,
+            Option<String>,
+            String,
+        ),
+    >(
         r#"
         SELECT id,
                event_at,
                event_kind,
-               actor_user_id,
-               principal_user_id,
+               actor_principal_id,
+               principal_id,
+               redacted_actor_alias,
+               redacted_principal_alias,
                metadata::TEXT
         FROM identity_lifecycle_audit
-        WHERE ($1::TEXT IS NULL OR principal_user_id = $1)
+        WHERE ($1::UUID IS NULL OR principal_id = $1)
         ORDER BY id DESC
         LIMIT $2
         "#,
     )
-    .bind(query.principal_user_id.as_deref())
+    .bind(query.principal_id.map(PrincipalId::as_uuid))
     .bind(limit)
     .fetch_all(&state.pool)
     .await?;
@@ -3878,13 +3933,24 @@ async fn identity_lifecycle_audit(
     let entries = rows
         .into_iter()
         .map(
-            |(id, event_at, event_kind, actor_user_id, principal_user_id, metadata)| {
+            |(
+                id,
+                event_at,
+                event_kind,
+                actor_principal_id,
+                principal_id,
+                redacted_actor_alias,
+                redacted_principal_alias,
+                metadata,
+            )| {
                 IdentityLifecycleAuditEntry {
                     id,
                     event_at,
                     event_kind,
-                    actor_user_id,
-                    principal_user_id,
+                    actor_principal_id: actor_principal_id.map(PrincipalId::from_uuid),
+                    principal_id: principal_id.map(PrincipalId::from_uuid),
+                    redacted_actor_alias,
+                    redacted_principal_alias,
                     metadata: serde_json::from_str(&metadata).unwrap_or(serde_json::Value::Null),
                 }
             },
@@ -3896,27 +3962,23 @@ async fn identity_lifecycle_audit(
 
 async fn auth_session_response(
     state: &AuthHttpState,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     game: Option<Uuid>,
     global_capabilities: Vec<String>,
 ) -> Result<AuthSessionResponse, ApiError> {
     let mut capabilities = global_capability_grants(&global_capabilities);
     let game_capabilities: Vec<_> = match game {
-        Some(game) => caps::resolve(
-            &state.pool,
-            &Principal::user(principal_user_id.as_str()),
-            game,
-        )
-        .await?
-        .iter()
-        .map(CapabilityGrant::from)
-        .collect(),
+        Some(game) => caps::resolve(&state.pool, &Principal::authenticated(principal_id), game)
+            .await?
+            .iter()
+            .map(CapabilityGrant::from)
+            .collect(),
         None => Vec::new(),
     };
     capabilities.extend(game_capabilities);
 
     Ok(AuthSessionResponse {
-        principal_user_id,
+        principal_id,
         capabilities,
         session_token: None,
         created_at: None,
@@ -3986,10 +4048,10 @@ async fn authenticated_account_principal_for_update(
     authorization: &AuthorizationContext,
     account_id: &str,
     current_password: &str,
-) -> Result<String, ApiError> {
-    let account = sqlx::query_as::<_, (String, String)>(
+) -> Result<PrincipalId, ApiError> {
+    let account = sqlx::query_as::<_, (Uuid, String)>(
         r#"
-        SELECT principal_user_id, password_hash
+        SELECT principal_id, password_hash
         FROM auth_account
         WHERE account_id = $1
           AND disabled_at IS NULL
@@ -4000,12 +4062,12 @@ async fn authenticated_account_principal_for_update(
     .fetch_optional(&mut **tx)
     .await?
     .ok_or_else(unauthorized_account)?;
-    if account.0 != authorization.principal_user_id
+    if account.0 != authorization.principal_id.as_uuid()
         || !verify_account_password(account.1.as_str(), current_password).await?
     {
         return Err(unauthorized_account());
     }
-    Ok(authorization.principal_user_id.clone())
+    Ok(authorization.principal_id)
 }
 
 /// Resolve an account owner without taking a subordinate row lock. The result
@@ -4014,22 +4076,25 @@ async fn authenticated_account_principal_for_update(
 async fn discover_account_principal(
     pool: &PgPool,
     account_id: &str,
-) -> Result<Option<String>, ApiError> {
+) -> Result<Option<PrincipalId>, ApiError> {
     Ok(
-        sqlx::query_scalar("SELECT principal_user_id FROM auth_account WHERE account_id = $1")
-            .bind(account_id)
-            .fetch_optional(pool)
-            .await?,
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT principal_id FROM auth_account WHERE account_id = $1",
+        )
+        .bind(account_id)
+        .fetch_optional(pool)
+        .await?
+        .map(PrincipalId::from_uuid),
     )
 }
 
 async fn lock_active_authentication_owner(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<identity::methods::IdentityMutationOwner, ApiError> {
     let owner = identity::methods::lock_identity_mutation(
         tx,
-        principal_user_id,
+        principal_id,
         identity::methods::IdentityMutationExtent::Authentication,
     )
     .await?;
@@ -4043,13 +4108,13 @@ async fn record_account_recovery_rejection(
     recovery_hash: &str,
     now: i64,
 ) -> Result<(), ApiError> {
-    let principal_user_id = sqlx::query_scalar::<_, String>(
-        "SELECT principal_user_id FROM auth_account WHERE account_id = $1",
+    let principal_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT principal_id FROM auth_account WHERE account_id = $1",
     )
     .bind(account_id)
     .fetch_optional(pool)
     .await?;
-    let Some(principal_user_id) = principal_user_id else {
+    let Some(principal_id) = principal_id else {
         return Ok(());
     };
     sqlx::query(
@@ -4057,8 +4122,8 @@ async fn record_account_recovery_rejection(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -4067,7 +4132,7 @@ async fn record_account_recovery_rejection(
         "#,
     )
     .bind(now)
-    .bind(principal_user_id)
+    .bind(principal_id)
     .bind(recovery_hash)
     .bind(
         serde_json::json!({
@@ -4085,7 +4150,7 @@ pub(super) async fn require_global_admin(
     state: &AuthHttpState,
     token: &str,
     action: &str,
-) -> Result<String, ApiError> {
+) -> Result<PrincipalId, ApiError> {
     let authorization = authorization_context(state, token).await?;
     if !authorization
         .global_capabilities
@@ -4098,14 +4163,14 @@ pub(super) async fn require_global_admin(
             message: format!("{action} requires GlobalAdmin"),
         });
     }
-    Ok(authorization.principal_user_id)
+    Ok(authorization.principal_id)
 }
 
 pub(super) async fn require_global_operator(
     state: &AuthHttpState,
     token: &str,
     action: &str,
-) -> Result<String, ApiError> {
+) -> Result<PrincipalId, ApiError> {
     let authorization = authorization_context(state, token).await?;
     if !authorization
         .global_capabilities
@@ -4118,7 +4183,7 @@ pub(super) async fn require_global_operator(
             message: format!("{action} requires GlobalAdmin or GlobalMod"),
         });
     }
-    Ok(authorization.principal_user_id)
+    Ok(authorization.principal_id)
 }
 
 pub(super) fn unauthorized_session() -> ApiError {

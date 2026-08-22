@@ -4,8 +4,8 @@ import { workosAuthKitConfigured } from "../../../lib/server/workos-authkit.mjs"
 export function load({ locals, url }) {
   return {
     chooser: {
-      principalUserId:
-        typeof locals.principalUserId === "string" ? locals.principalUserId : null,
+      principalId:
+        typeof locals.principalId === "string" ? locals.principalId : null,
       accountId: optionalToken(url.searchParams.get("account")),
       returnTo: authReturnPath(url.searchParams.get("returnTo")),
       workosAvailable: workosAuthKitConfigured(),

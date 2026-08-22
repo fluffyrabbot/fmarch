@@ -4,13 +4,13 @@
   import { buildNavigationPendingData } from "./app-shell-model.mjs";
 
   export let path = null;
-  export let principalUserId = null;
+  export let principalId = null;
   export let viewerProfile = null;
   export let capabilities = [];
 
   $: view = buildNavigationPendingData({
     path,
-    principalUserId,
+    principalId,
     viewerProfile,
     capabilities,
   });

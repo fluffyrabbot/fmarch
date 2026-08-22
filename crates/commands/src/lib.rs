@@ -34,8 +34,8 @@ use eventstore::{ActorId, EventInput};
 use game_persona_application::GamePersonaApplicationError;
 use game_platform::{
     GamePersonaId, GamePersonaName, GamePersonaPresentation, OccupancyId, OccupancyTransitionId,
-    PrincipalId,
 };
+use principal::PrincipalId;
 use projections::{append_and_project_in_tx, audit_rebuild, ProjectionError};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -75,7 +75,7 @@ macro_rules! seat_persona {
     };
     (game: $game:expr, slot: $slot:expr, user: $user:expr $(,)?) => {{
         let slot: String = $slot;
-        let principal_id: String = $user;
+        let principal_id = $crate::fixture_principal_id($user);
         let public_name = format!("Player {slot}");
         $crate::Command::SeatPersona {
             game: $game,
@@ -84,6 +84,16 @@ macro_rules! seat_persona {
             slot,
         }
     }};
+}
+
+/// Deterministically mint a UUID-backed authority for test and proof fixtures.
+///
+/// This is deliberately separate from the authenticated production boundary:
+/// production identities are minted by the identity subsystem, while fixture
+/// labels are merely stable input to repeatable local scenarios.
+#[doc(hidden)]
+pub fn fixture_principal_id(label: impl AsRef<str>) -> PrincipalId {
+    PrincipalId::fixture(label)
 }
 
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_SEED: u64 = 90_001;
@@ -160,8 +170,8 @@ async fn command_runtime_checkpoint(checkpoint: CommandRuntimeCheckpoint) {
 pub struct EngineSnapshotIdentityAudit {
     pub phase_id: String,
     pub snapshot_slot_ids: Vec<String>,
-    pub stream_user_ids: Vec<String>,
-    pub leaked_user_ids: Vec<String>,
+    pub stream_principal_ids: Vec<PrincipalId>,
+    pub leaked_principal_ids: Vec<PrincipalId>,
     pub slot_only: bool,
 }
 
@@ -406,7 +416,7 @@ impl EnginePhaseInput {
 
 #[derive(Debug, Clone)]
 struct ReceiptClaim {
-    principal_user_id: String,
+    principal_id: PrincipalId,
     command_id: Uuid,
     command_fingerprint: Vec<u8>,
 }
@@ -417,9 +427,33 @@ struct ReceiptClaim {
 /// this context preserves the authenticated initiating principal and the exact
 /// authority exercised. Keeping the stamping at the append boundary prevents
 /// individual handlers from silently omitting cohost attribution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AuditInitiator {
+    Principal(PrincipalId),
+    Service(SystemAuditService),
+}
+
+/// Fixed service identities that may initiate internal commands.  They are
+/// intentionally a disjoint set from authenticated principals, so audit data
+/// cannot represent a daemon as a synthetic user.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SystemAuditService {
+    DayEventAutomation,
+    DayEventNarrative,
+}
+
+impl SystemAuditService {
+    pub(crate) const fn id(self) -> &'static str {
+        match self {
+            Self::DayEventAutomation => "day-event-automation",
+            Self::DayEventNarrative => "day-event-narrative",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CommandAuditContext {
-    pub(crate) principal_user_id: String,
+    pub(crate) initiator: AuditInitiator,
     pub(crate) command_id: Uuid,
     pub(crate) command_kind: String,
     pub(crate) authority_used: String,
@@ -624,7 +658,7 @@ impl ReceiptClaim {
         fingerprint.update(b"fmarch-command-payload:v1\0");
         fingerprint.update(payload);
         Ok(ReceiptClaim {
-            principal_user_id: principal.user_id().to_string(),
+            principal_id: principal.id(),
             command_id,
             command_fingerprint: fingerprint.finalize().to_vec(),
         })
@@ -800,20 +834,22 @@ async fn handle_command(
             )
             .await
         }
-        Command::AddCohost { game, user } => {
+        Command::AddCohost { game, principal_id } => {
             host_structural_lifecycle(
                 tx,
                 principal,
                 game,
                 "CohostAdded",
-                serde_json::json!({ "user_id": user }),
+                serde_json::json!({ "principal_id": principal_id }),
                 ActorId::Host,
             )
             .await
         }
-        Command::GrantSpectator { game, user } => grant_spectator(tx, principal, game, user).await,
-        Command::RevokeSpectator { game, user } => {
-            revoke_spectator(tx, principal, game, user).await
+        Command::GrantSpectator { game, principal_id } => {
+            grant_spectator(tx, principal, game, principal_id).await
+        }
+        Command::RevokeSpectator { game, principal_id } => {
+            revoke_spectator(tx, principal, game, principal_id).await
         }
         Command::StartGame { game, phase } => start_game(tx, principal, game, phase).await,
         Command::OpenDayPhase { game, phase } => {
@@ -1008,11 +1044,11 @@ async fn command_audit_context(
             // host-team command will have exercised.
             let role: Option<String> = sqlx::query_scalar(
                 "SELECT role FROM game_authority \
-                 WHERE game_id = $1 AND user_id = $2 \
+                 WHERE game_id = $1 AND principal_id = $2 \
                  ORDER BY CASE role WHEN 'host' THEN 0 ELSE 1 END LIMIT 1",
             )
             .bind(game)
-            .bind(principal.user_id())
+            .bind(principal.id().as_uuid())
             .fetch_optional(&mut **tx)
             .await
             .map_err(|error| Reject::Internal(error.to_string()))?;
@@ -1031,7 +1067,7 @@ async fn command_audit_context(
     };
 
     Ok(CommandAuditContext {
-        principal_user_id: principal.user_id().to_string(),
+        initiator: AuditInitiator::Principal(principal.id()),
         command_id,
         command_kind: command_kind.to_string(),
         authority_used,
@@ -1231,7 +1267,7 @@ pub async fn game_completed(pool: &PgPool, game: Uuid) -> Result<bool, Reject> {
 }
 
 /// `CreateGame` requires no game-scoped capability — there is none yet. The
-/// creating principal BECOMES the host (the `GameCreated.host` field), which is
+/// creating principal BECOMES the host (the `GameCreated.host_principal_id` field), which is
 /// what every subsequent host-gated command resolves against.
 async fn create_game(
     tx: &mut Transaction<'_, Postgres>,
@@ -1246,18 +1282,18 @@ async fn create_game(
     let pack_artifact = selected_pack_artifact(&pack)?;
     let pack_ref = pack_artifact.pack_ref.clone();
     load_pack(&pack_artifact)?;
-    let host = principal.user_id().to_string();
+    let host_principal_id = principal.id();
     let denied: Vec<&str> = cohost_denied.iter().map(|c| c.as_str()).collect();
     let ev = EventInput::new(
         "GameCreated",
         1,
         serde_json::json!({
-            "host": host,
+            "host_principal_id": host_principal_id,
             "pack_ref": pack_ref,
             "pack_artifact": pack_artifact,
             "cohost_denied": denied,
         }),
-        ActorId::Principal(host.clone()),
+        ActorId::Principal(host_principal_id),
         0,
     );
     persist(tx, game, &[ev]).await
@@ -1282,16 +1318,13 @@ async fn grant_spectator(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    user: String,
+    principal_id: PrincipalId,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
-    if user.trim().is_empty() {
-        return Err(Reject::InvalidTarget);
-    }
-    if projections::principal_has_open_occupancy(&mut **tx, game, &user).await?
-        || projections::spectator_membership(&mut **tx, game, &user).await?
+    if projections::principal_has_open_occupancy(&mut **tx, game, principal_id).await?
+        || projections::spectator_membership(&mut **tx, game, principal_id).await?
     {
         return Err(Reject::InvalidTarget);
     }
@@ -1301,7 +1334,7 @@ async fn grant_spectator(
         &[EventInput::new(
             "SpectatorGranted",
             1,
-            serde_json::json!({ "user_id": user }),
+            serde_json::json!({ "principal_id": principal_id }),
             ActorId::Host,
             0,
         )],
@@ -1313,15 +1346,12 @@ async fn revoke_spectator(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    user: String,
+    principal_id: PrincipalId,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::Setup).await?;
-    if user.trim().is_empty() {
-        return Err(Reject::InvalidTarget);
-    }
-    if !projections::spectator_membership(&mut **tx, game, &user).await? {
+    if !projections::spectator_membership(&mut **tx, game, principal_id).await? {
         return Err(Reject::InvalidTarget);
     }
     persist(
@@ -1330,7 +1360,7 @@ async fn revoke_spectator(
         &[EventInput::new(
             "SpectatorRevoked",
             1,
-            serde_json::json!({ "user_id": user }),
+            serde_json::json!({ "principal_id": principal_id }),
             ActorId::Host,
             0,
         )],
@@ -1702,8 +1732,7 @@ async fn apply_effect_plan(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::EffectSpec).await?;
 
-    let principal_id = game_platform::PrincipalId::new(principal.user_id().to_string())
-        .map_err(effect_spec_validation)?;
+    let principal_id = principal.id();
     let plan = game_platform::EffectPlan::try_new(
         game_platform::EffectOrigin::HostFiat { principal_id },
         effects,
@@ -1716,7 +1745,7 @@ async fn apply_effect_plan(
             Reject::Internal("command audit context missing in effect plan".to_string())
         })?;
     let application = EffectApplication::HostFiat {
-        principal_user_id: principal.user_id().to_string(),
+        principal_id,
         command_id,
     };
     let mut lifecycle_states = BTreeMap::new();
@@ -1727,7 +1756,7 @@ async fn apply_effect_plan(
 #[derive(Debug, Clone)]
 pub(crate) enum EffectApplication {
     HostFiat {
-        principal_user_id: String,
+        principal_id: PrincipalId,
         command_id: Uuid,
     },
     DayEvent {
@@ -1759,9 +1788,9 @@ impl EffectApplication {
     fn grant_source(&self, index: usize) -> String {
         match self {
             Self::HostFiat {
-                principal_user_id,
+                principal_id,
                 command_id,
-            } => host_fiat_grant_source(principal_user_id, *command_id, index),
+            } => host_fiat_grant_source(principal_id, *command_id, index),
             Self::DayEvent {
                 event_id,
                 reward_key,
@@ -1957,10 +1986,10 @@ fn persistent_effect_policy<'a>(
         .map_err(|issue| effect_spec_reject(issue.message))
 }
 
-fn host_fiat_grant_source(principal_user_id: &str, command_id: Uuid, index: usize) -> String {
+fn host_fiat_grant_source(principal_id: &PrincipalId, command_id: Uuid, index: usize) -> String {
     let scope = format!(
         "{:x}",
-        Sha256::digest(format!("{principal_user_id}\0{command_id}").as_bytes())
+        Sha256::digest(format!("{principal_id}\0{command_id}").as_bytes())
     );
     format!("host_fiat:grant:{scope}:{index}")
 }
@@ -2024,16 +2053,16 @@ async fn current_slot_lifecycle_status(
 async fn persona_id_for_principal(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-    principal_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<Option<GamePersonaId>, Reject> {
     sqlx::query_scalar::<_, Uuid>(
         "SELECT binding.persona_id FROM game_persona_subject_binding AS binding \
          JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id \
          WHERE binding.game_id = $1 AND binding.lifecycle = 'active' \
-         AND subject.principal_user_id = $2",
+         AND subject.principal_id = $2",
     )
     .bind(game)
-    .bind(principal_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(&mut **tx)
     .await
     .map(|persona_id| persona_id.map(GamePersonaId::from_uuid))
@@ -2127,7 +2156,7 @@ async fn assign_slot_with_name(
     principal: &Principal,
     game: Uuid,
     slot: String,
-    principal_id: String,
+    principal_id: PrincipalId,
     public_name: Option<String>,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
@@ -2136,7 +2165,7 @@ async fn assign_slot_with_name(
     if !projections::slot_exists(&mut **tx, game, &slot).await? {
         return Err(Reject::UnknownSlot);
     }
-    if projections::spectator_membership(&mut **tx, game, &principal_id).await? {
+    if projections::spectator_membership(&mut **tx, game, principal_id).await? {
         return Err(Reject::InvalidTarget);
     }
     if projections::slot_occupant(&mut **tx, game, &slot)
@@ -2145,7 +2174,7 @@ async fn assign_slot_with_name(
     {
         return Err(Reject::InvalidTarget);
     }
-    let persona_id = persona_id_for_principal(tx, game, &principal_id)
+    let persona_id = persona_id_for_principal(tx, game, principal_id)
         .await?
         .unwrap_or_else(GamePersonaId::random);
     let is_new_persona = !game_persona_exists(tx, game, persona_id).await?;
@@ -2166,7 +2195,6 @@ async fn assign_slot_with_name(
     let occupancy_id = OccupancyId::random();
     let mut events = Vec::new();
     if is_new_persona {
-        let target = PrincipalId::new(&principal_id).map_err(|_| Reject::InvalidTarget)?;
         let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
             .await
             .map_err(|error| Reject::Internal(error.to_string()))?;
@@ -2175,7 +2203,7 @@ async fn assign_slot_with_name(
                 tx,
                 game,
                 persona_id,
-                &target,
+                &principal_id,
                 persona_presentation(requested_public_name)?,
                 ActorId::Host,
                 occurred_at,
@@ -2213,7 +2241,7 @@ async fn seat_persona(
     principal: &Principal,
     game: Uuid,
     slot: String,
-    principal_id: String,
+    principal_id: PrincipalId,
     public_name: String,
 ) -> Result<Ack, Reject> {
     if public_name.trim().is_empty() {
@@ -2798,7 +2826,7 @@ async fn process_replacement(
     game: Uuid,
     slot: String,
     outgoing_persona_id: GamePersonaId,
-    incoming_principal_id: String,
+    incoming_principal_id: PrincipalId,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
@@ -2816,17 +2844,16 @@ async fn process_replacement(
     if current_persona_id != outgoing_persona_id {
         return Err(Reject::InvalidTarget);
     }
-    if projections::spectator_membership(&mut **tx, game, &incoming_principal_id).await? {
+    if projections::spectator_membership(&mut **tx, game, incoming_principal_id).await? {
         return Err(Reject::InvalidTarget);
     }
-    let incoming_persona_id = persona_id_for_principal(tx, game, &incoming_principal_id)
+    let incoming_persona_id = persona_id_for_principal(tx, game, incoming_principal_id)
         .await?
         .unwrap_or_else(GamePersonaId::random);
     let transition_id = OccupancyTransitionId::random();
     let incoming_occupancy_id = OccupancyId::random();
     let mut events = Vec::new();
     if !game_persona_exists(tx, game, incoming_persona_id).await? {
-        let target = PrincipalId::new(&incoming_principal_id).map_err(|_| Reject::InvalidTarget)?;
         let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
             .await
             .map_err(|error| Reject::Internal(error.to_string()))?;
@@ -2835,7 +2862,7 @@ async fn process_replacement(
                 tx,
                 game,
                 incoming_persona_id,
-                &target,
+                &incoming_principal_id,
                 persona_presentation(generated_persona_name(&slot, incoming_persona_id))?,
                 ActorId::Host,
                 occurred_at,
@@ -3461,7 +3488,7 @@ pub async fn run_large_action_graph_performance_proof(
     seed: u64,
     threshold: Duration,
 ) -> Result<LargeActionGraphPerformanceProof, Reject> {
-    let host = Principal::user("host_h");
+    let host = Principal::authenticated(fixture_principal_id("host_h"));
     let roster = large_action_graph_roster();
     let actions = large_action_graph_actions();
 
@@ -3519,7 +3546,10 @@ pub async fn run_large_action_graph_performance_proof(
     for (actor_slot, template_id, action_slug, targets) in &actions {
         handle(
             pool,
-            &Principal::user(format!("large_graph_user_{}", slot_number(actor_slot)?)),
+            &Principal::authenticated(fixture_principal_id(format!(
+                "large_graph_user_{}",
+                slot_number(actor_slot)?
+            ))),
             Command::SubmitAction {
                 game,
                 action_id: format!("large_graph_{action_slug}"),
@@ -3897,7 +3927,6 @@ async fn admit_host_prompt_resolution(
     host_prompt_resolution::resolve_host_prompt(
         host_prompt_resolution::HostPromptResolutionContext::new(
             tx,
-            principal.user_id().to_string(),
             host_prompt_resolution::HostPromptResolutionRequest {
                 game,
                 prompt_id,
@@ -3928,12 +3957,7 @@ fn next_declared_phase_id(
     } else {
         source_number
     };
-    let prefix = match next_kind {
-        domain::pack::PhaseKind::Day => "D",
-        domain::pack::PhaseKind::Night => "N",
-        domain::pack::PhaseKind::Twilight => "T",
-    };
-    let phase_id = format!("{prefix}{next_number:02}");
+    let phase_id = domain::phase::PhaseId::compose(next_kind, next_number);
     validate_phase_id_for_policy(phase_policy, &phase_id)?;
     Ok(phase_id)
 }
@@ -4240,7 +4264,7 @@ pub async fn load_engine_phase_input(
     })
 }
 
-/// Audit the UserId/SlotId boundary at the command-to-engine seam.
+/// Audit the PrincipalId/SlotId boundary at the command-to-engine seam.
 ///
 /// Platform identity is valid in the event stream for host, cohost,
 /// occupant, and replacement events. The engine snapshot is resolver input,
@@ -4258,10 +4282,10 @@ pub async fn audit_engine_snapshot_identity_boundary(
         .state;
     let snapshot_json = serde_json::to_string(&snapshot)
         .map_err(|e| Reject::Internal(format!("serialize engine snapshot: {e}")))?;
-    let stream_user_ids = stream_platform_user_ids(&stream);
-    let leaked_user_ids = stream_user_ids
+    let stream_principal_ids = stream_platform_principal_ids(&stream);
+    let leaked_principal_ids = stream_principal_ids
         .iter()
-        .filter(|user_id| snapshot_json.contains(user_id.as_str()))
+        .filter(|principal_id| snapshot_json.contains(&principal_id.to_string()))
         .cloned()
         .collect::<Vec<_>>();
     let snapshot_slot_ids = snapshot
@@ -4269,52 +4293,49 @@ pub async fn audit_engine_snapshot_identity_boundary(
         .iter()
         .map(|slot| slot.slot_id.clone())
         .collect::<Vec<_>>();
-    let slot_only = leaked_user_ids.is_empty();
+    let slot_only = leaked_principal_ids.is_empty();
 
     Ok(EngineSnapshotIdentityAudit {
         phase_id: phase_id.to_string(),
         snapshot_slot_ids,
-        stream_user_ids,
-        leaked_user_ids,
+        stream_principal_ids,
+        leaked_principal_ids,
         slot_only,
     })
 }
 
-fn stream_platform_user_ids(stream: &[eventstore::StoredEvent]) -> Vec<String> {
-    let mut user_ids = BTreeSet::new();
+fn stream_platform_principal_ids(stream: &[eventstore::StoredEvent]) -> Vec<PrincipalId> {
+    let mut principal_ids = BTreeSet::new();
     for ev in stream {
-        if let ActorId::Principal(user_id) = &ev.actor {
-            user_ids.insert(user_id.clone());
+        if let ActorId::Principal(principal_id) = &ev.actor {
+            principal_ids.insert(*principal_id);
         }
-        collect_platform_user_ids(&ev.payload, &mut user_ids);
-        collect_platform_user_ids(&ev.meta, &mut user_ids);
+        collect_platform_principal_ids(&ev.payload, &mut principal_ids);
+        collect_platform_principal_ids(&ev.meta, &mut principal_ids);
     }
-    user_ids.into_iter().collect()
+    principal_ids.into_iter().collect()
 }
 
-fn collect_platform_user_ids(value: &serde_json::Value, user_ids: &mut BTreeSet<String>) {
+fn collect_platform_principal_ids(
+    value: &serde_json::Value,
+    principal_ids: &mut BTreeSet<PrincipalId>,
+) {
     match value {
         serde_json::Value::Object(map) => {
             for (key, nested) in map {
-                if matches!(
-                    key.as_str(),
-                    "host"
-                        | "user"
-                        | "user_id"
-                        | "principal_user_id"
-                        | "outgoing_user"
-                        | "incoming_user"
-                ) {
-                    if let Some(user_id) = nested.as_str() {
-                        user_ids.insert(user_id.to_string());
+                if key == "principal_id" {
+                    if let Some(raw_principal_id) = nested.as_str() {
+                        if let Ok(principal_id) = raw_principal_id.parse() {
+                            principal_ids.insert(principal_id);
+                        }
                     }
                 }
-                collect_platform_user_ids(nested, user_ids);
+                collect_platform_principal_ids(nested, principal_ids);
             }
         }
         serde_json::Value::Array(values) => {
             for nested in values {
-                collect_platform_user_ids(nested, user_ids);
+                collect_platform_principal_ids(nested, principal_ids);
             }
         }
         _ => {}
@@ -4322,23 +4343,15 @@ fn collect_platform_user_ids(value: &serde_json::Value, user_ids: &mut BTreeSet<
 }
 
 pub(crate) fn phase_kind(phase_id: &str) -> Result<domain::pack::PhaseKind, Reject> {
-    match phase_id.chars().next() {
-        Some('D') => Ok(domain::pack::PhaseKind::Day),
-        Some('N') => Ok(domain::pack::PhaseKind::Night),
-        Some('T') => Ok(domain::pack::PhaseKind::Twilight),
-        _ => Err(Reject::Internal(format!("unknown phase id `{phase_id}`"))),
-    }
+    domain::phase::PhaseId::parse(phase_id)
+        .map(|phase| phase.kind())
+        .map_err(|error| Reject::Internal(error.to_string()))
 }
 
 pub(crate) fn phase_number(phase_id: &str) -> Result<u32, Reject> {
-    let digits: String = phase_id
-        .chars()
-        .skip(1)
-        .take_while(|c| c.is_ascii_digit())
-        .collect();
-    digits
-        .parse()
-        .map_err(|_| Reject::Internal(format!("phase id `{phase_id}` has no numeric number")))
+    domain::phase::PhaseId::parse(phase_id)
+        .map(|phase| phase.number())
+        .map_err(|error| Reject::Internal(error.to_string()))
 }
 
 fn validate_pack_phase_id(pack: &domain::Pack, phase_id: &str) -> Result<(), Reject> {
@@ -5559,11 +5572,11 @@ async fn claim_or_replay_receipt_in_tx(
 ) -> Result<Option<Ack>, Reject> {
     let result = sqlx::query(
         "INSERT INTO command_receipt \
-         (principal_user_id, command_id, command_fingerprint, stream_id, stream_seqs) \
+         (principal_id, command_id, command_fingerprint, stream_id, stream_seqs) \
          VALUES ($1, $2, $3, $4, ARRAY[]::BIGINT[]) \
-         ON CONFLICT (principal_user_id, command_id) DO NOTHING",
+         ON CONFLICT (principal_id, command_id) DO NOTHING",
     )
-    .bind(&receipt.principal_user_id)
+    .bind(receipt.principal_id.as_uuid())
     .bind(receipt.command_id)
     .bind(&receipt.command_fingerprint)
     .bind(game)
@@ -5576,9 +5589,9 @@ async fn claim_or_replay_receipt_in_tx(
     }
     let row = sqlx::query(
         "SELECT command_fingerprint, stream_seqs FROM command_receipt \
-         WHERE principal_user_id = $1 AND command_id = $2",
+         WHERE principal_id = $1 AND command_id = $2",
     )
-    .bind(&receipt.principal_user_id)
+    .bind(receipt.principal_id.as_uuid())
     .bind(receipt.command_id)
     .fetch_one(&mut **tx)
     .await
@@ -5600,9 +5613,9 @@ async fn store_receipt_ack_in_tx(
 ) -> Result<(), Reject> {
     sqlx::query(
         "UPDATE command_receipt SET stream_seqs = $3 \
-         WHERE principal_user_id = $1 AND command_id = $2",
+         WHERE principal_id = $1 AND command_id = $2",
     )
-    .bind(&receipt.principal_user_id)
+    .bind(receipt.principal_id.as_uuid())
     .bind(receipt.command_id)
     .bind(&ack.stream_seqs)
     .execute(&mut **tx)
@@ -5629,10 +5642,17 @@ pub(crate) async fn persist(
         let meta = event.meta.as_object_mut().ok_or_else(|| {
             Reject::Internal(format!("event {} audit meta must be an object", event.kind))
         })?;
-        meta.insert(
-            "principal_user_id".to_string(),
-            serde_json::Value::String(audit.principal_user_id.clone()),
-        );
+        let initiator = match audit.initiator {
+            AuditInitiator::Principal(principal_id) => serde_json::json!({
+                "kind": "principal",
+                "principal_id": principal_id,
+            }),
+            AuditInitiator::Service(service) => serde_json::json!({
+                "kind": "service",
+                "service_id": service.id(),
+            }),
+        };
+        meta.insert("initiator".to_string(), initiator);
         meta.insert(
             "command_id".to_string(),
             serde_json::Value::String(audit.command_id.to_string()),
@@ -5709,9 +5729,11 @@ mod tests {
     #[test]
     fn host_fiat_grant_sources_are_opaque_and_collision_free_across_principals() {
         let command_id = Uuid::nil();
-        let host = host_fiat_grant_source("host_account", command_id, 0);
-        let cohost = host_fiat_grant_source("cohost_account", command_id, 0);
-        let second_effect = host_fiat_grant_source("host_account", command_id, 1);
+        let host_principal = fixture_principal_id("host_account");
+        let cohost_principal = fixture_principal_id("cohost_account");
+        let host = host_fiat_grant_source(&host_principal, command_id, 0);
+        let cohost = host_fiat_grant_source(&cohost_principal, command_id, 0);
+        let second_effect = host_fiat_grant_source(&host_principal, command_id, 1);
 
         assert_ne!(host, cohost);
         assert_ne!(host, second_effect);

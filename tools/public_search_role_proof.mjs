@@ -11,10 +11,11 @@ import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+  fixturePrincipalAuthorityId,
+  fixturePrincipalTransport,
+} from "./principal_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -276,31 +277,31 @@ function assertEvidence(evidence) {
   }
 }
 
-async function createDevSession(apiBaseUrl, principalUserId, globalCapabilities) {
+async function createDevSession(apiBaseUrl, principalId, globalCapabilities) {
   const session = await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      principal_user_id: principalUserId,
+      principal_id: fixturePrincipalAuthorityId(principalId),
       expires_at: 4_102_444_800,
       global_capabilities: globalCapabilities,
     }),
   });
   if (typeof session.session_token !== "string" || session.session_token === "") {
-    throw new Error(`dev session for ${principalUserId} returned no session_token`);
+    throw new Error(`dev session for ${principalId} returned no session_token`);
   }
-  devSessionTokens.set(principalUserId, session.session_token);
+  devSessionTokens.set(principalId, session.session_token);
   return session.session_token;
 }
 
-async function createAccount(apiBaseUrl, adminToken, accountId, principalUserId, globalCapabilities) {
+async function createAccount(apiBaseUrl, adminToken, accountId, principalId, globalCapabilities) {
   await fetchJson(`${apiBaseUrl}/auth/accounts`, {
     method: "POST",
     headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
     body: JSON.stringify({
       account_id: accountId,
       password: "correct horse battery staple",
-      principal_user_id: principalUserId,
+      principal_id: fixturePrincipalAuthorityId(principalId),
       global_capabilities: globalCapabilities,
     }),
   });
@@ -308,10 +309,10 @@ async function createAccount(apiBaseUrl, adminToken, accountId, principalUserId,
 
 // The strict wire rejects any actor field in the envelope; seed commands act
 // as a principal by presenting that principal's dev session as the bearer.
-async function sendCommand(apiBaseUrl, id, principalUserId, command) {
-  const sessionToken = devSessionTokens.get(principalUserId);
+async function sendCommand(apiBaseUrl, id, principalId, command) {
+  const sessionToken = devSessionTokens.get(principalId);
   if (sessionToken === undefined) {
-    throw new Error(`no dev session minted for ${principalUserId}`);
+    throw new Error(`no dev session minted for ${principalId}`);
   }
   const result = await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
@@ -324,7 +325,10 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
       id,
       body: {
         kind: "Command",
-        body: { command_id: randomUUID(), command },
+        body: {
+          command_id: randomUUID(),
+          command: fixturePrincipalTransport(command, "public search command transport"),
+        },
       },
     }),
   });
@@ -355,7 +359,7 @@ async function startApi(applicationUrl) {
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
-    env: { ...applicationDatabaseEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: process.env.RUST_LOG ?? "warn" },
+    env: { ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: process.env.RUST_LOG ?? "warn" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (chunk) => { serverOutput += chunk.toString(); });

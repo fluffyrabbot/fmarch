@@ -39,13 +39,13 @@ export async function load({ cookies, locals, fetch, params, url }) {
   const game = url.searchParams.get("game") ?? "midsummer";
   const data = await buildAdminAuditDetailData({
     audit: params.audit,
-    principalUserId: locals.principalUserId,
+    principalId: locals.principalId,
     capabilities: locals.resolvedCapabilities,
     game,
     fetchImpl: apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
     sessionToken: accessTokenForRequest({ locals, cookies }),
-    identityPrincipalUserId: url.searchParams.get("principal_user_id") ?? "host_h",
+    identityPrincipalId: url.searchParams.get("principal_id") ?? locals.principalId,
     proofRun: await readLocalDevTestGameProofRun(),
     opsArtifacts: await readLocalOpsArtifacts(),
     seedFixtureSummary: await readLocalSeedFixtureSummary(),

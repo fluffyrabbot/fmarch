@@ -42,7 +42,7 @@
       <p class="fm-eyebrow">Account</p>
       <h1>Security</h1>
       <p class="fm-summary" data-testid="account-security-principal">
-        Signed in as {security.principalUserId}
+        Signed in as {security.principalId}
       </p>
     </div>
     <a

@@ -11,7 +11,7 @@ test("GlobalAdmin creates the first game through the authenticated command bound
       actions.createGame({
         cookies: { get: (name) => (name === "fmarch_session" ? "fmss_admin-session" : null) },
         locals: {
-          principalUserId: "admin_a",
+          principalId: "admin_a",
           resolvedCapabilities: [{ kind: "GlobalAdmin" }],
         },
         request: formRequest({ pack: "mafiascum" }),
@@ -36,7 +36,7 @@ test("GlobalAdmin creates the first game through the authenticated command bound
     assert.equal(observed.authorization, "Bearer fmss_admin-session");
     assert.equal(observed.envelope.body.kind, "Command");
     assert.equal(observed.envelope.body.body.command.CreateGame.pack, "mafiascum");
-    assert.equal("principal_user_id" in observed.envelope.body.body, false);
+    assert.equal("principal_id" in observed.envelope.body.body, false);
   } finally {
     restoreEnv("FMARCH_API_BASE_URL", previous);
   }
@@ -45,7 +45,7 @@ test("GlobalAdmin creates the first game through the authenticated command bound
 test("non-admin sessions cannot invoke fresh-install bootstrap", async () => {
   const result = await actions.createGame({
     cookies: { get: () => "member-session" },
-    locals: { principalUserId: "member_a", resolvedCapabilities: [] },
+    locals: { principalId: "member_a", resolvedCapabilities: [] },
     request: formRequest({ pack: "mafiascum" }),
     fetch: async () => {
       throw new Error("unauthorized bootstrap must not reach API");

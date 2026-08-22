@@ -14,26 +14,30 @@ use social::{
 use sqlx::Row;
 use uuid::Uuid;
 
-fn test_game_created_payload(host: &str, key: &str) -> serde_json::Value {
+fn test_principal(value: u128) -> PrincipalId {
+    PrincipalId::from_uuid(Uuid::from_u128(value))
+}
+
+fn test_game_created_payload(host_principal_id: PrincipalId, key: &str) -> serde_json::Value {
     let artifact = content_registry::select_pack_artifact(key)
         .unwrap_or_else(|error| panic!("select canonical test pack artifact `{key}`: {error}"));
     serde_json::json!({
-        "host": host,
+        "host_principal_id": host_principal_id,
         "pack_ref": &artifact.pack_ref,
         "pack_artifact": artifact,
     })
 }
 
-async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
+async fn ensure_test_principal(pool: &sqlx::PgPool, principal_id: PrincipalId) {
     let mut connection = pool.acquire().await.unwrap();
-    identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
+    identity::methods::ensure_principal(&mut connection, &principal_id, &[], 1)
         .await
         .unwrap();
 }
 
 async fn create_test_profile(
     pool: &sqlx::PgPool,
-    principal: &str,
+    principal: PrincipalId,
     handle: &str,
     display_name: &str,
     bio: &str,
@@ -46,25 +50,22 @@ async fn create_test_profile(
         ProfileBio::new(bio).unwrap(),
         visibility,
     );
-    profile_application::create_profile(
-        pool,
-        PrincipalId::new(principal).unwrap(),
-        presentation,
-        occurred_at,
-    )
-    .await
-    .unwrap()
-    .as_uuid()
+    profile_application::create_profile(pool, principal, presentation, occurred_at)
+        .await
+        .unwrap()
+        .as_uuid()
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     let area = Uuid::from_u128(81);
     let topic = Uuid::from_u128(82);
-    ensure_test_principal(&pool, "quote_member").await;
+    let quote_member = test_principal(1);
+    let moderator = test_principal(2);
+    ensure_test_principal(&pool, quote_member).await;
     let profile = create_test_profile(
         &pool,
-        "quote_member",
+        quote_member,
         "quote_member",
         "Quote Member",
         "Cites sources",
@@ -79,7 +80,7 @@ async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) 
             "DiscussionAreaCreated",
             1,
             serde_json::json!({ "slug": "quotes", "title": "Quotes", "description": "Citation proofs" }),
-            ActorId::Principal("moderator".into()),
+            ActorId::Principal(moderator),
             2,
         )],
     )
@@ -93,14 +94,14 @@ async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) 
                 "DiscussionTopicCreated",
                 1,
                 serde_json::json!({ "area_id": area, "title": "Signal theory", "author_profile_id": profile }),
-                ActorId::Principal("quote_member".into()),
+                ActorId::Principal(quote_member),
                 3,
             ),
             EventInput::new(
                 "DiscussionPostSubmitted",
                 1,
                 serde_json::json!({ "body": "Alpha signal analysis", "author_profile_id": profile }),
-                ActorId::Principal("quote_member".into()),
+                ActorId::Principal(quote_member),
                 4,
             ),
         ],
@@ -126,7 +127,7 @@ async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) 
                     "excerpt": "Alpha signal"
                 }]
             }),
-            ActorId::Principal("quote_member".into()),
+            ActorId::Principal(quote_member),
             5,
         )],
     )
@@ -171,6 +172,7 @@ async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     let game = Uuid::from_u128(91);
+    let host = test_principal(3);
     append_and_project(
         &pool,
         game,
@@ -178,8 +180,8 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
             EventInput::new(
                 "GameCreated",
                 1,
-                test_game_created_payload("host", "mafiascum"),
-                ActorId::Principal("host".into()),
+                test_game_created_payload(host, "mafiascum"),
+                ActorId::Principal(host),
                 1,
             ),
             EventInput::new(
@@ -295,10 +297,12 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
 ) {
     let area = Uuid::from_u128(101);
     let topic = Uuid::from_u128(102);
-    ensure_test_principal(&pool, "reader").await;
+    let reader = test_principal(4);
+    let moderator = test_principal(5);
+    ensure_test_principal(&pool, reader).await;
     let profile = create_test_profile(
         &pool,
-        "reader",
+        reader,
         "reader",
         "Reader",
         "Reads community discussions",
@@ -313,7 +317,7 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
             "DiscussionAreaCreated",
             1,
             serde_json::json!({ "slug": "read", "title": "Read", "description": "" }),
-            ActorId::Principal("moderator".into()),
+            ActorId::Principal(moderator),
             2,
         )],
     )
@@ -327,14 +331,14 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
                 "DiscussionTopicCreated",
                 1,
                 serde_json::json!({ "area_id": area, "title": "Claims", "author_profile_id": profile }),
-                ActorId::Principal("reader".into()),
+                ActorId::Principal(reader),
                 3,
             ),
             EventInput::new(
                 "DiscussionPostSubmitted",
                 1,
                 serde_json::json!({ "body": "Root claim", "author_profile_id": profile }),
-                ActorId::Principal("reader".into()),
+                ActorId::Principal(reader),
                 4,
             ),
         ],
@@ -361,7 +365,7 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
                         "excerpt": "Root"
                     }]
                 }),
-                ActorId::Principal("reader".into()),
+                ActorId::Principal(reader),
                 5,
             ),
             EventInput::new(
@@ -379,7 +383,7 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
                         "excerpt": "Root"
                     }]
                 }),
-                ActorId::Principal("reader".into()),
+                ActorId::Principal(reader),
                 6,
             ),
         ],
@@ -391,11 +395,12 @@ async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quot
         INSERT INTO moderation_target_state (
             surface_id, source_seq, visibility, reason,
             moderator_principal_id, updated_seq
-        ) VALUES ($1, $2, 'hidden', 'spam', 'moderator', $2)
+        ) VALUES ($1, $2, 'hidden', 'spam', $3, $2)
         "#,
     )
     .bind(topic)
     .bind(quoting[1].seq)
+    .bind(moderator.as_uuid())
     .execute(&pool)
     .await
     .unwrap();

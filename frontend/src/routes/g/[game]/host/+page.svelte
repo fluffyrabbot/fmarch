@@ -596,14 +596,14 @@
               </label>
               <input
                 type="hidden"
-                name="principalUserId"
-                value={inviteTarget.principalUserId}
+                name="principalId"
+                value={inviteTarget.principalId}
               />
               <input type="hidden" name="slotId" value={inviteTarget.slotId} />
               <input
                 type="hidden"
-                name="expectedOccupantUserId"
-                value={inviteTarget.expectedOccupantUserId}
+                name="expectedOccupantPrincipalId"
+                value={inviteTarget.expectedOccupantPrincipalId}
               />
               <button
                 class="touch-control"
@@ -629,7 +629,7 @@
                 >
                   {inviteResult.loginUrl}
                 </a>
-              {:else if inviteTarget.id === "player" && inviteResult.currentOccupantUserId}
+              {:else if inviteTarget.id === "player" && inviteResult.currentOccupantPrincipalId}
                 <form
                   class="host-console-critical-path__invite-retry"
                   method="POST"
@@ -648,8 +648,8 @@
                   </label>
                   <input
                     type="hidden"
-                    name="principalUserId"
-                    value={inviteResult.currentOccupantUserId}
+                    name="principalId"
+                    value={inviteResult.currentOccupantPrincipalId}
                   />
                   <input
                     type="hidden"
@@ -658,8 +658,8 @@
                   />
                   <input
                     type="hidden"
-                    name="expectedOccupantUserId"
-                    value={inviteResult.currentOccupantUserId}
+                    name="expectedOccupantPrincipalId"
+                    value={inviteResult.currentOccupantPrincipalId}
                   />
                   <button
                     class="touch-control"

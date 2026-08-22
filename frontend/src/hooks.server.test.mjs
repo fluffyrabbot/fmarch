@@ -4,7 +4,10 @@ import {
   fmarchIdentityHandle as handle,
   securityHeadersHandle,
 } from "./hooks.server.js";
-import { clearSessionCache } from "./lib/server/session-capabilities.mjs";
+import {
+  clearSessionCache,
+  FIXTURE_SESSION_PRINCIPAL_IDS,
+} from "./lib/server/session-capabilities.mjs";
 
 test("handle rotates an overdue browser session before resolving the route", async () => {
   const observed = { requests: [], set: null, deleted: null };
@@ -19,7 +22,7 @@ test("handle rotates an overdue browser session before resolving the route", asy
   assert.deepEqual(JSON.parse(observed.requests[1].init.body), {});
   assert.equal(observed.requests[2].url, "/auth/session?game=game-1");
   assert.equal(observed.set.value, "fmss_rotated-token");
-  assert.equal(event.locals.principalUserId, "host_h");
+  assert.equal(event.locals.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.host);
   assert.equal(event.locals.viewerProfile, null);
   assert.equal(event.locals.resolvedCapabilities[0].kind, "HostOf");
 });
@@ -31,7 +34,7 @@ test("handle clears a concurrently stale browser session instead of serving it",
   });
   await handle({ event, resolve: async () => new Response("ok") });
   assert.deepEqual(observed.deleted, { name: "fmarch_session", options: { path: "/" } });
-  assert.equal(event.locals.principalUserId, null);
+  assert.equal(event.locals.principalId, null);
   assert.equal(event.locals.viewerProfile, null);
   assert.deepEqual(event.locals.resolvedCapabilities, []);
 });
@@ -51,7 +54,7 @@ test("handle re-resolves game authority on every request", async () => {
     observed.requests.filter((request) => request.url.startsWith("/auth/session?")).length,
     2,
   );
-  assert.equal(event.locals.principalUserId, "host_h");
+  assert.equal(event.locals.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.host);
   clearSessionCache();
 });
 
@@ -70,7 +73,7 @@ test("handle serves repeat non-game identity requests from the session cache wit
     observed.requests.filter((request) => request.url === "/auth/session").length,
     1,
   );
-  assert.equal(event.locals.principalUserId, "host_h");
+  assert.equal(event.locals.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.host);
   clearSessionCache();
 });
 
@@ -133,7 +136,7 @@ function sessionResponse({ rotationRequired }) {
     status: 200,
     async json() {
       return {
-        principal_user_id: "host_h",
+        principal_id: FIXTURE_SESSION_PRINCIPAL_IDS.host,
         rotation_required: rotationRequired,
         session_token: "fmss_rotated-token",
         capabilities: [{ kind: "HostOf", body: { game: "game-1" } }],

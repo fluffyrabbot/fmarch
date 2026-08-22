@@ -71,7 +71,7 @@ test("gameplay proxy rejects legacy public-main thread aliases", async () => {
 });
 
 test("private gameplay proxy rejects client-selected principals before forwarding", async () => {
-  for (const selector of ["principal_user_id", "principalUserId"]) {
+  for (const selector of ["principal_id", "principalId"]) {
     let called = false;
     const request = new Request(
       `https://app.example/api/gameplay/games/game-1/player-command-state?slot_id=slot-7&${selector}=forged-user`,

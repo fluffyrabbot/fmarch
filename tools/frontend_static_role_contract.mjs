@@ -112,6 +112,9 @@ import {
   hostConsoleForbiddenMessage,
 } from "../frontend/src/routes/g/[game]/host/host-route-model.mjs";
 import {
+  FIXTURE_PRINCIPAL_IDS,
+} from "../frontend/src/lib/principal-id.mjs";
+import {
   buildHostDerivedState,
   hostCommandPendingStatus,
   sendHostRouteAction,
@@ -206,7 +209,7 @@ console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 
 function proveBoardSurface() {
   const data = buildBoardRouteData({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
     gameIndexPage: fixtureBoardGameIndexPage(),
   });
@@ -251,7 +254,7 @@ async function proveAppShellContract() {
     "utf8",
   );
   const data = buildBoardRouteData({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
     game: "midsummer",
   });
@@ -1146,7 +1149,7 @@ async function proveConfirmationActionContract() {
       },
     },
     game: "midsummer",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
   });
   const hostAction = createHostActionController(
     {
@@ -1314,12 +1317,12 @@ function proveCommandTraceContract() {
 
 async function proveAdminSurface() {
   const data = await buildAdminRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
   });
   const auditDetailData = await buildAdminAuditDetailData({
     audit: "proof-runs",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
   });
   assert.equal(data.access.allowed, true);
@@ -1350,7 +1353,7 @@ async function proveAdminSurface() {
     tasks: data.recoveryTasks,
     commandStatuses,
     game: data.shell.game,
-    principalUserId: data.operator.principalUserId,
+    principalId: data.operator.principalId,
   });
   const activity = buildAdminCommandActivityViewModel({ commandStatuses });
   const escalation = buildAdminEscalationPanelViewModel({
@@ -1412,7 +1415,7 @@ async function proveAdminSurface() {
       throw new Error("static admin proof uses injected command sender");
     },
     sendCommandImpl: async (request) => {
-      assert.equal(request.principalUserId, "admin_a");
+      assert.equal(request.principalId, "admin_a");
       assert.equal(request.endpoint, "/commands");
       assert.deepEqual(request.command, {
         CreateGame: {
@@ -1488,7 +1491,7 @@ async function provePlayerSurface() {
   ];
   const data = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities,
   });
   assert.equal(data.access.allowed, true);
@@ -1672,7 +1675,7 @@ async function provePlayerSurface() {
   const rolePmRoute = await buildGameRouteData({
     game: "midsummer",
     activeChannel: "private:role_pm:slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
@@ -1874,7 +1877,7 @@ async function provePlayerSurface() {
 async function proveModeratorSurface() {
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
-    principalUserId: "host_h",
+    principalId: FIXTURE_PRINCIPAL_IDS.hostH,
     capabilities: [{ kind: "HostOf", game: "midsummer" }],
   });
   assert.equal(data.access.allowed, true);
@@ -1940,11 +1943,11 @@ async function proveModeratorSurface() {
   assert.equal(controls.tasks.length >= 6, true);
   assert.deepEqual(controls.commandContext, {
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
-    summary: "Hosting as @host_h",
+    summary: `Hosting as @${FIXTURE_PRINCIPAL_IDS.hostH}`,
     label: "Technical access",
-    value: "HostOf(midsummer) · @host_h",
+    value: `HostOf(midsummer) · @${FIXTURE_PRINCIPAL_IDS.hostH}`,
     gameId: "midsummer",
-    principalUserId: "host_h",
+    principalId: FIXTURE_PRINCIPAL_IDS.hostH,
     capabilityLabel: "HostOf(midsummer)",
     commandEndpoint: "/commands",
   });
@@ -2005,7 +2008,7 @@ async function proveModeratorSurface() {
     fetchImpl: async () => null,
     projectionStore,
     sendHostActionCommandImpl: async (request) => {
-      assert.equal("principalUserId" in request, false);
+      assert.equal("principalId" in request, false);
       return {
         state: "ack",
         actionId: request.actionEvent.actionId,
@@ -2037,7 +2040,7 @@ async function proveModeratorSurface() {
     fetchImpl: async () => null,
     projectionStore: promptProjectionStore,
     sendHostActionCommandImpl: async (request) => {
-      assert.equal("principalUserId" in request, false);
+      assert.equal("principalId" in request, false);
       assert.equal(request.actionEvent.payload.kind, "resolve_host_prompt");
       assert.equal(request.actionEvent.payload.promptId, "D01:skip_next_day:slot_1");
       return {
@@ -2080,7 +2083,7 @@ async function proveModeratorSurface() {
     fetchImpl: async () => null,
     projectionStore: hydratedPromptProjectionStore,
     sendHostActionCommandImpl: async (request) => {
-      assert.equal("principalUserId" in request, false);
+      assert.equal("principalId" in request, false);
       assert.equal(request.actionEvent.payload.kind, "resolve_host_prompt");
       return {
         state: "ack",
@@ -2403,21 +2406,21 @@ function assertAdminConfirmationBehavior(confirmation, {
 
 async function proveForbiddenRoutes() {
   const adminData = await buildAdminRouteData({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
   assert.equal(adminData.access.allowed, false);
 
   const playerData = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: null,
+    principalId: null,
     capabilities: [],
   });
   assert.equal(playerData.access.allowed, false);
 
   const hostData = await buildHostConsoleRouteData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: FIXTURE_PRINCIPAL_IDS.playerMira,
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
   assert.equal(hostData.access.allowed, false);

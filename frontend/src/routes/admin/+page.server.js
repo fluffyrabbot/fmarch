@@ -3,6 +3,7 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import { buildAdminCommand, buildCommandEnvelope } from "../../lib/app/command-boundary.mjs";
 import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
+import { canonicalPrincipalId } from "../../lib/principal-id.mjs";
 import { serverApiBaseUrl } from "../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../lib/server/session-capabilities.mjs";
 import {
@@ -14,8 +15,15 @@ import {
 } from "./admin-runtime-route-model.mjs";
 
 export async function load({ cookies, locals, fetch, url }) {
-  if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
+  if (typeof locals.principalId !== "string" || locals.principalId.trim() === "") {
     throw redirect(303, loginHref(url));
+  }
+  const requestedIdentityPrincipalId = url.searchParams.get("principal_id");
+  const identityPrincipalId = requestedIdentityPrincipalId === null
+    ? locals.principalId
+    : canonicalPrincipalId(requestedIdentityPrincipalId);
+  if (identityPrincipalId === null) {
+    throw error(400, "principal_id must be a canonical UUID");
   }
   const apiBaseUrl = serverApiBaseUrl();
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
@@ -33,7 +41,7 @@ export async function load({ cookies, locals, fetch, url }) {
     fallback: fixtureMode && apiBaseUrl === "" ? fixtureAdminBootstrapCatalog() : null,
   });
   const data = await buildAdminRuntimeRouteData({
-    principalUserId: locals.principalUserId,
+    principalId: locals.principalId,
     capabilities: locals.resolvedCapabilities,
     game: optionalGame(url.searchParams.get("game")),
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
@@ -42,7 +50,7 @@ export async function load({ cookies, locals, fetch, url }) {
     gameIndexPage,
     bootstrapCatalog,
     includeLegacyIdentityOps: classicAuthEnabled(process.env),
-    identityPrincipalUserId: url.searchParams.get("identity_principal_user_id") ?? "host_h",
+    identityPrincipalId,
   });
 
   if (!data.access.allowed) {
@@ -98,7 +106,7 @@ export const actions = {
       return fail(403, { bootstrap: { state: "reject", message: "Game creation requires GlobalAdmin" } });
     }
     const sessionToken = accessTokenForRequest({ locals, cookies });
-    if (!sessionToken || typeof locals.principalUserId !== "string") {
+    if (!sessionToken || typeof locals.principalId !== "string") {
       return fail(401, { bootstrap: { state: "reject", message: "Authenticated admin session required" } });
     }
     const formData = await request.formData();
@@ -248,11 +256,16 @@ export const actions = {
       });
     }
 
-    const grantedKinds = (body.capabilities ?? [])
-      .map((capability) => capability.kind)
-      .join(", ");
+    const principalId = canonicalPrincipalId(body?.principal_id);
+    const grantedCapabilities = Array.isArray(body?.capabilities) ? body.capabilities : null;
+    const grantedKinds = grantedCapabilities?.map((capability) => capability.kind).join(", ") ?? "";
     const issuedSessionToken = body?.session_token;
-    if (typeof issuedSessionToken !== "string" || issuedSessionToken.trim() === "") {
+    if (
+      principalId === null ||
+      grantedCapabilities === null ||
+      typeof issuedSessionToken !== "string" ||
+      issuedSessionToken.trim() === ""
+    ) {
       return fail(502, {
         id: "session-grants",
         state: "reject",
@@ -262,8 +275,8 @@ export const actions = {
     return {
       id: "session-grants",
       state: "ack",
-      message: `Granted ${grantedKinds} to ${body.principal_user_id}`,
-      principalUserId: body.principal_user_id,
+      message: `Granted ${grantedKinds} to ${principalId}`,
+      principalId,
       capabilityKinds: grantedKinds,
       sessionToken: issuedSessionToken,
     };
@@ -285,6 +298,13 @@ function requiredFormString(formData, field) {
 }
 
 function parseSessionGrantPayload(formData) {
+  const principalId = canonicalPrincipalId(formData.get("principalId"));
+  if (principalId === null) {
+    return Object.freeze({
+      status: "reject",
+      message: "Session grant principal must be a canonical UUID",
+    });
+  }
   const expiresAtText = requiredFormString(formData, "expiresAt");
   if (!/^\d+$/u.test(expiresAtText)) {
     return Object.freeze({
@@ -317,7 +337,7 @@ function parseSessionGrantPayload(formData) {
   return Object.freeze({
     status: "ok",
     payload: Object.freeze({
-      principal_user_id: requiredFormString(formData, "principalUserId"),
+      principal_id: principalId,
       expires_at: expiresAt,
       global_capabilities: Object.freeze(globalCapabilities),
     }),

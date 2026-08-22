@@ -338,7 +338,7 @@ test("player post builder allows an empty body with a YouTube embed", () => {
 
 test("generic command envelope uses the Rust ClientEnvelope shape", () => {
   const envelope = buildCommandEnvelope({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     commandId: "11111111-1111-4111-8111-111111111111",
     envelopeId: 10,
     command: buildPlayerCommand({
@@ -422,7 +422,7 @@ test("admin actions map to bootstrap wire command variants", () => {
       action: "assign_slot",
       game: "00000000-0000-0000-0000-000000000123",
       slot: "slot_1",
-      user: "player_mira",
+      principalId: "player_mira",
       publicName: "Mira",
     }),
     {
@@ -455,12 +455,12 @@ test("admin actions map to bootstrap wire command variants", () => {
     buildAdminCommand({
       action: "add_cohost",
       game: "00000000-0000-0000-0000-000000000123",
-      user: "cohost_c",
+      principalId: "cohost_c",
     }),
     {
       AddCohost: {
         game: "00000000-0000-0000-0000-000000000123",
-        user: "cohost_c",
+        principal_id: "cohost_c",
       },
     },
   );
@@ -498,7 +498,7 @@ test("admin actions map to bootstrap wire command variants", () => {
 
 test("generic command sender normalizes ack and reject outcomes", async () => {
   const ack = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "submit_vote",
       game: "00000000-0000-0000-0000-000000000001",
@@ -518,7 +518,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   assert.deepEqual(ack.streamSeqs, [44]);
 
   const reject = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "withdraw_vote",
       game: "00000000-0000-0000-0000-000000000001",
@@ -547,7 +547,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   );
 
   const staleActionReject = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "submit_action",
       game: "00000000-0000-0000-0000-000000000001",
@@ -580,7 +580,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   );
 
   const deadActionReject = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "submit_action",
       game: "00000000-0000-0000-0000-000000000001",
@@ -613,7 +613,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   );
 
   const staleActionTargetReject = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "submit_invalid_action:factional_kill",
       game: "00000000-0000-0000-0000-000000000001",
@@ -647,7 +647,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   );
 
   const staleVoteTargetReject = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "submit_vote",
       game: "00000000-0000-0000-0000-000000000001",
@@ -676,7 +676,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   );
 
   const alreadySubmittedReject = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "withdraw_vote",
       game: "00000000-0000-0000-0000-000000000001",
@@ -704,7 +704,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   );
 
   const notYourSlotReject = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "submit_vote",
       game: "00000000-0000-0000-0000-000000000001",
@@ -733,7 +733,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   );
 
   const retryableReject = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "withdraw_vote",
       game: "00000000-0000-0000-0000-000000000001",
@@ -762,7 +762,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   );
 
   const retryableRejectWithGuidance = await sendCommand({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     command: buildPlayerCommand({
       action: "withdraw_vote",
       game: "00000000-0000-0000-0000-000000000001",
@@ -850,7 +850,7 @@ test("player and admin builders emit tags present in generated wire Command unio
       action: "assign_slot",
       game,
       slot: "slot_1",
-      user: "player_mira",
+      principalId: "player_mira",
       publicName: "Mira",
     }),
     buildAdminCommand({
@@ -862,7 +862,7 @@ test("player and admin builders emit tags present in generated wire Command unio
     buildAdminCommand({
       action: "add_cohost",
       game,
-      user: "cohost_a",
+      principalId: "cohost_a",
     }),
     buildAdminCommand({
       action: "set_post_policy",

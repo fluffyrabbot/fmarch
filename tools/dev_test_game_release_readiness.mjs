@@ -3486,14 +3486,14 @@ function validateReplacementPlayerLaneProof(proof, options = {}) {
     game.trim() === "" ||
     frontendBaseUrl === "" ||
     hostIssuedInvite?.status !== "passed" ||
-    hostIssuedInvite.evidence?.principalUserId !== "player-rowan" ||
+    hostIssuedInvite.evidence?.principalId !== "player-rowan" ||
     hostIssuedInvite.evidence?.issuedBy !== "host_h" ||
     hostIssuedInvite.evidence?.issuedByCapability !== "HostOf" ||
     hostIssuedInvite.evidence?.returnTo !== `/g/${game}` ||
     hostIssuedInvite.evidence?.tokenPresent !== true ||
     sessionRefresh?.status !== "passed" ||
     sessionRefresh.evidence?.credentialKind !== "account" ||
-    sessionRefresh.evidence?.principalUserId !== "player-rowan" ||
+    sessionRefresh.evidence?.principalId !== "player-rowan" ||
     sessionRefresh.evidence?.usedInviteToken !== false ||
     sessionRefresh.evidence?.usedSessionGrant !== false ||
     sessionRefresh.evidence?.prefilledAccountId !== true ||
@@ -3503,7 +3503,7 @@ function validateReplacementPlayerLaneProof(proof, options = {}) {
     !sessionRefresh.evidence?.capabilityKinds?.includes("ChannelMember") ||
     sessionRefresh.evidence?.commandStateSlot !== "slot-7" ||
     incomingPlayer?.status !== "passed" ||
-    incomingPlayer.evidence?.principalUserId !== "player-rowan" ||
+    incomingPlayer.evidence?.principalId !== "player-rowan" ||
     !incomingPlayer.evidence?.capabilityKinds?.includes("SlotOccupant") ||
     !incomingPlayer.evidence?.capabilityKinds?.includes("ChannelMember") ||
     incomingPlayer.evidence?.commandStateSlot !== "slot-7" ||
@@ -3533,11 +3533,11 @@ function validateReplacementPlayerLaneProof(proof, options = {}) {
     status: "passed",
     path: options.path ?? devTestGameProofRunPath,
     roleUrl: `${frontendBaseUrl}/g/<seeded-game>`,
-    principalUserId: "player-rowan",
+    principalId: "player-rowan",
     commandStateSlot: "slot-7",
     capabilityKinds: [...incomingPlayer.evidence.capabilityKinds],
     hostIssuedInvite: {
-      principalUserId: hostIssuedInvite.evidence.principalUserId,
+      principalId: hostIssuedInvite.evidence.principalId,
       issuedBy: hostIssuedInvite.evidence.issuedBy,
       issuedByCapability: hostIssuedInvite.evidence.issuedByCapability,
       returnTo: hostIssuedInvite.evidence.returnTo.replace(
@@ -6336,7 +6336,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.hostScopedInviteIssuance?.sameRoleSurface !== true ||
     proof.identityLifecycle?.hostScopedInviteIssuance?.hostRoleSurfaceStillValid !== true ||
     proof.identityLifecycle?.accountLogin?.status !== "passed" ||
-    proof.identityLifecycle?.accountLogin?.principalUserId !== "host_h" ||
+    proof.identityLifecycle?.accountLogin?.principalId !== "host_h" ||
     !proof.identityLifecycle?.accountLogin?.capabilityKinds?.includes("HostOf") ||
     proof.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
     proof.identityLifecycle?.accountLogin?.cookieValuePrefix !== "fmss_" ||
@@ -6424,7 +6424,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
-      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h" ||
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.controlsTestId !==
       "admin-identity-account-controls" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.visitedDetailRoleUrl !==
@@ -6440,7 +6440,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
       ?.reloadRecoveryStatus !== "disabled" ||
     proof.identityLifecycle?.accountLifecycle?.adminControlSurface
       ?.reloadRecoveryDetailRoleUrl !==
-      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h" ||
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h" ||
     !String(
       proof.identityLifecycle?.accountLifecycle?.adminControlSurface
         ?.reloadRecoveryTargetText ?? "",
@@ -6564,7 +6564,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     throw new Error("identity adapter proof did not seed the local game shape");
   }
   if (
-    proof.accounts?.host?.principalUserId !== "host_h" ||
+    proof.accounts?.host?.principalId !== "host_h" ||
     typeof proof.accounts?.host?.accountId !== "string" ||
     proof.accounts.host.accountId.trim() === "" ||
     Object.hasOwn(proof.accounts.host, "password")
@@ -9299,7 +9299,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (
     replacementCheck === undefined ||
     !replacementCheck.roleUrl?.includes("/g/<seeded-game>") ||
-    replacementCheck.principalUserId !== "player-rowan" ||
+    replacementCheck.principalId !== "player-rowan" ||
     replacementCheck.commandStateSlot !== "slot-7" ||
     !replacementCheck.capabilityKinds?.includes("SlotOccupant") ||
     !replacementCheck.capabilityKinds?.includes("ChannelMember") ||

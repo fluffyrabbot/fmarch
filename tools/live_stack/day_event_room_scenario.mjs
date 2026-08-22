@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { fixturePrincipalAuthorityId } from "../principal_fixture.mjs";
 
 export const DAY_EVENT_ROOM_SCOPE = "day-event-room";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -11,11 +12,11 @@ export function createDayEventRoomFixture({ randomUUID = crypto.randomUUID } = {
     channelId: `private:event:${eventId}`,
     outgoing: Object.freeze({
       slotId: "event-room-slot",
-      principalUserId: "event-room-outgoing",
+      principalId: "event-room-outgoing",
       sessionToken: `host-console-live-stack-event-room-outgoing-${randomUUID()}`,
     }),
     incoming: Object.freeze({
-      principalUserId: "event-room-incoming",
+      principalId: "event-room-incoming",
       sessionToken: `host-console-live-stack-event-room-incoming-${randomUUID()}`,
     }),
   });
@@ -30,7 +31,7 @@ export async function seedDayEventRoom({ fixture, sendCommand }) {
       SeatPersona: {
         game: fixture.game,
         slot: fixture.outgoing.slotId,
-        principal_id: fixture.outgoing.principalUserId, public_name: fixture.outgoing.principalUserId,
+        principal_id: fixture.outgoing.principalId, public_name: fixture.outgoing.principalId,
       },
     },
     {
@@ -105,12 +106,12 @@ export async function createDayEventRoomSessions({
   return {
     outgoing: await createAccountSession({
       sessionAlias: fixture.outgoing.sessionToken,
-      principalUserId: fixture.outgoing.principalUserId,
+      principalId: fixturePrincipalAuthorityId(fixture.outgoing.principalId),
       label: "day-event-room-outgoing",
     }),
     incoming: await createAccountSession({
       sessionAlias: fixture.incoming.sessionToken,
-      principalUserId: fixture.incoming.principalUserId,
+      principalId: fixturePrincipalAuthorityId(fixture.incoming.principalId),
       label: "day-event-room-incoming",
     }),
   };
@@ -291,7 +292,7 @@ export async function driveDayEventRoomBrowser({
       game: fixture.game,
       slot: fixture.outgoing.slotId,
       outgoing_persona_id: outgoingPersonaId,
-      incoming_principal_id: fixture.incoming.principalUserId,
+      incoming_principal_id: fixture.incoming.principalId,
     },
   });
   await outgoingPage.evaluate(async () => {

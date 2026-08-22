@@ -2,7 +2,7 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 export async function load({ locals, cookies, fetch }) {
-  if (!locals.principalUserId) throw redirect(303, "/auth/login?returnTo=/profile/edit");
+  if (!locals.principalId) throw redirect(303, "/auth/login?returnTo=/profile/edit");
   const response = await _profileRequest({ locals, cookies, fetch, path: "/profiles/me/editor" });
   if (response.status === 404) return { profile: null };
   if (!response.ok) throw error(response.status === 401 || response.status === 403 ? 403 : 502, "Profile editor is unavailable");

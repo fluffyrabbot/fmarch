@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { actions, load } from "./+page.server.js";
 
+const PRINCIPAL_ID = "00000000-0000-5000-8000-000000000001";
+
 test("classic registration load preserves the local game return path", () => {
   assert.deepEqual(
     load({
@@ -36,7 +38,7 @@ test("classic registration stores the backend-issued session and enters account 
         };
         return jsonResponse({
           account_id: "new@example.test",
-          principal_user_id: "registered-00000000-0000-0000-0000-000000000001",
+          principal_id: PRINCIPAL_ID,
           session_token: "fmss_registered-session",
           expires_at: 4_102_444_800,
         });
@@ -96,7 +98,7 @@ test("classic registration rejects a session response without a backend token", 
     fetch: async () =>
       jsonResponse({
         account_id: "new@example.test",
-        principal_user_id: "registered-00000000-0000-0000-0000-000000000001",
+        principal_id: PRINCIPAL_ID,
         expires_at: 4_102_444_800,
       }),
     request: formRequest({
@@ -109,6 +111,45 @@ test("classic registration rejects a session response without a backend token", 
   });
   assert.equal(result.status, 502);
   assert.equal(result.data.message, "Auth service returned a malformed registration");
+});
+
+test("classic registration rejects missing or noncanonical principal IDs from the registration API", async (t) => {
+  for (const [name, responseBody] of [
+    [
+      "missing",
+      {
+        account_id: "new@example.test",
+        session_token: "fmss_registered-session",
+        expires_at: 4_102_444_800,
+      },
+    ],
+    [
+      "label",
+      {
+        account_id: "new@example.test",
+        principal_id: "registered_user",
+        session_token: "fmss_registered-session",
+        expires_at: 4_102_444_800,
+      },
+    ],
+  ]) {
+    await t.test(name, async () => {
+      const result = await actions.default({
+        cookies: forbiddenCookieJar(),
+        fetch: async () => jsonResponse(responseBody),
+        request: formRequest({
+          accountId: "new@example.test",
+          password: "correct horse battery",
+          confirmPassword: "correct horse battery",
+          returnTo: "/admin",
+        }),
+        url: new URL("http://localhost/auth/register/classic"),
+      });
+
+      assert.equal(result.status, 502);
+      assert.equal(result.data.message, "Auth service returned a malformed registration");
+    });
+  }
 });
 
 test("classic registration exposes duplicate and rate-limit recovery states", async () => {

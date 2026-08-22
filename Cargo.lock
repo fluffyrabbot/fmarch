@@ -99,6 +99,7 @@ dependencies = [
  "media",
  "object_store",
  "png",
+ "principal",
  "profile_application",
  "projections",
  "reqwest 0.12.28",
@@ -198,6 +199,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 name = "attention"
 version = "0.1.0"
 dependencies = [
+ "principal",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -484,6 +486,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 name = "caps"
 version = "0.1.0"
 dependencies = [
+ "principal",
  "projections",
  "serde",
  "sqlx",
@@ -649,6 +652,7 @@ dependencies = [
  "identity",
  "libc",
  "operator_proof",
+ "principal",
  "projections",
  "serde",
  "serde_json",
@@ -985,6 +989,7 @@ dependencies = [
  "base64",
  "chacha20poly1305",
  "domain",
+ "principal",
  "rand 0.8.6",
  "serde",
  "serde_json",
@@ -1186,6 +1191,7 @@ dependencies = [
  "eventstore",
  "game_platform",
  "identity",
+ "principal",
  "serde_json",
  "sqlx",
  "thiserror 1.0.69",
@@ -1198,6 +1204,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "domain",
+ "principal",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -1615,6 +1622,8 @@ dependencies = [
  "hmac 0.12.1",
  "jsonwebtoken",
  "object_store",
+ "principal",
+ "profile_handle_index",
  "rand 0.8.6",
  "reqwest 0.12.28",
  "serde",
@@ -2192,6 +2201,7 @@ dependencies = [
  "eventstore",
  "identity",
  "operator_proof",
+ "principal",
  "projections",
  "serde",
  "serde_json",
@@ -2213,6 +2223,8 @@ dependencies = [
  "domain",
  "eventstore",
  "game_platform",
+ "identity",
+ "principal",
  "projections",
  "serde",
  "serde_json",
@@ -2360,6 +2372,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "principal"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2373,15 +2395,24 @@ name = "profile_application"
 version = "0.1.0"
 dependencies = [
  "eventstore",
- "hmac 0.12.1",
  "identity",
+ "profile_handle_index",
  "projections",
  "serde_json",
- "sha2 0.10.9",
  "social",
  "sqlx",
  "thiserror 1.0.69",
  "uuid",
+]
+
+[[package]]
+name = "profile_handle_index"
+version = "0.1.0"
+dependencies = [
+ "hmac 0.12.1",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2417,7 +2448,9 @@ dependencies = [
  "game_platform",
  "identity",
  "object_store",
+ "principal",
  "profile_application",
+ "profile_handle_index",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -3065,9 +3098,12 @@ dependencies = [
  "operator_api",
  "percent-encoding",
  "profile_application",
+ "profile_handle_index",
  "projections",
  "serde_json",
+ "social",
  "sqlx",
+ "tempfile",
  "tokio",
  "tower",
  "tracing",
@@ -3097,6 +3133,12 @@ dependencies = [
  "cpufeatures 0.3.0",
  "digest 0.11.3",
 ]
+
+[[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
 
 [[package]]
 name = "sha2"
@@ -3197,6 +3239,7 @@ dependencies = [
 name = "social"
 version = "0.1.0"
 dependencies = [
+ "principal",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3846,6 +3889,7 @@ name = "trust_safety"
 version = "0.1.0"
 dependencies = [
  "content_reference",
+ "principal",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3979,6 +4023,7 @@ dependencies = [
  "getrandom 0.4.2",
  "js-sys",
  "serde_core",
+ "sha1_smol",
  "wasm-bindgen",
 ]
 
@@ -4371,6 +4416,7 @@ dependencies = [
  "content_reference",
  "domain",
  "game_platform",
+ "principal",
  "projections",
  "serde",
  "serde_json",

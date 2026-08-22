@@ -6,7 +6,7 @@ test("community inbox loads the authenticated update page and private mute contr
   const requested = [];
   const data = await load({
     cookies: { get: () => "member-session" },
-    locals: { principalUserId: "member_b", resolvedCapabilities: [] },
+    locals: { principalId: "member_b", resolvedCapabilities: [] },
     url: new URL("http://localhost/inbox?before_seq=90"),
     fetch: async (url, options) => {
       requested.push({ url, authorization: options.headers.authorization });
@@ -46,7 +46,7 @@ test("community inbox rejects a signed-out browser", async () => {
   await assert.rejects(
     load({
       cookies: { get: () => undefined },
-      locals: { principalUserId: null, resolvedCapabilities: [] },
+      locals: { principalId: null, resolvedCapabilities: [] },
       url: new URL("http://localhost/inbox"),
       fetch: async () => { throw new Error("fetch must not run"); },
     }),
@@ -85,7 +85,7 @@ test("inbox unmute action removes the private member relationship", async () => 
   await assert.rejects(
     actions.unmute({
       cookies: { get: () => "member-session" },
-      locals: { principalUserId: "member_b" },
+      locals: { principalId: "member_b" },
       request: new Request("http://localhost/inbox?/unmute", {
         method: "POST",
         body: new URLSearchParams({ handle: "quiet-member" }),

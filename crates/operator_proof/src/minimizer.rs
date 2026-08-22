@@ -4,6 +4,7 @@ use caps::Principal;
 use commands::{
     audit_resolution_envelopes, inspect_resolution_traces, Command, HostPromptDecision, VoteTarget,
 };
+use principal::PrincipalId;
 use projections::{
     audit_rebuild, delayed_death_queues, player_notifications, sheriff_badges, slot_effects,
     slot_state,
@@ -21,72 +22,35 @@ pub async fn handle_fixture_command(
     actor: &Principal,
     command: Command,
 ) -> Result<commands::Ack, commands::Reject> {
-    if let Some(principal_user_id) = fixture_command_principal(&command) {
-        ensure_fixture_principal(pool, principal_user_id).await?;
+    ensure_fixture_principal(pool, actor.id()).await?;
+    if let Some(principal_id) = fixture_command_principal(&command) {
+        ensure_fixture_principal(pool, principal_id).await?;
     }
     commands::handle(pool, actor, command).await
 }
 
-fn fixture_command_principal(command: &Command) -> Option<&str> {
+fn fixture_command_principal(command: &Command) -> Option<PrincipalId> {
     match command {
         Command::SeatPersona { principal_id, .. }
         | Command::ProcessReplacement {
             incoming_principal_id: principal_id,
             ..
-        } => Some(principal_id),
+        } => Some(*principal_id),
         _ => None,
     }
 }
 
 async fn ensure_fixture_principal(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<(), commands::Reject> {
-    let already_active: bool = sqlx::query_scalar(
-        r#"
-        SELECT EXISTS (
-            SELECT 1
-            FROM platform_principal AS principal
-            JOIN privacy_subject AS subject
-              ON subject.principal_user_id = principal.principal_user_id
-            WHERE principal.principal_user_id = $1
-              AND principal.status = 'active'
-              AND subject.lifecycle_state = 'active'
-        )
-        "#,
-    )
-    .bind(principal_user_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|error| commands::Reject::Internal(error.to_string()))?;
-    if already_active {
-        return Ok(());
-    }
-    sqlx::query(
-        r#"
-        INSERT INTO platform_principal (
-            principal_user_id, status, global_capabilities, created_at, disabled_at
-        )
-        VALUES ($1, 'active', ARRAY[]::TEXT[], 0, NULL)
-        ON CONFLICT (principal_user_id) DO NOTHING
-        "#,
-    )
-    .bind(principal_user_id)
-    .execute(pool)
-    .await
-    .map_err(|error| commands::Reject::Internal(error.to_string()))?;
-    let status: String =
-        sqlx::query_scalar("SELECT status FROM platform_principal WHERE principal_user_id = $1")
-            .bind(principal_user_id)
-            .fetch_one(pool)
-            .await
-            .map_err(|error| commands::Reject::Internal(error.to_string()))?;
-    if status != "active" {
-        return Err(commands::Reject::Internal(format!(
-            "fixture principal `{principal_user_id}` is not active"
-        )));
-    }
-    Ok(())
+    let mut connection = pool
+        .acquire()
+        .await
+        .map_err(|error| commands::Reject::Internal(error.to_string()))?;
+    identity::methods::ensure_principal(&mut connection, &principal_id, &[], 0)
+        .await
+        .map_err(|error| commands::Reject::Internal(error.to_string()))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -725,7 +689,7 @@ fn prune_slot_references(fixture: &mut NightFixture, removed_slot: &str) {
 
 async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
     let game = Uuid::new_v4();
-    let host = Principal::user("fixture_host");
+    let host = Principal::authenticated(PrincipalId::fixture("fixture_host"));
     if let Err(err) = handle_fixture_command(
         pool,
         &host,
@@ -1043,10 +1007,10 @@ async fn run_fixture_phase(
     for action in &phase.actions {
         if let Err(err) = handle_fixture_command(
             pool,
-            &Principal::user(format!(
+            &Principal::authenticated(PrincipalId::fixture(format!(
                 "fixture_user_{}",
                 slot_number(&action.actor_slot).unwrap_or(0)
-            )),
+            ))),
             Command::SubmitAction {
                 game,
                 action_id: action.action_id.clone(),
@@ -1072,10 +1036,10 @@ async fn run_fixture_phase(
     for vote in &phase.votes {
         if let Err(err) = handle_fixture_command(
             pool,
-            &Principal::user(format!(
+            &Principal::authenticated(PrincipalId::fixture(format!(
                 "fixture_user_{}",
                 slot_number(&vote.actor_slot).unwrap_or(0)
-            )),
+            ))),
             Command::SubmitVote {
                 game,
                 actor_slot: vote.actor_slot.clone(),
@@ -1495,24 +1459,27 @@ mod tests {
         let seat = Command::SeatPersona {
             game,
             slot: "slot_1".to_string(),
-            principal_id: "incoming-seat".to_string(),
+            principal_id: PrincipalId::fixture("incoming-seat"),
             public_name: "Incoming Seat".to_string(),
         };
         let replacement = Command::ProcessReplacement {
             game,
             slot: "slot_1".to_string(),
             outgoing_persona_id: game_platform::GamePersonaId::from_uuid(Uuid::from_u128(1)),
-            incoming_principal_id: "incoming-replacement".to_string(),
+            incoming_principal_id: PrincipalId::fixture("incoming-replacement"),
         };
         let ordinary = Command::AddSlot {
             game,
             slot: "slot_2".to_string(),
         };
 
-        assert_eq!(fixture_command_principal(&seat), Some("incoming-seat"));
+        assert_eq!(
+            fixture_command_principal(&seat),
+            Some(PrincipalId::fixture("incoming-seat"))
+        );
         assert_eq!(
             fixture_command_principal(&replacement),
-            Some("incoming-replacement")
+            Some(PrincipalId::fixture("incoming-replacement"))
         );
         assert_eq!(fixture_command_principal(&ordinary), None);
     }

@@ -299,7 +299,7 @@ function redactRoles(sessions) {
     Object.entries(sessions).map(([role, session]) => [
       role,
       {
-        principalUserId: session.principalUserId,
+        principalId: session.principalId,
         credentialKind: session.credentialKind,
         returnTo: session.returnTo,
         expectedCapabilityKind: session.expectedCapabilityKind,
@@ -343,7 +343,7 @@ function markdownSeedFixture(summary) {
     "| --- | --- | --- |",
   ];
   for (const [role, entry] of Object.entries(summary.fixture.roles)) {
-    lines.push(`| ${role} | ${entry.principalUserId} | \`${entry.loginUrlRedacted}\` |`);
+    lines.push(`| ${role} | ${entry.principalId} | \`${entry.loginUrlRedacted}\` |`);
   }
   lines.push("", "## Seeded Slots", "", "| Slot | User | Role Key | Fixture Role |", "| --- | --- | --- | --- |");
   for (const slot of summary.fixture.slots) {

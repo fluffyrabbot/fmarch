@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { FIXTURE_PRINCIPAL_IDS } from "../../../../lib/principal-id.mjs";
 import { actions, load } from "./+page.server.js";
 import {
   HOST_CONSOLE_ROUTE_CONTRACT,
@@ -10,6 +11,13 @@ import {
   resolveHostConsoleAccess,
   resolveHostRouteCapabilities,
 } from "./host-route-model.mjs";
+
+const HOST_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.hostH;
+const COHOST_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.cohostC;
+const PLAYER_MIRA_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.playerMira;
+const PLAYER_ROWAN_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.playerRowan;
+const PLAYER_ALEX_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000010";
+const PLAYER_JULES_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000011";
 
 test("host console route data is allowed for HostOf scoped to the current game", async () => {
   const data = await buildHostConsoleRouteData({
@@ -65,7 +73,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   assert.equal(data.dayVoteOutcomesEndpoint, "/games/midsummer/day-vote-outcomes");
   assert.deepEqual(data.commandContext, {
     gameId: "midsummer",
-    principalUserId: "host_h",
+    principalId: HOST_PRINCIPAL_ID,
     capabilityLabel: "HostOf(midsummer)",
     commandEndpoint: "/commands",
   });
@@ -197,8 +205,8 @@ test("host console route data is allowed for HostOf scoped to the current game",
     urlTestId: "host-player-invite-url",
     accountTestId: "host-player-invite-account",
     slotId: "slot-7",
-    principalUserId: "player-mira",
-    expectedOccupantUserId: "player-mira",
+    principalId: PLAYER_MIRA_PRINCIPAL_ID,
+    expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
     targetLabel: "Slot 7 / player-mira",
     submitLabel: "Issue player invite",
   });
@@ -226,17 +234,19 @@ test("host invite targets derive from projected slot occupancy", () => {
     replacement: {
       slotId: "slot_12",
       occupantLabel: "player-alex",
+      assignedPrincipalId: PLAYER_ALEX_PRINCIPAL_ID,
     },
-    replacementPrincipalUserId: "player-jules",
+    replacementPrincipalId: PLAYER_JULES_PRINCIPAL_ID,
+    replacementLabel: "player-jules",
   });
 
   assert.equal(targets.player.slotId, "slot_12");
-  assert.equal(targets.player.principalUserId, "player-alex");
-  assert.equal(targets.player.expectedOccupantUserId, "player-alex");
+  assert.equal(targets.player.principalId, PLAYER_ALEX_PRINCIPAL_ID);
+  assert.equal(targets.player.expectedOccupantPrincipalId, PLAYER_ALEX_PRINCIPAL_ID);
   assert.equal(targets.player.targetLabel, "Slot 12 / player-alex");
   assert.equal(targets.replacement.slotId, "slot_12");
-  assert.equal(targets.replacement.principalUserId, "player-jules");
-  assert.equal(targets.replacement.expectedOccupantUserId, "player-alex");
+  assert.equal(targets.replacement.principalId, PLAYER_JULES_PRINCIPAL_ID);
+  assert.equal(targets.replacement.expectedOccupantPrincipalId, PLAYER_ALEX_PRINCIPAL_ID);
   assert.equal(targets.replacement.targetLabel, "Slot 12 / player-jules");
 });
 
@@ -244,7 +254,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   const seen = [];
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
-    principalUserId: "host_h",
+    principalId: HOST_PRINCIPAL_ID,
     capabilities: [{ kind: "HostOf", game: "midsummer" }],
     fetchImpl: async (url) => {
       seen.push(url);
@@ -280,7 +290,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
         return jsonResponse({
           game: "midsummer",
           authority: {
-            principal_user_id: "host_h",
+            principal_id: HOST_PRINCIPAL_ID,
             capability: "HostOf",
             allowed_classes: ["phase_resolve", "deadline"],
             denied_classes: [],
@@ -513,14 +523,14 @@ test("host console route data uses host prompt and votecount cold-loads when ava
 test("host console route data is allowed for CohostOf scoped to the current game", async () => {
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
-    principalUserId: "cohost_c",
+    principalId: COHOST_PRINCIPAL_ID,
     capabilities: [{ kind: "CohostOf", game: "midsummer" }],
     fetchImpl: async (url) =>
       url.endsWith("/host-console-state?slot_id=slot-7")
         ? jsonResponse({
             game: "midsummer",
             authority: {
-              principal_user_id: "cohost_c",
+              principal_id: COHOST_PRINCIPAL_ID,
               capability: "CohostOf",
               allowed_classes: [
                 "deadline",
@@ -556,7 +566,7 @@ test("host console route data is allowed for CohostOf scoped to the current game
     ],
   );
   assert.deepEqual(data.authority, {
-    principalUserId: "cohost_c",
+    principalId: COHOST_PRINCIPAL_ID,
     capabilityKind: "CohostOf",
     allowedClasses: ["deadline", "host_prompt_resolve", "replacement"],
     deniedClasses: ["lifecycle", "phase_resolve"],
@@ -578,7 +588,7 @@ test("host console route data is allowed for CohostOf scoped to the current game
   );
   assert.deepEqual(data.commandContext, {
     gameId: "midsummer",
-    principalUserId: "cohost_c",
+    principalId: COHOST_PRINCIPAL_ID,
     capabilityLabel: "CohostOf(midsummer)",
     commandEndpoint: "/commands",
   });
@@ -674,7 +684,7 @@ test("load returns host shell data when locals carry a resolved host capability"
   const data = await load({
     params: { game: "midsummer" },
     locals: {
-      principalUserId: "host_h",
+      principalId: HOST_PRINCIPAL_ID,
       resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
     },
   });
@@ -682,7 +692,7 @@ test("load returns host shell data when locals carry a resolved host capability"
   assert.equal(data.game.id, "midsummer");
   assert.equal(data.shellOwner, "layout");
   assert.equal(data.access.capabilityLabel, "HostOf(midsummer)");
-  assert.equal(data.session.principalUserId, "host_h");
+  assert.equal(data.session.principalId, HOST_PRINCIPAL_ID);
   assert.equal(data.commandEndpoint, "/commands");
 });
 
@@ -692,7 +702,7 @@ test("load rejects non-host access before the shell renders", async () => {
       load({
         params: { game: "midsummer" },
         locals: {
-          principalUserId: "user_a",
+          principalId: PLAYER_MIRA_PRINCIPAL_ID,
           resolvedCapabilities: [{ kind: "SlotOccupant", game: "midsummer" }],
         },
       }),
@@ -735,28 +745,28 @@ test("host action issues a replacement invite through the authenticated host ses
       });
       if (url === "/games/midsummer/host-console-state?slot_id=slot-7") {
         return jsonResponse({
-          slots: [{ slot_id: "slot-7", assigned_principal_id: "player-mira" }],
+          slots: [{ slot_id: "slot-7", assigned_principal_id: PLAYER_MIRA_PRINCIPAL_ID }],
         });
       }
       return jsonResponse({
         account_id: "rowan@example.test",
-        principal_user_id: "player-rowan",
-        invited_by_user_id: "host_h",
+        principal_id: PLAYER_ROWAN_PRINCIPAL_ID,
+        invited_by_principal_id: HOST_PRINCIPAL_ID,
         game: "midsummer",
         expires_at: observed.at(-1).body.expires_at,
         global_capabilities: [],
       });
     },
     locals: {
-      principalUserId: "host_h",
+      principalId: HOST_PRINCIPAL_ID,
       resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
     },
     params: { game: "midsummer" },
     request: formRequest({
       accountId: "rowan@example.test",
-      principalUserId: " player-rowan ",
+      principalId: PLAYER_ROWAN_PRINCIPAL_ID,
       slotId: "slot-7",
-      expectedOccupantUserId: "player-mira",
+      expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
     }),
     url: new URL("http://localhost/g/midsummer/host"),
   });
@@ -772,7 +782,7 @@ test("host action issues a replacement invite through the authenticated host ses
   assert.equal(observed[1].authorization, "Bearer host-session-token");
   assert.equal(observed[1].accept, "application/json");
   assert.equal(observed[1].body.account_id, "rowan@example.test");
-  assert.equal(observed[1].body.expected_principal_user_id, "player-rowan");
+  assert.equal(observed[1].body.expected_principal_id, PLAYER_ROWAN_PRINCIPAL_ID);
   assert.equal(observed[1].body.game, "midsummer");
   assert.equal(observed[1].body.global_capabilities, undefined);
   assert.match(observed[1].body.invite_token, /^replacement-midsummer-/);
@@ -780,8 +790,8 @@ test("host action issues a replacement invite through the authenticated host ses
     state: "ack",
     message: "Replacement invite issued",
     accountId: "rowan@example.test",
-    principalUserId: "player-rowan",
-    invitedByUserId: "host_h",
+    principalId: PLAYER_ROWAN_PRINCIPAL_ID,
+    invitedByPrincipalId: HOST_PRINCIPAL_ID,
     game: "midsummer",
     returnTo: "/g/midsummer",
     loginUrl: `http://localhost/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
@@ -808,28 +818,28 @@ test("host action issues a player invite through the authenticated host session"
       });
       if (url === "/games/midsummer/host-console-state?slot_id=slot-7") {
         return jsonResponse({
-          slots: [{ slot_id: "slot-7", assigned_principal_id: "player-mira" }],
+          slots: [{ slot_id: "slot-7", assigned_principal_id: PLAYER_MIRA_PRINCIPAL_ID }],
         });
       }
       return jsonResponse({
         account_id: "mira@example.test",
-        principal_user_id: "player-mira",
-        invited_by_user_id: "host_h",
+        principal_id: PLAYER_MIRA_PRINCIPAL_ID,
+        invited_by_principal_id: HOST_PRINCIPAL_ID,
         game: "midsummer",
         expires_at: observed.at(-1).body.expires_at,
         global_capabilities: [],
       });
     },
     locals: {
-      principalUserId: "host_h",
+      principalId: HOST_PRINCIPAL_ID,
       resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
     },
     params: { game: "midsummer" },
     request: formRequest({
       accountId: "mira@example.test",
-      principalUserId: " player-mira ",
+      principalId: PLAYER_MIRA_PRINCIPAL_ID,
       slotId: "slot-7",
-      expectedOccupantUserId: "player-mira",
+      expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
     }),
     url: new URL("http://localhost/g/midsummer/host"),
   });
@@ -845,7 +855,7 @@ test("host action issues a player invite through the authenticated host session"
   assert.equal(observed[1].authorization, "Bearer host-session-token");
   assert.equal(observed[1].accept, "application/json");
   assert.equal(observed[1].body.account_id, "mira@example.test");
-  assert.equal(observed[1].body.expected_principal_user_id, "player-mira");
+  assert.equal(observed[1].body.expected_principal_id, PLAYER_MIRA_PRINCIPAL_ID);
   assert.equal(observed[1].body.game, "midsummer");
   assert.equal(observed[1].body.global_capabilities, undefined);
   assert.match(observed[1].body.invite_token, /^player-midsummer-/);
@@ -853,8 +863,8 @@ test("host action issues a player invite through the authenticated host session"
     state: "ack",
     message: "Player invite issued",
     accountId: "mira@example.test",
-    principalUserId: "player-mira",
-    invitedByUserId: "host_h",
+    principalId: PLAYER_MIRA_PRINCIPAL_ID,
+    invitedByPrincipalId: HOST_PRINCIPAL_ID,
     game: "midsummer",
     returnTo: "/g/midsummer",
     loginUrl: `http://localhost/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
@@ -884,19 +894,19 @@ test("WorkOS host invite returns an account-addressed sign-in link through the v
       fetch: async (url, init) => {
         observed.push({ url, authorization: init.headers.authorization });
         return jsonResponse({
-          slots: [{ slot_id: "slot-7", assigned_principal_id: "player-mira" }],
+          slots: [{ slot_id: "slot-7", assigned_principal_id: PLAYER_MIRA_PRINCIPAL_ID }],
         });
       },
       locals: {
-        principalUserId: "host_h",
+        principalId: HOST_PRINCIPAL_ID,
         resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
       },
       params: { game: "midsummer" },
       request: formRequest({
         accountId: "mira@example.test",
-        principalUserId: "player-mira",
+        principalId: PLAYER_MIRA_PRINCIPAL_ID,
         slotId: "slot-7",
-        expectedOccupantUserId: "player-mira",
+        expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
       }),
       url: new URL("https://fmarch.example.test/g/midsummer/host"),
     });
@@ -934,19 +944,19 @@ test("host action rejects stale player invite targets before issuing an invite",
         accept: init.headers.accept,
       });
       return jsonResponse({
-        slots: [{ slot_id: "slot-7", assigned_principal_id: "player-rowan" }],
+        slots: [{ slot_id: "slot-7", assigned_principal_id: PLAYER_ROWAN_PRINCIPAL_ID }],
       });
     },
     locals: {
-      principalUserId: "host_h",
+      principalId: HOST_PRINCIPAL_ID,
       resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
     },
     params: { game: "midsummer" },
     request: formRequest({
       accountId: "mira@example.test",
-      principalUserId: "player-mira",
+      principalId: PLAYER_MIRA_PRINCIPAL_ID,
       slotId: "slot-7",
-      expectedOccupantUserId: "player-mira",
+      expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
     }),
     url: new URL("http://localhost/g/midsummer/host"),
   });
@@ -954,7 +964,7 @@ test("host action rejects stale player invite targets before issuing an invite",
   assert.equal(result.status, 409);
   assert.equal(result.data.playerInvite.state, "reject");
   assert.match(result.data.playerInvite.message, /Invite target is stale/);
-  assert.equal(result.data.playerInvite.currentOccupantUserId, "player-rowan");
+  assert.equal(result.data.playerInvite.currentOccupantPrincipalId, PLAYER_ROWAN_PRINCIPAL_ID);
   assert.deepEqual(observed, [
     {
       url: "/games/midsummer/host-console-state?slot_id=slot-7",
@@ -983,38 +993,38 @@ test("host action retries stale player invites against the current occupant", as
       });
       if (url === "/games/midsummer/host-console-state?slot_id=slot-7") {
         return jsonResponse({
-        slots: [{ slot_id: "slot-7", assigned_principal_id: "player-rowan" }],
+        slots: [{ slot_id: "slot-7", assigned_principal_id: PLAYER_ROWAN_PRINCIPAL_ID }],
         });
       }
       return jsonResponse({
         account_id: "rowan@example.test",
-        principal_user_id: "player-rowan",
-        invited_by_user_id: "host_h",
+        principal_id: PLAYER_ROWAN_PRINCIPAL_ID,
+        invited_by_principal_id: HOST_PRINCIPAL_ID,
         game: "midsummer",
         expires_at: observed.at(-1).body.expires_at,
         global_capabilities: [],
       });
     },
     locals: {
-      principalUserId: "host_h",
+      principalId: HOST_PRINCIPAL_ID,
       resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
     },
     params: { game: "midsummer" },
     request: formRequest({
       accountId: "rowan@example.test",
-      principalUserId: "player-rowan",
+      principalId: PLAYER_ROWAN_PRINCIPAL_ID,
       slotId: "slot-7",
-      expectedOccupantUserId: "player-rowan",
+      expectedOccupantPrincipalId: PLAYER_ROWAN_PRINCIPAL_ID,
     }),
     url: new URL("http://localhost/g/midsummer/host"),
   });
 
   assert.equal(observed[1].url, "/auth/invites");
   assert.equal(observed[1].body.account_id, "rowan@example.test");
-  assert.equal(observed[1].body.expected_principal_user_id, "player-rowan");
+  assert.equal(observed[1].body.expected_principal_id, PLAYER_ROWAN_PRINCIPAL_ID);
   assert.match(observed[1].body.invite_token, /^player-midsummer-/);
   assert.equal(result.playerInvite.state, "ack");
-  assert.equal(result.playerInvite.principalUserId, "player-rowan");
+  assert.equal(result.playerInvite.principalId, PLAYER_ROWAN_PRINCIPAL_ID);
 });
 
 test("host action rejects replacement invite issuance without a host session", async () => {
@@ -1022,12 +1032,118 @@ test("host action rejects replacement invite issuance without a host session", a
     cookies: { get: () => undefined },
     fetch: unreachableFetch,
     params: { game: "midsummer" },
-    request: formRequest({ principalUserId: "player-rowan" }),
+    request: formRequest({ principalId: PLAYER_ROWAN_PRINCIPAL_ID }),
     url: new URL("http://localhost/g/midsummer/host"),
   });
 
   assert.equal(result.status, 401);
   assert.equal(result.data.replacementInvite.state, "reject");
+});
+
+test("host invites reject missing or text-shaped principal authority before any API call", async () => {
+  const common = {
+    cookies: { get: (name) => (name === "fmarch_session" ? "host-session-token" : undefined) },
+    fetch: unreachableFetch,
+    locals: {
+      principalId: HOST_PRINCIPAL_ID,
+      resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
+    },
+    params: { game: "midsummer" },
+    url: new URL("http://localhost/g/midsummer/host"),
+  };
+
+  const missingPrincipal = await actions.issuePlayerInvite({
+    ...common,
+    request: formRequest({
+      accountId: "mira@example.test",
+      slotId: "slot-7",
+      expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
+    }),
+  });
+  assert.equal(missingPrincipal.status, 400);
+  assert.match(missingPrincipal.data.playerInvite.message, /canonical UUID/);
+
+  const textExpectedOccupant = await actions.issuePlayerInvite({
+    ...common,
+    request: formRequest({
+      accountId: "mira@example.test",
+      principalId: PLAYER_MIRA_PRINCIPAL_ID,
+      slotId: "slot-7",
+      expectedOccupantPrincipalId: "player-mira",
+    }),
+  });
+  assert.equal(textExpectedOccupant.status, 400);
+  assert.match(textExpectedOccupant.data.playerInvite.message, /Expected occupant principal/);
+
+  const missingSlot = await actions.issuePlayerInvite({
+    ...common,
+    request: formRequest({
+      accountId: "mira@example.test",
+      principalId: PLAYER_MIRA_PRINCIPAL_ID,
+      expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
+    }),
+  });
+  assert.equal(missingSlot.status, 400);
+  assert.match(missingSlot.data.playerInvite.message, /Invite slot is required/);
+});
+
+test("host invites refuse malformed projection or mismatched invite response authority", async () => {
+  const common = {
+    cookies: { get: (name) => (name === "fmarch_session" ? "host-session-token" : undefined) },
+    locals: {
+      principalId: HOST_PRINCIPAL_ID,
+      resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
+    },
+    params: { game: "midsummer" },
+    url: new URL("http://localhost/g/midsummer/host"),
+  };
+
+  const malformedProjection = await actions.issuePlayerInvite({
+    ...common,
+    request: formRequest({
+      accountId: "mira@example.test",
+      principalId: PLAYER_MIRA_PRINCIPAL_ID,
+      slotId: "slot-7",
+      expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
+    }),
+    fetch: async () =>
+      jsonResponse({
+        slots: [{ slot_id: "slot-7", assigned_principal_id: "player-mira" }],
+      }),
+  });
+  assert.equal(malformedProjection.status, 502);
+  assert.match(malformedProjection.data.playerInvite.message, /projection is unavailable/);
+
+  const observed = [];
+  const mismatchedInvite = await actions.issuePlayerInvite({
+    ...common,
+    request: formRequest({
+      accountId: "mira@example.test",
+      principalId: PLAYER_MIRA_PRINCIPAL_ID,
+      slotId: "slot-7",
+      expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
+    }),
+    fetch: async (url, init) => {
+      observed.push(String(url));
+      if (String(url).includes("host-console-state")) {
+        return jsonResponse({
+          slots: [{ slot_id: "slot-7", assigned_principal_id: PLAYER_MIRA_PRINCIPAL_ID }],
+        });
+      }
+      return jsonResponse({
+        account_id: "mira@example.test",
+        principal_id: PLAYER_ROWAN_PRINCIPAL_ID,
+        invited_by_principal_id: HOST_PRINCIPAL_ID,
+        game: "midsummer",
+      });
+    },
+  });
+  assert.equal(mismatchedInvite.status, 502);
+  assert.match(mismatchedInvite.data.playerInvite.message, /mismatched principal authority/);
+  assert.deepEqual(observed, [
+    "/games/midsummer/host-console-state?slot_id=slot-7",
+    "/auth/invites",
+  ]);
 });
 
 test("route model does not grant tablet smoke access by itself", () => {
@@ -1068,7 +1184,7 @@ test("host live projection endpoint uses the same-origin authenticated ticket br
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
     capabilities: [{ kind: "HostOf", game: "midsummer", source: "fixture" }],
-    principalUserId: "host_h",
+    principalId: HOST_PRINCIPAL_ID,
     fetchImpl: null,
     apiBaseUrl: "http://fmarch.railway.internal:8080",
   });

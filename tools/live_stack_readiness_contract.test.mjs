@@ -101,12 +101,12 @@ function liveStackReadinessFixture() {
       lifecycle: "created-and-dropped-per-smoke-run",
     },
     grantedSessions: {
-      admin: { principalUserId: "admin_a" },
-      host: { principalUserId: "host_h" },
-      player: { principalUserId: "player-mira" },
-      actionPlayer: { principalUserId: "player-seed" },
-      racePlayer: { principalUserId: "player-race" },
-      cohost: { principalUserId: "cohost-c" },
+      admin: { principalId: "admin_a" },
+      host: { principalId: "host_h" },
+      player: { principalId: "player-mira" },
+      actionPlayer: { principalId: "player-seed" },
+      racePlayer: { principalId: "player-race" },
+      cohost: { principalId: "cohost-c" },
     },
     browser: {
       admin: {
@@ -249,14 +249,14 @@ function liveStackReadinessFixture() {
         slotLifecycle: { commandStatus: { state: "ack" } },
         playerInviteTarget: {
           status: "passed",
-          principalUserId: "player-rowan",
+          principalId: "player-rowan",
         },
         stalePlayerInviteReject: {
           state: "recovered",
           reject: { message: "Invite target is stale" },
           retry: {
             state: "ack",
-            target: { principalUserId: "player-rowan" },
+            target: { principalId: "player-rowan" },
           },
         },
         rolePmReplacement: {

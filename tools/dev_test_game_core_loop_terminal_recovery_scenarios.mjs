@@ -127,7 +127,7 @@ export function assertTerminalRecoveryBrowserProof({
     ],
     [
       proof?.d03TerminalVoteSubmission?.requestEnvelope?.body?.body
-        ?.principal_user_id === undefined,
+        ?.principal_id === undefined,
       "terminal vote included a client-supplied principal",
     ],
     [

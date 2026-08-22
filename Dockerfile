@@ -40,7 +40,8 @@ RUN --mount=type=cache,id=${FMARCH_CARGO_CACHE_NAMESPACE}-registry,target=/usr/l
     && install -D -m 0755 /app/target/release/server /out/fmarch-server \
     && install -D -m 0755 /app/target/release/fmarch-migrate /out/fmarch-migrate \
     && install -D -m 0755 /app/target/release/fmarch-schema-gate /out/fmarch-schema-gate \
-    && install -D -m 0755 /app/target/release/fmarch-event-key-admin /out/fmarch-event-key-admin
+    && install -D -m 0755 /app/target/release/fmarch-event-key-admin /out/fmarch-event-key-admin \
+    && install -D -m 0755 /app/target/release/fmarch-profile-index-admin /out/fmarch-profile-index-admin
 
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS runtime-base
 
@@ -58,6 +59,7 @@ COPY --from=builder /out/fmarch-server /usr/local/bin/fmarch-server
 COPY --from=builder /out/fmarch-migrate /usr/local/bin/fmarch-migrate
 COPY --from=builder /out/fmarch-schema-gate /usr/local/bin/fmarch-schema-gate
 COPY --from=builder /out/fmarch-event-key-admin /usr/local/bin/fmarch-event-key-admin
+COPY --from=builder /out/fmarch-profile-index-admin /usr/local/bin/fmarch-profile-index-admin
 
 USER fmarch
 

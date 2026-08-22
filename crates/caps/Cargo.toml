@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 projections = { path = "../projections", version = "0.1.0" }
+principal = { path = "../principal", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 sqlx = { workspace = true, features = [
     "uuid",

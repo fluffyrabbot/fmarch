@@ -2,6 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 import { authReturnPath } from "../../../../lib/server/auth-return-path.mjs";
 import { authSourceHeader } from "../../../../lib/server/auth-source.mjs";
+import { canonicalPrincipalId } from "../../../../lib/principal-id.mjs";
 import {
   browserSessionCookieOptions,
   SESSION_COOKIE_NAME,
@@ -10,8 +11,8 @@ import {
 export function load({ locals, url }) {
   return {
     login: {
-      principalUserId:
-        typeof locals.principalUserId === "string" ? locals.principalUserId : null,
+      principalId:
+        typeof locals.principalId === "string" ? locals.principalId : null,
       accountId: optionalToken(url.searchParams.get("account")),
       returnTo: authReturnPath(url.searchParams.get("returnTo")),
     },
@@ -132,8 +133,7 @@ function validSessionBody(body) {
   return (
     body !== null &&
     typeof body === "object" &&
-    typeof body.principal_user_id === "string" &&
-    body.principal_user_id.trim() !== "" &&
+    canonicalPrincipalId(body.principal_id) !== null &&
     typeof body.session_token === "string" &&
     body.session_token.trim() !== "" &&
     Array.isArray(body.capabilities)

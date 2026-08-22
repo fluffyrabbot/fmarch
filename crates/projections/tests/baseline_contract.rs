@@ -1,6 +1,6 @@
 //! Exact catalog contract after applying the append-only projection migrations.
 
-use sqlx::{migrate::Migrator, PgPool};
+use sqlx::PgPool;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -115,7 +115,7 @@ const EXPECTED_EVENT_COLUMNS: &[&str] = &[
 
 const EXPECTED_AUTH_SESSION_COLUMNS: &[&str] = &[
     "token_hash:text",
-    "principal_user_id:text",
+    "principal_id:uuid",
     "created_at:bigint",
     "expires_at:bigint",
     "revoked_at:bigint",
@@ -138,7 +138,7 @@ const EXPECTED_WORKOS_SESSION_EXCHANGE_COLUMNS: &[&str] = &[
 const EXPECTED_WORKOS_PROVIDER_SESSION_COLUMNS: &[&str] = &[
     "provider_session_id:text",
     "subject:text",
-    "principal_user_id:text",
+    "principal_id:uuid",
     "method_id:uuid",
     "status:text",
     "created_at:bigint",
@@ -183,7 +183,7 @@ const EXPECTED_PACK_ARTIFACT_COLUMNS: &[&str] = &[
 
 const EXPECTED_MEMBER_PROFILE_COLUMNS: &[&str] = &[
     "profile_id:uuid",
-    "active_principal_id:text",
+    "active_principal_id:uuid",
     "handle_hmac:bytea",
     "lifecycle:text",
     "redacted_alias:text",
@@ -206,11 +206,64 @@ const EXPECTED_PUBLIC_PROFILE_COLUMNS: &[&str] = &[
 
 const EXPECTED_PROFILE_MUTE_COLUMNS: &[&str] = &[
     "relationship_id:uuid",
-    "principal_user_id:text",
+    "principal_id:uuid",
     "target_profile_id:uuid",
     "active:boolean",
     "updated_seq:bigint",
     "version:bigint",
+];
+
+const EXPECTED_IDENTITY_LIFECYCLE_AUDIT_COLUMNS: &[&str] = &[
+    "id:bigint",
+    "event_at:bigint",
+    "event_kind:text",
+    "actor_principal_id:uuid",
+    "principal_id:uuid",
+    "redacted_actor_alias:text",
+    "redacted_principal_alias:text",
+    "token_hash:text",
+    "related_token_hash:text",
+    "metadata:jsonb",
+];
+
+const EXPECTED_IDENTITY_LIFECYCLE_AUDIT_REDACTION_COLUMNS: &[&str] = &[
+    "actor_principal_id:uuid:YES",
+    "principal_id:uuid:YES",
+    "redacted_actor_alias:text:YES",
+    "redacted_principal_alias:text:YES",
+];
+
+// This is the deliberate authority-bearing principal surface, not a broad
+// name-pattern query: public aliases and unrelated operational identifiers are
+// not principals merely because their names contain a familiar word.
+const EXPECTED_CANONICAL_PRINCIPAL_COLUMNS: &[&str] = &[
+    "auth_account.principal_id:uuid",
+    "auth_delivery_intent.principal_id:uuid",
+    "auth_invite.principal_id:uuid",
+    "auth_invite.invited_by_principal_id:uuid",
+    "auth_session.principal_id:uuid",
+    "auth_websocket_ticket.principal_id:uuid",
+    "authentication_method.principal_id:uuid",
+    "command_receipt.principal_id:uuid",
+    "external_identity.principal_id:uuid",
+    "game_authority.principal_id:uuid",
+    "identity_lifecycle_audit.actor_principal_id:uuid",
+    "identity_lifecycle_audit.principal_id:uuid",
+    "media_upload_ledger.principal_id:uuid",
+    "member_lifecycle_event.principal_id:uuid",
+    "member_lifecycle_projection.principal_id:uuid",
+    "member_personal_export.principal_id:uuid",
+    "member_profile.active_principal_id:uuid",
+    "moderation_case_history.actor_principal_id:uuid",
+    "moderation_report.reporter_principal_id:uuid",
+    "moderation_target_state.moderator_principal_id:uuid",
+    "platform_principal.principal_id:uuid",
+    "privacy_subject.principal_id:uuid",
+    "profile_mute.principal_id:uuid",
+    "public_watch.principal_id:uuid",
+    "spectator_membership.principal_id:uuid",
+    "subject_erasure_outbox.principal_id:uuid",
+    "workos_provider_session.principal_id:uuid",
 ];
 
 const EXPECTED_INDEXES: &[&str] = &[
@@ -375,7 +428,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "post_policy_pkey",
     "privacy_subject_exact_owner_unique",
     "privacy_subject_pkey",
-    "privacy_subject_principal_user_id_key",
+    "privacy_subject_principal_id_key",
     "private_channel_member_pkey",
     "private_channel_member_private_kid_idx",
     "private_channel_member_slot_idx",
@@ -413,7 +466,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "spectator_membership_pkey",
     "subject_authority_binding_pkey",
     "subject_erasure_outbox_pkey",
-    "subject_erasure_outbox_principal_user_id_key",
+    "subject_erasure_outbox_principal_id_key",
     "subject_erasure_outbox_receipt_id_key",
     "subject_erasure_outbox_replacement_alias_key",
     "subject_erasure_outbox_subject_id_key",
@@ -447,10 +500,10 @@ const EXPECTED_INDEXES: &[&str] = &[
 ];
 
 const EXPECTED_ERASURE_INDEX_DEFINITIONS: &[&str] = &[
-    "auth_delivery_intent_principal_idx:CREATE INDEX auth_delivery_intent_principal_idx ON public.auth_delivery_intent USING btree (principal_user_id)",
-    "auth_websocket_ticket_principal_idx:CREATE INDEX auth_websocket_ticket_principal_idx ON public.auth_websocket_ticket USING btree (principal_user_id)",
+    "auth_delivery_intent_principal_idx:CREATE INDEX auth_delivery_intent_principal_idx ON public.auth_delivery_intent USING btree (principal_id)",
+    "auth_websocket_ticket_principal_idx:CREATE INDEX auth_websocket_ticket_principal_idx ON public.auth_websocket_ticket USING btree (principal_id)",
     "game_persona_subject_binding_erasure_idx:CREATE INDEX game_persona_subject_binding_erasure_idx ON public.game_persona_subject_binding USING btree (subject_id) WHERE (lifecycle = 'active'::text)",
-    "identity_lifecycle_audit_actor_idx:CREATE INDEX identity_lifecycle_audit_actor_idx ON public.identity_lifecycle_audit USING btree (actor_user_id)",
+    "identity_lifecycle_audit_actor_idx:CREATE INDEX identity_lifecycle_audit_actor_idx ON public.identity_lifecycle_audit USING btree (actor_principal_id)",
     "member_lifecycle_event_subject_idx:CREATE INDEX member_lifecycle_event_subject_idx ON public.member_lifecycle_event USING btree (subject_id)",
     "member_lifecycle_projection_subject_idx:CREATE INDEX member_lifecycle_projection_subject_idx ON public.member_lifecycle_projection USING btree (subject_id)",
     "member_personal_export_subject_idx:CREATE INDEX member_personal_export_subject_idx ON public.member_personal_export USING btree (subject_id)",
@@ -496,7 +549,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "auth_session_idle_expiry_check:c",
     "auth_session_method_fkey:f",
     "auth_session_pkey:p",
-    "auth_session_principal_user_id_fkey:f",
+    "auth_session_principal_id_fkey:f",
     "auth_session_workos_provider_session_fkey:f",
     "auth_session_workos_session_shape_check:c",
     "auth_websocket_ticket_access_expiry_check:c",
@@ -506,12 +559,11 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "auth_websocket_ticket_channel_check:c",
     "auth_websocket_ticket_expiry_check:c",
     "auth_websocket_ticket_pkey:p",
-    "auth_websocket_ticket_principal_check:c",
     "authentication_method_disabled_shape_check:c",
     "authentication_method_identity_key:u",
     "authentication_method_kind_check:c",
     "authentication_method_pkey:p",
-    "authentication_method_principal_user_id_fkey:f",
+    "authentication_method_principal_id_fkey:f",
     "authentication_method_status_check:c",
     "command_receipt_fingerprint_check:c",
     "command_receipt_pkey:p",
@@ -598,7 +650,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "external_identity_method_identity_fkey:f",
     "external_identity_method_subject_key:u",
     "external_identity_pkey:p",
-    "external_identity_principal_user_id_fkey:f",
+    "external_identity_principal_id_fkey:f",
     "external_identity_provider_check:c",
     "external_identity_seen_check:c",
     "external_identity_subject_check:c",
@@ -636,21 +688,21 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "investigation_memory_result_private_kid_present:c",
     "media_upload_ledger_encoded_bytes_check:c",
     "media_upload_ledger_pkey:p",
-    "media_upload_ledger_principal_user_id_fkey:f",
+    "media_upload_ledger_principal_id_fkey:f",
     "member_lifecycle_event_kind_check:c",
     "member_lifecycle_event_pkey:p",
-    "member_lifecycle_event_principal_user_id_fkey:f",
+    "member_lifecycle_event_principal_id_fkey:f",
     "member_lifecycle_event_seq_check:c",
     "member_lifecycle_event_subject_id_fkey:f",
     "member_lifecycle_projection_pkey:p",
-    "member_lifecycle_projection_principal_user_id_fkey:f",
+    "member_lifecycle_projection_principal_id_fkey:f",
     "member_lifecycle_projection_seq_check:c",
     "member_lifecycle_projection_status_check:c",
     "member_lifecycle_projection_subject_id_fkey:f",
     "member_personal_export_envelope_shape:c",
     "member_personal_export_expiry_check:c",
     "member_personal_export_pkey:p",
-    "member_personal_export_principal_user_id_fkey:f",
+    "member_personal_export_principal_id_fkey:f",
     "member_personal_export_seq_check:c",
     "member_personal_export_subject_id_fkey:f",
     "member_profile_active_principal_id_fkey:f",
@@ -682,7 +734,6 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "pack_artifact_version_check:c",
     "phase_state_pkey:p",
     "platform_principal_disabled_shape_check:c",
-    "platform_principal_id_check:c",
     "platform_principal_pkey:p",
     "platform_principal_status_check:c",
     "player_info_result_pkey:p",
@@ -696,8 +747,8 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "privacy_subject_exact_owner_unique:u",
     "privacy_subject_lifecycle_state_check:c",
     "privacy_subject_pkey:p",
-    "privacy_subject_principal_user_id_fkey:f",
-    "privacy_subject_principal_user_id_key:u",
+    "privacy_subject_principal_id_fkey:f",
+    "privacy_subject_principal_id_key:u",
     "private_channel_member_pkey:p",
     "private_channel_member_private_kid_fkey:f",
     "private_channel_member_private_kid_present:c",
@@ -745,7 +796,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "subject_erasure_outbox_fingerprint_check:c",
     "subject_erasure_outbox_payload_version_check:c",
     "subject_erasure_outbox_pkey:p",
-    "subject_erasure_outbox_principal_user_id_key:u",
+    "subject_erasure_outbox_principal_id_key:u",
     "subject_erasure_outbox_receipt_id_key:u",
     "subject_erasure_outbox_replacement_alias_key:u",
     "subject_erasure_outbox_subject_id_key:u",
@@ -798,12 +849,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "workos_subject_tombstone_reason_check:c",
 ];
 
-const EXPECTED_NOT_VALID_CONSTRAINTS: &[&str] = &[
-    "auth_session_workos_provider_session_fkey",
-    "auth_session_workos_session_shape_check",
-    "event_stream_keys_wrap_kid_fkey",
-    "workos_session_exchange_provider_session_fkey",
-];
+const EXPECTED_NOT_VALID_CONSTRAINTS: &[&str] = &["event_stream_keys_wrap_kid_fkey"];
 
 fn assert_inventory(kind: &str, actual: &[String], expected: &[&str]) {
     let actual: Vec<&str> = actual.iter().map(String::as_str).collect();
@@ -834,6 +880,53 @@ async fn erasure_support_indexes_have_exact_catalog_definitions(pool: PgPool) {
         "erasure support index definition",
         &definitions,
         EXPECTED_ERASURE_INDEX_DEFINITIONS,
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn canonical_authority_principal_columns_are_uuid(pool: PgPool) {
+    let columns: Vec<String> = sqlx::query_scalar(
+        "SELECT table_name || '.' || column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' \
+           AND (table_name, column_name) IN ( \
+               ('auth_account', 'principal_id'), \
+               ('auth_delivery_intent', 'principal_id'), \
+               ('auth_invite', 'principal_id'), \
+               ('auth_invite', 'invited_by_principal_id'), \
+               ('auth_session', 'principal_id'), \
+               ('auth_websocket_ticket', 'principal_id'), \
+               ('authentication_method', 'principal_id'), \
+               ('command_receipt', 'principal_id'), \
+               ('external_identity', 'principal_id'), \
+               ('game_authority', 'principal_id'), \
+               ('identity_lifecycle_audit', 'actor_principal_id'), \
+               ('identity_lifecycle_audit', 'principal_id'), \
+               ('media_upload_ledger', 'principal_id'), \
+               ('member_lifecycle_event', 'principal_id'), \
+               ('member_lifecycle_projection', 'principal_id'), \
+               ('member_personal_export', 'principal_id'), \
+               ('member_profile', 'active_principal_id'), \
+               ('moderation_case_history', 'actor_principal_id'), \
+               ('moderation_report', 'reporter_principal_id'), \
+               ('moderation_target_state', 'moderator_principal_id'), \
+               ('platform_principal', 'principal_id'), \
+               ('privacy_subject', 'principal_id'), \
+               ('profile_mute', 'principal_id'), \
+               ('public_watch', 'principal_id'), \
+               ('spectator_membership', 'principal_id'), \
+               ('subject_erasure_outbox', 'principal_id'), \
+               ('workos_provider_session', 'principal_id') \
+           ) \
+         ORDER BY table_name, ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read canonical authority principal column types");
+    assert_inventory(
+        "canonical authority principal column",
+        &columns,
+        EXPECTED_CANONICAL_PRINCIPAL_COLUMNS,
     );
 }
 
@@ -1101,6 +1194,43 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
         "profile mute column",
         &profile_mute_columns,
         EXPECTED_PROFILE_MUTE_COLUMNS,
+    );
+
+    let lifecycle_audit_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' AND table_name = 'identity_lifecycle_audit' \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read identity lifecycle audit column inventory");
+    assert_inventory(
+        "identity lifecycle audit column",
+        &lifecycle_audit_columns,
+        EXPECTED_IDENTITY_LIFECYCLE_AUDIT_COLUMNS,
+    );
+
+    let lifecycle_audit_redaction_columns: Vec<String> = sqlx::query_scalar(
+        "SELECT column_name || ':' || data_type || ':' || is_nullable \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' \
+           AND table_name = 'identity_lifecycle_audit' \
+           AND column_name IN ( \
+               'actor_principal_id', \
+               'principal_id', \
+               'redacted_actor_alias', \
+               'redacted_principal_alias' \
+           ) \
+         ORDER BY ordinal_position",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read identity lifecycle audit redaction column contract");
+    assert_inventory(
+        "identity lifecycle audit redaction column",
+        &lifecycle_audit_redaction_columns,
+        EXPECTED_IDENTITY_LIFECYCLE_AUDIT_REDACTION_COLUMNS,
     );
 }
 
@@ -1408,7 +1538,7 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
         r#"
         INSERT INTO auth_session (
             token_hash,
-            principal_user_id,
+            principal_id,
             created_at,
             expires_at,
             global_capabilities,
@@ -1418,7 +1548,7 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
         )
         VALUES (
             'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-            'missing-principal',
+            '00000000-0000-4000-8000-000000000001',
             1,
             100,
             '{}',
@@ -1431,10 +1561,10 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
     .execute(&pool)
     .await
     .expect_err("an orphan session must be rejected");
-    assert_foreign_key_violation(orphan_insert, "auth_session_principal_user_id_fkey");
+    assert_foreign_key_violation(orphan_insert, "auth_session_principal_id_fkey");
 
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ('owned-principal', 'active', '{}', 1)",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ('00000000-0000-4000-8000-000000000002', 'active', '{}', 1)",
     )
     .execute(&pool)
     .await
@@ -1443,7 +1573,7 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
         r#"
         INSERT INTO auth_session (
             token_hash,
-            principal_user_id,
+            principal_id,
             created_at,
             expires_at,
             global_capabilities,
@@ -1453,7 +1583,7 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
         )
         VALUES (
             'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-            'owned-principal',
+            '00000000-0000-4000-8000-000000000002',
             1,
             100,
             '{}',
@@ -1468,206 +1598,141 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
     .unwrap();
 
     let owner_delete =
-        sqlx::query("DELETE FROM platform_principal WHERE principal_user_id = 'owned-principal'")
+        sqlx::query("DELETE FROM platform_principal WHERE principal_id = '00000000-0000-4000-8000-000000000002'")
             .execute(&pool)
             .await
             .expect_err("a referenced principal must not be deleted");
-    assert_foreign_key_violation(owner_delete, "auth_session_principal_user_id_fkey");
+    assert_foreign_key_violation(owner_delete, "auth_session_principal_id_fkey");
 }
 
-#[sqlx::test(migrations = false)]
-async fn workos_cutover_preserves_legacy_evidence_without_preserving_authority(pool: PgPool) {
-    let through_identity_cutover = Migrator::with_migrations(
-        projections::MIGRATOR
-            .iter()
-            .filter(|migration| migration.version < 27)
-            .cloned()
-            .collect(),
-    );
-    through_identity_cutover
-        .run(&pool)
-        .await
-        .expect("apply projection migrations through 0026");
-
-    let method_id = Uuid::new_v4();
-    let legacy_token = identity::token::generate_session_token();
-    let legacy_token_hash = identity::token::hash_token(legacy_token.as_str());
-    sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ('legacy-workos-owner', 'active', '{}', 1)",
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query(
-        "INSERT INTO authentication_method (method_id, principal_user_id, kind, status, created_at) VALUES ($1, 'legacy-workos-owner', 'workos', 'active', 1)",
-    )
-    .bind(method_id)
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query(
-        r#"
-        INSERT INTO external_identity (
-            provider, subject, principal_user_id, display_label,
-            created_at, last_seen_at, method_id
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn member_profiles_enforce_exact_subject_owner_and_claim_provenance(pool: PgPool) {
+    let owner_a = Uuid::new_v4();
+    let owner_b = Uuid::new_v4();
+    let redacted_owner = Uuid::new_v4();
+    for principal_id in [owner_a, owner_b, redacted_owner] {
+        sqlx::query(
+            "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) \
+             VALUES ($1, 'active', '{}'::text[], 1)",
         )
-        VALUES (
-            'workos', 'user_legacy_workos_owner', 'legacy-workos-owner',
-            NULL, 1, 1, $1
-        )
-        "#,
-    )
-    .bind(method_id)
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query(
-        r#"
-        INSERT INTO auth_session (
-            token_hash, principal_user_id, created_at, expires_at,
-            global_capabilities, authenticated_via_method_id,
-            idle_expires_at, assurance, authenticated_at
-        )
-        VALUES ($1, 'legacy-workos-owner', 10, 10000, '{}', $2, 5000, 'external_sso', 10)
-        "#,
-    )
-    .bind(legacy_token_hash.as_str())
-    .bind(method_id)
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query(
-        r#"
-        INSERT INTO workos_session_exchange (
-            provider_session_id, access_token_hash, subject,
-            exchanged_at, access_expires_at
-        )
-        VALUES
-            (
-                'session_01HQAG1HENBZMAZD82YRXDFC0B', repeat('a', 64),
-                'user_legacy_workos_owner', 10, 1000
-            ),
-            (
-                'session_01HQAG1HENBZMAZD82YRXDFC0C', repeat('b', 64),
-                'user_orphaned_workos_identity', 10, 1000
-            )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    projections::MIGRATOR
-        .run(&pool)
-        .await
-        .expect("apply WorkOS provider-session custody migration");
-
-    let legacy_session: (Option<String>, Option<i64>) = sqlx::query_as(
-        "SELECT workos_session_id, revoked_at FROM auth_session WHERE token_hash = $1",
-    )
-    .bind(legacy_token_hash.as_str())
-    .fetch_one(&pool)
-    .await
-    .expect("the cutover must retain the legacy local-session evidence");
-    assert_eq!(legacy_session, (None, None));
-    assert!(matches!(
-        identity::session::validate_session(
-            &pool,
-            legacy_token.as_str(),
-            &identity::SessionPolicy {
-                absolute_ttl_seconds: 10_000,
-                workos_absolute_ttl_seconds: 10_000,
-                idle_ttl_seconds: 10_000,
-            },
-            20,
-        )
-        .await,
-        Err(identity::IdentityFlowError::Unauthorized)
-    ));
-
-    let retained_exchanges: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM workos_session_exchange WHERE provider_session_id IN ('session_01HQAG1HENBZMAZD82YRXDFC0B', 'session_01HQAG1HENBZMAZD82YRXDFC0C')",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(retained_exchanges, 2);
-    let retired_provider_sids: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM workos_provider_session_tombstone WHERE reason = 'migration_cutover'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(retired_provider_sids, 2);
-
-    sqlx::query("UPDATE auth_session SET revoked_at = 20 WHERE token_hash = $1")
-        .bind(legacy_token_hash.as_str())
+        .bind(principal_id)
         .execute(&pool)
         .await
-        .expect("a grandfathered null-sid row must remain revocable");
-    let reactivated =
-        sqlx::query("UPDATE auth_session SET revoked_at = NULL WHERE token_hash = $1")
-            .bind(legacy_token_hash.as_str())
-            .execute(&pool)
-            .await
-            .expect_err("terminal grandfathered rows must not return to authority");
-    assert_database_constraint(
-        reactivated,
-        "23514",
-        "auth_session_workos_session_shape_check",
-    );
+        .unwrap();
+    }
 
-    let new_null_sid = sqlx::query(
-        r#"
-        INSERT INTO auth_session (
-            token_hash, principal_user_id, created_at, expires_at,
-            global_capabilities, authenticated_via_method_id,
-            idle_expires_at, assurance, authenticated_at
+    let subject_a = Uuid::new_v4();
+    let subject_b = Uuid::new_v4();
+    let redacted_subject = Uuid::new_v4();
+    for (subject_id, principal_id) in [
+        (subject_a, owner_a),
+        (subject_b, owner_b),
+        (redacted_subject, redacted_owner),
+    ] {
+        sqlx::query(
+            "INSERT INTO privacy_subject (subject_id, principal_id, created_at) VALUES ($1, $2, 1)",
         )
-        VALUES (repeat('c', 64), 'legacy-workos-owner', 20, 10000, '{}', $1, 5000, 'external_sso', 20)
-        "#,
+        .bind(subject_id)
+        .bind(principal_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let claim_a = Uuid::new_v4();
+    let claim_b = Uuid::new_v4();
+    for (claim_id, subject_id) in [(claim_a, subject_a), (claim_b, subject_b)] {
+        sqlx::query(
+            "INSERT INTO subject_private_claim \
+             (claim_id, subject_id, claim_kind, scope_id, envelope, created_at) \
+             VALUES ($1, $2, 'profile', $3, '{}'::jsonb, 1)",
+        )
+        .bind(claim_id)
+        .bind(subject_id)
+        .bind(Uuid::new_v4())
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let wrong_owner = sqlx::query(
+        "INSERT INTO member_profile \
+         (profile_id, active_principal_id, handle_hmac, lifecycle, created_seq, updated_seq, revision, subject_id, current_claim_id) \
+         VALUES ($1, $2, decode(repeat('01', 32), 'hex'), 'active', 1, 1, 1, $3, $4)",
     )
-    .bind(method_id)
+    .bind(Uuid::new_v4())
+    .bind(owner_b)
+    .bind(subject_a)
+    .bind(claim_a)
     .execute(&pool)
     .await
-    .expect_err("new active WorkOS rows must carry a canonical provider sid");
-    assert_database_constraint(
-        new_null_sid,
-        "23514",
-        "auth_session_workos_session_shape_check",
-    );
+    .expect_err("a profile principal must own its subject");
+    assert_foreign_key_violation(wrong_owner, "member_profile_active_principal_id_fkey");
 
-    let new_unbound_exchange = sqlx::query(
-        r#"
-        INSERT INTO workos_session_exchange (
-            provider_session_id, access_token_hash,
-            exchanged_at, access_expires_at
-        )
-        VALUES (
-            'session_01HQAG1HENBZMAZD82YRXDFC0D', repeat('d', 64), 20, 1000
-        )
-        "#,
+    let wrong_claim = sqlx::query(
+        "INSERT INTO member_profile \
+         (profile_id, active_principal_id, handle_hmac, lifecycle, created_seq, updated_seq, revision, subject_id, current_claim_id) \
+         VALUES ($1, $2, decode(repeat('02', 32), 'hex'), 'active', 1, 1, 1, $3, $4)",
     )
+    .bind(Uuid::new_v4())
+    .bind(owner_a)
+    .bind(subject_a)
+    .bind(claim_b)
     .execute(&pool)
     .await
-    .expect_err("NOT VALID must still enforce provider custody on new assertions");
-    assert_foreign_key_violation(
-        new_unbound_exchange,
-        "workos_session_exchange_provider_session_fkey",
-    );
+    .expect_err("a profile claim must belong to its subject");
+    assert_foreign_key_violation(wrong_claim, "member_profile_current_claim_id_fkey");
+
+    let profile_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO member_profile \
+         (profile_id, active_principal_id, handle_hmac, lifecycle, created_seq, updated_seq, revision, subject_id, current_claim_id) \
+         VALUES ($1, $2, decode(repeat('03', 32), 'hex'), 'active', 1, 1, 1, $3, $4)",
+    )
+    .bind(profile_id)
+    .bind(owner_a)
+    .bind(subject_a)
+    .bind(claim_a)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let resolved_owner: Uuid = sqlx::query_scalar(
+        "SELECT subject.principal_id \
+         FROM member_profile AS profile \
+         JOIN privacy_subject AS subject \
+           ON (subject.subject_id, subject.principal_id) = (profile.subject_id, profile.active_principal_id) \
+         WHERE profile.profile_id = $1",
+    )
+    .bind(profile_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(resolved_owner, owner_a);
+
+    sqlx::query(
+        "INSERT INTO member_profile \
+         (profile_id, active_principal_id, handle_hmac, lifecycle, redacted_alias, created_seq, updated_seq, revision, subject_id, current_claim_id) \
+         VALUES ($1, NULL, NULL, 'redacted', 'former-member-ownership-proof', 1, 1, 1, $2, NULL)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(redacted_subject)
+    .execute(&pool)
+    .await
+    .expect("redacted profiles may intentionally omit active owner and claim references");
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn workos_session_catalog_binds_provider_custody_and_replays_exact_assertions(pool: PgPool) {
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ('workos-owner', 'active', '{}', 1)",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ('00000000-0000-4000-8000-000000000004', 'active', '{}', 1)",
     )
     .execute(&pool)
     .await
     .unwrap();
     let method_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO authentication_method (method_id, principal_user_id, kind, status, created_at) VALUES ($1, 'workos-owner', 'workos', 'active', 1)",
+        "INSERT INTO authentication_method (method_id, principal_id, kind, status, created_at) VALUES ($1, '00000000-0000-4000-8000-000000000004', 'workos', 'active', 1)",
     )
     .bind(method_id)
     .execute(&pool)
@@ -1677,11 +1742,11 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     let missing_provider_session = sqlx::query(
         r#"
         INSERT INTO auth_session (
-            token_hash, principal_user_id, created_at, expires_at,
+            token_hash, principal_id, created_at, expires_at,
             global_capabilities, authenticated_via_method_id,
             idle_expires_at, assurance, authenticated_at
         )
-        VALUES (repeat('a', 64), 'workos-owner', 1, 100, '{}', $1, 50, 'external_sso', 1)
+        VALUES (repeat('a', 64), '00000000-0000-4000-8000-000000000004', 1, 100, '{}', $1, 50, 'external_sso', 1)
         "#,
     )
     .bind(method_id)
@@ -1697,12 +1762,12 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     let provider_session_on_other_assurance = sqlx::query(
         r#"
         INSERT INTO auth_session (
-            token_hash, principal_user_id, created_at, expires_at,
+            token_hash, principal_id, created_at, expires_at,
             global_capabilities, idle_expires_at, assurance,
             authenticated_at, workos_session_id
         )
         VALUES (
-            repeat('b', 64), 'workos-owner', 1, 100, '{}', 50,
+            repeat('b', 64), '00000000-0000-4000-8000-000000000004', 1, 100, '{}', 50,
             'admin_grant', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B'
         )
         "#,
@@ -1719,11 +1784,11 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     sqlx::query(
         r#"
         INSERT INTO external_identity (
-            provider, subject, principal_user_id, display_label,
+            provider, subject, principal_id, display_label,
             created_at, last_seen_at, method_id
         )
         VALUES (
-            'workos', 'user_01HQAG1HENBZMAZD82YRXDFC0B', 'workos-owner',
+            'workos', 'user_01HQAG1HENBZMAZD82YRXDFC0B', '00000000-0000-4000-8000-000000000004',
             NULL, 1, 1, $1
         )
         "#,
@@ -1735,13 +1800,13 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     sqlx::query(
         r#"
         INSERT INTO workos_provider_session (
-            provider_session_id, subject, principal_user_id, method_id,
+            provider_session_id, subject, principal_id, method_id,
             status, created_at, last_seen_at, access_expires_at
         )
         VALUES (
             'session_01HQAG1HENBZMAZD82YRXDFC0B',
             'user_01HQAG1HENBZMAZD82YRXDFC0B',
-            'workos-owner', $1, 'active', 1, 1, 100
+            '00000000-0000-4000-8000-000000000004', $1, 'active', 1, 1, 100
         )
         "#,
     )
@@ -1753,12 +1818,12 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     sqlx::query(
         r#"
         INSERT INTO auth_session (
-            token_hash, principal_user_id, created_at, expires_at,
+            token_hash, principal_id, created_at, expires_at,
             global_capabilities, authenticated_via_method_id,
             idle_expires_at, assurance, authenticated_at, workos_session_id
         )
         VALUES (
-            repeat('c', 64), 'workos-owner', 1, 100, '{}', $1, 50,
+            repeat('c', 64), '00000000-0000-4000-8000-000000000004', 1, 100, '{}', $1, 50,
             'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B'
         )
         "#,
@@ -1783,12 +1848,12 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     let unbound_provider_session = sqlx::query(
         r#"
         INSERT INTO auth_session (
-            token_hash, principal_user_id, created_at, expires_at,
+            token_hash, principal_id, created_at, expires_at,
             global_capabilities, authenticated_via_method_id,
             idle_expires_at, assurance, authenticated_at, workos_session_id
         )
         VALUES (
-            repeat('f', 64), 'workos-owner', 1, 100, '{}', $1, 50,
+            repeat('f', 64), '00000000-0000-4000-8000-000000000004', 1, 100, '{}', $1, 50,
             'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0C'
         )
         "#,
@@ -1913,7 +1978,7 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     let subject_id = Uuid::new_v4();
     let erasure_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at, lifecycle_state) VALUES ($1, 'workos-owner', 1, 'erasure_pending')",
+        "INSERT INTO privacy_subject (subject_id, principal_id, created_at, lifecycle_state) VALUES ($1, '00000000-0000-4000-8000-000000000004', 1, 'erasure_pending')",
     )
     .bind(subject_id)
     .execute(&pool)
@@ -1922,10 +1987,10 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     sqlx::query(
         r#"
         INSERT INTO subject_erasure_outbox (
-            erasure_id, subject_id, principal_user_id, receipt_id,
+            erasure_id, subject_id, principal_id, receipt_id,
             replacement_alias, key_fingerprint_sha256, requested_at
         )
-        VALUES ($1, $2, 'workos-owner', $3, 'erased-workos-owner', repeat('f', 64), 1)
+        VALUES ($1, $2, '00000000-0000-4000-8000-000000000004', $3, 'erased-workos-owner', repeat('f', 64), 1)
         "#,
     )
     .bind(erasure_id)
@@ -2019,13 +2084,13 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     let sid_recreated = sqlx::query(
         r#"
         INSERT INTO workos_provider_session (
-            provider_session_id, subject, principal_user_id, method_id,
+            provider_session_id, subject, principal_id, method_id,
             status, created_at, last_seen_at, access_expires_at
         )
         VALUES (
             'session_01HQAG1HENBZMAZD82YRXDFC0B',
             'user_01HQAG1HENBZMAZD82YRXDFC0B',
-            'workos-owner', $1, 'active', 3, 3, 100
+            '00000000-0000-4000-8000-000000000004', $1, 'active', 3, 3, 100
         )
         "#,
     )
@@ -2056,13 +2121,13 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     let subject_recreated = sqlx::query(
         r#"
         INSERT INTO workos_provider_session (
-            provider_session_id, subject, principal_user_id, method_id,
+            provider_session_id, subject, principal_id, method_id,
             status, created_at, last_seen_at, access_expires_at
         )
         VALUES (
             'session_01HQAG1HENBZMAZD82YRXDFC0C',
             'user_01HQAG1HENBZMAZD82YRXDFC0B',
-            'workos-owner', $1, 'active', 3, 3, 100
+            '00000000-0000-4000-8000-000000000004', $1, 'active', 3, 3, 100
         )
         "#,
     )

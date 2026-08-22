@@ -102,7 +102,7 @@ async function proveSourceContracts() {
       requiredSnippets: [
         "on:click={() => onRecoveryTask(item)}",
         "action={item.form.action}",
-        'name="principalUserId"',
+        'name="principalId"',
       ],
     }),
     await proveSourceContract({
@@ -185,7 +185,7 @@ async function proveAdminInteraction(bundle) {
   );
   assertIncludes(
     recoveryConfirm.html,
-    'name="principalUserId"',
+    'name="principalId"',
     "admin recovery principal hidden field",
   );
   assertIncludes(ack.html, 'data-testid="admin-command-activity-cohost"', "admin ack row");
@@ -583,7 +583,7 @@ export function renderAdminSessionGrantConfirm() {
         "session-grants": adminConfirmStatus(item),
       },
       sessionGrant: {
-        principalUserId: "mod_a",
+        principalId: "mod_a",
         expiresAt: 4102444800,
         globalCapabilities: ["GlobalMod"],
       },
@@ -603,7 +603,7 @@ export function renderAdminRecoveryGateConfirm() {
         "recovery-gate": adminConfirmStatus(item),
       },
       game: "midsummer",
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       onRecoveryTask: () => {},
       onCancelRecoveryTask: () => {},
     },

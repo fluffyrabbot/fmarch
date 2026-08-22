@@ -56,7 +56,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
     shellOwner: "layout",
     shell: buildAppShell({
       activeSurface: "community",
-      principalUserId: locals.principalUserId,
+      principalId: locals.principalId,
       capabilities: locals.resolvedCapabilities,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
@@ -74,7 +74,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
       quotationsJson: view.quotationsJson,
       quoteEnabled: view.quoteEnabled,
       canPost,
-      hasSession: typeof locals.principalUserId === "string",
+      hasSession: typeof locals.principalId === "string",
       subscription,
       canModerate: hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalMod" })
         || hasCapability({ capabilities: locals.resolvedCapabilities, kind: "GlobalAdmin" }),

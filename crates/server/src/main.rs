@@ -392,10 +392,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         || env::var_os("DATABASE_KEY_ADMIN_URL").is_some()
         || env::var_os("FMARCH_DATABASE_APPLICATION_PASSWORD").is_some()
         || env::var_os("FMARCH_DATABASE_KEY_ADMIN_PASSWORD").is_some()
+        || env::var_os("FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY").is_some()
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
-            "fmarch-server accepts only the application DATABASE_URL; migration/key-admin credentials and role passwords must not enter the runtime environment",
+            "fmarch-server accepts only the active application authorities; migration/key-admin credentials, role passwords, and profile-index replacement material must not enter the runtime environment",
         )
         .into());
     }
@@ -405,6 +406,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     server::validate_database_transport(&config.database_url, "DATABASE_URL")
         .map_err(|message| std::io::Error::new(std::io::ErrorKind::PermissionDenied, message))?;
+    // Reject absent, malformed, or placeholder profile-index custody before
+    // touching external subject authority or opening a database connection.
+    profile_application::require_profile_handle_index_configuration()?;
     // Validate the external erasure authority before opening a database
     // connection. `--check-content` intentionally exits above this requirement.
     let subject_authority = identity::configured_subject_key_authority().await?;
@@ -418,7 +422,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     }
     eventstore::require_secure_event_encryption_configuration()?;
-    profile_application::require_profile_handle_index_configuration()?;
     let auth_source_key = env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY").ok();
     if auth_source_key
         .as_deref()
@@ -486,6 +489,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eventstore::attest_active_runtime_kek(&pool).await?;
     eventstore::audit_event_encryption_key_coverage(&pool).await?;
     identity::prepare_subject_authority_for_service(&pool, &subject_authority).await?;
+    profile_application::verify_profile_handle_index_consistency(&pool).await?;
     let _subject_erasure_worker = spawn_subject_erasure_worker(pool.clone());
     let _day_event_scheduler =
         commands::day_scheduler::spawn_day_event_scheduler(pool.clone(), config.scheduler.clone())?;

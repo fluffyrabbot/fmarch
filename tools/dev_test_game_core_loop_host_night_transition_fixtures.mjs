@@ -53,7 +53,7 @@ export function hostNightActionTransitionSurfaceFixture({
             playerCase.sourceRoleUrlField === "sourceActionPlayerRoleUrl"
               ? baseRolePath
               : `${baseRolePath}?private=notification-1`,
-          principalUserId: playerCase.expectedPrincipalUserId,
+          principalId: playerCase.expectedPrincipalUserId,
           slotField: playerCase.slotField,
           slot: playerCase.expectedSlot,
           actorAlive: playerCase.expectedActorAlive,
@@ -111,7 +111,7 @@ function dayThreeObservationBoundary(proofField) {
 export function dayThreeObservationFixture({
   sourceRoleUrl,
   visitedRolePath,
-  principalUserId,
+  principalId,
   slotField,
   slot,
   actorAlive,
@@ -131,7 +131,7 @@ export function dayThreeObservationFixture({
     surfaceTestId: "player-surface",
     clickedThroughFromRoleUrl: true,
     [slotField]: slot,
-    principalUserId,
+    principalId,
     checkpoint: {
       phaseId: "D03",
       phaseState: "open",

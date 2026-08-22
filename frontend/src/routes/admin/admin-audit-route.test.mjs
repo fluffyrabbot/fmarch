@@ -3,10 +3,12 @@ import { test } from "node:test";
 import { actions, load } from "./audit/[audit]/+page.server.js";
 import { adminForbiddenMessage } from "./admin-route-model.mjs";
 
+const ADMIN_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000004";
+
 test("admin audit detail load returns the native SPA audit surface", async () => {
   const data = await load({
     locals: {
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     params: { audit: "proof-runs" },
@@ -33,7 +35,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
   const data = await load({
     cookies: { get: () => "admin-session" },
     locals: {
-      principalUserId: "admin_a",
+      principalId: ADMIN_PRINCIPAL_ID,
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     params: { audit: "identity-lifecycle" },
@@ -41,110 +43,114 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
     fetch: async (url, init) => {
       if (String(url).startsWith("/auth/identity-lifecycle-audit")) {
         assert.equal(init.headers.authorization, "Bearer admin-session");
+        assert.equal(
+          String(url),
+          `/auth/identity-lifecycle-audit?principal_id=${ADMIN_PRINCIPAL_ID}&limit=50`,
+        );
         return jsonResponse({
           entries: [
             {
               id: 1,
               event_at: 98,
               event_kind: "account_created",
-              actor_user_id: "admin_a",
-              principal_user_id: "host_h",
+              actor_principal_id: "admin_a",
+              principal_id: "host_h",
               metadata: { account_id: "host@example.test" },
             },
             {
               id: 2,
               event_at: 99,
               event_kind: "account_disabled",
-              actor_user_id: "admin_a",
-              principal_user_id: "host_h",
+              actor_principal_id: "admin_a",
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 3,
               event_at: 100,
               event_kind: "account_enabled",
-              actor_user_id: "admin_a",
-              principal_user_id: "host_h",
+              actor_principal_id: "admin_a",
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 4,
               event_at: 101,
               event_kind: "account_password_rotated",
-              actor_user_id: "host_h",
-              principal_user_id: "host_h",
+              actor_principal_id: "host_h",
+              principal_id: "host_h",
               metadata: { password_algorithm: "argon2id" },
             },
             {
               id: 5,
               event_at: 102,
               event_kind: "account_recovery_credential_issued",
-              actor_user_id: "host_h",
-              principal_user_id: "host_h",
+              actor_principal_id: "host_h",
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 6,
               event_at: 103,
               event_kind: "account_recovery_credential_revoked",
-              actor_user_id: "host_h",
-              principal_user_id: "host_h",
+              actor_principal_id: "host_h",
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 7,
               event_at: 104,
               event_kind: "account_recovery_rejected",
-              actor_user_id: null,
-              principal_user_id: "host_h",
+              actor_principal_id: null,
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 8,
               event_at: 105,
               event_kind: "account_recovered",
-              actor_user_id: "host_h",
-              principal_user_id: "host_h",
+              actor_principal_id: "host_h",
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 13,
               event_at: 106,
               event_kind: "auth_attempt_rate_limited",
-              actor_user_id: null,
-              principal_user_id: "host_h",
+              actor_principal_id: null,
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 9,
               event_at: 101,
               event_kind: "account_session_created",
-              actor_user_id: "host_h",
-              principal_user_id: "host_h",
+              actor_principal_id: "host_h",
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 10,
               event_at: 102,
               event_kind: "session_rotated",
-              actor_user_id: "host_h",
-              principal_user_id: "host_h",
+              actor_principal_id: "host_h",
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 11,
               event_at: 103,
               event_kind: "session_revoked",
-              actor_user_id: "admin_a",
-              principal_user_id: "host_h",
+              actor_principal_id: "admin_a",
+              principal_id: "host_h",
               metadata: {},
             },
             {
               id: 12,
               event_at: 104,
               event_kind: "invite_revoked",
-              actor_user_id: "admin_a",
-              principal_user_id: "host_h",
+              actor_principal_id: "admin_a",
+              principal_id: "host_h",
               metadata: {},
             },
           ],
@@ -176,7 +182,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
   );
   assert.deepEqual(data.audit.accountControls, {
     accountId: "host@example.test",
-    principalUserId: "host_h",
+    principalId: ADMIN_PRINCIPAL_ID,
     currentDisabled: false,
     disableAction: "?/disableAccount",
     enableAction: "?/enableAccount",
@@ -189,7 +195,7 @@ test("admin audit detail load rejects non-admin authority", async () => {
     async () =>
       await load({
         locals: {
-          principalUserId: "host_h",
+          principalId: "host_h",
           resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
         },
         params: { audit: "proof-runs" },
@@ -215,7 +221,7 @@ test("admin audit detail load rejects unknown audit rows", async () => {
     async () =>
       await load({
         locals: {
-          principalUserId: "admin_a",
+          principalId: "admin_a",
           resolvedCapabilities: [{ kind: "GlobalAdmin" }],
         },
         params: { audit: "missing-proof" },
@@ -243,7 +249,7 @@ test("admin audit account lifecycle action disables an account through admin ses
       return jsonResponse({
         status: "disabled",
         account_id: "host@example.test",
-        principal_user_id: "host_h",
+        principal_id: "host_h",
         disabled_at: 123,
         revoked_session_count: 2,
       });
@@ -288,7 +294,7 @@ test("admin audit account lifecycle action enables an account through admin sess
       return jsonResponse({
         status: "enabled",
         account_id: "host@example.test",
-        principal_user_id: "host_h",
+        principal_id: "host_h",
         disabled_at: null,
         revoked_session_count: 0,
       });

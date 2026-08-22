@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { actions, load } from "./+page.server.js";
 
+const PRINCIPAL_ID = "00000000-0000-5000-8000-000000000001";
+
 test("classic login load preserves only local return paths", () => {
   assert.deepEqual(
     load({
@@ -12,7 +14,7 @@ test("classic login load preserves only local return paths", () => {
     }),
     {
       login: {
-        principalUserId: null,
+        principalId: null,
         accountId: "host@example.test",
         returnTo: "/g/midsummer/host",
       },
@@ -21,14 +23,14 @@ test("classic login load preserves only local return paths", () => {
 
   assert.deepEqual(
     load({
-      locals: { principalUserId: "admin_a" },
+      locals: { principalId: "admin_a" },
       url: new URL(
         "http://localhost/auth/login/classic?returnTo=/auth/login/classic%3FreturnTo%3D/admin",
       ),
     }),
     {
       login: {
-        principalUserId: "admin_a",
+        principalId: "admin_a",
         accountId: "",
         returnTo: "/",
       },
@@ -56,7 +58,7 @@ test("classic login exchanges credentials for a backend-issued session token", a
           });
           assert.equal(url, "/auth/sessions");
           return jsonResponse({
-            principal_user_id: "host_h",
+            principal_id: PRINCIPAL_ID,
             session_token: "fmss_issued-by-backend",
             expires_at: 4_102_444_800,
             capabilities: [{ kind: "HostOf" }],
@@ -94,12 +96,35 @@ test("classic login exchanges credentials for a backend-issued session token", a
   });
 });
 
+test("classic login rejects missing or noncanonical principal IDs from the session API", async (t) => {
+  for (const [name, responseBody] of [
+    ["missing", { session_token: "fmss_issued-by-backend", capabilities: [] }],
+    ["label", { principal_id: "host_h", session_token: "fmss_issued-by-backend", capabilities: [] }],
+  ]) {
+    await t.test(name, async () => {
+      const result = await actions.default({
+        cookies: forbiddenCookieJar(),
+        fetch: async () => jsonResponse(responseBody),
+        request: formRequest({
+          accountId: "host@example.test",
+          password: "correct horse battery",
+          returnTo: "/admin",
+        }),
+        url: new URL("http://localhost/auth/login/classic"),
+      });
+
+      assert.equal(result.status, 502);
+      assert.equal(result.data.message, "Auth service returned a malformed account session");
+    });
+  }
+});
+
 test("classic login rejects a session response without a backend token", async () => {
   const result = await actions.default({
     cookies: forbiddenCookieJar(),
     fetch: async () =>
       jsonResponse({
-        principal_user_id: "host_h",
+        principal_id: PRINCIPAL_ID,
         capabilities: [{ kind: "HostOf" }],
       }),
     request: formRequest({

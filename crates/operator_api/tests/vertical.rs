@@ -24,6 +24,7 @@ use operator_proof::{
     PROOF_RUN_STATUS_AUDIT_REPORT_ARTIFACT_VERSION, RESOLUTION_DIFF_REPORT_ARTIFACT_VERSION,
     TRACE_INSPECTION_REPORT_ARTIFACT_VERSION,
 };
+use principal::PrincipalId;
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::process::Command as ProcessCommand;
@@ -39,10 +40,10 @@ use wire::{
 macro_rules! seat_persona {
     ($game:ident, slot: $slot:expr, user: $user:expr $(,)?) => {{
         let slot: String = $slot;
-        let principal_id: String = $user;
+        let principal_id = PrincipalId::fixture($user);
         Command::SeatPersona {
             game: $game,
-            public_name: principal_id.clone(),
+            public_name: format!("Player {slot}"),
             principal_id,
             slot,
         }
@@ -62,49 +63,50 @@ fn router(pool: sqlx::PgPool) -> Router {
     command_router(pool).merge(operator)
 }
 
-/// The vertical suite predates HTTP session auth and uses query principals to
-/// select fixture actors. Translate that fixture selector into a real,
-/// database-backed bearer session before the production router sees the
-/// request. Authorization is still resolved by the production session and
-/// capability path; dedicated route tests prove query principals are ignored.
+/// The vertical suite uses a test-only `fixture_principal` query selector to
+/// choose fixture actors. Translate that label into a real, database-backed
+/// bearer session before the production router sees the request. Authorization
+/// is still resolved by the production session and capability path; dedicated
+/// route tests prove authority query parameters are ignored.
 async fn authenticate_operator_fixture(
     State(pool): State<sqlx::PgPool>,
     mut request: Request<Body>,
     next: Next,
 ) -> Response {
-    let Some(principal_user_id) = request
+    let Some(principal_label) = request
         .uri()
         .query()
-        .and_then(fixture_principal_user_id)
+        .and_then(fixture_principal_label)
         .map(str::to_owned)
     else {
         return next.run(request).await;
     };
 
-    let token_seed = format!("vertical-operator-session:{principal_user_id}");
+    let principal_id = PrincipalId::fixture(&principal_label);
+    let token_seed = format!("vertical-operator-session:{principal_label}");
     let token = format!("fmss_{}", session_token_hash(token_seed.as_str()));
     sqlx::query(
         "INSERT INTO platform_principal \
-         (principal_user_id, status, global_capabilities, created_at) \
+         (principal_id, status, global_capabilities, created_at) \
          VALUES ($1, 'active', ARRAY[]::TEXT[], 0) \
-         ON CONFLICT (principal_user_id) DO NOTHING",
+         ON CONFLICT (principal_id) DO NOTHING",
     )
-    .bind(&principal_user_id)
+    .bind(principal_id.as_uuid())
     .execute(&pool)
     .await
     .expect("insert vertical operator fixture principal");
     sqlx::query(
         "INSERT INTO auth_session \
-         (token_hash, principal_user_id, created_at, expires_at, global_capabilities, idle_expires_at, assurance, authenticated_at) \
+         (token_hash, principal_id, created_at, expires_at, global_capabilities, idle_expires_at, assurance, authenticated_at) \
          VALUES ($1, $2, 0, 4102444800, ARRAY[]::TEXT[], 4102444800, 'admin_grant', 0) \
          ON CONFLICT (token_hash) DO UPDATE SET \
-           principal_user_id = EXCLUDED.principal_user_id, \
+           principal_id = EXCLUDED.principal_id, \
            expires_at = EXCLUDED.expires_at, \
            idle_expires_at = EXCLUDED.idle_expires_at, \
            revoked_at = NULL",
     )
     .bind(session_token_hash(&token))
-    .bind(&principal_user_id)
+    .bind(principal_id.as_uuid())
     .execute(&pool)
     .await
     .expect("insert vertical operator fixture session");
@@ -116,10 +118,10 @@ async fn authenticate_operator_fixture(
     next.run(request).await
 }
 
-fn fixture_principal_user_id(query: &str) -> Option<&str> {
+fn fixture_principal_label(query: &str) -> Option<&str> {
     query
         .split('&')
-        .find_map(|part| part.strip_prefix("principal_user_id="))
+        .find_map(|part| part.strip_prefix("fixture_principal="))
         .filter(|principal| !principal.is_empty())
 }
 
@@ -149,13 +151,13 @@ async fn test_command(
             }),
         ));
     };
-    let principal = Principal::user(
+    let principal = Principal::authenticated(PrincipalId::fixture(
         headers
             .get("authorization")
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.strip_prefix("Bearer "))
             .unwrap_or("missing-session"),
-    );
+    ));
     let wire::CommandDispatch::Direct(command) = msg.command.into_dispatch() else {
         return Json(ServerEnvelope::new(
             envelope.id,
@@ -179,29 +181,29 @@ fn stable_command_id(id: u64) -> Uuid {
     Uuid::from_u128(id as u128)
 }
 
-async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
+async fn ensure_test_principal(pool: &sqlx::PgPool, principal_id: PrincipalId) {
     let mut connection = pool.acquire().await.expect("acquire identity connection");
-    identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
+    identity::methods::ensure_principal(&mut connection, &principal_id, &[], 1)
         .await
         .expect("provision test principal and privacy subject");
 }
 
 async fn provision_fixture_command_principal(pool: &sqlx::PgPool, command: &commands::Command) {
-    let principal_user_id = match command {
+    let principal_id = match command {
         commands::Command::SeatPersona { principal_id, .. }
         | commands::Command::ProcessReplacement {
             incoming_principal_id: principal_id,
             ..
-        } => principal_id,
+        } => *principal_id,
         _ => return,
     };
-    ensure_test_principal(pool, principal_user_id).await;
+    ensure_test_principal(pool, principal_id).await;
 }
 
 fn command_envelope_with_command_id(
     id: u64,
     command_id: Uuid,
-    _principal_user_id: &str,
+    _principal_id: &str,
     command: Command,
 ) -> ClientEnvelope {
     ClientEnvelope::new(
@@ -216,13 +218,13 @@ fn command_envelope_with_command_id(
 async fn post_command(
     app: axum::Router,
     id: u64,
-    principal_user_id: &str,
+    principal_id: &str,
     command: Command,
 ) -> ServerEnvelope {
     let body = serde_json::to_vec(&command_envelope_with_command_id(
         id,
         stable_command_id(id),
-        principal_user_id,
+        principal_id,
         command,
     ))
     .unwrap();
@@ -232,7 +234,7 @@ async fn post_command(
             Request::builder()
                 .method("POST")
                 .uri("/commands")
-                .header("authorization", format!("Bearer {principal_user_id}"))
+                .header("authorization", format!("Bearer {principal_id}"))
                 .header("content-type", "application/json")
                 .body(Body::from(body))
                 .unwrap(),
@@ -1261,7 +1263,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             "host_h",
             Command::AddCohost {
                 game,
-                user: "cohost_c".into(),
+                principal_id: PrincipalId::fixture("cohost_c"),
             },
         )
         .await,
@@ -1286,7 +1288,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             seat_persona! {
                 game,
                 slot: "slot_1".into(),
-                user: "user_1".into(),
+                user: "user_1",
             },
         )
         .await,
@@ -1335,7 +1337,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/projection-audit?principal_user_id=host_h"
+                    "/games/{game}/projection-audit?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1374,7 +1376,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/projection-audit/view?principal_user_id=host_h"
+                    "/games/{game}/projection-audit/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1410,7 +1412,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/projection-audit/view?principal_user_id=cohost_c"
+                    "/games/{game}/projection-audit/view?fixture_principal=cohost_c"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1428,7 +1430,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/projection-audit?principal_user_id=user_1"
+                    "/games/{game}/projection-audit?fixture_principal=user_1"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1446,7 +1448,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status-audit?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs/status-audit?fixture_principal=outsider"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1464,7 +1466,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=outsider"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1482,7 +1484,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/projection-audit/view?principal_user_id=user_1"
+                    "/games/{game}/projection-audit/view?fixture_principal=user_1"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1500,7 +1502,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/retention?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs/retention?fixture_principal=outsider"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1518,7 +1520,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/projection-rebuild?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs/projection-rebuild?fixture_principal=outsider"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1536,7 +1538,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/resolution-diff?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs/resolution-diff?fixture_principal=outsider"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1554,7 +1556,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/trace-inspection?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs/trace-inspection?fixture_principal=outsider"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1593,7 +1595,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             "host_h",
             Command::AddCohost {
                 game,
-                user: "cohost_c".into(),
+                principal_id: PrincipalId::fixture("cohost_c"),
             },
         )
         .await,
@@ -1604,7 +1606,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/games/{game}/operator?principal_user_id=host_h"))
+                .uri(format!("/games/{game}/operator?fixture_principal=host_h"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -1657,7 +1659,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1746,7 +1748,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs?principal_user_id=host_h&fixture=artifact-provenance"
+                    "/games/{game}/operator/proof-runs?fixture_principal=host_h&fixture=artifact-provenance"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -1831,7 +1833,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status?principal_user_id=host_h&fixture=artifact-provenance"
+                    "/games/{game}/operator/proof-runs/status?fixture_principal=host_h&fixture=artifact-provenance"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2267,7 +2269,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status-audit?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/status-audit?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2305,7 +2307,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2329,7 +2331,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status-audit?principal_user_id=host_h&fixture=artifact-state-drift"
+                    "/games/{game}/operator/proof-runs/status-audit?fixture_principal=host_h&fixture=artifact-state-drift"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2354,7 +2356,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture=artifact-state-drift"
+                    "/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=host_h&fixture=artifact-state-drift"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2387,7 +2389,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/status-audit?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/status-audit?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -2405,7 +2407,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -2424,7 +2426,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/go-no-go?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/go-no-go?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2654,7 +2656,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/go-no-go/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2724,7 +2726,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/retention?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/retention?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2756,7 +2758,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/retention/view?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/retention/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2783,7 +2785,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/retention?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/retention?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -2801,7 +2803,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/retention/view?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/retention/view?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -2822,7 +2824,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/projection-rebuild?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/projection-rebuild?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2848,7 +2850,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/projection-rebuild/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2876,7 +2878,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/projection-rebuild?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/projection-rebuild?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -2895,7 +2897,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/projection-rebuild/view?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -2917,7 +2919,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/resolution-diff?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/resolution-diff?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2942,7 +2944,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/resolution-diff/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -2971,7 +2973,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/resolution-diff?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/resolution-diff?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -2990,7 +2992,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/resolution-diff/view?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -3012,7 +3014,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/trace-inspection?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/trace-inspection?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3041,7 +3043,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/trace-inspection/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3071,7 +3073,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/trace-inspection?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/trace-inspection?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -3090,7 +3092,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/trace-inspection/view?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -3112,7 +3114,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/large-action-graph-performance?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/large-action-graph-performance?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3140,7 +3142,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/large-action-graph-performance/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3169,7 +3171,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/large-action-graph-performance?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/large-action-graph-performance?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -3188,7 +3190,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/large-action-graph-performance/view?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -3210,7 +3212,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/determinism-fuzz?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/determinism-fuzz?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3239,7 +3241,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/determinism-fuzz/view?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/determinism-fuzz/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3267,7 +3269,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/determinism-fuzz?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/determinism-fuzz?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -3289,7 +3291,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/determinism-fuzz/view?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/determinism-fuzz/view?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -3316,7 +3318,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/go-no-go?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/go-no-go?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -3340,7 +3342,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 Request::builder()
                     .method("GET")
                     .uri(format!(
-                        "/games/{game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h&fixture={fixture}"
+                        "/games/{game}/operator/proof-runs/go-no-go/view?fixture_principal=host_h&fixture={fixture}"
                     ))
                     .body(Body::empty())
                     .unwrap(),
@@ -3360,7 +3362,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/games/{game}/operator?principal_user_id=cohost_c"))
+                .uri(format!("/games/{game}/operator?fixture_principal=cohost_c"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -3370,7 +3372,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let cohost_html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(cohost_html.contains("Operator Index"));
-    assert!(!cohost_html.contains("principal_user_id="));
+    assert!(!cohost_html.contains("fixture_principal="));
 
     let response = app
         .clone()
@@ -3378,7 +3380,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs?principal_user_id=cohost_c"
+                    "/games/{game}/operator/proof-runs?fixture_principal=cohost_c"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3389,7 +3391,8 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let cohost_proof_html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(cohost_proof_html.contains("Operator Proof-Run Index"));
-    assert!(cohost_proof_html.contains("cohost_c"));
+    let cohost_principal = PrincipalId::fixture("cohost_c").to_string();
+    assert!(cohost_proof_html.contains(cohost_principal.as_str()));
     assert!(cohost_proof_html.contains("server page does not execute background jobs"));
     assert!(cohost_proof_html
         .contains("target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json"));
@@ -3403,7 +3406,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/games/{game}/operator?principal_user_id=outsider"))
+                .uri(format!("/games/{game}/operator?fixture_principal=outsider"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -3420,7 +3423,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs/status?fixture_principal=outsider"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3438,7 +3441,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs?fixture_principal=outsider"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3456,7 +3459,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/go-no-go?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs/go-no-go?fixture_principal=outsider"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3469,10 +3472,10 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(reject.error, RejectCode::NotAuthorized);
 
     for path in [
-        format!("/games/{game}/operator/proof-runs/projection-rebuild?principal_user_id=outsider"),
-        format!("/games/{game}/operator/proof-runs/trace-inspection?principal_user_id=outsider"),
-        format!("/games/{game}/operator/proof-runs/large-action-graph-performance?principal_user_id=outsider"),
-        format!("/games/{game}/operator/proof-runs/determinism-fuzz?principal_user_id=outsider"),
+        format!("/games/{game}/operator/proof-runs/projection-rebuild?fixture_principal=outsider"),
+        format!("/games/{game}/operator/proof-runs/trace-inspection?fixture_principal=outsider"),
+        format!("/games/{game}/operator/proof-runs/large-action-graph-performance?fixture_principal=outsider"),
+        format!("/games/{game}/operator/proof-runs/determinism-fuzz?fixture_principal=outsider"),
     ] {
         let response = app
             .clone()
@@ -3517,7 +3520,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
             "host_h",
             Command::AddCohost {
                 game,
-                user: "cohost_c".into(),
+                principal_id: PrincipalId::fixture("cohost_c"),
             },
         )
         .await,
@@ -3551,7 +3554,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
                 seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,
@@ -3633,7 +3636,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/host-phase-controls/view?principal_user_id=host_h"
+                    "/games/{game}/host-phase-controls/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3650,7 +3653,8 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
     assert!(html.contains("D01"));
     assert!(html.contains("N02"));
     assert!(html.contains("D02"));
-    assert!(html.contains("host_h"));
+    // The fixture principal authorizes this view; phase-control rows deliberately
+    // contain no authority identifier to render.
 
     let response = app
         .clone()
@@ -3658,7 +3662,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/host-phase-controls/view?principal_user_id=cohost_c"
+                    "/games/{game}/host-phase-controls/view?fixture_principal=cohost_c"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3675,7 +3679,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/host-phase-controls/view?principal_user_id=user_2"
+                    "/games/{game}/host-phase-controls/view?fixture_principal=user_2"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3713,7 +3717,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             "host_h",
             Command::AddCohost {
                 game,
-                user: "cohost_c".into(),
+                principal_id: PrincipalId::fixture("cohost_c"),
             },
         )
         .await,
@@ -3745,7 +3749,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
                 seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,
@@ -3824,7 +3828,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-traces?principal_user_id=host_h"
+                    "/games/{game}/resolution-traces?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -3864,7 +3868,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-traces?principal_user_id=host_h&run_id={}",
+                    "/games/{game}/resolution-traces?fixture_principal=host_h&run_id={}",
                     run.run_id
                 ))
                 .body(Body::empty())
@@ -3884,7 +3888,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-traces?principal_user_id=cohost_c&run_id={}",
+                    "/games/{game}/resolution-traces?fixture_principal=cohost_c&run_id={}",
                     run.run_id
                 ))
                 .body(Body::empty())
@@ -3910,7 +3914,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-traces/view?principal_user_id=host_h&run_id={}",
+                    "/games/{game}/resolution-traces/view?fixture_principal=host_h&run_id={}",
                     run.run_id
                 ))
                 .body(Body::empty())
@@ -3988,7 +3992,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-traces/view?principal_user_id=cohost_c&run_id={}",
+                    "/games/{game}/resolution-traces/view?fixture_principal=cohost_c&run_id={}",
                     run.run_id
                 ))
                 .body(Body::empty())
@@ -4007,7 +4011,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-traces?principal_user_id=user_1"
+                    "/games/{game}/resolution-traces?fixture_principal=user_1"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -4025,7 +4029,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-traces?principal_user_id=outsider&run_id={}",
+                    "/games/{game}/resolution-traces?fixture_principal=outsider&run_id={}",
                     run.run_id
                 ))
                 .body(Body::empty())
@@ -4044,7 +4048,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-traces/view?principal_user_id=user_1&run_id={}",
+                    "/games/{game}/resolution-traces/view?fixture_principal=user_1&run_id={}",
                     run.run_id
                 ))
                 .body(Body::empty())
@@ -4062,7 +4066,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-traces/view?principal_user_id=outsider&run_id={}",
+                    "/games/{game}/resolution-traces/view?fixture_principal=outsider&run_id={}",
                     run.run_id
                 ))
                 .body(Body::empty())
@@ -4080,8 +4084,8 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
 async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
-    for principal_user_id in ["user_1", "user_2", "user_3"] {
-        ensure_test_principal(&pool, principal_user_id).await;
+    for principal_id in ["user_1", "user_2", "user_3"] {
+        ensure_test_principal(&pool, PrincipalId::fixture(principal_id)).await;
     }
 
     expect_ack(
@@ -4104,7 +4108,7 @@ async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sql
             "host_h",
             Command::AddCohost {
                 game,
-                user: "cohost_c".into(),
+                principal_id: PrincipalId::fixture("cohost_c"),
             },
         )
         .await,
@@ -4134,7 +4138,7 @@ async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sql
                 seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,
@@ -4253,7 +4257,7 @@ async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sql
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-audit?principal_user_id=host_h"
+                    "/games/{game}/resolution-audit?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -4268,7 +4272,7 @@ async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sql
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/resolution-audit/view?principal_user_id=host_h"
+                    "/games/{game}/resolution-audit/view?fixture_principal=host_h"
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -4326,7 +4330,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,
@@ -4408,7 +4412,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
 
     let smoke_pages: Vec<(String, Vec<&str>)> = vec![
         (
-            format!("/games/{game}/operator?principal_user_id=host_h"),
+            format!("/games/{game}/operator?fixture_principal=host_h"),
             vec![
                 "Operator Index",
                 "Host Phase-Control View",
@@ -4424,7 +4428,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs?fixture_principal=host_h"),
             vec![
                 "Operator Proof-Run Index",
                 "Local-Only Regression Lanes",
@@ -4462,7 +4466,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs?principal_user_id=host_h&fixture=artifact-provenance"),
+            format!("/games/{game}/operator/proof-runs?fixture_principal=host_h&fixture=artifact-provenance"),
             vec![
                 "Operator Proof-Run Index",
                 "Operator Proof Fixtures",
@@ -4487,7 +4491,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/status?principal_user_id=host_h&fixture=artifact-provenance"),
+            format!("/games/{game}/operator/proof-runs/status?fixture_principal=host_h&fixture=artifact-provenance"),
             vec![
                 "\"contract_version\":1",
                 "\"execution\":\"local-only command copy\"",
@@ -4552,7 +4556,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/status-audit?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/status-audit?fixture_principal=host_h"),
             vec![
                 "\"ok\":true",
                 "\"expected_path\":\"crates/operator_proof/fixtures/operator-proof-status-artifact-provenance.snapshot.json\"",
@@ -4563,7 +4567,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=host_h"),
             vec![
                 "Operator Proof-Run Status Audit",
                 "matched",
@@ -4576,7 +4580,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture=artifact-state-drift"),
+            format!("/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=host_h&fixture=artifact-state-drift"),
             vec![
                 "Operator Proof-Run Status Audit",
                 "drifted",
@@ -4589,22 +4593,22 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture=saved-report-malformed"),
+            format!("/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=host_h&fixture=saved-report-malformed"),
             vec![
                 "Operator Proof-Run Status Audit",
                 "artifact metadata unreadable",
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture=saved-report-stale"),
+            format!("/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=host_h&fixture=saved-report-stale"),
             vec!["Operator Proof-Run Status Audit", "artifact stale"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/status-audit/view?principal_user_id=host_h&fixture=saved-report-drifted"),
+            format!("/games/{game}/operator/proof-runs/status-audit/view?fixture_principal=host_h&fixture=saved-report-drifted"),
             vec!["Operator Proof-Run Status Audit", "artifact drifted"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/go-no-go?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/go-no-go?fixture_principal=host_h"),
             vec![
                 "\"ok\":true",
                 "\"artifact_path\":\"target/operator-proof/current-artifact-go-no-go-report.json\"",
@@ -4645,7 +4649,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/go-no-go/view?fixture_principal=host_h"),
             vec![
                 "Operator Proof Artifact Go/No-Go",
                 "go",
@@ -4684,7 +4688,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/retention?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/retention?fixture_principal=host_h"),
             vec![
                 "\"ok\":true",
                 "\"artifact_path\":\"target/operator-proof/current-artifact-retention-report.json\"",
@@ -4695,7 +4699,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/retention/view?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/retention/view?fixture_principal=host_h"),
             vec![
                 "Operator Proof Artifact Retention",
                 "matched",
@@ -4705,19 +4709,19 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/retention/view?principal_user_id=host_h&fixture=newly-missing-artifact"),
+            format!("/games/{game}/operator/proof-runs/retention/view?fixture_principal=host_h&fixture=newly-missing-artifact"),
             vec!["Operator Proof Artifact Retention", "regressed", "newly-missing-artifact", "missing"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/retention/view?principal_user_id=host_h&fixture=stale-previously-trusted"),
+            format!("/games/{game}/operator/proof-runs/retention/view?fixture_principal=host_h&fixture=stale-previously-trusted"),
             vec!["Operator Proof Artifact Retention", "regressed", "stale-previously-trusted", "stale"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/retention/view?principal_user_id=host_h&fixture=recovered-artifact"),
+            format!("/games/{game}/operator/proof-runs/retention/view?fixture_principal=host_h&fixture=recovered-artifact"),
             vec!["Operator Proof Artifact Retention", "matched", "recovered-artifact", "trusted"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/projection-rebuild?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/projection-rebuild?fixture_principal=host_h"),
             vec![
                 "\"ok\":true",
                 "\"artifact_state\":\"trusted\"",
@@ -4728,7 +4732,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?fixture_principal=host_h"),
             vec![
                 "Operator Projection Rebuild Report",
                 "matched",
@@ -4738,23 +4742,23 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h&fixture=missing-report"),
+            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?fixture_principal=host_h&fixture=missing-report"),
             vec!["Operator Projection Rebuild Report", "missing-report", "missing", "No table rows."],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h&fixture=stale-report"),
+            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?fixture_principal=host_h&fixture=stale-report"),
             vec!["Operator Projection Rebuild Report", "stale-report", "stale"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h&fixture=drifted-report"),
+            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?fixture_principal=host_h&fixture=drifted-report"),
             vec!["Operator Projection Rebuild Report", "drifted-report", "drifted", "slot_state"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?principal_user_id=host_h&fixture=recovered-report"),
+            format!("/games/{game}/operator/proof-runs/projection-rebuild/view?fixture_principal=host_h&fixture=recovered-report"),
             vec!["Operator Projection Rebuild Report", "recovered-report", "trusted"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/resolution-diff?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/resolution-diff?fixture_principal=host_h"),
             vec![
                 "\"ok\":true",
                 "\"artifact_state\":\"trusted\"",
@@ -4764,7 +4768,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/resolution-diff/view?fixture_principal=host_h"),
             vec![
                 "Operator Resolution Diff Report",
                 "matched",
@@ -4773,23 +4777,23 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h&fixture=missing-report"),
+            format!("/games/{game}/operator/proof-runs/resolution-diff/view?fixture_principal=host_h&fixture=missing-report"),
             vec!["Operator Resolution Diff Report", "missing-report", "missing", "No phase rows."],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h&fixture=stale-report"),
+            format!("/games/{game}/operator/proof-runs/resolution-diff/view?fixture_principal=host_h&fixture=stale-report"),
             vec!["Operator Resolution Diff Report", "stale-report", "stale"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h&fixture=drifted-report"),
+            format!("/games/{game}/operator/proof-runs/resolution-diff/view?fixture_principal=host_h&fixture=drifted-report"),
             vec!["Operator Resolution Diff Report", "drifted-report", "drifted", "$.winner"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/resolution-diff/view?principal_user_id=host_h&fixture=matched-report"),
+            format!("/games/{game}/operator/proof-runs/resolution-diff/view?fixture_principal=host_h&fixture=matched-report"),
             vec!["Operator Resolution Diff Report", "matched-report", "trusted"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/trace-inspection?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/trace-inspection?fixture_principal=host_h"),
             vec![
                 "\"ok\":true",
                 "\"artifact_state\":\"trusted\"",
@@ -4799,7 +4803,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/trace-inspection/view?fixture_principal=host_h"),
             vec![
                 "Operator Trace Inspection Report",
                 "available",
@@ -4809,27 +4813,27 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=missing-report"),
+            format!("/games/{game}/operator/proof-runs/trace-inspection/view?fixture_principal=host_h&fixture=missing-report"),
             vec!["Operator Trace Inspection Report", "missing-report", "missing", "No trace rows."],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=stale-report"),
+            format!("/games/{game}/operator/proof-runs/trace-inspection/view?fixture_principal=host_h&fixture=stale-report"),
             vec!["Operator Trace Inspection Report", "stale-report", "stale"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=malformed-report"),
+            format!("/games/{game}/operator/proof-runs/trace-inspection/view?fixture_principal=host_h&fixture=malformed-report"),
             vec!["Operator Trace Inspection Report", "malformed-report", "malformed"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=filtered-run"),
+            format!("/games/{game}/operator/proof-runs/trace-inspection/view?fixture_principal=host_h&fixture=filtered-run"),
             vec!["Operator Trace Inspection Report", "filtered-run", "trusted", "filtered:run"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/trace-inspection/view?principal_user_id=host_h&fixture=empty-trace"),
+            format!("/games/{game}/operator/proof-runs/trace-inspection/view?fixture_principal=host_h&fixture=empty-trace"),
             vec!["Operator Trace Inspection Report", "empty-trace", "drifted", "No trace rows."],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/large-action-graph-performance?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/large-action-graph-performance?fixture_principal=host_h"),
             vec![
                 "\"ok\":true",
                 "\"artifact_state\":\"trusted\"",
@@ -4839,7 +4843,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/large-action-graph-performance/view?fixture_principal=host_h"),
             vec![
                 "Operator Large Action Graph Performance Report",
                 "within ceiling",
@@ -4848,7 +4852,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/large-action-graph-performance/view?principal_user_id=host_h&fixture=threshold-regressed"),
+            format!("/games/{game}/operator/proof-runs/large-action-graph-performance/view?fixture_principal=host_h&fixture=threshold-regressed"),
             vec![
                 "Operator Large Action Graph Performance Report",
                 "threshold-regressed",
@@ -4857,7 +4861,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/determinism-fuzz?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/determinism-fuzz?fixture_principal=host_h"),
             vec![
                 "\"ok\":true",
                 "\"artifact_state\":\"trusted\"",
@@ -4867,7 +4871,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/determinism-fuzz/view?principal_user_id=host_h"),
+            format!("/games/{game}/operator/proof-runs/determinism-fuzz/view?fixture_principal=host_h"),
             vec![
                 "Operator Determinism Fuzz Report",
                 "passed",
@@ -4876,7 +4880,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/determinism-fuzz/view?principal_user_id=host_h&fixture=failed-seed"),
+            format!("/games/{game}/operator/proof-runs/determinism-fuzz/view?fixture_principal=host_h&fixture=failed-seed"),
             vec![
                 "Operator Determinism Fuzz Report",
                 "failed-seed",
@@ -4885,27 +4889,27 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h&fixture=missing-production-artifact"),
+            format!("/games/{game}/operator/proof-runs/go-no-go/view?fixture_principal=host_h&fixture=missing-production-artifact"),
             vec!["Operator Proof Artifact Go/No-Go", "no-go", "missing", "non_trusted 1"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h&fixture=stale-production-artifact"),
+            format!("/games/{game}/operator/proof-runs/go-no-go/view?fixture_principal=host_h&fixture=stale-production-artifact"),
             vec!["Operator Proof Artifact Go/No-Go", "no-go", "stale", "non_trusted 1"],
         ),
         (
-            format!("/games/{game}/operator/proof-runs/go-no-go/view?principal_user_id=host_h&fixture=drifted-production-artifact"),
+            format!("/games/{game}/operator/proof-runs/go-no-go/view?fixture_principal=host_h&fixture=drifted-production-artifact"),
             vec!["Operator Proof Artifact Go/No-Go", "no-go", "drifted", "non_trusted 1"],
         ),
         (
-            format!("/games/{game}/projection-audit/view?principal_user_id=host_h"),
+            format!("/games/{game}/projection-audit/view?fixture_principal=host_h"),
             vec!["Projection Rebuild Audit", "matched"],
         ),
         (
-            format!("/games/{game}/resolution-audit/view?principal_user_id=host_h"),
+            format!("/games/{game}/resolution-audit/view?fixture_principal=host_h"),
             vec!["Resolution Replay Audit", "D01"],
         ),
         (
-            format!("/games/{game}/resolution-traces/view?principal_user_id=host_h"),
+            format!("/games/{game}/resolution-traces/view?fixture_principal=host_h"),
             vec![
                 "Resolution Trace Inspection",
                 "D01",
@@ -4916,7 +4920,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             ],
         ),
         (
-            format!("/games/{game}/host-phase-controls/view?principal_user_id=host_h"),
+            format!("/games/{game}/host-phase-controls/view?fixture_principal=host_h"),
             vec!["Host Phase-Control Audit", "D01:skip_next_day:slot_1"],
         ),
     ];

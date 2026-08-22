@@ -2,6 +2,8 @@
 // should extend these tables (and the scenario module) instead of adding
 // bespoke code to tools/frontend_role_smoke.mjs.
 
+import { FIXTURE_PRINCIPAL_IDS } from "../frontend/src/lib/principal-id.mjs";
+
 // Step types the runner's flow executor implements. Interaction types may
 // also appear inside restartSteps.
 export const flowStepTypes = Object.freeze([
@@ -118,7 +120,7 @@ export const mockStateProjections = Object.freeze({
       slots: [
         {
           slot_id: "slot-7",
-          assigned_principal_id: "player-mira",
+          assigned_principal_id: FIXTURE_PRINCIPAL_IDS.playerMira,
           status: state.slotStatus,
           alive: state.slotStatus === "alive",
         },
@@ -883,7 +885,7 @@ export const commandFlows = Object.freeze({
           label: "admin recovery gate form",
           formTestId: "admin-recovery-form-recovery-gate",
           action: "?/checkRecoveryGate",
-          fieldNames: ["game", "principalUserId"],
+          fieldNames: ["game", "principalId"],
         },
       },
       {

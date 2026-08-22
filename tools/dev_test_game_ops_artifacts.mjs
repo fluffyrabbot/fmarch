@@ -313,7 +313,7 @@ function redactRoles(sessions) {
     Object.entries(sessions).map(([role, session]) => [
       role,
       {
-        principalUserId: session.principalUserId,
+        principalId: session.principalId,
         credentialKind: session.credentialKind,
         returnTo: session.returnTo,
         expectedCapabilityKind: session.expectedCapabilityKind,
@@ -370,7 +370,7 @@ function markdownOpsArtifacts(ops) {
   }
   lines.push("", "## Roles", "", "| Role | Principal | URL |", "| --- | --- | --- |");
   for (const [role, entry] of Object.entries(ops.roles)) {
-    lines.push(`| ${role} | ${entry.principalUserId} | \`${entry.loginUrlRedacted}\` |`);
+    lines.push(`| ${role} | ${entry.principalId} | \`${entry.loginUrlRedacted}\` |`);
   }
   return `${lines.join("\n")}\n`;
 }

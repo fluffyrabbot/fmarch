@@ -51,7 +51,7 @@ test("profile updates preserve the revision read by the editor", () => {
 test("owner profile editor reads and writes through the authenticated session", async () => {
   let readRequest = null;
   const loaded = await loadOwner({
-    locals: { principalUserId: "principal-a" },
+    locals: { principalId: "principal-a" },
     cookies: { get: () => "editor-session" },
     fetch: async (url, init) => {
       readRequest = { url, init };
@@ -72,7 +72,7 @@ test("owner profile editor reads and writes through the authenticated session", 
   let updateRequest = null;
   await assert.rejects(
     ownerActions.update({
-      locals: { principalUserId: "principal-a" },
+      locals: { principalId: "principal-a" },
       cookies: { get: () => "editor-session" },
       request: requestWithForm({
         displayName: "Quiet Member",
@@ -101,7 +101,7 @@ test("owner profile editor reads and writes through the authenticated session", 
 test("owner profile editor rejects an update without a valid revision before it reaches the API", async () => {
   let called = false;
   const result = await ownerActions.update({
-    locals: { principalUserId: "principal-a" },
+    locals: { principalId: "principal-a" },
     cookies: { get: () => "editor-session" },
     request: requestWithForm({
       displayName: "Quiet Member",
@@ -119,7 +119,7 @@ test("owner profile editor rejects an update without a valid revision before it 
 
 test("owner profile editor distinguishes an absent profile from an unavailable owner endpoint", async () => {
   const data = await loadOwner({
-    locals: { principalUserId: "principal-a" },
+    locals: { principalId: "principal-a" },
     cookies: { get: () => "editor-session" },
     fetch: async () => new Response(null, { status: 404 }),
   });

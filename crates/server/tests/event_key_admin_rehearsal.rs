@@ -4,6 +4,7 @@ use std::process::Command;
 use std::sync::{Mutex, MutexGuard};
 
 use eventstore::{ActorId, EventInput, RuntimeKekLifecycle};
+use identity::{MethodKind, PrincipalId};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
@@ -201,19 +202,21 @@ async fn seed_direct_surfaces(pool: &PgPool, game: Uuid, delivery: Uuid) {
         .await
         .unwrap();
 
-    sqlx::query(
-        "INSERT INTO platform_principal \
-         (principal_user_id, status, global_capabilities, created_at) \
-         VALUES ('rotation-user', 'active', '{}', 1)",
-    )
-    .execute(&mut *tx)
-    .await
-    .unwrap();
+    let principal_id = PrincipalId::fixture("rotation-user");
+    identity::methods::ensure_principal(&mut tx, &principal_id, &[], 1)
+        .await
+        .unwrap();
+    let method_id =
+        identity::methods::create_method(&mut tx, &principal_id, MethodKind::ClassicPassword, 1)
+            .await
+            .unwrap();
     sqlx::query(
         "INSERT INTO auth_account \
-         (account_id, principal_user_id, password_hash, created_at, global_capabilities) \
-         VALUES ('rotation@example.test', 'rotation-user', 'unused', 1, '{}')",
+         (account_id, principal_id, method_id, password_hash, created_at, global_capabilities) \
+         VALUES ('rotation@example.test', $1, $2, 'unused', 1, '{}')",
     )
+    .bind(principal_id.as_uuid())
+    .bind(method_id)
     .execute(&mut *tx)
     .await
     .unwrap();
@@ -227,15 +230,15 @@ async fn seed_direct_surfaces(pool: &PgPool, game: Uuid, delivery: Uuid) {
     sqlx::query(
         r#"
         INSERT INTO auth_delivery_intent (
-            delivery_id, delivery_kind, account_id, principal_user_id,
+            delivery_id, delivery_kind, account_id, principal_id,
             credential_hash, credential_expires_at, credential_envelope,
             status, attempt_count, next_attempt_at, delivered_at, last_error,
             created_at, updated_at, provider_id, outcome_kind, outcome_code,
             provider_receipt_id, claim_token, claim_expires_at
         )
         VALUES (
-            $1, 'invite', 'rotation@example.test', 'rotation-user',
-            'rotation-hash', 1000, $2,
+            $1, 'invite', 'rotation@example.test', $2,
+            'rotation-hash', 1000, $3,
             'queued', 0, 100, NULL, NULL,
             1, 1, 'local-deterministic', 'queued', NULL,
             NULL, NULL, NULL
@@ -243,6 +246,7 @@ async fn seed_direct_surfaces(pool: &PgPool, game: Uuid, delivery: Uuid) {
         "#,
     )
     .bind(delivery)
+    .bind(principal_id.as_uuid())
     .bind(credential_envelope)
     .execute(&mut *tx)
     .await

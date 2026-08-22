@@ -56,7 +56,7 @@ export function postDayThreePlayerSurfaceFixture({
   visitedRolePath,
   slotField,
   slot,
-  principalUserId,
+  principalId,
   phaseId,
   phaseState,
   actorAlive,
@@ -86,7 +86,7 @@ export function postDayThreePlayerSurfaceFixture({
     surfaceTestId: "player-surface",
     clickedThroughFromRoleUrl: true,
     [slotField]: slot,
-    principalUserId,
+    principalId,
     checkpoint: {
       phaseId,
       phaseState,
@@ -165,7 +165,7 @@ export function seededCoreLoopPlayerSurfaceFixture({
   roleUrlSuffix = "",
   visitedRolePathSuffix = roleUrlSuffix,
   slot,
-  principalUserId,
+  principalId,
   ...proofArgs
 }) {
   return postDayThreePlayerSurfaceFixture({
@@ -175,15 +175,15 @@ export function seededCoreLoopPlayerSurfaceFixture({
       suffix: visitedRolePathSuffix,
     }),
     slot,
-    principalUserId,
+    principalId,
     commandStateEndpoint: seededCoreLoopCommandStateEndpoint({
       game,
-      principalUserId,
+      principalId,
       slot,
     }),
     notificationsEndpoint: seededCoreLoopNotificationsEndpoint({
       game,
-      principalUserId,
+      principalId,
     }),
     ...proofArgs,
   });

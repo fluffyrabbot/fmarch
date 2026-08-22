@@ -15,6 +15,8 @@ domain = { path = "../domain", version = "0.1.0" }
 eventstore = { path = "../eventstore", version = "0.1.0" }
 game_platform = { path = "../game_platform", version = "0.1.0" }
 identity = { path = "../identity", version = "0.1.0" }
+principal = { path = "../principal", version = "0.1.0" }
+profile_handle_index = { path = "../profile_handle_index", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"

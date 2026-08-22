@@ -16,10 +16,10 @@ use uuid::Uuid;
 #[path = "pipeline/common.rs"]
 #[allow(dead_code)]
 mod common;
-use common::ensure_test_principal;
+use common::{ensure_test_principal, fixture_principal_id};
 
 fn user(id: &str) -> Principal {
-    Principal::user(id)
+    Principal::authenticated(fixture_principal_id(id))
 }
 
 async fn setup_game(pool: &PgPool) -> Uuid {
@@ -40,7 +40,7 @@ async fn setup_game(pool: &PgPool) -> Uuid {
         commands::seat_persona! {
             game,
             slot: "slot_1".into(),
-            user: "user_a".into(),
+            user: "user_a",
         },
         Command::AssignRole {
             game,
@@ -119,8 +119,9 @@ async fn artifact_counts(
 ) -> (i64, i64, i64) {
     let receipts = sqlx::query_scalar(
         "SELECT count(*) FROM command_receipt \
-         WHERE principal_user_id = 'user_a' AND command_id = $1",
+         WHERE principal_id = $1 AND command_id = $2",
     )
+    .bind(fixture_principal_id("user_a").as_uuid())
     .bind(command_id)
     .fetch_one(pool)
     .await
@@ -244,8 +245,9 @@ async fn cancellation_after_commit_replays_the_committed_outcome(pool: PgPool) {
 
     let committed_seqs: Vec<i64> = sqlx::query_scalar(
         "SELECT stream_seqs FROM command_receipt \
-         WHERE principal_user_id = 'user_a' AND command_id = $1",
+         WHERE principal_id = $1 AND command_id = $2",
     )
+    .bind(fixture_principal_id("user_a").as_uuid())
     .bind(command_id)
     .fetch_one(&pool)
     .await

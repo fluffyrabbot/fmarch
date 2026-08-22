@@ -7,7 +7,7 @@ test("player channel route loads an allowed role PM channel", async () => {
   const data = await load({
     params: { game: "midsummer", channel: "private:role_pm:slot-7" },
     locals: {
-      principalUserId: "player_mira",
+      principalId: "player_mira",
       resolvedCapabilities: [
         { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
       ],
@@ -38,7 +38,7 @@ test("player channel route rejects missing channel capability", async () => {
       await load({
         params: { game: "midsummer", channel: "private:role_pm:slot-7" },
         locals: {
-          principalUserId: "player_mira",
+          principalId: "player_mira",
           resolvedCapabilities: [
             { kind: "ChannelMember", game: "midsummer", channel: "main" },
           ],
@@ -63,7 +63,7 @@ test("player channel route rejects missing dynamic private-room capability", asy
       await load({
         params: { game: "midsummer", channel: "private:mafia_day_chat" },
         locals: {
-          principalUserId: "player_target",
+          principalId: "player_target",
           resolvedCapabilities: [
             { kind: "SlotOccupant", game: "midsummer", slot: "slot-2" },
           ],
@@ -88,7 +88,7 @@ test("player channel route distinguishes unsupported channels", async () => {
       await load({
         params: { game: "midsummer", channel: "scum-chat" },
         locals: {
-          principalUserId: "player_mira",
+          principalId: "player_mira",
           resolvedCapabilities: [
             { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
           ],
@@ -110,7 +110,7 @@ test("player dead channel accepts dead-viewer capability", async () => {
   const data = await load({
     params: { game: "midsummer", channel: "dead" },
     locals: {
-      principalUserId: "dead_reader",
+      principalId: "dead_reader",
       resolvedCapabilities: [
         { kind: "DeadViewer", game: "midsummer" },
       ],

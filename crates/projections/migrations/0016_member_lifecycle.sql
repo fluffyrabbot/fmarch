@@ -1,12 +1,12 @@
 -- 0016_member_lifecycle.sql — durable, append-only member data-lifecycle authority.
 
 CREATE TABLE public.member_lifecycle_event (
-    principal_user_id text NOT NULL REFERENCES public.platform_principal(principal_user_id) ON DELETE RESTRICT,
+    principal_id uuid NOT NULL REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT,
     seq bigint NOT NULL,
     kind text NOT NULL,
     payload jsonb NOT NULL DEFAULT '{}'::jsonb,
     occurred_at bigint NOT NULL,
-    CONSTRAINT member_lifecycle_event_pkey PRIMARY KEY (principal_user_id, seq),
+    CONSTRAINT member_lifecycle_event_pkey PRIMARY KEY (principal_id, seq),
     CONSTRAINT member_lifecycle_event_seq_check CHECK (seq > 0),
     CONSTRAINT member_lifecycle_event_kind_check CHECK (kind IN (
         'MemberDeactivated',
@@ -18,7 +18,7 @@ CREATE TABLE public.member_lifecycle_event (
 );
 
 CREATE TABLE public.member_lifecycle_projection (
-    principal_user_id text PRIMARY KEY REFERENCES public.platform_principal(principal_user_id) ON DELETE RESTRICT,
+    principal_id uuid PRIMARY KEY REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT,
     status text NOT NULL DEFAULT 'active',
     last_seq bigint NOT NULL DEFAULT 0,
     deactivated_at bigint,
@@ -33,7 +33,7 @@ CREATE TABLE public.member_lifecycle_projection (
 
 CREATE TABLE public.member_personal_export (
     export_id uuid PRIMARY KEY,
-    principal_user_id text NOT NULL REFERENCES public.platform_principal(principal_user_id) ON DELETE RESTRICT,
+    principal_id uuid NOT NULL REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT,
     requested_at bigint NOT NULL,
     expires_at bigint NOT NULL,
     artifact_json jsonb NOT NULL,
@@ -57,6 +57,6 @@ CREATE TABLE public.game_persona_redaction (
 );
 
 CREATE INDEX member_lifecycle_event_principal_seq_idx
-    ON public.member_lifecycle_event (principal_user_id, seq);
+    ON public.member_lifecycle_event (principal_id, seq);
 CREATE INDEX member_personal_export_principal_requested_idx
-    ON public.member_personal_export (principal_user_id, requested_at DESC);
+    ON public.member_personal_export (principal_id, requested_at DESC);

@@ -7,6 +7,7 @@
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use media::{MediaLimits, MediaStore};
+use principal::PrincipalId;
 use std::sync::{Mutex, MutexGuard};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -79,7 +80,7 @@ fn stable_command_id(id: u64) -> Uuid {
 async fn post_command(
     app: axum::Router,
     id: u64,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     command: Command,
 ) -> ServerEnvelope {
     let global_capabilities = if matches!(&command, Command::CreateGame { .. }) {
@@ -95,7 +96,7 @@ async fn post_command(
         }),
     ))
     .unwrap();
-    let token = dev_session_token(&app, principal_user_id, global_capabilities).await;
+    let token = dev_session_token(&app, principal_id, global_capabilities).await;
     let response = app
         .oneshot(
             Request::builder()
@@ -115,7 +116,7 @@ async fn post_command(
 
 async fn dev_session_token(
     app: &axum::Router,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     global_capabilities: Vec<&str>,
 ) -> String {
     let session = app
@@ -127,7 +128,7 @@ async fn dev_session_token(
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
-                        "principal_user_id": principal_user_id,
+                        "principal_id": principal_id,
                         "expires_at": 4_102_444_800i64,
                         "global_capabilities": global_capabilities
                     })
@@ -180,7 +181,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
         post_command(
             app.clone(),
             1,
-            "host_h",
+            PrincipalId::fixture("host_h"),
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
@@ -194,12 +195,12 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
         (5, "slot_2", "goon_user", "mafia_goon"),
         (8, "slot_3", "traitor_user", "traitor"),
     ] {
-        let _ = dev_session_token(&app, user, Vec::new()).await;
+        let _ = dev_session_token(&app, PrincipalId::fixture(user), Vec::new()).await;
         expect_ack(
             post_command(
                 app.clone(),
                 id,
-                "host_h",
+                PrincipalId::fixture("host_h"),
                 Command::AddSlot {
                     game,
                     slot: slot.into(),
@@ -211,11 +212,11 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
             post_command(
                 app.clone(),
                 id + 1,
-                "host_h",
+                PrincipalId::fixture("host_h"),
                 wire::seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,
@@ -224,7 +225,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
             post_command(
                 app.clone(),
                 id + 2,
-                "host_h",
+                PrincipalId::fixture("host_h"),
                 Command::AssignRole {
                     game,
                     slot: slot.into(),
@@ -238,7 +239,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
         post_command(
             app.clone(),
             11,
-            "host_h",
+            PrincipalId::fixture("host_h"),
             Command::StartGame {
                 game,
                 phase: "D01".into(),
@@ -258,7 +259,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
         post_command(
             app.clone(),
             12,
-            "encryptor_user",
+            PrincipalId::fixture("encryptor_user"),
             Command::SubmitPost {
                 game,
                 channel_id: "private:mafia_day_chat".into(),
@@ -339,7 +340,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
         .await
         .expect("destructive rebuild should decrypt both envelope kids");
 
-    let goon_token = dev_session_token(&app, "goon_user", vec![]).await;
+    let goon_token = dev_session_token(&app, PrincipalId::fixture("goon_user"), vec![]).await;
     let allowed = app
         .clone()
         .oneshot(
@@ -361,7 +362,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     assert_eq!(page.posts[0].channel_id, "private:mafia_day_chat");
     assert_eq!(page.posts[0].body, "mixed-key day chat survives replay");
 
-    let traitor_token = dev_session_token(&app, "traitor_user", vec![]).await;
+    let traitor_token = dev_session_token(&app, PrincipalId::fixture("traitor_user"), vec![]).await;
     let denied_read = app
         .clone()
         .oneshot(
@@ -381,7 +382,7 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     let denied_post = post_command(
         app,
         13,
-        "traitor_user",
+        PrincipalId::fixture("traitor_user"),
         Command::SubmitPost {
             game,
             channel_id: "private:mafia_day_chat".into(),

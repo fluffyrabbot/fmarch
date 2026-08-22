@@ -7,10 +7,11 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+  fixturePrincipalAuthorityId,
+  fixturePrincipalTransport,
+} from "./principal_fixture.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(root, "frontend");
@@ -83,11 +84,11 @@ try {
 async function seed(api) {
   const member = "moderation_member";
   const moderator = "moderation_operator";
-  const memberToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_user_id: member, expires_at: 4_102_444_800, global_capabilities: [] })));
-  const memberBootstrapToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_user_id: member, expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin"] })));
-  const moderatorToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_user_id: moderator, expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin", "GlobalMod"] })));
-  await json(`${api}/auth/accounts`, post({ account_id: "moderation-member@example.test", password: "correct horse battery staple", principal_user_id: member, global_capabilities: [] }, moderatorToken));
-  await json(`${api}/auth/accounts`, post({ account_id: "moderation-operator@example.test", password: "correct horse battery staple", principal_user_id: moderator, global_capabilities: ["GlobalAdmin", "GlobalMod"] }, moderatorToken));
+  const memberToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_id: fixturePrincipalAuthorityId(member), expires_at: 4_102_444_800, global_capabilities: [] })));
+  const memberBootstrapToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_id: fixturePrincipalAuthorityId(member), expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin"] })));
+  const moderatorToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_id: fixturePrincipalAuthorityId(moderator), expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin", "GlobalMod"] })));
+  await json(`${api}/auth/accounts`, post({ account_id: "moderation-member@example.test", password: "correct horse battery staple", principal_id: fixturePrincipalAuthorityId(member), global_capabilities: [] }, moderatorToken));
+  await json(`${api}/auth/accounts`, post({ account_id: "moderation-operator@example.test", password: "correct horse battery staple", principal_id: fixturePrincipalAuthorityId(moderator), global_capabilities: ["GlobalAdmin", "GlobalMod"] }, moderatorToken));
   const game = randomUUID();
   let id = 1;
   await command(api, id++, memberBootstrapToken, { CreateGame: { game, pack: "mafiascum" } });
@@ -167,7 +168,7 @@ function post(body, token) {
   return { method: "POST", headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), "content-type": "application/json" }, body: JSON.stringify(body) };
 }
 async function command(api, id, sessionToken, commandBody) {
-  const result = await json(`${api}/commands`, post({ v: 2, id, body: { kind: "Command", body: { command_id: randomUUID(), command: commandBody } } }, sessionToken));
+  const result = await json(`${api}/commands`, post({ v: 2, id, body: { kind: "Command", body: { command_id: randomUUID(), command: fixturePrincipalTransport(commandBody, "community moderation command transport") } } }, sessionToken));
   if (result.body?.kind !== "Ack") throw new Error(`seed command rejected: ${JSON.stringify(result)}`);
 }
 async function cookie(context, base, value) {
@@ -199,7 +200,7 @@ async function startApi(applicationUrl) {
   const base = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media");
   await mkdir(mediaRoot, { recursive: true });
-  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...applicationDatabaseEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] });
+  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] });
   apiProcess.stdout.on("data", (chunk) => { apiOutput += chunk; });
   apiProcess.stderr.on("data", (chunk) => { apiOutput += chunk; });
   const deadline = Date.now() + 240_000;

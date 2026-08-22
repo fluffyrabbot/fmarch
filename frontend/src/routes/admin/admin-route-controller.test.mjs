@@ -235,7 +235,7 @@ test("admin route controller sends setup commands through the typed command boun
   });
 
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].principalUserId, "admin_a");
+  assert.equal(sent[0].principalId, "admin_a");
   assert.equal(sent[0].endpoint, "/commands");
   assert.deepEqual(sent[0].command, {
     CreateGame: {
@@ -332,7 +332,7 @@ test("admin route controller exposes command and form results for smoke evidence
 function fixtureData() {
   return {
     operator: {
-      principalUserId: "admin_a",
+      principalId: "admin_a",
     },
     command: {
       endpoint: "/commands",
@@ -344,7 +344,7 @@ function fixtureData() {
       cohost: {
         action: "add_cohost",
         game: "midsummer",
-        user: "cohost_c",
+        principalId: "cohost_c",
       },
     },
   };

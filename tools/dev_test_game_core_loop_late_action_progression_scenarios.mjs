@@ -444,7 +444,7 @@ export function assertNightFourResolutionPlayerSurfaceProofCase({
     !proof.visitedRolePath.includes("/g/") ||
     proof.surfaceTestId !== "player-surface" ||
     proof[slotField] !== expectedSlot ||
-    proof.principalUserId !== expectedPrincipalUserId ||
+    proof.principalId !== expectedPrincipalUserId ||
     proof.checkpoint?.phaseId !== expectedPhaseId ||
     proof.checkpoint.phaseState !== expectedPhaseState ||
     proof.checkpoint.actorSlot !== expectedSlot ||

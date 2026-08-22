@@ -159,6 +159,7 @@ import {
   privateChannelInvalidActionRecoveryScenario,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import { principalFixtureId } from "./principal_fixture.mjs";
 
 export const DEV_TEST_GAME_PROOF_VERSION = 1;
 
@@ -171,6 +172,8 @@ const hostAdvanceByDeadlineActionId =
   hostAdvanceByDeadlineCommandFacts().actionId;
 const privateChannelInvalidActionRecovery =
   privateChannelInvalidActionRecoveryScenario();
+const playerMiraPrincipalId = principalFixtureId("player-mira");
+const playerRowanPrincipalId = principalFixtureId("player-rowan");
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultSessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
@@ -450,7 +453,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           `CohostOf(${session?.game ?? ""})` &&
         verification.cohostConsole?.extendDeadline?.commandStatus?.state === "ack" &&
         verification.cohostConsole?.extendDeadline?.commandStatus?.requestEnvelope?.body
-          ?.body?.principal_user_id === undefined &&
+          ?.body?.principal_id === undefined &&
         verification.cohostConsole?.sessionPrincipalUserId === "cohost_c" &&
         verification.cohostConsole?.hostOnlyControlsVisible === false &&
         verification.cohostConsole?.hostOnlyResolveReject?.serverEnvelope?.body?.kind ===
@@ -458,7 +461,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.cohostConsole?.hostOnlyResolveReject?.serverEnvelope?.body?.body
           ?.error === "CohostPermissionDenied" &&
         verification.cohostConsole?.hostOnlyResolveReject?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         verification.cohostConsole?.phaseAfterReject?.id === "D01" &&
         verification.cohostConsole?.phaseAfterReject?.locked === false,
     }),
@@ -501,7 +504,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             "ack" &&
           cohostLaterPhaseDeadlinePrincipal === "cohost_c" &&
           cohostLaterPhaseDeadline.extendDeadline?.commandStatus?.requestEnvelope
-            ?.body?.body?.principal_user_id === undefined &&
+            ?.body?.body?.principal_id === undefined &&
           cohostLaterPhaseDeadlineCommand?.game ===
             cohostLaterPhaseDeadline.game &&
           cohostLaterPhaseDeadlineCommand?.phase === "D02" &&
@@ -702,12 +705,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.dayVoteNoLynch?.dayVoteOutcome?.tallies?.no_lynch === 2 &&
         verification.dayVoteNoLynch?.miraNoLynchVote?.state === "ack" &&
         verification.dayVoteNoLynch?.miraNoLynchVote?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         verification.dayVoteNoLynch?.miraNoLynchVote?.requestEnvelope?.body?.body
           ?.command?.SubmitVote?.target === "NoLynch" &&
         verification.dayVoteNoLynch?.seedNoLynchVote?.state === "ack" &&
         verification.dayVoteNoLynch?.seedNoLynchVote?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         verification.dayVoteNoLynch?.seedNoLynchVote?.requestEnvelope?.body?.body
           ?.command?.SubmitVote?.target === "NoLynch" &&
         verification.dayVoteNoLynch?.miraVotecountAfterVote?.some(
@@ -1355,7 +1358,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.error ?? null,
       directRejectPrincipal:
         verification.playerActionBoundary?.directFactionalKill?.requestEnvelope?.body?.body
-          ?.principal_user_id ?? null,
+          ?.principal_id ?? null,
       phaseAfterReject:
         verification.playerActionBoundary?.phaseAfterReject?.phaseId ?? null,
       actionVisibleAfterReject:
@@ -1370,7 +1373,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.playerActionBoundary?.directFactionalKill?.serverEnvelope?.body?.body
           ?.error === "InvalidTarget" &&
         verification.playerActionBoundary?.directFactionalKill?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         verification.playerActionBoundary?.phaseAfterReject?.phaseId === "N01" &&
         verification.playerActionBoundary?.actionVisibleAfterReject === false,
     }),
@@ -1665,12 +1668,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
       },
     ),
     lane("replacement-host-issued-invite", "Host issues incoming replacement role URL", {
-      principalUserId:
-        verification.replacementConsole?.hostIssuedInvite?.session?.principalUserId ??
+      principalId:
+        verification.replacementConsole?.hostIssuedInvite?.session?.principalId ??
         null,
       issuedBy:
         verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy
-          ?.principalUserId ?? null,
+          ?.principalId ?? null,
       issuedByCapability:
         verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy
           ?.capabilityKind ?? null,
@@ -1681,10 +1684,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.hostIssuedInvite?.targetLabel ?? null,
       passed:
         verification.replacementConsole?.hostIssuedInvite?.status === "passed" &&
-        verification.replacementConsole?.hostIssuedInvite?.session?.principalUserId ===
+        verification.replacementConsole?.hostIssuedInvite?.session?.principalId ===
           "player-rowan" &&
         verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy
-          ?.principalUserId === "host_h" &&
+          ?.principalId === "host_h" &&
         verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy
           ?.capabilityKind === "HostOf" &&
         verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy?.game ===
@@ -1696,8 +1699,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.hostIssuedInvite?.tokenPresent === true,
     }),
     lane("replacement-pending-player", "Incoming replacement URL waits without slot authority", {
-      principalUserId:
-        verification.replacementConsole?.pendingIncomingPlayer?.principalUserId ?? null,
+      principalId:
+        verification.replacementConsole?.pendingIncomingPlayer?.principalId ?? null,
       capabilityKinds:
         verification.replacementConsole?.pendingIncomingPlayer?.capabilityKinds ?? null,
       capabilityLabel:
@@ -1713,7 +1716,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.primaryButtons ?? null,
       passed:
         verification.replacementConsole?.pendingIncomingPlayer?.status === "passed" &&
-        verification.replacementConsole?.pendingIncomingPlayer?.principalUserId ===
+        verification.replacementConsole?.pendingIncomingPlayer?.principalId ===
           "player-rowan" &&
         verification.replacementConsole?.pendingIncomingPlayer?.capabilityKinds?.length ===
           0 &&
@@ -1800,9 +1803,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
       credentialKind:
         verification.replacementConsole?.replacementSessionRefresh?.session
           ?.credentialKind ?? null,
-      principalUserId:
+      principalId:
         verification.replacementConsole?.replacementSessionRefresh?.session
-          ?.principalUserId ?? null,
+          ?.principalId ?? null,
       usedInviteToken:
         verification.replacementConsole?.replacementSessionRefresh?.login
           ?.usedInviteToken ?? null,
@@ -1839,7 +1842,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementSessionRefresh?.session
           ?.credentialKind === "account" &&
         verification.replacementConsole?.replacementSessionRefresh?.session
-          ?.principalUserId === "player-rowan" &&
+          ?.principalId === "player-rowan" &&
         verification.replacementConsole?.replacementSessionRefresh?.login
           ?.usedInviteToken === false &&
         verification.replacementConsole?.replacementSessionRefresh?.login
@@ -1851,7 +1854,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementSessionRefresh?.login
           ?.landedOnDirectUrl === true &&
         verification.replacementConsole?.replacementSessionRefresh?.browserEntry
-          ?.principalUserId === "player-rowan" &&
+          ?.principalId === "player-rowan" &&
         verification.replacementConsole?.replacementSessionRefresh?.browserEntry
           ?.capabilityKinds?.includes("SlotOccupant") === true &&
         verification.replacementConsole?.replacementSessionRefresh?.commandState
@@ -1861,7 +1864,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementSessionRefresh?.postStatus
           ?.state === "ack" &&
         verification.replacementConsole?.replacementSessionRefresh?.postStatus
-          ?.requestEnvelope?.body?.body?.principal_user_id === undefined &&
+          ?.requestEnvelope?.body?.body?.principal_id === undefined &&
         verification.replacementConsole?.replacementSessionRefresh?.postStatus
           ?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot ===
           "slot-7" &&
@@ -1930,9 +1933,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.freshRoleUrlHasAccount === true,
     }),
     lane("replacement-reconnect-recovery", "Replacement player reconnect recovers Slot 7 state", {
-      principalUserId:
+      principalId:
         verification.replacementConsole?.replacementReconnectRecovery
-          ?.principalUserId ?? null,
+          ?.principalId ?? null,
       actorSlot:
         verification.replacementConsole?.replacementReconnectRecovery?.actorSlot ??
         null,
@@ -1955,7 +1958,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementReconnectRecovery?.status ===
           "passed" &&
         verification.replacementConsole?.replacementReconnectRecovery
-          ?.principalUserId === "player-rowan" &&
+          ?.principalId === "player-rowan" &&
         verification.replacementConsole?.replacementReconnectRecovery?.actorSlot ===
           "slot-7" &&
         verification.replacementConsole?.replacementReconnectRecovery
@@ -1971,7 +1974,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementReconnectRecovery
           ?.recoveredSnapshotContainsPost === true &&
         verification.replacementConsole?.replacementReconnectRecovery
-          ?.reconnectCommand?.principalUserId ===
+          ?.reconnectCommand?.principalId ===
           "player-rowan" &&
         verification.replacementConsole?.replacementReconnectRecovery
           ?.reconnectCommand?.command?.SubmitPost?.actor_slot === "slot-7" &&
@@ -1981,9 +1984,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.recoveredCommandState?.actorAlive === true,
     }),
     lane("stale-host-invite-recovery", "Stale host player invite recovers to current occupant", {
-      beforePrincipalUserId:
+      beforePrincipalId:
         verification.replacementConsole?.staleHostInviteRecovery?.beforeSubmit
-          ?.principalUserId ?? null,
+          ?.principalId ?? null,
       rejectMessage:
         verification.replacementConsole?.staleHostInviteRecovery?.reject?.message ??
         null,
@@ -1993,21 +1996,21 @@ export function buildDevTestGameProofRun(session, options = {}) {
       retryState:
         verification.replacementConsole?.staleHostInviteRecovery?.retry?.state ??
         null,
-      retryPrincipalUserId:
+      retryPrincipalId:
         verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
-          ?.principalUserId ?? null,
-      retryExpectedOccupantUserId:
+          ?.principalId ?? null,
+      retryExpectedOccupantPrincipalId:
         verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
-          ?.expectedOccupantUserId ?? null,
+          ?.expectedOccupantPrincipalId ?? null,
       retrySlotId:
         verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
           ?.slotId ?? null,
       passed:
         verification.replacementConsole?.staleHostInviteRecovery?.status === "passed" &&
         verification.replacementConsole?.staleHostInviteRecovery?.beforeSubmit
-          ?.principalUserId === "player-mira" &&
+          ?.principalId === playerMiraPrincipalId &&
         verification.replacementConsole?.staleHostInviteRecovery?.beforeSubmit
-          ?.expectedOccupantUserId === "player-mira" &&
+          ?.expectedOccupantPrincipalId === playerMiraPrincipalId &&
         verification.replacementConsole?.staleHostInviteRecovery?.reject?.message?.includes(
           "Invite target is stale",
         ) === true &&
@@ -2016,9 +2019,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.staleHostInviteRecovery?.retry?.state ===
           "ack" &&
         verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
-          ?.principalUserId === "player-rowan" &&
+          ?.principalId === playerRowanPrincipalId &&
         verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
-          ?.expectedOccupantUserId === "player-rowan" &&
+          ?.expectedOccupantPrincipalId === playerRowanPrincipalId &&
         verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
           ?.slotId === "slot-7" &&
         verification.replacementConsole?.staleHostInviteRecovery?.retry?.loginUrl?.includes(
@@ -2111,7 +2114,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.invalidReplacementRecovery?.reject?.error ===
           "InvalidTarget" &&
         verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
-          ?.requestEnvelope?.body?.body?.principal_user_id === undefined &&
+          ?.requestEnvelope?.body?.body?.principal_id === undefined &&
         isOpaquePersonaId(
           verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
             ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_persona_id,
@@ -2135,7 +2138,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
           ?.assigned_principal_id === "player-mira" &&
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
-          ?.principalUserId === "player-rowan" &&
+          ?.principalId === "player-rowan" &&
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
           ?.capabilityKinds?.length === 0 &&
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
@@ -2253,7 +2256,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.staleReplacementAfterSuccess?.reject
           ?.error === "InvalidTarget" &&
         verification.replacementConsole?.staleReplacementAfterSuccess
-          ?.invalidReplacement?.requestEnvelope?.body?.body?.principal_user_id ===
+          ?.invalidReplacement?.requestEnvelope?.body?.body?.principal_id ===
           undefined &&
         isOpaquePersonaId(
           verification.replacementConsole?.staleReplacementAfterSuccess
@@ -2403,7 +2406,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "slot ownership changed",
         ) === true &&
         verification.replacementConsole?.stalePrivateChannel?.stalePost
-          ?.requestEnvelope?.body?.body?.principal_user_id === undefined &&
+          ?.requestEnvelope?.body?.body?.principal_id === undefined &&
         verification.replacementConsole?.stalePrivateChannel?.stalePost
           ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
           "private:mafia_day_chat" &&
@@ -2432,7 +2435,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.stalePrivateChannel?.rowanPost?.state ===
           "ack" &&
         verification.replacementConsole?.stalePrivateChannel?.rowanPost
-          ?.requestEnvelope?.body?.body?.principal_user_id === undefined &&
+          ?.requestEnvelope?.body?.body?.principal_id === undefined &&
         verification.replacementConsole?.stalePrivateChannel?.rowanPost
           ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
           "private:mafia_day_chat" &&
@@ -2498,8 +2501,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.staleRouteStillForbidden === true,
     }),
     lane("replacement-incoming-player", "Incoming replacement player owns stable slot", {
-      principalUserId:
-        verification.replacementConsole?.incomingPlayer?.browserEntry?.principalUserId ??
+      principalId:
+        verification.replacementConsole?.incomingPlayer?.browserEntry?.principalId ??
         null,
       capabilityKinds:
         verification.replacementConsole?.incomingPlayer?.browserEntry?.capabilityKinds ??
@@ -2525,7 +2528,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       passed:
         verification.replacementConsole?.status === "passed" &&
         verification.replacementConsole?.incomingPlayer?.status === "passed" &&
-        verification.replacementConsole?.incomingPlayer?.browserEntry?.principalUserId ===
+        verification.replacementConsole?.incomingPlayer?.browserEntry?.principalId ===
           "player-rowan" &&
         verification.replacementConsole?.incomingPlayer?.browserEntry?.capabilityKinds?.includes(
           "SlotOccupant",
@@ -2539,7 +2542,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.incomingPlayer?.stableHistoryVisible === true &&
         verification.replacementConsole?.incomingPlayer?.postStatus?.state === "ack" &&
         verification.replacementConsole?.incomingPlayer?.postStatus?.requestEnvelope?.body
-          ?.body?.principal_user_id === undefined &&
+          ?.body?.principal_id === undefined &&
         verification.replacementConsole?.incomingPlayer?.postStatus?.requestEnvelope?.body
           ?.body?.command?.SubmitPost?.actor_slot === "slot-7" &&
         verification.replacementConsole?.incomingPlayer?.rowanProjectedPost?.author?.kind ===
@@ -2554,7 +2557,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
                 ?.slotId,
         ) === true &&
         verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
           ?.command?.SubmitVote?.actor_slot === "slot-7" &&
         verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
@@ -4130,7 +4133,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementIncomingAction?.action?.serverEnvelope?.body?.kind ===
           "Ack" &&
         hardening.replacementIncomingAction?.action?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         hardening.replacementIncomingAction?.action?.requestEnvelope?.body?.body
           ?.command?.SubmitAction?.actor_slot ===
           replacementIncomingActionCase.actorSlot &&
@@ -4223,7 +4226,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementActionReconnect?.action?.serverEnvelope?.body?.kind ===
           "Ack" &&
         hardening.replacementActionReconnect?.action?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         hardening.replacementActionReconnect?.action?.requestEnvelope?.body?.body
           ?.command?.SubmitAction?.actor_slot ===
           replacementActionReconnectCase.actorSlot &&
@@ -4257,7 +4260,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementActionReconnect?.targetNoticeBeforeReconnect
           ?.status === replacementActionReconnectCase.templateId &&
         hardening.replacementActionReconnect?.reconnect?.status === "passed" &&
-        hardening.replacementActionReconnect?.reconnect?.principalUserId ===
+        hardening.replacementActionReconnect?.reconnect?.principalId ===
           replacementActionReconnectCase.replacementPrincipalUserId &&
         hardening.replacementActionReconnect?.reconnect?.actorSlot ===
           replacementActionReconnectCase.actorSlot &&
@@ -4274,7 +4277,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementActionReconnect?.reconnect
           ?.recoveredSnapshotContainsPost === true &&
         hardening.replacementActionReconnect?.reconnect?.reconnectCommand
-          ?.principalUserId ===
+          ?.principalId ===
           replacementActionReconnectCase.replacementPrincipalUserId &&
         hardening.replacementActionReconnect?.reconnect?.reconnectCommand?.command
           ?.SubmitPost?.actor_slot === replacementActionReconnectCase.actorSlot &&

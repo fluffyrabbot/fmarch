@@ -25,8 +25,11 @@ principal or the application session.** Identity is a `platform_principal` with 
 `authentication_method` rows (`classic_password` or `workos`). Every method ends at the same
 backend-owned opaque app session (`auth_session`, `fmss_`-prefixed token, SHA-256 hash
 stored, absolute and idle expiry, bound to the method that authenticated it). Authorization,
-memberships, profiles, and game history reference only `principal_user_id` — adding or
-removing a sign-in method never rewrites a principal.
+memberships, profiles, and private authority records reference only the UUID-backed
+`PrincipalId` (`principal_id`, or a deliberately named relationship such as
+`invited_by_principal_id`) — adding or removing a sign-in method never rewrites a
+principal. Provider subjects, provider-session IDs, account/login names, and token hashes
+remain adapter-local strings; none is an application principal or an authorization input.
 
 - **Classic — direct sign-in (first-class, on by default):** Argon2id credentials, invites,
   recovery credentials, and login throttling, all server-local. Product promise: *your

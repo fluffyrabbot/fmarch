@@ -15,6 +15,7 @@ use caps::{Capability, Principal};
 use content_reference::{
     PostKind as ContentPostKind, PostRef as ContentPostRef, DEFAULT_POST_CITATION_LIMIT,
 };
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use std::collections::{BTreeMap, BTreeSet};
@@ -87,27 +88,27 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
 
 #[derive(Debug, Clone)]
 pub(super) struct GameAuthorization {
-    principal_user_id: String,
+    principal_id: PrincipalId,
     global_capabilities: Vec<String>,
 }
 
 impl GameAuthorization {
     pub(super) fn from_context(context: &AuthorizationContext) -> Self {
         Self {
-            principal_user_id: context.principal_user_id.clone(),
+            principal_id: context.principal_id,
             global_capabilities: context.global_capabilities.clone(),
         }
     }
 
-    fn fixture_principal(principal_user_id: &str) -> Self {
+    fn fixture_principal(principal_id: PrincipalId) -> Self {
         Self {
-            principal_user_id: principal_user_id.to_string(),
+            principal_id,
             global_capabilities: Vec::new(),
         }
     }
 
-    pub(super) fn principal_user_id(&self) -> &str {
-        self.principal_user_id.as_str()
+    pub(super) const fn principal_id(&self) -> PrincipalId {
+        self.principal_id
     }
 
     fn is_global_operator(&self) -> bool {
@@ -254,7 +255,7 @@ async fn completed_game_export(
     let authorization = required_game_authorization(&state, &headers).await?;
     let capabilities = caps::resolve(
         &state.pool,
-        &Principal::user(authorization.principal_user_id()),
+        &Principal::authenticated(authorization.principal_id()),
         game,
     )
     .await?;
@@ -431,7 +432,7 @@ async fn channel_thread_view(
         &state.pool,
         game,
         channel.as_str(),
-        Some(authorization.principal_user_id()),
+        Some(authorization.principal_id()),
     )
     .await?;
 
@@ -503,7 +504,7 @@ async fn channel_post_citations(
         &state.pool,
         game,
         channel.as_str(),
-        Some(authorization.principal_user_id()),
+        Some(authorization.principal_id()),
     )
     .await?;
     game_post_citations(&state.pool, game, channel.as_str(), source_seq, query.limit).await
@@ -620,9 +621,9 @@ pub(super) async fn require_channel_thread_access(
     pool: &PgPool,
     game: Uuid,
     channel: &str,
-    principal_user_id: Option<&str>,
+    principal_id: Option<PrincipalId>,
 ) -> Result<(), ApiError> {
-    let Some(principal_user_id) = principal_user_id else {
+    let Some(principal_id) = principal_id else {
         return Err(ApiError::Reject {
             status: StatusCode::FORBIDDEN,
             error: RejectCode::NotAuthorized,
@@ -630,7 +631,7 @@ pub(super) async fn require_channel_thread_access(
         });
     };
 
-    let caps = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
+    let caps = caps::resolve(pool, &Principal::authenticated(principal_id), game).await?;
     let channel_cap = Capability::ChannelMember(channel.to_string());
     let dead_channel_cap = Capability::DeadViewer(game);
     let spectator_channel_cap = Capability::SpectatorOf(game);
@@ -657,8 +658,7 @@ async fn player_notifications(
 ) -> Result<Json<Vec<PlayerNotification>>, ApiError> {
     let authorization = required_game_authorization(&state, &headers).await?;
     Ok(Json(
-        player_notifications_for_principal(&state.pool, game, authorization.principal_user_id())
-            .await?,
+        player_notifications_for_principal(&state.pool, game, authorization.principal_id()).await?,
     ))
 }
 
@@ -669,21 +669,17 @@ async fn player_investigation_results(
 ) -> Result<Json<Vec<PlayerInvestigationResult>>, ApiError> {
     let authorization = required_game_authorization(&state, &headers).await?;
     Ok(Json(
-        player_investigation_results_for_principal(
-            &state.pool,
-            game,
-            authorization.principal_user_id(),
-        )
-        .await?,
+        player_investigation_results_for_principal(&state.pool, game, authorization.principal_id())
+            .await?,
     ))
 }
 
 pub(super) async fn player_notifications_for_principal(
     pool: &PgPool,
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<Vec<PlayerNotification>, ApiError> {
-    let caps = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
+    let caps = caps::resolve(pool, &Principal::authenticated(principal_id), game).await?;
     let rows = if caps.grants(&Capability::CohostOf(game)) {
         projections::player_notifications(pool, game).await?
     } else {
@@ -712,9 +708,9 @@ pub(super) async fn player_notifications_for_principal(
 pub(super) async fn player_investigation_results_for_principal(
     pool: &PgPool,
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<Vec<PlayerInvestigationResult>, ApiError> {
-    let caps = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
+    let caps = caps::resolve(pool, &Principal::authenticated(principal_id), game).await?;
     let rows = if caps.grants(&Capability::CohostOf(game)) {
         projections::player_investigation_results(pool, game).await?
     } else {
@@ -846,7 +842,7 @@ async fn player_command_state(
     let authorization = required_game_authorization(&state, &headers).await?;
     let caps = caps::resolve(
         &state.pool,
-        &Principal::user(authorization.principal_user_id()),
+        &Principal::authenticated(authorization.principal_id()),
         game,
     )
     .await?;
@@ -999,10 +995,10 @@ async fn player_command_state(
 pub async fn load_player_day_event_attention_for_principal(
     pool: &PgPool,
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     requested_slot: Option<&str>,
 ) -> Result<Vec<PlayerDayEventAttention>, ApiError> {
-    let caps = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
+    let caps = caps::resolve(pool, &Principal::authenticated(principal_id), game).await?;
     let actor_slot = match requested_slot {
         Some(slot) if caps.grants(&Capability::SlotOccupant(slot.to_string())) => slot.to_string(),
         Some(_) => {
@@ -1416,7 +1412,7 @@ mod tests {
     #[test]
     fn host_console_authority_exposes_effective_cohost_policy() {
         let authority = build_host_console_authority(
-            "cohost_c",
+            PrincipalId::fixture("cohost_c"),
             false,
             BTreeSet::from([
                 commands::CohostPermissionClass::Lifecycle,
@@ -1439,12 +1435,13 @@ mod tests {
             .allowed_classes
             .contains(&wire::CohostPermissionClass::Deadline));
 
-        let host = build_host_console_authority("host_h", true, BTreeSet::new());
+        let host =
+            build_host_console_authority(PrincipalId::fixture("host_h"), true, BTreeSet::new());
         assert_eq!(host.capability, HostConsoleAuthorityKind::HostOf);
         assert_eq!(host.allowed_classes.len(), 12);
         assert!(host.denied_classes.is_empty());
 
-        let operator = build_host_console_operator_authority("operator_o");
+        let operator = build_host_console_operator_authority(PrincipalId::fixture("operator_o"));
         assert_eq!(
             operator.capability,
             HostConsoleAuthorityKind::GlobalOperator
@@ -1458,7 +1455,8 @@ mod tests {
             host_prompt_row("prompt:one", "pending"),
             host_prompt_row("prompt:resolved", "resolved"),
         ];
-        let host = build_host_console_authority("host_h", true, BTreeSet::new());
+        let host =
+            build_host_console_authority(PrincipalId::fixture("host_h"), true, BTreeSet::new());
         let tasks = select_host_tasks(&prompts, &[], &host);
 
         assert_eq!(tasks.len(), 1, "resolved facts are history, not tasks");
@@ -1476,7 +1474,7 @@ mod tests {
         assert_eq!(tasks[0].blocked_reason, None);
 
         let denied_cohost = build_host_console_authority(
-            "cohost_c",
+            PrincipalId::fixture("cohost_c"),
             false,
             BTreeSet::from([commands::CohostPermissionClass::HostPromptResolve]),
         );
@@ -1493,7 +1491,8 @@ mod tests {
     #[test]
     fn locked_day_event_selects_a_permission_aware_host_task() {
         let event = day_event_row("locked");
-        let host = build_host_console_authority("host_h", true, BTreeSet::new());
+        let host =
+            build_host_console_authority(PrincipalId::fixture("host_h"), true, BTreeSet::new());
         let tasks = select_host_tasks(&[], std::slice::from_ref(&event), &host);
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].id, "day-event-resolve:event-cookie");
@@ -1508,7 +1507,7 @@ mod tests {
         );
 
         let denied = build_host_console_authority(
-            "cohost_c",
+            PrincipalId::fixture("cohost_c"),
             false,
             BTreeSet::from([commands::CohostPermissionClass::DayEventResolve]),
         );
@@ -1539,7 +1538,6 @@ mod tests {
             status: status.to_string(),
             decision: None,
             public_resolution: None,
-            resolved_by: None,
             resolved_at: None,
         }
     }
@@ -1634,7 +1632,6 @@ pub struct HostPrompt {
     pub status: String,
     pub decision: Option<HostPromptRecordedDecision>,
     pub public_resolution: Option<HostPromptPublicResolution>,
-    pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
 }
 
@@ -1657,7 +1654,6 @@ impl TryFrom<projections::HostPromptRow> for HostPrompt {
             status: delta.status,
             decision: delta.decision,
             public_resolution: delta.public_resolution,
-            resolved_by: delta.resolved_by,
             resolved_at: delta.resolved_at,
         })
     }
@@ -1699,7 +1695,7 @@ pub struct HostConsoleSlotOccupancy {
     pub public_name: String,
     /// Host-only operational binding. Public game/read-model responses expose
     /// the persona fields above, never this principal.
-    pub assigned_principal_id: String,
+    pub assigned_principal_id: PrincipalId,
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
@@ -1804,7 +1800,7 @@ pub struct HostSetupSlotState {
     pub slot_id: String,
     pub persona_id: Option<String>,
     pub public_name: Option<String>,
-    pub assigned_principal_id: Option<String>,
+    pub assigned_principal_id: Option<PrincipalId>,
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
@@ -1961,10 +1957,10 @@ async fn host_console_state(
 pub async fn load_host_console_state_for_principal(
     pool: &PgPool,
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     limit: Option<i64>,
 ) -> Result<HostConsoleStateResponse, ApiError> {
-    let authorization = GameAuthorization::fixture_principal(principal_user_id);
+    let authorization = GameAuthorization::fixture_principal(principal_id);
     let authority = resolve_host_console_authority(pool, game, &authorization)
         .await?
         .ok_or_else(|| ApiError::Reject {
@@ -2020,10 +2016,18 @@ pub(super) async fn load_host_console_state(
         let slot_state = slot_states
             .iter()
             .find(|state| state.slot_id == row.slot_id);
-        let assigned_principal_id = assigned_principals
-            .get(&row.slot_id)
-            .cloned()
-            .unwrap_or_default();
+        let assigned_principal_id =
+            assigned_principals
+                .get(&row.slot_id)
+                .copied()
+                .ok_or_else(|| ApiError::Reject {
+                    status: StatusCode::INTERNAL_SERVER_ERROR,
+                    error: RejectCode::Internal,
+                    message: format!(
+                        "open slot occupancy `{}` has no active principal binding",
+                        row.slot_id
+                    ),
+                })?;
         slots.push(HostConsoleSlotOccupancy {
             slot_id: row.slot_id,
             occupancy_id: row.occupancy_id,
@@ -2278,8 +2282,8 @@ pub(super) async fn resolve_host_console_authority(
     game: Uuid,
     authorization: &GameAuthorization,
 ) -> Result<Option<HostConsoleAuthorityDelta>, ApiError> {
-    let principal_user_id = authorization.principal_user_id();
-    let capabilities = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
+    let principal_id = authorization.principal_id();
+    let capabilities = caps::resolve(pool, &Principal::authenticated(principal_id), game).await?;
     let is_host = capabilities
         .iter()
         .any(|cap| cap == &Capability::HostOf(game));
@@ -2288,9 +2292,7 @@ pub(super) async fn resolve_host_console_authority(
         .any(|cap| cap == &Capability::CohostOf(game));
     if !is_host && !is_cohost {
         return if authorization.is_global_operator() {
-            Ok(Some(build_host_console_operator_authority(
-                principal_user_id,
-            )))
+            Ok(Some(build_host_console_operator_authority(principal_id)))
         } else {
             Ok(None)
         };
@@ -2305,14 +2307,14 @@ pub(super) async fn resolve_host_console_authority(
             .collect()
     };
     Ok(Some(build_host_console_authority(
-        principal_user_id,
+        principal_id,
         is_host,
         denied,
     )))
 }
 
 fn build_host_console_authority(
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     is_host: bool,
     denied: BTreeSet<commands::CohostPermissionClass>,
 ) -> HostConsoleAuthorityDelta {
@@ -2327,7 +2329,7 @@ fn build_host_console_authority(
         .collect();
 
     HostConsoleAuthorityDelta {
-        principal_user_id: principal_user_id.to_string(),
+        principal_id,
         capability: if is_host {
             HostConsoleAuthorityKind::HostOf
         } else {
@@ -2338,9 +2340,9 @@ fn build_host_console_authority(
     }
 }
 
-fn build_host_console_operator_authority(principal_user_id: &str) -> HostConsoleAuthorityDelta {
+fn build_host_console_operator_authority(principal_id: PrincipalId) -> HostConsoleAuthorityDelta {
     HostConsoleAuthorityDelta {
-        principal_user_id: principal_user_id.to_string(),
+        principal_id,
         capability: HostConsoleAuthorityKind::GlobalOperator,
         allowed_classes: Vec::new(),
         denied_classes: Vec::new(),
@@ -2719,8 +2721,8 @@ pub(super) async fn require_host_audit_access(
     authorization: &GameAuthorization,
     message: &'static str,
 ) -> Result<(), ApiError> {
-    let principal_user_id = authorization.principal_user_id();
-    let caps = caps::resolve(pool, &Principal::user(principal_user_id), game).await?;
+    let principal_id = authorization.principal_id();
+    let caps = caps::resolve(pool, &Principal::authenticated(principal_id), game).await?;
     if caps.grants(&Capability::HostOf(game)) || caps.grants(&Capability::CohostOf(game)) {
         return Ok(());
     }

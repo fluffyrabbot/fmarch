@@ -24,6 +24,8 @@ use std::sync::{Arc, OnceLock};
 use url::Url;
 use uuid::Uuid;
 
+use crate::PrincipalId;
+
 const SUBJECT_KEY_DIR_ENV: &str = "FMARCH_SUBJECT_KEY_DIR";
 const SUBJECT_AUTHORITY_REVISION_ENV: &str = "FMARCH_SUBJECT_KEY_AUTHORITY_REVISION";
 const SUBJECT_AUTHORITY_ENDPOINT_ENV: &str = "FMARCH_SUBJECT_AUTHORITY_ENDPOINT";
@@ -135,7 +137,7 @@ pub struct SubjectRevocationRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubjectErasureWork {
     pub erasure_id: Uuid,
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub record: SubjectRevocationRecord,
     pub authority_id: Option<Uuid>,
     pub authority_revision: Option<String>,
@@ -1533,9 +1535,10 @@ fn subject_erasure_work_from_row(
         erasure_id: row
             .try_get("erasure_id")
             .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
-        principal_user_id: row
-            .try_get("principal_user_id")
-            .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+        principal_id: PrincipalId::from_uuid(
+            row.try_get("principal_id")
+                .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?,
+        ),
         record: SubjectRevocationRecord {
             subject_id: SubjectId::from_uuid(
                 row.try_get("subject_id")
@@ -1572,7 +1575,7 @@ fn subject_erasure_work_from_row(
 const SUBJECT_ERASURE_WORK_SELECT: &str = r#"
     SELECT outbox.erasure_id,
            outbox.subject_id,
-           outbox.principal_user_id,
+           outbox.principal_id,
            outbox.receipt_id,
            outbox.replacement_alias,
            outbox.key_fingerprint_sha256,
@@ -1585,12 +1588,12 @@ const SUBJECT_ERASURE_WORK_SELECT: &str = r#"
 
 pub(crate) async fn load_subject_erasure_work_by_principal(
     pool: &sqlx::PgPool,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<Option<SubjectErasureWork>, SubjectPrivacyError> {
     let row = sqlx::query(sqlx::AssertSqlSafe(format!(
-        "{SUBJECT_ERASURE_WORK_SELECT} WHERE outbox.principal_user_id = $1"
+        "{SUBJECT_ERASURE_WORK_SELECT} WHERE outbox.principal_id = $1"
     )))
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(pool)
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
@@ -1897,9 +1900,9 @@ pub(crate) async fn process_subject_erasure_with_store(
 pub(crate) async fn discover_revoked_subject_owner(
     pool: &sqlx::PgPool,
     subject_id: SubjectId,
-) -> Result<String, SubjectPrivacyError> {
-    let owner = sqlx::query_scalar::<_, Option<String>>(
-        "SELECT principal_user_id FROM privacy_subject WHERE subject_id = $1",
+) -> Result<PrincipalId, SubjectPrivacyError> {
+    let owner: Uuid = sqlx::query_scalar::<_, Option<Uuid>>(
+        "SELECT principal_id FROM privacy_subject WHERE subject_id = $1",
     )
     .bind(subject_id.as_uuid())
     .fetch_optional(pool)
@@ -1911,19 +1914,19 @@ pub(crate) async fn discover_revoked_subject_owner(
             "revoked subject {subject_id} has no canonical principal owner; explicit recovery is required"
         ))
     })?;
-    let legacy_owners = sqlx::query_scalar::<_, String>(
-        "SELECT DISTINCT principal_user_id FROM member_lifecycle_event WHERE subject_id = $1 ORDER BY principal_user_id",
+    let legacy_owners = sqlx::query_scalar::<_, Uuid>(
+        "SELECT DISTINCT principal_id FROM member_lifecycle_event WHERE subject_id = $1 ORDER BY principal_id",
     )
     .bind(subject_id.as_uuid())
     .fetch_all(pool)
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    if legacy_owners.iter().any(|legacy| legacy != &owner) {
+    if legacy_owners.iter().any(|legacy| *legacy != owner) {
         return Err(SubjectPrivacyError::Storage(format!(
             "revoked subject {subject_id} has conflicting canonical and legacy owners; explicit recovery is required"
         )));
     }
-    Ok(owner)
+    Ok(PrincipalId::from_uuid(owner))
 }
 
 async fn finalize_subject_erasure(
@@ -1938,9 +1941,12 @@ async fn finalize_subject_erasure(
     let work = &claim.work;
     verify_work_record(work, authenticated_record)?;
     let record = authenticated_record;
-    let principal = &work.principal_user_id;
+    let principal = &work.principal_id;
     let mut tx = pool
         .begin()
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    profile_handle_index::acquire_profile_handle_index_writer_lease(&mut tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     let owner = crate::methods::lock_identity_mutation(
@@ -1951,7 +1957,7 @@ async fn finalize_subject_erasure(
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     if owner.subject_id != record.subject_id.as_uuid()
-        || owner.principal_user_id != *principal
+        || owner.principal_id != *principal
         || !matches!(
             owner.subject_lifecycle_state.as_str(),
             "erasure_pending" | "erased"
@@ -2103,8 +2109,8 @@ async fn finalize_subject_erasure(
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     reconcile_member_lifecycle(&mut tx, record, principal).await?;
-    sqlx::query("DELETE FROM member_personal_export WHERE principal_user_id = $1")
-        .bind(principal)
+    sqlx::query("DELETE FROM member_personal_export WHERE principal_id = $1")
+        .bind(principal.as_uuid())
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
@@ -2119,12 +2125,12 @@ async fn finalize_subject_erasure(
                $2,
                'subject_erasure'
         FROM external_identity
-        WHERE principal_user_id = $1
+        WHERE principal_id = $1
           AND provider = 'workos'
         ON CONFLICT DO NOTHING
         "#,
     )
-    .bind(principal)
+    .bind(principal.as_uuid())
     .bind(record.destroyed_at)
     .execute(&mut *tx)
     .await
@@ -2143,66 +2149,79 @@ async fn finalize_subject_erasure(
                $2,
                'subject_erasure'
         FROM workos_provider_session
-        WHERE principal_user_id = $1
+        WHERE principal_id = $1
         ON CONFLICT DO NOTHING
         "#,
     )
-    .bind(principal)
+    .bind(principal.as_uuid())
     .bind(record.destroyed_at)
     .execute(&mut *tx)
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM workos_session_exchange WHERE provider_session_id IN (SELECT provider_session_id FROM workos_provider_session WHERE principal_user_id = $1)")
-        .bind(principal)
+    sqlx::query("DELETE FROM workos_session_exchange WHERE provider_session_id IN (SELECT provider_session_id FROM workos_provider_session WHERE principal_id = $1)")
+        .bind(principal.as_uuid())
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query(
-        "DELETE FROM auth_session WHERE principal_user_id = $1 AND workos_session_id IS NOT NULL",
+        "DELETE FROM auth_session WHERE principal_id = $1 AND workos_session_id IS NOT NULL",
     )
-    .bind(principal)
+    .bind(principal.as_uuid())
     .execute(&mut *tx)
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM workos_provider_session WHERE principal_user_id = $1")
-        .bind(principal)
+    sqlx::query("DELETE FROM workos_provider_session WHERE principal_id = $1")
+        .bind(principal.as_uuid())
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM external_identity WHERE principal_user_id = $1")
-        .bind(principal)
+    sqlx::query("DELETE FROM external_identity WHERE principal_id = $1")
+        .bind(principal.as_uuid())
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("UPDATE authentication_method SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2) WHERE principal_user_id = $1")
-        .bind(principal).bind(record.destroyed_at).execute(&mut *tx).await
+    sqlx::query("UPDATE authentication_method SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2) WHERE principal_id = $1")
+        .bind(principal.as_uuid()).bind(record.destroyed_at).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("UPDATE auth_session SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_user_id = $1")
-        .bind(principal).bind(record.destroyed_at).execute(&mut *tx).await
-        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM auth_websocket_ticket WHERE principal_user_id = $1")
-        .bind(principal)
+    sqlx::query(
+        "UPDATE auth_session SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_id = $1",
+    )
+    .bind(principal.as_uuid())
+    .bind(record.destroyed_at)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    sqlx::query("DELETE FROM auth_websocket_ticket WHERE principal_id = $1")
+        .bind(principal.as_uuid())
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM auth_invite WHERE principal_user_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1)")
-        .bind(principal).execute(&mut *tx).await
+    sqlx::query("DELETE FROM auth_invite WHERE principal_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1)")
+        .bind(principal.as_uuid()).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM auth_delivery_intent WHERE principal_user_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1)")
-        .bind(principal).execute(&mut *tx).await
+    sqlx::query("DELETE FROM auth_delivery_intent WHERE principal_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1)")
+        .bind(principal.as_uuid()).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM auth_account_recovery_credential WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1)")
-        .bind(principal).execute(&mut *tx).await
+    sqlx::query("DELETE FROM auth_account_recovery_credential WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1)")
+        .bind(principal.as_uuid()).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     let erased_account_id = format!("erased_{}", record.receipt_id.simple());
-    sqlx::query("UPDATE auth_account SET account_id = $2, disabled_at = COALESCE(disabled_at, $3), password_hash = $4, global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
-        .bind(principal).bind(erased_account_id).bind(record.destroyed_at).bind(format!("erased:{}", record.receipt_id)).execute(&mut *tx).await
+    sqlx::query("UPDATE auth_account SET account_id = $2, disabled_at = COALESCE(disabled_at, $3), password_hash = $4, global_capabilities = '{}'::text[] WHERE principal_id = $1")
+        .bind(principal.as_uuid()).bind(erased_account_id).bind(record.destroyed_at).bind(format!("erased:{}", record.receipt_id)).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("UPDATE identity_lifecycle_audit SET actor_user_id = CASE WHEN actor_user_id = $1 THEN $2 ELSE actor_user_id END, principal_user_id = $2, metadata = '{}'::jsonb WHERE principal_user_id = $1 OR actor_user_id = $1")
-        .bind(principal).bind(&record.replacement_alias).execute(&mut *tx).await
+    sqlx::query(
+        "UPDATE identity_lifecycle_audit \
+         SET principal_id = CASE WHEN principal_id = $1 THEN NULL ELSE principal_id END, \
+             actor_principal_id = CASE WHEN actor_principal_id = $1 THEN NULL ELSE actor_principal_id END, \
+             redacted_principal_alias = CASE WHEN principal_id = $1 THEN $2 ELSE redacted_principal_alias END, \
+             redacted_actor_alias = CASE WHEN actor_principal_id = $1 THEN $2 ELSE redacted_actor_alias END, \
+             metadata = '{}'::jsonb \
+         WHERE principal_id = $1 OR actor_principal_id = $1",
+    )
+        .bind(principal.as_uuid()).bind(&record.replacement_alias).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("UPDATE platform_principal SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2), global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
-        .bind(principal).bind(record.destroyed_at).execute(&mut *tx).await
+    sqlx::query("UPDATE platform_principal SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2), global_capabilities = '{}'::text[] WHERE principal_id = $1")
+        .bind(principal.as_uuid()).bind(record.destroyed_at).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     let completed = sqlx::query(
         "UPDATE subject_erasure SET state = 'complete', claim_token = NULL, claim_owner = NULL, claim_expires_at = NULL, completed_at = $2 WHERE erasure_id = $1 AND state = 'pending' AND claim_token = $3 AND claim_owner = $4",
@@ -2445,14 +2464,14 @@ async fn subject_transitioned_to_erasure(
 async fn reconcile_member_lifecycle(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     record: &SubjectRevocationRecord,
-    principal: &str,
+    principal: &PrincipalId,
 ) -> Result<(), SubjectPrivacyError> {
     use sqlx::Row;
 
     let rows = sqlx::query(
-        "SELECT seq, kind FROM member_lifecycle_event WHERE principal_user_id = $1 ORDER BY seq",
+        "SELECT seq, kind FROM member_lifecycle_event WHERE principal_id = $1 ORDER BY seq",
     )
-    .bind(principal)
+    .bind(principal.as_uuid())
     .fetch_all(&mut **tx)
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
@@ -2474,8 +2493,8 @@ async fn reconcile_member_lifecycle(
             continue;
         }
         next_seq += 1;
-        sqlx::query("INSERT INTO member_lifecycle_event (principal_user_id, seq, kind, payload, occurred_at, subject_id) VALUES ($1,$2,$3,$4::jsonb,$5,$6)")
-            .bind(principal)
+        sqlx::query("INSERT INTO member_lifecycle_event (principal_id, seq, kind, payload, occurred_at, subject_id) VALUES ($1,$2,$3,$4::jsonb,$5,$6)")
+            .bind(principal.as_uuid())
             .bind(next_seq)
             .bind(kind)
             .bind(payload.to_string())
@@ -2488,11 +2507,11 @@ async fn reconcile_member_lifecycle(
     sqlx::query(
         r#"
         INSERT INTO member_lifecycle_projection
-            (principal_user_id, status, last_seq, deactivated_at,
+            (principal_id, status, last_seq, deactivated_at,
              erasure_requested_at, credentials_erased_at,
              authorship_pseudonymized_at, pseudonym, subject_id)
         VALUES ($1, 'erased', $2, $3, $3, $3, $3, $4, $5)
-        ON CONFLICT (principal_user_id) DO UPDATE SET
+        ON CONFLICT (principal_id) DO UPDATE SET
             status = 'erased',
             last_seq = EXCLUDED.last_seq,
             deactivated_at = COALESCE(member_lifecycle_projection.deactivated_at, EXCLUDED.deactivated_at),
@@ -2503,7 +2522,7 @@ async fn reconcile_member_lifecycle(
             subject_id = EXCLUDED.subject_id
         "#,
     )
-    .bind(principal)
+    .bind(principal.as_uuid())
     .bind(next_seq)
     .bind(record.destroyed_at)
     .bind(&record.replacement_alias)
@@ -2774,7 +2793,7 @@ mod tests {
             claim,
             "profile",
             "profile-a",
-            &serde_json::json!({"principal_user_id": "member-a", "display_name": "A"}),
+            &serde_json::json!({"principal_id": "member-a", "display_name": "A"}),
         )
         .await
         .unwrap();

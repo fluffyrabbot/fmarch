@@ -7,10 +7,11 @@
 //! appear in the durable game event payload.
 
 use eventstore::{ActorId, EventInput};
-use game_platform::{GamePersonaId, PrincipalId};
+use game_platform::GamePersonaId;
 use identity::{
     ensure_active_subject, insert_subject_claim, ClaimId, PrivateClaimError, SubjectId,
 };
+use principal::PrincipalId;
 use sqlx::Row;
 use uuid::Uuid;
 
@@ -64,7 +65,7 @@ pub async fn register(
     // Persona lock first, then the subject lock inside `ensure_active_subject`.
     // Rename follows that same order, so a duplicate registration cannot
     // deadlock an in-flight rename of the same persona.
-    let subject_id = ensure_active_subject(tx, principal_id.as_str(), occurred_at).await?;
+    let subject_id = ensure_active_subject(tx, *principal_id, occurred_at).await?;
     if load_subject_binding_for_update(tx, game_id, subject_id)
         .await?
         .is_some()
@@ -300,7 +301,7 @@ mod tests {
         assert_eq!(event.payload["claim_id"], claim_id.as_uuid().to_string());
         assert_eq!(event.payload.as_object().unwrap().len(), 3);
         assert!(event.payload.get("principal_id").is_none());
-        assert!(event.payload.get("principal_user_id").is_none());
+        assert!(event.payload.get("principal_id").is_none());
         assert!(event.payload.get("public_name").is_none());
     }
 

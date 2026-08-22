@@ -9,13 +9,13 @@ test("logout load exposes the authenticated principal and preserves a local retu
   const observed = { headers: null };
   assert.deepEqual(
     load({
-      locals: { principalUserId: "host_h" },
+      locals: { principalId: "host_h" },
       setHeaders: (headers) => {
         observed.headers = headers;
       },
       url: new URL("http://localhost/auth/logout?returnTo=/g/game-1/host"),
     }),
-    { logout: { principalUserId: "host_h", returnTo: "/g/game-1/host" } },
+    { logout: { principalId: "host_h", returnTo: "/g/game-1/host" } },
   );
   assert.deepEqual(observed.headers, { "cache-control": "no-store" });
 });
@@ -48,7 +48,7 @@ test("logout revokes the presented opaque token before clearing every identity c
       cookies: cookieJar("active-host-session", observed),
       fetch: async (url, init) => {
         observed.request = { url, method: init.method, authorization: init.headers.authorization };
-        return jsonResponse({ status: "logged_out", principal_user_id: "host_h" });
+        return jsonResponse({ status: "logged_out", principal_id: "host_h" });
       },
       request: formRequest({ returnTo: "/g/game-1/host" }),
     }),
@@ -86,7 +86,7 @@ test("WorkOS logout clears local identity before returning an exact continuation
     fetch: async () =>
       jsonResponse({
         status: "logged_out",
-        principal_user_id: "admin_a",
+        principal_id: "admin_a",
         provider_logout_url:
           "https://api.workos.com/user_management/sessions/logout?session_id=session_a",
       }),
@@ -110,7 +110,7 @@ test("logout refuses an untrusted provider redirect", async () => {
     fetch: async () =>
       jsonResponse({
         status: "logged_out",
-        principal_user_id: "admin_a",
+        principal_id: "admin_a",
         provider_logout_url: "https://attacker.example/logout",
       }),
     request: formRequest({ returnTo: "/admin" }),

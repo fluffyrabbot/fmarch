@@ -37,14 +37,12 @@ pub(super) struct LiveProjectionPublisher {
 
 pub(super) struct LiveProjectionInflightGuard {
     publisher: LiveProjectionPublisher,
-    game: Option<Uuid>,
+    game: Uuid,
 }
 
 impl Drop for LiveProjectionInflightGuard {
     fn drop(&mut self) {
-        if let Some(game) = self.game.take() {
-            self.publisher.end_inflight(game);
-        }
+        self.publisher.end_inflight(self.game);
     }
 }
 
@@ -61,10 +59,8 @@ impl LiveProjectionPublisher {
         self.sender.subscribe()
     }
 
-    pub(super) fn inflight_guard(&self, game: Option<Uuid>) -> LiveProjectionInflightGuard {
-        if let Some(game) = game {
-            self.begin_inflight(game);
-        }
+    pub(super) fn inflight_guard(&self, game: Uuid) -> LiveProjectionInflightGuard {
+        self.begin_inflight(game);
         LiveProjectionInflightGuard {
             publisher: self.clone(),
             game,
@@ -321,17 +317,15 @@ mod tests {
         let publisher = LiveProjectionPublisher::new(8);
         let game = Uuid::new_v4();
         assert!(!publisher.has_inflight(game));
-        let outer = publisher.inflight_guard(Some(game));
+        let outer = publisher.inflight_guard(game);
         assert!(publisher.has_inflight(game));
         {
-            let inner = publisher.inflight_guard(Some(game));
+            let inner = publisher.inflight_guard(game);
             assert!(publisher.has_inflight(game));
             drop(inner);
             assert!(publisher.has_inflight(game));
         }
         drop(outer);
-        assert!(!publisher.has_inflight(game));
-        let _ignored = publisher.inflight_guard(None);
         assert!(!publisher.has_inflight(game));
     }
 

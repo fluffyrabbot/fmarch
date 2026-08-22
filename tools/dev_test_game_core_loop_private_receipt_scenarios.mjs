@@ -64,7 +64,7 @@ export function privateReceiptScenarios() {
       id: "n01-target-receipt",
       slotField: "targetSlot",
       expectedSlot: "slot-2",
-      principalUserId: "player_ilya",
+      principalId: "player_ilya",
       phaseId: "N01",
       phaseState: "locked",
       actorAlive: false,
@@ -84,7 +84,7 @@ export function privateReceiptScenarios() {
       id: "n01-normal-privacy",
       slotField: "normalSlot",
       expectedSlot: "slot-4",
-      principalUserId: "player_rowan",
+      principalId: "player_rowan",
       phaseId: "N01",
       phaseState: "locked",
       actorAlive: true,
@@ -102,7 +102,7 @@ export function privateReceiptScenarios() {
       id: "d02-target-receipt",
       slotField: "targetSlot",
       expectedSlot: "slot-2",
-      principalUserId: "player_ilya",
+      principalId: "player_ilya",
       phaseId: "D02",
       phaseState: "locked",
       actorAlive: false,
@@ -121,7 +121,7 @@ export function privateReceiptScenarios() {
       id: "d02-normal-privacy",
       slotField: "normalSlot",
       expectedSlot: "slot-4",
-      principalUserId: "player_rowan",
+      principalId: "player_rowan",
       phaseId: "D02",
       phaseState: "locked",
       actorAlive: true,
@@ -139,7 +139,7 @@ export function privateReceiptScenarios() {
       id: "n02-target-receipt",
       slotField: "targetSlot",
       expectedSlot: "slot-3",
-      principalUserId: "player-seed",
+      principalId: "player-seed",
       phaseId: "N02",
       phaseState: "locked",
       actorAlive: false,
@@ -157,7 +157,7 @@ export function privateReceiptScenarios() {
       id: "n02-normal-privacy",
       slotField: "normalSlot",
       expectedSlot: "slot-4",
-      principalUserId: "player_rowan",
+      principalId: "player_rowan",
       phaseId: "N02",
       phaseState: "locked",
       actorAlive: true,
@@ -174,7 +174,7 @@ export function privateReceiptScenarios() {
       id: "d03-target-receipt",
       slotField: "targetSlot",
       expectedSlot: "slot-4",
-      principalUserId: "player_rowan",
+      principalId: "player_rowan",
       phaseId: "D03",
       phaseState: "locked",
       actorAlive: false,
@@ -191,7 +191,7 @@ export function privateReceiptScenarios() {
       id: "d03-action-player-privacy",
       slotField: "actionPlayerSlot",
       expectedSlot: "slot-7",
-      principalUserId: "player_mira",
+      principalId: "player_mira",
       phaseId: "D03",
       phaseState: "locked",
       actorAlive: true,
@@ -208,7 +208,7 @@ export function privateReceiptScenarios() {
       id: "n04-survivor-receipt",
       slotField: "survivorSlot",
       expectedSlot: "slot-5",
-      principalUserId: "player_sage",
+      principalId: "player_sage",
       phaseId: "N04",
       phaseState: "locked",
       actorAlive: false,
@@ -225,7 +225,7 @@ export function privateReceiptScenarios() {
       id: "n04-action-player-privacy",
       slotField: "actionPlayerSlot",
       expectedSlot: "slot-7",
-      principalUserId: "player_mira",
+      principalId: "player_mira",
       phaseId: "N04",
       phaseState: "locked",
       actorAlive: true,
@@ -834,7 +834,7 @@ export function assertLiveCompletedPrivateChannelPostRejectOutcome({
     outcome?.commandStatus?.error !== scenario.commandError ||
     outcome?.commandStatus?.serverEnvelope?.body?.kind !== "Reject" ||
     Array.isArray(outcome?.commandStatus?.streamSeqs) ||
-    outcome?.commandStatus?.requestEnvelope?.body?.body?.principal_user_id !==
+    outcome?.commandStatus?.requestEnvelope?.body?.body?.principal_id !==
       undefined ||
     command?.game !== expectedGame ||
     command?.channel_id !== expectedChannelId ||
@@ -1161,7 +1161,7 @@ function sameStringArray(actual, expected) {
 export function privateReceiptProofArgs(scenario) {
   return {
     expectedSlot: scenario.expectedSlot,
-    principalUserId: scenario.principalUserId,
+    principalId: scenario.principalId,
     slotField: scenario.slotField,
     notifications: privateReceiptNotifications(scenario),
     resyncFromSeq: scenario.resyncFromSeq,
@@ -1177,7 +1177,7 @@ export function privateReceiptAssertionArgs({
     sourceRoleUrl,
     expectedSlot: scenario.expectedSlot,
     slotField: scenario.slotField,
-    expectedPrincipalUserId: scenario.principalUserId,
+    expectedPrincipalUserId: scenario.principalId,
     expectedPhaseId: scenario.phaseId,
     expectedPhaseState: scenario.phaseState,
     expectedActorAlive: scenario.actorAlive,
@@ -1248,7 +1248,7 @@ export function assertPrivateReceiptRoleSurfaceCase({
     proof.productionReady !== false ||
     proof.rawInviteTokensVisible !== false ||
     proof[slotField] !== expectedSlot ||
-    proof.principalUserId !== expectedPrincipalUserId ||
+    proof.principalId !== expectedPrincipalUserId ||
     (!expectedPrivateReceipt && proof.targetReceiptVisible !== false) ||
     typeof proof.sourceRoleUrl !== "string" ||
     proof.sourceRoleUrl !== sourceRoleUrl ||
@@ -1366,7 +1366,7 @@ export function assertDayThreePlayerObservationProofCase({
     !proof.visitedRolePath.includes("/g/") ||
     proof.surfaceTestId !== "player-surface" ||
     proof[slotField] !== expectedSlot ||
-    proof.principalUserId !== expectedPrincipalUserId ||
+    proof.principalId !== expectedPrincipalUserId ||
     proof.checkpoint?.phaseId !== "D03" ||
     proof.checkpoint.phaseState !== "open" ||
     proof.checkpoint.actorSlot !== expectedSlot ||
@@ -1470,7 +1470,7 @@ export function assertPostDayThreePlayerSurfaceProofCase({
     !proof.visitedRolePath.includes("/g/") ||
     proof.surfaceTestId !== "player-surface" ||
     proof[slotField] !== expectedSlot ||
-    proof.principalUserId !== expectedPrincipalUserId ||
+    proof.principalId !== expectedPrincipalUserId ||
     proof.checkpoint?.phaseId !== expectedPhaseId ||
     proof.checkpoint.phaseState !== expectedPhaseState ||
     proof.checkpoint.actorSlot !== expectedSlot ||

@@ -114,11 +114,11 @@ async fn seed_open_night_game_with_pack_artifact(
             "GameCreated",
             1,
             serde_json::json!({
-                "host": host_id,
+                "host_principal_id": fixture_principal_id(host_id),
                 "pack_ref": &pack_artifact.pack_ref,
                 "pack_artifact": pack_artifact
             }),
-            ActorId::Principal(host_id.to_string()),
+            ActorId::Principal(fixture_principal_id(host_id)),
             0,
         )],
     )
@@ -133,7 +133,7 @@ async fn seed_open_night_game_with_pack_artifact(
             &mut tx,
             game,
             first_persona,
-            &game_platform::PrincipalId::new("user_1").expect("fixture principal"),
+            &fixture_principal_id("user_1"),
             game_platform::GamePersonaPresentation {
                 public_name: game_platform::GamePersonaName::new("Player One")
                     .expect("fixture persona name"),
@@ -147,7 +147,7 @@ async fn seed_open_night_game_with_pack_artifact(
             &mut tx,
             game,
             second_persona,
-            &game_platform::PrincipalId::new("user_2").expect("fixture principal"),
+            &fixture_principal_id("user_2"),
             game_platform::GamePersonaPresentation {
                 public_name: game_platform::GamePersonaName::new("Player Two")
                     .expect("fixture persona name"),
@@ -6148,7 +6148,6 @@ fn mafiascum_no_majority_revote_prompt_fixture_json() -> String {
                             "target_phase_id": "D01R1",
                             "reason": "revote"
                         },
-                        "resolved_by": "fixture_host"
                     }
                 },
                 {
@@ -6285,7 +6284,6 @@ fn mafiascum_beloved_princess_skip_next_day_fixture_json() -> String {
                             "reason": "skip_next_day",
                             "skipped_phase_id": "D02"
                         },
-                        "resolved_by": "fixture_host"
                     }
                 },
                 {
@@ -6402,7 +6400,6 @@ fn mafiascum_virgin_night_skip_next_day_fixture_json() -> String {
                             "reason": "skip_next_day",
                             "skipped_phase_id": "D02"
                         },
-                        "resolved_by": "fixture_host"
                     }
                 },
                 {
@@ -6528,7 +6525,6 @@ fn dynamic_vote_no_majority_revote_prompt_fixture_json() -> String {
                             "target_phase_id": "D02R1",
                             "reason": "revote"
                         },
-                        "resolved_by": "fixture_host"
                     }
                 },
                 {
@@ -6669,7 +6665,6 @@ fn dynamic_vote_pk_prompt_fixture_json() -> String {
                             "selected_slot": "slot_3",
                             "reason": "host_decides_tie"
                         },
-                        "resolved_by": "fixture_host"
                     }
                 }
             ],
@@ -6704,7 +6699,6 @@ fn dynamic_vote_pk_prompt_fixture_json() -> String {
                             "kind": "select_slot",
                             "slot": "slot_3"
                         },
-                        "resolved_by": "fixture_host"
                     }
                 }
             ]
@@ -6865,7 +6859,6 @@ fn generated_epicmafia_pk_expectations_json(case: &GeneratedEpicmafiaPkCase) -> 
                         "kind": "select_slot",
                         "slot": case.selected_slot,
                     },
-                    "resolved_by": "fixture_host",
                 },
             }
         ]
@@ -7335,7 +7328,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -7562,7 +7555,7 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -8248,9 +8241,9 @@ async fn wait_for_cancelled_command_cleanup(
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             let receipt_count: i64 = sqlx::query_scalar(
-                "SELECT count(*) FROM command_receipt WHERE principal_user_id = $1 AND command_id = $2",
+                "SELECT count(*) FROM command_receipt WHERE principal_id = $1 AND command_id = $2",
             )
-            .bind("user_a")
+            .bind(fixture_principal_id("user_a").as_uuid())
             .bind(command_id)
             .fetch_one(pool)
             .await

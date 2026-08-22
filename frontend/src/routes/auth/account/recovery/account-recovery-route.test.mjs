@@ -79,7 +79,7 @@ test("successful recovery clears a stale cookie and redirects through account lo
           status: "recovered",
           recovery_id: "00000000-0000-0000-0000-000000000001",
           account_id: "host@example.test",
-          principal_user_id: "host_h",
+          principal_id: "host_h",
           revoked_session_count: 2,
           password_algorithm: "argon2id",
         });

@@ -7,7 +7,7 @@ test("delivery page loads the authenticated redacted operator queue", async () =
   const data = await load({
     cookies: { get: () => "operator-session" },
     locals: {
-      principalUserId: "mod_m",
+      principalId: "mod_m",
       resolvedCapabilities: [{ kind: "GlobalMod" }],
     },
     url: new URL("http://localhost/admin/deliveries"),

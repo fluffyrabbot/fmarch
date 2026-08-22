@@ -266,7 +266,7 @@ function validateInviteRoleProof(artifact) {
       [...required.keys()].map((role) => [
         role,
         {
-          principalUserId: proof.roles[role].principalUserId,
+          principalId: proof.roles[role].principalId,
           capabilityKinds: proof.roles[role].capabilityKinds,
           returnTo: proof.roles[role].returnTo,
         },

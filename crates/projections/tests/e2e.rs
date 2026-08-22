@@ -17,7 +17,7 @@ use domain::state::{RevealState, SlotLifecycle, SlotState, StateSnapshot, Submis
 use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
 use eventstore::{ActorId, EventInput, StoreError};
 use game_persona_application::GamePersonaPresentation;
-use game_platform::{GamePersonaId, GamePersonaName, PrincipalId as GamePrincipalId};
+use game_platform::{GamePersonaId, GamePersonaName};
 use projections::{
     action_counters, action_grants, append_and_project, append_discussion_and_project,
     append_discussion_and_project_expected, audit_rebuild, day_vote_outcomes,
@@ -48,10 +48,16 @@ fn test_pack_artifact(key: &str) -> content_registry::PackArtifactSnapshot {
         .unwrap_or_else(|error| panic!("build canonical test pack artifact `{key}`: {error}"))
 }
 
+fn fixture_principal_id(label: &str) -> PrincipalId {
+    label
+        .parse()
+        .unwrap_or_else(|_| PrincipalId::fixture(label))
+}
+
 fn test_game_created_payload(host: &str, key: &str) -> serde_json::Value {
     let artifact = test_pack_artifact(key);
     serde_json::json!({
-        "host": host,
+        "host_principal_id": fixture_principal_id(host),
         "pack_ref": &artifact.pack_ref,
         "pack_artifact": artifact,
     })
@@ -93,11 +99,49 @@ fn refresh_stream_export_checksum(export: &mut eventstore::StreamExport) {
     export.checksum_sha256 = format!("{:x}", Sha256::digest(bytes));
 }
 
-async fn ensure_test_principal(pool: &sqlx::PgPool, principal_user_id: &str) {
+async fn ensure_test_principal(pool: &sqlx::PgPool, principal_id: &str) {
     let mut connection = pool.acquire().await.unwrap();
-    identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
+    identity::methods::ensure_principal(
+        &mut connection,
+        &fixture_principal_id(principal_id),
+        &[],
+        1,
+    )
+    .await
+    .unwrap();
+}
+
+/// Stable authority fixtures for the attention, mute, and moderation scenarios.
+/// Labels remain presentation-only; every authorization edge receives a UUID.
+fn auxiliary_principal(id: u128) -> PrincipalId {
+    PrincipalId::from_uuid(Uuid::from_u128(id))
+}
+
+async fn ensure_auxiliary_principal(pool: &sqlx::PgPool, principal_id: PrincipalId) {
+    let mut connection = pool.acquire().await.unwrap();
+    identity::methods::ensure_principal(&mut connection, &principal_id, &[], 1)
         .await
         .unwrap();
+}
+
+async fn create_auxiliary_profile(
+    pool: &sqlx::PgPool,
+    principal_id: PrincipalId,
+    handle: &str,
+    display_name: &str,
+    bio: &str,
+    visibility: ProfileVisibility,
+    occurred_at: i64,
+) -> Uuid {
+    profile_application::create_profile(
+        pool,
+        principal_id,
+        test_profile_presentation(handle, display_name, bio, visibility),
+        occurred_at,
+    )
+    .await
+    .unwrap()
+    .as_uuid()
 }
 
 async fn append_test_game_persona_registration(
@@ -113,7 +157,7 @@ async fn append_test_game_persona_registration(
         &mut tx,
         game,
         persona_id,
-        &GamePrincipalId::new(principal_id).unwrap(),
+        &fixture_principal_id(principal_id),
         GamePersonaPresentation {
             public_name: GamePersonaName::new(public_name).unwrap(),
         },
@@ -179,7 +223,7 @@ async fn create_test_profile(
 ) -> Uuid {
     profile_application::create_profile(
         pool,
-        PrincipalId::new(principal).unwrap(),
+        fixture_principal_id(principal),
         test_profile_presentation(handle, display_name, bio, visibility),
         occurred_at,
     )
@@ -210,7 +254,7 @@ async fn update_test_profile(pool: &sqlx::PgPool, update: TestProfileUpdate<'_>)
     profile_application::update_profile(
         pool,
         ProfileId::from_uuid(update.profile_id),
-        PrincipalId::new(update.principal).unwrap(),
+        fixture_principal_id(update.principal),
         ProfileRevision::new(update.expected_revision),
         update.edit,
         update.occurred_at,
@@ -629,7 +673,6 @@ async fn host_decides_prompt_finalizes_official_day_vote_outcome(pool: sqlx::PgP
                         "selected_slot": "slot-2",
                         "reason": "host_decides_tie"
                     },
-                    "resolved_by": "host_h"
                 }),
                 ActorId::Host,
                 2,
@@ -835,7 +878,6 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                     "reason": "skip_next_day",
                     "skipped_phase_id": "D02"
                 },
-                "resolved_by": "host_h"
             }),
             ActorId::Host,
             3,
@@ -847,7 +889,6 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     let before = host_prompts(&pool, game).await.unwrap();
     assert_eq!(before.len(), 1);
     assert_eq!(before[0].status, "resolved");
-    assert_eq!(before[0].resolved_by.as_deref(), Some("host_h"));
     assert_eq!(before[0].resolved_at, Some(3));
     assert_eq!(
         before[0].public_resolution.as_ref().unwrap()["kind"],
@@ -890,7 +931,6 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     assert_eq!(controls[0].target_phase_id, "N02");
     assert_eq!(controls[0].skipped_phase_id.as_deref(), Some("D02"));
     assert_eq!(controls[0].reason, "skip_next_day");
-    assert_eq!(controls[0].resolved_by.as_deref(), Some("host_h"));
     assert_eq!(controls[0].resolved_at, Some(3));
     assert_eq!(controls[0].occurred_at, 4);
 
@@ -1725,7 +1765,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
                 "GameCreated",
                 1,
                 test_game_created_payload("host_active", "mafiascum"),
-                ActorId::Principal("host_active".into()),
+                ActorId::Principal(fixture_principal_id("host_active")),
                 100,
             ),
             EventInput::new(
@@ -1754,7 +1794,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
                 "GameCreated",
                 1,
                 test_game_created_payload("host_completed", "mafia_universe"),
-                ActorId::Principal("host_completed".into()),
+                ActorId::Principal(fixture_principal_id("host_completed")),
                 90,
             ),
             EventInput::new(
@@ -1782,7 +1822,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
             "GameCreated",
             1,
             test_game_created_payload("host_setup", "epicmafia"),
-            ActorId::Principal("host_setup".into()),
+            ActorId::Principal(fixture_principal_id("host_setup")),
             150,
         )],
     )
@@ -1867,7 +1907,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
             "DiscussionAreaCreated",
             1,
             serde_json::json!({ "slug": "theory", "title": "Theory", "description": "Public analysis" }),
-            ActorId::Principal("moderator".into()),
+            ActorId::Principal(fixture_principal_id("moderator")),
             2,
         )],
     )
@@ -1881,14 +1921,14 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
                 "DiscussionTopicCreated",
                 1,
                 serde_json::json!({ "area_id": area, "title": "Signal theory", "author_profile_id": profile }),
-                ActorId::Principal("signal_member".into()),
+                ActorId::Principal(fixture_principal_id("signal_member")),
                 3,
             ),
             EventInput::new(
                 "DiscussionPostSubmitted",
                 1,
                 serde_json::json!({ "body": "Alpha signal analysis", "author_profile_id": profile }),
-                ActorId::Principal("signal_member".into()),
+                ActorId::Principal(fixture_principal_id("signal_member")),
                 4,
             ),
         ],
@@ -1903,7 +1943,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
                 "GameCreated",
                 1,
                 test_game_created_payload("host", "signal_pack"),
-                ActorId::Principal("host".into()),
+                ActorId::Principal(fixture_principal_id("host")),
                 5,
             ),
             EventInput::new(
@@ -1988,7 +2028,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
             "DiscussionTopicVisibilityChanged",
             1,
             serde_json::json!({ "visibility": "hidden" }),
-            ActorId::Principal("moderator".into()),
+            ActorId::Principal(fixture_principal_id("moderator")),
             9,
         )],
     )
@@ -2049,6 +2089,10 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::PgPool) {
+    let host = auxiliary_principal(0x2101);
+    let reporter = auxiliary_principal(0x2102);
+    let other_member = auxiliary_principal(0x2103);
+    let moderator = auxiliary_principal(0x2104);
     let game = Uuid::new_v4();
     append_and_project(
         &pool,
@@ -2057,8 +2101,8 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
             EventInput::new(
                 "GameCreated",
                 1,
-                test_game_created_payload("host", "moderation_pack"),
-                ActorId::Principal("host".into()),
+                test_game_created_payload(&host.to_string(), "moderation_pack"),
+                ActorId::Principal(host),
                 1,
             ),
             EventInput::new(
@@ -2097,7 +2141,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         &pool,
         target.clone(),
         report_id,
-        "reporter_a",
+        reporter,
         ReportReasonFamily::Harassment,
         "direct abuse".into(),
         10,
@@ -2110,7 +2154,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
             &pool,
             target.clone(),
             Uuid::new_v4(),
-            "reporter_a",
+            reporter,
             ReportReasonFamily::Harassment,
             "duplicate".into(),
             11,
@@ -2119,7 +2163,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         Err(ProjectionError::DuplicateModerationReport)
     ));
     assert!(
-        projections::moderation_report_receipt(&pool, report_id, "other_member")
+        projections::moderation_report_receipt(&pool, report_id, other_member)
             .await
             .unwrap()
             .is_none()
@@ -2146,7 +2190,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         case_id,
         state.version,
         hidden,
-        "moderator",
+        moderator,
         12,
     )
     .await
@@ -2164,7 +2208,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
             .is_empty()
     );
     assert_eq!(
-        projections::moderation_report_receipt(&pool, report_id, "reporter_a")
+        projections::moderation_report_receipt(&pool, report_id, reporter)
             .await
             .unwrap()
             .unwrap()
@@ -2188,7 +2232,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         case_id,
         state.version,
         restored,
-        "moderator",
+        moderator,
         13,
     )
     .await
@@ -2214,7 +2258,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         &pool,
         target,
         Uuid::new_v4(),
-        "reporter_a",
+        reporter,
         ReportReasonFamily::Harassment,
         "new report after restoration".into(),
         14,
@@ -2237,7 +2281,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         case_id,
         state.version,
         dismissed,
-        "moderator",
+        moderator,
         15,
     )
     .await
@@ -2269,13 +2313,15 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPool) {
+    let host = auxiliary_principal(0x2201);
+    let reporter = auxiliary_principal(0x2202);
     let game = Uuid::new_v4();
     let mut events = vec![
         EventInput::new(
             "GameCreated",
             1,
-            test_game_created_payload("host", "moderation_limit"),
-            ActorId::Principal("host".into()),
+            test_game_created_payload(&host.to_string(), "moderation_limit"),
+            ActorId::Principal(host),
             1,
         ),
         EventInput::new(
@@ -2313,7 +2359,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
                 public: PublicContentRef::new(game, post.source_seq),
             },
             Uuid::new_v4(),
-            "bounded_reporter",
+            reporter,
             ReportReasonFamily::Other,
             String::new(),
             100 + index as i64,
@@ -2327,7 +2373,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
             public: PublicContentRef::new(game, posts[10].source_seq),
         },
         Uuid::new_v4(),
-        "bounded_reporter",
+        reporter,
         ReportReasonFamily::Other,
         String::new(),
         111,
@@ -2341,12 +2387,17 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(pool: PgPool) {
+    let author = auxiliary_principal(0x2301);
+    let member = auxiliary_principal(0x2302);
+    let moderator = auxiliary_principal(0x2303);
+    let reporter = auxiliary_principal(0x2304);
+    let host = auxiliary_principal(0x2305);
     let area = Uuid::new_v4();
     let topic = Uuid::new_v4();
-    ensure_test_principal(&pool, "author_a").await;
-    let profile = create_test_profile(
+    ensure_auxiliary_principal(&pool, author).await;
+    let profile = create_auxiliary_profile(
         &pool,
-        "author_a",
+        author,
         "author_a",
         "Author A",
         "Writes community updates",
@@ -2361,7 +2412,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             "DiscussionAreaCreated",
             1,
             serde_json::json!({ "slug": "watch", "title": "Watch", "description": "Updates" }),
-            ActorId::Principal("moderator".into()),
+            ActorId::Principal(moderator),
             2,
         )],
     )
@@ -2375,14 +2426,14 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
                 "DiscussionTopicCreated",
                 1,
                 serde_json::json!({ "area_id": area, "title": "Watched topic", "author_profile_id": profile }),
-                ActorId::Principal("author_a".into()),
+                ActorId::Principal(author),
                 3,
             ),
             EventInput::new(
                 "DiscussionPostSubmitted",
                 1,
                 serde_json::json!({ "body": "Opening post", "author_profile_id": profile }),
-                ActorId::Principal("author_a".into()),
+                ActorId::Principal(author),
                 4,
             ),
         ],
@@ -2390,12 +2441,12 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     .await
     .unwrap();
     let target = WatchTarget { surface_id: topic };
-    let watcher = projections::subscribe_to_public_target(&pool, target.clone(), "member_b", 5)
+    let watcher = projections::subscribe_to_public_target(&pool, target.clone(), member, 5)
         .await
         .unwrap();
     assert!(watcher.subscribed);
     assert_eq!(watcher.unread_count, 0);
-    projections::subscribe_to_public_target(&pool, target.clone(), "author_a", 5)
+    projections::subscribe_to_public_target(&pool, target.clone(), author, 5)
         .await
         .unwrap();
 
@@ -2412,7 +2463,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             "DiscussionPostSubmitted",
             1,
             serde_json::json!({ "body": "First watched reply", "author_profile_id": profile }),
-            ActorId::Principal("author_a".into()),
+            ActorId::Principal(author),
             6,
         )],
     )
@@ -2424,7 +2475,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .unwrap()
         .last_post_seq
         .unwrap();
-    let inbox = projections::public_inbox(&pool, "member_b", None, 20)
+    let inbox = projections::public_inbox(&pool, member, None, 20)
         .await
         .unwrap();
     assert_eq!(inbox.unread_count, 1);
@@ -2433,24 +2484,18 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     assert!(inbox.items[0]
         .href
         .ends_with(&format!("#post-{watched_seq}")));
-    assert!(!inbox.items[0].href.contains("member_b"));
-    assert!(projections::public_inbox(&pool, "author_a", None, 20)
+    assert!(!inbox.items[0].href.contains(&member.to_string()));
+    assert!(projections::public_inbox(&pool, author, None, 20)
         .await
         .unwrap()
         .items
         .is_empty());
 
-    projections::advance_subscription_read_cursor(
-        &pool,
-        target.clone(),
-        "member_b",
-        watched_seq,
-        7,
-    )
-    .await
-    .unwrap();
+    projections::advance_subscription_read_cursor(&pool, target.clone(), member, watched_seq, 7)
+        .await
+        .unwrap();
     assert_eq!(
-        projections::public_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, member, None, 20)
             .await
             .unwrap()
             .unread_count,
@@ -2470,7 +2515,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             "DiscussionPostSubmitted",
             1,
             serde_json::json!({ "body": "Moderated watched reply", "author_profile_id": profile }),
-            ActorId::Principal("author_a".into()),
+            ActorId::Principal(author),
             8,
         )],
     )
@@ -2489,7 +2534,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         &pool,
         moderation_target,
         Uuid::new_v4(),
-        "reporter",
+        reporter,
         ReportReasonFamily::Spam,
         "spam".into(),
         9,
@@ -2519,13 +2564,13 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         case.case_id,
         case_state.version,
         hidden,
-        "moderator",
+        moderator,
         10,
     )
     .await
     .unwrap();
     assert_eq!(
-        projections::public_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, member, None, 20)
             .await
             .unwrap()
             .unread_count,
@@ -2547,20 +2592,20 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         case.case_id,
         case_state.version,
         restored,
-        "moderator",
+        moderator,
         11,
     )
     .await
     .unwrap();
     assert_eq!(
-        projections::public_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, member, None, 20)
             .await
             .unwrap()
             .unread_count,
         1
     );
 
-    projections::unsubscribe_from_public_target(&pool, target.clone(), "member_b", 12)
+    projections::unsubscribe_from_public_target(&pool, target.clone(), member, 12)
         .await
         .unwrap();
     let version = discussion_topic_by_id(&pool, topic)
@@ -2576,21 +2621,20 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             "DiscussionPostSubmitted",
             1,
             serde_json::json!({ "body": "Unwatched reply", "author_profile_id": profile }),
-            ActorId::Principal("author_a".into()),
+            ActorId::Principal(author),
             13,
         )],
     )
     .await
     .unwrap();
-    let before_resubscribe = projections::public_inbox(&pool, "member_b", None, 20)
+    let before_resubscribe = projections::public_inbox(&pool, member, None, 20)
         .await
         .unwrap()
         .items
         .len();
-    let resubscribed =
-        projections::subscribe_to_public_target(&pool, target.clone(), "member_b", 14)
-            .await
-            .unwrap();
+    let resubscribed = projections::subscribe_to_public_target(&pool, target.clone(), member, 14)
+        .await
+        .unwrap();
     assert_eq!(
         resubscribed.read_through_seq,
         resubscribed.latest_source_seq
@@ -2598,7 +2642,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
 
     rebuild_discussion_stream(&pool, topic).await.unwrap();
     assert_eq!(
-        projections::public_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, member, None, 20)
             .await
             .unwrap()
             .items
@@ -2606,8 +2650,9 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         before_resubscribe
     );
     let subscription_id: Uuid = sqlx::query_scalar(
-        "SELECT subscription_id FROM public_watch WHERE principal_user_id = 'member_b' AND surface_id = $1",
+        "SELECT subscription_id FROM public_watch WHERE principal_id = $1 AND surface_id = $2",
     )
+    .bind(member.as_uuid())
     .bind(topic)
     .fetch_one(&pool)
     .await
@@ -2616,7 +2661,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         .await
         .unwrap();
     assert_eq!(
-        projections::public_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, member, None, 20)
             .await
             .unwrap()
             .items
@@ -2632,8 +2677,8 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
             EventInput::new(
                 "GameCreated",
                 1,
-                test_game_created_payload("host", "watch_pack"),
-                ActorId::Principal("host".into()),
+                test_game_created_payload(&host.to_string(), "watch_pack"),
+                ActorId::Principal(host),
                 15,
             ),
             EventInput::new(
@@ -2648,7 +2693,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     .await
     .unwrap();
     let game_target = WatchTarget { surface_id: game };
-    projections::subscribe_to_public_target(&pool, game_target, "member_b", 17)
+    projections::subscribe_to_public_target(&pool, game_target, member, 17)
         .await
         .unwrap();
     append_and_project(
@@ -2681,7 +2726,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
         game_post_author_profile_id, None,
         "public game posts never carry profile attribution"
     );
-    let game_items = projections::public_inbox(&pool, "member_b", None, 20)
+    let game_items = projections::public_inbox(&pool, member, None, 20)
         .await
         .unwrap()
         .items
@@ -2691,7 +2736,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     assert_eq!(game_items, 0);
     rebuild(&pool, game).await.unwrap();
     assert_eq!(
-        projections::public_inbox(&pool, "member_b", None, 20)
+        projections::public_inbox(&pool, member, None, 20)
             .await
             .unwrap()
             .items
@@ -2929,7 +2974,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
                 "title": "General",
                 "description": "Public discussion"
             }),
-            ActorId::Principal("moderator".into()),
+            ActorId::Principal(fixture_principal_id("moderator")),
             1,
         )],
     )
@@ -2947,14 +2992,14 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
                     "title": "Welcome",
                     "author_profile_id": member_profile
                 }),
-                ActorId::Principal("member".into()),
+                ActorId::Principal(fixture_principal_id("member")),
                 2,
             ),
             EventInput::new(
                 "DiscussionPostSubmitted",
                 1,
                 serde_json::json!({ "body": "First public post", "author_profile_id": member_profile }),
-                ActorId::Principal("member".into()),
+                ActorId::Principal(fixture_principal_id("member")),
                 3,
             ),
         ],
@@ -2973,14 +3018,14 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
                     "title": "Hidden",
                     "author_profile_id": member_profile
                 }),
-                ActorId::Principal("member".into()),
+                ActorId::Principal(fixture_principal_id("member")),
                 4,
             ),
             EventInput::new(
                 "DiscussionTopicVisibilityChanged",
                 1,
                 serde_json::json!({ "visibility": "hidden" }),
-                ActorId::Principal("moderator".into()),
+                ActorId::Principal(fixture_principal_id("moderator")),
                 5,
             ),
         ],
@@ -3016,7 +3061,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
             "DiscussionTopicPostingStateChanged",
             1,
             serde_json::json!({ "posting_state": "locked" }),
-            ActorId::Principal("moderator".into()),
+            ActorId::Principal(fixture_principal_id("moderator")),
             6,
         )],
     )
@@ -3030,7 +3075,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
             "DiscussionPostSubmitted",
             1,
             serde_json::json!({ "body": "stale reply", "author_profile_id": member_profile }),
-            ActorId::Principal("member".into()),
+            ActorId::Principal(fixture_principal_id("member")),
             7,
         )],
     )
@@ -3087,12 +3132,15 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool: sqlx::PgPool) {
+    let reader = auxiliary_principal(0x2401);
+    let author = auxiliary_principal(0x2402);
+    let moderator = auxiliary_principal(0x2403);
     let area = Uuid::from_u128(142);
     let topic = Uuid::from_u128(143);
-    ensure_test_principal(&pool, "reader").await;
-    let _reader_profile = create_test_profile(
+    ensure_auxiliary_principal(&pool, reader).await;
+    let _reader_profile = create_auxiliary_profile(
         &pool,
-        "reader",
+        reader,
         "reader",
         "Reader",
         "Reader profile",
@@ -3100,10 +3148,10 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         1,
     )
     .await;
-    ensure_test_principal(&pool, "orchid_author").await;
-    let target_profile = create_test_profile(
+    ensure_auxiliary_principal(&pool, author).await;
+    let target_profile = create_auxiliary_profile(
         &pool,
-        "orchid_author",
+        author,
         "orchid_author",
         "Orchid Author",
         "Orchid public profile",
@@ -3122,7 +3170,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
                 "title": "Orchids",
                 "description": "Orchid discussion"
             }),
-            ActorId::Principal("moderator".into()),
+            ActorId::Principal(moderator),
             2,
         )],
     )
@@ -3140,7 +3188,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
                     "title": "Orchid signals",
                     "author_profile_id": target_profile
                 }),
-                ActorId::Principal("orchid_author".into()),
+                ActorId::Principal(author),
                 3,
             ),
             EventInput::new(
@@ -3150,7 +3198,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
                     "body": "Opening orchid signal",
                     "author_profile_id": target_profile
                 }),
-                ActorId::Principal("orchid_author".into()),
+                ActorId::Principal(author),
                 4,
             ),
         ],
@@ -3158,7 +3206,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
     .await
     .unwrap();
     let subscription_target = WatchTarget { surface_id: topic };
-    projections::subscribe_to_public_target(&pool, subscription_target.clone(), "reader", 5)
+    projections::subscribe_to_public_target(&pool, subscription_target.clone(), reader, 5)
         .await
         .unwrap();
     let version = discussion_topic_by_id(&pool, topic)
@@ -3177,46 +3225,46 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
                 "body": "Watched orchid reply",
                 "author_profile_id": target_profile
             }),
-            ActorId::Principal("orchid_author".into()),
+            ActorId::Principal(author),
             6,
         )],
     )
     .await
     .unwrap();
     assert_eq!(
-        projections::public_inbox(&pool, "reader", None, 20)
+        projections::public_inbox(&pool, reader, None, 20)
             .await
             .unwrap()
             .unread_count,
         1
     );
 
-    let muted = projections::mute_public_profile(&pool, "reader", "orchid_author", 7)
+    let muted = projections::mute_public_profile(&pool, reader, "orchid_author", 7)
         .await
         .unwrap();
     assert!(muted.muted);
     assert!(matches!(
-        projections::mute_public_profile(&pool, "reader", "orchid_author", 8).await,
+        projections::mute_public_profile(&pool, reader, "orchid_author", 8).await,
         Err(ProjectionError::AlreadyMuted)
     ));
     assert!(matches!(
-        projections::mute_public_profile(&pool, "reader", "reader", 8).await,
+        projections::mute_public_profile(&pool, reader, "reader", 8).await,
         Err(ProjectionError::CannotMuteSelf)
     ));
     assert_eq!(
-        projections::member_mutes(&pool, "reader", None, 20)
+        projections::member_mutes(&pool, reader, None, 20)
             .await
             .unwrap()
             .members
             .len(),
         1
     );
-    assert!(discussion_topics(&pool, area, None, 20, Some("reader"))
+    assert!(discussion_topics(&pool, area, None, 20, Some(reader))
         .await
         .unwrap()
         .topics
         .is_empty());
-    assert!(discussion_posts(&pool, topic, None, 20, Some("reader"))
+    assert!(discussion_posts(&pool, topic, None, 20, Some(reader))
         .await
         .unwrap()
         .posts
@@ -3227,7 +3275,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         PublicSearchFilter::All,
         None,
         20,
-        Some("reader"),
+        Some(reader),
     )
     .await
     .unwrap()
@@ -3240,30 +3288,30 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
             .results
             .is_empty()
     );
-    assert!(projections::public_inbox(&pool, "reader", None, 20)
+    assert!(projections::public_inbox(&pool, reader, None, 20)
         .await
         .unwrap()
         .items
         .is_empty());
     assert_eq!(
-        projections::subscription_target_state(&pool, "reader", subscription_target.clone())
+        projections::subscription_target_state(&pool, reader, subscription_target.clone())
             .await
             .unwrap()
             .unread_count,
         0
     );
 
-    let relationship_id: Uuid = sqlx::query_scalar(
-        "SELECT relationship_id FROM profile_mute WHERE principal_user_id = 'reader'",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let relationship_id: Uuid =
+        sqlx::query_scalar("SELECT relationship_id FROM profile_mute WHERE principal_id = $1")
+            .bind(reader.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     projections::rebuild_member_mute_stream(&pool, relationship_id)
         .await
         .unwrap();
     assert_eq!(
-        projections::member_mutes(&pool, "reader", None, 20)
+        projections::member_mutes(&pool, reader, None, 20)
             .await
             .unwrap()
             .members
@@ -3271,12 +3319,12 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         1
     );
 
-    let unmuted = projections::unmute_public_profile(&pool, "reader", "orchid_author", 9)
+    let unmuted = projections::unmute_public_profile(&pool, reader, "orchid_author", 9)
         .await
         .unwrap();
     assert!(!unmuted.muted);
     assert!(
-        discussion_posts(&pool, topic, None, 20, Some("reader"))
+        discussion_posts(&pool, topic, None, 20, Some(reader))
             .await
             .unwrap()
             .posts
@@ -3284,52 +3332,52 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
             >= 2
     );
     assert_eq!(
-        projections::public_inbox(&pool, "reader", None, 20)
+        projections::public_inbox(&pool, reader, None, 20)
             .await
             .unwrap()
             .unread_count,
         1
     );
     assert!(matches!(
-        projections::unmute_public_profile(&pool, "reader", "orchid_author", 10).await,
+        projections::unmute_public_profile(&pool, reader, "orchid_author", 10).await,
         Err(ProjectionError::NotMuted)
     ));
     projections::rebuild_member_mute_stream(&pool, relationship_id)
         .await
         .unwrap();
-    assert!(projections::member_mutes(&pool, "reader", None, 20)
+    assert!(projections::member_mutes(&pool, reader, None, 20)
         .await
         .unwrap()
         .members
         .is_empty());
 
-    let remuted = projections::mute_public_profile(&pool, "reader", "orchid_author", 11)
+    let remuted = projections::mute_public_profile(&pool, reader, "orchid_author", 11)
         .await
         .unwrap();
     assert!(remuted.muted);
-    update_test_profile(
+    profile_application::update_profile(
         &pool,
-        TestProfileUpdate {
-            profile_id: target_profile,
-            principal: "orchid_author",
-            expected_revision: 1,
-            edit: test_profile_edit(
-                "Orchid Author",
-                "Orchid public profile",
-                ProfileVisibility::Private,
-            ),
-            occurred_at: 12,
-        },
+        ProfileId::from_uuid(target_profile),
+        author,
+        ProfileRevision::new(1),
+        test_profile_edit(
+            "Orchid Author",
+            "Orchid public profile",
+            ProfileVisibility::Private,
+        ),
+        12,
     )
-    .await;
+    .await
+    .unwrap();
     assert!(public_profile_by_handle(&pool, "orchid_author")
         .await
         .unwrap()
         .is_none());
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM profile_mute WHERE principal_user_id = 'reader' AND target_profile_id = $1",
+            "SELECT COUNT(*) FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
         )
+        .bind(reader.as_uuid())
         .bind(target_profile)
         .fetch_one(&pool)
         .await
@@ -3337,17 +3385,17 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         0,
         "a private profile has no remaining public mute target",
     );
-    assert!(projections::member_mutes(&pool, "reader", None, 20)
+    assert!(projections::member_mutes(&pool, reader, None, 20)
         .await
         .unwrap()
         .members
         .is_empty());
     assert!(matches!(
-        projections::member_mute_state(&pool, "reader", "orchid_author").await,
+        projections::member_mute_state(&pool, reader, "orchid_author").await,
         Err(ProjectionError::MuteTargetNotPublic)
     ));
     assert!(matches!(
-        projections::mute_public_profile(&pool, "reader", "orchid_author", 13).await,
+        projections::mute_public_profile(&pool, reader, "orchid_author", 13).await,
         Err(ProjectionError::MuteTargetNotPublic)
     ));
 }
@@ -3388,8 +3436,8 @@ async fn profile_projection_keeps_owner_state_private_and_rebuildable(pool: sqlx
     .await
     .unwrap();
     assert_eq!(
-        metadata.get::<Option<String>, _>("active_principal_id"),
-        Some("owner_a".to_string())
+        metadata.get::<Option<Uuid>, _>("active_principal_id"),
+        Some(fixture_principal_id("owner_a").as_uuid())
     );
     assert_eq!(metadata.get::<String, _>("lifecycle"), "active");
     assert_eq!(metadata.get::<Option<String>, _>("redacted_alias"), None);
@@ -3414,8 +3462,8 @@ async fn profile_projection_keeps_owner_state_private_and_rebuildable(pool: sqlx
     .await
     .unwrap();
     assert_eq!(
-        rebuilt.get::<Option<String>, _>("active_principal_id"),
-        Some("owner_a".to_string())
+        rebuilt.get::<Option<Uuid>, _>("active_principal_id"),
+        Some(fixture_principal_id("owner_a").as_uuid())
     );
     assert_eq!(rebuilt.get::<String, _>("lifecycle"), "active");
     assert_eq!(rebuilt.get::<Option<String>, _>("redacted_alias"), None);
@@ -3442,7 +3490,7 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
             "GameCreated",
             1,
             test_game_created_payload("export_host", "archived_removed_pack"),
-            ActorId::Principal("export_host".into()),
+            ActorId::Principal(fixture_principal_id("export_host")),
             1,
         )],
     )
@@ -3477,8 +3525,8 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
     assert_eq!(export.detached_subject_aliases.len(), 1);
     let detached_alias = export.detached_subject_aliases[0].detached_alias.clone();
     let subject_id: Uuid =
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(&principal)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(fixture_principal_id(&principal).as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -3635,20 +3683,23 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
         .await
         .unwrap();
     let collision_alias = "Global tombstone collision must not win";
+    let collision_principal = fixture_principal_id("unrelated-collision-principal");
     sqlx::query(
         "INSERT INTO platform_principal \
-         (principal_user_id, status, created_at, disabled_at) \
-         VALUES ('unrelated-collision-principal', 'disabled', 1, 2)",
+         (principal_id, status, created_at, disabled_at) \
+         VALUES ($1, 'disabled', 1, 2)",
     )
+    .bind(collision_principal.as_uuid())
     .execute(&target)
     .await
     .unwrap();
     sqlx::query(
         "INSERT INTO privacy_subject \
-         (subject_id, principal_user_id, created_at, lifecycle_state) \
-         VALUES ($1, 'unrelated-collision-principal', 1, 'erased')",
+         (subject_id, principal_id, created_at, lifecycle_state) \
+         VALUES ($1, $2, 1, 'erased')",
     )
     .bind(subject_id)
+    .bind(collision_principal.as_uuid())
     .execute(&target)
     .await
     .unwrap();

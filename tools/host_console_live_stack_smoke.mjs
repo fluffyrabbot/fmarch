@@ -5,10 +5,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
@@ -38,6 +35,7 @@ import {
   createLiveStackFixtureTools,
   sqlLiteral,
 } from "./live_stack/fixture.mjs";
+import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 import {
   buildSetupCommandEvidence,
   selectHostSetupStage,
@@ -89,6 +87,55 @@ const {
 });
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const fixtureAliasByPrincipalId = new Map();
+const PLAYER_MIRA_PRINCIPAL_ID = principalFixtureId("player-mira");
+const PLAYER_ROWAN_PRINCIPAL_ID = principalFixtureId("player-rowan");
+
+function authorityPrincipalId(aliasOrId) {
+  const value = String(aliasOrId);
+  if (isPrincipalId(value)) return value;
+  const principalId = principalFixtureId(value);
+  fixtureAliasByPrincipalId.set(principalId, value);
+  return principalId;
+}
+
+function preserveFixturePrincipalAliases(value) {
+  if (typeof value === "string") {
+    return fixtureAliasByPrincipalId.get(value) ?? value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(preserveFixturePrincipalAliases);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        preserveFixturePrincipalAliases(item),
+      ]),
+    );
+  }
+  return value;
+}
+
+function commandForAuthorityTransport(command) {
+  const transport = structuredClone(command);
+  const commandBody = Object.values(transport)[0];
+  if (commandBody === undefined || commandBody === null) return transport;
+  if ("SeatPersona" in transport) {
+    commandBody.principal_id = authorityPrincipalId(commandBody.principal_id);
+  } else if ("ProcessReplacement" in transport) {
+    commandBody.incoming_principal_id = authorityPrincipalId(
+      commandBody.incoming_principal_id,
+    );
+  } else if (
+    "AddCohost" in transport ||
+    "GrantSpectator" in transport ||
+    "RevokeSpectator" in transport
+  ) {
+    commandBody.principal_id = authorityPrincipalId(commandBody.principal_id);
+  }
+  return transport;
+}
 const game = crypto.randomUUID();
 const actionGame = crypto.randomUUID();
 const additionalRoomsGame = crypto.randomUUID();
@@ -133,15 +180,15 @@ const additionalRoomDefinitions = Object.freeze([
     revealsAlignment: "Town",
     outgoing: Object.freeze({
       slotId: "mason-1",
-      principalUserId: "rooms-mason-outgoing",
+      principalId: "rooms-mason-outgoing",
       sessionToken: `host-console-live-stack-mason-outgoing-${crypto.randomUUID()}`,
     }),
     peer: Object.freeze({
       slotId: "mason-2",
-      principalUserId: "rooms-mason-peer",
+      principalId: "rooms-mason-peer",
     }),
     incoming: Object.freeze({
-      principalUserId: "rooms-mason-incoming",
+      principalId: "rooms-mason-incoming",
       sessionToken: `host-console-live-stack-mason-incoming-${crypto.randomUUID()}`,
     }),
     historyBody: "Mason room history before replacement",
@@ -156,15 +203,15 @@ const additionalRoomDefinitions = Object.freeze([
     revealsAlignment: "None",
     outgoing: Object.freeze({
       slotId: "neighbor-1",
-      principalUserId: "rooms-neighbor-outgoing",
+      principalId: "rooms-neighbor-outgoing",
       sessionToken: `host-console-live-stack-neighbor-outgoing-${crypto.randomUUID()}`,
     }),
     peer: Object.freeze({
       slotId: "neighbor-2",
-      principalUserId: "rooms-neighbor-peer",
+      principalId: "rooms-neighbor-peer",
     }),
     incoming: Object.freeze({
-      principalUserId: "rooms-neighbor-incoming",
+      principalId: "rooms-neighbor-incoming",
       sessionToken: `host-console-live-stack-neighbor-incoming-${crypto.randomUUID()}`,
     }),
     historyBody: "Neighbor room history before replacement",
@@ -174,7 +221,7 @@ const additionalRoomDefinitions = Object.freeze([
 ]);
 const additionalRoomOutsider = Object.freeze({
   slotId: "rooms-outsider-1",
-  principalUserId: "rooms-outsider",
+  principalId: "rooms-outsider",
   sessionToken: `host-console-live-stack-rooms-outsider-${crypto.randomUUID()}`,
 });
 const deadChatDefinition = Object.freeze({
@@ -182,16 +229,16 @@ const deadChatDefinition = Object.freeze({
   route: "dead",
   outgoing: Object.freeze({
     slotId: "dead-slot",
-    principalUserId: "dead-chat-outgoing",
+    principalId: "dead-chat-outgoing",
     sessionToken: `host-console-live-stack-dead-outgoing-${crypto.randomUUID()}`,
   }),
   incoming: Object.freeze({
-    principalUserId: "dead-chat-incoming",
+    principalId: "dead-chat-incoming",
     sessionToken: `host-console-live-stack-dead-incoming-${crypto.randomUUID()}`,
   }),
   living: Object.freeze({
     slotId: "living-slot",
-    principalUserId: "dead-chat-living",
+    principalId: "dead-chat-living",
     sessionToken: `host-console-live-stack-dead-living-${crypto.randomUUID()}`,
   }),
   historyBody: "Dead-chat history before replacement",
@@ -201,7 +248,7 @@ const deadChatDefinition = Object.freeze({
 const spectatorDefinition = Object.freeze({
   channelId: "spectator",
   route: "spectator",
-  principalUserId: "spectator-room-user",
+  principalId: "spectator-room-user",
   sessionToken: `host-console-live-stack-spectator-${crypto.randomUUID()}`,
   historyBody: "Host notice preserved for spectators",
   liveBody: "Second host notice delivered live to spectators",
@@ -212,7 +259,7 @@ const accountOnlyFixturePrincipals = Object.freeze([
   "player-town-extra",
   "action-target",
   "action-town",
-  ...additionalRoomDefinitions.map((room) => room.peer.principalUserId),
+  ...additionalRoomDefinitions.map((room) => room.peer.principalId),
 ]);
 const factionDayChatUploadAsset = Object.freeze({
   contentAddress: "live-stack-private-upload-source",
@@ -250,17 +297,32 @@ const liveStackAuth = createLiveStackAuth({
   fetchJson,
   rootAdminSessionToken,
 });
-const { createAuthAccount } = liveStackAuth;
-const createAccountSession = async ({ sessionAlias, ...options }) =>
-  registerIssuedSession(sessionAlias, await liveStackAuth.createAccountSession(options));
-const createGrantedSession = async ({ sessionAlias, ...options }) =>
-  registerIssuedSession(sessionAlias, await liveStackAuth.createGrantedSession(options));
-const sendCommand = createLiveStackCommandSender({
+const createAuthAccount = async ({ principalId, ...options }) =>
+  await liveStackAuth.createAuthAccount({
+    ...options,
+    principalId: authorityPrincipalId(principalId),
+  });
+const createAccountSession = async ({ sessionAlias, principalId, ...options }) => {
+  const session = await liveStackAuth.createAccountSession({
+    ...options,
+    principalId: authorityPrincipalId(principalId),
+  });
+  return registerIssuedSession(sessionAlias, { ...session, principalId });
+};
+const createGrantedSession = async ({ sessionAlias, principalId, ...options }) => {
+  const session = await liveStackAuth.createGrantedSession({
+    ...options,
+    principalId: authorityPrincipalId(principalId),
+  });
+  return registerIssuedSession(sessionAlias, { ...session, principalId });
+};
+const rawSendCommand = createLiveStackCommandSender({
   apiBaseUrl,
   fetchJson,
   nextEnvelopeId: () => commandEnvelopeId++,
-  sessionTokenForPrincipal: (principalUserId) =>
-    resolveSessionToken(({
+  sessionTokenForPrincipal: (principalId) => {
+    const alias = fixtureAliasByPrincipalId.get(principalId) ?? principalId;
+    return resolveSessionToken(({
       host_h: hostSessionToken,
       admin_a: adminSessionToken,
       "player-mira": playerSessionToken,
@@ -270,8 +332,13 @@ const sendCommand = createLiveStackCommandSender({
       "player-goon-a": racePlayerSessionToken,
       "player-goon-b": goonBSessionToken,
       "action-goon": actionPlayerSessionToken,
-    })[principalUserId]),
+    })[alias]);
+  },
 });
+const sendCommand = async (principalId, command) =>
+  preserveFixturePrincipalAliases(
+    await rawSendCommand(principalId, commandForAuthorityTransport(command)),
+  );
 let server;
 let vite;
 let browser;
@@ -306,7 +373,7 @@ try {
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...applicationDatabaseEnvironment({ applicationUrl: smokeDatabase.applicationUrl }),
+      ...serverRuntimeEnvironment({ applicationUrl: smokeDatabase.applicationUrl }),
       FMARCH_BIND: `${host}:${apiPort}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_SUBJECT_KEY_DIR: subjectKeyRoot,
@@ -358,7 +425,7 @@ try {
     grantedSessions = {
       host: await createGrantedSession({
         sessionAlias: hostSessionToken,
-        principalUserId: "host_h",
+        principalId: "host_h",
         globalCapabilities: ["GlobalAdmin"],
       }),
     };
@@ -835,18 +902,18 @@ async function seedAdditionalRoomsGame() {
     ...additionalRoomDefinitions.flatMap((room) => [
       {
         slotId: room.outgoing.slotId,
-        principalUserId: room.outgoing.principalUserId,
+        principalId: room.outgoing.principalId,
         roleKey: room.id,
       },
       {
         slotId: room.peer.slotId,
-        principalUserId: room.peer.principalUserId,
+        principalId: room.peer.principalId,
         roleKey: room.id,
       },
     ]),
     {
       slotId: additionalRoomOutsider.slotId,
-      principalUserId: additionalRoomOutsider.principalUserId,
+      principalId: additionalRoomOutsider.principalId,
       roleKey: "vanilla_townie",
     },
   ];
@@ -859,7 +926,7 @@ async function seedAdditionalRoomsGame() {
         SeatPersona: {
           game: additionalRoomsGame,
           slot: occupant.slotId,
-          principal_id: occupant.principalUserId, public_name: occupant.principalUserId,
+          principal_id: occupant.principalId, public_name: occupant.principalId,
         },
       }),
       await sendCommand("host_h", {
@@ -910,12 +977,12 @@ async function seedAdditionalRoomsGame() {
       channelId: room.channelId,
       revealsAlignment: room.revealsAlignment,
       declaredMemberSlots: [room.outgoing.slotId, room.peer.slotId],
-      outgoingPrincipalUserId: room.outgoing.principalUserId,
-      incomingPrincipalId: room.incoming.principalUserId,
+      outgoingPrincipalUserId: room.outgoing.principalId,
+      incomingPrincipalId: room.incoming.principalId,
     })),
     outsider: {
       slotId: additionalRoomOutsider.slotId,
-      principalUserId: additionalRoomOutsider.principalUserId,
+      principalId: additionalRoomOutsider.principalId,
     },
     boundary:
       "The mafiascum pack declared occupied Mason and Neighbor role groups through StartGame; no test-only private_channel_member rows were inserted.",
@@ -938,7 +1005,7 @@ async function seedDeadChatGame() {
         SeatPersona: {
           game: deadChatGame,
           slot: occupant.slotId,
-          principal_id: occupant.principalUserId, public_name: occupant.principalUserId,
+          principal_id: occupant.principalId, public_name: occupant.principalId,
         },
       }),
       await sendCommand("host_h", {
@@ -1008,35 +1075,17 @@ async function seedFactionDayChatFixture() {
 }
 
 async function seedRootAdminSession() {
+  const rootPrincipalId = authorityPrincipalId("root_admin");
   await runSql(smokeDatabase.applicationUrl, `
     INSERT INTO platform_principal (
-      principal_user_id, status, global_capabilities, created_at, disabled_at
-    ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
-    ON CONFLICT (principal_user_id) DO NOTHING;
-  `);
-  await runSql(smokeDatabase.applicationUrl, `
-    INSERT INTO auth_account (
-      account_id,
-      principal_user_id,
-      password_hash,
-      created_at,
-      disabled_at,
-      global_capabilities
-    )
-    VALUES (
-      'host-console-root-admin@local.fmarch.test',
-      'root_admin',
-      'seed-only-not-a-real-hash',
-      0,
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[]
-    )
-    ON CONFLICT (account_id) DO NOTHING;
+      principal_id, status, global_capabilities, created_at, disabled_at
+    ) VALUES (${sqlLiteral(rootPrincipalId)}, 'active', ARRAY[]::TEXT[], 0, NULL)
+    ON CONFLICT (principal_id) DO NOTHING;
   `);
   await runSql(smokeDatabase.applicationUrl, `
     INSERT INTO auth_session (
       token_hash,
-      principal_user_id,
+      principal_id,
       created_at,
       expires_at,
       revoked_at,
@@ -1047,7 +1096,7 @@ async function seedRootAdminSession() {
     )
     VALUES (
       ${sqlLiteral(hashSessionToken(rootAdminSessionToken))},
-      'root_admin',
+      ${sqlLiteral(rootPrincipalId)},
       0,
       4102444800,
       NULL,
@@ -1057,7 +1106,7 @@ async function seedRootAdminSession() {
       0
     )
     ON CONFLICT (token_hash) DO UPDATE SET
-      principal_user_id = EXCLUDED.principal_user_id,
+      principal_id = EXCLUDED.principal_id,
       expires_at = EXCLUDED.expires_at,
       revoked_at = NULL,
       global_capabilities = EXCLUDED.global_capabilities,
@@ -1077,7 +1126,7 @@ async function seedRootAdminSession() {
     );
   }
   return {
-    principalUserId: session.principal_user_id,
+    principalId: session.principal_id,
     capabilityKinds,
     boundary:
       "root GlobalAdmin is seeded directly into the scratch auth_session table so the live browser proof can keep /auth/dev-session disabled and mint all browser tokens through /auth/session-grants",
@@ -1098,58 +1147,58 @@ async function createGrantedSessions() {
   return {
     admin: await createGrantedSession({
       sessionAlias: adminSessionToken,
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
     host: await createGrantedSession({
       sessionAlias: hostSessionToken,
-      principalUserId: "host_h",
+      principalId: "host_h",
       globalCapabilities: ["GlobalAdmin"],
     }),
     player: await createAccountSession({
       sessionAlias: playerSessionToken,
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       label: "player-mira",
     }),
     rolePmIncoming: await createAccountSession({
       sessionAlias: rolePmIncomingSessionToken,
-      principalUserId: "player-rowan",
+      principalId: "player-rowan",
       label: "role-pm-incoming",
       accountId: rolePmIncomingAccountId,
     }),
     actionPlayer: await createGrantedSession({
       sessionAlias: actionPlayerSessionToken,
-      principalUserId: "action-goon",
+      principalId: "action-goon",
     }),
     racePlayer: await createGrantedSession({
       sessionAlias: racePlayerSessionToken,
-      principalUserId: "player-goon-a",
+      principalId: "player-goon-a",
     }),
     seedPlayer: await createGrantedSession({
       sessionAlias: seedPlayerSessionToken,
-      principalUserId: "player-seed",
+      principalId: "player-seed",
     }),
     targetPlayer: await createGrantedSession({
       sessionAlias: targetPlayerSessionToken,
-      principalUserId: "player-target",
+      principalId: "player-target",
     }),
     goonB: await createGrantedSession({
       sessionAlias: goonBSessionToken,
-      principalUserId: "player-goon-b",
+      principalId: "player-goon-b",
     }),
     cohost: await createGrantedSession({
       sessionAlias: cohostSessionToken,
-      principalUserId: "cohost_c",
+      principalId: "cohost_c",
     }),
   };
 }
 
 async function provisionAccountOnlyFixturePrincipals() {
-  for (const principalUserId of accountOnlyFixturePrincipals) {
+  for (const principalId of accountOnlyFixturePrincipals) {
     await createAuthAccount({
-      accountId: `live-stack-fixture-${principalUserId}-${crypto.randomUUID()}@example.test`,
-      password: `live-stack fixture password ${principalUserId} ${crypto.randomUUID()}`,
-      principalUserId,
+      accountId: `live-stack-fixture-${principalId}-${crypto.randomUUID()}@example.test`,
+      password: `live-stack fixture password ${principalId} ${crypto.randomUUID()}`,
+      principalId,
     });
   }
   return [...accountOnlyFixturePrincipals];
@@ -1161,12 +1210,12 @@ async function createAdditionalRoomSessions() {
     rooms[room.id] = {
       outgoing: await createAccountSession({
         sessionAlias: room.outgoing.sessionToken,
-        principalUserId: room.outgoing.principalUserId,
+        principalId: room.outgoing.principalId,
         label: `${room.id}-outgoing`,
       }),
       incoming: await createAccountSession({
         sessionAlias: room.incoming.sessionToken,
-        principalUserId: room.incoming.principalUserId,
+        principalId: room.incoming.principalId,
         label: `${room.id}-incoming`,
       }),
     };
@@ -1175,7 +1224,7 @@ async function createAdditionalRoomSessions() {
     rooms,
     outsider: await createAccountSession({
       sessionAlias: additionalRoomOutsider.sessionToken,
-      principalUserId: additionalRoomOutsider.principalUserId,
+      principalId: additionalRoomOutsider.principalId,
       label: "additional-rooms-outsider",
     }),
     boundary:
@@ -1187,17 +1236,17 @@ async function createDeadChatSessions() {
   return {
     outgoing: await createAccountSession({
       sessionAlias: deadChatDefinition.outgoing.sessionToken,
-      principalUserId: deadChatDefinition.outgoing.principalUserId,
+      principalId: deadChatDefinition.outgoing.principalId,
       label: "dead-chat-outgoing",
     }),
     incoming: await createAccountSession({
       sessionAlias: deadChatDefinition.incoming.sessionToken,
-      principalUserId: deadChatDefinition.incoming.principalUserId,
+      principalId: deadChatDefinition.incoming.principalId,
       label: "dead-chat-incoming",
     }),
     living: await createAccountSession({
       sessionAlias: deadChatDefinition.living.sessionToken,
-      principalUserId: deadChatDefinition.living.principalUserId,
+      principalId: deadChatDefinition.living.principalId,
       label: "dead-chat-living",
     }),
     boundary:
@@ -1208,7 +1257,7 @@ async function createDeadChatSessions() {
 async function createSpectatorSession() {
   return await createAccountSession({
     sessionAlias: spectatorDefinition.sessionToken,
-    principalUserId: spectatorDefinition.principalUserId,
+    principalId: spectatorDefinition.principalId,
     label: "spectator-room",
   });
 }
@@ -1756,7 +1805,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
         additionalRoomsGame,
         room.outgoing.slotId,
       ),
-      incoming_principal_id: room.incoming.principalUserId,
+      incoming_principal_id: room.incoming.principalId,
     },
   });
 
@@ -1873,7 +1922,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     frontendBaseUrl,
     room,
     token: room.outgoing.sessionToken,
-    principalUserId: room.outgoing.principalUserId,
+    principalId: room.outgoing.principalId,
     actorSlot: room.outgoing.slotId,
     mediaUrl: privateMediaUrl,
     expectedReject: "NotYourSlot",
@@ -1883,7 +1932,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     frontendBaseUrl,
     room,
     token: additionalRoomOutsider.sessionToken,
-    principalUserId: additionalRoomOutsider.principalUserId,
+    principalId: additionalRoomOutsider.principalId,
     actorSlot: additionalRoomOutsider.slotId,
     mediaUrl: privateMediaUrl,
     expectedReject: "NotAuthorized",
@@ -1899,7 +1948,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     pageUrl,
     declaredMemberSlots: [room.outgoing.slotId, room.peer.slotId],
     outgoing: {
-      principalUserId: room.outgoing.principalUserId,
+      principalId: room.outgoing.principalId,
       submitOutcome: outgoingOutcome,
       commandLiveDelta: outgoingLiveDelta,
       recoveredAfterReload: true,
@@ -1909,7 +1958,7 @@ async function driveAdditionalRoomLifecycle(frontendBaseUrl, room) {
     },
     replacement,
     incoming: {
-      principalUserId: room.incoming.principalUserId,
+      principalId: room.incoming.principalId,
       submitOutcome: incomingOutcome,
       initialLiveDelta: incomingInitialLiveDelta,
       commandLiveDelta: incomingCommandLiveDelta,
@@ -1935,7 +1984,7 @@ async function proveAdditionalRoomDenial({
   frontendBaseUrl,
   room,
   token,
-  principalUserId,
+  principalId,
   actorSlot,
   mediaUrl,
   expectedReject,
@@ -2001,7 +2050,7 @@ async function proveAdditionalRoomDenial({
   }
   await context.close();
   return {
-    principalUserId,
+    principalId,
     authenticatedSessionRemainedActive: true,
     routeStatus: routeResponse.status(),
     threadStatus: threadResponse.status,
@@ -2023,7 +2072,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   const preDeathOutgoing = await proveDeadChatDenial({
     frontendBaseUrl,
     token: deadChatDefinition.outgoing.sessionToken,
-    principalUserId: deadChatDefinition.outgoing.principalUserId,
+    principalId: deadChatDefinition.outgoing.principalId,
     actorSlot: deadChatDefinition.outgoing.slotId,
     expectedReject: "NotAuthorized",
     label: "pre-death outgoing",
@@ -2031,7 +2080,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   const preDeathLiving = await proveDeadChatDenial({
     frontendBaseUrl,
     token: deadChatDefinition.living.sessionToken,
-    principalUserId: deadChatDefinition.living.principalUserId,
+    principalId: deadChatDefinition.living.principalId,
     actorSlot: deadChatDefinition.living.slotId,
     expectedReject: "NotAuthorized",
     label: "pre-death living",
@@ -2222,7 +2271,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
         deadChatGame,
         deadChatDefinition.outgoing.slotId,
       ),
-      incoming_principal_id: deadChatDefinition.incoming.principalUserId,
+      incoming_principal_id: deadChatDefinition.incoming.principalId,
     },
   });
   const incomingContext = await browserContextWithSession(
@@ -2331,7 +2380,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   const staleOutgoing = await proveDeadChatDenial({
     frontendBaseUrl,
     token: deadChatDefinition.outgoing.sessionToken,
-    principalUserId: deadChatDefinition.outgoing.principalUserId,
+    principalId: deadChatDefinition.outgoing.principalId,
     actorSlot: deadChatDefinition.outgoing.slotId,
     mediaUrl: privateMediaUrl,
     expectedReject: "NotYourSlot",
@@ -2340,7 +2389,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   const living = await proveDeadChatDenial({
     frontendBaseUrl,
     token: deadChatDefinition.living.sessionToken,
-    principalUserId: deadChatDefinition.living.principalUserId,
+    principalId: deadChatDefinition.living.principalId,
     actorSlot: deadChatDefinition.living.slotId,
     mediaUrl: privateMediaUrl,
     expectedReject: "NotAuthorized",
@@ -2357,7 +2406,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
   const restoredAlive = await proveDeadChatDenial({
     frontendBaseUrl,
     token: deadChatDefinition.incoming.sessionToken,
-    principalUserId: deadChatDefinition.incoming.principalUserId,
+    principalId: deadChatDefinition.incoming.principalId,
     actorSlot: deadChatDefinition.outgoing.slotId,
     mediaUrl: privateMediaUrl,
     expectedReject: "NotAuthorized",
@@ -2390,7 +2439,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     death,
     derivedCapability: "DeadViewer(game)",
     outgoing: {
-      principalUserId: deadChatDefinition.outgoing.principalUserId,
+      principalId: deadChatDefinition.outgoing.principalId,
       submitOutcome: outgoingOutcome,
       commandLiveDelta: outgoingLiveDelta,
       recoveredAfterReload: true,
@@ -2400,7 +2449,7 @@ async function driveDeadChatBrowser(frontendBaseUrl, seed) {
     },
     replacement,
     incoming: {
-      principalUserId: deadChatDefinition.incoming.principalUserId,
+      principalId: deadChatDefinition.incoming.principalId,
       submitOutcome: incomingOutcome,
       initialLiveDelta: incomingInitialLiveDelta,
       commandLiveDelta: incomingCommandLiveDelta,
@@ -2456,7 +2505,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
   const grant = await sendCommand("host_h", {
     GrantSpectator: {
       game: spectatorGame,
-      user: spectatorDefinition.principalUserId,
+      principal_id: spectatorDefinition.principalId,
     },
   });
   const session = await fetchJson(`${apiBaseUrl}/auth/session?game=${spectatorGame}`, {
@@ -2674,7 +2723,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
   const revoke = await sendCommand("host_h", {
     RevokeSpectator: {
       game: spectatorGame,
-      user: spectatorDefinition.principalUserId,
+      principal_id: spectatorDefinition.principalId,
     },
   });
   const revokedRoute = await page.goto(pageUrl, { waitUntil: "networkidle" });
@@ -2729,7 +2778,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
   const sessionAfterRevoke = await fetchJson(`${apiBaseUrl}/auth/session`, {
     headers: { authorization: `Bearer ${spectatorDefinition.sessionToken}` },
   });
-  if (sessionAfterRevoke.principal_user_id !== spectatorDefinition.principalUserId) {
+  if (sessionAfterRevoke.principal_id !== spectatorDefinition.principalId) {
     throw new Error(
       `spectator account session did not remain active: ${JSON.stringify(sessionAfterRevoke)}`,
     );
@@ -2778,7 +2827,7 @@ async function driveSpectatorBrowser(frontendBaseUrl, seed) {
 async function proveDeadChatDenial({
   frontendBaseUrl,
   token,
-  principalUserId,
+  principalId,
   actorSlot,
   mediaUrl = null,
   expectedReject,
@@ -2850,7 +2899,7 @@ async function proveDeadChatDenial({
   }
   await context.close();
   return {
-    principalUserId,
+    principalId,
     authenticatedSessionRemainedActive: true,
     routeStatus: routeResponse.status(),
     threadStatus: threadResponse.status,
@@ -2967,7 +3016,7 @@ async function seedRolePmHistory(contentId) {
 async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl, privateMediaPath) {
   const deniedToken = targetPlayerSessionToken;
   const deniedSession = {
-    principalUserId: "player-target",
+    principalId: "player-target",
     authentication: "existing-enabled-account-session",
   };
   const context = await browser.newContext({ viewport: smokeViewport });
@@ -3272,11 +3321,11 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
     slotId: "slot-7",
     incomingSession: {
       accountId: rolePmIncomingAccountId,
-      principalUserId: fixture.incomingPrincipalId,
+      principalId: fixture.incomingPrincipalId,
       authentication: "enabled-account-login",
     },
     incoming: {
-      principalUserId: "player-rowan",
+      principalId: "player-rowan",
       commandStatus,
       submitOutcome,
       initialLiveDelta,
@@ -3286,7 +3335,7 @@ async function driveRolePmReplacementBrowser(frontendBaseUrl, fixture) {
       mediaBodyBytes: incomingMediaBytes.byteLength,
     },
     outgoing: {
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       authenticatedSessionRemainedActive: true,
       routeStatus: deniedRoute.status(),
       threadStatus: staleThreadResponse.status,
@@ -3379,7 +3428,8 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   }
 
   const slotId = "slot_1";
-  const principalUserId = "player-mira";
+  const principalId = "player-mira";
+  const authorityId = authorityPrincipalId(principalId);
   const publicName = "Mira";
   const roleKey = "vanilla_townie";
   const addSlotForm = page.getByTestId("host-setup-add-slot-form");
@@ -3407,8 +3457,8 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   const rosterRow = page.getByTestId(`host-setup-slot-${slotId}`);
   await rosterRow.waitFor({ state: "visible" });
   await rosterRow
-    .locator('input[name="principalUserId"]')
-    .fill(principalUserId);
+    .locator('input[name="principalId"]')
+    .fill(authorityId);
   await rosterRow.locator('input[name="publicName"]').fill(publicName);
   const assignSlotButton = rosterRow.getByRole("button", {
     name: "Assign player",
@@ -3424,13 +3474,13 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
     commandPredicate: (command) =>
       command?.game === adminCreatedGame &&
       command?.slot === slotId &&
-      command?.principal_id === principalUserId &&
+      command?.principal_id === authorityId &&
       command?.public_name === publicName,
     statePredicate: (state) =>
       (state?.slots ?? []).some(
         (slot) =>
           slot.slotId === slotId &&
-          slot.assignedPrincipalId === principalUserId,
+          slot.assignedPrincipalId === authorityId,
       ),
   });
 
@@ -3558,7 +3608,7 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
       openHostConsoleBox,
     },
     slotId,
-    principalUserId,
+    principalId,
     roleKey,
     policyBefore,
     policyAfter,
@@ -3760,9 +3810,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     assertSinglePlayerVoteSubmittedRow(duplicateVoteRows);
     duplicateVoteReceiptRows = await runSql(
       smokeDatabase.applicationUrl,
-      `SELECT principal_user_id, command_id::text, stream_seqs
+      `SELECT principal_id, command_id::text, stream_seqs
        FROM command_receipt
-       WHERE principal_user_id = 'player-mira'
+       WHERE principal_id = ${sqlLiteral(authorityPrincipalId("player-mira"))}
          AND command_id = '${duplicateVoteCommandId}'::uuid`,
     );
     assertDuplicatePlayerVoteReceipt({
@@ -4404,11 +4454,11 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   const duplicateReceiptRows = await runSql(
     smokeDatabase.applicationUrl,
     `SELECT 'ActionSubmitted' AS acknowledged_command,
-            principal_user_id,
+            principal_id,
             command_id::text,
             stream_seqs
      FROM command_receipt
-     WHERE principal_user_id = 'action-goon'
+     WHERE principal_id = ${sqlLiteral(authorityPrincipalId("action-goon"))}
        AND command_id = '${duplicatePlayerSubmitCommandId}'::uuid`,
   );
   const actionRows = [
@@ -4906,8 +4956,9 @@ async function driveModeratorBrowser(
       if (
         !stalePlayerInviteBefore.targetLabel.includes("Slot 7") ||
         !stalePlayerInviteBefore.targetLabel.includes("player-mira") ||
-        stalePlayerInviteBefore.principalUserId !== "player-mira" ||
-        stalePlayerInviteBefore.expectedOccupantUserId !== "player-mira"
+        stalePlayerInviteBefore.principalId !== PLAYER_MIRA_PRINCIPAL_ID ||
+        stalePlayerInviteBefore.expectedOccupantPrincipalId !==
+          PLAYER_MIRA_PRINCIPAL_ID
       ) {
         throw new Error(
           `stale player invite fixture was not pre-replacement: ${JSON.stringify(stalePlayerInviteBefore)}`,
@@ -4977,8 +5028,8 @@ async function driveModeratorBrowser(
   if (
     !livePlayerInvite.targetLabel.includes("Slot 7") ||
     livePlayerInvite.targetLabel.includes("player-rowan") ||
-    livePlayerInvite.principalUserId !== "player-rowan" ||
-    livePlayerInvite.expectedOccupantUserId !== "player-rowan"
+    livePlayerInvite.principalId !== PLAYER_ROWAN_PRINCIPAL_ID ||
+    livePlayerInvite.expectedOccupantPrincipalId !== PLAYER_ROWAN_PRINCIPAL_ID
   ) {
     throw new Error(
       `player invite target did not follow replacement projection: ${JSON.stringify({
@@ -5014,8 +5065,8 @@ async function driveModeratorBrowser(
       status: "passed",
       source: "host-console-state projection",
       targetLabel: livePlayerInvite.targetLabel,
-      principalUserId: livePlayerInvite.principalUserId,
-      expectedOccupantUserId: livePlayerInvite.expectedOccupantUserId,
+      principalId: livePlayerInvite.principalId,
+      expectedOccupantPrincipalId: livePlayerInvite.expectedOccupantPrincipalId,
     },
     stalePlayerInviteReject,
     rolePmReplacement,
@@ -5226,17 +5277,17 @@ async function openHostConsoleDrawer(page, testId) {
 async function readPlayerInviteTarget(page) {
   return {
     targetLabel: await page.getByTestId("host-player-invite-target").textContent(),
-    principalUserId: await page
+    principalId: await page
       .getByTestId("host-player-invite-panel")
-      .locator('input[name="principalUserId"]')
+      .locator('input[name="principalId"]')
       .inputValue(),
     slotId: await page
       .getByTestId("host-player-invite-panel")
       .locator('input[name="slotId"]')
       .inputValue(),
-    expectedOccupantUserId: await page
+    expectedOccupantPrincipalId: await page
       .getByTestId("host-player-invite-panel")
-      .locator('input[name="expectedOccupantUserId"]')
+      .locator('input[name="expectedOccupantPrincipalId"]')
       .inputValue(),
   };
 }
@@ -5282,22 +5333,22 @@ async function rejectStalePlayerInviteFromBrowser(page) {
   const retryBox = await retry.boundingBox();
   assertHitTarget(retryBox, "stale player invite retry submit");
   const retryTarget = {
-    principalUserId: await page
+    principalId: await page
       .getByTestId("host-player-invite-retry")
-      .locator('input[name="principalUserId"]')
+      .locator('input[name="principalId"]')
       .inputValue(),
     slotId: await page
       .getByTestId("host-player-invite-retry")
       .locator('input[name="slotId"]')
       .inputValue(),
-    expectedOccupantUserId: await page
+    expectedOccupantPrincipalId: await page
       .getByTestId("host-player-invite-retry")
-      .locator('input[name="expectedOccupantUserId"]')
+      .locator('input[name="expectedOccupantPrincipalId"]')
       .inputValue(),
   };
   if (
-    retryTarget.principalUserId !== "player-rowan" ||
-    retryTarget.expectedOccupantUserId !== "player-rowan" ||
+    retryTarget.principalId !== PLAYER_ROWAN_PRINCIPAL_ID ||
+    retryTarget.expectedOccupantPrincipalId !== PLAYER_ROWAN_PRINCIPAL_ID ||
     retryTarget.slotId !== "slot-7"
   ) {
     throw new Error(
@@ -5834,7 +5885,8 @@ async function waitForHostConsoleDeadlineDelta(page, deadline) {
   );
 }
 
-async function waitForHostConsoleReplacementDelta(page, principalUserId) {
+async function waitForHostConsoleReplacementDelta(page, principalId) {
+  const authorityId = authorityPrincipalId(principalId);
   await page.waitForFunction(
     (expectedOccupant) =>
       (window.__fmarchHostLiveProjectionEvents ?? []).some(
@@ -5844,7 +5896,7 @@ async function waitForHostConsoleReplacementDelta(page, principalUserId) {
             (slot) => slot.assigned_principal_id === expectedOccupant,
           ),
       ),
-    principalUserId,
+    authorityId,
   );
 }
 
@@ -5862,7 +5914,7 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(body)}`);
   }
-  return body;
+  return preserveFixturePrincipalAliases(body);
 }
 
 async function hostSlotPersonaId(gameId, slotId) {
@@ -6115,7 +6167,10 @@ function assertConcurrentPlayerVoteRows(voteRows) {
 }
 
 function assertDuplicatePlayerVoteReceipt({ commandId, receiptRows }) {
-  if (!receiptRows.includes("player-mira") || !receiptRows.includes(commandId)) {
+  if (
+    !receiptRows.includes(authorityPrincipalId("player-mira")) ||
+    !receiptRows.includes(commandId)
+  ) {
     throw new Error(
       `duplicate player SubmitVote receipt missing command ${commandId}:\n${receiptRows}`,
     );
@@ -6420,7 +6475,10 @@ function assertSinglePlayerActionSubmittedRow(actionRows) {
 }
 
 function assertDuplicatePlayerSubmitReceipt({ commandId, receiptRows }) {
-  if (!receiptRows.includes("action-goon") || !receiptRows.includes(commandId)) {
+  if (
+    !receiptRows.includes(authorityPrincipalId("action-goon")) ||
+    !receiptRows.includes(commandId)
+  ) {
     throw new Error(
       `duplicate player SubmitAction receipt missing command ${commandId}:\n${receiptRows}`,
     );

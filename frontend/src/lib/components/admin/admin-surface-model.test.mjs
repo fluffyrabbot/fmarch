@@ -17,7 +17,7 @@ test("admin readiness strip summarizes authority and operator proof boundaries",
   assert.deepEqual(
     buildAdminReadinessStripViewModel({
       operator: {
-        principalUserId: "admin_a",
+        principalId: "admin_a",
         capabilityLabel: "GlobalAdmin",
       },
       gameSetup: [
@@ -100,7 +100,7 @@ test("admin readiness strip fails closed when authority or proof data is missing
   assert.deepEqual(
     buildAdminReadinessStripViewModel({
       operator: {
-        principalUserId: "host_h",
+        principalId: "host_h",
         capabilityLabel: "HostOf(midsummer)",
       },
       audit: [
@@ -218,7 +218,7 @@ test("admin command activity has a stable empty state", () => {
 
 test("admin setup grid view model binds command status and confirmation metadata", () => {
   const sessionGrant = {
-    principalUserId: "mod_a",
+    principalId: "mod_a",
     expiresAt: 4102444800,
     globalCapabilities: ["GlobalMod"],
   };
@@ -546,7 +546,7 @@ test("admin recovery model binds proof-gate form and status metadata", () => {
       },
     },
     game: "midsummer",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
   });
 
   assert.equal(view.root.ariaLabel, "Recovery");
@@ -574,7 +574,7 @@ test("admin recovery model binds proof-gate form and status metadata", () => {
   assert.deepEqual(view.items[0].form, {
     action: "?/checkRecoveryGate",
     game: "midsummer",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
   });
   assert.deepEqual(view.items[0].status, {
     state: "confirm",

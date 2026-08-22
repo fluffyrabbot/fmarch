@@ -3,8 +3,8 @@ import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 
 const ALLOWED_GAMEPLAY_READ = /^games\/[^/]+(?:\/(?:channels\/(?!main(?:\/|$))[^/]+\/thread|notifications|investigation-results|player-command-state|host-phase-controls|host-prompts|host-console-state|setup-state|export))?$/u;
 const CLIENT_SELECTED_AUTHORITY_PARAMS = Object.freeze([
-  "principal_user_id",
-  "principalUserId",
+  "principal_id",
+  "principalId",
 ]);
 
 export async function GET({ cookies, fetch, locals, params, request, url }) {

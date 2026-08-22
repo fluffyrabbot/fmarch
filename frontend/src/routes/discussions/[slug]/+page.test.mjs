@@ -9,7 +9,7 @@ test("discussion area loads public authorship and exposes canonical community na
   const data = await load({
     params: { slug: "general" },
     locals: {
-      principalUserId: "member_a",
+      principalId: "member_a",
       resolvedCapabilities: [{ kind: "GlobalMod", source: "auth-session" }],
     },
     fetch: async (url) => {
@@ -50,7 +50,7 @@ test("discussion area loads public authorship and exposes canonical community na
 test("discussion route keeps unavailable data explicit and does not invent moderation", async () => {
   const data = await load({
     params: { slug: "general" },
-    locals: { principalUserId: null, resolvedCapabilities: [] },
+    locals: { principalId: null, resolvedCapabilities: [] },
     cookies: { get: () => undefined },
     fetch: async () => new Response(null, { status: 503 }),
     url: new URL("https://fmarch.local/discussions/general"),

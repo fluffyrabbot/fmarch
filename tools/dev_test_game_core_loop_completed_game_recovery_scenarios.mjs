@@ -99,7 +99,7 @@ export const completedPlayerReloadCaseDefinitions = Object.freeze([
     commandStateKind: "action-player",
     expectedSlot: "slot-7",
     expectedBoundaryText: "completed action-player role URL reloaded",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     boundary:
       "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
   }),
@@ -111,7 +111,7 @@ export const completedPlayerReloadCaseDefinitions = Object.freeze([
     commandStateKind: "normal-player",
     expectedSlot: "slot-4",
     expectedBoundaryText: "completed normal-player role URL reloaded",
-    principalUserId: "player_rowan",
+    principalId: "player_rowan",
     boundary:
       "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
   }),
@@ -125,7 +125,7 @@ export const completedPlayerReloadCaseDefinitions = Object.freeze([
     expectedActorAlive: false,
     expectedActorStatus: "dead",
     expectedBoundaryText: "completed dead-player role URL reloaded",
-    principalUserId: "player_ilya",
+    principalId: "player_ilya",
     boundary:
       "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
   }),
@@ -366,7 +366,7 @@ export const completedDeadPlayerStaleVoteCaseDefinition = Object.freeze({
   transitionToken: "deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted",
   commandKind: "SubmitVote",
   expectedSlot: "slot-2",
-  principalUserId: "player_ilya",
+  principalId: "player_ilya",
   expectedBoundaryText: "completed dead-player stale vote rejected",
 });
 
@@ -437,7 +437,7 @@ export function completedPlayerReloadAssertionCases({
     sourceRoleUrl: completedGameEndgameSurface[scenario.sourceRoleUrlField],
     expectedSlot: scenario.expectedSlot,
     expectedBoundaryText: scenario.expectedBoundaryText,
-    principalUserId: scenario.principalUserId,
+    principalId: scenario.principalId,
   }));
 }
 

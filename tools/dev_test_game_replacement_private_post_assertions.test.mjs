@@ -118,7 +118,7 @@ const replacementResolvedPrivatePostProofFixture = () => ({
     reconnectButtonsBeforeDrop: [{ action: "submit_post", disabled: false }],
     reconnectingStatus: { state: "reconnecting" },
     reconnectCommand: {
-      principalUserId: resolveScenario.replacementPrincipalUserId,
+      principalId: resolveScenario.replacementPrincipalUserId,
       command: {
         SubmitPost: {
           channel_id: resolveScenario.channelId,
@@ -378,7 +378,7 @@ test("replacement resolved private-post proof builders normalize ACK and reconne
   assert.equal(ackProof.receiptRefreshKeys, "thread,commandState");
   assert.equal(reconnectProof.status, "passed");
   assert.equal(
-    reconnectProof.principalUserId,
+    reconnectProof.principalId,
     resolveScenario.replacementPrincipalUserId,
   );
   assert.equal(reconnectProof.reconnectRecoveryEvent.state, "recovered");

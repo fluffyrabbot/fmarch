@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::error::IdentityFlowError;
 use crate::token::{generate_session_token, hash_token, APP_SESSION_TOKEN_PREFIX};
-use crate::{Assurance, MethodKind, WorkosSessionId};
+use crate::{Assurance, MethodKind, PrincipalId, WorkosSessionId};
 
 /// Backend-owned session lifetimes. Classic and WorkOS sessions share one
 /// storage shape; WorkOS sessions default shorter because upstream revocation
@@ -63,7 +63,7 @@ fn bounded_env_i64(name: &str, default: i64, min: i64, max: i64) -> i64 {
 
 #[derive(Debug, Clone)]
 pub struct SessionSpec<'a> {
-    pub principal_user_id: &'a str,
+    pub principal_id: &'a PrincipalId,
     /// Capabilities granted only for this session (for example an invite or
     /// explicit admin session grant). Durable principal capabilities are
     /// always read from platform_principal during validation and must never be
@@ -83,7 +83,7 @@ pub struct SessionSpec<'a> {
 pub struct IssuedSession {
     pub session_token: String,
     pub token_hash: String,
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub expires_at: i64,
     pub idle_expires_at: i64,
 }
@@ -115,7 +115,7 @@ pub async fn issue_session(
         r#"
         INSERT INTO auth_session (
             token_hash,
-            principal_user_id,
+            principal_id,
             created_at,
             expires_at,
             revoked_at,
@@ -130,7 +130,7 @@ pub async fn issue_session(
         "#,
     )
     .bind(&token_hash)
-    .bind(spec.principal_user_id)
+    .bind(spec.principal_id.as_uuid())
     .bind(now)
     .bind(spec.expires_at)
     .bind(spec.session_capabilities)
@@ -144,7 +144,7 @@ pub async fn issue_session(
     Ok(IssuedSession {
         session_token,
         token_hash,
-        principal_user_id: spec.principal_user_id.to_string(),
+        principal_id: *spec.principal_id,
         expires_at: spec.expires_at,
         idle_expires_at: spec.idle_expires_at,
     })
@@ -154,7 +154,7 @@ pub async fn issue_session(
 /// app session. `session_reference` is the stored token hash, never a bearer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorizationContext {
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub global_capabilities: Vec<String>,
     pub method: Option<(Uuid, MethodKind)>,
     pub assurance: Assurance,
@@ -174,7 +174,7 @@ pub struct AuthorizationContext {
 /// after independently proving the provider row and permanent tombstone.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompletedWorkosLogout {
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub method_id: Uuid,
     pub workos_session_id: WorkosSessionId,
 }
@@ -228,10 +228,10 @@ pub async fn validate_session_for_update(
         return Err(IdentityFlowError::Unauthorized);
     }
     let session_reference = hash_token(token);
-    let principal_user_id = discover_session_principal(conn, session_reference.as_str()).await?;
+    let principal_id = discover_session_principal(conn, session_reference.as_str()).await?;
     let owner = crate::methods::lock_identity_mutation(
         conn,
-        principal_user_id.as_str(),
+        &principal_id,
         crate::methods::IdentityMutationExtent::Authentication,
     )
     .await?;
@@ -256,10 +256,10 @@ pub async fn lock_session_for_logout(
         return Err(IdentityFlowError::Unauthorized);
     }
     let session_reference = hash_token(token);
-    let principal_user_id = discover_session_principal(conn, session_reference.as_str()).await?;
+    let principal_id = discover_session_principal(conn, session_reference.as_str()).await?;
     let owner = crate::methods::lock_identity_mutation(
         conn,
-        principal_user_id.as_str(),
+        &principal_id,
         crate::methods::IdentityMutationExtent::Authentication,
     )
     .await?;
@@ -282,20 +282,20 @@ pub async fn lock_session_for_logout(
     let completed = sqlx::query_as::<
         _,
         (
-            String,
+            Uuid,
             Option<String>,
             Option<Uuid>,
             Option<String>,
-            Option<String>,
+            Option<Uuid>,
             Option<String>,
         ),
     >(
         r#"
-        SELECT session.principal_user_id,
+        SELECT session.principal_id,
                session.assurance,
                session.authenticated_via_method_id,
                session.workos_session_id,
-               method.principal_user_id,
+               method.principal_id,
                method.kind
         FROM auth_session AS session
         LEFT JOIN authentication_method AS method
@@ -313,10 +313,10 @@ pub async fn lock_session_for_logout(
     .ok_or(IdentityFlowError::Unauthorized)?;
     let (stored_principal, assurance, method_id, workos_session_id, method_principal, method_kind) =
         completed;
-    if stored_principal != principal_user_id
+    if stored_principal != principal_id.as_uuid()
         || assurance.as_deref() != Some(Assurance::ExternalSso.as_str())
         || method_id.is_none()
-        || method_principal.as_deref() != Some(principal_user_id.as_str())
+        || method_principal != Some(principal_id.as_uuid())
         || method_kind.as_deref() != Some(MethodKind::Workos.as_str())
     {
         return Err(IdentityFlowError::Unauthorized);
@@ -326,7 +326,7 @@ pub async fn lock_session_for_logout(
             .map_err(|_| IdentityFlowError::Unauthorized)?;
     let method_id = method_id.ok_or(IdentityFlowError::Unauthorized)?;
     Ok(LogoutSessionState::CompletedWorkos(CompletedWorkosLogout {
-        principal_user_id,
+        principal_id,
         method_id,
         workos_session_id,
     }))
@@ -366,11 +366,11 @@ pub async fn rotate_session(
     }
     let previous_session_reference = hash_token(token);
     let mut tx = pool.begin().await?;
-    let principal_user_id =
+    let principal_id =
         discover_session_principal(&mut tx, previous_session_reference.as_str()).await?;
     let owner = crate::methods::lock_identity_mutation(
         &mut tx,
-        principal_user_id.as_str(),
+        &principal_id,
         crate::methods::IdentityMutationExtent::Authentication,
     )
     .await?;
@@ -403,7 +403,7 @@ pub async fn rotate_session(
         r#"
         INSERT INTO auth_session (
             token_hash,
-            principal_user_id,
+            principal_id,
             created_at,
             expires_at,
             revoked_at,
@@ -418,7 +418,7 @@ pub async fn rotate_session(
         "#,
     )
     .bind(token_hash.as_str())
-    .bind(eligible.context.principal_user_id.as_str())
+    .bind(eligible.context.principal_id.as_uuid())
     .bind(now)
     .bind(eligible.context.expires_at)
     .bind(&eligible.session_capabilities)
@@ -441,8 +441,8 @@ pub async fn rotate_session(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -451,8 +451,8 @@ pub async fn rotate_session(
         "#,
     )
     .bind(now)
-    .bind(eligible.context.principal_user_id.as_str())
-    .bind(eligible.context.principal_user_id.as_str())
+    .bind(eligible.context.principal_id.as_uuid())
+    .bind(eligible.context.principal_id.as_uuid())
     .bind(previous_session_reference.as_str())
     .bind(token_hash.as_str())
     .bind(
@@ -468,7 +468,7 @@ pub async fn rotate_session(
     let issued = IssuedSession {
         session_token,
         token_hash: token_hash.clone(),
-        principal_user_id: eligible.context.principal_user_id.clone(),
+        principal_id: eligible.context.principal_id,
         expires_at: eligible.context.expires_at,
         idle_expires_at,
     };
@@ -492,12 +492,14 @@ pub async fn rotate_session(
 async fn discover_session_principal(
     conn: &mut PgConnection,
     session_reference: &str,
-) -> Result<String, IdentityFlowError> {
-    sqlx::query_scalar("SELECT principal_user_id FROM auth_session WHERE token_hash = $1")
-        .bind(session_reference)
-        .fetch_optional(&mut *conn)
-        .await?
-        .ok_or(IdentityFlowError::Unauthorized)
+) -> Result<PrincipalId, IdentityFlowError> {
+    let principal_id: Uuid =
+        sqlx::query_scalar("SELECT principal_id FROM auth_session WHERE token_hash = $1")
+            .bind(session_reference)
+            .fetch_optional(&mut *conn)
+            .await?
+            .ok_or(IdentityFlowError::Unauthorized)?;
+    Ok(PrincipalId::from_uuid(principal_id))
 }
 
 async fn lock_eligible_session(
@@ -535,7 +537,7 @@ async fn load_eligible_session(
     let row = sqlx::query_as::<
         _,
         (
-            String,
+            Uuid,
             Vec<String>,
             i64,
             i64,
@@ -543,7 +545,7 @@ async fn load_eligible_session(
             Option<String>,
             Option<String>,
             Option<Uuid>,
-            Option<String>,
+            Option<Uuid>,
             Option<String>,
             Option<String>,
             Option<i64>,
@@ -560,7 +562,7 @@ async fn load_eligible_session(
     .ok_or(IdentityFlowError::Unauthorized)?;
 
     let (
-        principal_user_id,
+        principal_id,
         snapshot_globals,
         created_at,
         expires_at,
@@ -568,7 +570,7 @@ async fn load_eligible_session(
         assurance,
         workos_session_id,
         method_id,
-        method_principal_user_id,
+        method_principal_id,
         method_kind,
         method_status,
         method_disabled_at,
@@ -577,6 +579,7 @@ async fn load_eligible_session(
         principal_globals,
         authenticated_at,
     ) = row;
+    let principal_id = PrincipalId::from_uuid(principal_id);
     if principal_status != "active" || principal_disabled_at.is_some() {
         return Err(IdentityFlowError::Unauthorized);
     }
@@ -595,7 +598,7 @@ async fn load_eligible_session(
     };
     let method = match method_id {
         Some(method_id) => {
-            if method_principal_user_id.as_deref() != Some(principal_user_id.as_str())
+            if method_principal_id != Some(principal_id.as_uuid())
                 || method_status.as_deref() != Some("active")
                 || method_disabled_at.is_some()
             {
@@ -661,7 +664,7 @@ async fn load_eligible_session(
 
     Ok(EligibleSession {
         context: AuthorizationContext {
-            principal_user_id,
+            principal_id,
             global_capabilities,
             method,
             assurance,
@@ -677,7 +680,7 @@ async fn load_eligible_session(
 }
 
 const ELIGIBLE_SESSION_SQL: &str = r#"
-    SELECT session.principal_user_id,
+    SELECT session.principal_id,
            session.global_capabilities,
            session.created_at,
            session.expires_at,
@@ -685,7 +688,7 @@ const ELIGIBLE_SESSION_SQL: &str = r#"
            session.assurance,
            session.workos_session_id,
            session.authenticated_via_method_id,
-           method.principal_user_id,
+           method.principal_id,
            method.kind,
            method.status,
            method.disabled_at,
@@ -695,7 +698,7 @@ const ELIGIBLE_SESSION_SQL: &str = r#"
            session.authenticated_at
     FROM auth_session AS session
     INNER JOIN platform_principal AS principal
-      ON principal.principal_user_id = session.principal_user_id
+      ON principal.principal_id = session.principal_id
     LEFT JOIN authentication_method AS method
       ON method.method_id = session.authenticated_via_method_id
     WHERE session.token_hash = $1
@@ -730,20 +733,20 @@ fn unix_now_seconds() -> i64 {
 
 pub async fn revoke_sessions_for_principal(
     conn: &mut PgConnection,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     now: i64,
 ) -> Result<u64, IdentityFlowError> {
     let revoked = sqlx::query(
         r#"
         UPDATE auth_session
         SET revoked_at = $1
-        WHERE principal_user_id = $2
+        WHERE principal_id = $2
           AND revoked_at IS NULL
           AND expires_at > $1
         "#,
     )
     .bind(now)
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .execute(&mut *conn)
     .await?;
     Ok(revoked.rows_affected())

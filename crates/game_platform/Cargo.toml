@@ -5,11 +5,12 @@ edition.workspace = true
 publish.workspace = true
 
 [features]
-typescript = ["dep:ts-rs", "domain/typescript"]
+typescript = ["dep:ts-rs", "domain/typescript", "principal/typescript"]
 
 [dependencies]
 blake3 = "1"
 domain = { path = "../domain", version = "0.1.0" }
+principal = { path = "../principal", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"

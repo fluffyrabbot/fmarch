@@ -106,13 +106,16 @@ using `deploy/railway/key-admin.env.example`; they are not Railway service
 variables.
 
 The profile-handle blind-index key belongs only to the API process. It is not
-an event-encryption key and must not be reused for one. The current release
-process does not support rotating it in place: rotation is blocked until the
-dedicated maintenance reindex command lands. That command must drain profile
-writers, rewrite every active claim's `handle_hmac` in one transaction under the
-replacement key, atomically switch the API key and KID while traffic remains
-drained, then prove both owner reads and duplicate-handle rejection before
-retiring the prior key.
+an event-encryption key and must not be reused for one. Startup validates the
+key/KID and audits every active reservation before the API becomes ready. Rotate
+it only with the protected, drained
+[`fmarch-profile-index-admin`](profile-handle-index-rotation.md) maintenance
+workflow: audit the active configuration, stop every profile writer, atomically
+reindex active reservations using the replacement-only secret, then atomically
+switch the API key/KID while traffic remains drained. A direct service-variable
+flip is unsafe. The reindex command requires both `--writers-drained` and
+`--execute`, but its acknowledgement does not substitute for actually draining
+pre-lease binaries or out-of-band writers.
 
 The schema owner is confined to the one-shot migrator and owns the application
 schema, tables, sequences, functions, and `_sqlx_migrations`. ACL reconciliation

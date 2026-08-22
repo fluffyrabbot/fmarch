@@ -39,12 +39,11 @@ ALTER TABLE public.command_receipt
     ADD CONSTRAINT command_receipt_fingerprint_check CHECK ((octet_length(command_fingerprint) = 32));
 
 CREATE TABLE public.platform_principal (
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     status text DEFAULT 'active'::text NOT NULL,
     global_capabilities text[] DEFAULT '{}'::text[] NOT NULL,
     created_at bigint NOT NULL,
     disabled_at bigint,
-    CONSTRAINT platform_principal_id_check CHECK ((length(TRIM(BOTH FROM principal_user_id)) > 0)),
     CONSTRAINT platform_principal_status_check CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text]))),
     CONSTRAINT platform_principal_disabled_shape_check CHECK ((((status = 'active'::text) AND (disabled_at IS NULL)) OR ((status = 'disabled'::text) AND (disabled_at IS NOT NULL))))
 );
@@ -52,7 +51,7 @@ CREATE TABLE public.platform_principal (
 CREATE TABLE public.external_identity (
     provider text NOT NULL,
     subject text NOT NULL,
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     display_label text,
     created_at bigint NOT NULL,
     last_seen_at bigint NOT NULL,
@@ -66,7 +65,7 @@ CREATE TABLE public.auth_websocket_ticket (
     auth_kind text NOT NULL,
     session_reference text NOT NULL,
     access_expires_at bigint NOT NULL,
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     audience text NOT NULL,
     game_id uuid NOT NULL,
     channel_id text NOT NULL,
@@ -80,12 +79,11 @@ CREATE TABLE public.auth_websocket_ticket (
     CONSTRAINT auth_websocket_ticket_after_seq_check CHECK ((after_seq >= 0)),
     CONSTRAINT auth_websocket_ticket_audience_check CHECK ((length(TRIM(BOTH FROM audience)) > 0)),
     CONSTRAINT auth_websocket_ticket_channel_check CHECK ((length(TRIM(BOTH FROM channel_id)) > 0)),
-    CONSTRAINT auth_websocket_ticket_expiry_check CHECK ((expires_at > issued_at)),
-    CONSTRAINT auth_websocket_ticket_principal_check CHECK ((length(TRIM(BOTH FROM principal_user_id)) > 0))
+    CONSTRAINT auth_websocket_ticket_expiry_check CHECK ((expires_at > issued_at))
 );
 
 ALTER TABLE ONLY public.platform_principal
-    ADD CONSTRAINT platform_principal_pkey PRIMARY KEY (principal_user_id);
+    ADD CONSTRAINT platform_principal_pkey PRIMARY KEY (principal_id);
 
 ALTER TABLE ONLY public.external_identity
     ADD CONSTRAINT external_identity_pkey PRIMARY KEY (provider, subject);
@@ -97,7 +95,7 @@ CREATE INDEX auth_websocket_ticket_expiry_idx ON public.auth_websocket_ticket US
 
 CREATE INDEX auth_websocket_ticket_session_idx ON public.auth_websocket_ticket USING btree (auth_kind, session_reference);
 
-CREATE INDEX external_identity_principal_idx ON public.external_identity USING btree (principal_user_id);
+CREATE INDEX external_identity_principal_idx ON public.external_identity USING btree (principal_id);
 
 ALTER TABLE ONLY public.external_identity
-    ADD CONSTRAINT external_identity_principal_user_id_fkey FOREIGN KEY (principal_user_id) REFERENCES public.platform_principal(principal_user_id) ON DELETE RESTRICT;
+    ADD CONSTRAINT external_identity_principal_id_fkey FOREIGN KEY (principal_id) REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT;

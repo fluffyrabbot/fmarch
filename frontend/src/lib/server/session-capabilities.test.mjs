@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   FIXTURE_SESSION_COOKIE_NAME,
+  FIXTURE_SESSION_PRINCIPAL_IDS,
   SESSION_COOKIE_NAME,
   accessTokenForRequest,
   authenticatedApiFetch,
@@ -10,6 +11,11 @@ import {
   resolveFixtureSession,
   sessionContextFromRequest,
 } from "./session-capabilities.mjs";
+
+const HOST_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000001";
+const MEMBER_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000002";
+const PLAYER_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000003";
+const ADMIN_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000004";
 
 test("the fmarch_session cookie is the only per-request bearer", async () => {
   const cookies = cookieJar("fmss_app-session-token");
@@ -39,7 +45,7 @@ test("opaque session cookie resolves principal and scoped host capabilities thro
     fetchImpl: async (url, options) => {
       seen.push({ url, options });
       return jsonResponse({
-        principal_user_id: "host_h",
+        principal_id: HOST_PRINCIPAL_ID,
         capabilities: [
           {
             kind: "HostOf",
@@ -56,7 +62,7 @@ test("opaque session cookie resolves principal and scoped host capabilities thro
     "http://127.0.0.1:4017/auth/session?game=00000000-0000-0000-0000-000000000001",
   );
   assert.equal(seen[0].options.headers.authorization, "Bearer opaque-token");
-  assert.equal(session.principalUserId, "host_h");
+  assert.equal(session.principalId, HOST_PRINCIPAL_ID);
   assert.deepEqual(session.resolvedCapabilities, [
     {
       kind: "HostOf",
@@ -78,18 +84,32 @@ test("session may carry an explicit viewer profile without treating it as author
     request: requestFor("/community"),
     env: {},
     fetchImpl: async () => jsonResponse({
-      principal_user_id: "principal-opaque-7",
+      principal_id: MEMBER_PRINCIPAL_ID,
       viewer_profile: { handle: "mira-r", display_name: "Mira Rowan" },
       capabilities: [],
     }),
   });
 
-  assert.equal(session.principalUserId, "principal-opaque-7");
+  assert.equal(session.principalId, MEMBER_PRINCIPAL_ID);
   assert.deepEqual(session.viewerProfile, {
     handle: "mira-r",
     displayName: "Mira Rowan",
     href: "/u/mira-r",
   });
+});
+
+test("legacy user-shaped session payloads cannot establish browser authority", async () => {
+  const session = await resolveAuthenticatedSession({
+    cookies: cookieJar("opaque-token"),
+    request: requestFor("/community"),
+    env: {},
+    fetchImpl: async () => jsonResponse({
+      user_id: "legacy-member",
+      capabilities: [{ kind: "GlobalAdmin" }],
+    }),
+  });
+
+  assert.deepEqual(session, { principalId: null, resolvedCapabilities: [] });
 });
 
 test("missing cookie, non-host route, or rejected lookup leaves locals unauthenticated", async () => {
@@ -100,7 +120,7 @@ test("missing cookie, non-host route, or rejected lookup leaves locals unauthent
       fetchImpl: unreachableFetch,
       env: {},
     }),
-    { principalUserId: null, resolvedCapabilities: [] },
+    { principalId: null, resolvedCapabilities: [] },
   );
 
   assert.deepEqual(
@@ -113,7 +133,7 @@ test("missing cookie, non-host route, or rejected lookup leaves locals unauthent
           "/auth/session?game=00000000-0000-0000-0000-000000000001",
         );
         return jsonResponse({
-          principal_user_id: "player_a",
+          principal_id: PLAYER_PRINCIPAL_ID,
           capabilities: [
             {
               kind: "ChannelMember",
@@ -128,7 +148,7 @@ test("missing cookie, non-host route, or rejected lookup leaves locals unauthent
       env: {},
     }),
     {
-      principalUserId: "player_a",
+      principalId: PLAYER_PRINCIPAL_ID,
       resolvedCapabilities: [
         {
           kind: "ChannelMember",
@@ -147,7 +167,7 @@ test("missing cookie, non-host route, or rejected lookup leaves locals unauthent
       fetchImpl: async () => ({ ok: false }),
       env: {},
     }),
-    { principalUserId: null, resolvedCapabilities: [] },
+    { principalId: null, resolvedCapabilities: [] },
   );
 });
 
@@ -210,13 +230,13 @@ test("account-security route resolves the active opaque session", async () => {
       assert.equal(url, "http://127.0.0.1:4017/auth/session");
       assert.equal(options.headers.authorization, "Bearer account-session-token");
       return jsonResponse({
-        principal_user_id: "host_h",
+        principal_id: HOST_PRINCIPAL_ID,
         capabilities: [],
       });
     },
   });
 
-  assert.equal(session.principalUserId, "host_h");
+  assert.equal(session.principalId, HOST_PRINCIPAL_ID);
 });
 
 test("fixture sessions exercise admin, player, and host role routes", async () => {
@@ -225,7 +245,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     request: requestFor("/"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
-  assert.equal(board.principalUserId, "player_mira");
+  assert.equal(board.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.player);
   assert.deepEqual(
     board.resolvedCapabilities.map((capability) => [
       capability.kind,
@@ -244,7 +264,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     request: requestFor("/admin"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
-  assert.equal(admin.principalUserId, "admin_a");
+  assert.equal(admin.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.admin);
   assert.equal(admin.resolvedCapabilities[0].kind, "GlobalAdmin");
 
   const player = await resolveAuthenticatedSession({
@@ -252,7 +272,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     request: requestFor("/g/midsummer"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
-  assert.equal(player.principalUserId, "player_mira");
+  assert.equal(player.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.player);
   assert.deepEqual(
     player.resolvedCapabilities.map((capability) => [
       capability.kind,
@@ -270,7 +290,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     request: requestFor("/g/midsummer?private=notification-1"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
-  assert.equal(target.principalUserId, "player_ilya");
+  assert.equal(target.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.target);
   assert.deepEqual(
     target.resolvedCapabilities.map((capability) => [
       capability.kind,
@@ -284,7 +304,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     request: requestFor("/g/midsummer?private=notification-1"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
-  assert.equal(nightTarget.principalUserId, "player-seed");
+  assert.equal(nightTarget.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.nightTarget);
   assert.deepEqual(
     nightTarget.resolvedCapabilities.map((capability) => [
       capability.kind,
@@ -298,7 +318,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     request: requestFor("/g/midsummer?private=notification-1"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
-  assert.equal(normal.principalUserId, "player_rowan");
+  assert.equal(normal.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.normal);
   assert.deepEqual(
     normal.resolvedCapabilities.map((capability) => [
       capability.kind,
@@ -312,7 +332,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     request: requestFor("/g/midsummer"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
-  assert.equal(survivor.principalUserId, "player_sage");
+  assert.equal(survivor.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.survivor);
   assert.deepEqual(
     survivor.resolvedCapabilities.map((capability) => [
       capability.kind,
@@ -326,7 +346,7 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     request: requestFor("/g/midsummer/host"),
     env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
   });
-  assert.equal(host.principalUserId, "host_h");
+  assert.equal(host.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.host);
   assert.equal(host.resolvedCapabilities[0].kind, "HostOf");
 });
 
@@ -336,7 +356,7 @@ test("fixture session helper exposes the same game-scoped proof capabilities", (
     game: "midsummer",
   });
 
-  assert.equal(player.principalUserId, "player_mira");
+  assert.equal(player.principalId, FIXTURE_SESSION_PRINCIPAL_IDS.player);
   assert.deepEqual(
     player.resolvedCapabilities.map((capability) => [
       capability.kind,
@@ -360,14 +380,14 @@ test("admin route accepts API-returned global capabilities", async () => {
       assert.equal(url, "http://127.0.0.1:4017/auth/session");
       assert.equal(options.headers.authorization, "Bearer admin-token");
       return jsonResponse({
-        principal_user_id: "admin_a",
+        principal_id: ADMIN_PRINCIPAL_ID,
         capabilities: [{ kind: "GlobalAdmin" }],
       });
     },
   });
 
   assert.deepEqual(session, {
-    principalUserId: "admin_a",
+    principalId: ADMIN_PRINCIPAL_ID,
     resolvedCapabilities: [
       {
         kind: "GlobalAdmin",
@@ -427,7 +447,7 @@ test("session resolution prefers the private-network API base when configured", 
     },
     fetchImpl: async (url) => {
       seen.push(url);
-      return jsonResponse({ principal_user_id: "host_h", capabilities: [] });
+      return jsonResponse({ principal_id: HOST_PRINCIPAL_ID, capabilities: [] });
     },
   });
   assert.equal(seen[0], "http://fmarch.railway.internal:8080/auth/session?game=game-1");
@@ -442,7 +462,7 @@ test("session resolution degrades to an empty session when the API fetch fails",
       throw new Error("connect ECONNREFUSED");
     },
   });
-  assert.equal(session.principalUserId, null);
+  assert.equal(session.principalId, null);
   assert.deepEqual(session.resolvedCapabilities, []);
 });
 
@@ -454,7 +474,7 @@ test("session resolution passes an abort signal from the SSR fetch budget", asyn
     env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
     fetchImpl: async (url, options) => {
       observed.push(options);
-      return jsonResponse({ principal_user_id: "host_h", capabilities: [] });
+      return jsonResponse({ principal_id: HOST_PRINCIPAL_ID, capabilities: [] });
     },
   });
   assert.ok(observed[0].signal instanceof AbortSignal);
@@ -473,7 +493,7 @@ test("cached non-game session resolution reuses a live entry and refetches after
     env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
     fetchImpl: async () => {
       fetches += 1;
-      return jsonResponse({ principal_user_id: "host_h", capabilities: [] });
+      return jsonResponse({ principal_id: HOST_PRINCIPAL_ID, capabilities: [] });
     },
     now: () => clock,
   };
@@ -482,7 +502,7 @@ test("cached non-game session resolution reuses a live entry and refetches after
   const second = await resolveAuthenticatedSessionCached(args);
   assert.equal(fetches, 1);
   assert.equal(first, second);
-  assert.equal(second.principalUserId, "host_h");
+  assert.equal(second.principalId, HOST_PRINCIPAL_ID);
 
   clock += 30_001;
   await resolveAuthenticatedSessionCached(args);
@@ -503,7 +523,7 @@ test("game-scoped session resolution never caches mutable capabilities", async (
     fetchImpl: async () => {
       fetches += 1;
       return jsonResponse({
-        principal_user_id: "player_a",
+        principal_id: PLAYER_PRINCIPAL_ID,
         capabilities: fetches === 1
           ? [{ kind: "SlotOccupant", body: { slot: "slot-1" } }]
           : [
@@ -550,7 +570,7 @@ test("cached session resolution never caches empty or rotation-required sessions
     fetchImpl: async () => {
       fetches += 1;
       return jsonResponse({
-        principal_user_id: "host_h",
+        principal_id: HOST_PRINCIPAL_ID,
         rotation_required: true,
         capabilities: [],
       });
@@ -577,7 +597,7 @@ test("cached session resolution can be disabled with a zero TTL", async () => {
     },
     fetchImpl: async () => {
       fetches += 1;
-      return jsonResponse({ principal_user_id: "host_h", capabilities: [] });
+      return jsonResponse({ principal_id: HOST_PRINCIPAL_ID, capabilities: [] });
     },
     now: () => 1_000,
   };

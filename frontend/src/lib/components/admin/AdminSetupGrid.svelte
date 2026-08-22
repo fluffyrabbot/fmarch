@@ -158,8 +158,8 @@
               <label class="admin-surface__field fm-field">
                 <span>Principal</span>
                 <input
-                  name="principalUserId"
-                  value={item.sessionGrant.principalUserId}
+                  name="principalId"
+                  value={item.sessionGrant.principalId}
                   autocomplete="off"
                   data-testid="admin-session-grant-principal"
                 />

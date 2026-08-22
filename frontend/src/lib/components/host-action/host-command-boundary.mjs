@@ -880,10 +880,10 @@ export function normalizeHostConsoleAuthority(authority, fallback = {}) {
   );
 
   return Object.freeze({
-    principalUserId: String(
-      source.principal_user_id ??
-        source.principalUserId ??
-        fallback.principalUserId ??
+    principalId: String(
+      source.principal_id ??
+        source.principalId ??
+        fallback.principalId ??
         "",
     ),
     capabilityKind,

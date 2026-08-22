@@ -4,7 +4,7 @@ import { accessTokenForRequest } from "../../../lib/server/session-capabilities.
 
 export async function load({ cookies, fetch, locals, url }) {
   if (!classicAuthEnabled(process.env)) throw redirect(303, "/admin");
-  if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
+  if (typeof locals.principalId !== "string" || locals.principalId.trim() === "") {
     throw redirect(303, `/auth/login?returnTo=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
   }
   const capabilities = capabilityKinds(locals.resolvedCapabilities);

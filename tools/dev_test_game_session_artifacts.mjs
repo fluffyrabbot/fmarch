@@ -554,7 +554,7 @@ export function markdownSessionCard(card) {
         "",
         `Stale replacement recovery: ${card.verification.replacementConsole.staleReplacementAfterSuccess.reject.error}`,
         "",
-        `Incoming replacement: ${card.verification.replacementConsole.incomingPlayer.browserEntry.principalUserId} ${card.verification.replacementConsole.incomingPlayer.postStatus.message}`,
+        `Incoming replacement: ${card.verification.replacementConsole.incomingPlayer.browserEntry.principalId} ${card.verification.replacementConsole.incomingPlayer.postStatus.message}`,
         "",
       );
     }

@@ -8,10 +8,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { seedCommandPlanForGame } from "./dev_test_game.mjs";
-import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 import {
   assertDevTestGameIdentityAdapterContractPacket,
   buildDevTestGameIdentityAdapterContractPacket,
@@ -88,11 +86,58 @@ const registrationCredentials = Object.freeze({
 const memberLifecycleCredentials = Object.freeze({
   accountId: `member-lifecycle-${game}@example.test`,
   password: `member-lifecycle-account-password-${game}`,
-  principalUserId: `member-lifecycle-${game}`,
+  principalId: `member-lifecycle-${game}`,
 });
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const deliveryIntentPollTimeoutMs = 5000;
 const deliveryIntentPollIntervalMs = 100;
+const fixtureAliasByPrincipalId = new Map();
+
+function authorityPrincipalId(aliasOrId) {
+  const value = String(aliasOrId);
+  if (isPrincipalId(value)) return value;
+  const principalId = principalFixtureId(value);
+  fixtureAliasByPrincipalId.set(principalId, value);
+  return principalId;
+}
+
+function preserveFixturePrincipalAliases(value) {
+  if (typeof value === "string") {
+    return fixtureAliasByPrincipalId.get(value) ?? value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(preserveFixturePrincipalAliases);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        preserveFixturePrincipalAliases(item),
+      ]),
+    );
+  }
+  return value;
+}
+
+function commandForAuthorityTransport(command) {
+  const transport = structuredClone(command);
+  const commandBody = Object.values(transport)[0];
+  if (commandBody === undefined || commandBody === null) return transport;
+  if ("SeatPersona" in transport) {
+    commandBody.principal_id = authorityPrincipalId(commandBody.principal_id);
+  } else if ("ProcessReplacement" in transport) {
+    commandBody.incoming_principal_id = authorityPrincipalId(
+      commandBody.incoming_principal_id,
+    );
+  } else if (
+    "AddCohost" in transport ||
+    "GrantSpectator" in transport ||
+    "RevokeSpectator" in transport
+  ) {
+    commandBody.principal_id = authorityPrincipalId(commandBody.principal_id);
+  }
+  return transport;
+}
 
 if (!migrationUrl) {
   throw new Error(
@@ -132,7 +177,7 @@ try {
   const seedTargetAccounts = await provisionSeedTargetAccounts({
     apiBaseUrl,
     existingPrincipals: Object.values(accounts).map(
-      (account) => account.principalUserId,
+      (account) => account.principalId,
     ),
   });
   const seedCommands = await seedGame(apiBaseUrl);
@@ -227,7 +272,7 @@ try {
       accountRegistrationRoleSurfacePattern:
         "/auth/register/classic?account=<account-id>&returnTo=<role-surface>",
       capabilityAuthority:
-        "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
+        "auth_session resolves principal_id and committed game/global capabilities at the API boundary",
     },
     identityAdapterContract,
     identityAdapterContractDiff:
@@ -292,44 +337,26 @@ try {
 
 async function seedGame(apiBaseUrl) {
   const commands = [];
-  for (const [principalUserId, command] of seedCommandPlanForGame(game)) {
+  for (const [principalId, command] of seedCommandPlanForGame(game)) {
     commands.push(
-      await sendCommand(apiBaseUrl, commands.length + 1, principalUserId, command),
+      await sendCommand(apiBaseUrl, commands.length + 1, principalId, command),
     );
   }
   return commands;
 }
 
 async function seedRootAdminSession(url) {
+  const rootPrincipalId = authorityPrincipalId("root_admin");
   await runSql(url, `
     INSERT INTO platform_principal (
-      principal_user_id, status, global_capabilities, created_at, disabled_at
-    ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
-    ON CONFLICT (principal_user_id) DO NOTHING;
-  `);
-  await runSql(url, `
-    INSERT INTO auth_account (
-      account_id,
-      principal_user_id,
-      password_hash,
-      created_at,
-      disabled_at,
-      global_capabilities
-    )
-    VALUES (
-      'root-admin-seed@local.fmarch.test',
-      'root_admin',
-      'seed-only-not-a-real-hash',
-      0,
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[]
-    )
-    ON CONFLICT (account_id) DO NOTHING;
+      principal_id, status, global_capabilities, created_at, disabled_at
+    ) VALUES (${sqlLiteral(rootPrincipalId)}, 'active', ARRAY[]::TEXT[], 0, NULL)
+    ON CONFLICT (principal_id) DO NOTHING;
   `);
   await runSql(url, `
     INSERT INTO auth_session (
       token_hash,
-      principal_user_id,
+      principal_id,
       created_at,
       expires_at,
       revoked_at,
@@ -340,7 +367,7 @@ async function seedRootAdminSession(url) {
     )
     VALUES (
       ${sqlLiteral(hashSessionToken(rootAdminSessionToken))},
-      'root_admin',
+      ${sqlLiteral(rootPrincipalId)},
       0,
       4102444800,
       NULL,
@@ -357,18 +384,18 @@ async function createInvites(apiBaseUrl) {
     admin: await createInvite(apiBaseUrl, {
       inviteToken: inviteTokens.admin,
       accountId: accountCredentials.admin.accountId,
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
     host: await createInvite(apiBaseUrl, {
       inviteToken: inviteTokens.host,
       accountId: accountCredentials.host.accountId,
-      principalUserId: "host_h",
+      principalId: "host_h",
     }),
     player: await createInvite(apiBaseUrl, {
       inviteToken: inviteTokens.player,
       accountId: accountCredentials.player.accountId,
-      principalUserId: "player-mira",
+      principalId: "player-mira",
     }),
   };
 }
@@ -378,18 +405,18 @@ async function createAccounts(apiBaseUrl) {
     admin: await createAccount(apiBaseUrl, {
       accountId: accountCredentials.admin.accountId,
       password: accountCredentials.admin.password,
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
     host: await createAccount(apiBaseUrl, {
       accountId: accountCredentials.host.accountId,
       password: accountCredentials.host.password,
-      principalUserId: "host_h",
+      principalId: "host_h",
     }),
     player: await createAccount(apiBaseUrl, {
       accountId: accountCredentials.player.accountId,
       password: accountCredentials.player.password,
-      principalUserId: "player-mira",
+      principalId: "player-mira",
     }),
   };
 }
@@ -398,19 +425,19 @@ async function provisionSeedTargetAccounts({ apiBaseUrl, existingPrincipals }) {
   const existing = new Set(existingPrincipals);
   const targets = new Set();
   for (const [, command] of seedCommandPlanForGame(game)) {
-    const principalUserId =
+    const principalId =
       command.SeatPersona?.principal_id ??
       command.ProcessReplacement?.incoming_principal_id;
-    if (typeof principalUserId === "string" && !existing.has(principalUserId)) {
-      targets.add(principalUserId);
+    if (typeof principalId === "string" && !existing.has(principalId)) {
+      targets.add(principalId);
     }
   }
   return await Promise.all(
-    [...targets].sort().map((principalUserId) =>
+    [...targets].sort().map((principalId) =>
       createAccount(apiBaseUrl, {
-        accountId: `seed-${principalUserId}-${game}@example.test`,
-        password: `seed-account-password-${principalUserId}-${game}`,
-        principalUserId,
+        accountId: `seed-${principalId}-${game}@example.test`,
+        password: `seed-account-password-${principalId}-${game}`,
+        principalId,
       }),
     ),
   );
@@ -421,7 +448,7 @@ async function createAccount(
   {
     accountId,
     password,
-    principalUserId,
+    principalId,
     globalCapabilities = [],
     bearerToken = rootAdminSessionToken,
   },
@@ -435,13 +462,13 @@ async function createAccount(
     body: JSON.stringify({
       account_id: accountId,
       password,
-      principal_user_id: principalUserId,
+      principal_id: authorityPrincipalId(principalId),
       global_capabilities: globalCapabilities,
     }),
   });
   return {
     accountId: response.account_id,
-    principalUserId: response.principal_user_id,
+    principalId,
     globalCapabilities: response.global_capabilities,
   };
 }
@@ -451,7 +478,7 @@ async function createInvite(
   {
     inviteToken,
     accountId,
-    principalUserId,
+    principalId,
     globalCapabilities = [],
     gameScope = null,
     bearerToken = rootAdminSessionToken,
@@ -466,7 +493,7 @@ async function createInvite(
     body: JSON.stringify({
       invite_token: inviteToken,
       account_id: accountId,
-      expected_principal_user_id: principalUserId,
+      expected_principal_id: authorityPrincipalId(principalId),
       expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
       ...(gameScope === null ? {} : { game: gameScope }),
       global_capabilities: globalCapabilities,
@@ -474,11 +501,11 @@ async function createInvite(
   });
   return {
     accountId: response.account_id,
-    principalUserId: response.principal_user_id,
+    principalId,
     expiresAt: response.expires_at,
     game: response.game,
     globalCapabilities: response.global_capabilities,
-    invitedByUserId: response.invited_by_user_id,
+    invitedByPrincipalId: response.invited_by_principal_id,
     deliveryId: response.delivery_id,
     deliveryStatus: response.delivery_status,
     deliveryAttemptCount: response.delivery_attempt_count,
@@ -547,7 +574,7 @@ async function driveInviteLogin({
       role,
       loginUrl,
       returnTo,
-      principalUserId: session.principal_user_id,
+      principalId: session.principal_id,
       accountId: accountCredential.accountId,
       capabilityKinds,
       sessionToken: sessionCookie.value,
@@ -616,7 +643,7 @@ async function driveAccountLogin({
       loginUrl,
       returnTo,
       accountId,
-      principalUserId: session.principal_user_id,
+      principalId: session.principal_id,
       capabilityKinds,
       sessionToken: sessionCookie.value,
       cookie: {
@@ -645,7 +672,7 @@ async function driveAccountRegistration({
   )}&returnTo=${encodeURIComponent(returnTo)}`;
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   let sessionToken;
-  let principalUserId;
+  let principalId;
   try {
     await page.goto(`${frontendBaseUrl}${registrationRoleUrl}`, {
       waitUntil: "networkidle",
@@ -675,10 +702,9 @@ async function driveAccountRegistration({
     const session = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
       headers: { authorization: `Bearer ${sessionToken}` },
     });
-    principalUserId = session.principal_user_id;
+    principalId = session.principal_id;
     if (
-      typeof principalUserId !== "string" ||
-      !principalUserId.startsWith("registered-") ||
+      !isPrincipalId(principalId) ||
       (session.capabilities ?? []).length !== 0
     ) {
       throw new Error(`account registration session drifted: ${JSON.stringify(session)}`);
@@ -771,7 +797,7 @@ async function driveAccountRegistration({
     registrationSurfaceTestId: "auth-registration-classic-surface",
     securitySurfaceTestId: "account-security-surface",
     accountId: accountCredential.accountId,
-    principalUserId,
+    principalId,
     sessionToken,
     sessionCookiePrefix: "fmss_",
     sessionHasNoGameCapabilities: true,
@@ -1339,7 +1365,7 @@ async function proveIdentityLifecycle({
   await createInvite(apiBaseUrl, {
     inviteToken: revokedInviteToken,
     accountId: hostAccount.accountId,
-    principalUserId: "host_h",
+    principalId: "host_h",
   });
   const inviteRevocation = await revokeInvite({
     apiBaseUrl,
@@ -1356,7 +1382,7 @@ async function proveIdentityLifecycle({
   const recoveryInvite = await createInvite(apiBaseUrl, {
     inviteToken: recoveryInviteToken,
     accountId: hostAccount.accountId,
-    principalUserId: "host_h",
+    principalId: "host_h",
   });
   const inviteDelivery = await retryFailedDelivery({
     apiBaseUrl,
@@ -1709,7 +1735,7 @@ async function finishIdentityLifecycleProof({
 }) {
   const auditTrail = await fetchIdentityLifecycleAudit({
     apiBaseUrl,
-    principalUserId: "host_h",
+    principalId: "host_h",
   });
   const auditEventKinds = auditTrail.entries.map((entry) => entry.event_kind).sort();
   const passwordRotationAudit = auditTrail.entries.find(
@@ -1720,7 +1746,7 @@ async function finishIdentityLifecycleProof({
   );
   const registrationAuditTrail = await fetchIdentityLifecycleAudit({
     apiBaseUrl,
-    principalUserId: accountRegistration.principalUserId,
+    principalId: accountRegistration.principalId,
   });
   const registrationAuditEventKinds = registrationAuditTrail.entries
     .map((entry) => entry.event_kind)
@@ -1757,7 +1783,7 @@ async function finishIdentityLifecycleProof({
   const deliveryRetryAudit = auditTrail.entries.find(
     (entry) => entry.event_kind === "auth_delivery_retried",
   );
-  if (deliveryRetryAudit?.actor_user_id !== "root_admin") {
+  if (deliveryRetryAudit?.actor_principal_id !== "root_admin") {
     throw new Error("delivery retry audit did not identify the GlobalAdmin actor");
   }
   if ((passwordRotationAudit?.metadata?.revoked_session_count ?? 0) < 1) {
@@ -1841,7 +1867,7 @@ async function finishIdentityLifecycleProof({
       typedOutcomes: true,
       invite: inviteDelivery,
       recovery: recoveryDelivery,
-      retryActorUserId: deliveryRetryAudit.actor_user_id,
+      retryActorUserId: deliveryRetryAudit.actor_principal_id,
       rawCredentialsStored: false,
     },
     accountRegistration: {
@@ -1851,7 +1877,7 @@ async function finishIdentityLifecycleProof({
       registrationSurfaceTestId: accountRegistration.registrationSurfaceTestId,
       securitySurfaceTestId: accountRegistration.securitySurfaceTestId,
       accountId: accountRegistration.accountId,
-      principalUserId: accountRegistration.principalUserId,
+      principalId: accountRegistration.principalId,
       sessionCookiePrefix: accountRegistration.sessionCookiePrefix,
       sessionHasNoGameCapabilities: accountRegistration.sessionHasNoGameCapabilities,
       gameRolePendingReplacement: accountRegistration.gameRolePendingReplacement,
@@ -1867,7 +1893,7 @@ async function finishIdentityLifecycleProof({
     memberLifecycle,
     sessionRotation: {
       status: "passed",
-      principalUserId: rotation.principal_user_id,
+      principalId: rotation.principal_id,
       oldSessionRejected: true,
       rotatedSessionCapabilityKinds: (rotatedSession.capabilities ?? []).map(
         (capability) => capability.kind,
@@ -1894,12 +1920,12 @@ async function finishIdentityLifecycleProof({
     },
     sessionRevocation: {
       status: "passed",
-      principalUserId: sessionRevocation.principal_user_id,
+      principalId: sessionRevocation.principal_id,
       revokedSessionRejected: true,
     },
     inviteRevocation: {
       status: "passed",
-      principalUserId: inviteRevocation.principal_user_id,
+      principalId: inviteRevocation.principal_id,
       revokedInviteRejected: revokedInviteReject.status === "reject",
       recoveryCapabilityKinds: recovery.capabilityKinds,
       sameRoleSurface: new URL(recovery.loginUrl).searchParams.get("returnTo") === hostReturnTo,
@@ -1907,7 +1933,7 @@ async function finishIdentityLifecycleProof({
     hostScopedInviteIssuance,
     accountLogin: {
       status: "passed",
-      principalUserId: accountLogin.principalUserId,
+      principalId: accountLogin.principalId,
       accountId: accountLogin.accountId,
       capabilityKinds: accountLogin.capabilityKinds,
       sameRoleSurface:
@@ -2052,13 +2078,13 @@ async function finishIdentityLifecycleProof({
     },
     auditTrail: {
       status: "passed",
-      principalUserId: "host_h",
+      principalId: "host_h",
       eventKinds: auditEventKinds,
-      actorUserIds: [
+      actorPrincipalIds: [
         ...new Set(
           auditTrail.entries
-            .map((entry) => entry.actor_user_id)
-            .filter((actorUserId) => actorUserId !== null),
+            .map((entry) => entry.actor_principal_id)
+            .filter((actorPrincipalId) => actorPrincipalId !== null),
         ),
       ].sort(),
       rawTokensStored: false,
@@ -2079,7 +2105,7 @@ async function proveMemberLifecycleBrowser({ apiBaseUrl, frontendBaseUrl }) {
   await createAccount(apiBaseUrl, {
     accountId: memberLifecycleCredentials.accountId,
     password: memberLifecycleCredentials.password,
-    principalUserId: memberLifecycleCredentials.principalUserId,
+    principalId: memberLifecycleCredentials.principalId,
   });
   const returnTo = `/g/${game}`;
   const login = await driveAccountLogin({
@@ -2121,10 +2147,12 @@ async function proveMemberLifecycleBrowser({ apiBaseUrl, frontendBaseUrl }) {
     if (typeof downloadHref !== "string" || !downloadHref.startsWith(dataPrefix)) {
       throw new Error("personal export browser surface did not expose a JSON download");
     }
-    const artifact = JSON.parse(decodeURIComponent(downloadHref.slice(dataPrefix.length)));
+    const artifact = preserveFixturePrincipalAliases(
+      JSON.parse(decodeURIComponent(downloadHref.slice(dataPrefix.length))),
+    );
     if (
       artifact?.schema_version !== 1 ||
-      artifact?.principal_user_id !== memberLifecycleCredentials.principalUserId ||
+      artifact?.principal_id !== memberLifecycleCredentials.principalId ||
       artifact?.accounts?.[0]?.account_id !== memberLifecycleCredentials.accountId ||
       JSON.stringify(artifact).includes(memberLifecycleCredentials.password)
     ) {
@@ -2175,8 +2203,8 @@ async function proveHostScopedInviteIssuance({
   });
   const issued = await storedInviteRecord(hostSurface.inviteToken);
   if (
-    issued.invitedByUserId !== "host_h" ||
-    issued.principalUserId !== "player-mira" ||
+    issued.invitedByPrincipalId !== "host_h" ||
+    issued.principalId !== "player-mira" ||
     issued.accountId !== playerAccount.accountId
   ) {
     throw new Error(
@@ -2219,10 +2247,10 @@ async function proveHostScopedInviteIssuance({
     hostAction: "?/issuePlayerInvite",
     hostPanelTestId: "host-player-invite-panel",
     clickedThroughFromHostRoleUrl: hostSurface.clickedThroughFromHostRoleUrl,
-    issuedByPrincipalUserId: issued.invitedByUserId,
+    issuedByPrincipalId: issued.invitedByPrincipalId,
     issuedForGame: hostSurface.game,
     storedGameScope: issued.game,
-    principalUserId: player.principalUserId,
+    principalId: player.principalId,
     boundAccountId: issued.accountId,
     accountBindingRequired: true,
     globalCapabilitiesGranted: issued.globalCapabilities.length,
@@ -2449,10 +2477,10 @@ async function enableAccount({ apiBaseUrl, accountId }) {
   });
 }
 
-async function fetchIdentityLifecycleAudit({ apiBaseUrl, principalUserId }) {
+async function fetchIdentityLifecycleAudit({ apiBaseUrl, principalId }) {
   return await fetchJson(
-    `${apiBaseUrl}/auth/identity-lifecycle-audit?principal_user_id=${encodeURIComponent(
-      principalUserId,
+    `${apiBaseUrl}/auth/identity-lifecycle-audit?principal_id=${encodeURIComponent(
+      authorityPrincipalId(principalId),
     )}`,
     {
       headers: {
@@ -2496,7 +2524,7 @@ async function openAdminAccountLifecyclePage({
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const detailPath = `/admin/audit/identity-lifecycle?game=${encodeURIComponent(
     game,
-  )}&principal_user_id=host_h`;
+  )}&principal_id=${encodeURIComponent(authorityPrincipalId("host_h"))}`;
   const detailUrl = `${frontendBaseUrl}${detailPath}`;
   await page.context().addCookies([
     {
@@ -2519,14 +2547,17 @@ async function openAdminAccountLifecyclePage({
   const targetText = await page
     .getByTestId("admin-identity-account-control-target")
     .innerText();
-  if (!targetText.includes(accountId) || !targetText.includes("host_h")) {
+  if (
+    !targetText.includes(accountId) ||
+    !targetText.includes(authorityPrincipalId("host_h"))
+  ) {
     await page.close();
     throw new Error(`admin account lifecycle target drifted: ${targetText}`);
   }
   return {
     page,
     detailRoleUrl:
-      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
   };
 }
 
@@ -2565,7 +2596,7 @@ async function submitAdminAccountLifecycleControl({
   action,
   expectedState,
   expectedText,
-  detailRoleUrl = "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+  detailRoleUrl = "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
 }) {
   const actionConfig =
     action === "disable"
@@ -2627,9 +2658,9 @@ async function storedInviteRecord(inviteToken) {
     `
       SELECT json_build_object(
         'accountId', account_id,
-        'principalUserId', principal_user_id,
+        'principalId', principal_id,
         'game', COALESCE(game::TEXT, ''),
-        'invitedByUserId', invited_by_user_id,
+        'invitedByPrincipalId', invited_by_principal_id,
         'globalCapabilities', COALESCE(to_json(global_capabilities), '[]'::JSON)
       )::TEXT
       FROM auth_invite
@@ -2640,7 +2671,7 @@ async function storedInviteRecord(inviteToken) {
   if (json === "") {
     throw new Error("stored invite row was not found");
   }
-  return JSON.parse(json);
+  return preserveFixturePrincipalAliases(JSON.parse(json));
 }
 
 async function storedRecoveryCredentialRecords() {
@@ -2789,10 +2820,13 @@ async function driveAdminIdentityAuditSurface({
   rawTokens,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const overviewUrl = `${frontendBaseUrl}/admin?game=${encodeURIComponent(game)}`;
+  const auditPrincipalId = authorityPrincipalId("host_h");
+  const overviewUrl = `${frontendBaseUrl}/admin?game=${encodeURIComponent(
+    game,
+  )}&principal_id=${encodeURIComponent(auditPrincipalId)}`;
   const detailPath = `/admin/audit/identity-lifecycle?game=${encodeURIComponent(
     game,
-  )}&principal_user_id=host_h`;
+  )}&principal_id=${encodeURIComponent(auditPrincipalId)}`;
   const detailUrl = `${frontendBaseUrl}${detailPath}`;
   try {
     await page.context().addCookies([
@@ -2890,8 +2924,8 @@ async function driveAdminIdentityAuditSurface({
       visibleEventKinds.push(eventKind);
     }
     const bodyText = await page.locator("body").innerText();
-    if (!bodyText.includes("host_h")) {
-      throw new Error("admin identity lifecycle audit did not show the host principal");
+    if (!bodyText.includes(auditPrincipalId)) {
+      throw new Error("admin identity lifecycle audit did not show the canonical host principal");
     }
     for (const rawToken of rawTokens) {
       if (bodyText.includes(rawToken)) {
@@ -2932,14 +2966,14 @@ async function driveAdminIdentityAuditSurface({
     }
     return {
       status: "passed",
-      overviewRoleUrl: "/admin?game=<seeded-game>",
+      overviewRoleUrl: "/admin?game=<seeded-game>&principal_id=host_h",
       detailRoleUrl:
-        "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+        "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
       linkTestId: "admin-audit-link-identity-lifecycle",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleEventKinds,
-      principalUserId: "host_h",
+      principalId: "host_h",
       rawTokensVisible: false,
       deliveryProviderId,
       deliveryOutcomeKind,
@@ -3364,7 +3398,7 @@ function assertInviteProof(evidence) {
       "host-player-invite-panel" ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.clickedThroughFromHostRoleUrl !==
       true ||
-    evidence.identityLifecycle?.hostScopedInviteIssuance?.issuedByPrincipalUserId !==
+    evidence.identityLifecycle?.hostScopedInviteIssuance?.issuedByPrincipalId !==
       "host_h" ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.issuedForGame !== game ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.storedGameScope !== game ||
@@ -3379,7 +3413,7 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.hostScopedInviteIssuance?.sameRoleSurface !== true ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.hostRoleSurfaceStillValid !== true ||
     evidence.identityLifecycle?.accountLogin?.status !== "passed" ||
-    evidence.identityLifecycle?.accountLogin?.principalUserId !== "host_h" ||
+    evidence.identityLifecycle?.accountLogin?.principalId !== "host_h" ||
     evidence.identityLifecycle?.accountLogin?.accountId !==
       accountCredentials.host.accountId ||
     !evidence.identityLifecycle?.accountLogin?.capabilityKinds?.includes("HostOf") ||
@@ -3479,7 +3513,7 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountLifecycle?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
-      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h" ||
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.controlsTestId !==
       "admin-identity-account-controls" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface?.visitedDetailRoleUrl !==
@@ -3495,7 +3529,7 @@ function assertInviteProof(evidence) {
       ?.reloadRecoveryStatus !== "disabled" ||
     evidence.identityLifecycle?.accountLifecycle?.adminControlSurface
       ?.reloadRecoveryDetailRoleUrl !==
-      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h" ||
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h" ||
     !String(
       evidence.identityLifecycle?.accountLifecycle?.adminControlSurface
         ?.reloadRecoveryTargetText ?? "",
@@ -3619,7 +3653,7 @@ function assertInviteProof(evidence) {
   assertDevTestGameIdentityAdapterContractPacket(evidence.identityAdapterContract);
   if (
     evidence.accounts?.host?.accountId !== accountCredentials.host.accountId ||
-    evidence.accounts?.host?.principalUserId !== "host_h" ||
+    evidence.accounts?.host?.principalId !== "host_h" ||
     Object.hasOwn(evidence.accounts.host, "password")
   ) {
     throw new Error("invite proof must include only redacted account evidence");
@@ -3680,7 +3714,7 @@ async function startApi(applicationUrl) {
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...applicationDatabaseEnvironment({ applicationUrl }),
+      ...serverRuntimeEnvironment({ applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_SUBJECT_KEY_DIR: subjectKeyRoot,
@@ -3763,11 +3797,11 @@ async function startFrontend(apiBaseUrl) {
 
 // The strict wire rejects any actor field in the envelope; seed commands act
 // as a principal by presenting a granted session for that principal instead.
-async function seedSessionToken(apiBaseUrl, principalUserId) {
-  if (principalUserId === "root_admin") {
+async function seedSessionToken(apiBaseUrl, principalId) {
+  if (principalId === "root_admin") {
     return rootAdminSessionToken;
   }
-  const cached = seedSessionTokens.get(principalUserId);
+  const cached = seedSessionTokens.get(principalId);
   if (cached !== undefined) {
     return cached;
   }
@@ -3778,20 +3812,20 @@ async function seedSessionToken(apiBaseUrl, principalUserId) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      principal_user_id: principalUserId,
+      principal_id: authorityPrincipalId(principalId),
       expires_at: 4102444800,
       global_capabilities: ["GlobalAdmin"],
     }),
   });
   if (typeof granted.session_token !== "string" || granted.session_token === "") {
-    throw new Error(`session grant for ${principalUserId} returned no session_token`);
+    throw new Error(`session grant for ${principalId} returned no session_token`);
   }
-  seedSessionTokens.set(principalUserId, granted.session_token);
+  seedSessionTokens.set(principalId, granted.session_token);
   return granted.session_token;
 }
 
-async function sendCommand(apiBaseUrl, id, principalUserId, command) {
-  const sessionToken = await seedSessionToken(apiBaseUrl, principalUserId);
+async function sendCommand(apiBaseUrl, id, principalId, command) {
+  const sessionToken = await seedSessionToken(apiBaseUrl, principalId);
   const result = await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
     headers: {
@@ -3805,7 +3839,7 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
         kind: "Command",
         body: {
           command_id: randomUUID(),
-          command,
+          command: commandForAuthorityTransport(command),
         },
       },
     }),
@@ -3814,7 +3848,7 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
     throw new Error(`command rejected: ${JSON.stringify(result)}`);
   }
   return {
-    principalUserId,
+    principalId,
     kind: Object.keys(command)[0],
     streamSeqs: result.body.body.stream_seqs,
   };
@@ -3826,7 +3860,7 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(body)}`);
   }
-  return body;
+  return preserveFixturePrincipalAliases(body);
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {

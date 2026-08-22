@@ -14,7 +14,7 @@
   export let tasks = [];
   export let commandStatuses = {};
   export let game;
-  export let principalUserId;
+  export let principalId;
   export let onRecoveryTask = () => {};
   export let onCancelRecoveryTask = () => {};
 
@@ -26,7 +26,7 @@
     tasks,
     commandStatuses,
     game,
-    principalUserId,
+    principalId,
   });
   $: focusNewConfirmation(view.items);
 
@@ -123,8 +123,8 @@
             <input type="hidden" name="game" value={item.form.game} />
             <input
               type="hidden"
-              name="principalUserId"
-              value={item.form.principalUserId}
+              name="principalId"
+              value={item.form.principalId}
             />
             <button
               type="submit"

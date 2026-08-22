@@ -8,7 +8,7 @@ import { validateSecretCustodyPolicy } from "./production_promotion.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactPath = path.join(root, "target", "security-release-baseline", "report.json");
 
-const sensitiveKey = /(?:authorization|cookie|credential|email|login_name|password|principal_user_id|secret|session|signed_url|token|workos_user_id)/i;
+const sensitiveKey = /(?:authorization|cookie|credential|email|login_name|password|principal_id|secret|session|signed_url|token|workos_user_id)/i;
 const sensitiveTextPatterns = [
   /\bBearer\s+[A-Za-z0-9._~+/-]+=*/i,
   /\bfmss_[A-Za-z0-9._~-]+/i,
@@ -72,7 +72,7 @@ export function validateTelemetrySource(source, label) {
   for (const event of events) {
     assert.doesNotMatch(
       event,
-      /(?:principal_user_id|workos_user_id|login_name)\s*=/,
+      /(?:principal_id|workos_user_id|login_name)\s*=/,
       `${label} logs a concrete identity`,
     );
     assert.doesNotMatch(
@@ -213,7 +213,7 @@ export async function validateSecurityReleaseBaseline() {
 
   const canary = {
     authorization: "Bearer canary-secret-token",
-    principal_user_id: "principal-canary",
+    principal_id: "principal-canary",
     contact: "operator@private.invalid",
     provider: "sk_canaryprovidersecret000000",
     object: "AKIAIOSFODNN7EXAMPLE",

@@ -18,6 +18,7 @@ use uuid::Uuid;
 
 use crate::error::IdentityFlowError;
 use crate::methods;
+use crate::PrincipalId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedIdentity {
@@ -264,29 +265,29 @@ impl AccessTokenVerifier for StaticAccessTokenVerifier {
 
 #[derive(Debug, Clone)]
 pub struct WorkosResolution {
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub global_capabilities: Vec<String>,
     pub method_id: Uuid,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DiscoveredWorkosIdentity {
-    principal_user_id: String,
-    method_id: Option<Uuid>,
+    principal_id: PrincipalId,
+    method_id: Uuid,
 }
 
 async fn discover_subject(
     conn: &mut PgConnection,
     subject: &str,
 ) -> Result<Option<DiscoveredWorkosIdentity>, IdentityFlowError> {
-    Ok(sqlx::query_as::<_, (String, Option<Uuid>)>(
-        "SELECT principal_user_id, method_id FROM external_identity WHERE provider = 'workos' AND subject = $1",
+    Ok(sqlx::query_as::<_, (Uuid, Uuid)>(
+        "SELECT principal_id, method_id FROM external_identity WHERE provider = 'workos' AND subject = $1",
     )
     .bind(subject)
     .fetch_optional(&mut *conn)
     .await?
-    .map(|(principal_user_id, method_id)| DiscoveredWorkosIdentity {
-        principal_user_id,
+    .map(|(principal_id, method_id)| DiscoveredWorkosIdentity {
+        principal_id: PrincipalId::from_uuid(principal_id),
         method_id,
     }))
 }
@@ -294,10 +295,10 @@ async fn discover_subject(
 async fn lock_method(
     conn: &mut PgConnection,
     method_id: Uuid,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<String, IdentityFlowError> {
-    let (linked_principal, kind, status) = sqlx::query_as::<_, (String, String, String)>(
-        "SELECT principal_user_id, kind, status FROM authentication_method WHERE method_id = $1 FOR UPDATE",
+    let (linked_principal, kind, status) = sqlx::query_as::<_, (Uuid, String, String)>(
+        "SELECT principal_id, kind, status FROM authentication_method WHERE method_id = $1 FOR UPDATE",
     )
     .bind(method_id)
     .fetch_optional(&mut *conn)
@@ -307,7 +308,7 @@ async fn lock_method(
             "WorkOS identity references a missing authentication method".to_string(),
         )
     })?;
-    if linked_principal != principal_user_id || kind != crate::MethodKind::Workos.as_str() {
+    if linked_principal != principal_id.as_uuid() || kind != crate::MethodKind::Workos.as_str() {
         return Err(IdentityFlowError::Unauthorized);
     }
     Ok(status)
@@ -317,14 +318,14 @@ async fn lock_subject_binding(
     conn: &mut PgConnection,
     subject: &str,
 ) -> Result<Option<DiscoveredWorkosIdentity>, IdentityFlowError> {
-    Ok(sqlx::query_as::<_, (String, Option<Uuid>)>(
-        "SELECT principal_user_id, method_id FROM external_identity WHERE provider = 'workos' AND subject = $1 FOR UPDATE",
+    Ok(sqlx::query_as::<_, (Uuid, Uuid)>(
+        "SELECT principal_id, method_id FROM external_identity WHERE provider = 'workos' AND subject = $1 FOR UPDATE",
     )
     .bind(subject)
     .fetch_optional(&mut *conn)
     .await?
-    .map(|(principal_user_id, method_id)| DiscoveredWorkosIdentity {
-        principal_user_id,
+    .map(|(principal_id, method_id)| DiscoveredWorkosIdentity {
+        principal_id: PrincipalId::from_uuid(principal_id),
         method_id,
     }))
 }
@@ -396,33 +397,27 @@ pub async fn resolve_subject(
     // the canonical principal -> privacy-subject lock root; the binding is
     // re-read under lock only after its authentication method is locked.
     let discovered = discover_subject(conn, verified.subject.as_str()).await?;
-    let principal_user_id = discovered
+    let principal_id = discovered
         .as_ref()
-        .map(|identity| identity.principal_user_id.clone())
-        .unwrap_or_else(|| format!("principal-{}", Uuid::new_v4()));
-    methods::ensure_principal(conn, principal_user_id.as_str(), &[], now).await?;
+        .map(|identity| identity.principal_id)
+        .unwrap_or_else(PrincipalId::random);
+    methods::ensure_principal(conn, &principal_id, &[], now).await?;
     let owner = methods::lock_identity_mutation(
         conn,
-        principal_user_id.as_str(),
+        &principal_id,
         methods::IdentityMutationExtent::Authentication,
     )
     .await?;
     owner.require_active()?;
     let global_capabilities = owner.global_capabilities;
 
-    let method_id = if let Some(method_id) = discovered.as_ref().and_then(|row| row.method_id) {
-        if lock_method(conn, method_id, principal_user_id.as_str()).await? != "active" {
+    let method_id = if let Some(identity) = discovered.as_ref() {
+        if lock_method(conn, identity.method_id, &principal_id).await? != "active" {
             return Err(IdentityFlowError::Unauthorized);
         }
-        method_id
+        identity.method_id
     } else {
-        methods::create_method(
-            conn,
-            principal_user_id.as_str(),
-            crate::MethodKind::Workos,
-            now,
-        )
-        .await?
+        methods::create_method(conn, &principal_id, crate::MethodKind::Workos, now).await?
     };
 
     let locked_binding = lock_subject_binding(conn, verified.subject.as_str()).await?;
@@ -432,13 +427,12 @@ pub async fn resolve_subject(
     methods::touch_method(conn, method_id, now).await?;
     if discovered.is_some() {
         let updated = sqlx::query(
-            "UPDATE external_identity SET last_seen_at = $1, display_label = COALESCE($2, display_label), method_id = $3 WHERE provider = 'workos' AND subject = $4 AND principal_user_id = $5",
+            "UPDATE external_identity SET last_seen_at = $1, display_label = COALESCE($2, display_label) WHERE provider = 'workos' AND subject = $3 AND principal_id = $4",
         )
         .bind(now)
         .bind(verified.email.as_deref())
-        .bind(method_id)
         .bind(verified.subject.as_str())
-        .bind(principal_user_id.as_str())
+        .bind(principal_id.as_uuid())
         .execute(&mut *conn)
         .await?;
         if updated.rows_affected() != 1 {
@@ -446,10 +440,10 @@ pub async fn resolve_subject(
         }
     } else {
         sqlx::query(
-            "INSERT INTO external_identity (provider, subject, principal_user_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, $4, $4, $5)",
+            "INSERT INTO external_identity (provider, subject, principal_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, $4, $4, $5)",
         )
         .bind(verified.subject.as_str())
-        .bind(principal_user_id.as_str())
+        .bind(principal_id.as_uuid())
         .bind(verified.email.as_deref())
         .bind(now)
         .bind(method_id)
@@ -458,20 +452,20 @@ pub async fn resolve_subject(
         sqlx::query(
             r#"
             INSERT INTO identity_lifecycle_audit (
-                event_at, event_kind, actor_user_id, principal_user_id,
+                event_at, event_kind, actor_principal_id, principal_id,
                 token_hash, related_token_hash, metadata
             )
             VALUES ($1, 'external_identity_bound', NULL, $2, NULL, NULL, $3::JSONB)
             "#,
         )
         .bind(now)
-        .bind(principal_user_id.as_str())
+        .bind(principal_id.as_uuid())
         .bind(serde_json::json!({ "provider": "workos" }).to_string())
         .execute(&mut *conn)
         .await?;
     }
     Ok(WorkosResolution {
-        principal_user_id,
+        principal_id,
         global_capabilities,
         method_id,
     })
@@ -483,11 +477,11 @@ pub async fn resolve_subject(
 pub async fn attach_subject(
     conn: &mut PgConnection,
     verified: &VerifiedIdentity,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     now: i64,
 ) -> Result<WorkosResolution, IdentityFlowError> {
     lock_subject_advisory(conn, verified.subject.as_str()).await?;
-    attach_subject_under_advisory_lock(conn, verified, principal_user_id, now).await
+    attach_subject_under_advisory_lock(conn, verified, principal_id, now).await
 }
 
 /// Attach a WorkOS subject after the caller acquired
@@ -497,7 +491,7 @@ pub async fn attach_subject(
 pub async fn attach_subject_under_advisory_lock(
     conn: &mut PgConnection,
     verified: &VerifiedIdentity,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     now: i64,
 ) -> Result<WorkosResolution, IdentityFlowError> {
     if verified.expires_at <= now {
@@ -505,31 +499,29 @@ pub async fn attach_subject_under_advisory_lock(
     }
     reject_tombstoned_identity(conn, verified).await?;
     let discovered = discover_subject(conn, verified.subject.as_str()).await?;
-    methods::lock_active_principal_and_subject(conn, principal_user_id, now).await?;
+    methods::lock_active_principal_and_subject(conn, principal_id, now).await?;
     let owner = methods::lock_identity_mutation(
         conn,
-        principal_user_id,
+        principal_id,
         methods::IdentityMutationExtent::Authentication,
     )
     .await?;
     owner.require_active()?;
     let global_capabilities = owner.global_capabilities;
     if let Some(identity) = &discovered {
-        if identity.principal_user_id != principal_user_id {
+        if identity.principal_id != *principal_id {
             return Err(IdentityFlowError::AlreadyExists(
                 "this WorkOS identity is linked to another principal",
             ));
         }
     }
 
-    let (method_id, method_status) = if let Some(method_id) =
-        discovered.as_ref().and_then(|row| row.method_id)
-    {
-        let status = lock_method(conn, method_id, principal_user_id).await?;
-        (method_id, Some(status))
+    let (method_id, method_status) = if let Some(identity) = discovered.as_ref() {
+        let status = lock_method(conn, identity.method_id, principal_id).await?;
+        (identity.method_id, Some(status))
     } else {
         (
-            methods::create_method(conn, principal_user_id, crate::MethodKind::Workos, now).await?,
+            methods::create_method(conn, principal_id, crate::MethodKind::Workos, now).await?,
             None,
         )
     };
@@ -557,13 +549,12 @@ pub async fn attach_subject_under_advisory_lock(
     methods::touch_method(conn, method_id, now).await?;
     if discovered.is_some() {
         let updated = sqlx::query(
-            "UPDATE external_identity SET last_seen_at = $1, display_label = COALESCE($2, display_label), method_id = $3 WHERE provider = 'workos' AND subject = $4 AND principal_user_id = $5",
+            "UPDATE external_identity SET last_seen_at = $1, display_label = COALESCE($2, display_label) WHERE provider = 'workos' AND subject = $3 AND principal_id = $4",
         )
         .bind(now)
         .bind(verified.email.as_deref())
-        .bind(method_id)
         .bind(verified.subject.as_str())
-        .bind(principal_user_id)
+        .bind(principal_id.as_uuid())
         .execute(&mut *conn)
         .await?;
         if updated.rows_affected() != 1 {
@@ -571,10 +562,10 @@ pub async fn attach_subject_under_advisory_lock(
         }
     } else {
         sqlx::query(
-            "INSERT INTO external_identity (provider, subject, principal_user_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, $4, $4, $5)",
+            "INSERT INTO external_identity (provider, subject, principal_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, $4, $4, $5)",
         )
         .bind(verified.subject.as_str())
-        .bind(principal_user_id)
+        .bind(principal_id.as_uuid())
         .bind(verified.email.as_deref())
         .bind(now)
         .bind(method_id)
@@ -582,7 +573,7 @@ pub async fn attach_subject_under_advisory_lock(
         .await?;
     }
     Ok(WorkosResolution {
-        principal_user_id: principal_user_id.to_string(),
+        principal_id: *principal_id,
         global_capabilities,
         method_id,
     })

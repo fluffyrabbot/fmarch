@@ -1,6 +1,10 @@
 import { buildAppShell } from "../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../lib/app/app-surface-header-model.mjs";
 import { fetchJson } from "../../../../lib/app/cold-load.mjs";
+import {
+  canonicalPrincipalId,
+  FIXTURE_PRINCIPAL_IDS,
+} from "../../../../lib/principal-id.mjs";
 import { resolveHostConsoleAccess } from "../host/host-route-model.mjs";
 import { buildHostSetupWorkflow } from "./setup-workflow-model.mjs";
 
@@ -13,13 +17,13 @@ export const HOST_SETUP_ROUTE_CONTRACT = Object.freeze({
 export async function buildHostSetupRouteData({
   game,
   capabilities = [],
-  principalUserId = "host_h",
+  principalId = FIXTURE_PRINCIPAL_IDS.hostH,
   fetchImpl = null,
   apiBaseUrl = "",
   sessionToken = null,
 }) {
   const gameId = normalizeId(game, "game");
-  const principal = normalizeId(principalUserId, "principalUserId");
+  const principal = requirePrincipalId(principalId, "principalId");
   const access = resolveHostConsoleAccess({ game: gameId, capabilities });
   const serverSetupStateEndpoint = hostSetupStateUrl({
     apiBaseUrl,
@@ -43,7 +47,7 @@ export async function buildHostSetupRouteData({
     shell: buildAppShell({
       game: gameId,
       activeSurface: "moderator",
-      principalUserId: principal,
+      principalId: principal,
       capabilities,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
@@ -60,7 +64,7 @@ export async function buildHostSetupRouteData({
       label: gameId,
     }),
     session: Object.freeze({
-      principalUserId: principal,
+      principalId: principal,
     }),
     commandEndpoint: "/commands",
     setupStateEndpoint: browserSetupStateEndpoint,
@@ -226,7 +230,7 @@ export function normalizeHostSetupState(raw, { game }) {
           slotId: normalizeId(slot.slot_id, "slot.slot_id"),
           personaId: normalizeOptionalText(slot.persona_id),
           publicName: normalizeOptionalText(slot.public_name),
-          assignedPrincipalId: normalizeOptionalText(slot.assigned_principal_id),
+          assignedPrincipalId: canonicalPrincipalId(slot.assigned_principal_id),
           alive: slot.alive !== false,
           status: normalizeOptionalText(slot.status) ?? "alive",
           statusTags: Object.freeze(
@@ -318,8 +322,8 @@ export function occupiedSetupInviteTargets(setupState) {
       .map((slot) =>
         Object.freeze({
           slotId: slot.slotId,
-          principalUserId: slot.assignedPrincipalId,
-          expectedOccupantUserId: slot.assignedPrincipalId,
+          principalId: slot.assignedPrincipalId,
+          expectedOccupantPrincipalId: slot.assignedPrincipalId,
           targetLabel: `${slotLabel(slot.slotId)} / ${slot.publicName}`,
         }),
       ),
@@ -355,7 +359,7 @@ function hostSetupFixtureState({ game }) {
         slot_id: "slot_1",
         persona_id: "00000000-0000-0000-0000-000000000701",
         public_name: "Mira",
-        assigned_principal_id: "player_mira",
+        assigned_principal_id: FIXTURE_PRINCIPAL_IDS.setupPlayerMira,
         alive: true,
         status: "alive",
         status_tags: Object.freeze([]),
@@ -458,4 +462,12 @@ function normalizeId(value, field) {
     throw new TypeError(`${field} must be a non-empty string`);
   }
   return normalized;
+}
+
+function requirePrincipalId(value, field) {
+  const principalId = canonicalPrincipalId(value);
+  if (principalId === null) {
+    throw new TypeError(`${field} must be a canonical UUID`);
+  }
+  return principalId;
 }

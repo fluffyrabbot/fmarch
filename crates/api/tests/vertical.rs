@@ -12,6 +12,7 @@ use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
 use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
 use media::{MediaLimits, MediaStore, VariantLimits};
+use principal::PrincipalId;
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -27,6 +28,10 @@ use wire::{
     ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage,
     VoteTarget, PROTOCOL_VERSION,
 };
+
+fn fixture_principal_json(label: impl AsRef<str>) -> serde_json::Value {
+    serde_json::json!(PrincipalId::fixture(label))
+}
 
 fn test_pack_artifact(key: &str) -> content_registry::PackArtifactSnapshot {
     content_registry::select_pack_artifact(key).expect("select verified test pack artifact")
@@ -132,7 +137,20 @@ async fn last_logical_event_payload(
 
 async fn issue_dev_session(
     app: &axum::Router,
-    principal_user_id: &str,
+    principal_label: &str,
+    global_capabilities: &[&str],
+) -> String {
+    issue_dev_session_for_principal(
+        app,
+        PrincipalId::fixture(principal_label),
+        global_capabilities,
+    )
+    .await
+}
+
+async fn issue_dev_session_for_principal(
+    app: &axum::Router,
+    principal_id: PrincipalId,
     global_capabilities: &[&str],
 ) -> String {
     let response = app
@@ -144,7 +162,7 @@ async fn issue_dev_session(
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
-                        "principal_user_id": principal_user_id,
+                        "principal_id": principal_id,
                         "expires_at": 4_102_444_800i64,
                         "global_capabilities": global_capabilities
                     })
@@ -165,10 +183,10 @@ async fn issue_dev_session(
 
 async fn get_as_dev_principal(
     app: &axum::Router,
-    principal_user_id: &str,
+    principal_id: &str,
     uri: impl AsRef<str>,
 ) -> axum::response::Response {
-    let session_token = issue_dev_session(app, principal_user_id, &[]).await;
+    let session_token = issue_dev_session(app, principal_id, &[]).await;
     app.clone()
         .oneshot(
             Request::builder()
@@ -235,11 +253,11 @@ async fn issue_websocket_ticket(
 
 async fn issue_dev_websocket_ticket(
     app: &axum::Router,
-    principal_user_id: &str,
+    principal_id: &str,
     game: Uuid,
     channel: &str,
 ) -> String {
-    let session_token = issue_dev_session(app, principal_user_id, &[]).await;
+    let session_token = issue_dev_session(app, principal_id, &[]).await;
     issue_websocket_ticket(app, &session_token, game, channel).await
 }
 
@@ -325,7 +343,7 @@ async fn create_test_auth_account(
     admin_token: &str,
     account_id: &str,
     password: &str,
-    principal_user_id: &str,
+    principal_label: &str,
 ) {
     let response = app
         .clone()
@@ -339,7 +357,7 @@ async fn create_test_auth_account(
                     serde_json::json!({
                         "account_id": account_id,
                         "password": password,
-                        "principal_user_id": principal_user_id
+                        "principal_id": PrincipalId::fixture(principal_label)
                     })
                     .to_string(),
                 ))
@@ -369,7 +387,7 @@ async fn fresh_database_bootstraps_exactly_one_global_admin(pool: sqlx::PgPool) 
         SELECT identity.display_label, principal.global_capabilities
         FROM external_identity AS identity
         JOIN platform_principal AS principal
-          ON principal.principal_user_id = identity.principal_user_id
+          ON principal.principal_id = identity.principal_id
         ORDER BY identity.display_label
         "#,
     )
@@ -412,11 +430,6 @@ async fn verified_workos_sid_tombstones_return_the_exact_provider_logout_recover
     pool: sqlx::PgPool,
 ) {
     let cases = [
-        (
-            "workos-recover-migration-cutover",
-            "session_01HQAG1HENBZMAZD82YRXDFC0B",
-            "migration_cutover",
-        ),
         (
             "workos-recover-logout",
             "session_01HQAG1HENBZMAZD82YRXDFC0C",
@@ -763,9 +776,9 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
-    let bindings = sqlx::query_as::<_, (String, String, String)>(
+    let bindings = sqlx::query_as::<_, (String, Uuid, String)>(
         r#"
-        SELECT identity.subject, identity.principal_user_id, identity.display_label
+        SELECT identity.subject, identity.principal_id, identity.display_label
         FROM external_identity AS identity
         WHERE identity.provider = 'workos'
         "#,
@@ -798,9 +811,9 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
     // Disabling the principal kills both the existing session and any future
     // exchange.
     sqlx::query(
-        "UPDATE platform_principal SET status = 'disabled', disabled_at = 1 WHERE principal_user_id = $1",
+        "UPDATE platform_principal SET status = 'disabled', disabled_at = 1 WHERE principal_id = $1",
     )
-    .bind(bindings[0].1.as_str())
+    .bind(bindings[0].1)
     .execute(&pool)
     .await
     .unwrap();
@@ -1054,11 +1067,11 @@ async fn workos_logout_fails_closed_if_persisted_provider_session_custody_is_cor
 
 async fn create_media_upload_account_session(app: &axum::Router, label: &str) -> (String, String) {
     let account_id = format!("media-upload-{label}@example.test");
-    let principal_user_id = format!("media_upload_{label}");
+    let principal_id = format!("media_upload_{label}");
     let password = "correct horse battery";
     let admin_token =
         issue_dev_session(app, &format!("media_admin_{label}"), &["GlobalAdmin"]).await;
-    create_test_auth_account(app, &admin_token, &account_id, password, &principal_user_id).await;
+    create_test_auth_account(app, &admin_token, &account_id, password, &principal_id).await;
     let response = app
         .clone()
         .oneshot(
@@ -1081,7 +1094,7 @@ async fn create_media_upload_account_session(app: &axum::Router, label: &str) ->
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let response: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let session_token = response["session_token"].as_str().unwrap().to_string();
-    (session_token, principal_user_id)
+    (session_token, principal_id)
 }
 
 async fn post_media_upload(
@@ -1233,9 +1246,9 @@ async fn media_upload_rejects_missing_expired_revoked_and_disabled_sessions_with
     let (expired_token, expired_principal) =
         create_media_upload_account_session(&app, "expired").await;
     sqlx::query(
-        "UPDATE auth_session SET authenticated_at = 1, created_at = 1, expires_at = 2, idle_expires_at = 2 WHERE principal_user_id = $1",
+        "UPDATE auth_session SET authenticated_at = 1, created_at = 1, expires_at = 2, idle_expires_at = 2 WHERE principal_id = $1",
     )
-        .bind(&expired_principal)
+        .bind(PrincipalId::fixture(&expired_principal).as_uuid())
         .execute(&pool)
         .await
         .unwrap();
@@ -1244,8 +1257,8 @@ async fn media_upload_rejects_missing_expired_revoked_and_disabled_sessions_with
 
     let (revoked_token, revoked_principal) =
         create_media_upload_account_session(&app, "revoked").await;
-    sqlx::query("UPDATE auth_session SET revoked_at = 1 WHERE principal_user_id = $1")
-        .bind(&revoked_principal)
+    sqlx::query("UPDATE auth_session SET revoked_at = 1 WHERE principal_id = $1")
+        .bind(PrincipalId::fixture(&revoked_principal).as_uuid())
         .execute(&pool)
         .await
         .unwrap();
@@ -1269,9 +1282,9 @@ async fn media_upload_rejects_missing_expired_revoked_and_disabled_sessions_with
     assert_eq!(disabled.status(), StatusCode::OK);
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM auth_session WHERE principal_user_id = $1 AND revoked_at IS NOT NULL",
+            "SELECT COUNT(*) FROM auth_session WHERE principal_id = $1 AND revoked_at IS NOT NULL",
         )
-        .bind(&disabled_principal)
+        .bind(PrincipalId::fixture(&disabled_principal).as_uuid())
         .fetch_one(&pool)
         .await
         .unwrap(),
@@ -1482,7 +1495,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
                 outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_1")
                     .await
                     .as_uuid(),
-                incoming_principal_id: incoming_principal.clone(),
+                incoming_principal_id: PrincipalId::fixture(&incoming_principal),
             },
         )
         .await,
@@ -1771,7 +1784,7 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
             wire::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: principal.into(),
+                user: principal,
             },
             Command::AssignRole {
                 game,
@@ -1934,7 +1947,7 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                     game,
                     slot: slot.into(),
                     outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await.as_uuid(),
-                    incoming_principal_id: incoming.into(),
+                    incoming_principal_id: PrincipalId::fixture(incoming),
                 },
             )
             .await,
@@ -2194,7 +2207,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
             wire::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: principal.into(),
+                user: principal,
             },
             Command::AssignRole {
                 game,
@@ -2314,7 +2327,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                 outgoing_persona_id: current_slot_persona_id(&pool, game, dead_slot)
                     .await
                     .as_uuid(),
-                incoming_principal_id: incoming.clone(),
+                incoming_principal_id: PrincipalId::fixture(&incoming),
             },
         )
         .await,
@@ -2601,7 +2614,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
             "host_h",
             Command::GrantSpectator {
                 game,
-                user: spectator.clone(),
+                principal_id: PrincipalId::fixture(&spectator),
             },
         )
         .await,
@@ -2613,7 +2626,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
             "host_h",
             Command::GrantSpectator {
                 game,
-                user: spectator.clone(),
+                principal_id: PrincipalId::fixture(&spectator),
             },
         )
         .await,
@@ -2828,7 +2841,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
             "host_h",
             Command::RevokeSpectator {
                 game,
-                user: spectator.clone(),
+                principal_id: PrincipalId::fixture(&spectator),
             },
         )
         .await,
@@ -2921,7 +2934,7 @@ fn stable_command_id(id: u64) -> Uuid {
 fn command_envelope_with_command_id(
     id: u64,
     command_id: Uuid,
-    _principal_user_id: &str,
+    _principal_id: &str,
     command: Command,
 ) -> ClientEnvelope {
     ClientEnvelope::new(
@@ -2936,29 +2949,29 @@ fn command_envelope_with_command_id(
 async fn post_command(
     app: axum::Router,
     id: u64,
-    principal_user_id: &str,
+    principal_id: &str,
     command: Command,
 ) -> ServerEnvelope {
-    post_command_with_command_id(app, id, stable_command_id(id), principal_user_id, command).await
+    post_command_with_command_id(app, id, stable_command_id(id), principal_id, command).await
 }
 
 async fn post_command_with_command_id(
     app: axum::Router,
     id: u64,
     command_id: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     command: Command,
 ) -> ServerEnvelope {
     let private_claim_principal = match &command {
-        Command::SeatPersona { principal_id, .. } => Some(principal_id.as_str()),
+        Command::SeatPersona { principal_id, .. } => Some(*principal_id),
         Command::ProcessReplacement {
             incoming_principal_id,
             ..
-        } => Some(incoming_principal_id.as_str()),
+        } => Some(*incoming_principal_id),
         _ => None,
     };
     if let Some(private_claim_principal) = private_claim_principal {
-        let _ = issue_dev_session(&app, private_claim_principal, &[]).await;
+        let _ = issue_dev_session_for_principal(&app, private_claim_principal, &[]).await;
     }
     let global_capabilities = if matches!(&command, Command::CreateGame { .. }) {
         vec!["GlobalAdmin"]
@@ -2968,11 +2981,11 @@ async fn post_command_with_command_id(
     let body = serde_json::to_vec(&command_envelope_with_command_id(
         id,
         command_id,
-        principal_user_id,
+        principal_id,
         command,
     ))
     .unwrap();
-    let token = issue_dev_session(&app, principal_user_id, &global_capabilities).await;
+    let token = issue_dev_session(&app, principal_id, &global_capabilities).await;
     let response = app
         .clone()
         .oneshot(
@@ -3083,7 +3096,7 @@ async fn seed_single_vote_game(app: axum::Router, game: Uuid) {
             wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
-                user: "user_a".into(),
+                user: "user_a",
             },
         )
         .await,
@@ -3122,7 +3135,7 @@ async fn seed_single_vote_game(app: axum::Router, game: Uuid) {
             wire::seat_persona! {
                 game,
                 slot: "slot_3".into(),
-                user: "user_b".into(),
+                user: "user_b",
             },
         )
         .await,
@@ -3209,7 +3222,7 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
                 wire::seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user_id.into(),
+                    user: user_id,
                 },
             )
             .await,
@@ -3235,7 +3248,7 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
             "host_h",
             Command::AddCohost {
                 game,
-                user: "cohost_c".into(),
+                principal_id: PrincipalId::fixture("cohost_c"),
             },
         )
         .await,
@@ -3364,7 +3377,7 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
                 wire::seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user_id.into(),
+                    user: user_id,
                 },
             )
             .await,
@@ -3590,18 +3603,16 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
-    let mut connection = pool.acquire().await.unwrap();
-    identity::methods::ensure_principal(&mut connection, "player_mira", &[], 1)
-        .await
-        .unwrap();
-    drop(connection);
-    sqlx::query(
-        "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, global_capabilities) VALUES ('mira@example.test', 'player_mira', 'unused-in-this-test', 1, '{}')",
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     let app = router(pool);
+    let admin_token = issue_dev_session(&app, "host_setup_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &admin_token,
+        "mira@example.test",
+        "correct horse battery",
+        "player_mira",
+    )
+    .await;
     let game = Uuid::new_v4();
     let raffle_program: game_platform::DayProgram =
         serde_json::from_str(include_str!("../../../programs/raffle.v1.program.json")).unwrap();
@@ -3627,7 +3638,7 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
             wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
-                user: "player_mira".into(),
+                user: "player_mira",
             },
         ),
         (
@@ -3804,7 +3815,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
             wire::seat_persona! {
                 game,
                 slot: "slot_4".into(),
-                user: "action-goon".into(),
+                user: "action-goon",
             },
         ),
         (
@@ -3822,7 +3833,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
             wire::seat_persona! {
                 game,
                 slot: "slot-2".into(),
-                user: "action-target".into(),
+                user: "action-target",
             },
         ),
         (
@@ -3840,7 +3851,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
             wire::seat_persona! {
                 game,
                 slot: "slot-3".into(),
-                user: "action-town".into(),
+                user: "action-town",
             },
         ),
         (
@@ -4120,7 +4131,7 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
             wire::seat_persona! {
                 game,
                 slot: "slot_4".into(),
-                user: "action-goon".into(),
+                user: "action-goon",
             },
         ),
         (
@@ -4138,7 +4149,7 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
             wire::seat_persona! {
                 game,
                 slot: "slot-2".into(),
-                user: "action-target".into(),
+                user: "action-target",
             },
         ),
         (
@@ -4156,7 +4167,7 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
             wire::seat_persona! {
                 game,
                 slot: "slot-3".into(),
-                user: "action-town".into(),
+                user: "action-town",
             },
         ),
         (
@@ -4821,7 +4832,7 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
             wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
-                user: "user_a".into(),
+                user: "user_a",
             },
         ),
         (
@@ -4836,7 +4847,7 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
             505,
             Command::AddCohost {
                 game,
-                user: "cohost_c".into(),
+                principal_id: PrincipalId::fixture("cohost_c"),
             },
         ),
         (
@@ -5090,7 +5101,7 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
                 wire::seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,
@@ -5266,7 +5277,7 @@ async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::
                 wire::seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user_id.into(),
+                    user: user_id,
                 },
             )
             .await,
@@ -5386,7 +5397,7 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
             wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
-                user: "user_a".into(),
+                user: "user_a",
             },
         )
         .await,
@@ -5514,10 +5525,11 @@ async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: s
     sqlx::query(
         "INSERT INTO moderation_target_state \
          (surface_id, source_seq, visibility, reason, moderator_principal_id, updated_seq) \
-         VALUES ($1, $2, 'hidden', 'confirmed abuse', 'global_mod', 42)",
+         VALUES ($1, $2, 'hidden', 'confirmed abuse', $3, 42)",
     )
     .bind(game)
     .bind(hidden_source_seq)
+    .bind(PrincipalId::fixture("global_mod").as_uuid())
     .execute(&pool)
     .await
     .unwrap();
@@ -5780,26 +5792,17 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     let discussion_member_token = issue_dev_session(&app, "discussion_member", &[]).await;
     let discussion_moderator_token =
         issue_dev_session(&app, "discussion_moderator", &["GlobalMod"]).await;
-    for (principal_user_id, globals) in [
-        ("discussion_member", serde_json::json!([])),
-        ("discussion_moderator", serde_json::json!(["GlobalMod"])),
-    ] {
-        sqlx::query(
-            "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, 'test-only', 1, NULL, $3)",
+    let account_admin_token =
+        issue_dev_session(&app, "discussion_account_admin", &["GlobalAdmin"]).await;
+    for principal_label in ["discussion_member", "discussion_moderator"] {
+        create_test_auth_account(
+            &app,
+            &account_admin_token,
+            &format!("{principal_label}@example.test"),
+            "correct horse battery",
+            principal_label,
         )
-        .bind(format!("{principal_user_id}@example.test"))
-        .bind(principal_user_id)
-        .bind(
-            globals
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|value| value.as_str().unwrap().to_string())
-                .collect::<Vec<_>>(),
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        .await;
     }
 
     for (token, handle, display_name) in [
@@ -5971,8 +5974,9 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     assert_eq!(rejected_post.status(), StatusCode::CONFLICT);
 
     sqlx::query(
-        "UPDATE platform_principal SET status = 'disabled', disabled_at = 2 WHERE principal_user_id = 'discussion_member'",
+        "UPDATE platform_principal SET status = 'disabled', disabled_at = 2 WHERE principal_id = $1",
     )
+    .bind(PrincipalId::fixture("discussion_member").as_uuid())
     .execute(&pool)
     .await
     .unwrap();
@@ -6256,7 +6260,7 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
                 "title": "Subscription API",
                 "description": "Watched updates"
             }),
-            eventstore::ActorId::Principal("moderator".into()),
+            eventstore::ActorId::Principal(PrincipalId::fixture("moderator")),
             1,
         )],
     )
@@ -6337,12 +6341,9 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
     assert!(inbox.items[0]
         .href
         .contains("/discussions/subscription-api/t/"));
-    assert!(!serde_json::to_string(&inbox)
-        .unwrap()
-        .contains(&watcher_principal));
-    assert!(!serde_json::to_string(&inbox)
-        .unwrap()
-        .contains(&author_principal));
+    let inbox_json = serde_json::to_string(&inbox).unwrap();
+    assert!(!inbox_json.contains(&PrincipalId::fixture(&watcher_principal).to_string()));
+    assert!(!inbox_json.contains(&PrincipalId::fixture(&author_principal).to_string()));
 
     let author_inbox = app
         .clone()
@@ -6417,14 +6418,16 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
         create_media_upload_account_session(&app, "moderation-member").await;
     let moderator_principal = "community_moderator";
     let moderator_token = issue_dev_session(&app, moderator_principal, &["GlobalMod"]).await;
-    sqlx::query(
-        "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, 'test-only', 1, NULL, ARRAY['GlobalMod'])",
+    let account_admin_token =
+        issue_dev_session(&app, "moderation_account_admin", &["GlobalAdmin"]).await;
+    create_test_auth_account(
+        &app,
+        &account_admin_token,
+        "community-moderator@example.test",
+        "correct horse battery",
+        moderator_principal,
     )
-    .bind("community-moderator@example.test")
-    .bind(moderator_principal)
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     let upload = post_media_upload(
         &app,
@@ -6458,11 +6461,11 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                 "GameCreated",
                 1,
                 serde_json::json!({
-                    "host": "host",
+                    "host_principal_id": PrincipalId::fixture("host"),
                     "pack_ref": pack_artifact.pack_ref.clone(),
                     "pack_artifact": pack_artifact,
                 }),
-                eventstore::ActorId::Principal("host".into()),
+                eventstore::ActorId::Principal(PrincipalId::fixture("host")),
                 1,
             ),
             eventstore::EventInput::new(
@@ -6627,7 +6630,10 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
         .unwrap();
     let detail: ModerationCaseDetail =
         serde_json::from_slice(&to_bytes(detail.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert_eq!(detail.reports[0].reporter_principal_id, member_principal);
+    assert_eq!(
+        detail.reports[0].reporter_principal_id,
+        PrincipalId::fixture(&member_principal)
+    );
 
     let ticket = issue_websocket_ticket(&app, member_token.as_str(), game, "main").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -6972,7 +6978,8 @@ async fn profile_api_uses_enabled_accounts_and_principal_addressed_editing(pool:
     let bytes = to_bytes(public.into_body(), usize::MAX).await.unwrap();
     let public: PublicProfile = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(public.display_name, "Owner Profile");
-    assert!(!String::from_utf8_lossy(&bytes).contains(owner_principal.as_str()));
+    assert!(!String::from_utf8_lossy(&bytes)
+        .contains(&PrincipalId::fixture(&owner_principal).to_string()));
 
     let other_without_profile = app
         .clone()
@@ -7108,13 +7115,14 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     let game = Uuid::new_v4();
     let game_text = game.to_string();
     let persona_id = Uuid::new_v4();
+    let user_a = PrincipalId::fixture("user_a");
     let mut connection = pool.acquire().await.unwrap();
-    identity::methods::ensure_principal(&mut connection, "user_a", &[], 1)
+    identity::methods::ensure_principal(&mut connection, &user_a, &[], 1)
         .await
         .unwrap();
     drop(connection);
     let mut persona_tx = pool.begin().await.unwrap();
-    let subject_id = identity::ensure_active_subject(&mut persona_tx, "user_a", 1)
+    let subject_id = identity::ensure_active_subject(&mut persona_tx, user_a, 1)
         .await
         .unwrap();
     let persona_scope_key = persona_id.to_string();
@@ -7282,7 +7290,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
     let (nonmember_token, _) =
         create_media_upload_account_session(&app, "private-event-nonmember").await;
     let game = Uuid::new_v4();
-    let host = caps::Principal::user("host_h");
+    let host = caps::Principal::authenticated(PrincipalId::fixture("host_h"));
     for command in [
         commands::Command::CreateGame {
             game,
@@ -7335,7 +7343,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
     .unwrap();
     commands::handle(
         &pool,
-        &caps::Principal::user(&member_principal),
+        &caps::Principal::authenticated(PrincipalId::fixture(&member_principal)),
         commands::Command::SubmitDayEventParticipation {
             game,
             event_id: event_id.clone(),
@@ -7348,7 +7356,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
     let secret = "event-channel-secret-never-crosses-denied-boundaries";
     commands::handle(
         &pool,
-        &caps::Principal::user(&member_principal),
+        &caps::Principal::authenticated(PrincipalId::fixture(&member_principal)),
         commands::Command::SubmitPost {
             game,
             channel_id: channel_id.clone(),
@@ -7448,7 +7456,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
 
     commands::handle(
         &pool,
-        &caps::Principal::user(&member_principal),
+        &caps::Principal::authenticated(PrincipalId::fixture(&member_principal)),
         commands::Command::WithdrawDayEventParticipation {
             game,
             event_id: event_id.clone(),
@@ -7523,7 +7531,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
 
     commands::handle(
         &pool,
-        &caps::Principal::user(&member_principal),
+        &caps::Principal::authenticated(PrincipalId::fixture(&member_principal)),
         commands::Command::SubmitDayEventParticipation {
             game,
             event_id: event_id.clone(),
@@ -7540,7 +7548,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
             game,
             slot: "slot_1".into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_1").await,
-            incoming_principal_id: replacement_principal,
+            incoming_principal_id: PrincipalId::fixture(&replacement_principal),
         },
     )
     .await
@@ -7643,7 +7651,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
             wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
-                user: "user_a".into(),
+                user: "user_a",
             },
         ),
         (
@@ -7776,7 +7784,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
                 wire::seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,
@@ -7937,7 +7945,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
                 wire::seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,
@@ -7992,7 +8000,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
             "host_h",
             Command::AddCohost {
                 game,
-                user: "cohost_c".into(),
+                principal_id: PrincipalId::fixture("cohost_c"),
             },
         )
         .await,
@@ -8037,7 +8045,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
                 outgoing_persona_id: current_slot_persona_id(&pool, game, "slot_7")
                     .await
                     .as_uuid(),
-                incoming_principal_id: "player_rowan".into(),
+                incoming_principal_id: PrincipalId::fixture("player_rowan"),
             },
         )
         .await,
@@ -8068,7 +8076,10 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
     assert_eq!(state["phase"]["phase_id"], "D01");
     assert_eq!(state["phase"]["deadline"], 1_781_928_000);
     assert_eq!(state["slots"][0]["slot_id"], "slot_7");
-    assert_eq!(state["slots"][0]["assigned_principal_id"], "player_rowan");
+    assert_eq!(
+        state["slots"][0]["assigned_principal_id"],
+        serde_json::json!(PrincipalId::fixture("player_rowan"))
+    );
     assert!(state["slots"][0]["persona_id"]
         .as_str()
         .is_some_and(|persona_id| Uuid::parse_str(persona_id).is_ok()));
@@ -8112,7 +8123,7 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
         .await,
     );
 
-    let disabled_app = api::router(pool.clone(), shared_test_media_store());
+    let disabled_app = api::router_with_state(test_api_state(pool.clone()).with_dev_auth(false));
     let disabled_response = disabled_app
         .oneshot(
             Request::builder()
@@ -8121,7 +8132,7 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
-                        "principal_user_id": "host_h",
+                        "principal_id": PrincipalId::fixture("host_h"),
                         "expires_at": 4_102_444_800i64
                     })
                     .to_string(),
@@ -8161,7 +8172,7 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_user_id"], "host_h");
+    assert_eq!(session["principal_id"], fixture_principal_json("host_h"));
     assert_eq!(session["capabilities"][0]["kind"], "HostOf");
     assert_eq!(session["capabilities"][0]["body"]["game"], game.to_string());
 }
@@ -8317,7 +8328,7 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
-                        "principal_user_id": "mod_a",
+                        "principal_id": PrincipalId::fixture("mod_a"),
                         "expires_at": 4_102_444_800i64,
                         "global_capabilities": ["GlobalMod"]
                     })
@@ -8330,7 +8341,7 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_user_id"], "mod_a");
+    assert_eq!(session["principal_id"], fixture_principal_json("mod_a"));
     assert_eq!(session["capabilities"][0]["kind"], "GlobalMod");
     let global_mod_token = session["session_token"]
         .as_str()
@@ -8352,7 +8363,7 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_user_id"], "mod_a");
+    assert_eq!(session["principal_id"], fixture_principal_json("mod_a"));
     assert_eq!(session["capabilities"][0]["kind"], "GlobalMod");
 
     let response = app
@@ -8364,7 +8375,7 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
                 .header("authorization", format!("Bearer {global_mod_token}"))
                 .body(Body::from(
                     serde_json::json!({
-                        "principal_user_id": "other_admin",
+                        "principal_id": PrincipalId::fixture("other_admin"),
                         "expires_at": 4_102_444_800i64,
                         "global_capabilities": ["GlobalAdmin"]
                     })
@@ -8410,7 +8421,7 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
                     serde_json::json!({
                         "invite_token": "delivery-invite-raw-token",
                         "account_id": "delivery@example.test",
-                        "expected_principal_user_id": "delivery_user",
+                        "expected_principal_id": PrincipalId::fixture("delivery_user"),
                         "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
@@ -8540,42 +8551,53 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     .await
     .unwrap();
     assert_eq!(provider_receipt_id, format!("local-{delivery_id}"));
-    let audit_rows = sqlx::query_as::<_, (String, String)>(
-        "SELECT event_kind, actor_user_id FROM identity_lifecycle_audit WHERE principal_user_id = 'delivery_user' ORDER BY id",
+    let audit_rows = sqlx::query_as::<_, (String, Uuid)>(
+        "SELECT event_kind, actor_principal_id FROM identity_lifecycle_audit WHERE principal_id = $1 ORDER BY id",
     )
+    .bind(PrincipalId::fixture("delivery_user").as_uuid())
     .fetch_all(&pool)
     .await
     .unwrap();
     assert_eq!(
         audit_rows,
         vec![
-            ("account_created".to_string(), "admin_a".to_string()),
+            (
+                "account_created".to_string(),
+                PrincipalId::fixture("admin_a").as_uuid(),
+            ),
             (
                 "auth_delivery_queued".to_string(),
-                "delivery_user".to_string()
+                PrincipalId::fixture("delivery_user").as_uuid(),
             ),
             (
                 "auth_delivery_retryable_failed".to_string(),
-                "delivery_user".to_string()
+                PrincipalId::fixture("delivery_user").as_uuid(),
             ),
-            ("auth_delivery_retried".to_string(), "admin_a".to_string()),
+            (
+                "auth_delivery_retried".to_string(),
+                PrincipalId::fixture("admin_a").as_uuid(),
+            ),
         ]
     );
-    let outcome_audits = sqlx::query_as::<_, (String, String, String, serde_json::Value)>(
+    let outcome_audits = sqlx::query_as::<_, (String, Uuid, String, serde_json::Value)>(
         r#"
-        SELECT event_kind, actor_user_id, token_hash, metadata
+        SELECT event_kind, actor_principal_id, token_hash, metadata
         FROM identity_lifecycle_audit
-        WHERE principal_user_id = 'delivery_user'
+        WHERE principal_id = $1
           AND event_kind IN ('auth_delivery_retryable_failed', 'auth_delivery_retried')
         ORDER BY id
         "#,
     )
+    .bind(PrincipalId::fixture("delivery_user").as_uuid())
     .fetch_all(&pool)
     .await
     .unwrap();
     assert_eq!(outcome_audits.len(), 2);
     assert_eq!(outcome_audits[0].0, "auth_delivery_retryable_failed");
-    assert_eq!(outcome_audits[0].1, "delivery_user");
+    assert_eq!(
+        outcome_audits[0].1,
+        PrincipalId::fixture("delivery_user").as_uuid()
+    );
     assert_eq!(outcome_audits[0].2, credential_hash);
     assert_eq!(
         outcome_audits[0].3,
@@ -8591,7 +8613,10 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
         })
     );
     assert_eq!(outcome_audits[1].0, "auth_delivery_retried");
-    assert_eq!(outcome_audits[1].1, "admin_a");
+    assert_eq!(
+        outcome_audits[1].1,
+        PrincipalId::fixture("admin_a").as_uuid()
+    );
     assert_eq!(outcome_audits[1].2, outcome_audits[0].2);
     assert_eq!(
         outcome_audits[1].3,
@@ -8638,7 +8663,7 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
                     serde_json::json!({
                         "invite_token": "permanent-delivery-invite-token",
                         "account_id": "permanent-delivery@example.test",
-                        "expected_principal_user_id": "permanent_delivery_user",
+                        "expected_principal_id": PrincipalId::fixture("permanent_delivery_user"),
                         "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
@@ -8701,19 +8726,23 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
     assert!(terminal_state.4.is_none());
     assert!(terminal_state.5.is_none());
     assert!(terminal_state.6.is_none());
-    let terminal_audit = sqlx::query_as::<_, (String, String, String, serde_json::Value)>(
+    let terminal_audit = sqlx::query_as::<_, (String, Uuid, String, serde_json::Value)>(
         r#"
-        SELECT event_kind, actor_user_id, token_hash, metadata
+        SELECT event_kind, actor_principal_id, token_hash, metadata
         FROM identity_lifecycle_audit
-        WHERE principal_user_id = 'permanent_delivery_user'
+        WHERE principal_id = $1
           AND event_kind = 'auth_delivery_permanent_failed'
         "#,
     )
+    .bind(PrincipalId::fixture("permanent_delivery_user").as_uuid())
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(terminal_audit.0, "auth_delivery_permanent_failed");
-    assert_eq!(terminal_audit.1, "permanent_delivery_user");
+    assert_eq!(
+        terminal_audit.1,
+        PrincipalId::fixture("permanent_delivery_user").as_uuid()
+    );
     assert_eq!(terminal_audit.2, terminal_state.0);
     assert_eq!(
         terminal_audit.3,
@@ -8772,7 +8801,7 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
                     serde_json::json!({
                         "invite_token": "cancel-delivery-invite-token",
                         "account_id": "cancel-delivery@example.test",
-                        "expected_principal_user_id": "cancel_delivery_user",
+                        "expected_principal_id": PrincipalId::fixture("cancel_delivery_user"),
                         "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
@@ -8844,21 +8873,28 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
     assert!(cancelled.8.is_none());
     assert!(cancelled.9.is_none());
 
-    let audit = sqlx::query_as::<_, (i64, String, String, String, String, serde_json::Value)>(
+    let audit = sqlx::query_as::<_, (i64, String, Uuid, Uuid, String, serde_json::Value)>(
         r#"
-        SELECT event_at, event_kind, actor_user_id, principal_user_id, token_hash, metadata
+        SELECT event_at, event_kind, actor_principal_id, principal_id, token_hash, metadata
         FROM identity_lifecycle_audit
         WHERE event_kind = 'auth_delivery_cancelled'
-          AND principal_user_id = 'cancel_delivery_user'
+          AND principal_id = $1
         "#,
     )
+    .bind(PrincipalId::fixture("cancel_delivery_user").as_uuid())
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(audit.0, cancelled_at);
     assert_eq!(audit.1, "auth_delivery_cancelled");
-    assert_eq!(audit.2, "cancel_delivery_user");
-    assert_eq!(audit.3, "cancel_delivery_user");
+    assert_eq!(
+        audit.2,
+        PrincipalId::fixture("cancel_delivery_user").as_uuid()
+    );
+    assert_eq!(
+        audit.3,
+        PrincipalId::fixture("cancel_delivery_user").as_uuid()
+    );
     assert_eq!(audit.4, credential_hash);
     assert_eq!(
         audit.5,
@@ -8900,10 +8936,14 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let registered: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(registered["account_id"], "new.user+one@example.test");
-    let principal_user_id = registered["principal_user_id"]
-        .as_str()
-        .expect("registration principal");
-    assert!(principal_user_id.starts_with("registered-"));
+    let principal_id = PrincipalId::from_uuid(
+        Uuid::parse_str(
+            registered["principal_id"]
+                .as_str()
+                .expect("registration principal"),
+        )
+        .expect("registration principal must be a UUID"),
+    );
     assert!(registered["expires_at"].as_i64().is_some());
     let registered_session_token = registered["session_token"]
         .as_str()
@@ -8928,25 +8968,25 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_user_id"], principal_user_id);
+    assert_eq!(session["principal_id"], serde_json::json!(principal_id));
     assert_eq!(session["capabilities"], serde_json::json!([]));
 
     let (stored_principal, password_hash, global_capabilities) =
-        sqlx::query_as::<_, (String, String, Vec<String>)>(
-            "SELECT principal_user_id, password_hash, global_capabilities FROM auth_account WHERE account_id = $1",
+        sqlx::query_as::<_, (Uuid, String, Vec<String>)>(
+            "SELECT principal_id, password_hash, global_capabilities FROM auth_account WHERE account_id = $1",
         )
         .bind("new.user+one@example.test")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(stored_principal, principal_user_id);
+    assert_eq!(stored_principal, principal_id.as_uuid());
     assert!(password_hash.starts_with("$argon2id$"));
     assert!(global_capabilities.is_empty());
 
     let audit_kinds = sqlx::query_scalar::<_, String>(
-        "SELECT event_kind FROM identity_lifecycle_audit WHERE principal_user_id = $1 ORDER BY id",
+        "SELECT event_kind FROM identity_lifecycle_audit WHERE principal_id = $1 ORDER BY id",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_all(&pool)
     .await
     .unwrap();
@@ -9077,7 +9117,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                     serde_json::json!({
                         "account_id": "host@example.test",
                         "password": "correct horse battery",
-                        "principal_user_id": "host_h"
+                        "principal_id": PrincipalId::fixture("host_h")
                     })
                     .to_string(),
                 ))
@@ -9089,7 +9129,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let account: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(account["account_id"], "host@example.test");
-    assert_eq!(account["principal_user_id"], "host_h");
+    assert_eq!(account["principal_id"], fixture_principal_json("host_h"));
 
     let response = app
         .clone()
@@ -9135,7 +9175,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let login: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(login["principal_user_id"], "host_h");
+    assert_eq!(login["principal_id"], fixture_principal_json("host_h"));
     let host_session_token = login["session_token"]
         .as_str()
         .expect("account login returns a backend-generated session token")
@@ -9156,7 +9196,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_user_id"], "host_h");
+    assert_eq!(session["principal_id"], fixture_principal_json("host_h"));
     assert_eq!(session["capabilities"][0]["kind"], "HostOf");
     assert_eq!(session["capabilities"][0]["body"]["game"], game.to_string());
 
@@ -9183,7 +9223,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     let disabled: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(disabled["status"], "disabled");
     assert_eq!(disabled["account_id"], "host@example.test");
-    assert_eq!(disabled["principal_user_id"], "host_h");
+    assert_eq!(disabled["principal_id"], fixture_principal_json("host_h"));
     assert!(disabled["revoked_session_count"].as_u64().unwrap() >= 1);
 
     let response = app
@@ -9314,7 +9354,10 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let reenabled_session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reenabled_session["principal_user_id"], "host_h");
+    assert_eq!(
+        reenabled_session["principal_id"],
+        fixture_principal_json("host_h")
+    );
     assert_eq!(reenabled_session["capabilities"][0]["kind"], "HostOf");
 
     let stored_password_hash = sqlx::query_scalar::<_, String>(
@@ -9351,7 +9394,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let rotation: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(rotation["status"], "rotated");
-    assert_eq!(rotation["principal_user_id"], "host_h");
+    assert_eq!(rotation["principal_id"], fixture_principal_json("host_h"));
     assert_eq!(rotation["password_algorithm"], "argon2id");
     assert!(rotation["revoked_session_count"].as_i64().unwrap() >= 1);
 
@@ -9624,7 +9667,10 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/auth/identity-lifecycle-audit?principal_user_id=host_h")
+                .uri(format!(
+                    "/auth/identity-lifecycle-audit?principal_id={}",
+                    PrincipalId::fixture("host_h")
+                ))
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -9832,7 +9878,7 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
             delivery_id,
             kind: api::identity_delivery::IdentityDeliveryKind::Recovery,
             account_id: account_id.to_string(),
-            principal_user_id: "recovery_delivery_user".to_string(),
+            principal_id: PrincipalId::fixture("recovery_delivery_user"),
             credential_hash: "redacted-hash".to_string(),
             credential_expires_at: expires_at,
             credential_material: Some(recovery_token.clone()),
@@ -10303,7 +10349,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
                     serde_json::json!({
                         "invite_token": "host-invite-token",
                         "account_id": "host@example.test",
-                        "expected_principal_user_id": "host_h",
+                        "expected_principal_id": PrincipalId::fixture("host_h"),
                         "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
@@ -10316,7 +10362,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(invite["account_id"], "host@example.test");
-    assert_eq!(invite["principal_user_id"], "host_h");
+    assert_eq!(invite["principal_id"], fixture_principal_json("host_h"));
 
     let response = app
         .clone()
@@ -10361,7 +10407,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let redeemed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(redeemed["principal_user_id"], "host_h");
+    assert_eq!(redeemed["principal_id"], fixture_principal_json("host_h"));
     assert_eq!(redeemed["capabilities"].as_array().unwrap().len(), 0);
     let host_session_token = redeemed["session_token"]
         .as_str()
@@ -10383,7 +10429,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_user_id"], "host_h");
+    assert_eq!(session["principal_id"], fixture_principal_json("host_h"));
     assert_eq!(session["capabilities"][0]["kind"], "HostOf");
     assert_eq!(session["capabilities"][0]["body"]["game"], game.to_string());
 
@@ -10449,7 +10495,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
             wire::seat_persona! {
                 game,
                 slot: "slot-7".into(),
-                user: "player-rowan".into(),
+                user: "player-rowan",
             },
         )
         .await,
@@ -10478,7 +10524,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
                     serde_json::json!({
                         "invite_token": "rowan-replacement-invite",
                         "account_id": "rowan@example.test",
-                        "expected_principal_user_id": "player-rowan",
+                        "expected_principal_id": PrincipalId::fixture("player-rowan"),
                         "expires_at": unix_now_seconds() + 3_600,
                         "game": game
                     })
@@ -10491,9 +10537,15 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(invite["principal_user_id"], "player-rowan");
+    assert_eq!(
+        invite["principal_id"],
+        serde_json::json!(PrincipalId::fixture("player-rowan"))
+    );
     assert_eq!(invite["game"], game.to_string());
-    assert_eq!(invite["invited_by_user_id"], "host_h");
+    assert_eq!(
+        invite["invited_by_principal_id"],
+        serde_json::json!(PrincipalId::fixture("host_h"))
+    );
     assert_eq!(invite["global_capabilities"].as_array().unwrap().len(), 0);
 
     let response = app
@@ -10541,7 +10593,10 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_user_id"], "player-rowan");
+    assert_eq!(
+        session["principal_id"],
+        serde_json::json!(PrincipalId::fixture("player-rowan"))
+    );
     assert_eq!(session["capabilities"][0]["kind"], "SlotOccupant");
     assert_eq!(session["capabilities"][0]["body"]["slot"], "slot-7");
 
@@ -10559,7 +10614,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
                     serde_json::json!({
                         "invite_token": "forbidden-global",
                         "account_id": "missing@example.test",
-                        "expected_principal_user_id": "other",
+                        "expected_principal_id": PrincipalId::fixture("other"),
                         "expires_at": unix_now_seconds() + 3_600,
                         "game": game,
                         "global_capabilities": ["GlobalAdmin"]
@@ -10585,7 +10640,7 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
-                        "principal_user_id": "host_h",
+                        "principal_id": PrincipalId::fixture("host_h"),
                         "expires_at": 4_102_444_800i64
                     })
                     .to_string(),
@@ -10603,11 +10658,12 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
         .to_string();
 
     sqlx::query(
-        "UPDATE auth_session SET created_at = 0, authenticated_at = 0 WHERE principal_user_id = 'host_h'",
+        "UPDATE auth_session SET created_at = 0, authenticated_at = 0 WHERE principal_id = $1",
     )
-        .execute(&pool)
-        .await
-        .unwrap();
+    .bind(PrincipalId::fixture("host_h").as_uuid())
+    .execute(&pool)
+    .await
+    .unwrap();
     let response = app
         .clone()
         .oneshot(
@@ -10679,7 +10735,7 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let logged_out: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(logged_out["status"], "logged_out");
-    assert_eq!(logged_out["principal_user_id"], "host_h");
+    assert_eq!(logged_out["principal_id"], fixture_principal_json("host_h"));
 
     let response = app
         .clone()
@@ -10695,9 +10751,9 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
-    let audit = sqlx::query_as::<_, (String, String, Option<String>, serde_json::Value)>(
+    let audit = sqlx::query_as::<_, (String, Uuid, Option<String>, serde_json::Value)>(
         r#"
-        SELECT event_kind, principal_user_id, related_token_hash, metadata
+        SELECT event_kind, principal_id, related_token_hash, metadata
         FROM identity_lifecycle_audit
         WHERE event_kind = 'session_logged_out'
         "#,
@@ -10706,7 +10762,7 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
     .await
     .unwrap();
     assert_eq!(audit.0, "session_logged_out");
-    assert_eq!(audit.1, "host_h");
+    assert_eq!(audit.1, PrincipalId::fixture("host_h").as_uuid());
     assert_eq!(audit.2, None);
     assert_eq!(audit.3, serde_json::json!({}));
 }
@@ -10751,7 +10807,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
-                        "principal_user_id": "host_h",
+                        "principal_id": PrincipalId::fixture("host_h"),
                         "expires_at": 4_102_444_800i64
                     })
                     .to_string(),
@@ -10787,7 +10843,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let rotated: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(rotated["principal_user_id"], "host_h");
+    assert_eq!(rotated["principal_id"], fixture_principal_json("host_h"));
     let rotated_session_token = rotated["session_token"]
         .as_str()
         .expect("rotation returns a backend-generated session token")
@@ -10874,7 +10930,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                     serde_json::json!({
                         "invite_token": "revoked-host-invite",
                         "account_id": "lifecycle-host@example.test",
-                        "expected_principal_user_id": "host_h",
+                        "expected_principal_id": PrincipalId::fixture("host_h"),
                         "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
@@ -10942,7 +10998,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
                     serde_json::json!({
                         "invite_token": "replacement-host-invite",
                         "account_id": "lifecycle-host@example.test",
-                        "expected_principal_user_id": "host_h",
+                        "expected_principal_id": PrincipalId::fixture("host_h"),
                         "expires_at": unix_now_seconds() + 3_600
                     })
                     .to_string(),
@@ -11004,7 +11060,10 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri("/auth/identity-lifecycle-audit?principal_user_id=host_h")
+                .uri(format!(
+                    "/auth/identity-lifecycle-audit?principal_id={}",
+                    PrincipalId::fixture("host_h")
+                ))
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -11033,18 +11092,18 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
     );
     assert!(entries.iter().any(|entry| {
         entry["event_kind"] == "session_rotated"
-            && entry["actor_user_id"] == "host_h"
-            && entry["principal_user_id"] == "host_h"
+            && entry["actor_principal_id"] == fixture_principal_json("host_h")
+            && entry["principal_id"] == fixture_principal_json("host_h")
     }));
     assert!(entries.iter().any(|entry| {
         entry["event_kind"] == "session_revoked"
-            && entry["actor_user_id"] == "admin_a"
-            && entry["principal_user_id"] == "host_h"
+            && entry["actor_principal_id"] == fixture_principal_json("admin_a")
+            && entry["principal_id"] == fixture_principal_json("host_h")
     }));
     assert!(entries.iter().any(|entry| {
         entry["event_kind"] == "invite_revoked"
-            && entry["actor_user_id"] == "admin_a"
-            && entry["principal_user_id"] == "host_h"
+            && entry["actor_principal_id"] == fixture_principal_json("admin_a")
+            && entry["principal_id"] == fixture_principal_json("host_h")
     }));
     let audit_text = audit.to_string();
     for raw_token in [
@@ -11099,7 +11158,7 @@ async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: 
             wire::seat_persona! {
                 game,
                 slot: "slot_1".into(),
-                user: "user_a".into(),
+                user: "user_a",
             },
         )
         .await,
@@ -11189,7 +11248,7 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
                 wire::seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,
@@ -11332,7 +11391,7 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
                 wire::seat_persona! {
                     game,
                     slot: slot.into(),
-                    user: user.into(),
+                    user: user,
                 },
             )
             .await,

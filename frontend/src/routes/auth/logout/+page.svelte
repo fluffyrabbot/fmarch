@@ -44,7 +44,7 @@
       <div>
         <p class="fm-eyebrow">Account</p>
         <h1>Sign out</h1>
-        <p class="fm-summary" data-testid="auth-logout-principal">Signed in as {logout.principalUserId}</p>
+        <p class="fm-summary" data-testid="auth-logout-principal">Signed in as {logout.principalId}</p>
       </div>
     </section>
 

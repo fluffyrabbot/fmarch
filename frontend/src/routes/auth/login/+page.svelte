@@ -34,9 +34,9 @@
       </p>
     {/if}
 
-    {#if chooser.principalUserId}
+    {#if chooser.principalId}
       <p class="auth-chooser__status" data-testid="auth-login-current-session">
-        Current session: {chooser.principalUserId}
+        Current session: {chooser.principalId}
       </p>
     {/if}
 

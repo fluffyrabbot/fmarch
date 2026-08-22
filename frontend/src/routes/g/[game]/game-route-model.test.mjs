@@ -63,7 +63,7 @@ test("player DayEvent attention becomes one current typed participation command"
 test("player route data exposes thread, channel, votecount, and touch command labels", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "main" },
@@ -254,7 +254,7 @@ test("player route data exposes action-open state for seeded UUID role URLs", as
   const game = "806825b7-98ee-447b-b643-980991de9480";
   const data = await buildGameRouteData({
     game,
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game, slot: "slot-7" },
       { kind: "ChannelMember", game, channel: "main" },
@@ -290,7 +290,7 @@ test("player route data exposes action-open state for seeded UUID role URLs", as
 test("spectator role URLs load only the spectator room without player-private cold loads", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: "spectator_s",
+    principalId: "spectator_s",
     activeChannel: "spectator",
     capabilities: [{ kind: "SpectatorOf", game: "midsummer" }],
   });
@@ -402,7 +402,7 @@ test("player route data marks active private channel access without host data", 
   const data = await buildGameRouteData({
     game: "midsummer",
     activeChannel: "private:role_pm:slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
@@ -445,7 +445,7 @@ test("player route data can address private queue rows from the URL", async () =
   const data = await buildGameRouteData({
     game: "midsummer",
     privateItem: "notification-1",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
 
@@ -461,7 +461,7 @@ test("player route data can address private queue rows from the URL", async () =
   const unknown = await buildGameRouteData({
     game: "midsummer",
     privateItem: "missing-private-row",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
   assert.deepEqual(unknown.privateQueueExpandedItems, {});
@@ -470,7 +470,7 @@ test("player route data can address private queue rows from the URL", async () =
     game: "midsummer",
     activeChannel: "private:role_pm:slot-7",
     privateItem: "investigation-1",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
@@ -487,7 +487,7 @@ test("player route data models unsupported and denied channel access", async () 
   const unsupported = await buildGameRouteData({
     game: "midsummer",
     activeChannel: "scum-chat",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
     ],
@@ -501,7 +501,7 @@ test("player route data models unsupported and denied channel access", async () 
   const denied = await buildGameRouteData({
     game: "midsummer",
     activeChannel: "private:role_pm:slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "ChannelMember", game: "midsummer", channel: "main" },
     ],
@@ -518,7 +518,7 @@ test("player route data models unsupported and denied channel access", async () 
 test("player route data uses REST projection cold-loads when available", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
     fetchImpl: async (url) => {
       if (url === "/api/gameplay/games/midsummer?limit=50") {
@@ -778,7 +778,7 @@ test("player private queue helpers derive visible queue from scoped projections"
 test("player route data exposes no older pager when the server returns the oldest page", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
     fetchImpl: async (url) => {
       if (url === "/api/gameplay/games/midsummer?limit=50") {
@@ -840,7 +840,7 @@ test("player thread pagination merges older pages oldest-to-newest without dupli
 test("player route data exposes only channels granted to the session", async () => {
   const rolePmData = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
       { kind: "DeadViewer", game: "midsummer" },
@@ -855,7 +855,7 @@ test("player route data exposes only channels granted to the session", async () 
 
   const slotData = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "other", channel: "private:role_pm:slot-7" },
@@ -875,7 +875,7 @@ test("player load rejects sessions without scoped read/play capability", async (
       await load({
         params: { game: "midsummer" },
         locals: {
-          principalUserId: "host_other",
+          principalId: "host_other",
           resolvedCapabilities: [{ kind: "HostOf", game: "other" }],
         },
         fetch: async () => ({ ok: false }),
@@ -890,7 +890,7 @@ test("player load renders pending replacement state for authenticated no-slot se
   const data = await load({
     params: { game: "midsummer" },
     locals: {
-      principalUserId: "player-rowan",
+      principalId: "player-rowan",
       resolvedCapabilities: [],
     },
     fetch: async () => {
@@ -904,7 +904,7 @@ test("player load renders pending replacement state for authenticated no-slot se
   assert.equal(data.access.pending, true);
   assert.equal(data.access.capabilityLabel, "PendingReplacement(midsummer)");
   assert.equal(data.pendingReplacement, true);
-  assert.equal(data.player.principalUserId, "player-rowan");
+  assert.equal(data.player.principalId, "player-rowan");
   assert.equal(data.player.slotId, "slot-7");
   assert.equal(data.player.status, "pending_replacement");
   assert.equal(data.commandState.actorStatus, "pending_replacement");
@@ -926,7 +926,7 @@ test("player load rejects signed-out sessions without private scoped requests", 
       await load({
         params: { game: "midsummer" },
         locals: {
-          principalUserId: null,
+          principalId: null,
           resolvedCapabilities: [],
         },
         fetch: async (url) => {
@@ -950,7 +950,7 @@ test("player load accepts channel membership scoped to the game", async () => {
   const data = await load({
     params: { game: "midsummer" },
     locals: {
-      principalUserId: "reader_a",
+      principalId: "reader_a",
       resolvedCapabilities: [
         { kind: "ChannelMember", game: "midsummer", channel: "main" },
       ],
@@ -970,7 +970,7 @@ test("player channel load exposes active channel route state from fixture query"
     const data = await loadChannelRoute({
       params: { game: "midsummer", channel: "private:role_pm:slot-7" },
       locals: {
-        principalUserId: "player_mira",
+        principalId: "player_mira",
         resolvedCapabilities: [
           { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
           { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
@@ -1011,7 +1011,7 @@ test("player main route rejects dead-viewer access without main-channel authorit
     load({
       params: { game: "midsummer" },
       locals: {
-        principalUserId: "dead_reader",
+        principalId: "dead_reader",
         resolvedCapabilities: [{ kind: "DeadViewer", game: "midsummer" }],
       },
       fetch: async () => ({ ok: false }),
@@ -1035,7 +1035,7 @@ function jsonResponse(body) {
 test("live projection endpoint always uses the same-origin authenticated ticket broker", async () => {
   const data = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7", source: "fixture" },
     ],

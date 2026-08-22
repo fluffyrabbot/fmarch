@@ -737,7 +737,7 @@ function routeStatePath(path, state) {
 function buildBoardSmokeScenario({ id, token, game }) {
   const session = resolveFixtureSession({ token, game });
   const data = buildBoardRouteData({
-    principalUserId: session.principalUserId,
+    principalId: session.principalId,
     capabilities: session.resolvedCapabilities,
     gameIndexPage: fixtureBoardGameIndexPage(game),
   });
@@ -779,7 +779,7 @@ function shellForFixture({ token, game, activeSurface }) {
   return buildAppShell({
     game,
     activeSurface,
-    principalUserId: session.principalUserId,
+    principalId: session.principalId,
     capabilities: session.resolvedCapabilities,
   });
 }

@@ -125,7 +125,7 @@ export function buildAdminCommand({
   pack = "mafiascum",
   slot,
   roleKey,
-  user,
+  principalId,
   publicName,
   channelId = "main",
   allowMediaOnly = false,
@@ -152,7 +152,7 @@ export function buildAdminCommand({
         SeatPersona: Object.freeze({
           game: requiredString(game, "game"),
           slot: requiredString(slot, "slot"),
-          principal_id: requiredString(user, "user"),
+          principal_id: requiredString(principalId, "principalId"),
           public_name: requiredString(publicName, "publicName"),
         }),
       });
@@ -168,7 +168,7 @@ export function buildAdminCommand({
       return Object.freeze({
         AddCohost: Object.freeze({
           game: requiredString(game, "game"),
-          user: requiredString(user, "user"),
+          principal_id: requiredString(principalId, "principalId"),
         }),
       });
     case "set_post_policy":

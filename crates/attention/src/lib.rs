@@ -3,6 +3,7 @@
 //! Targets are public publication surfaces. This crate deliberately has no
 //! knowledge of forum, game, or any other source aggregate.
 
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -33,7 +34,7 @@ pub struct WatchTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WatchState {
     pub watch_id: Uuid,
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub target: WatchTarget,
     pub active: bool,
     pub read_through_seq: i64,
@@ -149,7 +150,7 @@ mod tests {
     fn active_state() -> WatchState {
         WatchState {
             watch_id: Uuid::from_u128(2),
-            principal_user_id: "reader".to_string(),
+            principal_id: PrincipalId::from_uuid(Uuid::from_u128(1)),
             target: target(),
             active: true,
             read_through_seq: 4,

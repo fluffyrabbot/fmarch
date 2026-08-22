@@ -9,7 +9,7 @@ const postDayVoteAdvanceSurfaceCaseDefinitions = Object.freeze({
   targetPostDayVoteAdvance: Object.freeze({
     slotField: "targetSlot",
     expectedSlot: "slot-2",
-    principalUserId: "player_ilya",
+    principalId: "player_ilya",
     phaseId: "N02",
     phaseState: "open",
     actorAlive: false,
@@ -27,7 +27,7 @@ const postDayVoteAdvanceSurfaceCaseDefinitions = Object.freeze({
   normalPostDayVoteAdvance: Object.freeze({
     slotField: "normalSlot",
     expectedSlot: "slot-4",
-    principalUserId: "player_rowan",
+    principalId: "player_rowan",
     phaseId: "N02",
     phaseState: "open",
     actorAlive: true,
@@ -106,7 +106,7 @@ function assertPostDayVoteAdvanceSurfaceProof({
     proof.productionReady !== false ||
     proof.rawInviteTokensVisible !== false ||
     proof[surfaceCase.slotField] !== surfaceCase.expectedSlot ||
-    proof.principalUserId !== surfaceCase.principalUserId ||
+    proof.principalId !== surfaceCase.principalId ||
     (!surfaceCase.privateReceipt && proof.targetReceiptVisible !== false) ||
     typeof proof.sourceRoleUrl !== "string" ||
     proof.sourceRoleUrl !== sourceRoleUrl ||

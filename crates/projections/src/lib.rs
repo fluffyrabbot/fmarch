@@ -76,6 +76,7 @@ use identity::{
     active_subject_key_store, open_subject_claim, ClaimId, SubjectClaimEnvelope, SubjectId,
     SubjectKeyStore,
 };
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use social::{self, ProfilePresentation, ProfileVisibility, RedactedProfileAlias};
@@ -326,7 +327,6 @@ pub struct HostPromptRow {
     pub status: String,
     pub decision: Option<serde_json::Value>,
     pub public_resolution: Option<serde_json::Value>,
-    pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
 }
 
@@ -424,7 +424,6 @@ pub struct HostPhaseControlRow {
     pub target_phase_id: String,
     pub reason: String,
     pub skipped_phase_id: Option<String>,
-    pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
     pub occurred_at: i64,
 }
@@ -433,7 +432,7 @@ pub struct HostPhaseControlRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameAuthorityRow {
     pub game_id: Uuid,
-    pub user_id: String,
+    pub principal_id: PrincipalId,
     /// `"host"` | `"cohost"`.
     pub role: String,
 }
@@ -442,7 +441,7 @@ pub struct GameAuthorityRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpectatorMembershipRow {
     pub game_id: Uuid,
-    pub user_id: String,
+    pub principal_id: PrincipalId,
 }
 
 /// A public selector row for the one open epoch in a slot.
@@ -713,7 +712,7 @@ pub struct ModerationCaseRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModerationReportRow {
     pub report_id: Uuid,
-    pub reporter_principal_id: String,
+    pub reporter_principal_id: PrincipalId,
     pub reason_family: String,
     pub details: String,
     pub active: bool,
@@ -724,7 +723,7 @@ pub struct ModerationReportRow {
 pub struct ModerationHistoryRow {
     pub source_seq: i64,
     pub event_kind: String,
-    pub actor_principal_id: String,
+    pub actor_principal_id: PrincipalId,
     pub reason: Option<String>,
     pub occurred_at: i64,
 }
@@ -1047,8 +1046,8 @@ async fn fold_event(
 
         // ── game_authority (caps: HostOf / CohostOf) ──
         "GameCreated" => {
-            let host = str_field(&ev.payload, "host", &ev.kind)?;
-            upsert_authority(tx, game_id, &host, "host").await?;
+            let host_principal_id = principal_id_field(&ev.payload, "host_principal_id", &ev.kind)?;
+            upsert_authority(tx, game_id, host_principal_id, "host").await?;
             let pack_ref: PackRef = serde_json::from_value(
                 ev.payload
                     .get("pack_ref")
@@ -1080,16 +1079,16 @@ async fn fold_event(
             upsert_cohost_policy(tx, game_id, &denied, ev.seq).await?;
         }
         "CohostAdded" => {
-            let cohost = str_field(&ev.payload, "user_id", &ev.kind)?;
-            upsert_authority(tx, game_id, &cohost, "cohost").await?;
+            let cohost_principal_id = principal_id_field(&ev.payload, "principal_id", &ev.kind)?;
+            upsert_authority(tx, game_id, cohost_principal_id, "cohost").await?;
         }
         "SpectatorGranted" => {
-            let user = str_field(&ev.payload, "user_id", &ev.kind)?;
-            insert_spectator_membership(tx, game_id, &user).await?;
+            let principal_id = principal_id_field(&ev.payload, "principal_id", &ev.kind)?;
+            insert_spectator_membership(tx, game_id, principal_id).await?;
         }
         "SpectatorRevoked" => {
-            let user = str_field(&ev.payload, "user_id", &ev.kind)?;
-            delete_spectator_membership(tx, game_id, &user).await?;
+            let principal_id = principal_id_field(&ev.payload, "principal_id", &ev.kind)?;
+            delete_spectator_membership(tx, game_id, principal_id).await?;
         }
 
         // ── slot lifecycle / occupancy ──
@@ -1378,7 +1377,6 @@ async fn fold_event(
         "HostPromptResolved" => {
             let p = &ev.payload;
             let prompt_id = str_field(p, "prompt_id", &ev.kind)?;
-            let resolved_by = str_field(p, "resolved_by", &ev.kind)?;
             let public_resolution: domain::HostPromptPublicResolution =
                 serde_json::from_value(p["public_resolution"].clone()).map_err(|source| {
                     ProjectionError::Payload {
@@ -1389,14 +1387,13 @@ async fn fold_event(
             sqlx::query(
                 "UPDATE host_prompt SET \
                  status = 'resolved', decision = $3, public_resolution = $4, \
-                 resolved_by = $5, resolved_at = $6 \
+                 resolved_at = $5 \
                  WHERE game_id = $1 AND prompt_id = $2",
             )
             .bind(game_id)
             .bind(&prompt_id)
             .bind(&p["decision"])
             .bind(&p["public_resolution"])
-            .bind(&resolved_by)
             .bind(ev.occurred_at)
             .execute(&mut **tx)
             .await?;
@@ -1905,8 +1902,9 @@ async fn refresh_day_event_schedule_work(
         .and_then(|row| row.get::<Option<i64>, _>("phase_opened_at"));
     let current_day_number = phase_id
         .as_deref()
-        .and_then(|value| value.strip_prefix('D'))
-        .and_then(|value| value.parse::<u32>().ok());
+        .and_then(|value| domain::phase::PhaseId::parse(value).ok())
+        .filter(|phase| phase.kind() == domain::pack::PhaseKind::Day)
+        .and_then(|phase| phase.plain_number());
 
     let rows = sqlx::query(
         "SELECT definition, state, open_due_at FROM day_event \
@@ -2711,8 +2709,8 @@ async fn lock_active_subject(
     // order. A joined `FOR UPDATE OF subject, principal` lets the query planner
     // choose the opposite row-lock order and can deadlock a replay opening an
     // existing claim against another game issuing a claim for the same member.
-    let principal_user_id: String = sqlx::query_scalar::<_, Option<String>>(
-        "SELECT principal_user_id FROM privacy_subject WHERE subject_id = $1",
+    let principal_id: Uuid = sqlx::query_scalar::<_, Option<Uuid>>(
+        "SELECT principal_id FROM privacy_subject WHERE subject_id = $1",
     )
     .bind(subject_id.as_uuid())
     .fetch_optional(&mut **tx)
@@ -2722,15 +2720,15 @@ async fn lock_active_subject(
         ProjectionError::Privacy("private claim subject owner is missing".to_string())
     })?;
     let principal_status: String = sqlx::query_scalar(
-        "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+        "SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE",
     )
-    .bind(&principal_user_id)
+    .bind(principal_id)
     .fetch_optional(&mut **tx)
     .await?
     .ok_or_else(|| ProjectionError::Privacy("private claim principal is missing".to_string()))?;
     let row = sqlx::query(
         r#"
-        SELECT subject.principal_user_id, subject.lifecycle_state,
+        SELECT subject.principal_id, subject.lifecycle_state,
                EXISTS (
                    SELECT 1 FROM subject_tombstone AS tombstone
                    WHERE tombstone.subject_id = subject.subject_id
@@ -2744,10 +2742,10 @@ async fn lock_active_subject(
     .fetch_optional(&mut **tx)
     .await?
     .ok_or_else(|| ProjectionError::Privacy("private claim subject is missing".to_string()))?;
-    let locked_principal_user_id: Option<String> = row.try_get("principal_user_id")?;
+    let locked_principal_id: Option<Uuid> = row.try_get("principal_id")?;
     let lifecycle_state: String = row.try_get("lifecycle_state")?;
     let tombstoned: bool = row.try_get("tombstoned")?;
-    if locked_principal_user_id.as_deref() != Some(principal_user_id.as_str())
+    if locked_principal_id != Some(principal_id)
         || lifecycle_state != "active"
         || principal_status != "active"
         || tombstoned
@@ -2790,12 +2788,12 @@ async fn prelock_rebuild_subject_owners(
 
     let owners = sqlx::query(
         r#"
-        SELECT subject_id, principal_user_id
+        SELECT subject_id, principal_id
         FROM privacy_subject
         WHERE subject_id = ANY($1)
           AND lifecycle_state = 'active'
-          AND principal_user_id IS NOT NULL
-        ORDER BY principal_user_id, subject_id
+          AND principal_id IS NOT NULL
+        ORDER BY principal_id, subject_id
         "#,
     )
     .bind(&subject_ids)
@@ -2804,11 +2802,11 @@ async fn prelock_rebuild_subject_owners(
 
     for owner in owners {
         let subject_id: Uuid = owner.try_get("subject_id")?;
-        let principal_user_id: String = owner.try_get("principal_user_id")?;
+        let principal_id: Uuid = owner.try_get("principal_id")?;
         let principal_status: Option<String> = sqlx::query_scalar(
-            "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+            "SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE",
         )
-        .bind(&principal_user_id)
+        .bind(principal_id)
         .fetch_optional(&mut **tx)
         .await?;
         if principal_status.is_none() {
@@ -2817,14 +2815,14 @@ async fn prelock_rebuild_subject_owners(
             ));
         }
 
-        let locked_owner: Option<String> = sqlx::query_scalar(
-            "SELECT principal_user_id FROM privacy_subject WHERE subject_id = $1 FOR UPDATE",
+        let locked_owner: Option<Uuid> = sqlx::query_scalar(
+            "SELECT principal_id FROM privacy_subject WHERE subject_id = $1 FOR UPDATE",
         )
         .bind(subject_id)
         .fetch_optional(&mut **tx)
         .await?
         .flatten();
-        if locked_owner.as_deref() != Some(principal_user_id.as_str()) {
+        if locked_owner != Some(principal_id) {
             return Err(ProjectionError::Privacy(
                 "private claim subject owner changed during rebuild".to_string(),
             ));
@@ -3070,7 +3068,7 @@ pub async fn append_discussion_and_project_expected(
 
 pub async fn member_mute_state(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     target_handle: &str,
 ) -> Result<MemberMuteStateRow, ProjectionError> {
     let row = sqlx::query(
@@ -3081,13 +3079,13 @@ pub async fn member_mute_state(
         FROM public_profile AS profile
         JOIN member_profile AS owner ON owner.profile_id = profile.profile_id
         LEFT JOIN profile_mute AS mute
-          ON mute.principal_user_id = $1
+          ON mute.principal_id = $1
          AND mute.target_profile_id = profile.profile_id
         WHERE profile.handle = $2
           AND owner.lifecycle = 'active'
         "#,
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(target_handle)
     .fetch_optional(pool)
     .await?
@@ -3103,7 +3101,7 @@ pub async fn member_mute_state(
 
 pub async fn member_mutes(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     cursor: Option<MemberMuteCursor>,
     limit: i64,
 ) -> Result<MemberMutePage, ProjectionError> {
@@ -3118,7 +3116,7 @@ pub async fn member_mutes(
                 FROM profile_mute AS mute
         JOIN public_profile AS profile ON profile.profile_id = mute.target_profile_id
         JOIN member_profile AS owner ON owner.profile_id = profile.profile_id
-        WHERE mute.principal_user_id = $1 AND mute.active
+        WHERE mute.principal_id = $1 AND mute.active
           AND owner.lifecycle = 'active'
                   AND (mute.updated_seq < $2 OR
                        (mute.updated_seq = $2 AND mute.relationship_id < $3))
@@ -3126,7 +3124,7 @@ pub async fn member_mutes(
                 LIMIT $4
                 "#,
             )
-            .bind(principal_user_id)
+            .bind(principal_id.as_uuid())
             .bind(cursor.updated_seq)
             .bind(cursor.relationship_id)
             .bind(fetch_limit)
@@ -3141,13 +3139,13 @@ pub async fn member_mutes(
                 FROM profile_mute AS mute
                 JOIN public_profile AS profile ON profile.profile_id = mute.target_profile_id
                 JOIN member_profile AS owner ON owner.profile_id = profile.profile_id
-                WHERE mute.principal_user_id = $1 AND mute.active
+                WHERE mute.principal_id = $1 AND mute.active
                   AND owner.lifecycle = 'active'
                 ORDER BY mute.updated_seq DESC, mute.relationship_id DESC
                 LIMIT $2
                 "#,
             )
-            .bind(principal_user_id)
+            .bind(principal_id.as_uuid())
             .bind(fetch_limit)
             .fetch_all(pool)
             .await?
@@ -3180,19 +3178,19 @@ pub async fn member_mutes(
 
 async fn subscription_domain_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     target: &WatchTarget,
 ) -> Result<Option<WatchState>, ProjectionError> {
     let row = sqlx::query(
-        "SELECT subscription_id, active, read_through_seq, version FROM public_watch WHERE principal_user_id = $1 AND surface_id = $2",
+        "SELECT subscription_id, active, read_through_seq, version FROM public_watch WHERE principal_id = $1 AND surface_id = $2",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(target.surface_id)
     .fetch_optional(&mut **tx)
     .await?;
     Ok(row.map(|row| WatchState {
         watch_id: row.get("subscription_id"),
-        principal_user_id: principal_user_id.to_string(),
+        principal_id,
         target: target.clone(),
         active: row.get("active"),
         read_through_seq: row.get("read_through_seq"),
@@ -3236,12 +3234,12 @@ async fn fold_subscription_event(
     subscription_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
-    let principal_user_id = match &event.actor {
+    let principal_id = match &event.actor {
         eventstore::ActorId::Principal(principal) => principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
-                source: serde::de::Error::custom("subscription events require a user actor"),
+                source: serde::de::Error::custom("subscription events require a principal actor"),
             })
         }
     };
@@ -3262,7 +3260,7 @@ async fn fold_subscription_event(
             sqlx::query(
                 r#"
                 INSERT INTO public_watch (
-                    subscription_id, principal_user_id, surface_id,
+                    subscription_id, principal_id, surface_id,
                     active, read_through_seq, created_seq, updated_seq, version
                 ) VALUES ($1, $2, $3, TRUE, $4, $5, $5, $6)
                 ON CONFLICT (subscription_id) DO UPDATE SET
@@ -3276,7 +3274,7 @@ async fn fold_subscription_event(
                 "#,
             )
             .bind(subscription_id)
-            .bind(principal_user_id)
+            .bind(principal_id.as_uuid())
             .bind(payload.target.surface_id)
             .bind(payload.initial_read_through_seq)
             .bind(event.seq)
@@ -3339,12 +3337,12 @@ async fn fold_member_mute_event(
     relationship_id: Uuid,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
-    let principal_user_id = match &event.actor {
+    let principal_id = match &event.actor {
         eventstore::ActorId::Principal(principal) => principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
-                source: serde::de::Error::custom("member mute events require a user actor"),
+                source: serde::de::Error::custom("member mute events require a principal actor"),
             })
         }
     };
@@ -3371,7 +3369,7 @@ async fn fold_member_mute_event(
             sqlx::query(
                 r#"
                 INSERT INTO profile_mute (
-                    relationship_id, principal_user_id, target_profile_id,
+                    relationship_id, principal_id, target_profile_id,
                     active, updated_seq, version
                 ) VALUES ($1, $2, $3, TRUE, $4, $5)
                 ON CONFLICT (relationship_id) DO UPDATE SET
@@ -3381,7 +3379,7 @@ async fn fold_member_mute_event(
                 "#,
             )
             .bind(relationship_id)
-            .bind(principal_user_id)
+            .bind(principal_id.as_uuid())
             .bind(target_profile_id)
             .bind(event.seq)
             .bind(event.stream_seq)
@@ -3408,7 +3406,7 @@ async fn fan_out_public_publication_update(
     surface_id: Uuid,
     source_seq: i64,
     occurred_at: i64,
-    author_principal_id: Option<&str>,
+    author_principal_id: Option<PrincipalId>,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
@@ -3422,14 +3420,14 @@ async fn fan_out_public_publication_update(
          AND period.started_seq < $2
          AND (period.ended_seq IS NULL OR period.ended_seq > $2)
         WHERE subscription.surface_id = $1
-          AND ($4::text IS NULL OR subscription.principal_user_id <> $4)
+          AND ($4::uuid IS NULL OR subscription.principal_id <> $4)
         ON CONFLICT (subscription_id, source_seq) DO NOTHING
         "#,
     )
     .bind(surface_id)
     .bind(source_seq)
     .bind(occurred_at)
-    .bind(author_principal_id)
+    .bind(author_principal_id.map(PrincipalId::as_uuid))
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -3441,7 +3439,7 @@ async fn fold_moderation_event(
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
     let actor = match &event.actor {
-        eventstore::ActorId::Principal(principal) => principal.clone(),
+        eventstore::ActorId::Principal(principal) => *principal,
         _ => {
             return Err(ProjectionError::Payload {
                 kind: event.kind.clone(),
@@ -3506,7 +3504,7 @@ async fn fold_moderation_event(
             )
             .bind(payload.report_id)
             .bind(case_id)
-            .bind(&actor)
+            .bind(actor.as_uuid())
             .bind(&payload.reason)
             .bind(payload.details)
             .bind(event.seq)
@@ -3591,7 +3589,7 @@ async fn fold_moderation_event(
     .bind(event.seq)
     .bind(case_id)
     .bind(&event.kind)
-    .bind(actor)
+    .bind(actor.as_uuid())
     .bind(history_reason)
     .bind(event.occurred_at)
     .execute(&mut **tx)
@@ -3604,7 +3602,7 @@ async fn set_moderation_target_visibility(
     case_id: Uuid,
     visibility: &str,
     reason: &str,
-    moderator_principal_id: &str,
+    moderator_principal_id: &PrincipalId,
     updated_seq: i64,
 ) -> Result<(), ProjectionError> {
     let row = sqlx::query("SELECT surface_id, source_seq FROM moderation_case WHERE case_id = $1")
@@ -3630,7 +3628,7 @@ async fn set_moderation_target_visibility(
     .bind(source_seq)
     .bind(visibility)
     .bind(reason)
-    .bind(moderator_principal_id)
+    .bind(moderator_principal_id.as_uuid())
     .bind(updated_seq)
     .execute(&mut **tx)
     .await?;
@@ -3820,7 +3818,7 @@ async fn backfill_subscription_inbox(
           AND NOT EXISTS (
               SELECT 1 FROM member_profile AS author
               WHERE author.profile_id = publication.author_profile_id
-                AND author.active_principal_id = subscription.principal_user_id
+                AND author.active_principal_id = subscription.principal_id
           )
         ON CONFLICT (subscription_id, source_seq) DO NOTHING
         "#,
@@ -3862,7 +3860,7 @@ async fn fold_discussion_event(
         forum::TOPIC_CREATED => {
             let area_id = uuid_field(&event.payload, "area_id", &event.kind)?;
             let title = str_field(&event.payload, "title", &event.kind)?;
-            let author_profile_id = discussion_author_profile_id(tx, event).await?;
+            let author_profile_id = discussion_author_profile_id(event)?;
             sqlx::query(
                 r#"
                 INSERT INTO discussion_topic
@@ -3896,7 +3894,7 @@ async fn fold_discussion_event(
         forum::POST_SUBMITTED => {
             let body = str_field(&event.payload, "body", &event.kind)?;
             let quotations = quotations_from_event(&event.payload, &event.kind)?;
-            let author_profile_id = discussion_author_profile_id(tx, event).await?;
+            let author_profile_id = discussion_author_profile_id(event)?;
             sqlx::query(
                 "INSERT INTO discussion_post (source_seq, topic_id, author_profile_id, body, quotations, created_seq, created_at) VALUES ($1, $2, $3, $4, $5, $1, $6)",
             )
@@ -3934,7 +3932,7 @@ async fn fold_discussion_event(
             .execute(&mut **tx)
             .await?;
             let author_principal_id = match &event.actor {
-                eventstore::ActorId::Principal(principal) => Some(principal.as_str()),
+                eventstore::ActorId::Principal(principal) => Some(*principal),
                 _ => None,
             };
             publications::record_publication(
@@ -4002,31 +4000,11 @@ async fn fold_discussion_event(
     Ok(())
 }
 
-async fn discussion_author_profile_id(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    event: &StoredEvent,
-) -> Result<Option<Uuid>, ProjectionError> {
+fn discussion_author_profile_id(event: &StoredEvent) -> Result<Option<Uuid>, ProjectionError> {
     if event.payload.get("author_profile_id").is_some() {
         return uuid_field(&event.payload, "author_profile_id", &event.kind).map(Some);
     }
-    let Some(principal_user_id) = event
-        .payload
-        .get("author_user_id")
-        .and_then(serde_json::Value::as_str)
-    else {
-        return Ok(None);
-    };
-    Ok(sqlx::query_scalar(
-        r#"
-            SELECT profile.profile_id
-            FROM public_profile AS profile
-            JOIN member_profile AS owner ON owner.profile_id = profile.profile_id
-            WHERE owner.active_principal_id = $1 AND owner.lifecycle = 'active'
-            "#,
-    )
-    .bind(principal_user_id)
-    .fetch_optional(&mut **tx)
-    .await?)
+    Ok(None)
 }
 
 /// Append profile events that have already crossed the profile application
@@ -4041,6 +4019,13 @@ pub async fn append_canonical_profile_and_project_expected_in_tx(
     expected_stream_seq: i64,
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
+    profile_handle_index::acquire_profile_handle_index_writer_lease(tx)
+        .await
+        .map_err(|error| {
+            ProjectionError::Privacy(format!(
+                "cannot acquire profile handle-index writer lease: {error}"
+            ))
+        })?;
     for event in events {
         validate_canonical_profile_event(event)?;
     }
@@ -4075,6 +4060,13 @@ pub async fn append_canonical_profile_and_project_expected(
 /// Rebuild one profile stream from its append-only events.
 pub async fn rebuild_profile_stream(pool: &PgPool, stream_id: Uuid) -> Result<(), ProjectionError> {
     let mut tx = pool.begin().await?;
+    profile_handle_index::acquire_profile_handle_index_writer_lease(&mut tx)
+        .await
+        .map_err(|error| {
+            ProjectionError::Privacy(format!(
+                "cannot acquire profile handle-index writer lease: {error}"
+            ))
+        })?;
     let events = eventstore::load_stream_in_tx(&mut tx, stream_id).await?;
     if !events.iter().any(|event| event.kind == "ProfileCreated") {
         return Ok(());
@@ -4101,10 +4093,9 @@ async fn fold_profile_event(
 ) -> Result<(), ProjectionError> {
     match event.kind.as_str() {
         "ProfileCreated" | "ProfileUpdated" => {
+            validate_active_profile_payload(&event.payload, &event.kind)?;
             let subject_id = canonical_profile_subject(event)?;
             let claim_id = ClaimId::from_uuid(uuid_field(&event.payload, "claim_id", &event.kind)?);
-            let handle_hmac = canonical_profile_handle_hmac(&event.payload, &event.kind)?;
-            let requested_visibility = parse_profile_visibility(&event.payload, &event.kind)?;
             let tombstone_alias = subject_tombstone_alias(tx, subject_id).await?;
             match tombstone_alias {
                 Some(alias) => {
@@ -4115,18 +4106,21 @@ async fn fold_profile_event(
                         tx, subject_id, claim_id, "profile", stream_id, None,
                     )
                     .await?;
-                    if presentation.visibility != requested_visibility {
-                        return Err(ProjectionError::Privacy(
-                            "canonical profile visibility does not match its sealed claim"
-                                .to_string(),
-                        ));
-                    }
-                    let active_principal_id: String = sqlx::query_scalar(
-                        "SELECT principal_user_id FROM privacy_subject WHERE subject_id = $1 AND lifecycle_state = 'active'",
+                    let handle_index_token = profile_handle_index::HandleIndexToken::for_handle(
+                        presentation.handle.as_str(),
+                    )
+                    .map_err(|error| {
+                        ProjectionError::Privacy(format!(
+                            "cannot derive profile handle reservation from its sealed claim: {error}"
+                        ))
+                    })?;
+                    let active_principal_id: PrincipalId = sqlx::query_scalar::<_, uuid::Uuid>(
+                        "SELECT principal_id FROM privacy_subject WHERE subject_id = $1 AND lifecycle_state = 'active'",
                     )
                     .bind(subject_id.as_uuid())
                     .fetch_optional(&mut **tx)
                     .await?
+                    .map(PrincipalId::from_uuid)
                     .ok_or_else(|| {
                         ProjectionError::Privacy(
                             "active profile subject has no active principal binding".to_string(),
@@ -4138,8 +4132,8 @@ async fn fold_profile_event(
                             profile_id: stream_id,
                             subject_id,
                             claim_id,
-                            active_principal_id: &active_principal_id,
-                            handle_hmac: &handle_hmac,
+                            active_principal_id,
+                            handle_index_token: &handle_index_token,
                             presentation: &presentation,
                             source_seq: event.seq,
                             revision: event.stream_seq,
@@ -4150,6 +4144,7 @@ async fn fold_profile_event(
             }
         }
         "ProfileRedacted" => {
+            validate_redacted_profile_payload(&event.payload, &event.kind)?;
             let subject_id = canonical_profile_subject(event)?;
             let alias = str_field(&event.payload, "retained_alias", &event.kind)?;
             RedactedProfileAlias::parse(alias.as_str()).map_err(|error| {
@@ -4171,7 +4166,14 @@ async fn fold_profile_event(
 }
 
 fn canonical_profile_subject(event: &StoredEvent) -> Result<SubjectId, ProjectionError> {
-    for prohibited in ["principal_user_id", "handle", "display_name", "bio"] {
+    for prohibited in [
+        "principal_id",
+        "handle",
+        "display_name",
+        "bio",
+        "handle_hmac",
+        "visibility",
+    ] {
         if event.payload.get(prohibited).is_some() {
             return Err(ProjectionError::Privacy(format!(
                 "canonical profile event {} contains prohibited raw {prohibited}",
@@ -4195,17 +4197,9 @@ fn canonical_profile_subject(event: &StoredEvent) -> Result<SubjectId, Projectio
 fn validate_canonical_profile_event(event: &EventInput) -> Result<(), ProjectionError> {
     match event.kind.as_str() {
         "ProfileCreated" | "ProfileUpdated" => {
-            for prohibited in ["principal_user_id", "handle", "display_name", "bio"] {
-                if event.payload.get(prohibited).is_some() {
-                    return Err(ProjectionError::Privacy(format!(
-                        "profile application must seal {prohibited} before appending"
-                    )));
-                }
-            }
+            validate_active_profile_payload(&event.payload, &event.kind)?;
             let subject_id = uuid_field(&event.payload, "subject_id", &event.kind)?;
             uuid_field(&event.payload, "claim_id", &event.kind)?;
-            canonical_profile_handle_hmac(&event.payload, &event.kind)?;
-            parse_profile_visibility(&event.payload, &event.kind)?;
             match &event.actor {
                 eventstore::ActorId::PrivacySubject(actor_subject)
                     if *actor_subject == subject_id =>
@@ -4218,12 +4212,8 @@ fn validate_canonical_profile_event(event: &EventInput) -> Result<(), Projection
             }
         }
         "ProfileRedacted" => {
+            validate_redacted_profile_payload(&event.payload, &event.kind)?;
             let subject_id = uuid_field(&event.payload, "subject_id", &event.kind)?;
-            if event.payload.get("handle_hmac").is_some() {
-                return Err(ProjectionError::Privacy(
-                    "redacted profile events must not retain handle hmacs".to_string(),
-                ));
-            }
             let alias = str_field(&event.payload, "retained_alias", &event.kind)?;
             RedactedProfileAlias::parse(alias.as_str()).map_err(|error| {
                 ProjectionError::Privacy(format!(
@@ -4248,49 +4238,42 @@ fn validate_canonical_profile_event(event: &EventInput) -> Result<(), Projection
     }
 }
 
-fn parse_profile_visibility(
+fn validate_active_profile_payload(
     payload: &serde_json::Value,
     kind: &str,
-) -> Result<ProfileVisibility, ProjectionError> {
-    str_field(payload, "visibility", kind)?
-        .parse::<ProfileVisibility>()
-        .map_err(|error| ProjectionError::Privacy(format!("invalid profile visibility: {error}")))
+) -> Result<(), ProjectionError> {
+    validate_exact_profile_payload_fields(payload, kind, &["subject_id", "claim_id"])
 }
 
-/// Decode the opaque handle reservation supplied by the profile application.
-/// It stays JSON-safe in the event envelope and compact in the projection;
-/// the plaintext handle never crosses this boundary for private profiles.
-fn canonical_profile_handle_hmac(
+fn validate_redacted_profile_payload(
     payload: &serde_json::Value,
     kind: &str,
-) -> Result<Vec<u8>, ProjectionError> {
-    let encoded = str_field(payload, "handle_hmac", kind)?;
-    let bytes = encoded.as_bytes();
-    if bytes.len() != 64
-        || !bytes
-            .iter()
-            .copied()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+) -> Result<(), ProjectionError> {
+    validate_exact_profile_payload_fields(payload, kind, &["subject_id", "retained_alias"])
+}
+
+fn validate_exact_profile_payload_fields(
+    payload: &serde_json::Value,
+    kind: &str,
+    expected: &[&str],
+) -> Result<(), ProjectionError> {
+    let object = payload.as_object().ok_or_else(|| {
+        ProjectionError::Privacy(format!(
+            "canonical profile event {kind} payload must be an object"
+        ))
+    })?;
+    if object.len() != expected.len()
+        || expected.iter().any(|field| !object.contains_key(*field))
+        || object
+            .keys()
+            .any(|field| !expected.contains(&field.as_str()))
     {
         return Err(ProjectionError::Privacy(format!(
-            "canonical profile handle_hmac for {kind} must be 64 lower-case hex characters"
+            "canonical profile event {kind} must contain exactly {}",
+            expected.join(", ")
         )));
     }
-    let mut decoded = Vec::with_capacity(32);
-    for pair in bytes.chunks_exact(2) {
-        let high = lowercase_hex_nibble(pair[0]).expect("validated lower-case hex");
-        let low = lowercase_hex_nibble(pair[1]).expect("validated lower-case hex");
-        decoded.push((high << 4) | low);
-    }
-    Ok(decoded)
-}
-
-fn lowercase_hex_nibble(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        _ => None,
-    }
+    Ok(())
 }
 
 /// The fully-opened profile state that may be materialized into the read
@@ -4301,8 +4284,8 @@ struct ActiveProfileProjection<'a> {
     profile_id: Uuid,
     subject_id: SubjectId,
     claim_id: ClaimId,
-    active_principal_id: &'a str,
-    handle_hmac: &'a [u8],
+    active_principal_id: PrincipalId,
+    handle_index_token: &'a profile_handle_index::HandleIndexToken,
     presentation: &'a ProfilePresentation,
     source_seq: i64,
     revision: i64,
@@ -4333,8 +4316,8 @@ async fn project_active_profile(
         "#,
     )
     .bind(profile.profile_id)
-    .bind(profile.active_principal_id)
-    .bind(profile.handle_hmac)
+    .bind(profile.active_principal_id.as_uuid())
+    .bind(profile.handle_index_token.as_bytes().as_slice())
     .bind(profile.source_seq)
     .bind(profile.revision)
     .bind(profile.subject_id.as_uuid())
@@ -4835,7 +4818,7 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     },
     AuditProjection {
         table: "game_authority",
-        order_by: "role, user_id",
+        order_by: "role, principal_id",
     },
     AuditProjection {
         table: "game_cohost_policy",
@@ -4843,7 +4826,7 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     },
     AuditProjection {
         table: "spectator_membership",
-        order_by: "user_id",
+        order_by: "principal_id",
     },
     AuditProjection {
         table: "game_persona",
@@ -6184,7 +6167,7 @@ where
     E: sqlx::PgExecutor<'e>,
 {
     let rows = sqlx::query(
-        "SELECT game_id, phase_id, event_index, prompt_id, kind, subject_slot, reason, phase_kind, phase_number, metadata, status, decision, public_resolution, resolved_by, resolved_at \
+        "SELECT game_id, phase_id, event_index, prompt_id, kind, subject_slot, reason, phase_kind, phase_number, metadata, status, decision, public_resolution, resolved_at \
          FROM host_prompt WHERE game_id = $1 \
          ORDER BY phase_id, event_index, prompt_id",
     )
@@ -6207,7 +6190,6 @@ where
             status: r.get("status"),
             decision: r.get("decision"),
             public_resolution: r.get("public_resolution"),
-            resolved_by: r.get("resolved_by"),
             resolved_at: r.get("resolved_at"),
         })
         .collect())
@@ -6611,7 +6593,7 @@ pub async fn host_phase_controls(
         "SELECT c.game_id, c.source_seq, c.stream_seq, c.prompt_id, \
                 p.kind AS prompt_kind, p.reason AS prompt_reason, \
                 c.source_phase_id, c.target_phase_id, c.reason, c.skipped_phase_id, \
-                p.resolved_by, p.resolved_at, c.occurred_at \
+                p.resolved_at, c.occurred_at \
          FROM host_phase_control c \
          LEFT JOIN host_prompt p ON p.game_id = c.game_id AND p.prompt_id = c.prompt_id \
          WHERE c.game_id = $1 \
@@ -6633,7 +6615,6 @@ pub async fn host_phase_controls(
             target_phase_id: r.get("target_phase_id"),
             reason: r.get("reason"),
             skipped_phase_id: r.get("skipped_phase_id"),
-            resolved_by: r.get("resolved_by"),
             resolved_at: r.get("resolved_at"),
             occurred_at: r.get("occurred_at"),
         })
@@ -6646,8 +6627,8 @@ pub async fn game_authority(
     game_id: Uuid,
 ) -> Result<Vec<GameAuthorityRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, user_id, role FROM game_authority \
-         WHERE game_id = $1 ORDER BY role, user_id",
+        "SELECT game_id, principal_id, role FROM game_authority \
+         WHERE game_id = $1 ORDER BY role, principal_id",
     )
     .bind(game_id)
     .fetch_all(pool)
@@ -6656,27 +6637,28 @@ pub async fn game_authority(
         .into_iter()
         .map(|r| GameAuthorityRow {
             game_id: r.get("game_id"),
-            user_id: r.get("user_id"),
+            principal_id: PrincipalId::from_uuid(r.get("principal_id")),
             role: r.get("role"),
         })
         .collect())
 }
 
-/// Whether a user currently holds the explicit spectator grant for this game.
+/// Whether a principal currently holds the explicit spectator grant for this game.
 pub async fn spectator_membership<'e, E>(
     executor: E,
     game_id: Uuid,
-    user_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<bool, ProjectionError>
 where
     E: sqlx::PgExecutor<'e>,
 {
-    let row =
-        sqlx::query("SELECT 1 AS x FROM spectator_membership WHERE game_id = $1 AND user_id = $2")
-            .bind(game_id)
-            .bind(user_id)
-            .fetch_optional(executor)
-            .await?;
+    let row = sqlx::query(
+        "SELECT 1 AS x FROM spectator_membership WHERE game_id = $1 AND principal_id = $2",
+    )
+    .bind(game_id)
+    .bind(principal_id.as_uuid())
+    .fetch_optional(executor)
+    .await?;
     Ok(row.is_some())
 }
 
@@ -6686,7 +6668,8 @@ pub async fn spectator_memberships(
     game_id: Uuid,
 ) -> Result<Vec<SpectatorMembershipRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, user_id FROM spectator_membership WHERE game_id = $1 ORDER BY user_id",
+        "SELECT game_id, principal_id FROM spectator_membership \
+         WHERE game_id = $1 ORDER BY principal_id",
     )
     .bind(game_id)
     .fetch_all(pool)
@@ -6695,7 +6678,7 @@ pub async fn spectator_memberships(
         .into_iter()
         .map(|r| SpectatorMembershipRow {
             game_id: r.get("game_id"),
-            user_id: r.get("user_id"),
+            principal_id: PrincipalId::from_uuid(r.get("principal_id")),
         })
         .collect())
 }
@@ -6705,12 +6688,12 @@ pub async fn slot_occupant<'e, E>(
     executor: E,
     game_id: Uuid,
     slot_id: &str,
-) -> Result<Option<String>, ProjectionError>
+) -> Result<Option<PrincipalId>, ProjectionError>
 where
     E: sqlx::PgExecutor<'e>,
 {
     let row = sqlx::query(
-        "SELECT subject.principal_user_id AS assigned_principal_id \
+        "SELECT subject.principal_id AS assigned_principal_id \
          FROM slot_occupancy_epoch o \
          JOIN game_persona_subject_binding binding \
            ON binding.game_id = o.game_id AND binding.persona_id = o.persona_id \
@@ -6722,7 +6705,7 @@ where
     .bind(slot_id)
     .fetch_optional(executor)
     .await?;
-    Ok(row.map(|r| r.get("assigned_principal_id")))
+    Ok(row.map(|r| PrincipalId::from_uuid(r.get("assigned_principal_id"))))
 }
 
 /// All open slot-to-principal bindings for an authorized game-scoped read.
@@ -6731,12 +6714,12 @@ where
 pub async fn slot_occupants<'e, E>(
     executor: E,
     game_id: Uuid,
-) -> Result<BTreeMap<String, String>, ProjectionError>
+) -> Result<BTreeMap<String, PrincipalId>, ProjectionError>
 where
     E: sqlx::PgExecutor<'e>,
 {
     let rows = sqlx::query(
-        "SELECT o.slot_id, subject.principal_user_id AS assigned_principal_id \
+        "SELECT o.slot_id, subject.principal_id AS assigned_principal_id \
          FROM slot_occupancy_epoch o \
          JOIN game_persona_subject_binding binding \
            ON binding.game_id = o.game_id AND binding.persona_id = o.persona_id \
@@ -6749,7 +6732,12 @@ where
     .await?;
     Ok(rows
         .into_iter()
-        .map(|row| (row.get("slot_id"), row.get("assigned_principal_id")))
+        .map(|row| {
+            (
+                row.get("slot_id"),
+                PrincipalId::from_uuid(row.get("assigned_principal_id")),
+            )
+        })
         .collect())
 }
 
@@ -6790,7 +6778,7 @@ where
 pub async fn principal_has_open_occupancy<'e, E>(
     executor: E,
     game_id: Uuid,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<bool, ProjectionError>
 where
     E: sqlx::PgExecutor<'e>,
@@ -6801,10 +6789,10 @@ where
            ON binding.game_id = o.game_id AND binding.persona_id = o.persona_id \
           AND binding.lifecycle = 'active' \
          JOIN privacy_subject subject ON subject.subject_id = binding.subject_id \
-         WHERE o.game_id = $1 AND subject.principal_user_id = $2 AND o.ended_seq IS NULL)",
+         WHERE o.game_id = $1 AND subject.principal_id = $2 AND o.ended_seq IS NULL)",
     )
     .bind(game_id)
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_one(executor)
     .await
     .map_err(Into::into)
@@ -7260,10 +7248,11 @@ pub async fn public_search(
     filter: PublicSearchFilter,
     cursor: Option<PublicSearchCursor>,
     limit: i64,
-    viewer_principal_user_id: Option<&str>,
+    viewer_principal_id: Option<PrincipalId>,
 ) -> Result<PublicSearchPage, ProjectionError> {
     let limit = limit.clamp(1, 50);
     let fetch_limit = limit + 1;
+    let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
     let filter = match filter {
         PublicSearchFilter::All => "all",
         PublicSearchFilter::Discussions => "discussions",
@@ -7298,8 +7287,8 @@ pub async fn public_search(
               AND ($2 = 'all' OR surface.search_group = $2)
               AND NOT EXISTS (
                   SELECT 1 FROM profile_mute AS mute
-                  WHERE $3::text IS NOT NULL
-                    AND mute.principal_user_id = $3
+                  WHERE $3::uuid IS NOT NULL
+                    AND mute.principal_id = $3
                     AND mute.active
                     AND mute.target_profile_id = publication.author_profile_id
               )
@@ -7317,7 +7306,7 @@ pub async fn public_search(
     )
     .bind(query)
     .bind(filter)
-    .bind(viewer_principal_user_id)
+    .bind(viewer_principal_id)
     .bind(cursor.as_ref().map(|value| value.rank))
     .bind(cursor.as_ref().map(|value| value.updated_seq))
     .bind(cursor.as_ref().map(|value| value.document_kind.as_str()))
@@ -7400,10 +7389,11 @@ pub async fn discussion_topics(
     area_id: Uuid,
     cursor: Option<DiscussionTopicCursor>,
     limit: i64,
-    viewer_principal_user_id: Option<&str>,
+    viewer_principal_id: Option<PrincipalId>,
 ) -> Result<DiscussionTopicPage, ProjectionError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
+    let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
     let rows = match cursor {
         Some(cursor) => {
             sqlx::query(
@@ -7421,8 +7411,8 @@ pub async fn discussion_topics(
                   AND (topic.updated_seq < $2 OR (topic.updated_seq = $2 AND topic.topic_id < $3))
                   AND NOT EXISTS (
                       SELECT 1 FROM profile_mute AS mute
-                      WHERE $4::text IS NOT NULL
-                        AND mute.principal_user_id = $4
+                      WHERE $4::uuid IS NOT NULL
+                        AND mute.principal_id = $4
                         AND mute.target_profile_id = topic.author_profile_id
                         AND mute.active
                   )
@@ -7433,7 +7423,7 @@ pub async fn discussion_topics(
             .bind(area_id)
             .bind(cursor.updated_seq)
             .bind(cursor.topic_id)
-            .bind(viewer_principal_user_id)
+            .bind(viewer_principal_id)
             .bind(fetch_limit)
             .fetch_all(pool)
             .await?
@@ -7452,8 +7442,8 @@ pub async fn discussion_topics(
                 WHERE topic.area_id = $1 AND topic.visibility = 'visible'
                   AND NOT EXISTS (
                       SELECT 1 FROM profile_mute AS mute
-                      WHERE $2::text IS NOT NULL
-                        AND mute.principal_user_id = $2
+                      WHERE $2::uuid IS NOT NULL
+                        AND mute.principal_id = $2
                         AND mute.target_profile_id = topic.author_profile_id
                         AND mute.active
                   )
@@ -7462,7 +7452,7 @@ pub async fn discussion_topics(
                 "#,
             )
             .bind(area_id)
-            .bind(viewer_principal_user_id)
+            .bind(viewer_principal_id)
             .bind(fetch_limit)
             .fetch_all(pool)
             .await?
@@ -7522,10 +7512,11 @@ pub async fn discussion_posts(
     topic_id: Uuid,
     before_seq: Option<i64>,
     limit: i64,
-    viewer_principal_user_id: Option<&str>,
+    viewer_principal_id: Option<PrincipalId>,
 ) -> Result<DiscussionPostPage, ProjectionError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
+    let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
     let rows = sqlx::query(
         r#"
         SELECT post.source_seq, post.body, post.quotations, post.created_at,
@@ -7544,8 +7535,8 @@ pub async fn discussion_posts(
                      AND quoting.visible AND quoting_surface.visible
                      AND NOT EXISTS (
                          SELECT 1 FROM profile_mute AS mute
-                         WHERE $3::text IS NOT NULL
-                           AND mute.principal_user_id = $3
+                         WHERE $3::uuid IS NOT NULL
+                           AND mute.principal_id = $3
                            AND mute.target_profile_id = quoting.author_profile_id
                            AND mute.active
                      )
@@ -7560,8 +7551,8 @@ pub async fn discussion_posts(
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
               SELECT 1 FROM profile_mute AS mute
-              WHERE $3::text IS NOT NULL
-                AND mute.principal_user_id = $3
+              WHERE $3::uuid IS NOT NULL
+                AND mute.principal_id = $3
                 AND mute.target_profile_id = post.author_profile_id
                 AND mute.active
           )
@@ -7571,7 +7562,7 @@ pub async fn discussion_posts(
     )
     .bind(topic_id)
     .bind(before_seq)
-    .bind(viewer_principal_user_id)
+    .bind(viewer_principal_id)
     .bind(fetch_limit)
     .fetch_all(pool)
     .await?;
@@ -7603,15 +7594,16 @@ pub async fn discussion_posts(
 pub async fn quotation_thread_for_discussion(
     pool: &PgPool,
     topic_id: Uuid,
-    viewer_principal_user_id: Option<&str>,
+    viewer_principal_id: Option<PrincipalId>,
 ) -> Result<QuotationThreadState, ProjectionError> {
+    let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
     let rows = sqlx::query(
         r#"
         SELECT post.source_seq, post.body, post.quotations,
                NOT EXISTS (
                    SELECT 1 FROM profile_mute AS mute
-                   WHERE $2::text IS NOT NULL
-                     AND mute.principal_user_id = $2
+                   WHERE $2::uuid IS NOT NULL
+                     AND mute.principal_id = $2
                      AND mute.target_profile_id = post.author_profile_id
                      AND mute.active
                )
@@ -7627,7 +7619,7 @@ pub async fn quotation_thread_for_discussion(
         "#,
     )
     .bind(topic_id)
-    .bind(viewer_principal_user_id)
+    .bind(viewer_principal_id)
     .fetch_all(pool)
     .await?;
     let mut posts = Vec::with_capacity(rows.len());
@@ -7758,10 +7750,11 @@ pub async fn visible_incoming_citations(
 pub async fn visible_public_incoming_citations(
     pool: &PgPool,
     quoted: content_reference::PublicContentRef,
-    viewer_principal_user_id: Option<&str>,
+    viewer_principal_id: Option<PrincipalId>,
     limit: i64,
 ) -> Result<Option<PublicCitationPage>, ProjectionError> {
     let limit = limit.clamp(1, content_reference::MAX_POST_CITATION_LIMIT);
+    let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
     let visible: bool = sqlx::query_scalar(
         r#"
         SELECT EXISTS (
@@ -7774,8 +7767,8 @@ pub async fn visible_public_incoming_citations(
               AND surface.visible
               AND NOT EXISTS (
                   SELECT 1 FROM profile_mute AS mute
-                  WHERE $3::text IS NOT NULL
-                    AND mute.principal_user_id = $3
+                  WHERE $3::uuid IS NOT NULL
+                    AND mute.principal_id = $3
                     AND mute.target_profile_id = publication.author_profile_id
                     AND mute.active
               )
@@ -7784,7 +7777,7 @@ pub async fn visible_public_incoming_citations(
     )
     .bind(quoted.surface_id)
     .bind(quoted.source_seq)
-    .bind(viewer_principal_user_id)
+    .bind(viewer_principal_id)
     .fetch_one(pool)
     .await?;
     if !visible {
@@ -7804,8 +7797,8 @@ pub async fn visible_public_incoming_citations(
           AND surface.visible
           AND NOT EXISTS (
               SELECT 1 FROM profile_mute AS mute
-              WHERE $3::text IS NOT NULL
-                AND mute.principal_user_id = $3
+              WHERE $3::uuid IS NOT NULL
+                AND mute.principal_id = $3
                 AND mute.target_profile_id = quoting.author_profile_id
                 AND mute.active
           )
@@ -7813,7 +7806,7 @@ pub async fn visible_public_incoming_citations(
     )
     .bind(quoted.surface_id)
     .bind(quoted.source_seq)
-    .bind(viewer_principal_user_id)
+    .bind(viewer_principal_id)
     .fetch_one(pool)
     .await?;
     let rows = sqlx::query(
@@ -7830,8 +7823,8 @@ pub async fn visible_public_incoming_citations(
           AND surface.visible
           AND NOT EXISTS (
               SELECT 1 FROM profile_mute AS mute
-              WHERE $3::text IS NOT NULL
-                AND mute.principal_user_id = $3
+              WHERE $3::uuid IS NOT NULL
+                AND mute.principal_id = $3
                 AND mute.target_profile_id = quoting.author_profile_id
                 AND mute.active
           )
@@ -7841,7 +7834,7 @@ pub async fn visible_public_incoming_citations(
     )
     .bind(quoted.surface_id)
     .bind(quoted.source_seq)
-    .bind(viewer_principal_user_id)
+    .bind(viewer_principal_id)
     .bind(limit)
     .fetch_all(pool)
     .await?;
@@ -8040,12 +8033,12 @@ async fn game_citation_rows(
 
 pub async fn subscription_target_state(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     target: WatchTarget,
 ) -> Result<SubscriptionTargetStateRow, ProjectionError> {
     let mut tx = pool.begin().await?;
     let latest_source_seq = public_subscription_target_latest_seq(&mut tx, &target).await?;
-    let state = subscription_domain_state(&mut tx, principal_user_id, &target).await?;
+    let state = subscription_domain_state(&mut tx, principal_id, &target).await?;
     if latest_source_seq.is_none() && state.is_none() {
         return Err(ProjectionError::SubscriptionTargetNotPublic);
     }
@@ -8055,7 +8048,7 @@ pub async fn subscription_target_state(
                 &mut tx,
                 state.watch_id,
                 state.read_through_seq,
-                principal_user_id,
+                principal_id,
             )
             .await?;
             (state.active, state.read_through_seq, unread_count)
@@ -8076,7 +8069,7 @@ async fn visible_subscription_inbox_count(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     subscription_id: Uuid,
     after_seq: i64,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<i64, ProjectionError> {
     Ok(sqlx::query_scalar(
         r#"
@@ -8090,7 +8083,7 @@ async fn visible_subscription_inbox_count(
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
             SELECT 1 FROM profile_mute AS mute
-            WHERE mute.principal_user_id = $3
+            WHERE mute.principal_id = $3
               AND mute.active
               AND mute.target_profile_id = publication.author_profile_id
           )
@@ -8098,14 +8091,14 @@ async fn visible_subscription_inbox_count(
     )
     .bind(subscription_id)
     .bind(after_seq)
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_one(&mut **tx)
     .await?)
 }
 
 pub async fn public_inbox(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     before_seq: Option<i64>,
     limit: i64,
 ) -> Result<PublicInboxPage, ProjectionError> {
@@ -8124,12 +8117,12 @@ pub async fn public_inbox(
           ON publication.surface_id = item.surface_id
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
-        WHERE subscription.principal_user_id = $1
+        WHERE subscription.principal_id = $1
           AND ($2::bigint IS NULL OR item.source_seq < $2)
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
             SELECT 1 FROM profile_mute AS mute
-            WHERE mute.principal_user_id = $1
+            WHERE mute.principal_id = $1
               AND mute.active
               AND mute.target_profile_id = publication.author_profile_id
           )
@@ -8137,7 +8130,7 @@ pub async fn public_inbox(
         LIMIT $3
         "#,
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(before_seq)
     .bind(fetch_limit)
     .fetch_all(pool)
@@ -8166,18 +8159,18 @@ pub async fn public_inbox(
           ON publication.surface_id = item.surface_id
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
-        WHERE subscription.principal_user_id = $1
+        WHERE subscription.principal_id = $1
           AND item.source_seq > subscription.read_through_seq
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
             SELECT 1 FROM profile_mute AS mute
-            WHERE mute.principal_user_id = $1
+            WHERE mute.principal_id = $1
               AND mute.active
               AND mute.target_profile_id = publication.author_profile_id
           )
         "#,
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_one(pool)
     .await?;
     let next_cursor = has_more.then(|| {
@@ -8196,7 +8189,7 @@ pub async fn public_inbox(
 pub async fn moderation_report_receipt(
     pool: &PgPool,
     report_id: Uuid,
-    reporter_principal_id: &str,
+    reporter_principal_id: PrincipalId,
 ) -> Result<Option<ModerationReportReceiptRow>, ProjectionError> {
     let row = sqlx::query(
         r#"
@@ -8208,7 +8201,7 @@ pub async fn moderation_report_receipt(
         "#,
     )
     .bind(report_id)
-    .bind(reporter_principal_id)
+    .bind(reporter_principal_id.as_uuid())
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|row| ModerationReportReceiptRow {
@@ -8297,7 +8290,7 @@ pub async fn moderation_case_by_id(
     .into_iter()
     .map(|row| ModerationReportRow {
         report_id: row.get("report_id"),
-        reporter_principal_id: row.get("reporter_principal_id"),
+        reporter_principal_id: PrincipalId::from_uuid(row.get("reporter_principal_id")),
         reason_family: row.get("reason_family"),
         details: row.get("details"),
         active: row.get("active"),
@@ -8314,7 +8307,7 @@ pub async fn moderation_case_by_id(
     .map(|row| ModerationHistoryRow {
         source_seq: row.get("source_seq"),
         event_kind: row.get("event_kind"),
-        actor_principal_id: row.get("actor_principal_id"),
+        actor_principal_id: PrincipalId::from_uuid(row.get("actor_principal_id")),
         reason: row.get("reason"),
         occurred_at: row.get("occurred_at"),
     })
@@ -8426,7 +8419,7 @@ pub async fn public_profile_by_handle(
 /// profile existence to caller-facing application code.
 pub async fn public_profile_id_by_principal(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<Option<Uuid>, ProjectionError> {
     sqlx::query_scalar(
         r#"
@@ -8436,7 +8429,7 @@ pub async fn public_profile_id_by_principal(
         WHERE profile.active_principal_id = $1 AND profile.lifecycle = 'active'
         "#,
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(pool)
     .await
     .map_err(ProjectionError::from)
@@ -9035,15 +9028,15 @@ async fn update_slot_private(
 async fn upsert_authority(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    user_id: &str,
+    principal_id: PrincipalId,
     role: &str,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
-        "INSERT INTO game_authority (game_id, user_id, role) VALUES ($1, $2, $3) \
-         ON CONFLICT (game_id, user_id, role) DO NOTHING",
+        "INSERT INTO game_authority (game_id, principal_id, role) VALUES ($1, $2, $3) \
+         ON CONFLICT (game_id, principal_id, role) DO NOTHING",
     )
     .bind(game_id)
-    .bind(user_id)
+    .bind(principal_id.as_uuid())
     .bind(role)
     .execute(&mut **tx)
     .await?;
@@ -9099,14 +9092,14 @@ where
 async fn insert_spectator_membership(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    user_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
-        "INSERT INTO spectator_membership (game_id, user_id) VALUES ($1, $2) \
-         ON CONFLICT (game_id, user_id) DO NOTHING",
+        "INSERT INTO spectator_membership (game_id, principal_id) VALUES ($1, $2) \
+         ON CONFLICT (game_id, principal_id) DO NOTHING",
     )
     .bind(game_id)
-    .bind(user_id)
+    .bind(principal_id.as_uuid())
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -9115,11 +9108,11 @@ async fn insert_spectator_membership(
 async fn delete_spectator_membership(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    user_id: &str,
+    principal_id: PrincipalId,
 ) -> Result<(), ProjectionError> {
-    sqlx::query("DELETE FROM spectator_membership WHERE game_id = $1 AND user_id = $2")
+    sqlx::query("DELETE FROM spectator_membership WHERE game_id = $1 AND principal_id = $2")
         .bind(game_id)
-        .bind(user_id)
+        .bind(principal_id.as_uuid())
         .execute(&mut **tx)
         .await?;
     Ok(())
@@ -10203,6 +10196,23 @@ fn uuid_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<Uuid, Proj
             source.to_string(),
         )),
     })
+}
+
+fn principal_id_field(
+    p: &serde_json::Value,
+    key: &str,
+    kind: &str,
+) -> Result<PrincipalId, ProjectionError> {
+    let value = str_field(p, key, kind)?;
+    value
+        .parse::<PrincipalId>()
+        .map_err(|source| ProjectionError::Payload {
+            kind: kind.to_string(),
+            source: serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                source.to_string(),
+            )),
+        })
 }
 
 fn optional_string_field(

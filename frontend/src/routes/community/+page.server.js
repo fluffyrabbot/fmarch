@@ -9,7 +9,7 @@ export async function load({ locals, fetch }) {
     shellOwner: "layout",
     shell: buildAppShell({
       activeSurface: "community",
-      principalUserId: locals.principalUserId,
+      principalId: locals.principalId,
       capabilities: locals.resolvedCapabilities,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({

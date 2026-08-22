@@ -10,6 +10,7 @@ const ENV = Object.freeze({
   WORKOS_COOKIE_PASSWORD: "0123456789abcdef0123456789abcdef",
   FMARCH_API_INTERNAL_URL: "http://fmarch.railway.internal:8080",
 });
+const PRINCIPAL_ID = "00000000-0000-5000-8000-000000000001";
 
 test("callback exchanges the typed AuthKit result directly for one backend session", async () => {
   const cookies = cookieJar({ "wos-session": "legacy-session" });
@@ -25,7 +26,7 @@ test("callback exchanges the typed AuthKit result directly for one backend sessi
       url: "https://fmarch.example.test/auth/callback?code=code_a&state=state_a",
       fetchImpl: async (url, init) => {
         observed.request = { url, init };
-        return jsonResponse({ session_token: "fmss_session-a" });
+        return jsonResponse({ principal_id: PRINCIPAL_ID, session_token: "fmss_session-a" });
       },
     }),
   );
@@ -143,6 +144,23 @@ test("callback gives API network, rejection, and malformed responses distinct re
       assert.equal(response.headers.get("location"), item.location);
       assert.equal(logReason(logs), item.reason);
       assert.equal(logs.join(" ").includes("provider-token"), false);
+    });
+  }
+});
+
+test("callback rejects missing or noncanonical principal IDs from the session API", async (t) => {
+  for (const [name, body] of [
+    ["missing", { session_token: "fmss_missing-principal" }],
+    ["label", { principal_id: "principal_a", session_token: "fmss_label-principal" }],
+  ]) {
+    await t.test(name, async () => {
+      const logs = [];
+      const response = await callbackHandler(callbackService(), logs)(
+        callbackEvent({ fetchImpl: async () => jsonResponse(body) }),
+      );
+
+      assert.equal(response.headers.get("location"), "/auth/login?error=workos_api_response_malformed");
+      assert.equal(logReason(logs), "api_response_malformed");
     });
   }
 });
@@ -310,7 +328,7 @@ test("callback links WorkOS to an authenticated principal without replacing its 
         return jsonResponse({
           status: "attached",
           method_id: "00000000-0000-0000-0000-000000000001",
-          principal_user_id: "principal_a",
+          principal_id: PRINCIPAL_ID,
           provider_logout_url:
             "https://api.workos.com/user_management/sessions/logout?session_id=session_link_a",
         });
@@ -465,7 +483,7 @@ test("link callback retries once with the identical request after response loss"
         return jsonResponse({
           status: "attached",
           method_id: "00000000-0000-0000-0000-000000000001",
-          principal_user_id: "principal_a",
+          principal_id: PRINCIPAL_ID,
           provider_logout_url:
             "https://api.workos.com/user_management/sessions/logout?session_id=session_link_a",
         });
@@ -512,7 +530,7 @@ test("link callback replays one ambiguous successful response", async (t) => {
       response: jsonResponse({
         status: "attached",
         method_id: "00000000-0000-0000-0000-000000000001",
-        principal_user_id: "principal_a",
+        principal_id: PRINCIPAL_ID,
       }),
     },
   ];
@@ -537,7 +555,7 @@ test("link callback replays one ambiguous successful response", async (t) => {
             return jsonResponse({
               status: "attached",
               method_id: "00000000-0000-0000-0000-000000000001",
-              principal_user_id: "principal_a",
+              principal_id: PRINCIPAL_ID,
               provider_logout_url:
                 "https://api.workos.com/user_management/sessions/logout?session_id=session_link_a",
             });
@@ -601,6 +619,40 @@ test("link callback stops locally after two malformed successful responses", asy
     logs.filter((line) => JSON.parse(line).event === "workos_callback_retry").length,
     1,
   );
+});
+
+test("link callback rejects a noncanonical principal response", async () => {
+  const logs = [];
+  let attempts = 0;
+  const response = await callbackHandler(
+    callbackService({
+      accessToken: "link-assertion",
+      returnPathname:
+        "/auth/account/security?fmarchWorkosFlow=link&returnTo=%2Fadmin",
+    }),
+    logs,
+  )(
+    callbackEvent({
+      cookies: cookieJar({ fmarch_session: "fmss_classic" }),
+      fetchImpl: async () => {
+        attempts += 1;
+        return jsonResponse({
+          status: "attached",
+          method_id: "00000000-0000-0000-0000-000000000001",
+          principal_id: "principal_a",
+          provider_logout_url:
+            "https://api.workos.com/user_management/sessions/logout?session_id=session_link_a",
+        });
+      },
+    }),
+  );
+
+  assert.equal(attempts, 2);
+  assert.equal(
+    response.headers.get("location"),
+    "/auth/account/security?returnTo=%2Fadmin&workosError=malformed_response",
+  );
+  assert.equal(logReason(logs), "link_api_response_malformed");
 });
 
 test("link callback stops locally after two transport failures", async () => {
@@ -699,7 +751,7 @@ test("linked identity never navigates to an absent or malformed provider logout 
             return jsonResponse({
               status: "attached",
               method_id: "00000000-0000-0000-0000-000000000001",
-              principal_user_id: "principal_a",
+              principal_id: PRINCIPAL_ID,
               ...(providerLogoutUrl === undefined
                 ? {}
                 : { provider_logout_url: providerLogoutUrl }),
@@ -731,7 +783,7 @@ test("two WorkOS login/logout/login cycles do not depend on retained AuthKit sta
   let created = 0;
   const loginFetch = async () => {
     created += 1;
-    return jsonResponse({ session_token: `fmss_cycle-${created}` });
+    return jsonResponse({ principal_id: PRINCIPAL_ID, session_token: `fmss_cycle-${created}` });
   };
 
   const first = await handler(
@@ -750,7 +802,7 @@ test("two WorkOS login/logout/login cycles do not depend on retained AuthKit sta
       fetch: async () =>
         jsonResponse({
           status: "logged_out",
-          principal_user_id: "principal_a",
+          principal_id: PRINCIPAL_ID,
           provider_logout_url:
             "https://api.workos.com/user_management/sessions/logout?session_id=session_one",
         }),
@@ -816,7 +868,7 @@ function callbackService({
 function callbackEvent({
   cookies = cookieJar(),
   url = "https://fmarch.example.test/auth/callback?code=code_a&state=state_a",
-  fetchImpl = async () => jsonResponse({ session_token: "fmss_default" }),
+  fetchImpl = async () => jsonResponse({ principal_id: PRINCIPAL_ID, session_token: "fmss_default" }),
 } = {}) {
   return { cookies, url: new URL(url), fetch: fetchImpl };
 }

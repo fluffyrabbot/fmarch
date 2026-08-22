@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { FIXTURE_PRINCIPAL_IDS } from "../../principal-id.mjs";
 import {
   HOST_TASK_WORKSPACE_CONTRACT,
   buildHostTaskWorkspaceViewModel,
 } from "./host-task-workspace.mjs";
+
+const HOST_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.hostH;
 
 const groups = [
   {
@@ -73,7 +76,7 @@ test("host task workspace prioritizes decisions and selects one canvas", () => {
     phase: { deadlineLabel: "Tonight, 9:00 PM" },
     hostPrompts: [{ id: "prompt-1", label: "Skip next day", status: "pending" }],
     hostTasks,
-    commandContext: { gameId: "midsummer", principalUserId: "host_h" },
+    commandContext: { gameId: "midsummer", principalId: HOST_PRINCIPAL_ID },
   });
 
   assert.equal(view.root.data.mode, "exception-queue-decision-canvas");
@@ -89,7 +92,7 @@ test("host task workspace prioritizes decisions and selects one canvas", () => {
   assert.equal(view.selectedTaskId, "deadline");
   assert.equal(view.selectedTask.consequence, "move the deadline");
   assert.equal(view.queue.attentionCount, 2);
-  assert.equal(view.commandContext.value, "HostOf(game) · @host_h");
+  assert.equal(view.commandContext.value, `HostOf(game) · @${HOST_PRINCIPAL_ID}`);
 });
 
 test("interrupted commands move their task to the front for recovery", () => {

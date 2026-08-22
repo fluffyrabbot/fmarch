@@ -36,8 +36,8 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
     assert_eq!(identity.0, APPLICATION_DATABASE_ROLE);
     assert_eq!(identity.1, APPLICATION_DATABASE_ROLE);
 
-    sqlx::query("INSERT INTO platform_principal (principal_user_id, created_at) VALUES ($1, 1)")
-        .bind(format!("authority-app-{}", Uuid::new_v4()))
+    sqlx::query("INSERT INTO platform_principal (principal_id, created_at) VALUES ($1, 1)")
+        .bind(Uuid::new_v4())
         .execute(&application)
         .await
         .expect("ordinary application insert");

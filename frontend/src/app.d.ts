@@ -1,7 +1,7 @@
 declare global {
   namespace App {
     interface Locals {
-      principalUserId: string | null;
+      principalId: string | null;
       resolvedCapabilities: unknown[];
     }
   }

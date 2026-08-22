@@ -14,6 +14,7 @@ use commands::day_scheduler::{
 };
 use commands::{Command, Reject};
 use game_platform::{DayEventId, DayProgramRef, ParticipationPayload};
+use principal::PrincipalId;
 use projections::{
     audit_rebuild, day_event_narratives, day_event_participation_page, DayEventParticipationCursor,
     ProjectionError, MAX_DAY_EVENT_PARTICIPATION_PAGE_SIZE,
@@ -187,7 +188,7 @@ pub async fn run_mash_scale_acceptance(
     let program = artifact.document.clone();
     commands::handle(
         pool,
-        &Principal::user(HOST),
+        &Principal::authenticated(host_principal_id()),
         Command::AttachDayProgram {
             game,
             program: program.clone(),
@@ -199,10 +200,14 @@ pub async fn run_mash_scale_acceptance(
     let open_reports = race_scheduler_replicas(pool, OPEN_AT).await?;
     let open_scheduler_elapsed = open_scheduler_started.elapsed();
     let open_events = projections::day_events(pool, game).await?;
-    let player_attention_items =
-        load_player_day_event_attention_for_principal(pool, game, &user_id(1), Some(&slot_id(1)))
-            .await
-            .map_err(|error| MashScaleError::PlayerAttention(format!("{error:?}")))?;
+    let player_attention_items = load_player_day_event_attention_for_principal(
+        pool,
+        game,
+        user_principal_id(1),
+        Some(&slot_id(1)),
+    )
+    .await
+    .map_err(|error| MashScaleError::PlayerAttention(format!("{error:?}")))?;
     let player_attention = MashScaleAttentionEvidence {
         open_events_visible_to_player: open_events.len(),
         open_events_player_can_act_on: player_attention_items
@@ -306,9 +311,10 @@ pub async fn run_mash_scale_acceptance(
     };
 
     let host_console_started = Instant::now();
-    let host_console_state = load_host_console_state_for_principal(pool, game, HOST, Some(25))
-        .await
-        .map_err(|error| MashScaleError::HostConsole(format!("{error:?}")))?;
+    let host_console_state =
+        load_host_console_state_for_principal(pool, game, host_principal_id(), Some(25))
+            .await
+            .map_err(|error| MashScaleError::HostConsole(format!("{error:?}")))?;
     let host_console_elapsed_ms = elapsed_ms(host_console_started.elapsed());
     let host_console_bytes = serde_json::to_vec(&host_console_state)?.len();
     let host_console = MashScaleHostConsoleEvidence {
@@ -494,15 +500,21 @@ pub async fn run_mash_scale_acceptance(
 
 async fn seed_game(pool: &PgPool, game: Uuid) -> Result<(), MashScaleError> {
     let mut connection = pool.acquire().await?;
-    identity::methods::ensure_principal(&mut connection, HOST, &[], 1).await?;
+    identity::methods::ensure_principal(&mut connection, &host_principal_id(), &[], 1).await?;
     for slot_number in 1..=MASH_SCALE_ROSTER_COUNT {
-        identity::methods::ensure_principal(&mut connection, &user_id(slot_number), &[], 1).await?;
+        identity::methods::ensure_principal(
+            &mut connection,
+            &user_principal_id(slot_number),
+            &[],
+            1,
+        )
+        .await?;
     }
     drop(connection);
 
     commands::handle(
         pool,
-        &Principal::user(HOST),
+        &Principal::authenticated(host_principal_id()),
         Command::CreateGame {
             game,
             pack: "mafiascum".to_string(),
@@ -515,7 +527,7 @@ async fn seed_game(pool: &PgPool, game: Uuid) -> Result<(), MashScaleError> {
         let user = user_id(slot_number);
         commands::handle(
             pool,
-            &Principal::user(HOST),
+            &Principal::authenticated(host_principal_id()),
             Command::AddSlot {
                 game,
                 slot: slot.clone(),
@@ -524,7 +536,7 @@ async fn seed_game(pool: &PgPool, game: Uuid) -> Result<(), MashScaleError> {
         .await?;
         commands::handle(
             pool,
-            &Principal::user(HOST),
+            &Principal::authenticated(host_principal_id()),
             commands::seat_persona! {
                 game,
                 slot: slot.clone(),
@@ -534,7 +546,7 @@ async fn seed_game(pool: &PgPool, game: Uuid) -> Result<(), MashScaleError> {
         .await?;
         commands::handle(
             pool,
-            &Principal::user(HOST),
+            &Principal::authenticated(host_principal_id()),
             Command::AssignRole {
                 game,
                 slot,
@@ -545,7 +557,7 @@ async fn seed_game(pool: &PgPool, game: Uuid) -> Result<(), MashScaleError> {
     }
     commands::handle(
         pool,
-        &Principal::user(HOST),
+        &Principal::authenticated(host_principal_id()),
         Command::StartGame {
             game,
             phase: "D01".to_string(),
@@ -644,7 +656,7 @@ async fn submit_participation(
 ) -> Result<(), MashScaleError> {
     commands::handle(
         pool,
-        &Principal::user(user_id(slot_number)),
+        &Principal::authenticated(user_principal_id(slot_number)),
         Command::SubmitDayEventParticipation {
             game,
             event_id: event_id.clone(),
@@ -769,6 +781,14 @@ fn slot_id(number: usize) -> String {
 
 fn user_id(number: usize) -> String {
     format!("mash_scale_user_{number}")
+}
+
+fn host_principal_id() -> PrincipalId {
+    PrincipalId::fixture(HOST)
+}
+
+fn user_principal_id(number: usize) -> PrincipalId {
+    PrincipalId::fixture(user_id(number))
 }
 
 fn elapsed_ms(duration: Duration) -> u64 {

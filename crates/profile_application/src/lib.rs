@@ -6,148 +6,26 @@
 //! owns subject keys; and `social` owns the pure profile state machine.
 
 use eventstore::{ActorId, EventInput, StoreError};
-use hmac::{Hmac, Mac};
 use identity::{
     ensure_active_subject, insert_subject_claim, open_active_subject_claim, ClaimId, SubjectId,
 };
-use sha2::{Digest, Sha256};
+use profile_handle_index::{
+    acquire_profile_handle_index_writer_lease,
+    require_profile_handle_index_configuration as require_index_configuration, HandleIndexToken,
+    ProfileHandleIndexConfiguration, ProfileHandleIndexError,
+};
 use social::{
     decide_profile, fold_profile_event, PrincipalId, PrivacySubjectId, ProfileCommand,
     ProfileDecisionError, ProfileEdit, ProfileFoldError, ProfileId, ProfileOwner,
     ProfilePresentation, ProfileRevision, ProfileState,
 };
-use sqlx::Row;
+use sqlx::{Acquire, Row};
 
-const PROFILE_HANDLE_INDEX_KEY_ENV: &str = "FMARCH_PROFILE_HANDLE_INDEX_KEY";
-const PROFILE_HANDLE_INDEX_KID_ENV: &str = "FMARCH_PROFILE_HANDLE_INDEX_KID";
-const DEBUG_PROFILE_HANDLE_INDEX_KEY: &[u8] = b"fmarch-local-dev-profile-handle-index-key-v1";
-
-type HmacSha256 = Hmac<Sha256>;
-
-/// A stable, opaque HMAC token used for active-handle uniqueness and public
-/// lookup. It is deliberately distinct from a profile handle: the plaintext
-/// handle remains inside the sealed profile claim or the public projection.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct HandleIndexToken([u8; 32]);
-
-impl HandleIndexToken {
-    fn for_handle(handle: &social::ProfileHandle) -> Result<Self, ProfileApplicationError> {
-        let key = load_handle_index_key()?;
-        Self::for_handle_with_key(handle, &key)
-    }
-
-    fn for_handle_with_key(
-        handle: &social::ProfileHandle,
-        key: &[u8],
-    ) -> Result<Self, ProfileApplicationError> {
-        let mut mac = HmacSha256::new_from_slice(key).map_err(|_| {
-            ProfileApplicationError::HandleIndexConfiguration(
-                "configured key cannot initialize HMAC-SHA256".to_string(),
-            )
-        })?;
-        mac.update(handle.as_str().as_bytes());
-        let bytes: [u8; 32] = mac.finalize().into_bytes().into();
-        Ok(Self(bytes))
-    }
-
-    fn from_database(bytes: Vec<u8>) -> Result<Self, ProfileApplicationError> {
-        let bytes: [u8; 32] = bytes.try_into().map_err(|_| {
-            ProfileApplicationError::InvalidState(
-                "active profile has a malformed handle index token".to_string(),
-            )
-        })?;
-        Ok(Self(bytes))
-    }
-
-    fn as_bytes(&self) -> &[u8; 32] {
-        &self.0
-    }
-
-    fn as_lower_hex(&self) -> String {
-        const HEX: &[u8; 16] = b"0123456789abcdef";
-        let mut encoded = String::with_capacity(64);
-        for byte in self.0 {
-            encoded.push(HEX[(byte >> 4) as usize] as char);
-            encoded.push(HEX[(byte & 0x0f) as usize] as char);
-        }
-        encoded
-    }
-}
-
-fn load_handle_index_key() -> Result<Vec<u8>, ProfileApplicationError> {
-    match std::env::var(PROFILE_HANDLE_INDEX_KEY_ENV) {
-        Ok(value) if value.len() >= 32 && value == value.trim() => {
-            if !cfg!(debug_assertions) && is_obvious_placeholder(&value) {
-                return Err(ProfileApplicationError::HandleIndexConfiguration(
-                    "FMARCH_PROFILE_HANDLE_INDEX_KEY must not use a placeholder value in release builds"
-                        .to_string(),
-                ));
-            }
-            Ok(value.into_bytes())
-        }
-        Ok(_) => Err(ProfileApplicationError::HandleIndexConfiguration(
-            "FMARCH_PROFILE_HANDLE_INDEX_KEY must contain at least 32 bytes with no leading or trailing whitespace"
-                .to_string(),
-        )),
-        Err(std::env::VarError::NotPresent) if cfg!(debug_assertions) => {
-            Ok(Sha256::digest(DEBUG_PROFILE_HANDLE_INDEX_KEY).to_vec())
-        }
-        Err(std::env::VarError::NotPresent) => {
-            Err(ProfileApplicationError::HandleIndexConfiguration(
-                "FMARCH_PROFILE_HANDLE_INDEX_KEY is required in release builds".to_string(),
-            ))
-        }
-        Err(std::env::VarError::NotUnicode(_)) => {
-            Err(ProfileApplicationError::HandleIndexConfiguration(
-                "FMARCH_PROFILE_HANDLE_INDEX_KEY must be valid UTF-8".to_string(),
-            ))
-        }
-    }
-}
-
-fn is_obvious_placeholder(value: &str) -> bool {
-    let normalized = value.to_ascii_lowercase();
-    ["replace", "change", "placeholder", "example", "at-least"]
-        .iter()
-        .any(|marker| normalized.contains(marker))
-}
-
-fn load_handle_index_kid() -> Result<String, ProfileApplicationError> {
-    let value = std::env::var(PROFILE_HANDLE_INDEX_KID_ENV).map_err(|error| match error {
-        std::env::VarError::NotPresent => ProfileApplicationError::HandleIndexConfiguration(
-            "FMARCH_PROFILE_HANDLE_INDEX_KID is required in release builds".to_string(),
-        ),
-        std::env::VarError::NotUnicode(_) => ProfileApplicationError::HandleIndexConfiguration(
-            "FMARCH_PROFILE_HANDLE_INDEX_KID must be valid UTF-8".to_string(),
-        ),
-    })?;
-    validate_handle_index_kid(value)
-}
-
-fn validate_handle_index_kid(value: String) -> Result<String, ProfileApplicationError> {
-    let is_valid = !value.is_empty()
-        && value.len() <= 128
-        && value == value.trim()
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'));
-    if !is_valid {
-        return Err(ProfileApplicationError::HandleIndexConfiguration(
-            "FMARCH_PROFILE_HANDLE_INDEX_KID must be a non-empty, trimmed identifier using only letters, digits, '.', '_', or '-'"
-                .to_string(),
-        ));
-    }
-    Ok(value)
-}
-
-/// Fail fast before the server accepts traffic. Release builds require both the
-/// opaque HMAC key and its non-secret custody marker; debug builds deliberately
-/// retain the deterministic local fallback for hermetic tests and development.
+/// Fail fast before the server accepts traffic. Unlike hermetic direct-library
+/// tests, a process that will serve requests must provide both the opaque key
+/// and a valid public custody marker explicitly.
 pub fn require_profile_handle_index_configuration() -> Result<(), ProfileApplicationError> {
-    let _ = load_handle_index_key()?;
-    if !cfg!(debug_assertions) {
-        let _ = load_handle_index_kid()?;
-    }
+    let _ = require_index_configuration()?;
     Ok(())
 }
 
@@ -184,6 +62,18 @@ pub enum ProfileApplicationError {
     InvalidState(String),
 }
 
+impl From<ProfileHandleIndexError> for ProfileApplicationError {
+    fn from(error: ProfileHandleIndexError) -> Self {
+        match error {
+            ProfileHandleIndexError::Configuration(message) => {
+                Self::HandleIndexConfiguration(message)
+            }
+            ProfileHandleIndexError::MalformedStoredToken(message) => Self::InvalidState(message),
+            ProfileHandleIndexError::Database(error) => Self::Database(error),
+        }
+    }
+}
+
 impl ProfileApplicationError {
     /// Whether a caller may safely present this as a stale-write conflict.
     pub fn is_revision_conflict(&self) -> bool {
@@ -197,6 +87,259 @@ impl ProfileApplicationError {
     }
 }
 
+/// A non-secret readiness result. The count intentionally excludes handles,
+/// HMAC values, subjects, and principals so it is safe for startup telemetry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProfileHandleIndexAudit {
+    pub active_profile_count: u64,
+}
+
+/// Prove that every active reservation is derived from its sealed claim under
+/// the explicitly configured key. Server startup runs this after subject-key
+/// authority preparation and before opening a listener, so a missing, malformed
+/// or mismatched index configuration never reaches readiness.
+pub async fn verify_profile_handle_index_consistency(
+    pool: &sqlx::postgres::PgPool,
+) -> Result<ProfileHandleIndexAudit, ProfileApplicationError> {
+    let configuration = require_index_configuration()?;
+    verify_profile_handle_index_consistency_with_configuration(pool, &configuration).await
+}
+
+/// Same proof under an already-validated explicit configuration. The protected
+/// maintenance command uses this internally while its replacement key is still
+/// absent from normal service configuration.
+pub async fn verify_profile_handle_index_consistency_with_configuration(
+    pool: &sqlx::postgres::PgPool,
+    configuration: &ProfileHandleIndexConfiguration,
+) -> Result<ProfileHandleIndexAudit, ProfileApplicationError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT profile_id, subject_id, current_claim_id, handle_hmac
+        FROM member_profile
+        WHERE lifecycle = 'active'
+        ORDER BY profile_id
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    for row in &rows {
+        let profile_id = ProfileId::from_uuid(row.try_get("profile_id")?);
+        let subject_id = SubjectId::from_uuid(row.try_get("subject_id")?);
+        let claim_id = ClaimId::from_uuid(
+            row.try_get::<Option<uuid::Uuid>, _>("current_claim_id")?
+                .ok_or_else(|| {
+                    ProfileApplicationError::InvalidState(
+                        "active profile has no current private claim".to_string(),
+                    )
+                })?,
+        );
+        let stored = HandleIndexToken::from_database(
+            row.try_get::<Option<Vec<u8>>, _>("handle_hmac")?
+                .ok_or_else(|| {
+                    ProfileApplicationError::InvalidState(
+                        "active profile has no handle index token".to_string(),
+                    )
+                })?,
+        )?;
+        let mut tx = pool.begin().await?;
+        let presentation: ProfilePresentation = open_active_subject_claim(
+            &mut tx,
+            subject_id,
+            claim_id,
+            "profile",
+            profile_id.as_uuid(),
+            None,
+        )
+        .await?;
+        let expected = HandleIndexToken::for_handle_with_configuration(
+            presentation.handle.as_str(),
+            configuration,
+        )?;
+        tx.commit().await?;
+        if stored != expected {
+            return Err(ProfileApplicationError::InvalidState(
+                "profile handle index token does not match its sealed claim under the configured key"
+                    .to_string(),
+            ));
+        }
+    }
+
+    Ok(ProfileHandleIndexAudit {
+        active_profile_count: u64::try_from(rows.len()).map_err(|_| {
+            ProfileApplicationError::InvalidState(
+                "active profile count exceeds supported range".to_string(),
+            )
+        })?,
+    })
+}
+
+/// The public, non-secret result of an atomic blind-index rekey.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProfileHandleIndexReindexReport {
+    pub current_kid: String,
+    pub replacement_kid: String,
+    pub active_profile_count: u64,
+}
+
+/// Recompute every active profile reservation under `replacement` in one
+/// database transaction. The caller must have explicitly loaded both key
+/// configurations from the protected maintenance environment; this function
+/// never accepts key material from a command-line argument or logs it.
+///
+/// A session-level exclusive lease drains compatible writers first. It is
+/// released on every normal success or error return. Operators must still stop
+/// old, pre-lease API replicas before acknowledging the maintenance window;
+/// the server-side startup audit fences a wrong-key restart afterward.
+pub async fn reindex_profile_handle_index(
+    connection: &mut sqlx::PgConnection,
+    current: &ProfileHandleIndexConfiguration,
+    replacement: &ProfileHandleIndexConfiguration,
+) -> Result<ProfileHandleIndexReindexReport, ProfileApplicationError> {
+    if !current.differs_from(replacement) {
+        return Err(ProfileApplicationError::HandleIndexConfiguration(
+            "replacement profile handle-index key and KID must both differ from the active configuration"
+                .to_string(),
+        ));
+    }
+    profile_handle_index::acquire_profile_handle_index_maintenance_lease(connection).await?;
+    let result = reindex_profile_handle_index_while_leased(connection, current, replacement).await;
+    let release =
+        profile_handle_index::release_profile_handle_index_maintenance_lease(connection).await;
+    match (result, release) {
+        (Ok(report), Ok(())) => Ok(report),
+        (Err(error), Ok(())) => Err(error),
+        (Ok(_), Err(error)) | (Err(_), Err(error)) => Err(error.into()),
+    }
+}
+
+async fn reindex_profile_handle_index_while_leased(
+    connection: &mut sqlx::PgConnection,
+    current: &ProfileHandleIndexConfiguration,
+    replacement: &ProfileHandleIndexConfiguration,
+) -> Result<ProfileHandleIndexReindexReport, ProfileApplicationError> {
+    let mut tx = connection.begin().await?;
+    let rows = sqlx::query(
+        r#"
+        SELECT profile_id, subject_id, current_claim_id, handle_hmac
+        FROM member_profile
+        WHERE lifecycle = 'active'
+        ORDER BY profile_id
+        "#,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let mut updates = Vec::with_capacity(rows.len());
+    for row in &rows {
+        let profile_id = ProfileId::from_uuid(row.try_get("profile_id")?);
+        let subject_id = SubjectId::from_uuid(row.try_get("subject_id")?);
+        let claim_id = ClaimId::from_uuid(
+            row.try_get::<Option<uuid::Uuid>, _>("current_claim_id")?
+                .ok_or_else(|| {
+                    ProfileApplicationError::InvalidState(
+                        "active profile has no current private claim".to_string(),
+                    )
+                })?,
+        );
+        let stored = HandleIndexToken::from_database(
+            row.try_get::<Option<Vec<u8>>, _>("handle_hmac")?
+                .ok_or_else(|| {
+                    ProfileApplicationError::InvalidState(
+                        "active profile has no handle index token".to_string(),
+                    )
+                })?,
+        )?;
+        let presentation: ProfilePresentation = open_active_subject_claim(
+            &mut tx,
+            subject_id,
+            claim_id,
+            "profile",
+            profile_id.as_uuid(),
+            None,
+        )
+        .await?;
+        let expected_current =
+            HandleIndexToken::for_handle_with_configuration(presentation.handle.as_str(), current)?;
+        if stored != expected_current {
+            return Err(ProfileApplicationError::InvalidState(
+                "profile handle index token does not match its sealed claim under the expected current key"
+                    .to_string(),
+            ));
+        }
+        let replacement_token = HandleIndexToken::for_handle_with_configuration(
+            presentation.handle.as_str(),
+            replacement,
+        )?;
+        updates.push((profile_id, claim_id, stored, replacement_token));
+    }
+
+    // Subject rows were locked while claims were authenticated above. Lock the
+    // projection roots only afterward to preserve the identity lock order and
+    // avoid a cycle with erasure finalization.
+    let locked_rows = sqlx::query(
+        r#"
+        SELECT profile_id, current_claim_id, handle_hmac
+        FROM member_profile
+        WHERE lifecycle = 'active'
+        ORDER BY profile_id
+        FOR UPDATE
+        "#,
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    if locked_rows.len() != updates.len() {
+        return Err(ProfileApplicationError::InvalidState(
+            "active profiles changed while the maintenance lease was held".to_string(),
+        ));
+    }
+    for (row, (profile_id, claim_id, stored, _)) in locked_rows.iter().zip(&updates) {
+        let locked_profile_id = ProfileId::from_uuid(row.try_get("profile_id")?);
+        let locked_claim_id = row.try_get::<Option<uuid::Uuid>, _>("current_claim_id")?;
+        let locked_token = row.try_get::<Option<Vec<u8>>, _>("handle_hmac")?;
+        if locked_profile_id != *profile_id
+            || locked_claim_id != Some(claim_id.as_uuid())
+            || locked_token.as_deref() != Some(stored.as_bytes().as_slice())
+        {
+            return Err(ProfileApplicationError::InvalidState(
+                "active profile changed while the maintenance lease was held".to_string(),
+            ));
+        }
+    }
+    for (profile_id, claim_id, stored, replacement_token) in &updates {
+        let updated = sqlx::query(
+            r#"
+            UPDATE member_profile
+            SET handle_hmac = $1
+            WHERE profile_id = $2
+              AND lifecycle = 'active'
+              AND current_claim_id = $3
+              AND handle_hmac = $4
+            "#,
+        )
+        .bind(replacement_token.as_bytes().as_slice())
+        .bind(profile_id.as_uuid())
+        .bind(claim_id.as_uuid())
+        .bind(stored.as_bytes().as_slice())
+        .execute(&mut *tx)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(ProfileApplicationError::InvalidState(
+                "profile handle-index reindex lost a fenced active profile".to_string(),
+            ));
+        }
+    }
+    tx.commit().await?;
+    Ok(ProfileHandleIndexReindexReport {
+        current_kid: current.kid().to_string(),
+        replacement_kid: replacement.kid().to_string(),
+        active_profile_count: u64::try_from(updates.len()).map_err(|_| {
+            ProfileApplicationError::InvalidState(
+                "active profile count exceeds supported range".to_string(),
+            )
+        })?,
+    })
+}
+
 /// Establish one new active profile.  Values are typed before this boundary;
 /// raw request parsing belongs to the caller.
 pub async fn create_profile(
@@ -205,13 +348,14 @@ pub async fn create_profile(
     presentation: ProfilePresentation,
     occurred_at: i64,
 ) -> Result<ProfileId, ProfileApplicationError> {
-    let handle_index_token = HandleIndexToken::for_handle(&presentation.handle)?;
     let mut tx = pool.begin().await?;
+    acquire_profile_handle_index_writer_lease(&mut tx).await?;
+    let handle_index_token = HandleIndexToken::for_handle(presentation.handle.as_str())?;
     lock_profile_creation(&mut tx, &owner, &handle_index_token).await?;
     if sqlx::query_scalar::<_, uuid::Uuid>(
         "SELECT profile_id FROM member_profile WHERE active_principal_id = $1",
     )
-    .bind(owner.as_str())
+    .bind(owner.as_uuid())
     .fetch_optional(&mut *tx)
     .await?
     .is_some()
@@ -229,7 +373,7 @@ pub async fn create_profile(
         return Err(ProfileApplicationError::HandleAlreadyExists);
     }
 
-    let subject_id = ensure_active_subject(&mut tx, owner.as_str(), occurred_at).await?;
+    let subject_id = ensure_active_subject(&mut tx, owner, occurred_at).await?;
     let profile_id = ProfileId::from_uuid(uuid::Uuid::new_v4());
     let initial = decide_profile(
         None,
@@ -244,7 +388,6 @@ pub async fn create_profile(
         None,
         ProfileRevision::INITIAL,
         initial,
-        &handle_index_token,
         occurred_at,
     )
     .await?;
@@ -264,6 +407,7 @@ pub async fn update_profile(
     occurred_at: i64,
 ) -> Result<ProfileId, ProfileApplicationError> {
     let mut tx = pool.begin().await?;
+    acquire_profile_handle_index_writer_lease(&mut tx).await?;
     let loaded = load_profile_state(&mut tx, profile_id).await?;
     let current = loaded.state;
     let decision = decide_profile(
@@ -280,7 +424,6 @@ pub async fn update_profile(
         Some(current),
         expected_revision,
         decision,
-        &loaded.handle_index_token,
         occurred_at,
     )
     .await?;
@@ -304,7 +447,7 @@ pub async fn owner_profile(
         FOR SHARE
         "#,
     )
-    .bind(owner.as_str())
+    .bind(owner.as_uuid())
     .fetch_optional(&mut *tx)
     .await?;
     let Some(row) = row else {
@@ -349,7 +492,7 @@ async fn lock_profile_creation(
     // make the common simultaneous-create race deterministic before a new
     // privacy subject key is provisioned.
     for key in [
-        format!("profile-owner:{}", owner.as_str()),
+        format!("profile-owner:{}", owner.as_uuid()),
         format!("profile-handle:{}", handle_index_token.as_lower_hex()),
     ] {
         sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
@@ -362,7 +505,6 @@ async fn lock_profile_creation(
 
 struct LoadedProfile {
     state: ProfileState,
-    handle_index_token: HandleIndexToken,
 }
 
 async fn load_profile_state(
@@ -387,8 +529,8 @@ async fn load_profile_state(
             "redacted profiles are not editable".to_string(),
         ));
     }
-    let principal_id: String = row
-        .try_get::<Option<String>, _>("active_principal_id")?
+    let principal_id: uuid::Uuid = row
+        .try_get::<Option<uuid::Uuid>, _>("active_principal_id")?
         .ok_or_else(|| {
             ProfileApplicationError::InvalidState("active profile has no principal".to_string())
         })?;
@@ -417,7 +559,7 @@ async fn load_profile_state(
         None,
     )
     .await?;
-    let expected_handle_index_token = HandleIndexToken::for_handle(&presentation.handle)?;
+    let expected_handle_index_token = HandleIndexToken::for_handle(presentation.handle.as_str())?;
     if handle_index_token != expected_handle_index_token {
         return Err(ProfileApplicationError::InvalidState(
             "profile handle index token does not match its sealed claim".to_string(),
@@ -427,14 +569,12 @@ async fn load_profile_state(
         state: ProfileState::Active(social::ActiveProfile {
             profile_id,
             owner: ProfileOwner::new(
-                PrincipalId::new(principal_id)
-                    .map_err(|error| ProfileApplicationError::InvalidState(error.to_string()))?,
+                PrincipalId::from_uuid(principal_id),
                 PrivacySubjectId::from_uuid(subject_id.as_uuid()),
             ),
             presentation,
             revision,
         }),
-        handle_index_token,
     })
 }
 
@@ -450,7 +590,6 @@ async fn append_decision(
     state_before: Option<ProfileState>,
     expected_revision: ProfileRevision,
     decision: Vec<social::ProfileEvent>,
-    handle_index_token: &HandleIndexToken,
     occurred_at: i64,
 ) -> Result<(), ProfileApplicationError> {
     let mut state = state_before;
@@ -479,8 +618,6 @@ async fn append_decision(
                     serde_json::json!({
                         "subject_id": subject_id,
                         "claim_id": claim_id,
-                        "visibility": active.presentation.visibility.to_string(),
-                        "handle_hmac": handle_index_token.as_lower_hex(),
                     }),
                     ActorId::PrivacySubject(subject_id.as_uuid()),
                     occurred_at,
@@ -522,34 +659,4 @@ async fn append_decision(
     )
     .await?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{validate_handle_index_kid, HandleIndexToken};
-    use social::ProfileHandle;
-
-    #[test]
-    fn handle_index_token_is_lowercase_hmac_sha256_of_normalized_handle() {
-        let handle = ProfileHandle::new("  alpha_99 ").unwrap();
-        let token = HandleIndexToken::for_handle_with_key(&handle, b"key").unwrap();
-
-        assert_eq!(
-            token.as_lower_hex(),
-            "c1d19d2af723a87b25b0c14efb3c89cd6e3a3237fcb111c90a5f3eac43059410"
-        );
-    }
-
-    #[test]
-    fn database_token_requires_exact_sha256_width() {
-        assert!(HandleIndexToken::from_database(vec![7; 31]).is_err());
-        assert!(HandleIndexToken::from_database(vec![7; 32]).is_ok());
-    }
-
-    #[test]
-    fn handle_index_kid_is_a_trimmed_public_identifier() {
-        assert!(validate_handle_index_kid("profile-index-v1".to_string()).is_ok());
-        assert!(validate_handle_index_kid(" profile-index-v1".to_string()).is_err());
-        assert!(validate_handle_index_kid("profile index v1".to_string()).is_err());
-    }
 }

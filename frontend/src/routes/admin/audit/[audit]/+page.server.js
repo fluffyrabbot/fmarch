@@ -10,13 +10,13 @@ export async function load({ cookies, locals, fetch, params, url }) {
   const apiBaseUrl = serverApiBaseUrl();
   const data = await buildAdminRuntimeAuditDetailData({
     audit: params.audit,
-    principalUserId: locals.principalUserId,
+    principalId: locals.principalId,
     capabilities: locals.resolvedCapabilities,
     game: url.searchParams.get("game"),
     fetchImpl: fetch,
     apiBaseUrl,
     sessionToken: accessTokenForRequest({ locals, cookies }),
-    identityPrincipalUserId: url.searchParams.get("principal_user_id") ?? "host_h",
+    identityPrincipalId: url.searchParams.get("principal_id") ?? locals.principalId,
   });
 
   if (!data.access.allowed) {
@@ -141,7 +141,7 @@ async function submitAccountLifecycleAction({
           } sessions`
         : `${body.account_id} ${verb}`,
     accountId: body.account_id,
-    principalUserId: body.principal_user_id,
+    principalId: body.principal_id,
     disabledAt: body.disabled_at ?? null,
     revokedSessionCount: body.revoked_session_count ?? 0,
   };

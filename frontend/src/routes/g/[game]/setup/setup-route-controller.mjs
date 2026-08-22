@@ -14,6 +14,7 @@ import {
   buildHostSetupReadiness,
   normalizeHostSetupState,
 } from "./setup-route-model.mjs";
+import { canonicalPrincipalId } from "../../../../lib/principal-id.mjs";
 
 export function setupFormStatusKey(form) {
   if (form?.id === undefined || form?.id === null) {
@@ -103,7 +104,7 @@ export function setupCommandConfigForAction({
         action: "assign_slot",
         game,
         slot: requiredFormValue(formData, "slotId"),
-        user: requiredFormValue(formData, "principalUserId"),
+        principalId: requiredPrincipalId(formData, "principalId"),
         publicName: requiredFormValue(formData, "publicName"),
       });
     case "assign-role":
@@ -240,4 +241,12 @@ function requiredFormValue(formData, field, fallback = null) {
     return fallback;
   }
   throw new TypeError(`${field} must be a non-empty string`);
+}
+
+function requiredPrincipalId(formData, field) {
+  const principalId = canonicalPrincipalId(formData.get(field));
+  if (principalId === null) {
+    throw new TypeError(`${field} must be a canonical UUID`);
+  }
+  return principalId;
 }

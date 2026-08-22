@@ -11,6 +11,7 @@ use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
 use media::{MediaLimits, MediaStore};
+use principal::PrincipalId;
 use tempfile::TempDir;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -23,6 +24,14 @@ fn test_state(pool: sqlx::PgPool, root: &TempDir) -> ApiState {
 async fn json_body(response: axum::response::Response) -> serde_json::Value {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     serde_json::from_slice(&bytes).unwrap()
+}
+
+fn response_principal_id(body: &serde_json::Value) -> PrincipalId {
+    body["principal_id"]
+        .as_str()
+        .expect("response includes principal_id")
+        .parse()
+        .expect("response principal_id is a canonical UUID")
 }
 
 async fn assert_workos_provider_logout_recovery(
@@ -66,7 +75,7 @@ async fn register_classic_account(
     app: &axum::Router,
     account_id: &str,
     password: &str,
-) -> (String, String) {
+) -> (PrincipalId, String) {
     let response = post_json(
         app,
         "/auth/accounts/registrations",
@@ -77,18 +86,18 @@ async fn register_classic_account(
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     (
-        body["principal_user_id"].as_str().unwrap().to_string(),
+        response_principal_id(&body),
         body["session_token"].as_str().unwrap().to_string(),
     )
 }
 
-async fn issue_dev_admin(app: &axum::Router, principal_user_id: &str) -> String {
+async fn issue_dev_admin(app: &axum::Router, principal_id: PrincipalId) -> String {
     let response = post_json(
         app,
         "/auth/dev-session",
         None,
         serde_json::json!({
-            "principal_user_id": principal_user_id,
+            "principal_id": principal_id,
             "expires_at": 4_102_444_800i64,
             "global_capabilities": ["GlobalAdmin"]
         }),
@@ -149,16 +158,16 @@ async fn wait_for_workos_subject_lock_waiters(pool: &sqlx::PgPool, expected: i64
     panic!("expected {expected} WorkOS subject-lock waiter(s)");
 }
 
-async fn assert_erased_without_eligible_sessions(pool: &sqlx::PgPool, principal_user_id: &str) {
+async fn assert_erased_without_eligible_sessions(pool: &sqlx::PgPool, principal_id: PrincipalId) {
     let (principal_status, subject_state): (String, String) = sqlx::query_as(
         r#"
         SELECT principal.status, subject.lifecycle_state
         FROM platform_principal AS principal
-        JOIN privacy_subject AS subject USING (principal_user_id)
-        WHERE principal.principal_user_id = $1
+        JOIN privacy_subject AS subject USING (principal_id)
+        WHERE principal.principal_id = $1
         "#,
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_one(pool)
     .await
     .unwrap();
@@ -166,15 +175,15 @@ async fn assert_erased_without_eligible_sessions(pool: &sqlx::PgPool, principal_
         r#"
         SELECT COUNT(*)
         FROM auth_session AS session
-        JOIN platform_principal AS principal USING (principal_user_id)
-        WHERE session.principal_user_id = $1
+        JOIN platform_principal AS principal USING (principal_id)
+        WHERE session.principal_id = $1
           AND session.revoked_at IS NULL
           AND session.expires_at > $2
           AND session.idle_expires_at > $2
           AND principal.status = 'active'
         "#,
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(unix_now_seconds())
     .fetch_one(pool)
     .await
@@ -236,7 +245,7 @@ async fn classic_identity_rows(
         FROM auth_account AS account
         JOIN authentication_method AS method ON method.method_id = account.method_id
         JOIN platform_principal AS principal
-          ON principal.principal_user_id = account.principal_user_id
+          ON principal.principal_id = account.principal_id
         WHERE account.account_id = $1
         "#,
     )
@@ -277,7 +286,7 @@ async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
     assert!(identity::token::is_app_session_token(
         session_token.as_str()
     ));
-    let principal_user_id = body["principal_user_id"].as_str().unwrap().to_string();
+    let principal_id = response_principal_id(&body);
 
     let (principal_status, method_id, method_kind, method_status) =
         classic_identity_rows(&pool, "new-player@example.test").await;
@@ -292,10 +301,7 @@ async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
     let response = get_session(&app, session_token.as_str()).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
-    assert_eq!(
-        body["principal_user_id"].as_str(),
-        Some(principal_user_id.as_str())
-    );
+    assert_eq!(body["principal_id"], serde_json::json!(principal_id));
     assert!(body.get("session_token").is_none());
 }
 
@@ -306,11 +312,26 @@ async fn orphan_accounts_fail_closed_without_creating_identity_rows(pool: sqlx::
 
     let password = "correct horse battery staple";
     let password_hash = identity::password::hash_password_sync(password).unwrap();
+    let orphan_principal_id = principal::PrincipalId::fixture("orphan-player-principal");
+    let orphan_method_id = Uuid::new_v4();
+    // Bypass the database guards in this isolated test to prove login remains
+    // fail-closed against a corrupted/restored account row as well.
+    sqlx::query("ALTER TABLE auth_account DROP CONSTRAINT IF EXISTS auth_account_method_id_fkey")
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query(
-        "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, $3, 1, NULL, '{}')",
+        "ALTER TABLE auth_account DROP CONSTRAINT IF EXISTS auth_account_method_identity_fkey",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO auth_account (account_id, principal_id, method_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, $3, $4, 1, NULL, '{}')",
     )
     .bind("orphan-player@example.test")
-    .bind("orphan-player-principal")
+    .bind(orphan_principal_id.as_uuid())
+    .bind(orphan_method_id)
     .bind(password_hash)
     .execute(&pool)
     .await
@@ -331,12 +352,13 @@ async fn orphan_accounts_fail_closed_without_creating_identity_rows(pool: sqlx::
     let (principals, subjects, methods, sessions): (i64, i64, i64, i64) = sqlx::query_as(
         r#"
         SELECT
-            (SELECT COUNT(*) FROM platform_principal WHERE principal_user_id = 'orphan-player-principal'),
-            (SELECT COUNT(*) FROM privacy_subject WHERE principal_user_id = 'orphan-player-principal'),
-            (SELECT COUNT(*) FROM authentication_method WHERE principal_user_id = 'orphan-player-principal'),
-            (SELECT COUNT(*) FROM auth_session WHERE principal_user_id = 'orphan-player-principal')
+            (SELECT COUNT(*) FROM platform_principal WHERE principal_id = $1),
+            (SELECT COUNT(*) FROM privacy_subject WHERE principal_id = $1),
+            (SELECT COUNT(*) FROM authentication_method WHERE principal_id = $1),
+            (SELECT COUNT(*) FROM auth_session WHERE principal_id = $1)
         "#,
     )
+    .bind(orphan_principal_id.as_uuid())
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -353,7 +375,7 @@ async fn dev_session_grant_and_rotation_issue_backend_tokens(pool: sqlx::PgPool)
         "/auth/dev-session",
         None,
         serde_json::json!({
-            "principal_user_id": "phase-one-admin",
+            "principal_id": principal::PrincipalId::fixture("phase-one-admin"),
             "expires_at": 4_102_444_800i64,
             "global_capabilities": ["GlobalAdmin"]
         }),
@@ -372,7 +394,7 @@ async fn dev_session_grant_and_rotation_issue_backend_tokens(pool: sqlx::PgPool)
         "/auth/session-grants",
         Some(admin_token.as_str()),
         serde_json::json!({
-            "principal_user_id": "granted-principal",
+            "principal_id": principal::PrincipalId::fixture("granted-principal"),
             "expires_at": 4_102_444_800i64
         }),
     )
@@ -458,7 +480,7 @@ fn workos_race_verifier() -> StaticAccessTokenVerifier {
     }))
 }
 
-async fn seed_workos_race_session(app: &axum::Router) -> (String, String) {
+async fn seed_workos_race_session(app: &axum::Router) -> (PrincipalId, String) {
     let response = post_json(
         app,
         "/auth/sessions",
@@ -469,23 +491,21 @@ async fn seed_workos_race_session(app: &axum::Router) -> (String, String) {
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     (
-        body["principal_user_id"].as_str().unwrap().to_string(),
+        response_principal_id(&body),
         body["session_token"].as_str().unwrap().to_string(),
     )
 }
 
 async fn hold_identity_owner(
     pool: &sqlx::PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
 ) -> sqlx::Transaction<'static, sqlx::Postgres> {
     let mut gate = pool.begin().await.unwrap();
-    sqlx::query(
-        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
-    )
-    .bind(principal_user_id)
-    .execute(&mut *gate)
-    .await
-    .unwrap();
+    sqlx::query("SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
+        .bind(principal_id.as_uuid())
+        .execute(&mut *gate)
+        .await
+        .unwrap();
     gate
 }
 
@@ -562,13 +582,13 @@ async fn workos_link_closes_the_provider_session_before_a_queued_login(pool: sql
     .await
     .unwrap();
     assert_eq!(consumed_assertions, 1);
-    let linked_principal: String = sqlx::query_scalar(
-        "SELECT principal_user_id FROM external_identity WHERE provider = 'workos' AND subject = 'user_workos_race'",
+    let linked_principal: Uuid = sqlx::query_scalar(
+        "SELECT principal_id FROM external_identity WHERE provider = 'workos' AND subject = 'user_workos_race'",
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(linked_principal, principal);
+    assert_eq!(linked_principal, principal.as_uuid());
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -630,10 +650,10 @@ async fn concurrent_exact_workos_link_retries_share_one_committed_ceremony(pool:
                (SELECT COUNT(*)
                 FROM identity_lifecycle_audit
                 WHERE event_kind = 'method_attached'
-                  AND principal_user_id = $1)
+                  AND principal_id = $1)
         "#,
     )
-    .bind(principal)
+    .bind(principal.as_uuid())
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -662,7 +682,7 @@ async fn workos_link_revalidates_the_local_session_after_queued_logout(pool: sql
         "correct horse battery staple",
     )
     .await;
-    let gate = hold_identity_owner(&pool, &principal).await;
+    let gate = hold_identity_owner(&pool, principal).await;
 
     let logout_app = app.clone();
     let logout_token = local_token.clone();
@@ -726,7 +746,7 @@ async fn workos_exchange_queued_before_logout_is_revoked_by_the_following_tombst
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
     let (principal, first_local_token) = seed_workos_race_session(&app).await;
-    let gate = hold_identity_owner(&pool, &principal).await;
+    let gate = hold_identity_owner(&pool, principal).await;
 
     let exchange_app = app.clone();
     let exchange = tokio::spawn(async move {
@@ -786,7 +806,7 @@ async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(po
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
     let (principal, first_local_token) = seed_workos_race_session(&app).await;
-    let gate = hold_identity_owner(&pool, &principal).await;
+    let gate = hold_identity_owner(&pool, principal).await;
 
     let logout_app = app.clone();
     let logout = tokio::spawn(async move {
@@ -821,8 +841,8 @@ async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(po
     assert_workos_provider_logout_recovery(exchange.unwrap(), "session_01HQAG1HENBZMAZD82YRXDFC0B")
         .await;
     let local_sessions: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_user_id = $1")
-            .bind(principal)
+        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -842,7 +862,7 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
         "/auth/dev-session",
         None,
         serde_json::json!({
-            "principal_user_id": "method-lifecycle-admin",
+            "principal_id": principal::PrincipalId::fixture("method-lifecycle-admin"),
             "expires_at": 4_102_444_800i64,
             "global_capabilities": ["GlobalAdmin"]
         }),
@@ -865,23 +885,20 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     let workos_session = body["session_token"].as_str().unwrap().to_string();
-    let principal_user_id = body["principal_user_id"].as_str().unwrap().to_string();
+    let principal_id = response_principal_id(&body);
 
     // Grant a capability to the principal so capability continuity is
     // observable across methods.
     sqlx::query(
-        "UPDATE platform_principal SET global_capabilities = ARRAY['GlobalMod'] WHERE principal_user_id = $1",
+        "UPDATE platform_principal SET global_capabilities = ARRAY['GlobalMod'] WHERE principal_id = $1",
     )
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
     let (status, session_a) = get_json(&app, "/auth/session", workos_session.as_str()).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(
-        session_a["principal_user_id"].as_str().unwrap(),
-        principal_user_id
-    );
+    assert_eq!(session_a["principal_id"], serde_json::json!(principal_id));
 
     // Add a classic sign-in method to the same principal (recent session).
     let response = post_json(
@@ -896,10 +913,7 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let added = json_body(response).await;
-    assert_eq!(
-        added["principal_user_id"].as_str().unwrap(),
-        principal_user_id
-    );
+    assert_eq!(added["principal_id"], serde_json::json!(principal_id));
     let recovery_codes: Vec<String> = added["recovery_codes"]
         .as_array()
         .unwrap()
@@ -930,10 +944,7 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
     // session: same principal and current durable capabilities.
     let (status, session_b) = get_json(&app, "/auth/session", classic_session.as_str()).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(
-        session_a["principal_user_id"],
-        session_b["principal_user_id"]
-    );
+    assert_eq!(session_a["principal_id"], session_b["principal_id"]);
     assert_eq!(session_a["capabilities"], session_b["capabilities"]);
 
     // Enumerate methods, then disconnect WorkOS under the classic session.
@@ -1101,9 +1112,9 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
         .starts_with("fmss_"));
 
     let audit_kinds = sqlx::query_scalar::<_, String>(
-        "SELECT event_kind FROM identity_lifecycle_audit WHERE principal_user_id = $1 ORDER BY id",
+        "SELECT event_kind FROM identity_lifecycle_audit WHERE principal_id = $1 ORDER BY id",
     )
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
     .fetch_all(&pool)
     .await
     .unwrap();
@@ -1431,14 +1442,14 @@ async fn idle_session_cannot_resurrect_after_expiring_while_rotation_waits_for_i
 async fn orphan_principal_sessions_fail_closed_for_read_and_rotation(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
-    let principal_user_id = "missing-platform-principal";
+    let principal_id = principal::PrincipalId::fixture("missing-platform-principal");
     let token = identity::token::generate_session_token();
     assert!(identity::token::is_app_session_token(token.as_str()));
 
     // Bypass the database guard in this isolated test to prove the canonical
     // validator remains fail-closed against corrupted/restored data as well.
     sqlx::query(
-        "ALTER TABLE auth_session DROP CONSTRAINT IF EXISTS auth_session_principal_user_id_fkey",
+        "ALTER TABLE auth_session DROP CONSTRAINT IF EXISTS auth_session_principal_id_fkey",
     )
     .execute(&pool)
     .await
@@ -1447,7 +1458,7 @@ async fn orphan_principal_sessions_fail_closed_for_read_and_rotation(pool: sqlx:
         r#"
         INSERT INTO auth_session (
             token_hash,
-            principal_user_id,
+            principal_id,
             created_at,
             expires_at,
             revoked_at,
@@ -1461,25 +1472,24 @@ async fn orphan_principal_sessions_fail_closed_for_read_and_rotation(pool: sqlx:
         "#,
     )
     .bind(identity::token::hash_token(token.as_str()))
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
 
     let read_status = get_session(&app, token.as_str()).await.status();
     let sessions_before: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_user_id = $1")
-            .bind(principal_user_id)
+        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_id = $1")
+            .bind(principal_id.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
-    let audits_before: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM identity_lifecycle_audit WHERE principal_user_id = $1",
-    )
-    .bind(principal_user_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let audits_before: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM identity_lifecycle_audit WHERE principal_id = $1")
+            .bind(principal_id.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     let rotation = post_json(
         &app,
@@ -1489,18 +1499,17 @@ async fn orphan_principal_sessions_fail_closed_for_read_and_rotation(pool: sqlx:
     )
     .await;
     let sessions_after: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_user_id = $1")
-            .bind(principal_user_id)
+        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_id = $1")
+            .bind(principal_id.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
-    let audits_after: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM identity_lifecycle_audit WHERE principal_user_id = $1",
-    )
-    .bind(principal_user_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let audits_after: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM identity_lifecycle_audit WHERE principal_id = $1")
+            .bind(principal_id.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     assert_eq!(
         (
@@ -1527,14 +1536,12 @@ async fn ordinary_sessions_do_not_preserve_revoked_principal_capabilities(pool: 
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let principal = json_body(response).await["principal_user_id"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let body = json_body(response).await;
+    let principal = response_principal_id(&body);
     sqlx::query(
-        "UPDATE platform_principal SET global_capabilities = ARRAY['GlobalAdmin'] WHERE principal_user_id = $1",
+        "UPDATE platform_principal SET global_capabilities = ARRAY['GlobalAdmin'] WHERE principal_id = $1",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
@@ -1555,13 +1562,11 @@ async fn ordinary_sessions_do_not_preserve_revoked_principal_capabilities(pool: 
         .as_str()
         .unwrap()
         .to_string();
-    sqlx::query(
-        "UPDATE platform_principal SET global_capabilities = '{}' WHERE principal_user_id = $1",
-    )
-    .bind(&principal)
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query("UPDATE platform_principal SET global_capabilities = '{}' WHERE principal_id = $1")
+        .bind(principal.as_uuid())
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let (status, session) = get_json(&app, "/auth/session", &token).await;
     assert_eq!(status, StatusCode::OK);
@@ -1581,11 +1586,6 @@ async fn classic_to_workos_link_recovers_verified_stale_provider_sessions_withou
 ) {
     let root = TempDir::new().unwrap();
     let recovery_cases = [
-        (
-            "link-recover-migration-cutover",
-            "session_01HQAG1HENBZMAZD82YRXDFC0B",
-            "migration_cutover",
-        ),
         (
             "link-recover-logout",
             "session_01HQAG1HENBZMAZD82YRXDFC0C",
@@ -1751,10 +1751,7 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
     assert_eq!(response.status(), StatusCode::OK);
     let registered = json_body(response).await;
     let classic_session = registered["session_token"].as_str().unwrap().to_string();
-    let principal = registered["principal_user_id"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let principal = response_principal_id(&registered);
 
     let response = post_json(
         &app,
@@ -1766,10 +1763,7 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
     assert_eq!(response.status(), StatusCode::OK);
     let attached = json_body(response).await;
     let method_id = attached["method_id"].as_str().unwrap().to_string();
-    assert_eq!(
-        attached["principal_user_id"].as_str(),
-        Some(principal.as_str())
-    );
+    assert_eq!(attached["principal_id"], serde_json::json!(principal));
     assert_eq!(
         attached["provider_logout_url"].as_str(),
         Some(
@@ -1907,12 +1901,12 @@ async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sq
     .await;
     assert_eq!(login.status(), StatusCode::OK);
     let login = json_body(login).await;
-    let principal = login["principal_user_id"].as_str().unwrap();
+    let principal = response_principal_id(&login);
     let workos_local_session = login["session_token"].as_str().unwrap();
     let workos_method_id: Uuid = sqlx::query_scalar(
-        "SELECT method_id FROM authentication_method WHERE principal_user_id = $1 AND kind = 'workos'",
+        "SELECT method_id FROM authentication_method WHERE principal_id = $1 AND kind = 'workos'",
     )
-    .bind(principal)
+    .bind(principal.as_uuid())
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -2028,7 +2022,7 @@ async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_i
     assert_eq!(registration.status(), StatusCode::OK);
     let registration = json_body(registration).await;
     let local_token = registration["session_token"].as_str().unwrap();
-    let principal = registration["principal_user_id"].as_str().unwrap();
+    let principal = response_principal_id(&registration);
 
     let linked = post_json(
         &app,
@@ -2085,13 +2079,12 @@ async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_i
         .unwrap(),
         1
     );
-    let provider_rows: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM workos_provider_session WHERE principal_user_id = $1",
-    )
-    .bind(principal)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let provider_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM workos_provider_session WHERE principal_id = $1")
+            .bind(principal.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(provider_rows, 0);
     let tombstone_json: String = sqlx::query_scalar(
         "SELECT to_jsonb(tombstone)::text FROM workos_provider_session_tombstone AS tombstone",
@@ -2192,16 +2185,13 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let registered = json_body(response).await;
-    let principal = registered["principal_user_id"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let principal = response_principal_id(&registered);
     let token = registered["session_token"].as_str().unwrap().to_string();
 
     let profile_id = Uuid::new_v4();
     let subject_id: Uuid =
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(principal.as_str())
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -2228,7 +2218,7 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
         "INSERT INTO member_profile (profile_id, active_principal_id, lifecycle, redacted_alias, created_seq, updated_seq, revision, subject_id, current_claim_id, handle_hmac) VALUES ($1, $2, 'active', NULL, 1, 1, 1, $3, $4, $5)",
     )
     .bind(profile_id)
-    .bind(principal.as_str())
+    .bind(principal.as_uuid())
     .bind(subject_id)
     .bind(profile_claim_id.as_uuid())
     .bind(vec![7_u8; 32])
@@ -2304,9 +2294,9 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     let response = get_session(&app, token.as_str()).await;
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let (principal_status, method_status, account_disabled): (String, String, Option<i64>) = sqlx::query_as(
-        "SELECT principal.status, method.status, account.disabled_at FROM platform_principal AS principal JOIN authentication_method AS method ON method.principal_user_id = principal.principal_user_id JOIN auth_account AS account ON account.principal_user_id = principal.principal_user_id WHERE principal.principal_user_id = $1",
+        "SELECT principal.status, method.status, account.disabled_at FROM platform_principal AS principal JOIN authentication_method AS method ON method.principal_id = principal.principal_id JOIN auth_account AS account ON account.principal_id = principal.principal_id WHERE principal.principal_id = $1",
     )
-    .bind(principal.as_str())
+    .bind(principal.as_uuid())
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -2324,7 +2314,7 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
         "erasure must remove the public profile materialization"
     );
     let (active_principal_id, lifecycle, redacted_alias, current_claim_id): (
-        Option<String>,
+        Option<Uuid>,
         String,
         Option<String>,
         Option<Uuid>,
@@ -2349,9 +2339,9 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     .unwrap();
     assert_eq!(redacted_name, pseudonym);
     let pending_kinds: Vec<String> = sqlx::query_scalar(
-        "SELECT kind FROM member_lifecycle_event WHERE principal_user_id = $1 ORDER BY seq",
+        "SELECT kind FROM member_lifecycle_event WHERE principal_id = $1 ORDER BY seq",
     )
-    .bind(principal.as_str())
+    .bind(principal.as_uuid())
     .fetch_all(&pool)
     .await
     .unwrap();
@@ -2371,18 +2361,18 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
         1
     );
     let terminal: (String, Option<String>) = sqlx::query_as(
-        "SELECT status, pseudonym FROM member_lifecycle_projection WHERE principal_user_id = $1",
+        "SELECT status, pseudonym FROM member_lifecycle_projection WHERE principal_id = $1",
     )
-    .bind(principal.as_str())
+    .bind(principal.as_uuid())
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(terminal.0, "erased");
     assert_eq!(terminal.1.as_deref(), Some(pseudonym.as_str()));
     let kinds: Vec<String> = sqlx::query_scalar(
-        "SELECT kind FROM member_lifecycle_event WHERE principal_user_id = $1 ORDER BY seq",
+        "SELECT kind FROM member_lifecycle_event WHERE principal_id = $1 ORDER BY seq",
     )
-    .bind(principal.as_str())
+    .bind(principal.as_uuid())
     .fetch_all(&pool)
     .await
     .unwrap();
@@ -2411,13 +2401,13 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_user_id = $1")
-        .bind(principal.as_str())
+    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_id = $1")
+        .bind(principal.as_uuid())
         .execute(&pool)
         .await
         .unwrap();
 
-    let rebuilt = identity::rebuild_member_lifecycle(&pool, principal.as_str())
+    let rebuilt = identity::rebuild_member_lifecycle(&pool, &principal)
         .await
         .unwrap();
     assert_eq!(rebuilt.status, identity::MemberLifecycleStatus::Erased);
@@ -2483,13 +2473,11 @@ async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     let recovery_token = credential["recovery_token"].as_str().unwrap().to_string();
 
     let mut owner_gate = pool.begin().await.unwrap();
-    sqlx::query(
-        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
-    )
-    .bind(&principal)
-    .execute(&mut *owner_gate)
-    .await
-    .unwrap();
+    sqlx::query("SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
+        .bind(principal.as_uuid())
+        .execute(&mut *owner_gate)
+        .await
+        .unwrap();
     let start = Arc::new(tokio::sync::Barrier::new(2));
     let mutation_app = app.clone();
     let mutation_start = Arc::clone(&start);
@@ -2520,7 +2508,7 @@ async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     probe.rollback().await.unwrap();
 
     let erasure_pool = pool.clone();
-    let erasure_principal = principal.clone();
+    let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
         identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
     });
@@ -2534,7 +2522,7 @@ async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     .expect("recovery and erasure must serialize without deadlock");
     assert_success_without_deadlock(mutation.unwrap()).await;
     erasure.unwrap().unwrap();
-    assert_erased_without_eligible_sessions(&pool, &principal).await;
+    assert_erased_without_eligible_sessions(&pool, principal).await;
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -2545,7 +2533,8 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
     let password = "correct horse battery staple";
     let invite_token = "invite-erasure-race-token";
     let (principal, _) = register_classic_account(&app, account_id, password).await;
-    let admin_token = issue_dev_admin(&app, "invite-race-admin").await;
+    let admin_token =
+        issue_dev_admin(&app, principal::PrincipalId::fixture("invite-race-admin")).await;
     let response = post_json(
         &app,
         "/auth/invites",
@@ -2553,7 +2542,7 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
         serde_json::json!({
             "invite_token": invite_token,
             "account_id": account_id,
-            "expected_principal_user_id": principal,
+            "expected_principal_id": principal,
             "expires_at": unix_now_seconds() + 3600,
             "global_capabilities": []
         }),
@@ -2563,13 +2552,11 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
     let invite_hash = identity::token::hash_token(invite_token);
 
     let mut owner_gate = pool.begin().await.unwrap();
-    sqlx::query(
-        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
-    )
-    .bind(&principal)
-    .execute(&mut *owner_gate)
-    .await
-    .unwrap();
+    sqlx::query("SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
+        .bind(principal.as_uuid())
+        .execute(&mut *owner_gate)
+        .await
+        .unwrap();
     let start = Arc::new(tokio::sync::Barrier::new(2));
     let mutation_app = app.clone();
     let mutation_start = Arc::clone(&start);
@@ -2598,7 +2585,7 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
     probe.rollback().await.unwrap();
 
     let erasure_pool = pool.clone();
-    let erasure_principal = principal.clone();
+    let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
         identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
     });
@@ -2611,7 +2598,7 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
     .expect("invite redemption and erasure must serialize without deadlock");
     assert_success_without_deadlock(mutation.unwrap()).await;
     erasure.unwrap().unwrap();
-    assert_erased_without_eligible_sessions(&pool, &principal).await;
+    assert_erased_without_eligible_sessions(&pool, principal).await;
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -2621,16 +2608,15 @@ async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPo
     let account_id = "disable-race@example.test";
     let (principal, _) =
         register_classic_account(&app, account_id, "correct horse battery staple").await;
-    let admin_token = issue_dev_admin(&app, "disable-race-admin").await;
+    let admin_token =
+        issue_dev_admin(&app, principal::PrincipalId::fixture("disable-race-admin")).await;
 
     let mut owner_gate = pool.begin().await.unwrap();
-    sqlx::query(
-        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
-    )
-    .bind(&principal)
-    .execute(&mut *owner_gate)
-    .await
-    .unwrap();
+    sqlx::query("SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
+        .bind(principal.as_uuid())
+        .execute(&mut *owner_gate)
+        .await
+        .unwrap();
     let start = Arc::new(tokio::sync::Barrier::new(2));
     let mutation_app = app.clone();
     let mutation_start = Arc::clone(&start);
@@ -2655,7 +2641,7 @@ async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPo
     probe.rollback().await.unwrap();
 
     let erasure_pool = pool.clone();
-    let erasure_principal = principal.clone();
+    let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
         identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
     });
@@ -2668,7 +2654,7 @@ async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPo
     .expect("account mutation and erasure must serialize without deadlock");
     assert_success_without_deadlock(mutation.unwrap()).await;
     erasure.unwrap().unwrap();
-    assert_erased_without_eligible_sessions(&pool, &principal).await;
+    assert_erased_without_eligible_sessions(&pool, principal).await;
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -2684,13 +2670,11 @@ async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     let token_hash = identity::token::hash_token(&token);
 
     let mut owner_gate = pool.begin().await.unwrap();
-    sqlx::query(
-        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
-    )
-    .bind(&principal)
-    .execute(&mut *owner_gate)
-    .await
-    .unwrap();
+    sqlx::query("SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
+        .bind(principal.as_uuid())
+        .execute(&mut *owner_gate)
+        .await
+        .unwrap();
     let start = Arc::new(tokio::sync::Barrier::new(2));
     let mutation_app = app.clone();
     let mutation_start = Arc::clone(&start);
@@ -2715,7 +2699,7 @@ async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     probe.rollback().await.unwrap();
 
     let erasure_pool = pool.clone();
-    let erasure_principal = principal.clone();
+    let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
         identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
     });
@@ -2728,7 +2712,7 @@ async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     .expect("session mutation and erasure must serialize without deadlock");
     assert_success_without_deadlock(mutation.unwrap()).await;
     erasure.unwrap().unwrap();
-    assert_erased_without_eligible_sessions(&pool, &principal).await;
+    assert_erased_without_eligible_sessions(&pool, principal).await;
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -2753,15 +2737,13 @@ async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx:
     .unwrap();
 
     let mut owner_gate = pool.begin().await.unwrap();
-    sqlx::query(
-        "SELECT principal_user_id FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
-    )
-    .bind(&principal)
-    .execute(&mut *owner_gate)
-    .await
-    .unwrap();
+    sqlx::query("SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
+        .bind(principal.as_uuid())
+        .execute(&mut *owner_gate)
+        .await
+        .unwrap();
     let rebuild_pool = pool.clone();
-    let rebuild_principal = principal.clone();
+    let rebuild_principal = principal;
     let rebuild = tokio::spawn(async move {
         identity::rebuild_member_lifecycle(&rebuild_pool, &rebuild_principal).await
     });
@@ -2770,15 +2752,15 @@ async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx:
     // Rebuild cannot read and hold a stale projection before owner
     // serialization; otherwise erasure could commit and then be overwritten.
     let mut probe = pool.begin().await.unwrap();
-    sqlx::query("SELECT principal_user_id FROM member_lifecycle_projection WHERE principal_user_id = $1 FOR UPDATE NOWAIT")
-        .bind(&principal)
+    sqlx::query("SELECT principal_id FROM member_lifecycle_projection WHERE principal_id = $1 FOR UPDATE NOWAIT")
+        .bind(principal.as_uuid())
         .execute(&mut *probe)
         .await
         .unwrap();
     probe.rollback().await.unwrap();
 
     let erasure_pool = pool.clone();
-    let erasure_principal = principal.clone();
+    let erasure_principal = principal;
     let erasure = tokio::spawn(async move {
         identity::erase_member(&erasure_pool, &erasure_principal, unix_now_seconds()).await
     });
@@ -2799,5 +2781,5 @@ async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx:
         .await
         .unwrap();
     assert_eq!(rebuilt.status, identity::MemberLifecycleStatus::Erased);
-    assert_erased_without_eligible_sessions(&pool, &principal).await;
+    assert_erased_without_eligible_sessions(&pool, principal).await;
 }

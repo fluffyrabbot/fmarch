@@ -950,7 +950,7 @@ test("proof graph admin feature targets derive from shared source rows", () => {
         "replacement-stale-private-receipts",
       ],
       readinessDetailKeys: [
-        "principalUserId",
+        "principalId",
         "commandStateSlot",
         "capabilityKinds",
         "hostIssuedInvite",

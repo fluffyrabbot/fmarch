@@ -26,7 +26,7 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         "delivery_id: Uuid",
         "kind: IdentityDeliveryKind",
         "account_id: &'a str",
-        "principal_user_id: &'a str",
+        "principal_id: &'a PrincipalId",
         "credential_hash: &'a str",
         "provider_id: &'a str",
         "cancelled_at: i64",
@@ -40,8 +40,8 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         "struct IdentityDeliveryAuditRecord<'a> {",
         "event_at: i64",
         "event_kind: &'a str",
-        "actor_user_id: &'a str",
-        "principal_user_id: &'a str",
+        "actor_principal_id: &'a PrincipalId",
+        "principal_id: &'a PrincipalId",
         "credential_hash: &'a str",
         "delivery_id: Uuid",
         "delivery_kind: IdentityDeliveryKind",
@@ -91,7 +91,7 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     for claim_contract in [
         "let request = IdentityDeliveryCancellationRequest {",
         "account_id: account_id.as_str()",
-        "principal_user_id: principal_user_id.as_str()",
+        "principal_id: &principal_id",
         "credential_hash: credential_hash.as_str()",
         "provider_id,",
         "cancelled_at: now",
@@ -128,7 +128,7 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "record_delivery_audit(",
             "IdentityDeliveryAuditRecord {",
             "event_kind: \"auth_delivery_cancelled\"",
-            "actor_user_id: request.principal_user_id",
+            "actor_principal_id: request.principal_id",
             "outcome_kind: \"cancelled\"",
             "outcome_code: Some(\"credential_inactive\")",
             "provider_receipt_id: None",
@@ -148,12 +148,12 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "lock_active_credential(",
             "lock_claimed_delivery(&mut tx, &claim)",
             "delivery_outcome(&mut claim, gateway, credential_active, now)",
-            "finalize_delivery(&mut tx, claim, outcome, actor_user_id, event_kind, now)",
+            "finalize_delivery(&mut tx, claim, outcome, actor_principal_id, event_kind, now)",
         ],
         "delivery transaction",
     );
     let finalization_position = delivery
-        .find("finalize_delivery(&mut tx, claim, outcome, actor_user_id, event_kind, now)")
+        .find("finalize_delivery(&mut tx, claim, outcome, actor_principal_id, event_kind, now)")
         .unwrap();
     let final_commit_position = delivery.rfind("tx.commit().await?").unwrap();
     assert!(
@@ -180,8 +180,8 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
             "IdentityDeliveryAuditRecord {",
             "event_at: now",
             "event_kind,",
-            "actor_user_id,",
-            "principal_user_id: claim.attempt.principal_user_id.as_str()",
+            "actor_principal_id,",
+            "principal_id: &claim.attempt.principal_id",
             "provider_id: claim.provider_id.as_str()",
             "outcome_kind: outcome.kind()",
             "outcome_code: outcome.code()",
@@ -200,8 +200,8 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
         &[
             ".bind(record.event_at)",
             ".bind(record.event_kind)",
-            ".bind(record.actor_user_id)",
-            ".bind(record.principal_user_id)",
+            ".bind(record.actor_principal_id.as_uuid())",
+            ".bind(record.principal_id.as_uuid())",
             ".bind(record.credential_hash)",
             "\"delivery_id\": record.delivery_id",
             "\"delivery_kind\": record.delivery_kind.as_str()",

@@ -184,7 +184,7 @@ export function postDayThreeResolutionSurfaceFixture({
       roleUrlSuffix: "?private=notification-1",
       slotField: "targetSlot",
       slot: "slot-4",
-      principalUserId: "player_rowan",
+      principalId: "player_rowan",
       phaseId: "D03",
       phaseState: "locked",
       actorAlive: false,
@@ -201,7 +201,7 @@ export function postDayThreeResolutionSurfaceFixture({
       game,
       slotField: "actionPlayerSlot",
       slot: "slot-7",
-      principalUserId: "player_mira",
+      principalId: "player_mira",
       phaseId: "D03",
       phaseState: "locked",
       actorAlive: true,
@@ -236,7 +236,7 @@ export function postDayThreeResolutionSurfaceFixture({
       game,
       slotField: "actionPlayerSlot",
       slot: "slot-7",
-      principalUserId: "player_mira",
+      principalId: "player_mira",
       phaseId: "N03",
       phaseState: "open",
       actorAlive: true,
@@ -271,7 +271,7 @@ export function nightThreeEmptyResolutionSurfaceFixture({
       game,
       slotField: surfaceCase.actionPlayerNoActionCase.slotField,
       slot: surfaceCase.actionPlayerNoActionCase.expectedSlot,
-      principalUserId:
+      principalId:
         surfaceCase.actionPlayerNoActionCase.expectedPrincipalUserId,
       phaseId: surfaceCase.actionPlayerNoActionCase.expectedPhaseId,
       phaseState: surfaceCase.actionPlayerNoActionCase.expectedPhaseState,
@@ -326,7 +326,7 @@ export function nightThreeEmptyResolutionSurfaceFixture({
       game,
       slotField: surfaceCase.actionPlayerDayFourCase.slotField,
       slot: surfaceCase.actionPlayerDayFourCase.expectedSlot,
-      principalUserId:
+      principalId:
         surfaceCase.actionPlayerDayFourCase.expectedPrincipalUserId,
       phaseId: surfaceCase.actionPlayerDayFourCase.expectedPhaseId,
       phaseState: surfaceCase.actionPlayerDayFourCase.expectedPhaseState,
@@ -361,7 +361,7 @@ export function dayFourSurvivorRoleSurfaceFixture({
       game,
       slotField: survivorCase.slotField,
       slot: survivorCase.expectedSlot,
-      principalUserId: survivorCase.expectedPrincipalUserId,
+      principalId: survivorCase.expectedPrincipalUserId,
       phaseId: survivorCase.expectedPhaseId,
       phaseState: survivorCase.expectedPhaseState,
       actorAlive: survivorCase.expectedActorAlive,

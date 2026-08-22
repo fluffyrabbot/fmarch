@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { FIXTURE_PRINCIPAL_IDS } from "../../../../lib/principal-id.mjs";
 import {
   appendHostActionEvent,
   appendHostCommandOutcome,
@@ -19,6 +20,8 @@ import {
   clearHostCommandStatus,
   sendHostRouteAction,
 } from "./host-route-controller.mjs";
+
+const HOST_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.hostH;
 import { CommandInterruptedError } from "../../../../lib/app/command-interruption.mjs";
 
 test("host interrupted command keeps confirmation and can be dismissed", () => {
@@ -422,7 +425,7 @@ test("host route controller sends commands and applies acked host projection sta
   });
 
   assert.equal(sent.length, 1);
-  assert.equal("principalUserId" in sent[0], false);
+  assert.equal("principalId" in sent[0], false);
   assert.equal(sent[0].endpoint, "/commands");
   assert.equal(sent[0].stateEndpoint, "/games/midsummer/host-console-state");
   assert.equal(result.outcome.state, "ack");
@@ -788,14 +791,14 @@ test("host route controller preserves non-phase reject outcomes without projecti
 function fixtureData(overrides = {}) {
   return {
     game: { id: "midsummer" },
-    session: { principalUserId: "host_h" },
+    session: { principalId: HOST_PRINCIPAL_ID },
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
     hostVotecountEndpoint: "/games/midsummer/votecount",
     dayVoteOutcomesEndpoint: "/games/midsummer/day-vote-outcomes",
     hostPromptEndpoint: "/games/midsummer/host-prompts",
     authority: {
-      principalUserId: "host_h",
+      principalId: HOST_PRINCIPAL_ID,
       capabilityKind: "HostOf",
       allowedClasses: [],
       deniedClasses: [],

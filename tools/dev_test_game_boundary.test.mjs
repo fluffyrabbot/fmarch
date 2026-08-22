@@ -164,7 +164,7 @@ test("private game reads derive principals only from authenticated sessions", as
   for (const { file, source } of sources) {
     assert.doesNotMatch(
       source,
-      /[?&]principal_user_id=/,
+      /[?&]principal_id=/,
       `${file} must not select a private-read principal through the URL`,
     );
   }

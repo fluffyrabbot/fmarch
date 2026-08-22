@@ -20,6 +20,7 @@ identity = { path = "../identity", version = "0.1.0" }
 media = { path = "../media", version = "0.1.0" }
 projections = { path = "../projections", version = "0.1.0" }
 profile_application = { path = "../profile_application", version = "0.1.0" }
+principal = { path = "../principal", version = "0.1.0" }
 wire = { path = "../wire", version = "0.1.0" }
 axum = { version = "0.8", features = ["ws"] }
 ciborium = "0.2"

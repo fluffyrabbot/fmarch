@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { actions, load } from "./+page.server.js";
 
+const PRINCIPAL_ID = "00000000-0000-5000-8000-000000000001";
+
 test("invitation load preserves local destinations and prefilled credentials", () => {
   assert.deepEqual(
     load({
@@ -12,7 +14,7 @@ test("invitation load preserves local destinations and prefilled credentials", (
     }),
     {
       invite: {
-        principalUserId: null,
+        principalId: null,
         inviteToken: "host-token",
         accountId: "host@example.test",
         returnTo: "/g/midsummer/host",
@@ -30,7 +32,7 @@ test("invitation route accepts an existing opaque session credential", async () 
         fetch: async (url, init) => {
           observed.request = { url, ...init };
           return jsonResponse({
-            principal_user_id: "mod_a",
+            principal_id: PRINCIPAL_ID,
             capabilities: [{ kind: "GlobalMod" }],
           });
         },
@@ -66,7 +68,7 @@ test("invitation route redeems an account-bound invitation", async () => {
           return url === "/auth/session"
             ? jsonResponse({}, { ok: false, status: 401 })
             : jsonResponse({
-                principal_user_id: "host_h",
+                principal_id: PRINCIPAL_ID,
                 session_token: "fmss_invite-issued-session",
                 capabilities: [{ kind: "HostOf" }],
               });
@@ -92,6 +94,22 @@ test("invitation route redeems an account-bound invitation", async () => {
     password: "invited account password",
   });
   assert.equal(observed.cookie.value, "fmss_invite-issued-session");
+});
+
+test("invitation route rejects a noncanonical principal ID from session verification", async () => {
+  const result = await actions.default({
+    cookies: forbiddenCookieJar(),
+    fetch: async () =>
+      jsonResponse({
+        principal_id: "mod_a",
+        capabilities: [{ kind: "GlobalMod" }],
+      }),
+    request: formRequest({ token: "session-token", returnTo: "/admin" }),
+    url: new URL("https://fmarch.local/auth/invite"),
+  });
+
+  assert.equal(result.status, 502);
+  assert.equal(result.data.message, "Auth service returned a malformed session");
 });
 
 test("invitation route keeps failures and retry timing explicit", async () => {

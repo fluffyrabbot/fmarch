@@ -11,10 +11,10 @@ import { workosProviderLogoutUrl } from "../../../lib/server/workos-provider-log
 export function load({ locals, setHeaders, url }) {
   setHeaders({ "cache-control": "no-store" });
   const returnTo = authReturnPath(url.searchParams.get("returnTo"));
-  if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
+  if (typeof locals.principalId !== "string" || locals.principalId.trim() === "") {
     throw redirect(303, loginPath(returnTo));
   }
-  return { logout: { principalUserId: locals.principalUserId, returnTo } };
+  return { logout: { principalId: locals.principalId, returnTo } };
 }
 
 export const actions = {
@@ -44,7 +44,7 @@ export const actions = {
     const providerLogoutUrl = workosProviderLogoutUrl(body?.provider_logout_url);
     if (
       body?.status !== "logged_out" ||
-      typeof body?.principal_user_id !== "string" ||
+      typeof body?.principal_id !== "string" ||
       (body?.provider_logout_url !== undefined &&
         body?.provider_logout_url !== null &&
         providerLogoutUrl === null)

@@ -7,7 +7,7 @@ test("public profile exposes the signed-in member's private mute state", async (
   const data = await load({
     params: { handle: "quiet-member" },
     cookies: { get: () => "member-session" },
-    locals: { principalUserId: "reader", resolvedCapabilities: [] },
+    locals: { principalId: "reader", resolvedCapabilities: [] },
     fetch: async (url, options = {}) => {
       requests.push({ url, authorization: options.headers?.authorization });
       return url.startsWith("/mutes/")
@@ -29,7 +29,7 @@ test("public profile mute action writes only the authenticated private relations
     actions.mute({
       params: { handle: "quiet-member" },
       cookies: { get: () => "member-session" },
-      locals: { principalUserId: "reader" },
+      locals: { principalId: "reader" },
       fetch: async (url, options) => {
         mutation = { url, method: options.method, authorization: options.headers.authorization };
         return Response.json({ handle: "quiet-member", muted: true });

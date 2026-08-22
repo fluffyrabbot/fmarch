@@ -220,15 +220,23 @@ pub async fn latest_sealed_event_body(pool: &PgPool, game: Uuid, kind: &str) -> 
         .unwrap_or_else(|| panic!("missing sealed {kind} in stream {game}"))
 }
 
+/// Test labels remain readable at call sites, but every fixture crosses the
+/// same UUID authority boundary as production before it reaches the database.
+pub fn fixture_principal_id(label: &str) -> principal::PrincipalId {
+    label
+        .parse()
+        .unwrap_or_else(|_| commands::fixture_principal_id(label))
+}
+
 pub fn user(id: &str) -> Principal {
-    Principal::user(id)
+    Principal::authenticated(fixture_principal_id(id))
 }
 
 /// Provision a test account through the same identity seam used by real
 /// authentication. Persona/profile commands deliberately require this owner
 /// row and its external subject key before accepting private claims.
-pub async fn ensure_test_principal(pool: &PgPool, principal_user_id: &str) {
-    ensure_test_principals(pool, [principal_user_id]).await;
+pub async fn ensure_test_principal(pool: &PgPool, principal_id: &str) {
+    ensure_test_principal_id(pool, fixture_principal_id(principal_id)).await;
 }
 
 /// Provision a set of test accounts while sharing one database connection.
@@ -236,32 +244,47 @@ pub async fn ensure_test_principal(pool: &PgPool, principal_user_id: &str) {
 /// several private claims.
 pub async fn ensure_test_principals<'a>(
     pool: &PgPool,
-    principal_user_ids: impl IntoIterator<Item = &'a str>,
+    principal_ids: impl IntoIterator<Item = &'a str>,
 ) {
-    let principal_user_ids: BTreeSet<_> = principal_user_ids.into_iter().collect();
+    let principal_ids: BTreeSet<_> = principal_ids
+        .into_iter()
+        .map(fixture_principal_id)
+        .collect();
+    ensure_test_principal_ids(pool, principal_ids).await;
+}
+
+pub async fn ensure_test_principal_id(pool: &PgPool, principal_id: principal::PrincipalId) {
+    ensure_test_principal_ids(pool, [principal_id]).await;
+}
+
+async fn ensure_test_principal_ids(
+    pool: &PgPool,
+    principal_ids: impl IntoIterator<Item = principal::PrincipalId>,
+) {
+    let principal_ids: BTreeSet<_> = principal_ids.into_iter().collect();
     let mut connection = pool.acquire().await.expect("acquire identity connection");
-    for principal_user_id in principal_user_ids {
+    for principal_id in principal_ids {
         let already_active: bool = sqlx::query_scalar(
             r#"
             SELECT EXISTS (
                 SELECT 1
                 FROM platform_principal AS principal
                 JOIN privacy_subject AS subject
-                  ON subject.principal_user_id = principal.principal_user_id
-                WHERE principal.principal_user_id = $1
+                  ON subject.principal_id = principal.principal_id
+                WHERE principal.principal_id = $1
                   AND principal.status = 'active'
                   AND subject.lifecycle_state = 'active'
             )
             "#,
         )
-        .bind(principal_user_id)
+        .bind(principal_id.as_uuid())
         .fetch_one(&mut *connection)
         .await
         .expect("inspect test principal privacy binding");
         if already_active {
             continue;
         }
-        identity::methods::ensure_principal(&mut connection, principal_user_id, &[], 1)
+        identity::methods::ensure_principal(&mut connection, &principal_id, &[], 1)
             .await
             .expect("provision test principal and privacy subject");
     }
@@ -269,15 +292,15 @@ pub async fn ensure_test_principals<'a>(
 
 async fn ensure_command_principals(pool: &PgPool, command: &Command) {
     let referenced = match command {
-        Command::SeatPersona { principal_id, .. } => Some(principal_id.as_str()),
+        Command::SeatPersona { principal_id, .. } => Some(*principal_id),
         Command::ProcessReplacement {
             incoming_principal_id,
             ..
-        } => Some(incoming_principal_id.as_str()),
+        } => Some(*incoming_principal_id),
         _ => None,
     };
-    if let Some(principal_user_id) = referenced {
-        ensure_test_principal(pool, principal_user_id).await;
+    if let Some(principal_id) = referenced {
+        ensure_test_principal_id(pool, principal_id).await;
     }
 }
 
@@ -309,12 +332,12 @@ pub async fn append_and_project(
 ) -> Result<Vec<eventstore::StoredEvent>, projections::ProjectionError> {
     for event in events {
         if matches!(event.kind.as_str(), "ProfileCreated" | "ProfileUpdated") {
-            if let Some(principal_user_id) = event
+            if let Some(principal_id) = event
                 .payload
-                .get("principal_user_id")
+                .get("principal_id")
                 .and_then(serde_json::Value::as_str)
             {
-                ensure_test_principal(pool, principal_user_id).await;
+                ensure_test_principal(pool, principal_id).await;
             }
         }
     }
@@ -376,7 +399,7 @@ pub async fn setup_game_with_pack_and_denied(
         Command::SeatPersona {
             game,
             slot: slot.into(),
-            principal_id: occupant.into(),
+            principal_id: fixture_principal_id(occupant),
             public_name: format!("Persona {slot}"),
         },
     )

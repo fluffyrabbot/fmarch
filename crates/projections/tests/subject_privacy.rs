@@ -58,11 +58,45 @@ impl Drop for SubjectKeyEnvironment {
     }
 }
 
-async fn ensure_principal(pool: &sqlx::PgPool, principal: &str) {
+async fn ensure_principal(pool: &sqlx::PgPool, principal: PrincipalId) {
     let mut connection = pool.acquire().await.unwrap();
-    identity::methods::ensure_principal(&mut connection, principal, &[], 1)
+    identity::methods::ensure_principal(&mut connection, &principal, &[], 1)
         .await
         .unwrap();
+}
+
+/// Seed a classic account through the same method/detail relationship enforced
+/// in production. Tests that need deliberately corrupt identity data construct
+/// that corruption explicitly at the call site instead of weakening this
+/// ordinary fixture.
+async fn insert_classic_account_fixture(
+    pool: &sqlx::PgPool,
+    account_id: &str,
+    principal: PrincipalId,
+    password_hash: &str,
+) {
+    let mut transaction = pool.begin().await.unwrap();
+    let method_id = identity::methods::create_method(
+        &mut transaction,
+        &principal,
+        identity::MethodKind::ClassicPassword,
+        1,
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO auth_account \
+         (account_id, principal_id, method_id, password_hash, created_at, global_capabilities) \
+         VALUES ($1, $2, $3, $4, 1, '{}'::text[])",
+    )
+    .bind(account_id)
+    .bind(principal.as_uuid())
+    .bind(method_id)
+    .bind(password_hash)
+    .execute(&mut *transaction)
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
 }
 
 /// Issue a sealed presentation claim before appending the canonical, reference-only
@@ -72,7 +106,7 @@ async fn append_game_persona(
     pool: &sqlx::PgPool,
     game_id: Uuid,
     persona_id: Uuid,
-    principal: &str,
+    principal: PrincipalId,
     public_name: &str,
     occurred_at: i64,
 ) {
@@ -125,7 +159,7 @@ async fn raw_persona_identity_payload_is_rejected_before_event_persistence(pool:
             1,
             serde_json::json!({
                 "persona_id": Uuid::new_v4(),
-                "principal_user_id": "credential-principal-must-not-enter-game-history",
+                "principal_id": "credential-principal-must-not-enter-game-history",
                 "public_name": "Private presentation must be sealed first",
             }),
             ActorId::Host,
@@ -147,7 +181,7 @@ async fn raw_persona_identity_payload_is_rejected_before_event_persistence(pool:
 
 async fn create_test_profile(
     pool: &sqlx::PgPool,
-    principal: &str,
+    principal: PrincipalId,
     handle: &str,
     display_name: &str,
     bio: &str,
@@ -160,19 +194,14 @@ async fn create_test_profile(
         ProfileBio::new(bio).unwrap(),
         visibility,
     );
-    profile_application::create_profile(
-        pool,
-        PrincipalId::new(principal).unwrap(),
-        presentation,
-        occurred_at,
-    )
-    .await
-    .unwrap()
-    .as_uuid()
+    profile_application::create_profile(pool, principal, presentation, occurred_at)
+        .await
+        .unwrap()
+        .as_uuid()
 }
 
 struct MemberProfileMetadata {
-    active_principal_id: Option<String>,
+    active_principal_id: Option<PrincipalId>,
     handle_hmac: Option<Vec<u8>>,
     redacted_alias: Option<String>,
     current_claim_id: Option<Uuid>,
@@ -189,7 +218,9 @@ async fn member_profile_metadata(pool: &sqlx::PgPool, profile_id: Uuid) -> Membe
     .await
     .unwrap();
     MemberProfileMetadata {
-        active_principal_id: row.get("active_principal_id"),
+        active_principal_id: row
+            .get::<Option<Uuid>, _>("active_principal_id")
+            .map(PrincipalId::from_uuid),
         handle_hmac: row.get("handle_hmac"),
         redacted_alias: row.get("redacted_alias"),
         current_claim_id: row.get("current_claim_id"),
@@ -254,12 +285,12 @@ async fn object_authority(
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
-    let principal = format!("member-{}", Uuid::new_v4().simple());
-    ensure_principal(&pool, &principal).await;
+    let principal = PrincipalId::random();
+    ensure_principal(&pool, principal).await;
     let handle = format!("private_{}", &Uuid::new_v4().simple().to_string()[..12]);
     let profile_id = create_test_profile(
         &pool,
-        &principal,
+        principal,
         &handle,
         "Canary Real Name",
         "canary private biography",
@@ -272,10 +303,7 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
         .unwrap()
         .is_none());
     let active = member_profile_metadata(&pool, profile_id).await;
-    assert_eq!(
-        active.active_principal_id.as_deref(),
-        Some(principal.as_str())
-    );
+    assert_eq!(active.active_principal_id, Some(principal));
     assert_eq!(active.lifecycle, "active");
     assert_eq!(active.redacted_alias, None);
     assert!(active.current_claim_id.is_some());
@@ -296,21 +324,12 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
             .keys()
             .map(String::as_str)
             .collect::<std::collections::BTreeSet<_>>(),
-        ["claim_id", "handle_hmac", "subject_id", "visibility"]
-            .into_iter()
-            .collect()
+        ["claim_id", "subject_id"].into_iter().collect()
     );
-    let handle_hmac = canonical[0].payload["handle_hmac"]
-        .as_str()
-        .expect("canonical profile event carries an opaque handle reservation");
-    assert_eq!(handle_hmac.len(), 64);
-    assert!(
-        handle_hmac
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')),
-        "the profile event must retain only lower-case hexadecimal handle metadata"
-    );
-    assert!(!canonical[0].payload.to_string().contains(&principal));
+    assert!(!canonical[0]
+        .payload
+        .to_string()
+        .contains(&principal.to_string()));
     assert!(!matches!(
         &canonical[0].actor,
         ActorId::Principal(user) if user == &principal
@@ -336,9 +355,10 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
             .fetch_one(&pool)
             .await
             .unwrap();
+    let principal_text = principal.to_string();
     for canary in [
-        &principal,
-        &handle,
+        principal_text.as_str(),
+        handle.as_str(),
         "Canary Real Name",
         "canary private biography",
     ] {
@@ -349,7 +369,7 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
     let erased = identity::erase_member(&pool, &principal, 10).await.unwrap();
     let alias = erased.pseudonym.unwrap();
     assert!(alias.starts_with("former-member-"));
-    assert!(!alias.contains(&principal));
+    assert!(!alias.contains(&principal.to_string()));
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM subject_private_claim WHERE scope_id = $1",
@@ -361,8 +381,8 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
         0
     );
 
-    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_user_id = $1")
-        .bind(&principal)
+    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_id = $1")
+        .bind(principal.as_uuid())
         .execute(&pool)
         .await
         .unwrap();
@@ -385,13 +405,13 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
-    let principal = format!("pending-redaction-{}", Uuid::new_v4().simple());
+    let principal = PrincipalId::random();
     let game_id = Uuid::new_v4();
-    ensure_principal(&pool, &principal).await;
+    ensure_principal(&pool, principal).await;
     let persona_id = Uuid::new_v4();
     let profile_id = create_test_profile(
         &pool,
-        &principal,
+        principal,
         "pending_private_handle",
         "Pending Private Name",
         "pending private biography",
@@ -403,7 +423,7 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
         &pool,
         game_id,
         persona_id,
-        &principal,
+        principal,
         "Pending Persona Name",
         1,
     )
@@ -418,8 +438,8 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
         identity::MemberLifecycleStatus::ErasureInProgress
     );
     let subject_id = SubjectId::from_uuid(
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(&principal)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap(),
@@ -469,8 +489,8 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
     assert_eq!(persona.get::<Option<Uuid>, _>("current_claim_id"), None);
     assert_eq!(persona.get::<String, _>("lifecycle"), "redacted");
 
-    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_user_id = $1")
-        .bind(&principal)
+    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_id = $1")
+        .bind(principal.as_uuid())
         .execute(&pool)
         .await
         .unwrap();
@@ -488,14 +508,14 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
 async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
     let game_id = Uuid::new_v4();
-    let principal = format!("persona-owner-{}", Uuid::new_v4().simple());
-    ensure_principal(&pool, &principal).await;
+    let principal = PrincipalId::random();
+    ensure_principal(&pool, principal).await;
     let persona_id = Uuid::new_v4();
     append_game_persona(
         &pool,
         game_id,
         persona_id,
-        &principal,
+        principal,
         "Canary Persona Name",
         1,
     )
@@ -515,7 +535,10 @@ async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::P
             .into_iter()
             .collect()
     );
-    assert!(!canonical[0].payload.to_string().contains(&principal));
+    assert!(!canonical[0]
+        .payload
+        .to_string()
+        .contains(&principal.to_string()));
     assert!(!canonical[0]
         .payload
         .to_string()
@@ -547,8 +570,8 @@ async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::P
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
-    let principal = format!("persona-lock-order-{}", Uuid::new_v4().simple());
-    ensure_principal(&pool, &principal).await;
+    let principal = PrincipalId::random();
+    ensure_principal(&pool, principal).await;
 
     let replay_game = Uuid::new_v4();
     let replay_persona_id = Uuid::new_v4();
@@ -556,14 +579,14 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
         &pool,
         replay_game,
         replay_persona_id,
-        &principal,
+        principal,
         "Replay Persona",
         1,
     )
     .await;
     let subject_id: Uuid =
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(&principal)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -585,7 +608,7 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
     wait_for_lock_waiters(&pool, 1).await;
 
     let claim_pool = pool.clone();
-    let claim_principal = principal.clone();
+    let claim_principal = principal;
     let claim_game = Uuid::new_v4();
     let claim_persona_id = Uuid::new_v4();
     let claim = tokio::spawn(async move {
@@ -593,7 +616,7 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
             &claim_pool,
             claim_game,
             claim_persona_id,
-            &claim_principal,
+            claim_principal,
             "Concurrent Persona",
             2,
         )
@@ -614,11 +637,11 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn profile_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
-    let principal = format!("profile-rebuild-erasure-{}", Uuid::new_v4().simple());
-    ensure_principal(&pool, &principal).await;
+    let principal = PrincipalId::random();
+    ensure_principal(&pool, principal).await;
     let profile_id = create_test_profile(
         &pool,
-        &principal,
+        principal,
         "profile_race_canary",
         "Profile Race Real Name",
         "profile race private biography",
@@ -644,7 +667,7 @@ async fn profile_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx
     wait_for_lock_waiters(&pool, 1).await;
 
     let erasure_pool = pool.clone();
-    let erased_principal = principal.clone();
+    let erased_principal = principal;
     let erasure =
         tokio::spawn(
             async move { identity::erase_member(&erasure_pool, &erased_principal, 10).await },
@@ -674,8 +697,9 @@ async fn profile_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx
         "{:?}:{:?}:{:?}",
         row.active_principal_id, row.handle_hmac, row.redacted_alias
     );
+    let principal_text = principal.to_string();
     for canary in [
-        principal.as_str(),
+        principal_text.as_str(),
         "profile_race_canary",
         "Profile Race Real Name",
         "profile race private biography",
@@ -688,14 +712,14 @@ async fn profile_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx
 async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
     let game_id = Uuid::new_v4();
-    let principal = format!("game-rebuild-erasure-{}", Uuid::new_v4().simple());
-    ensure_principal(&pool, &principal).await;
+    let principal = PrincipalId::random();
+    ensure_principal(&pool, principal).await;
     let persona_id = Uuid::new_v4();
     append_game_persona(
         &pool,
         game_id,
         persona_id,
-        &principal,
+        principal,
         "Game Race Real Name",
         1,
     )
@@ -716,7 +740,7 @@ async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::P
     wait_for_lock_waiters(&pool, 1).await;
 
     let erasure_pool = pool.clone();
-    let erased_principal = principal.clone();
+    let erased_principal = principal;
     let erasure =
         tokio::spawn(
             async move { identity::erase_member(&erasure_pool, &erased_principal, 10).await },
@@ -752,11 +776,11 @@ async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::P
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn active_subject_with_missing_external_key_fails_rebuild_closed(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
-    let principal = format!("missing-key-{}", Uuid::new_v4().simple());
-    ensure_principal(&pool, &principal).await;
+    let principal = PrincipalId::random();
+    ensure_principal(&pool, principal).await;
     let profile_id = create_test_profile(
         &pool,
-        &principal,
+        principal,
         "missing_key_canary",
         "Missing Key",
         "Private profile details",
@@ -765,8 +789,8 @@ async fn active_subject_with_missing_external_key_fails_rebuild_closed(pool: sql
     )
     .await;
     let subject_id: Uuid =
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(&principal)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -778,10 +802,7 @@ async fn active_subject_with_missing_external_key_fails_rebuild_closed(pool: sql
 
     assert!(rebuild_profile_stream(&pool, profile_id).await.is_err());
     let active = member_profile_metadata(&pool, profile_id).await;
-    assert_eq!(
-        active.active_principal_id.as_deref(),
-        Some(principal.as_str())
-    );
+    assert_eq!(active.active_principal_id, Some(principal));
     assert_eq!(active.lifecycle, "active");
     assert_eq!(active.redacted_alias, None);
     assert!(active.current_claim_id.is_some());
@@ -795,12 +816,12 @@ async fn active_subject_with_missing_external_key_fails_rebuild_closed(pool: sql
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
-    let principal = format!("restored-owner-{}", Uuid::new_v4().simple());
-    ensure_principal(&pool, &principal).await;
+    let principal = PrincipalId::random();
+    ensure_principal(&pool, principal).await;
     let account_id = format!("restored-account-{}", Uuid::new_v4().simple());
     let profile_id = create_test_profile(
         &pool,
-        &principal,
+        principal,
         "restore_canary",
         "Restored Real Name",
         "restored private bio",
@@ -808,11 +829,10 @@ async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool
         1,
     )
     .await;
-    sqlx::query("INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, global_capabilities) VALUES ($1,$2,'secret-hash',1,'{}'::text[])")
-        .bind(&account_id).bind(&principal).execute(&pool).await.unwrap();
+    insert_classic_account_fixture(&pool, &account_id, principal, "secret-hash").await;
     let subject_id = SubjectId::from_uuid(
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(&principal)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap(),
@@ -830,15 +850,14 @@ async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool
 
     assert_eq!(reconcile_subject_revocations(&pool).await.unwrap(), 1);
     assert_eq!(
-        sqlx::query_scalar::<_, Option<String>>(
-            "SELECT principal_user_id FROM privacy_subject WHERE subject_id = $1",
+        sqlx::query_scalar::<_, Option<Uuid>>(
+            "SELECT principal_id FROM privacy_subject WHERE subject_id = $1",
         )
         .bind(subject_id.as_uuid())
         .fetch_one(&pool)
         .await
-        .unwrap()
-        .as_deref(),
-        Some(principal.as_str())
+        .unwrap(),
+        Some(principal.as_uuid())
     );
     assert_no_public_profile(&pool, profile_id).await;
     let profile = member_profile_metadata(&pool, profile_id).await;
@@ -851,9 +870,9 @@ async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool
     assert_eq!(profile.current_claim_id, None);
     assert_eq!(profile.lifecycle, "redacted");
     let account = sqlx::query(
-        "SELECT account_id, disabled_at, password_hash FROM auth_account WHERE principal_user_id = $1",
+        "SELECT account_id, disabled_at, password_hash FROM auth_account WHERE principal_id = $1",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -862,9 +881,9 @@ async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool
     assert_ne!(account.get::<String, _>("password_hash"), "secret-hash");
     assert_eq!(
         sqlx::query_scalar::<_, String>(
-            "SELECT status FROM platform_principal WHERE principal_user_id = $1",
+            "SELECT status FROM platform_principal WHERE principal_id = $1",
         )
-        .bind(&principal)
+        .bind(principal.as_uuid())
         .fetch_one(&pool)
         .await
         .unwrap(),
@@ -885,7 +904,7 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
     pool: sqlx::PgPool,
 ) {
     let _environment = SubjectKeyEnvironment::isolated();
-    let principal = format!("auth-only-{}", Uuid::new_v4().simple());
+    let principal = PrincipalId::random();
     let account_id = format!("account-canary-{}", Uuid::new_v4().simple());
     let mut connection = pool.acquire().await.unwrap();
     identity::methods::ensure_principal(&mut connection, &principal, &[], 1)
@@ -894,22 +913,27 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
     drop(connection);
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM privacy_subject WHERE principal_user_id = $1",
+            "SELECT COUNT(*) FROM privacy_subject WHERE principal_id = $1",
         )
-        .bind(&principal)
+        .bind(principal.as_uuid())
         .fetch_one(&pool)
         .await
         .unwrap(),
         1
     );
-    sqlx::query("INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, global_capabilities) VALUES ($1,$2,'secret-hash',1,'{}'::text[])")
-        .bind(&account_id).bind(&principal).execute(&pool).await.unwrap();
-    sqlx::query("INSERT INTO auth_invite (token_hash, principal_user_id, created_at, expires_at, global_capabilities, invited_by_user_id, account_id) VALUES ($1,$2,1,100,'{}'::text[],'inviter',$3)")
-        .bind("11".repeat(32)).bind(&principal).bind(&account_id).execute(&pool).await.unwrap();
+    insert_classic_account_fixture(&pool, &account_id, principal, "secret-hash").await;
+    sqlx::query("INSERT INTO auth_invite (token_hash, principal_id, created_at, expires_at, global_capabilities, invited_by_principal_id, account_id) VALUES ($1,$2,1,100,'{}'::text[],$3,$4)")
+        .bind("11".repeat(32))
+        .bind(principal.as_uuid())
+        .bind(principal.as_uuid())
+        .bind(&account_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query(
         r#"
         INSERT INTO auth_delivery_intent
-            (delivery_id, delivery_kind, account_id, principal_user_id,
+            (delivery_id, delivery_kind, account_id, principal_id,
              credential_hash, status, attempt_count, next_attempt_at,
              created_at, updated_at, provider_id, outcome_kind,
              credential_expires_at)
@@ -919,7 +943,7 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
     )
     .bind(Uuid::new_v4())
     .bind(&account_id)
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .bind("22".repeat(32))
     .execute(&pool)
     .await
@@ -927,13 +951,13 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
     sqlx::query(
         r#"
         INSERT INTO auth_session
-            (token_hash, principal_user_id, created_at, expires_at,
+            (token_hash, principal_id, created_at, expires_at,
              idle_expires_at, authenticated_at, assurance, global_capabilities)
         VALUES ($1,$2,1,100,50,1,'admin_grant','{}'::text[])
         "#,
     )
     .bind("33".repeat(32))
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
@@ -942,38 +966,36 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
     assert_eq!(erased.status, identity::MemberLifecycleStatus::Erased);
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM member_lifecycle_event WHERE principal_user_id = $1 AND subject_id IS NOT NULL",
+            "SELECT COUNT(*) FROM member_lifecycle_event WHERE principal_id = $1 AND subject_id IS NOT NULL",
         )
-        .bind(&principal)
+        .bind(principal.as_uuid())
         .fetch_one(&pool)
         .await
         .unwrap(),
         4
     );
     assert_eq!(
-        sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM auth_invite WHERE principal_user_id = $1",
-        )
-        .bind(&principal)
-        .fetch_one(&pool)
-        .await
-        .unwrap(),
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_invite WHERE principal_id = $1",)
+            .bind(principal.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
         0
     );
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM auth_delivery_intent WHERE principal_user_id = $1",
+            "SELECT COUNT(*) FROM auth_delivery_intent WHERE principal_id = $1",
         )
-        .bind(&principal)
+        .bind(principal.as_uuid())
         .fetch_one(&pool)
         .await
         .unwrap(),
         0
     );
     let account = sqlx::query(
-        "SELECT account_id, disabled_at, password_hash FROM auth_account WHERE principal_user_id = $1",
+        "SELECT account_id, disabled_at, password_hash FROM auth_account WHERE principal_id = $1",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .fetch_one(&pool)
     .await
     .unwrap();
@@ -982,17 +1004,17 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
     assert_ne!(account.get::<String, _>("password_hash"), "secret-hash");
     assert_eq!(
         sqlx::query_scalar::<_, Option<i64>>(
-            "SELECT revoked_at FROM auth_session WHERE principal_user_id = $1",
+            "SELECT revoked_at FROM auth_session WHERE principal_id = $1",
         )
-        .bind(&principal)
+        .bind(principal.as_uuid())
         .fetch_one(&pool)
         .await
         .unwrap(),
         Some(10)
     );
 
-    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_user_id = $1")
-        .bind(&principal)
+    sqlx::query("DELETE FROM member_lifecycle_projection WHERE principal_id = $1")
+        .bind(principal.as_uuid())
         .execute(&pool)
         .await
         .unwrap();
@@ -1004,8 +1026,8 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
         erased.pseudonym
     );
     let subject_id: Uuid =
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(&principal)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -1016,8 +1038,8 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
     ));
     drop(connection);
     let subject_ids: Vec<Uuid> =
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(&principal)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_all(&pool)
             .await
             .unwrap();
@@ -1027,26 +1049,26 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn already_deactivated_member_can_complete_erasure(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
-    let principal = format!("deactivated-{}", Uuid::new_v4().simple());
-    ensure_principal(&pool, &principal).await;
+    let principal = PrincipalId::random();
+    ensure_principal(&pool, principal).await;
     let subject_id: Uuid =
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(&principal)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
     sqlx::query(
-        "INSERT INTO member_lifecycle_event (principal_user_id, seq, kind, payload, occurred_at, subject_id) VALUES ($1, 1, 'MemberDeactivated', '{\"reason\":\"prior_request\"}'::jsonb, 2, $2)",
+        "INSERT INTO member_lifecycle_event (principal_id, seq, kind, payload, occurred_at, subject_id) VALUES ($1, 1, 'MemberDeactivated', '{\"reason\":\"prior_request\"}'::jsonb, 2, $2)",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .bind(subject_id)
     .execute(&pool)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO member_lifecycle_projection (principal_user_id, status, last_seq, deactivated_at, subject_id) VALUES ($1, 'deactivated', 1, 2, $2)",
+        "INSERT INTO member_lifecycle_projection (principal_id, status, last_seq, deactivated_at, subject_id) VALUES ($1, 'deactivated', 1, 2, $2)",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .bind(subject_id)
     .execute(&pool)
     .await
@@ -1061,19 +1083,12 @@ async fn already_deactivated_member_can_complete_erasure(pool: sqlx::PgPool) {
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn personal_export_is_subject_sealed_owner_only_and_key_destructible(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
-    let principal = format!("export-owner-{}", Uuid::new_v4().simple());
-    let other = format!("export-other-{}", Uuid::new_v4().simple());
+    let principal = PrincipalId::random();
+    let other = PrincipalId::random();
     let account_canary = format!("pii-canary-{}@example.test", Uuid::new_v4().simple());
-    ensure_principal(&pool, &principal).await;
-    ensure_principal(&pool, &other).await;
-    sqlx::query(
-        "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, global_capabilities) VALUES ($1, $2, 'not-exported', 1, '{}'::text[])",
-    )
-    .bind(&account_canary)
-    .bind(&principal)
-    .execute(&pool)
-    .await
-    .unwrap();
+    ensure_principal(&pool, principal).await;
+    ensure_principal(&pool, other).await;
+    insert_classic_account_fixture(&pool, &account_canary, principal, "not-exported").await;
 
     let export = identity::create_personal_export(&pool, &principal, 2)
         .await
@@ -1103,8 +1118,8 @@ async fn personal_export_is_subject_sealed_owner_only_and_key_destructible(pool:
         .is_none());
 
     let subject_id: Uuid =
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(&principal)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal.as_uuid())
             .fetch_one(&pool)
             .await
             .unwrap();
@@ -1147,20 +1162,20 @@ async fn shared_authority_binds_database_rejects_wrong_genesis_and_missing_activ
         Err(SubjectPrivacyError::Configuration(_))
     ));
 
-    let principal = format!("missing-key-{}", Uuid::new_v4().simple());
+    let principal = PrincipalId::random();
     let subject_id = SubjectId::random();
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at) VALUES ($1, $2, 1)",
+        "INSERT INTO privacy_subject (subject_id, principal_id, created_at) VALUES ($1, $2, 1)",
     )
     .bind(subject_id.as_uuid())
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
@@ -1176,20 +1191,20 @@ async fn shared_authority_reapplies_revocation_to_pre_erasure_restore(pool: sqlx
     prepare_subject_authority_for_service(&pool, &authority)
         .await
         .unwrap();
-    let principal = format!("restore-member-{}", Uuid::new_v4().simple());
+    let principal = PrincipalId::random();
     let subject_id = SubjectId::random();
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at) VALUES ($1, $2, 1)",
+        "INSERT INTO privacy_subject (subject_id, principal_id, created_at) VALUES ($1, $2, 1)",
     )
     .bind(subject_id.as_uuid())
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
@@ -1221,9 +1236,9 @@ async fn shared_authority_reapplies_revocation_to_pre_erasure_restore(pool: sqlx
     );
     assert_eq!(
         sqlx::query_scalar::<_, String>(
-            "SELECT status FROM platform_principal WHERE principal_user_id = $1",
+            "SELECT status FROM platform_principal WHERE principal_id = $1",
         )
-        .bind(&principal)
+        .bind(principal.as_uuid())
         .fetch_one(&pool)
         .await
         .unwrap(),
@@ -1237,20 +1252,20 @@ async fn shared_authority_reapplies_revocation_to_pre_erasure_restore(pool: sqlx
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn claim_insert_waiting_on_erasure_cannot_commit_after_tombstone(pool: sqlx::PgPool) {
-    let principal = format!("claim-race-{}", Uuid::new_v4().simple());
+    let principal = PrincipalId::random();
     let subject_id = SubjectId::random();
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ($1, 'active', '{}'::text[], 1)",
     )
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO privacy_subject (subject_id, principal_user_id, created_at) VALUES ($1, $2, 1)",
+        "INSERT INTO privacy_subject (subject_id, principal_id, created_at) VALUES ($1, $2, 1)",
     )
     .bind(subject_id.as_uuid())
-    .bind(&principal)
+    .bind(principal.as_uuid())
     .execute(&pool)
     .await
     .unwrap();

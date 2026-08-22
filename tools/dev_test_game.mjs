@@ -7,10 +7,11 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import {
-  applicationDatabaseEnvironment,
   localDatabaseAuthority,
   runFmarchMigrations,
+  serverRuntimeEnvironment,
 } from "./run_fmarch_migrations.mjs";
+import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 import {
   completeDevTestGameConfiguration,
   defaultDevTestGamePaths,
@@ -129,6 +130,55 @@ const factionDayChatPostBody = "Faction day chat post from dev:test-game.";
 const hardeningRetryChannel = "main";
 const host = "127.0.0.1";
 const frontendRequire = createRequire(defaultDevTestGamePaths.frontendPackageJson);
+const fixtureAliasByPrincipalId = new Map();
+const PLAYER_MIRA_PRINCIPAL_ID = principalFixtureId("player-mira");
+const PLAYER_ROWAN_PRINCIPAL_ID = principalFixtureId("player-rowan");
+
+function authorityPrincipalId(aliasOrId) {
+  const value = String(aliasOrId);
+  if (isPrincipalId(value)) return value;
+  const principalId = principalFixtureId(value);
+  fixtureAliasByPrincipalId.set(principalId, value);
+  return principalId;
+}
+
+function preserveFixturePrincipalAliases(value) {
+  if (typeof value === "string") {
+    return fixtureAliasByPrincipalId.get(value) ?? value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(preserveFixturePrincipalAliases);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        preserveFixturePrincipalAliases(item),
+      ]),
+    );
+  }
+  return value;
+}
+
+function commandForAuthorityTransport(command) {
+  const transport = structuredClone(command);
+  const commandBody = Object.values(transport)[0];
+  if (commandBody === undefined || commandBody === null) return transport;
+  if ("SeatPersona" in transport) {
+    commandBody.principal_id = authorityPrincipalId(commandBody.principal_id);
+  } else if ("ProcessReplacement" in transport) {
+    commandBody.incoming_principal_id = authorityPrincipalId(
+      commandBody.incoming_principal_id,
+    );
+  } else if (
+    "AddCohost" in transport ||
+    "GrantSpectator" in transport ||
+    "RevokeSpectator" in transport
+  ) {
+    commandBody.principal_id = authorityPrincipalId(commandBody.principal_id);
+  }
+  return transport;
+}
 
 function isStaleVotePhaseLockedMessage(message) {
   return (
@@ -336,7 +386,7 @@ async function startApi() {
   apiServer = spawn("cargo", ["run", "-p", "server"], {
     cwd: configuration.paths.repoRoot,
     env: {
-      ...applicationDatabaseEnvironment({
+      ...serverRuntimeEnvironment({
         applicationUrl: databaseUrl,
         env: runtimeEnvironment,
       }),
@@ -454,8 +504,8 @@ async function seedGame() {
   // own fresh game with derived sequential seats.
   const plan = seedSetupCommandPlanForGame(game);
   for (let index = 0; index < plan.length; index += 1) {
-    const [principalUserId, command] = plan[index];
-    const result = await sendCommandResult(principalUserId, command);
+    const [principalId, command] = plan[index];
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       if (index === 0 && result.body.body?.error === "UnknownGame") {
         if (seedMode === "reuse-if-present") {
@@ -467,14 +517,14 @@ async function seedGame() {
       }
       throw new Error(`seed command rejected: ${JSON.stringify(result)}`);
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return { mode: "seeded", commands, shouldRunSetupBootstrap: true };
 }
 
 export function seedPostSetupCommandPlanForGame(game) {
   return [
-    ["host_h", { AddCohost: { game, user: "cohost_c" } }],
+    ["host_h", { AddCohost: { game, principal_id: "cohost_c" } }],
     [
       "player-seed",
       { SubmitVote: { game, actor_slot: "slot-3", target: { Slot: "slot_5" } } },
@@ -510,57 +560,57 @@ export function seedCommandPlanForGame(game) {
 
 async function seedPostSetupGameplayCommands() {
   const commands = [];
-  for (const [principalUserId, command] of seedPostSetupCommandPlanForGame(game)) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of seedPostSetupCommandPlanForGame(game)) {
+    commands.push(await sendCommand(principalId, command));
   }
   return { commands };
 }
 
 async function createSessions() {
   identityBootstrap ??= await seedRootAdminSession();
-  await ensureLocalAccount({ principalUserId: "player-rowan" });
+  await ensureLocalAccount({ principalId: "player-rowan" });
 
   return {
     admin: await createInviteCredential({
       inviteToken: tokens.admin,
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
       returnTo: "/admin",
       expectedCapabilityKind: "GlobalAdmin",
     }),
     host: await createInviteCredential({
       inviteToken: tokens.host,
-      principalUserId: "host_h",
+      principalId: "host_h",
       returnTo: `/g/${game}/host`,
       expectedCapabilityKind: "HostOf",
     }),
     hostSetup: await createInviteCredential({
       inviteToken: tokens.hostSetup,
-      principalUserId: "host_h",
+      principalId: "host_h",
       returnTo: `/g/${game}/setup`,
       expectedCapabilityKind: "HostOf",
     }),
     player: await createInviteCredential({
       inviteToken: tokens.player,
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       returnTo: `/g/${game}`,
       expectedCapabilityKind: "SlotOccupant",
     }),
     actionPlayer: await createInviteCredential({
       inviteToken: tokens.actionPlayer,
-      principalUserId: "player-goon-a",
+      principalId: "player-goon-a",
       returnTo: `/g/${game}`,
       expectedCapabilityKind: "SlotOccupant",
     }),
     deniedPlayer: await createInviteCredential({
       inviteToken: tokens.deniedPlayer,
-      principalUserId: "player-target",
+      principalId: "player-target",
       returnTo: `/g/${game}`,
       expectedCapabilityKind: "SlotOccupant",
     }),
     cohost: await createInviteCredential({
       inviteToken: tokens.cohost,
-      principalUserId: "cohost_c",
+      principalId: "cohost_c",
       returnTo: `/g/${game}/host`,
       expectedCapabilityKind: "CohostOf",
     }),
@@ -568,35 +618,17 @@ async function createSessions() {
 }
 
 async function seedRootAdminSession() {
+  const rootPrincipalId = authorityPrincipalId("root_admin");
   await runSql(databaseUrl, `
     INSERT INTO platform_principal (
-      principal_user_id, status, global_capabilities, created_at, disabled_at
-    ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
-    ON CONFLICT (principal_user_id) DO NOTHING;
-  `);
-  await runSql(databaseUrl, `
-    INSERT INTO auth_account (
-      account_id,
-      principal_user_id,
-      password_hash,
-      created_at,
-      disabled_at,
-      global_capabilities
-    )
-    VALUES (
-      'root-admin-seed@local.fmarch.test',
-      'root_admin',
-      'seed-only-not-a-real-hash',
-      0,
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[]
-    )
-    ON CONFLICT (account_id) DO NOTHING;
+      principal_id, status, global_capabilities, created_at, disabled_at
+    ) VALUES (${sqlLiteral(rootPrincipalId)}, 'active', ARRAY[]::TEXT[], 0, NULL)
+    ON CONFLICT (principal_id) DO NOTHING;
   `);
   await runSql(databaseUrl, `
     INSERT INTO auth_session (
       token_hash,
-      principal_user_id,
+      principal_id,
       created_at,
       expires_at,
       revoked_at,
@@ -607,7 +639,7 @@ async function seedRootAdminSession() {
     )
     VALUES (
       ${sqlLiteral(hashSessionToken(tokens.rootAdmin))},
-      'root_admin',
+      ${sqlLiteral(rootPrincipalId)},
       0,
       ${Number(expiresAt)},
       NULL,
@@ -617,7 +649,7 @@ async function seedRootAdminSession() {
       0
     )
     ON CONFLICT (token_hash) DO UPDATE SET
-      principal_user_id = EXCLUDED.principal_user_id,
+      principal_id = EXCLUDED.principal_id,
       expires_at = EXCLUDED.expires_at,
       revoked_at = NULL,
       global_capabilities = EXCLUDED.global_capabilities,
@@ -630,7 +662,7 @@ async function seedRootAdminSession() {
     (capability) => capability.kind,
   );
   if (
-    session.principal_user_id !== "root_admin" ||
+    session.principal_id !== "root_admin" ||
     !capabilityKinds.includes("GlobalAdmin")
   ) {
     throw new Error(
@@ -644,7 +676,7 @@ async function seedRootAdminSession() {
     browserCredentialIssuer: "/auth/accounts + /auth/invites",
     browserCredentialKinds: ["account", "account-bound-invite"],
     browserSessionGrantUsage: false,
-    rootPrincipalUserId: session.principal_user_id,
+    rootPrincipalId: session.principal_id,
     rootCapabilityKinds: capabilityKinds,
     rawRootTokenStored: false,
     boundary:
@@ -668,13 +700,13 @@ export function createTokenSet(prefix) {
 
 async function createInviteCredential({
   inviteToken,
-  principalUserId,
+  principalId,
   returnTo,
   globalCapabilities = [],
   expectedCapabilityKind,
 }) {
   const account = await ensureLocalAccount({
-    principalUserId,
+    principalId,
     globalCapabilities,
   });
   const invite = await fetchJson(`${apiBaseUrl}/auth/invites`, {
@@ -686,13 +718,13 @@ async function createInviteCredential({
     body: JSON.stringify({
       invite_token: inviteToken,
       account_id: account.accountId,
-      expected_principal_user_id: principalUserId,
+      expected_principal_id: authorityPrincipalId(principalId),
       expires_at: expiresAt,
       global_capabilities: globalCapabilities,
     }),
   });
   return {
-    principalUserId: invite.principal_user_id,
+    principalId,
     accountId: account.accountId,
     password: account.password,
     credentialKind: "invite",
@@ -709,8 +741,8 @@ async function createInviteCredential({
   };
 }
 
-async function ensureLocalAccount({ principalUserId, globalCapabilities = [] }) {
-  const existing = localAccounts.get(principalUserId);
+async function ensureLocalAccount({ principalId, globalCapabilities = [] }) {
+  const existing = localAccounts.get(principalId);
   if (existing !== undefined) {
     return existing;
   }
@@ -719,8 +751,8 @@ async function ensureLocalAccount({ principalUserId, globalCapabilities = [] }) 
   // method, so reruns must reuse the same credential instead of minting a
   // fresh account each time.
   const account = {
-    accountId: `${principalUserId}@local.fmarch.test`,
-    password: `dev-test-game-account-${principalUserId}`,
+    accountId: `${principalId}@local.fmarch.test`,
+    password: `dev-test-game-account-${principalId}`,
   };
   const response = await fetch(`${apiBaseUrl}/auth/accounts`, {
     method: "POST",
@@ -731,14 +763,14 @@ async function ensureLocalAccount({ principalUserId, globalCapabilities = [] }) 
     body: JSON.stringify({
       account_id: account.accountId,
       password: account.password,
-      principal_user_id: principalUserId,
+      principal_id: authorityPrincipalId(principalId),
       global_capabilities: globalCapabilities,
     }),
   });
   if (response.status === 409) {
     // Account already exists from an earlier run; the deterministic
     // credential still matches.
-    localAccounts.set(principalUserId, account);
+    localAccounts.set(principalId, account);
     return account;
   }
   if (!response.ok) {
@@ -747,33 +779,33 @@ async function ensureLocalAccount({ principalUserId, globalCapabilities = [] }) 
     );
   }
   const created = await response.json();
-  if (created.principal_user_id !== principalUserId) {
-    throw new Error(`local account principal drifted for ${principalUserId}`);
+  if (created.principal_id !== authorityPrincipalId(principalId)) {
+    throw new Error(`local account principal drifted for ${principalId}`);
   }
-  localAccounts.set(principalUserId, account);
+  localAccounts.set(principalId, account);
   return account;
 }
 
-function localAccountForPrincipal(principalUserId) {
-  const account = localAccounts.get(principalUserId);
+function localAccountForPrincipal(principalId) {
+  const account = localAccounts.get(principalId);
   if (account === undefined) {
-    throw new Error(`local account was not seeded for ${principalUserId}`);
+    throw new Error(`local account was not seeded for ${principalId}`);
   }
   return account;
 }
 
 async function createAccountLoginCredential({
-  principalUserId,
+  principalId,
   returnTo,
   globalCapabilities = [],
   expectedCapabilityKind,
 }) {
   const account = await ensureLocalAccount({
-    principalUserId,
+    principalId,
     globalCapabilities,
   });
   const credential = {
-    principalUserId,
+    principalId,
     credentialKind: "account",
     accountId: account.accountId,
     password: account.password,
@@ -788,12 +820,12 @@ async function createAccountLoginCredential({
   };
 }
 
-async function sendCommand(principalUserId, command) {
-  const response = await sendCommandResult(principalUserId, command);
+async function sendCommand(principalId, command) {
+  const response = await sendCommandResult(principalId, command);
   if (response.body?.kind !== "Ack") {
     throw new Error(`seed command rejected: ${JSON.stringify(response)}`);
   }
-  return commandSummary(principalUserId, command, response);
+  return commandSummary(principalId, command, response);
 }
 
 // The strict wire rejects any actor field in the envelope; seed commands act
@@ -801,45 +833,27 @@ async function sendCommand(principalUserId, command) {
 // sessions are inserted directly into scratch-Postgres, exactly like the root
 // admin session, so browser roles still enter only through accounts and
 // invites.
-async function seedSessionToken(principalUserId) {
-  if (principalUserId === "root_admin") {
+async function seedSessionToken(principalId) {
+  if (principalId === "root_admin") {
     return tokens.rootAdmin;
   }
-  const cached = seedSessionTokens.get(principalUserId);
+  const cached = seedSessionTokens.get(principalId);
   if (cached !== undefined) {
     return cached;
   }
-  const token = canonicalSessionToken(`${tokenPrefix}-seed-${principalUserId}`);
+  const token = canonicalSessionToken(`${tokenPrefix}-seed-${principalId}`);
+  const authorityId = authorityPrincipalId(principalId);
   await runSql(databaseUrl, `
     INSERT INTO platform_principal (
-      principal_user_id, status, global_capabilities, created_at, disabled_at
+      principal_id, status, global_capabilities, created_at, disabled_at
     ) VALUES (
-      ${sqlLiteral(principalUserId)}, 'active', ARRAY[]::TEXT[], 0, NULL
-    ) ON CONFLICT (principal_user_id) DO NOTHING;
-  `);
-  await runSql(databaseUrl, `
-    INSERT INTO auth_account (
-      account_id,
-      principal_user_id,
-      password_hash,
-      created_at,
-      disabled_at,
-      global_capabilities
-    )
-    VALUES (
-      ${sqlLiteral(`${principalUserId}-seed@local.fmarch.test`)},
-      ${sqlLiteral(principalUserId)},
-      'seed-only-not-a-real-hash',
-      0,
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[]
-    )
-    ON CONFLICT (account_id) DO NOTHING;
+      ${sqlLiteral(authorityId)}, 'active', ARRAY[]::TEXT[], 0, NULL
+    ) ON CONFLICT (principal_id) DO NOTHING;
   `);
   await runSql(databaseUrl, `
     INSERT INTO auth_session (
       token_hash,
-      principal_user_id,
+      principal_id,
       created_at,
       expires_at,
       revoked_at,
@@ -850,7 +864,7 @@ async function seedSessionToken(principalUserId) {
     )
     VALUES (
       ${sqlLiteral(hashSessionToken(token))},
-      ${sqlLiteral(principalUserId)},
+      ${sqlLiteral(authorityId)},
       0,
       ${Number(expiresAt)},
       NULL,
@@ -861,13 +875,13 @@ async function seedSessionToken(principalUserId) {
     )
     ON CONFLICT (token_hash) DO NOTHING;
   `);
-  seedSessionTokens.set(principalUserId, token);
+  seedSessionTokens.set(principalId, token);
   return token;
 }
 
-async function sendCommandResult(principalUserId, command) {
+async function sendCommandResult(principalId, command) {
   await ensureCommandTargetPrincipal(command);
-  const sessionToken = await seedSessionToken(principalUserId);
+  const sessionToken = await seedSessionToken(principalId);
   return await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
     headers: {
@@ -881,7 +895,7 @@ async function sendCommandResult(principalUserId, command) {
         kind: "Command",
         body: {
           command_id: crypto.randomUUID(),
-          command,
+          command: commandForAuthorityTransport(command),
         },
       },
     }),
@@ -889,18 +903,24 @@ async function sendCommandResult(principalUserId, command) {
 }
 
 async function ensureCommandTargetPrincipal(command) {
-  const principalUserId =
-    command.SeatPersona?.principal_id ??
-    command.ProcessReplacement?.incoming_principal_id;
-  if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
-    return;
+  const principalIds = [
+    command.SeatPersona?.principal_id,
+    command.ProcessReplacement?.incoming_principal_id,
+    command.AddCohost?.principal_id,
+    command.GrantSpectator?.principal_id,
+    command.RevokeSpectator?.principal_id,
+  ];
+  for (const principalId of principalIds) {
+    if (typeof principalId !== "string" || principalId.trim() === "") {
+      continue;
+    }
+    await ensureLocalAccount({ principalId });
   }
-  await ensureLocalAccount({ principalUserId });
 }
 
-function commandSummary(principalUserId, command, response) {
+function commandSummary(principalId, command, response) {
   return {
-    principalUserId,
+    principalId,
     command,
     streamSeqs: response.body.body.stream_seqs,
   };
@@ -1012,7 +1032,7 @@ async function verifySessionCard(card) {
     staleReplacementPage = await roleEntries.player.context.newPage();
     cohostConsole = await verifySeededCohostConsole({
       cohostPage: roleEntries.cohost.page,
-      cohostPrincipalUserId: roleEntries.cohost.verification.principalUserId,
+      cohostPrincipalUserId: roleEntries.cohost.verification.principalId,
       staleCohostPage,
       game: card.game,
       frontendBaseUrl: card.frontendBaseUrl,
@@ -1351,10 +1371,10 @@ async function bootstrapSeededGameThroughSetup(card) {
       CreateGame: { game: bootstrapGame, pack: "mafiascum" },
     });
     for (const row of uiBootstrapSetupRoster) {
-      await ensureLocalAccount({ principalUserId: row.user });
+      await ensureLocalAccount({ principalId: row.user });
     }
     const bootstrapSession = await createAccountLoginCredential({
-      principalUserId: "host_h",
+      principalId: "host_h",
       returnTo: `/g/${bootstrapGame}/setup`,
       expectedCapabilityKind: "HostOf",
     });
@@ -1371,9 +1391,12 @@ async function bootstrapSeededGameThroughSetup(card) {
       game: bootstrapGame,
       frontendBaseUrl: card.frontendBaseUrl,
       bootstrapSession,
-      roster: uiBootstrapSetupRoster,
+      roster: uiBootstrapSetupRoster.map((row) => ({
+        ...row,
+        user: authorityPrincipalId(row.user),
+      })),
     });
-    return { ...scenario, game: bootstrapGame };
+    return preserveFixturePrincipalAliases({ ...scenario, game: bootstrapGame });
   } finally {
     await entry?.context.close().catch(() => {});
     await browser.close();
@@ -1507,16 +1530,17 @@ async function verifyDisposableHostSetupRosterRoleCommand({
   const setupGame = crypto.randomUUID();
   const seed = await seedHostSetupRosterRoleGame({ setupGame });
   const assignedPrincipalId = "setup-extra-player";
+  const assignedAuthorityPrincipalId = authorityPrincipalId(assignedPrincipalId);
   // The setup form accepts an exact principal identifier; seed that identity
   // so the authoritative assignment command can bind it to the slot.
-  await ensureLocalAccount({ principalUserId: assignedPrincipalId });
+  await ensureLocalAccount({ principalId: assignedPrincipalId });
   const setupSession = await createAccountLoginCredential({
-    principalUserId: "host_h",
+    principalId: "host_h",
     returnTo: `/g/${setupGame}/setup`,
     expectedCapabilityKind: "HostOf",
   });
   const staleSetupSession = await createAccountLoginCredential({
-    principalUserId: "host_h",
+    principalId: "host_h",
     returnTo: `/g/${setupGame}/setup`,
     expectedCapabilityKind: "HostOf",
   });
@@ -1615,8 +1639,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
 
     const rosterRow = page.getByTestId(`host-setup-slot-${addedSlotId}`);
     await rosterRow
-      .locator('input[name="principalUserId"]')
-      .fill(assignedPrincipalId);
+      .locator('input[name="principalId"]')
+      .fill(assignedAuthorityPrincipalId);
     await rosterRow.locator('input[name="publicName"]').fill(assignedPublicName);
     await rosterRow
       .getByRole("button", { name: "Assign player", exact: true })
@@ -1627,13 +1651,13 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       commandKind: "SeatPersona",
       commandPredicate: (command) =>
         command?.slot === addedSlotId &&
-        command?.principal_id === assignedPrincipalId &&
+        command?.principal_id === assignedAuthorityPrincipalId &&
         command?.public_name === assignedPublicName,
       statePredicate: (state) =>
         (state?.slots ?? []).some(
           (slot) =>
             slot.slotId === addedSlotId &&
-            slot.assignedPrincipalId === assignedPrincipalId,
+            slot.assignedPrincipalId === assignedAuthorityPrincipalId,
         ),
     });
 
@@ -1654,7 +1678,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
         (state?.slots ?? []).some(
           (slot) =>
             slot.slotId === addedSlotId &&
-            slot.assignedPrincipalId === assignedPrincipalId &&
+            slot.assignedPrincipalId === assignedAuthorityPrincipalId &&
             slot.roleKey === assignedRoleKey,
         ),
     });
@@ -1674,7 +1698,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       initialState?.phase !== null ||
       duplicateAddSlotRecovery.error !== "InvalidTarget" ||
       duplicateSlotCountAfterReject !== 1 ||
-      finalSlot?.assignedPrincipalId !== assignedPrincipalId ||
+      finalSlot?.assignedPrincipalId !== assignedAuthorityPrincipalId ||
       finalSlot?.roleKey !== assignedRoleKey ||
       finalReadiness?.summary !== "Ready to start" ||
       finalReadiness?.startAvailable !== true
@@ -1692,13 +1716,13 @@ async function verifyDisposableHostSetupRosterRoleCommand({
         })}`,
       );
     }
-    return {
+    return preserveFixturePrincipalAliases({
       status: "passed",
       proof:
         "A disposable pre-start setup role URL added a slot, assigned its occupant, assigned its role, and refreshed to ready setup state.",
       game: setupGame,
       roleUrl: `${frontendBaseUrl}/g/${setupGame}/setup`,
-      sessionPrincipalUserId: setupSession.principalUserId,
+      sessionPrincipalUserId: setupSession.principalId,
       seed,
       addedSlotId,
       assignedPrincipalId,
@@ -1726,7 +1750,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
         setPostPolicy: null,
         startGame: null,
       }),
-    };
+    });
   } finally {
     await entry.context.close().catch(() => {});
     await staleEntry.context.close().catch(() => {});
@@ -1753,8 +1777,8 @@ async function seedHostSetupRosterRoleGame({ setupGame }) {
     ],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of plan) {
+    commands.push(await sendCommand(principalId, command));
   }
   return {
     game: setupGame,
@@ -1804,7 +1828,7 @@ async function openVerifiedRoleEntry({
     const cookies = await page.context().cookies(frontendBaseUrl);
     const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
     if (sessionCookie === undefined) {
-      throw new Error(`${session.principalUserId} login did not set fmarch_session cookie`);
+      throw new Error(`${session.principalId} login did not set fmarch_session cookie`);
     }
     const resolved = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
       headers: { authorization: `Bearer ${sessionCookie.value}` },
@@ -1815,21 +1839,21 @@ async function openVerifiedRoleEntry({
       !capabilityKinds.includes(session.expectedCapabilityKind)
     ) {
       throw new Error(
-        `${session.principalUserId} session missing ${session.expectedCapabilityKind}: ${JSON.stringify(
+        `${session.principalId} session missing ${session.expectedCapabilityKind}: ${JSON.stringify(
           resolved,
         )}`,
       );
     }
     const body = await page.locator("body").innerText();
     if (!body.includes(game)) {
-      throw new Error(`authenticated page for ${session.principalUserId} did not show ${game}`);
+      throw new Error(`authenticated page for ${session.principalId} did not show ${game}`);
     }
     const cookiePrefix = "fmss_";
     return {
       context,
       page,
       verification: {
-        principalUserId: resolved.principal_user_id,
+        principalId: resolved.principal_id,
         capabilityKinds,
         cookie: {
           httpOnly: sessionCookie.httpOnly,
@@ -1877,7 +1901,7 @@ async function verifySeededCohostConsole({
     throw new Error("cohost console exposed host-only resolve_phase control");
   }
   const hostOnlyResolveReject = await sendBrowserCommand(cohostPage, {
-    principalUserId: "cohost_c",
+    principalId: "cohost_c",
     commandId: crypto.randomUUID(),
     command: {
       ResolvePhase: {
@@ -1890,7 +1914,7 @@ async function verifySeededCohostConsole({
   if (
     rejectBody?.kind !== "Reject" ||
     rejectBody?.body?.error !== "CohostPermissionDenied" ||
-    hostOnlyResolveReject.requestEnvelope?.body?.body?.principal_user_id !== undefined
+    hostOnlyResolveReject.requestEnvelope?.body?.body?.principal_id !== undefined
   ) {
     throw new Error(
       `cohost denied ResolvePhase did not reject by policy: ${JSON.stringify(
@@ -1939,7 +1963,7 @@ async function verifyCohostLaterPhaseDeadlineExtension({
   const seed = await seedLaterPhaseCohostDeadlineGame({ game: proofGame });
   const expectedDeadline = seed.initialDeadline + 86_400;
   const cohostSession = await createAccountLoginCredential({
-    principalUserId: "cohost_c",
+    principalId: "cohost_c",
     returnTo: `/g/${proofGame}/host`,
     expectedCapabilityKind: "CohostOf",
   });
@@ -1992,7 +2016,7 @@ async function verifyCohostLaterPhaseDeadlineExtension({
       extendDeadline.commandStatus?.requestEnvelope?.body?.body?.command
         ?.ExtendDeadline;
     const commandActorField =
-      extendDeadline.commandStatus?.requestEnvelope?.body?.body?.principal_user_id;
+      extendDeadline.commandStatus?.requestEnvelope?.body?.body?.principal_id;
     const phaseAfterExtend = await cohostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
     );
@@ -2034,7 +2058,7 @@ async function verifyCohostLaterPhaseDeadlineExtension({
     const apiStateAfterReload = await fetchHostConsoleState({
       apiBaseUrl,
       game: proofGame,
-      principalUserId: "cohost_c",
+      principalId: "cohost_c",
       sessionToken: await browserSessionToken(cohostEntry.page),
     });
     const reload = {
@@ -2095,7 +2119,7 @@ async function verifyCohostLaterPhaseDeadlineExtension({
       initialDeadline: seed.initialDeadline,
       expectedDeadline,
       cohostEntry: cohostEntry.verification,
-      sessionPrincipalUserId: cohostEntry.verification.principalUserId,
+      sessionPrincipalUserId: cohostEntry.verification.principalId,
       capabilityLabel,
       renderedCapabilityLabel,
       setupPhase,
@@ -3091,8 +3115,8 @@ async function seedDayVoteResolutionGame({
     ],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of plan) {
+    commands.push(await sendCommand(principalId, command));
   }
   return {
     game,
@@ -3117,7 +3141,7 @@ async function verifySeededEarliestReachedTie({
   const tieGame = crypto.randomUUID();
   const seed = await seedEarliestReachedTieGame({ game: tieGame });
   const seedSession = await createAccountLoginCredential({
-    principalUserId: "player-seed",
+    principalId: "player-seed",
     returnTo: `/g/${tieGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -3298,7 +3322,7 @@ async function verifySeededHostDecidesTie({
   const tieGame = crypto.randomUUID();
   const seed = await seedHostDecidesTieGame({ game: tieGame });
   const seedSession = await createAccountLoginCredential({
-    principalUserId: "player-seed",
+    principalId: "player-seed",
     returnTo: `/g/${tieGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -3411,7 +3435,7 @@ async function verifySeededHostDecidesTie({
     const targetCommandStateAfterDecision = await fetchPlayerSlotCommandState({
       apiBaseUrl,
       game: tieGame,
-      principalUserId: "player-target",
+      principalId: "player-target",
       slotId: selectedSlot,
     });
     const targetAfterDecision = {
@@ -3535,8 +3559,8 @@ async function seedHostDecidesTieGame({ game }) {
     ["host_h", { StartGame: { game, phase: "D01" } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of plan) {
+    commands.push(await sendCommand(principalId, command));
   }
   return { game, commands: commands.length, roster };
 }
@@ -3558,8 +3582,8 @@ async function seedEarliestReachedTieGame({ game }) {
     ["host_h", { StartGame: { game, phase: "D01" } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of plan) {
+    commands.push(await sendCommand(principalId, command));
   }
   return { game, commands: commands.length, roster };
 }
@@ -3572,22 +3596,22 @@ async function verifySeededDayVoteNoLynch({
   const noLynchGame = crypto.randomUUID();
   const seed = await seedDayVoteNoLynchGame({ game: noLynchGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: "host_h",
+    principalId: "host_h",
     returnTo: `/g/${noLynchGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const miraVoterSession = await createAccountLoginCredential({
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     returnTo: `/g/${noLynchGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
   const seedVoterSession = await createAccountLoginCredential({
-    principalUserId: "player-seed",
+    principalId: "player-seed",
     returnTo: `/g/${noLynchGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
   const survivorSession = await createAccountLoginCredential({
-    principalUserId: "player-target",
+    principalId: "player-target",
     returnTo: `/g/${noLynchGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -3638,7 +3662,7 @@ async function verifySeededDayVoteNoLynch({
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.target === "NoLynch",
     );
@@ -3655,7 +3679,7 @@ async function verifySeededDayVoteNoLynch({
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.target === "NoLynch",
     );
@@ -3767,11 +3791,11 @@ async function verifySeededDayVoteNoLynch({
       dayVoteOutcome?.winner_slot !== null ||
       dayVoteOutcome?.tallies?.no_lynch !== 2 ||
       miraNoLynchVote?.state !== "ack" ||
-      miraNoLynchVote?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+      miraNoLynchVote?.requestEnvelope?.body?.body?.principal_id !== undefined ||
       miraNoLynchVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target !==
         "NoLynch" ||
       seedNoLynchVote?.state !== "ack" ||
-      seedNoLynchVote?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+      seedNoLynchVote?.requestEnvelope?.body?.body?.principal_id !== undefined ||
       seedNoLynchVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target !==
         "NoLynch" ||
       !miraVotecountAfterVote.some(
@@ -3814,7 +3838,7 @@ async function verifySeededDayVoteNoLynch({
           noLynchGame,
           seed,
           seedVoterSession: {
-            principalUserId: seedVoterSession.principalUserId,
+            principalId: seedVoterSession.principalId,
             credentialKind: seedVoterSession.credentialKind,
             expectedCapabilityKind: seedVoterSession.expectedCapabilityKind,
           },
@@ -3842,7 +3866,7 @@ async function verifySeededDayVoteNoLynch({
       game: noLynchGame,
       seed,
       seedVoterSession: {
-        principalUserId: seedVoterSession.principalUserId,
+        principalId: seedVoterSession.principalId,
         credentialKind: seedVoterSession.credentialKind,
         expectedCapabilityKind: seedVoterSession.expectedCapabilityKind,
       },
@@ -3887,8 +3911,8 @@ async function seedDayVoteNoLynchGame({ game }) {
     ["host_h", { StartGame: { game, phase: "D01" } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of plan) {
+    commands.push(await sendCommand(principalId, command));
   }
   return {
     game,
@@ -3909,17 +3933,17 @@ async function verifySeededVanillizerRoleAction({
   const seed = await seedVanillizerRoleActionGame(vanillizerGame);
   const sessionSpecs = {
     host: {
-      principalUserId: "host_h",
+      principalId: "host_h",
       returnTo: `/g/${vanillizerGame}/host`,
       expectedCapabilityKind: "HostOf",
     },
     actor: {
-      principalUserId: scenario.actor.principalUserId,
+      principalId: scenario.actor.principalId,
       returnTo: `/g/${vanillizerGame}`,
       expectedCapabilityKind: "SlotOccupant",
     },
     target: {
-      principalUserId: scenario.target.principalUserId,
+      principalId: scenario.target.principalId,
       returnTo: `/g/${vanillizerGame}`,
       expectedCapabilityKind: "SlotOccupant",
     },
@@ -4203,8 +4227,8 @@ async function verifySeededVanillizerRoleAction({
 async function seedVanillizerRoleActionGame(game) {
   const plan = vanillizerSeedCommandPlan(game);
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of plan) {
+    commands.push(await sendCommand(principalId, command));
   }
   return {
     game,
@@ -4624,22 +4648,22 @@ async function verifySeededD02VoteNightTransition({
   const transitionGame = crypto.randomUUID();
   const seed = await seedD02VoteNightTransitionGame({ game: transitionGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: "host_h",
+    principalId: "host_h",
     returnTo: `/g/${transitionGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const actionSession = await createAccountLoginCredential({
-    principalUserId: "player-goon-a",
+    principalId: "player-goon-a",
     returnTo: `/g/${transitionGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
   const playerSession = await createAccountLoginCredential({
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     returnTo: `/g/${transitionGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
   const targetSession = await createAccountLoginCredential({
-    principalUserId: "player-target",
+    principalId: "player-target",
     returnTo: `/g/${transitionGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -4779,7 +4803,7 @@ async function verifySeededD02VoteNightTransition({
     );
     if (
       finalVote?.state !== "ack" ||
-      finalVote?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+      finalVote?.requestEnvelope?.body?.body?.principal_id !== undefined ||
       finalVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !==
         "slot_4" ||
       finalVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
@@ -5110,7 +5134,7 @@ async function verifySeededD02VoteNightTransition({
 
     if (
       n02ActionSubmission?.state !== "ack" ||
-      n02ActionSubmission?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+      n02ActionSubmission?.requestEnvelope?.body?.body?.principal_id !== undefined ||
       n02ActionSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
         ?.actor_slot !== "slot_4" ||
       n02ActionSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
@@ -5427,7 +5451,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.actor_slot === "slot_4" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -5586,7 +5610,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.actor_slot === "slot_4" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -5829,7 +5853,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: ({ scenario, targetSlot }) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitAction?.actor_slot === scenario.expectedActorSlot &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -5933,7 +5957,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.actor_slot === "slot_4" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -6098,7 +6122,7 @@ async function verifySeededD02VoteNightTransition({
       waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === undefined &&
+          ?.principal_id === undefined &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.actor_slot === "slot_4" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
@@ -6586,18 +6610,18 @@ async function seedD02VoteNightTransitionGame({ game }) {
     ],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of plan) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `D02 vote/night transition seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game,
@@ -6978,7 +7002,7 @@ async function verifyPrivateChannelInvalidActionRecovery({
   const apiCommandStateAfterReject = await fetchPlayerSlotCommandState({
     apiBaseUrl,
     game,
-    principalUserId: "player-goon-a",
+    principalId: "player-goon-a",
     slotId: "slot_4",
   });
   const legalActionVisibleAfterReject = await page
@@ -6999,7 +7023,7 @@ async function verifyPrivateChannelInvalidActionRecovery({
   if (
     reject?.state !== "reject" ||
     reject?.error !== "InvalidTarget" ||
-    reject?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+    reject?.requestEnvelope?.body?.body?.principal_id !== undefined ||
     reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
       "slot_4" ||
     reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
@@ -7185,7 +7209,7 @@ async function verifySeededDeadPlayerRecovery({ targetPage, game, targetSlot }) 
 
 async function sendDeadPlayerCommand(page, { command }) {
   const raw = await sendBrowserCommand(page, {
-    principalUserId: "player-target",
+    principalId: "player-target",
     commandId: crypto.randomUUID(),
     command,
   });
@@ -7193,7 +7217,7 @@ async function sendDeadPlayerCommand(page, { command }) {
   if (
     rejectBody?.kind !== "Reject" ||
     rejectBody?.body?.error !== "SlotNotAlive" ||
-    raw.requestEnvelope?.body?.body?.principal_user_id !== undefined
+    raw.requestEnvelope?.body?.body?.principal_id !== undefined
   ) {
     throw new Error(`dead player command did not reject as SlotNotAlive: ${JSON.stringify(raw)}`);
   }
@@ -7347,7 +7371,7 @@ async function verifySeededPlayerActionBoundary({ playerPage, game }) {
   }
   const commandId = crypto.randomUUID();
   const directRaw = await sendBrowserCommand(playerPage, {
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     commandId,
     command: {
       SubmitAction: {
@@ -7364,7 +7388,7 @@ async function verifySeededPlayerActionBoundary({ playerPage, game }) {
   if (
     rejectBody?.kind !== "Reject" ||
     rejectBody?.body?.error !== "InvalidTarget" ||
-    directRaw.requestEnvelope?.body?.body?.principal_user_id !== undefined
+    directRaw.requestEnvelope?.body?.body?.principal_id !== undefined
   ) {
     throw new Error(
       `player direct factional_kill did not reject as InvalidTarget: ${JSON.stringify(
@@ -7593,7 +7617,7 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
     includeEvidenceInError: true,
   });
   if (
-    reject?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+    reject?.requestEnvelope?.body?.body?.principal_id !== undefined ||
     currentReceipt?.actionId !== "submit_action:factional_kill" ||
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
       true ||
@@ -7635,7 +7659,7 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
   const reconnectAfterReject = await verifyRoleReconnectRecovery({
     page,
     game,
-    principalUserId: "player-goon-a",
+    principalId: "player-goon-a",
     actorSlot: "slot_4",
     postPrefix: "Private-channel stale action reconnect proof",
     channelId: factionDayChatChannel,
@@ -8311,7 +8335,7 @@ async function submitStaleActionConflict({
   const reconnectAfterReject = await verifyRoleReconnectRecovery({
     page: staleActionPage,
     game,
-    principalUserId: "player-goon-a",
+    principalId: "player-goon-a",
     actorSlot: "slot_4",
     postPrefix: "Stale action reconnect proof",
     navigate: true,
@@ -8451,7 +8475,7 @@ async function submitStaleDeadActionConflict({
 
 async function setSlotLifecycleViaHost({ hostPage, game, slot, status }) {
   const raw = await sendBrowserCommand(hostPage, {
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandId: crypto.randomUUID(),
     command: {
       SetSlotStatus: {
@@ -8516,7 +8540,7 @@ async function verifySeededPrivateChannel({
     await fetchPrivateChannelThreadPostBodies({
       apiBaseUrl,
       game,
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       limit: 50,
     });
   if (!apiThreadPostBodies.includes(factionDayChatPostBody)) {
@@ -8680,7 +8704,7 @@ async function submitPrivateChannelPost({
 async function fetchPrivateChannelThread({
   apiBaseUrl,
   game,
-  principalUserId,
+  principalId,
   limit = 100,
 }) {
   return fetchJsonAsPrincipal(
@@ -8689,20 +8713,20 @@ async function fetchPrivateChannelThread({
       game,
       limit,
     }),
-    principalUserId,
+    principalId,
   );
 }
 
 async function fetchPrivateChannelThreadPostBodies({
   apiBaseUrl,
   game,
-  principalUserId,
+  principalId,
   limit = 100,
 }) {
   const thread = await fetchPrivateChannelThread({
     apiBaseUrl,
     game,
-    principalUserId,
+    principalId,
     limit,
   });
   return {
@@ -8714,7 +8738,7 @@ async function fetchPrivateChannelThreadPostBodies({
 async function fetchPlayerSlotCommandState({
   apiBaseUrl,
   game,
-  principalUserId,
+  principalId,
   slotId,
 }) {
   return fetchJsonAsPrincipal(
@@ -8723,7 +8747,7 @@ async function fetchPlayerSlotCommandState({
       game,
       slotId,
     }),
-    principalUserId,
+    principalId,
   );
 }
 
@@ -8848,14 +8872,14 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
     const apiCommandStateAfterAck = await fetchPlayerSlotCommandState({
       apiBaseUrl,
       game: phaseClosureGame,
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       slotId: "slot-7",
     });
     const { thread: apiThreadAfterAck } =
       await fetchPrivateChannelThreadPostBodies({
         apiBaseUrl,
         game: phaseClosureGame,
-        principalUserId: "player-mira",
+        principalId: "player-mira",
       });
     const submitPostAckProof = assertLivePrivateChannelSubmitPostAckOutcome({
       outcome: {
@@ -8884,12 +8908,12 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
       seed,
       channel: factionDayChatChannel,
       hostSession: {
-        principalUserId: hostSession.principalUserId,
+        principalId: hostSession.principalId,
         credentialKind: hostSession.credentialKind,
         expectedCapabilityKind: hostSession.expectedCapabilityKind,
       },
       playerSession: {
-        principalUserId: playerSession.principalUserId,
+        principalId: playerSession.principalId,
         credentialKind: playerSession.credentialKind,
         expectedCapabilityKind: playerSession.expectedCapabilityKind,
       },
@@ -8937,12 +8961,12 @@ async function verifyCompletedPrivateChannelRecovery({
   const completeGame = crypto.randomUUID();
   const seed = await seedPrivateChannelCompleteGame({ game: completeGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: "host_h",
+    principalId: "host_h",
     returnTo: `/g/${completeGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const playerSession = await createAccountLoginCredential({
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     returnTo: `/g/${completeGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -9053,14 +9077,14 @@ async function verifyCompletedPrivateChannelRecovery({
     const apiCommandStateAfterReject = await fetchPlayerSlotCommandState({
       apiBaseUrl,
       game: completeGame,
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       slotId: "slot-7",
     });
     const { thread: apiThreadAfterReject, postBodies: apiThreadPostBodies } =
       await fetchPrivateChannelThreadPostBodies({
         apiBaseUrl,
         game: completeGame,
-        principalUserId: "player-mira",
+        principalId: "player-mira",
       });
 
     const reloadRoute = await openPrivateChannelRoleSurface({
@@ -9102,14 +9126,14 @@ async function verifyCompletedPrivateChannelRecovery({
     const apiCommandStateAfterReload = await fetchPlayerSlotCommandState({
       apiBaseUrl,
       game: completeGame,
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       slotId: "slot-7",
     });
     const { postBodies: apiThreadPostBodiesAfterReload } =
       await fetchPrivateChannelThreadPostBodies({
         apiBaseUrl,
         game: completeGame,
-        principalUserId: "player-mira",
+        principalId: "player-mira",
       });
     const reloadAfterReject = {
       status: "passed",
@@ -9222,12 +9246,12 @@ async function verifyCompletedPrivateChannelRecovery({
       seed,
       channel: factionDayChatChannel,
       hostSession: {
-        principalUserId: hostSession.principalUserId,
+        principalId: hostSession.principalId,
         credentialKind: hostSession.credentialKind,
         expectedCapabilityKind: hostSession.expectedCapabilityKind,
       },
       playerSession: {
-        principalUserId: playerSession.principalUserId,
+        principalId: playerSession.principalId,
         credentialKind: playerSession.credentialKind,
         expectedCapabilityKind: playerSession.expectedCapabilityKind,
       },
@@ -9269,8 +9293,8 @@ async function verifyCompletedPrivateChannelRecovery({
 
 async function seedPrivateChannelCompleteGame({ game }) {
   const commands = [];
-  for (const [principalUserId, command] of seedCommandPlanForGame(game)) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of seedCommandPlanForGame(game)) {
+    commands.push(await sendCommand(principalId, command));
   }
   return {
     game,
@@ -9342,12 +9366,12 @@ async function verifySeededMultiplayerHardening({
     },
   };
   const firstPostRaw = await sendBrowserCommand(playerPage, {
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     command: submitPostCommand,
     commandId: retryCommandId,
   });
   const retryPostRaw = await sendBrowserCommand(playerPage, {
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     command: submitPostCommand,
     commandId: retryCommandId,
   });
@@ -9877,12 +9901,12 @@ async function verifyConcurrentHostPromptSelectionRace({
   const slotTwoHostPage = await hostContext.newPage();
   const playerEntries = {};
   try {
-    for (const [key, principalUserId] of [
+    for (const [key, principalId] of [
       ["slotOne", "player-mira"],
       ["slotTwo", "player-target"],
     ]) {
       const session = await createAccountLoginCredential({
-        principalUserId,
+        principalId,
         returnTo: `/g/${raceGame}`,
         expectedCapabilityKind: "SlotOccupant",
       });
@@ -10166,8 +10190,8 @@ async function seedHostDecidesPromptRaceGame({ game }) {
     ["player-target", "slot-2", "slot-1"],
     ["player-goon-a", "slot-3", "slot-1"],
   ];
-  for (const [principalUserId, actorSlot, targetSlot] of votes) {
-    await sendCommand(principalUserId, {
+  for (const [principalId, actorSlot, targetSlot] of votes) {
+    await sendCommand(principalId, {
       SubmitVote: {
         game,
         actor_slot: actorSlot,
@@ -10420,8 +10444,8 @@ async function seedHostPromptRecoveryGame({ promptGame, promptId }) {
     ["host_h", { ResolvePhase: { game: promptGame, seed: 7421 } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of plan) {
+    commands.push(await sendCommand(principalId, command));
   }
   return {
     game: promptGame,
@@ -11261,8 +11285,8 @@ async function seedHostCompleteRecoveryGame({ completeGame }) {
     ["host_h", { StartGame: { game: completeGame, phase: "D01" } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of plan) {
+    commands.push(await sendCommand(principalId, command));
   }
   return {
     game: completeGame,
@@ -11364,8 +11388,8 @@ async function seedPlayerEndgameHistoryRecoveryGame({ completeGame }) {
     ["host_h", { UnlockThread: { game: completeGame } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of plan) {
+    commands.push(await sendCommand(principalId, command));
   }
   return {
     game: completeGame,
@@ -11419,7 +11443,7 @@ async function verifyConcurrentPlayerCompleteRace({
     const completeCommandId = crypto.randomUUID();
     const [postRaw, completeRaw] = await Promise.all([
       sendBrowserCommand(playerRacePage, {
-        principalUserId: "player-mira",
+        principalId: "player-mira",
         command: {
           SubmitPost: {
             game: completeGame,
@@ -11432,7 +11456,7 @@ async function verifyConcurrentPlayerCompleteRace({
         commandId: postCommandId,
       }),
       sendBrowserCommand(hostRacePage, {
-        principalUserId: "host_h",
+        principalId: "host_h",
         command: { CompleteGame: { game: completeGame } },
         commandId: completeCommandId,
       }),
@@ -12388,8 +12412,8 @@ async function playerCommandControlState(page, action) {
 
 async function seedHostPublishRaceGame({ publishRaceGame }) {
   const commands = [];
-  for (const [principalUserId, command] of seedCommandPlanForGame(publishRaceGame)) {
-    commands.push(await sendCommand(principalUserId, command));
+  for (const [principalId, command] of seedCommandPlanForGame(publishRaceGame)) {
+    commands.push(await sendCommand(principalId, command));
   }
   return {
     game: publishRaceGame,
@@ -12450,12 +12474,12 @@ async function verifyConcurrentHostPublishRace({
     const publishCommand = { PublishVotecount: { game: publishRaceGame } };
     const [firstRaw, secondRaw] = await Promise.all([
       sendBrowserCommand(firstHostPage, {
-        principalUserId: "host_h",
+        principalId: "host_h",
         command: publishCommand,
         commandId: firstCommandId,
       }),
       sendBrowserCommand(secondHostPage, {
-        principalUserId: "host_h",
+        principalId: "host_h",
         command: publishCommand,
         commandId: secondCommandId,
       }),
@@ -12817,7 +12841,7 @@ async function verifyStaleHostPublishAfterVotecountChange({
     const staleBody = officialVotecountBodyFromRows("D02", setup.votecountRows);
     const changeCommandId = crypto.randomUUID();
     const changeVoteRaw = await sendBrowserCommand(playerPage, {
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       command: {
         SubmitVote: {
           game,
@@ -12923,7 +12947,7 @@ async function verifyStaleHostPublishAfterVotecountChange({
       }));
     const restoreCommandId = crypto.randomUUID();
     const restoreVoteRaw = await sendBrowserCommand(playerPage, {
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       command: {
         SubmitVote: {
           game,
@@ -13408,7 +13432,7 @@ async function verifyHostSlotLifecycleControl({
   const actionControlCount = await playerPage.locator('[data-action^="submit_action"]').count();
   const directPostCommandId = crypto.randomUUID();
   const directPostRaw = await sendBrowserCommand(playerPage, {
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     commandId: directPostCommandId,
     command: {
       SubmitPost: {
@@ -13826,8 +13850,8 @@ async function verifySeededReplacementConsole({
     });
     if (
       hostIssuedInvite?.status !== "passed" ||
-      hostIssuedInvite?.session?.principalUserId !== "player-rowan" ||
-      hostIssuedInvite?.session?.issuedBy?.principalUserId !== "host_h" ||
+      hostIssuedInvite?.session?.principalId !== "player-rowan" ||
+      hostIssuedInvite?.session?.issuedBy?.principalId !== "host_h" ||
       hostIssuedInvite?.session?.issuedBy?.capabilityKind !== "HostOf" ||
       hostIssuedInvite?.session?.returnTo !== `/g/${game}` ||
       pendingIncomingPlayer?.status !== "passed" ||
@@ -13861,14 +13885,14 @@ async function verifySeededReplacementConsole({
       replacementIdempotentRetry?.apiSlotAfterRetry?.assigned_principal_id !==
         "player-rowan" ||
       staleHostInviteRecovery?.status !== "passed" ||
-      staleHostInviteRecovery?.beforeSubmit?.principalUserId !== "player-mira" ||
+      staleHostInviteRecovery?.beforeSubmit?.principalId !== PLAYER_MIRA_PRINCIPAL_ID ||
       staleHostInviteRecovery?.reject?.message?.includes("Invite target is stale") !==
         true ||
       staleHostInviteRecovery?.reject?.urlRendered !== false ||
       staleHostInviteRecovery?.retry?.state !== "ack" ||
-      staleHostInviteRecovery?.retry?.target?.principalUserId !== "player-rowan" ||
-      staleHostInviteRecovery?.retry?.target?.expectedOccupantUserId !==
-        "player-rowan" ||
+      staleHostInviteRecovery?.retry?.target?.principalId !== PLAYER_ROWAN_PRINCIPAL_ID ||
+      staleHostInviteRecovery?.retry?.target?.expectedOccupantPrincipalId !==
+        PLAYER_ROWAN_PRINCIPAL_ID ||
       staleHostInviteRecovery?.retry?.target?.slotId !== "slot-7" ||
       staleHostInviteRecovery?.retry?.loginUrl?.includes(`invite=player-${game}-`) !==
         true ||
@@ -13881,7 +13905,7 @@ async function verifySeededReplacementConsole({
         "player-rowan" ||
       staleReplacementAfterSuccess?.staleOutgoingPlayer?.recoveredCommandState
         ?.actorStatus !== "replaced" ||
-      incomingPlayer?.browserEntry?.principalUserId !== "player-rowan" ||
+      incomingPlayer?.browserEntry?.principalId !== "player-rowan" ||
       incomingPlayer?.commandState?.actorSlot !== "slot-7" ||
       incomingPlayer?.postStatus?.state !== "ack" ||
       incomingPlayer?.vote?.serverEnvelope?.body?.kind !== "Ack" ||
@@ -13893,7 +13917,7 @@ async function verifySeededReplacementConsole({
       stalePrivateChannel?.staleControlCounts?.actionButtons !== 0 ||
       stalePrivateChannel?.rowanRoute?.channelContextId !== factionDayChatChannel ||
       stalePrivateChannel?.rowanPost?.state !== "ack" ||
-      stalePrivateChannel?.rowanPost?.requestEnvelope?.body?.body?.principal_user_id !==
+      stalePrivateChannel?.rowanPost?.requestEnvelope?.body?.body?.principal_id !==
         undefined ||
       stalePrivateChannel?.rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost
         ?.channel_id !== factionDayChatChannel ||
@@ -13919,12 +13943,12 @@ async function verifySeededReplacementConsole({
       replacementSessionRevocation?.controlCounts?.actionButtons !== 0 ||
       replacementSessionRefresh?.status !== "passed" ||
       replacementSessionRefresh?.session?.credentialKind !== "account" ||
-      replacementSessionRefresh?.session?.principalUserId !== "player-rowan" ||
+      replacementSessionRefresh?.session?.principalId !== "player-rowan" ||
       replacementSessionRefresh?.login?.prefilledAccountId !== true ||
       replacementSessionRefresh?.login?.submittedAccountPassword !== true ||
       replacementSessionRefresh?.login?.usedInviteToken !== false ||
       replacementSessionRefresh?.login?.usedSessionGrant !== false ||
-      replacementSessionRefresh?.browserEntry?.principalUserId !== "player-rowan" ||
+      replacementSessionRefresh?.browserEntry?.principalId !== "player-rowan" ||
       replacementSessionRefresh?.browserEntry?.cookie?.valuePrefix !== "fmss_" ||
       replacementSessionRefresh?.browserEntry?.capabilityKinds?.includes(
         "SlotOccupant",
@@ -13943,7 +13967,7 @@ async function verifySeededReplacementConsole({
       replacementStaleSessionAfterRefresh?.freshRoleUrlHasAccount !== true ||
       replacementStaleSessionAfterRefresh?.staleCookie?.valuePrefix !== "fmss_" ||
       replacementReconnectRecovery?.status !== "passed" ||
-      replacementReconnectRecovery?.principalUserId !== "player-rowan" ||
+      replacementReconnectRecovery?.principalId !== "player-rowan" ||
       replacementReconnectRecovery?.actorSlot !== "slot-7" ||
       replacementReconnectRecovery?.reconnectingStatus?.state !== "reconnecting" ||
       replacementReconnectRecovery?.reconnectRecoveryEvent?.state !== "recovered" ||
@@ -14043,7 +14067,7 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
   const returnTo = loginUrl.searchParams.get("returnTo");
   const accountId = loginUrl.searchParams.get("account");
   const session = {
-    principalUserId: "player-rowan",
+    principalId: "player-rowan",
     credentialKind: "invite",
     token: inviteToken,
     inviteToken,
@@ -14055,7 +14079,7 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
     expectedCapabilityKind: "SlotOccupant",
     globalCapabilities: [],
     issuedBy: {
-      principalUserId: "host_h",
+      principalId: "host_h",
       capabilityKind: "HostOf",
       game,
       surface: "host-replacement-invite-panel",
@@ -14119,8 +14143,8 @@ async function openStaleHostInvitePage({ browser, hostPage, game, frontendBaseUr
       .fill(localAccountForPrincipal("player-mira").accountId);
     const before = await readPlayerInviteTarget(page);
     if (
-      before.principalUserId !== "player-mira" ||
-      before.expectedOccupantUserId !== "player-mira" ||
+      before.principalId !== PLAYER_MIRA_PRINCIPAL_ID ||
+      before.expectedOccupantPrincipalId !== PLAYER_MIRA_PRINCIPAL_ID ||
       before.slotId !== "slot-7"
     ) {
       throw new Error(
@@ -14146,17 +14170,17 @@ async function readPlayerInviteTarget(page) {
   return {
     targetLabel: await page.getByTestId("host-player-invite-target").innerText(),
     accountId: await page.getByTestId("host-player-invite-account").inputValue(),
-    principalUserId: await page
+    principalId: await page
       .getByTestId("host-player-invite-panel")
-      .locator('input[name="principalUserId"]')
+      .locator('input[name="principalId"]')
       .inputValue(),
     slotId: await page
       .getByTestId("host-player-invite-panel")
       .locator('input[name="slotId"]')
       .inputValue(),
-    expectedOccupantUserId: await page
+    expectedOccupantPrincipalId: await page
       .getByTestId("host-player-invite-panel")
-      .locator('input[name="expectedOccupantUserId"]')
+      .locator('input[name="expectedOccupantPrincipalId"]')
       .inputValue(),
   };
 }
@@ -14182,17 +14206,17 @@ async function verifyStaleHostPlayerInviteRecovery({
   const retry = staleHostInvitePage.getByTestId("host-player-invite-retry-submit");
   await retry.waitFor({ state: "visible" });
   const retryTarget = {
-    principalUserId: await staleHostInvitePage
+    principalId: await staleHostInvitePage
       .getByTestId("host-player-invite-retry")
-      .locator('input[name="principalUserId"]')
+      .locator('input[name="principalId"]')
       .inputValue(),
     slotId: await staleHostInvitePage
       .getByTestId("host-player-invite-retry")
       .locator('input[name="slotId"]')
       .inputValue(),
-    expectedOccupantUserId: await staleHostInvitePage
+    expectedOccupantPrincipalId: await staleHostInvitePage
       .getByTestId("host-player-invite-retry")
-      .locator('input[name="expectedOccupantUserId"]')
+      .locator('input[name="expectedOccupantPrincipalId"]')
       .inputValue(),
   };
   const retryAccount = localAccountForPrincipal("player-rowan");
@@ -14273,7 +14297,7 @@ async function verifyPendingReplacementPlayer({
         context,
         page,
         verification: {
-          principalUserId: pending.principalUserId,
+          principalId: pending.principalId,
           capabilityKinds: pending.capabilityKinds,
           cookie: pending.cookie,
         },
@@ -14381,7 +14405,7 @@ async function verifyInvalidReplacementRecovery({
     attempt.invalidReplacement.serverEnvelope?.body?.kind !== "Reject" ||
     attempt.invalidReplacement.actionId !== invalidActionId ||
     attempt.reject?.error !== "InvalidTarget" ||
-    attempt.invalidReplacement.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+    attempt.invalidReplacement.requestEnvelope?.body?.body?.principal_id !== undefined ||
     isOpaquePersonaId(
       attempt.invalidReplacement.requestEnvelope?.body?.body?.command
         ?.ProcessReplacement?.outgoing_persona_id,
@@ -14390,7 +14414,7 @@ async function verifyInvalidReplacementRecovery({
     attempt.hostProjectionAfterReject?.assignedPrincipalId !== "player-mira" ||
     apiSlotAfterReject?.slot_id !== "slot-7" ||
     apiSlotAfterReject?.assigned_principal_id !== "player-mira" ||
-    pendingAfterReject.principalUserId !== "player-rowan" ||
+    pendingAfterReject.principalId !== "player-rowan" ||
     pendingAfterReject.capabilityKinds.length !== 0 ||
     pendingAfterReject.capabilityLabel !== `PendingReplacement(${game})` ||
     pendingAfterReject.commandState?.actorStatus !== "pending_replacement" ||
@@ -14447,7 +14471,7 @@ async function verifyStaleReplacementAfterSuccess({
     attempt.invalidReplacement.serverEnvelope?.body?.kind !== "Reject" ||
     attempt.invalidReplacement.actionId !== staleActionId ||
     attempt.reject?.error !== "InvalidTarget" ||
-    attempt.invalidReplacement.requestEnvelope?.body?.body?.principal_user_id !==
+    attempt.invalidReplacement.requestEnvelope?.body?.body?.principal_id !==
       undefined ||
     isOpaquePersonaId(
       attempt.invalidReplacement.requestEnvelope?.body?.body?.command
@@ -14490,7 +14514,7 @@ async function verifyReplacementIdempotentRetry({
   const commandId = originalBody?.command_id;
   const command = originalBody?.command;
   const retry = await sendBrowserCommand(hostPage, {
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandId,
     command,
   });
@@ -14697,7 +14721,7 @@ async function readPendingReplacementSurface({
     () => window.__fmarchPlayerColdLoadEndpoints,
   );
   if (
-    resolved.principal_user_id !== "player-rowan" ||
+    resolved.principal_id !== "player-rowan" ||
     capabilityKinds.length !== 0 ||
     capabilityLabel !== `PendingReplacement(${game})` ||
     !routeStateText.includes("Replacement invite accepted") ||
@@ -14720,7 +14744,7 @@ async function readPendingReplacementSurface({
     );
   }
   return {
-    principalUserId: resolved.principal_user_id,
+    principalId: resolved.principal_id,
     capabilityKinds,
     capabilityLabel,
     routeStateText,
@@ -14776,7 +14800,7 @@ async function verifyIncomingReplacementPlayer({
       headers: { authorization: `Bearer ${sessionCookie.value}` },
     });
     const browserEntry = {
-      principalUserId: resolved.principal_user_id,
+      principalId: resolved.principal_id,
       capabilityKinds: (resolved.capabilities ?? []).map((capability) => capability.kind),
       cookie: {
         httpOnly: sessionCookie.httpOnly,
@@ -14832,7 +14856,7 @@ async function verifyIncomingReplacementPlayer({
       ),
     rowanPostBody);
     const vote = await sendBrowserCommand(page, {
-      principalUserId: "player-rowan",
+      principalId: "player-rowan",
       commandId: crypto.randomUUID(),
       command: {
         SubmitVote: {
@@ -14885,7 +14909,7 @@ async function verifyIncomingReplacementPlayer({
       !capabilityLabel?.includes("SlotOccupant") ||
       stableHistoryVisible !== true ||
       postStatus?.state !== "ack" ||
-      postStatus?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+      postStatus?.requestEnvelope?.body?.body?.principal_id !== undefined ||
       postStatus?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
         "slot-7" ||
       rowanProjectedPost?.author?.kind !== "slot" ||
@@ -14894,7 +14918,7 @@ async function verifyIncomingReplacementPlayer({
         (target) =>
           target.kind === "slot" && target.slotId === replacementVoteTarget.slotId,
       ) !== true ||
-      vote.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+      vote.requestEnvelope?.body?.body?.principal_id !== undefined ||
       vote.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !== "slot-7" ||
       vote.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
         replacementVoteTarget.slotId ||
@@ -14954,7 +14978,7 @@ async function verifyReplacementStalePrivateChannel({
   const stalePostBody = `Stale Mira private post after replacement ${crypto.randomUUID()}.`;
   const stalePostCommandId = crypto.randomUUID();
   const stalePostRaw = await sendBrowserCommand(staleOutgoingPage, {
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     commandId: stalePostCommandId,
     command: {
       SubmitPost: {
@@ -15074,7 +15098,7 @@ async function verifyReplacementStalePrivateChannel({
       `ChannelMember(${factionDayChatChannel})`,
     ) ||
     rowanPost?.state !== "ack" ||
-    rowanPost?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+    rowanPost?.requestEnvelope?.body?.body?.principal_id !== undefined ||
     rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
       factionDayChatChannel ||
     rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
@@ -15275,7 +15299,7 @@ async function verifyReplacementSessionRevocationRecovery({
     timeout: 15000,
   });
   const revokedPrincipalUserId =
-    revocation.principal_user_id ?? revocation.principalUserId ?? null;
+    revocation.principal_id ?? revocation.principalId ?? null;
   const unauthorized = await fetchWithTimeout(
     `${apiBaseUrl}/auth/session?game=${game}`,
     {
@@ -15469,7 +15493,7 @@ async function verifyReplacementSessionRefreshRecovery({
     throw new Error("replacement session refresh proof requires an open browser entry");
   }
   const session = await createAccountLoginCredential({
-    principalUserId: "player-rowan",
+    principalId: "player-rowan",
     returnTo: `/g/${game}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -15501,7 +15525,7 @@ async function verifyReplacementSessionRefreshRecovery({
     headers: { authorization: `Bearer ${sessionCookie.value}` },
   });
   const browserEntry = {
-    principalUserId: resolved.principal_user_id,
+    principalId: resolved.principal_id,
     capabilityKinds: (resolved.capabilities ?? []).map((capability) => capability.kind),
     cookie: {
       httpOnly: sessionCookie.httpOnly,
@@ -15570,17 +15594,17 @@ async function verifyReplacementSessionRefreshRecovery({
   };
   if (
     session.credentialKind !== "account" ||
-    session.principalUserId !== "player-rowan" ||
+    session.principalId !== "player-rowan" ||
     tokenFieldCount !== 0 ||
     prefilledAccountId !== session.accountId ||
-    browserEntry.principalUserId !== "player-rowan" ||
+    browserEntry.principalId !== "player-rowan" ||
     !browserEntry.capabilityKinds.includes("SlotOccupant") ||
     commandState?.actorSlot !== "slot-7" ||
     commandState?.actorAlive !== true ||
     !capabilityLabel?.includes("SlotOccupant") ||
     controlCounts.primaryButtons <= 0 ||
     postStatus?.state !== "ack" ||
-    postStatus?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+    postStatus?.requestEnvelope?.body?.body?.principal_id !== undefined ||
     postStatus?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
       "slot-7" ||
     rowanProjectedPost?.author?.kind !== "slot" ||
@@ -15639,19 +15663,19 @@ async function verifyReplacementReconnectRecovery({ replacementEntry, game }) {
   const reconnect = await verifyRoleReconnectRecovery({
     page,
     game,
-    principalUserId: "player-rowan",
+    principalId: "player-rowan",
     actorSlot: "slot-7",
     postPrefix: "Replacement Rowan reconnect proof",
   });
   if (
     reconnect.status !== "passed" ||
-    reconnect.principalUserId !== "player-rowan" ||
+    reconnect.principalId !== "player-rowan" ||
     reconnect.actorSlot !== "slot-7" ||
     reconnect.reconnectingStatus?.state !== "reconnecting" ||
     reconnect.reconnectRecoveryEvent?.state !== "recovered" ||
     !isPositiveReconnectAttempt(reconnect.reconnectRecoveryEvent?.attempt) ||
     reconnect.recoveredSnapshotContainsPost !== true ||
-    reconnect.reconnectCommand?.principalUserId !== "player-rowan" ||
+    reconnect.reconnectCommand?.principalId !== "player-rowan" ||
     reconnect.reconnectCommand?.command?.SubmitPost?.actor_slot !== "slot-7" ||
     reconnect.recoveredCommandState?.actorSlot !== "slot-7" ||
     reconnect.recoveredCommandState?.actorAlive !== true
@@ -15732,7 +15756,7 @@ async function submitStaleOutgoingReplacementRecovery({
   );
   const staleActionCommandId = crypto.randomUUID();
   const staleActionRaw = await sendBrowserCommand(staleOutgoingPage, {
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     commandId: staleActionCommandId,
     command: {
       SubmitAction: {
@@ -16044,18 +16068,18 @@ async function seedConcurrentHostLifecycleRaceGame({ raceGame }) {
     ["host_h", { AdvancePhase: { game: raceGame } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of plan) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent host lifecycle seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: raceGame,
@@ -16072,18 +16096,18 @@ async function seedConcurrentHostResolveRaceGame({ raceGame }) {
     ["host_h", { AdvancePhase: { game: raceGame } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of plan) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent host resolve seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: raceGame,
@@ -16105,7 +16129,7 @@ async function seedLaterPhaseCohostDeadlineGame({ game }) {
   if (result.body?.kind === "Reject") {
     throw new Error(
       `cohost later-phase deadline seed command rejected: ${JSON.stringify({
-        principalUserId: "host_h",
+        principalId: "host_h",
         command,
         result,
       })}`,
@@ -16248,18 +16272,18 @@ async function seedConcurrentHostAdvanceRaceGame({ raceGame }) {
     ["host_h", { ResolvePhase: { game: raceGame, seed: 918275 } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of plan) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent host advance seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: raceGame,
@@ -16274,18 +16298,18 @@ async function seedConcurrentHostDeadlineAdvanceRaceGame({ raceGame }) {
     ["host_h", { ResolvePhase: { game: raceGame, seed: 918_301 } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of plan) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent host deadline advance seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: raceGame,
@@ -16511,7 +16535,7 @@ async function submitConcurrentHostLifecycleRace({
     .count();
   const directPostCommandId = crypto.randomUUID();
   const directPostRaw = await sendBrowserCommand(affectedPlayerPage, {
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     commandId: directPostCommandId,
     command: {
       SubmitPost: {
@@ -18911,7 +18935,7 @@ async function submitStaleCohostDeadlineRecovery({
   const hostStateAfterReject = await fetchHostConsoleState({
     apiBaseUrl,
     game,
-    principalUserId: "cohost_c",
+    principalId: "cohost_c",
   });
   const staleClickBrowserProof = {
     roleUrl: staleCohostDeadlineSetup.roleUrl,
@@ -18959,7 +18983,7 @@ async function submitStaleCohostDeadlineRecovery({
   const hostStateAfterReload = await fetchHostConsoleState({
     apiBaseUrl,
     game,
-    principalUserId: "cohost_c",
+    principalId: "cohost_c",
   });
   const staleCohostDeadlineReloadAfterReject = {
     status: "passed",
@@ -18986,7 +19010,7 @@ async function submitStaleCohostDeadlineRecovery({
   const hostStateAfterReconnect = await fetchHostConsoleState({
     apiBaseUrl,
     game,
-    principalUserId: "cohost_c",
+    principalId: "cohost_c",
   });
   if (
     typeof staleCohostDeadlineSetup.roleUrl !== "string" ||
@@ -19095,7 +19119,7 @@ async function verifyPlayerReconnectRecovery({ playerPage, game }) {
   return await verifyRoleReconnectRecovery({
     page: playerPage,
     game,
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     actorSlot: "slot-7",
     postPrefix: "Player reconnect proof",
     navigate: true,
@@ -19476,7 +19500,7 @@ async function verifyHostReconnectRecovery({ page, game, navigate = false }) {
 async function verifyRoleReconnectRecovery({
   page,
   game,
-  principalUserId,
+  principalId,
   actorSlot,
   postPrefix,
   navigate = false,
@@ -19496,7 +19520,7 @@ async function verifyRoleReconnectRecovery({
     return window.__fmarchLiveProjectionStatus;
   });
   const reconnectPostBody = `${postPrefix} from dev:test-game ${crypto.randomUUID()}.`;
-  const reconnectCommand = await sendCommand(principalUserId, {
+  const reconnectCommand = await sendCommand(principalId, {
     SubmitPost: {
       game,
       channel_id: channelId,
@@ -19552,7 +19576,7 @@ async function verifyRoleReconnectRecovery({
   );
   return {
     status: "passed",
-    principalUserId,
+    principalId,
     actorSlot,
     reconnectingStatus,
     reconnectCommand,
@@ -19597,7 +19621,7 @@ async function verifyStalePlayerVoteRecovery({
   );
   const lockCommandId = crypto.randomUUID();
   const lockRaw = await sendBrowserCommand(hostPage, {
-    principalUserId: "host_h",
+    principalId: "host_h",
     command: { LockThread: { game } },
     commandId: lockCommandId,
   });
@@ -19681,7 +19705,7 @@ async function verifyStalePlayerVoteRecovery({
 
   const unlockCommandId = crypto.randomUUID();
   const unlockRaw = await sendBrowserCommand(hostPage, {
-    principalUserId: "host_h",
+    principalId: "host_h",
     command: { UnlockThread: { game } },
     commandId: unlockCommandId,
   });
@@ -19776,7 +19800,7 @@ async function verifyStalePlayerVoteAfterVotecountChange({
     );
     const actionVoteCommandId = crypto.randomUUID();
     const actionVoteRaw = await sendBrowserCommand(actionPage, {
-      principalUserId: "player-goon-a",
+      principalId: "player-goon-a",
       command: {
         SubmitVote: {
           game,
@@ -19875,7 +19899,7 @@ async function verifyStalePlayerVoteAfterVotecountChange({
     );
     const withdrawPlayerCommandId = crypto.randomUUID();
     const withdrawPlayerRaw = await sendBrowserCommand(playerPage, {
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       command: {
         WithdrawVote: {
           game,
@@ -19892,7 +19916,7 @@ async function verifyStalePlayerVoteAfterVotecountChange({
     });
     const withdrawActionCommandId = crypto.randomUUID();
     const withdrawActionRaw = await sendBrowserCommand(actionPage, {
-      principalUserId: "player-goon-a",
+      principalId: "player-goon-a",
       command: {
         WithdrawVote: {
           game,
@@ -20065,7 +20089,7 @@ async function verifyStalePlayerWithdrawAfterVoteChange({
     );
     const liveChangeCommandId = crypto.randomUUID();
     const liveChangeRaw = await sendBrowserCommand(playerPage, {
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       command: {
         SubmitVote: {
           game,
@@ -20238,12 +20262,12 @@ async function openResolvedDayStalePlayerProof({
     slotFourRoleKey,
   });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: "host_h",
+    principalId: "host_h",
     returnTo: `/g/${phaseClosureGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const playerSession = await createAccountLoginCredential({
-    principalUserId: "player-mira",
+    principalId: "player-mira",
     returnTo: `/g/${phaseClosureGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -20586,12 +20610,12 @@ async function verifyStalePlayerWithdrawAfterPhaseClosure({
       game: phaseClosureGame,
       seed,
       hostSession: {
-        principalUserId: hostSession.principalUserId,
+        principalId: hostSession.principalId,
         credentialKind: hostSession.credentialKind,
         expectedCapabilityKind: hostSession.expectedCapabilityKind,
       },
       playerSession: {
-        principalUserId: playerSession.principalUserId,
+        principalId: playerSession.principalId,
         credentialKind: playerSession.credentialKind,
         expectedCapabilityKind: playerSession.expectedCapabilityKind,
       },
@@ -20815,12 +20839,12 @@ async function verifyStalePlayerVoteAfterPhaseClosure({
       game: phaseClosureGame,
       seed,
       hostSession: {
-        principalUserId: hostSession.principalUserId,
+        principalId: hostSession.principalId,
         credentialKind: hostSession.credentialKind,
         expectedCapabilityKind: hostSession.expectedCapabilityKind,
       },
       playerSession: {
-        principalUserId: playerSession.principalUserId,
+        principalId: playerSession.principalId,
         credentialKind: playerSession.credentialKind,
         expectedCapabilityKind: playerSession.expectedCapabilityKind,
       },
@@ -21050,12 +21074,12 @@ async function verifyStalePlayerPostAfterPhaseClosure({
       game: phaseClosureGame,
       seed,
       hostSession: {
-        principalUserId: hostSession.principalUserId,
+        principalId: hostSession.principalId,
         credentialKind: hostSession.credentialKind,
         expectedCapabilityKind: hostSession.expectedCapabilityKind,
       },
       playerSession: {
-        principalUserId: playerSession.principalUserId,
+        principalId: playerSession.principalId,
         credentialKind: playerSession.credentialKind,
         expectedCapabilityKind: playerSession.expectedCapabilityKind,
       },
@@ -21104,12 +21128,12 @@ async function verifyConcurrentPlayerVoteResolveRace({
   const raceGame = crypto.randomUUID();
   const seed = await seedDayVoteResolutionGame({ game: raceGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: "host_h",
+    principalId: "host_h",
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const playerSession = await createAccountLoginCredential({
-    principalUserId: "player-goon-a",
+    principalId: "player-goon-a",
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -21184,7 +21208,7 @@ async function verifyConcurrentPlayerVoteResolveRace({
     const resolveCommandId = crypto.randomUUID();
     const [voteRaw, resolveRaw] = await Promise.all([
       sendBrowserCommand(playerEntry.page, {
-        principalUserId: "player-goon-a",
+        principalId: "player-goon-a",
         command: {
           SubmitVote: {
             game: raceGame,
@@ -21195,7 +21219,7 @@ async function verifyConcurrentPlayerVoteResolveRace({
         commandId: voteCommandId,
       }),
       sendBrowserCommand(hostEntry.page, {
-        principalUserId: "host_h",
+        principalId: "host_h",
         command: { ResolvePhase: { game: raceGame, seed: 71_004 } },
         commandId: resolveCommandId,
       }),
@@ -21386,12 +21410,12 @@ async function verifyConcurrentPlayerVoteResolveRace({
       game: raceGame,
       seed,
       hostSession: {
-        principalUserId: hostSession.principalUserId,
+        principalId: hostSession.principalId,
         credentialKind: hostSession.credentialKind,
         expectedCapabilityKind: hostSession.expectedCapabilityKind,
       },
       playerSession: {
-        principalUserId: playerSession.principalUserId,
+        principalId: playerSession.principalId,
         credentialKind: playerSession.credentialKind,
         expectedCapabilityKind: playerSession.expectedCapabilityKind,
       },
@@ -21435,12 +21459,12 @@ async function verifyConcurrentPlayerActionAdvanceRace({
   const raceGame = crypto.randomUUID();
   const seed = await seedPlayerActionAdvanceRaceGame({ raceGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: "host_h",
+    principalId: "host_h",
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const actionSession = await createAccountLoginCredential({
-    principalUserId: "player-goon-a",
+    principalId: "player-goon-a",
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -21688,12 +21712,12 @@ async function verifyConcurrentPlayerActionAdvanceRace({
       game: raceGame,
       seed,
       hostSession: {
-        principalUserId: hostSession.principalUserId,
+        principalId: hostSession.principalId,
         credentialKind: hostSession.credentialKind,
         expectedCapabilityKind: hostSession.expectedCapabilityKind,
       },
       actionSession: {
-        principalUserId: actionSession.principalUserId,
+        principalId: actionSession.principalId,
         credentialKind: actionSession.credentialKind,
         expectedCapabilityKind: actionSession.expectedCapabilityKind,
       },
@@ -21733,18 +21757,18 @@ async function seedPlayerActionAdvanceRaceGame({ raceGame }) {
     ["host_h", { AdvancePhase: { game: raceGame } }],
   ];
   const commands = [];
-  for (const [principalUserId, command] of plan) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of plan) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent player action/advance seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: raceGame,
@@ -21764,12 +21788,12 @@ async function verifyConcurrentCohostDeadlineResolveRace({
   const deadlineAt = 1_781_928_000;
   const seed = await seedCohostDeadlineResolveRaceGame({ raceGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: "host_h",
+    principalId: "host_h",
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const cohostSession = await createAccountLoginCredential({
-    principalUserId: "cohost_c",
+    principalId: "cohost_c",
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "CohostOf",
   });
@@ -21998,7 +22022,7 @@ async function verifyConcurrentCohostDeadlineResolveRace({
     const cohostStateAfterRace = await fetchHostConsoleState({
       apiBaseUrl,
       game: raceGame,
-      principalUserId: "cohost_c",
+      principalId: "cohost_c",
       sessionToken: await browserSessionToken(cohostEntry.page),
     });
     const expectedDeadline = deadlineAcked ? deadlineAt : null;
@@ -22102,18 +22126,18 @@ async function verifyConcurrentCohostDeadlineResolveRace({
 
 async function seedCohostDeadlineResolveRaceGame({ raceGame }) {
   const commands = [];
-  for (const [principalUserId, command] of seedCommandPlanForGame(raceGame)) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of seedCommandPlanForGame(raceGame)) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent cohost deadline/resolve seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: raceGame,
@@ -22134,12 +22158,12 @@ async function verifyConcurrentReplacementPrivatePostRace({
   const raceGame = crypto.randomUUID();
   const seed = await seedReplacementPrivatePostRaceGame({ raceGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: scenario.hostPrincipalUserId,
+    principalId: scenario.hostPrincipalUserId,
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const stalePlayerSession = await createAccountLoginCredential({
-    principalUserId: scenario.staleOutgoingPrincipalUserId,
+    principalId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -22168,13 +22192,13 @@ async function verifyConcurrentReplacementPrivatePostRace({
     ]);
     await Promise.all([
       hostEntry.page.waitForFunction(
-        ({ actorSlot, principalUserId }) =>
+        ({ actorSlot, principalId }) =>
           window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
           window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
-            principalUserId,
+            principalId,
         {
           actorSlot: scenario.actorSlot,
-          principalUserId: scenario.staleOutgoingPrincipalUserId,
+          principalId: scenario.staleOutgoingPrincipalUserId,
         },
       ),
       playerEntry.page.waitForFunction(
@@ -22210,7 +22234,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
     const replacementCommandId = crypto.randomUUID();
     const [postRaw, replacementRaw] = await Promise.all([
       sendBrowserCommand(playerEntry.page, {
-        principalUserId: scenario.staleOutgoingPrincipalUserId,
+        principalId: scenario.staleOutgoingPrincipalUserId,
         commandId: postCommandId,
         command: {
           SubmitPost: {
@@ -22222,7 +22246,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
         },
       }),
       sendBrowserCommand(hostEntry.page, {
-        principalUserId: scenario.hostPrincipalUserId,
+        principalId: scenario.hostPrincipalUserId,
         commandId: replacementCommandId,
         command: {
           ProcessReplacement: {
@@ -22309,13 +22333,13 @@ async function verifyConcurrentReplacementPrivatePostRace({
       waitUntil: "networkidle",
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, principalUserId }) =>
+      ({ actorSlot, principalId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
         window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
-          principalUserId,
+          principalId,
       {
         actorSlot: scenario.actorSlot,
-        principalUserId: scenario.replacementPrincipalUserId,
+        principalId: scenario.replacementPrincipalUserId,
       },
     );
     const hostReplacementAfterRace = await hostEntry.page.evaluate(
@@ -22443,17 +22467,17 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
     raceGame: privatePostGame,
   });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: scenario.hostPrincipalUserId,
+    principalId: scenario.hostPrincipalUserId,
     returnTo: `/g/${privatePostGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const staleOutgoingSession = await createAccountLoginCredential({
-    principalUserId: scenario.staleOutgoingPrincipalUserId,
+    principalId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${privatePostGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
   const replacementSession = await createAccountLoginCredential({
-    principalUserId: scenario.replacementPrincipalUserId,
+    principalId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${privatePostGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -22483,18 +22507,18 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       locked: false,
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, principalUserId }) =>
+      ({ actorSlot, principalId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
         window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
-          principalUserId,
+          principalId,
       {
         actorSlot: scenario.actorSlot,
-        principalUserId: scenario.staleOutgoingPrincipalUserId,
+        principalId: scenario.staleOutgoingPrincipalUserId,
       },
     );
     const replacementCommandId = crypto.randomUUID();
     const replacementRaw = await sendBrowserCommand(hostEntry.page, {
-      principalUserId: scenario.hostPrincipalUserId,
+      principalId: scenario.hostPrincipalUserId,
       commandId: replacementCommandId,
       command: {
         ProcessReplacement: {
@@ -22516,13 +22540,13 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       serverEnvelope: replacementRaw.serverEnvelope,
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, principalUserId }) =>
+      ({ actorSlot, principalId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
         window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
-          principalUserId,
+          principalId,
       {
         actorSlot: scenario.actorSlot,
-        principalUserId: scenario.replacementPrincipalUserId,
+        principalId: scenario.replacementPrincipalUserId,
       },
     );
     const hostReplacementAfterProcess = await hostEntry.page.evaluate(
@@ -22902,7 +22926,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       stalePost?.serverEnvelope?.body?.kind !== "Ack" ||
       !Array.isArray(stalePost?.streamSeqs) ||
       stalePost.streamSeqs.length === 0 ||
-      stalePost?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+      stalePost?.requestEnvelope?.body?.body?.principal_id !== undefined ||
       stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
         scenario.channelId ||
       stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
@@ -22954,7 +22978,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
         button.action?.startsWith("submit_vote"),
       ) ||
       privateReconnectAfterAck.reconnectingStatus?.state !== "reconnecting" ||
-      privateReconnectAfterAck.reconnectCommand?.principalUserId !==
+      privateReconnectAfterAck.reconnectCommand?.principalId !==
         scenario.replacementPrincipalUserId ||
       privateReconnectAfterAck.reconnectCommand?.command?.SubmitPost?.channel_id !==
         scenario.channelId ||
@@ -23090,17 +23114,17 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
   const completeGame = crypto.randomUUID();
   const seed = await seedReplacementPrivatePostRaceGame({ raceGame: completeGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: scenario.hostPrincipalUserId,
+    principalId: scenario.hostPrincipalUserId,
     returnTo: `/g/${completeGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const staleOutgoingSession = await createAccountLoginCredential({
-    principalUserId: scenario.staleOutgoingPrincipalUserId,
+    principalId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${completeGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
   const replacementSession = await createAccountLoginCredential({
-    principalUserId: scenario.replacementPrincipalUserId,
+    principalId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${completeGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -23130,18 +23154,18 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       locked: false,
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, principalUserId }) =>
+      ({ actorSlot, principalId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
         window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
-          principalUserId,
+          principalId,
       {
         actorSlot: scenario.actorSlot,
-        principalUserId: scenario.staleOutgoingPrincipalUserId,
+        principalId: scenario.staleOutgoingPrincipalUserId,
       },
     );
     const replacementCommandId = crypto.randomUUID();
     const replacementRaw = await sendBrowserCommand(hostEntry.page, {
-      principalUserId: scenario.hostPrincipalUserId,
+      principalId: scenario.hostPrincipalUserId,
       commandId: replacementCommandId,
       command: {
         ProcessReplacement: {
@@ -23163,13 +23187,13 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       serverEnvelope: replacementRaw.serverEnvelope,
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, principalUserId }) =>
+      ({ actorSlot, principalId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
         window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
-          principalUserId,
+          principalId,
       {
         actorSlot: scenario.actorSlot,
-        principalUserId: scenario.replacementPrincipalUserId,
+        principalId: scenario.replacementPrincipalUserId,
       },
     );
     const hostReplacementAfterProcess = await hostEntry.page.evaluate(
@@ -23454,7 +23478,7 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
       reject?.error !== scenario.commandError ||
       reject?.serverEnvelope?.body?.kind !== "Reject" ||
       Array.isArray(reject?.streamSeqs) ||
-      reject?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+      reject?.requestEnvelope?.body?.body?.principal_id !== undefined ||
       reject?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
         scenario.channelId ||
       reject?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
@@ -23590,18 +23614,18 @@ async function verifyStaleReplacementPrivatePostAfterComplete({
 
 async function seedReplacementPrivatePostRaceGame({ raceGame }) {
   const commands = [];
-  for (const [principalUserId, command] of seedCommandPlanForGame(raceGame)) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of seedCommandPlanForGame(raceGame)) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent replacement private-post seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: raceGame,
@@ -23622,12 +23646,12 @@ async function verifyConcurrentReplacementVoteRace({
   const raceGame = crypto.randomUUID();
   const seed = await seedReplacementVoteRaceGame({ raceGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: scenario.hostPrincipalUserId,
+    principalId: scenario.hostPrincipalUserId,
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const stalePlayerSession = await createAccountLoginCredential({
-    principalUserId: scenario.staleOutgoingPrincipalUserId,
+    principalId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -23654,13 +23678,13 @@ async function verifyConcurrentReplacementVoteRace({
     ]);
     await Promise.all([
       hostEntry.page.waitForFunction(
-        ({ actorSlot, principalUserId }) =>
+        ({ actorSlot, principalId }) =>
           window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
           window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
-            principalUserId,
+            principalId,
         {
           actorSlot: scenario.actorSlot,
-          principalUserId: scenario.staleOutgoingPrincipalUserId,
+          principalId: scenario.staleOutgoingPrincipalUserId,
         },
       ),
       playerEntry.page.waitForFunction(
@@ -23685,7 +23709,7 @@ async function verifyConcurrentReplacementVoteRace({
     const replacementCommandId = crypto.randomUUID();
     const [voteRaw, replacementRaw] = await Promise.all([
       sendBrowserCommand(playerEntry.page, {
-        principalUserId: scenario.staleOutgoingPrincipalUserId,
+        principalId: scenario.staleOutgoingPrincipalUserId,
         commandId: voteCommandId,
         command: {
           SubmitVote: {
@@ -23696,7 +23720,7 @@ async function verifyConcurrentReplacementVoteRace({
         },
       }),
       sendBrowserCommand(hostEntry.page, {
-        principalUserId: scenario.hostPrincipalUserId,
+        principalId: scenario.hostPrincipalUserId,
         commandId: replacementCommandId,
         command: {
           ProcessReplacement: {
@@ -23784,13 +23808,13 @@ async function verifyConcurrentReplacementVoteRace({
       waitUntil: "networkidle",
     });
     await hostEntry.page.waitForFunction(
-      ({ actorSlot, principalUserId }) =>
+      ({ actorSlot, principalId }) =>
         window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
         window.__fmarchHostProjection?.replacement?.assignedPrincipalId ===
-          principalUserId,
+          principalId,
       {
         actorSlot: scenario.actorSlot,
-        principalUserId: scenario.replacementPrincipalUserId,
+        principalId: scenario.replacementPrincipalUserId,
       },
     );
     const hostReplacementAfterRace = await hostEntry.page.evaluate(
@@ -23877,18 +23901,18 @@ async function verifyConcurrentReplacementVoteRace({
 
 async function seedReplacementVoteRaceGame({ raceGame }) {
   const commands = [];
-  for (const [principalUserId, command] of seedCommandPlanForGame(raceGame)) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of seedCommandPlanForGame(raceGame)) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent replacement vote seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: raceGame,
@@ -23909,12 +23933,12 @@ async function verifyConcurrentReplacementActionRace({
   const raceGame = crypto.randomUUID();
   const seed = await seedReplacementActionRaceGame({ raceGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: scenario.hostPrincipalUserId,
+    principalId: scenario.hostPrincipalUserId,
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const stalePlayerSession = await createAccountLoginCredential({
-    principalUserId: scenario.staleOutgoingPrincipalUserId,
+    principalId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -23980,7 +24004,7 @@ async function verifyConcurrentReplacementActionRace({
     const replacementCommandId = crypto.randomUUID();
     const [actionRaw, replacementRaw] = await Promise.all([
       sendBrowserCommand(playerEntry.page, {
-        principalUserId: scenario.staleOutgoingPrincipalUserId,
+        principalId: scenario.staleOutgoingPrincipalUserId,
         commandId: actionCommandId,
         command: {
           SubmitAction: {
@@ -23993,7 +24017,7 @@ async function verifyConcurrentReplacementActionRace({
         },
       }),
       sendBrowserCommand(hostEntry.page, {
-        principalUserId: scenario.hostPrincipalUserId,
+        principalId: scenario.hostPrincipalUserId,
         commandId: replacementCommandId,
         command: {
           ProcessReplacement: {
@@ -24104,7 +24128,7 @@ async function verifyConcurrentReplacementActionRace({
     };
     const retryCommandId = crypto.randomUUID();
     const staleRetryRaw = await sendBrowserCommand(playerEntry.page, {
-      principalUserId: scenario.staleOutgoingPrincipalUserId,
+      principalId: scenario.staleOutgoingPrincipalUserId,
       commandId: retryCommandId,
       command: {
         SubmitAction: {
@@ -24135,7 +24159,7 @@ async function verifyConcurrentReplacementActionRace({
     );
     const currentCommandStateAfterRace = apiCurrentCommandStateStatus.body;
     const replacementSession = await createAccountLoginCredential({
-      principalUserId: scenario.replacementPrincipalUserId,
+      principalId: scenario.replacementPrincipalUserId,
       returnTo: `/g/${raceGame}`,
       expectedCapabilityKind: "SlotOccupant",
     });
@@ -24255,18 +24279,18 @@ async function seedReplacementActionRaceGame({ raceGame }) {
     ["host_h", { ResolvePhase: { game: raceGame, seed: 72_501 } }],
     ["host_h", { AdvancePhase: { game: raceGame } }],
   ];
-  for (const [principalUserId, command] of plan) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of plan) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent replacement action seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: raceGame,
@@ -24287,7 +24311,7 @@ async function verifyIncomingReplacementActionSubmission({
   const actionGame = crypto.randomUUID();
   const seed = await seedIncomingReplacementActionGame({ actionGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: scenario.hostPrincipalUserId,
+    principalId: scenario.hostPrincipalUserId,
     returnTo: `/g/${actionGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
@@ -24320,7 +24344,7 @@ async function verifyIncomingReplacementActionSubmission({
     ).slots?.find?.((slot) => slot.slot_id === scenario.actorSlot);
     const replacementCommandId = crypto.randomUUID();
     const replacementRaw = await sendBrowserCommand(hostEntry.page, {
-      principalUserId: scenario.hostPrincipalUserId,
+      principalId: scenario.hostPrincipalUserId,
       commandId: replacementCommandId,
       command: {
         ProcessReplacement: {
@@ -24346,7 +24370,7 @@ async function verifyIncomingReplacementActionSubmission({
       scenario.staleOutgoingPrincipalUserId,
     );
     const replacementSession = await createAccountLoginCredential({
-      principalUserId: scenario.replacementPrincipalUserId,
+      principalId: scenario.replacementPrincipalUserId,
       returnTo: `/g/${actionGame}`,
       expectedCapabilityKind: "SlotOccupant",
     });
@@ -24379,7 +24403,7 @@ async function verifyIncomingReplacementActionSubmission({
     const actionCommandId = crypto.randomUUID();
     const targetSlot = scenario.targetSlot;
     const actionRaw = await sendBrowserCommand(replacementEntry.page, {
-      principalUserId: scenario.replacementPrincipalUserId,
+      principalId: scenario.replacementPrincipalUserId,
       commandId: actionCommandId,
       command: {
         SubmitAction: {
@@ -24428,7 +24452,7 @@ async function verifyIncomingReplacementActionSubmission({
       () => window.__fmarchHostProjection?.phase,
     );
     const targetSession = await createAccountLoginCredential({
-      principalUserId: scenario.targetPrincipalUserId,
+      principalId: scenario.targetPrincipalUserId,
       returnTo: `/g/${actionGame}`,
       expectedCapabilityKind: "SlotOccupant",
     });
@@ -24507,7 +24531,7 @@ async function verifyIncomingReplacementActionSubmission({
           button.action === scenario.commandAction && button.disabled === false,
       ) !== true ||
       action?.state !== "ack" ||
-      action?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+      action?.requestEnvelope?.body?.body?.principal_id !== undefined ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
         scenario.actorSlot ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
@@ -24596,18 +24620,18 @@ async function seedIncomingReplacementActionGame({ actionGame }) {
     ["host_h", { ResolvePhase: { game: actionGame, seed: 72_502 } }],
     ["host_h", { AdvancePhase: { game: actionGame } }],
   ];
-  for (const [principalUserId, command] of plan) {
-    const result = await sendCommandResult(principalUserId, command);
+  for (const [principalId, command] of plan) {
+    const result = await sendCommandResult(principalId, command);
     if (result.body?.kind === "Reject") {
       throw new Error(
         `incoming replacement action seed command rejected: ${JSON.stringify({
-          principalUserId,
+          principalId,
           command,
           result,
         })}`,
       );
     }
-    commands.push(commandSummary(principalUserId, command, result));
+    commands.push(commandSummary(principalId, command, result));
   }
   return {
     game: actionGame,
@@ -24628,17 +24652,17 @@ async function verifyReplacementActionReconnectRecovery({
   const actionGame = crypto.randomUUID();
   const seed = await seedIncomingReplacementActionGame({ actionGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: scenario.hostPrincipalUserId,
+    principalId: scenario.hostPrincipalUserId,
     returnTo: `/g/${actionGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const replacementSession = await createAccountLoginCredential({
-    principalUserId: scenario.replacementPrincipalUserId,
+    principalId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${actionGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
   const targetSession = await createAccountLoginCredential({
-    principalUserId: scenario.targetPrincipalUserId,
+    principalId: scenario.targetPrincipalUserId,
     returnTo: `/g/${actionGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -24667,7 +24691,7 @@ async function verifyReplacementActionReconnectRecovery({
     });
     const replacementCommandId = crypto.randomUUID();
     const replacementRaw = await sendBrowserCommand(hostEntry.page, {
-      principalUserId: scenario.hostPrincipalUserId,
+      principalId: scenario.hostPrincipalUserId,
       commandId: replacementCommandId,
       command: {
         ProcessReplacement: {
@@ -24717,7 +24741,7 @@ async function verifyReplacementActionReconnectRecovery({
     const targetSlot = scenario.targetSlot;
     const actionCommandId = crypto.randomUUID();
     const actionRaw = await sendBrowserCommand(replacementEntry.page, {
-      principalUserId: scenario.replacementPrincipalUserId,
+      principalId: scenario.replacementPrincipalUserId,
       commandId: actionCommandId,
       command: {
         SubmitAction: {
@@ -24784,7 +24808,7 @@ async function verifyReplacementActionReconnectRecovery({
     const reconnect = await verifyRoleReconnectRecovery({
       page: replacementEntry.page,
       game: actionGame,
-      principalUserId: scenario.replacementPrincipalUserId,
+      principalId: scenario.replacementPrincipalUserId,
       actorSlot: scenario.actorSlot,
       postPrefix: scenario.reconnectPostPrefix,
     });
@@ -24842,13 +24866,13 @@ async function verifyReplacementActionReconnectRecovery({
       targetCommandState?.actorAlive !== false ||
       targetNoticeBeforeReconnect === null ||
       reconnect?.status !== "passed" ||
-      reconnect?.principalUserId !== scenario.replacementPrincipalUserId ||
+      reconnect?.principalId !== scenario.replacementPrincipalUserId ||
       reconnect?.actorSlot !== scenario.actorSlot ||
       reconnect?.reconnectingStatus?.state !== "reconnecting" ||
       reconnect?.reconnectRecoveryEvent?.state !== "recovered" ||
       !isPositiveReconnectAttempt(reconnect?.reconnectRecoveryEvent?.attempt) ||
       reconnect?.recoveredSnapshotContainsPost !== true ||
-      reconnect?.reconnectCommand?.principalUserId !==
+      reconnect?.reconnectCommand?.principalId !==
         scenario.replacementPrincipalUserId ||
       reconnect?.reconnectCommand?.command?.SubmitPost?.actor_slot !==
         scenario.actorSlot ||
@@ -24925,12 +24949,12 @@ async function verifyStaleReplacementActionAfterResolve({
   const actionGame = crypto.randomUUID();
   const seed = await seedIncomingReplacementActionGame({ actionGame });
   const hostSession = await createAccountLoginCredential({
-    principalUserId: scenario.hostPrincipalUserId,
+    principalId: scenario.hostPrincipalUserId,
     returnTo: `/g/${actionGame}/host`,
     expectedCapabilityKind: "HostOf",
   });
   const replacementSession = await createAccountLoginCredential({
-    principalUserId: scenario.replacementPrincipalUserId,
+    principalId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${actionGame}`,
     expectedCapabilityKind: "SlotOccupant",
   });
@@ -24953,7 +24977,7 @@ async function verifyStaleReplacementActionAfterResolve({
     });
     const replacementCommandId = crypto.randomUUID();
     const replacementRaw = await sendBrowserCommand(hostEntry.page, {
-      principalUserId: scenario.hostPrincipalUserId,
+      principalId: scenario.hostPrincipalUserId,
       commandId: replacementCommandId,
       command: {
         ProcessReplacement: {
@@ -25098,7 +25122,7 @@ async function verifyStaleReplacementActionAfterResolve({
     };
 
     const targetSession = await createAccountLoginCredential({
-      principalUserId: scenario.targetPrincipalUserId,
+      principalId: scenario.targetPrincipalUserId,
       returnTo: `/g/${actionGame}`,
       expectedCapabilityKind: "SlotOccupant",
     });
@@ -25762,12 +25786,12 @@ async function verifyConcurrentVoteRace({
   };
   const [playerRaw, actionRaw] = await Promise.all([
     sendBrowserCommand(playerPage, {
-      principalUserId: "player-mira",
+      principalId: "player-mira",
       command: playerVoteCommand,
       commandId: playerCommandId,
     }),
     sendBrowserCommand(actionPage, {
-      principalUserId: "player-goon-a",
+      principalId: "player-goon-a",
       command: actionVoteCommand,
       commandId: actionCommandId,
     }),
@@ -26072,11 +26096,13 @@ async function fetchHostConsoleState({
   apiBaseUrl,
   game,
   slot,
-  principalUserId = "host_h",
+  principalId = "host_h",
   sessionToken,
 }) {
-  const bearer = sessionToken ?? (await seedSessionToken(principalUserId));
-  const params = new URLSearchParams({ principal_user_id: principalUserId });
+  const bearer = sessionToken ?? (await seedSessionToken(principalId));
+  const params = new URLSearchParams({
+    principal_id: authorityPrincipalId(principalId),
+  });
   if (slot !== undefined) {
     params.set("slot_id", slot);
   }
@@ -26106,11 +26132,13 @@ async function fetchCurrentSlotPersonaId({ apiBaseUrl, game, slot }) {
 async function fetchHostPrompts({
   apiBaseUrl,
   game,
-  principalUserId = "host_h",
+  principalId = "host_h",
   sessionToken,
 }) {
-  const bearer = sessionToken ?? (await seedSessionToken(principalUserId));
-  const params = new URLSearchParams({ principal_user_id: principalUserId });
+  const bearer = sessionToken ?? (await seedSessionToken(principalId));
+  const params = new URLSearchParams({
+    principal_id: authorityPrincipalId(principalId),
+  });
   return await fetchJson(`${apiBaseUrl}/games/${game}/host-prompts?${params}`, {
     headers: { authorization: `Bearer ${bearer}` },
   });
@@ -26510,7 +26538,7 @@ async function importFrontendModule(relativePath) {
 
 async function sendBrowserCommand(page, { command, commandId }) {
   const envelopeId = commandEnvelopeId++;
-  return await page.evaluate(
+  const result = await page.evaluate(
     async ({ command: browserCommand, commandId: browserCommandId, envelopeId: browserEnvelopeId }) => {
       const requestEnvelope = {
         v: 2,
@@ -26536,8 +26564,13 @@ async function sendBrowserCommand(page, { command, commandId }) {
         serverEnvelope: await response.json(),
       };
     },
-    { command, commandId, envelopeId },
+    {
+      command: commandForAuthorityTransport(command),
+      commandId,
+      envelopeId,
+    },
   );
+  return preserveFixturePrincipalAliases(result);
 }
 
 function sameArray(left, right) {
@@ -26762,7 +26795,7 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
     const response = await fetchWithTimeout(url, options, timeoutMs);
     const body = await response.json();
     if (response.ok) {
-      return body;
+      return preserveFixturePrincipalAliases(body);
     }
     if (
       retryableRead &&
@@ -26786,11 +26819,11 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
 
 async function fetchJsonAsPrincipal(
   url,
-  principalUserId,
+  principalId,
   options = {},
   timeoutMs = 15000,
 ) {
-  const bearer = await seedSessionToken(principalUserId);
+  const bearer = await seedSessionToken(principalId);
   return fetchJson(
     url,
     {
@@ -26815,17 +26848,17 @@ async function fetchJsonStatus(url, options = {}, timeoutMs = 15000) {
   return {
     status: response.status,
     ok: response.ok,
-    body,
+    body: preserveFixturePrincipalAliases(body),
   };
 }
 
 async function fetchJsonStatusAsPrincipal(
   url,
-  principalUserId,
+  principalId,
   options = {},
   timeoutMs = 15000,
 ) {
-  const bearer = await seedSessionToken(principalUserId);
+  const bearer = await seedSessionToken(principalId);
   return fetchJsonStatus(
     url,
     {

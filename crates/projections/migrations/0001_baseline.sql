@@ -96,7 +96,7 @@ CREATE TABLE public.action_history (
 
 CREATE TABLE public.auth_account (
     account_id text NOT NULL,
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     password_hash text NOT NULL,
     created_at bigint NOT NULL,
     disabled_at bigint,
@@ -144,7 +144,7 @@ CREATE TABLE public.auth_delivery_intent (
     delivery_id uuid NOT NULL,
     delivery_kind text NOT NULL,
     account_id text NOT NULL,
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     credential_hash text NOT NULL,
     status text NOT NULL,
     attempt_count integer DEFAULT 0 NOT NULL,
@@ -176,13 +176,13 @@ CREATE TABLE public.auth_delivery_intent (
 
 CREATE TABLE public.auth_invite (
     token_hash text NOT NULL,
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     created_at bigint NOT NULL,
     expires_at bigint NOT NULL,
     redeemed_at bigint,
     redeemed_session_token_hash text,
     global_capabilities text[] DEFAULT '{}'::text[] NOT NULL,
-    invited_by_user_id text NOT NULL,
+    invited_by_principal_id uuid NOT NULL,
     revoked_at bigint,
     game uuid,
     account_id text NOT NULL
@@ -210,7 +210,7 @@ CREATE TABLE public.auth_registration_attempt (
 
 CREATE TABLE public.auth_session (
     token_hash text NOT NULL,
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     created_at bigint NOT NULL,
     expires_at bigint NOT NULL,
     revoked_at bigint,
@@ -223,7 +223,7 @@ CREATE TABLE public.auth_session (
 --
 
 CREATE TABLE public.command_receipt (
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     command_id uuid NOT NULL,
     stream_id uuid NOT NULL,
     stream_seqs bigint[] NOT NULL
@@ -366,7 +366,7 @@ ALTER SEQUENCE public.events_seq_seq OWNED BY public.events.seq;
 
 CREATE TABLE public.game_authority (
     game_id uuid NOT NULL,
-    user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     role text NOT NULL
 );
 
@@ -437,7 +437,6 @@ CREATE TABLE public.host_prompt (
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     status text DEFAULT 'pending'::text NOT NULL,
     decision jsonb,
-    resolved_by text,
     resolved_at bigint,
     public_resolution jsonb
 );
@@ -451,8 +450,10 @@ CREATE TABLE public.identity_lifecycle_audit (
     id bigint NOT NULL,
     event_at bigint NOT NULL,
     event_kind text NOT NULL,
-    actor_user_id text,
-    principal_user_id text NOT NULL,
+    actor_principal_id uuid,
+    principal_id uuid,
+    redacted_actor_alias text,
+    redacted_principal_alias text,
     token_hash text,
     related_token_hash text,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL
@@ -588,7 +589,7 @@ CREATE TABLE public.private_channel_member (
 
 CREATE TABLE public.member_profile (
     profile_id uuid NOT NULL,
-    active_principal_id text,
+    active_principal_id uuid,
     handle_hmac bytea,
     lifecycle text DEFAULT 'active'::text NOT NULL,
     redacted_alias text,
@@ -762,7 +763,7 @@ CREATE TABLE public.slot_status_tag (
 
 CREATE TABLE public.spectator_membership (
     game_id uuid NOT NULL,
-    user_id text NOT NULL
+    principal_id uuid NOT NULL
 );
 
 
@@ -932,7 +933,7 @@ ALTER TABLE ONLY public.auth_session
 --
 
 ALTER TABLE ONLY public.command_receipt
-    ADD CONSTRAINT command_receipt_pkey PRIMARY KEY (principal_user_id, command_id);
+    ADD CONSTRAINT command_receipt_pkey PRIMARY KEY (principal_id, command_id);
 
 
 --
@@ -1004,7 +1005,7 @@ ALTER TABLE ONLY public.events
 --
 
 ALTER TABLE ONLY public.game_authority
-    ADD CONSTRAINT game_authority_pkey PRIMARY KEY (game_id, user_id, role);
+    ADD CONSTRAINT game_authority_pkey PRIMARY KEY (game_id, principal_id, role);
 
 
 --
@@ -1259,7 +1260,7 @@ ALTER TABLE ONLY public.slot_status_tag
 --
 
 ALTER TABLE ONLY public.spectator_membership
-    ADD CONSTRAINT spectator_membership_pkey PRIMARY KEY (game_id, user_id);
+    ADD CONSTRAINT spectator_membership_pkey PRIMARY KEY (game_id, principal_id);
 
 
 --
@@ -1318,7 +1319,7 @@ CREATE INDEX auth_account_disabled_idx ON public.auth_account USING btree (disab
 -- Name: auth_account_principal_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX auth_account_principal_idx ON public.auth_account USING btree (principal_user_id);
+CREATE INDEX auth_account_principal_idx ON public.auth_account USING btree (principal_id);
 
 
 --
@@ -1395,7 +1396,7 @@ CREATE INDEX auth_invite_game_idx ON public.auth_invite USING btree (game) WHERE
 -- Name: auth_invite_principal_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX auth_invite_principal_idx ON public.auth_invite USING btree (principal_user_id);
+CREATE INDEX auth_invite_principal_idx ON public.auth_invite USING btree (principal_id);
 
 
 --
@@ -1430,7 +1431,7 @@ CREATE INDEX auth_session_expiry_idx ON public.auth_session USING btree (expires
 -- Name: auth_session_principal_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX auth_session_principal_idx ON public.auth_session USING btree (principal_user_id);
+CREATE INDEX auth_session_principal_idx ON public.auth_session USING btree (principal_id);
 
 
 --
@@ -1507,7 +1508,7 @@ CREATE INDEX identity_lifecycle_audit_event_kind_idx ON public.identity_lifecycl
 -- Name: identity_lifecycle_audit_principal_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX identity_lifecycle_audit_principal_idx ON public.identity_lifecycle_audit USING btree (principal_user_id, id DESC);
+CREATE INDEX identity_lifecycle_audit_principal_idx ON public.identity_lifecycle_audit USING btree (principal_id, id DESC);
 
 
 --
@@ -1710,7 +1711,7 @@ CREATE TABLE public.moderation_case (
 CREATE TABLE public.moderation_report (
     report_id uuid NOT NULL,
     case_id uuid NOT NULL,
-    reporter_principal_id text NOT NULL,
+    reporter_principal_id uuid NOT NULL,
     reason_family text NOT NULL,
     details text NOT NULL,
     active boolean DEFAULT true NOT NULL,
@@ -1723,7 +1724,7 @@ CREATE TABLE public.moderation_case_history (
     source_seq bigint NOT NULL,
     case_id uuid NOT NULL,
     event_kind text NOT NULL,
-    actor_principal_id text NOT NULL,
+    actor_principal_id uuid NOT NULL,
     reason text,
     occurred_at bigint NOT NULL
 );
@@ -1733,7 +1734,7 @@ CREATE TABLE public.moderation_target_state (
     source_seq bigint NOT NULL,
     visibility text NOT NULL,
     reason text NOT NULL,
-    moderator_principal_id text NOT NULL,
+    moderator_principal_id uuid NOT NULL,
     updated_seq bigint NOT NULL,
     CONSTRAINT moderation_target_state_visibility_check CHECK ((visibility = ANY (ARRAY['visible'::text, 'hidden'::text])))
 );
@@ -1767,7 +1768,7 @@ ALTER TABLE ONLY public.moderation_case_history
 
 CREATE TABLE public.public_watch (
     subscription_id uuid NOT NULL,
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     surface_id uuid NOT NULL,
     active boolean DEFAULT true NOT NULL,
     read_through_seq bigint DEFAULT 0 NOT NULL,
@@ -1794,13 +1795,13 @@ CREATE TABLE public.public_inbox_item (
 ALTER TABLE ONLY public.public_watch
     ADD CONSTRAINT public_watch_pkey PRIMARY KEY (subscription_id);
 ALTER TABLE ONLY public.public_watch
-    ADD CONSTRAINT public_watch_member_target_key UNIQUE (principal_user_id, surface_id);
+    ADD CONSTRAINT public_watch_member_target_key UNIQUE (principal_id, surface_id);
 ALTER TABLE ONLY public.public_watch_period
     ADD CONSTRAINT public_watch_period_pkey PRIMARY KEY (subscription_id, started_seq);
 ALTER TABLE ONLY public.public_inbox_item
     ADD CONSTRAINT public_inbox_item_pkey PRIMARY KEY (subscription_id, source_seq);
 
-CREATE INDEX public_watch_member_idx ON public.public_watch USING btree (principal_user_id, active, updated_seq DESC);
+CREATE INDEX public_watch_member_idx ON public.public_watch USING btree (principal_id, active, updated_seq DESC);
 CREATE INDEX public_watch_target_idx ON public.public_watch USING btree (surface_id, active);
 CREATE INDEX public_watch_period_lookup_idx ON public.public_watch_period USING btree (subscription_id, started_seq, ended_seq);
 CREATE INDEX public_inbox_item_page_idx ON public.public_inbox_item USING btree (subscription_id, source_seq DESC);

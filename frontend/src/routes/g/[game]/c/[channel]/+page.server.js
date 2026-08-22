@@ -15,7 +15,7 @@ export async function load({ params, locals, fetch, url, cookies }) {
   const data = await buildGameRouteData({
     game: params.game,
     activeChannel: params.channel,
-    principalUserId: locals.principalUserId,
+    principalId: locals.principalId,
     capabilities: locals.resolvedCapabilities,
     fetchImpl:
       fixtureMode && apiBaseUrl === ""

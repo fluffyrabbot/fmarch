@@ -22,7 +22,7 @@ test("app shell builds role navigation from resolved capabilities", () => {
   const shell = buildAppShell({
     game: "midsummer",
     activeSurface: "player",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "HostOf", game: "other" },
@@ -150,7 +150,7 @@ test("app shell session summary models signed-out and multi-capability states", 
 test("app shell presents an explicit viewer profile without exposing the principal", () => {
   const shell = buildAppShell({
     activeSurface: "board",
-    principalUserId: "principal-opaque-7",
+    principalId: "principal-opaque-7",
     viewerProfile: { handle: "mira-r", display_name: "Mira Rowan" },
   });
 
@@ -160,9 +160,9 @@ test("app shell presents an explicit viewer profile without exposing the princip
   assert.equal(JSON.stringify(shell.session).includes("principal-opaque-7"), false);
 
   const republished = applyViewerPresentationToShell(
-    buildAppShell({ activeSurface: "board", principalUserId: "principal-opaque-7" }),
+    buildAppShell({ activeSurface: "board", principalId: "principal-opaque-7" }),
     {
-      principalUserId: "principal-opaque-7",
+      principalId: "principal-opaque-7",
       viewerProfile: { handle: "mira-r", displayName: "Mira Rowan" },
     },
   );
@@ -171,7 +171,7 @@ test("app shell presents an explicit viewer profile without exposing the princip
 
 test("board route is an app surface with capability-gated role actions", () => {
   const data = buildBoardRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
   });
@@ -203,7 +203,7 @@ test("board route is an app surface with capability-gated role actions", () => {
 
 test("board actions block denied role transitions without links", () => {
   const data = buildBoardRouteData({
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
     gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
   });
@@ -223,7 +223,7 @@ test("shared shell keyboard order starts with skip link before allowed role navi
   const shell = buildAppShell({
     game: "midsummer",
     activeSurface: "player",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
 
@@ -328,7 +328,7 @@ test("route error state keeps failed paths inside the shared app shell", () => {
     status: 404,
     message: "missing game",
     path: "/g/midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
@@ -344,7 +344,7 @@ test("route error state keeps failed paths inside the shared app shell", () => {
     status: 403,
     message: "Channel private:role_pm:slot-7 is not visible.",
     path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
   assert.equal(privateChannelError.shell.activeSurface, "player");
@@ -355,7 +355,7 @@ test("route error state keeps failed paths inside the shared app shell", () => {
 test("route loading state keeps target paths inside the shared app shell", () => {
   const boardLoading = buildRouteLoadingData({
     path: "/",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   });
   assert.equal(boardLoading.shell.activeSurface, "board");
@@ -366,7 +366,7 @@ test("route loading state keeps target paths inside the shared app shell", () =>
 
   const privateChannelLoading = buildRouteLoadingData({
     path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
@@ -391,7 +391,7 @@ test("navigation pending data exposes route-aware status without a duplicate she
 
   const pending = buildNavigationPendingData({
     path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },

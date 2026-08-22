@@ -17,6 +17,7 @@ use axum::routing::post;
 use axum::{Json, Router};
 use caps::Principal;
 use media::{ContentId, MediaRepository, VariantFormat, VariantLimits};
+use principal::PrincipalId;
 use sqlx::PgPool;
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
@@ -220,8 +221,8 @@ async fn command(
         .into_response();
     };
 
-    let principal_user_id = match authenticated_transport_principal(&state, &headers).await {
-        Ok(principal_user_id) => principal_user_id,
+    let principal_id = match authenticated_transport_principal(&state, &headers).await {
+        Ok(principal_id) => principal_id,
         Err(error) => return command_api_error_response(envelope.id, error),
     };
     if matches!(&msg.command, wire::Command::CreateGame { .. }) {
@@ -231,54 +232,47 @@ async fn command(
         }
     }
 
-    let game = command_game(&msg.command);
-    let thread_dirty = command_affects_thread(&msg.command);
-    let host_console_dirty = command_affects_host_console(&msg.command);
-    let host_prompts_dirty = command_affects_host_prompts(&msg.command);
-    let player_private_dirty = command_affects_player_private(&msg.command);
-    let player_command_state_dirty = command_affects_player_command_state(&msg.command);
-    let previous_votecount = match game {
-        Some(game) if command_affects_votecount(&msg.command) => {
-            live_projection::vote_count_rows(&state.pool, game)
-                .await
-                .ok()
-        }
-        _ => None,
-    };
-    let thread_after_seq = match game {
-        Some(game) if thread_dirty => live_projection::thread_high_water_seq(&state.pool, game)
+    let classified = classify_command(&msg.command);
+    let previous_votecount = if classified.dirty.votecount {
+        live_projection::vote_count_rows(&state.pool, classified.game)
             .await
-            .ok(),
-        _ => None,
+            .ok()
+    } else {
+        None
     };
-    let principal = Principal::user(principal_user_id);
+    let thread_after_seq = if classified.dirty.thread {
+        live_projection::thread_high_water_seq(&state.pool, classified.game)
+            .await
+            .ok()
+    } else {
+        None
+    };
+    let principal = Principal::authenticated(principal_id);
     let prepared_command = prepare_wire_command(&state, msg.command).await;
     let body = match prepared_command {
         Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
         Ok(command) => {
-            let _inflight = state.live_projection.inflight_guard(game);
+            let _inflight = state.live_projection.inflight_guard(classified.game);
             match commands::handle_idempotent(&state.pool, &principal, msg.command_id, command)
                 .await
             {
                 Ok(ack) => {
-                    if let Some(game) = game {
-                        state
-                            .live_projection
-                            .publish(
-                                &state.pool,
-                                LiveProjectionChangeSet {
-                                    game,
-                                    previous_vote_counts: previous_votecount,
-                                    thread_after_seq,
-                                    thread_dirty,
-                                    host_console_dirty,
-                                    host_prompts_dirty,
-                                    player_private_dirty,
-                                    player_command_state_dirty,
-                                },
-                            )
-                            .await;
-                    }
+                    state
+                        .live_projection
+                        .publish(
+                            &state.pool,
+                            LiveProjectionChangeSet {
+                                game: classified.game,
+                                previous_vote_counts: previous_votecount,
+                                thread_after_seq,
+                                thread_dirty: classified.dirty.thread,
+                                host_console_dirty: classified.dirty.host_console,
+                                host_prompts_dirty: classified.dirty.host_prompts,
+                                player_private_dirty: classified.dirty.player_private,
+                                player_command_state_dirty: classified.dirty.player_command_state,
+                            },
+                        )
+                        .await;
                     ServerMsg::Ack(AckMsg::from(ack))
                 }
                 Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
@@ -326,164 +320,170 @@ async fn import_completed_game_export(
 async fn authenticated_transport_principal(
     state: &CommandHttpState,
     headers: &HeaderMap,
-) -> Result<String, ApiError> {
+) -> Result<PrincipalId, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_session)?;
     Ok(authorization_context(&state.auth, token)
         .await?
-        .principal_user_id)
+        .principal_id)
 }
 
-fn command_game(command: &wire::Command) -> Option<Uuid> {
+/// The single classification site for wire commands: which game a command
+/// targets and which live-projection surfaces it can dirty. Adding a command
+/// variant requires exactly one row here; exhaustiveness is compiler-enforced.
+struct CommandClassification {
+    game: Uuid,
+    dirty: DirtySurfaces,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+struct DirtySurfaces {
+    thread: bool,
+    host_console: bool,
+    host_prompts: bool,
+    player_private: bool,
+    player_command_state: bool,
+    votecount: bool,
+}
+
+fn classify_command(command: &wire::Command) -> CommandClassification {
+    use wire::Command;
     match command {
-        wire::Command::CreateGame { game, .. }
-        | wire::Command::AddSlot { game, .. }
-        | wire::Command::SeatPersona { game, .. }
-        | wire::Command::RenameGamePersona { game, .. }
-        | wire::Command::AssignRole { game, .. }
-        | wire::Command::SetSlotStatus { game, .. }
-        | wire::Command::AddSlotStatusTag { game, .. }
-        | wire::Command::RemoveSlotStatusTag { game, .. }
-        | wire::Command::AddCohost { game, .. }
-        | wire::Command::GrantSpectator { game, .. }
-        | wire::Command::RevokeSpectator { game, .. }
-        | wire::Command::StartGame { game, .. }
-        | wire::Command::OpenDayPhase { game, .. }
-        | wire::Command::AdvancePhase { game }
-        | wire::Command::AdvancePhaseByDeadline { game, .. }
-        | wire::Command::LockThread { game }
-        | wire::Command::UnlockThread { game }
-        | wire::Command::ResolvePhase { game, .. }
-        | wire::Command::CompleteGame { game }
-        | wire::Command::PublishVotecount { game }
-        | wire::Command::ResolveHostPrompt { game, .. }
-        | wire::Command::SetPostPolicy { game, .. }
-        | wire::Command::PublishSpectatorPost { game, .. }
-        | wire::Command::ControlItaSession { game, .. }
-        | wire::Command::SubmitVote { game, .. }
-        | wire::Command::WithdrawVote { game, .. }
-        | wire::Command::SubmitAction { game, .. }
-        | wire::Command::WithdrawAction { game, .. }
-        | wire::Command::SubmitPost { game, .. }
-        | wire::Command::ExtendDeadline { game, .. }
-        | wire::Command::ApplyEffectPlan { game, .. }
-        | wire::Command::AttachDayProgram { game, .. }
-        | wire::Command::ScheduleDayEvent { game, .. }
-        | wire::Command::OpenDayEvent { game, .. }
-        | wire::Command::LockDayEvent { game, .. }
-        | wire::Command::CancelDayEvent { game, .. }
-        | wire::Command::SubmitDayEventParticipation { game, .. }
-        | wire::Command::WithdrawDayEventParticipation { game, .. }
-        | wire::Command::ResolveDayEvent { game, .. }
-        | wire::Command::ProcessReplacement { game, .. } => Some(*game),
+        Command::CreateGame { game, .. }
+        | Command::AddCohost { game, .. }
+        | Command::GrantSpectator { game, .. }
+        | Command::RevokeSpectator { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces::default(),
+        },
+        Command::AddSlot { game, .. }
+        | Command::SeatPersona { game, .. }
+        | Command::RenameGamePersona { game, .. }
+        | Command::ExtendDeadline { game, .. }
+        | Command::SubmitDayEventParticipation { game, .. }
+        | Command::WithdrawDayEventParticipation { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                host_console: true,
+                ..DirtySurfaces::default()
+            },
+        },
+        Command::AssignRole { game, .. }
+        | Command::AddSlotStatusTag { game, .. }
+        | Command::RemoveSlotStatusTag { game, .. }
+        | Command::StartGame { game, .. }
+        | Command::OpenDayPhase { game, .. }
+        | Command::AdvancePhase { game }
+        | Command::AdvancePhaseByDeadline { game, .. }
+        | Command::LockThread { game }
+        | Command::UnlockThread { game }
+        | Command::CompleteGame { game }
+        | Command::SetPostPolicy { game, .. }
+        | Command::ControlItaSession { game, .. }
+        | Command::AttachDayProgram { game, .. }
+        | Command::ScheduleDayEvent { game, .. }
+        | Command::OpenDayEvent { game, .. }
+        | Command::LockDayEvent { game, .. }
+        | Command::CancelDayEvent { game, .. }
+        | Command::ProcessReplacement { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                host_console: true,
+                player_command_state: true,
+                ..DirtySurfaces::default()
+            },
+        },
+        Command::SetSlotStatus { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                host_console: true,
+                host_prompts: true,
+                player_command_state: true,
+                ..DirtySurfaces::default()
+            },
+        },
+        Command::ResolvePhase { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                thread: true,
+                host_console: true,
+                host_prompts: true,
+                player_private: true,
+                player_command_state: true,
+                votecount: true,
+            },
+        },
+        Command::PublishVotecount { game } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                thread: true,
+                host_console: true,
+                ..DirtySurfaces::default()
+            },
+        },
+        Command::ResolveHostPrompt { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                host_console: true,
+                host_prompts: true,
+                player_private: true,
+                player_command_state: true,
+                ..DirtySurfaces::default()
+            },
+        },
+        Command::PublishSpectatorPost { game, .. } | Command::SubmitPost { game, .. } => {
+            CommandClassification {
+                game: *game,
+                dirty: DirtySurfaces {
+                    thread: true,
+                    ..DirtySurfaces::default()
+                },
+            }
+        }
+        Command::SubmitVote { game, .. } | Command::WithdrawVote { game, .. } => {
+            CommandClassification {
+                game: *game,
+                dirty: DirtySurfaces {
+                    votecount: true,
+                    ..DirtySurfaces::default()
+                },
+            }
+        }
+        Command::SubmitAction { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                thread: true,
+                player_private: true,
+                ..DirtySurfaces::default()
+            },
+        },
+        Command::WithdrawAction { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                player_private: true,
+                ..DirtySurfaces::default()
+            },
+        },
+        Command::ApplyEffectPlan { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                host_console: true,
+                host_prompts: true,
+                player_private: true,
+                player_command_state: true,
+                votecount: true,
+                ..DirtySurfaces::default()
+            },
+        },
+        Command::ResolveDayEvent { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                host_console: true,
+                player_private: true,
+                player_command_state: true,
+                ..DirtySurfaces::default()
+            },
+        },
     }
-}
-
-fn command_affects_host_console(command: &wire::Command) -> bool {
-    matches!(
-        command,
-        wire::Command::AddSlot { .. }
-            | wire::Command::SeatPersona { .. }
-            | wire::Command::RenameGamePersona { .. }
-            | wire::Command::AssignRole { .. }
-            | wire::Command::SetSlotStatus { .. }
-            | wire::Command::AddSlotStatusTag { .. }
-            | wire::Command::RemoveSlotStatusTag { .. }
-            | wire::Command::StartGame { .. }
-            | wire::Command::OpenDayPhase { .. }
-            | wire::Command::AdvancePhase { .. }
-            | wire::Command::AdvancePhaseByDeadline { .. }
-            | wire::Command::LockThread { .. }
-            | wire::Command::UnlockThread { .. }
-            | wire::Command::ResolvePhase { .. }
-            | wire::Command::CompleteGame { .. }
-            | wire::Command::PublishVotecount { .. }
-            | wire::Command::ResolveHostPrompt { .. }
-            | wire::Command::SetPostPolicy { .. }
-            | wire::Command::ControlItaSession { .. }
-            | wire::Command::ExtendDeadline { .. }
-            | wire::Command::ApplyEffectPlan { .. }
-            | wire::Command::AttachDayProgram { .. }
-            | wire::Command::ScheduleDayEvent { .. }
-            | wire::Command::OpenDayEvent { .. }
-            | wire::Command::LockDayEvent { .. }
-            | wire::Command::CancelDayEvent { .. }
-            | wire::Command::SubmitDayEventParticipation { .. }
-            | wire::Command::WithdrawDayEventParticipation { .. }
-            | wire::Command::ResolveDayEvent { .. }
-            | wire::Command::ProcessReplacement { .. }
-    )
-}
-
-fn command_affects_thread(command: &wire::Command) -> bool {
-    matches!(
-        command,
-        wire::Command::ResolvePhase { .. }
-            | wire::Command::SubmitAction { .. }
-            | wire::Command::SubmitPost { .. }
-            | wire::Command::PublishSpectatorPost { .. }
-            | wire::Command::PublishVotecount { .. }
-    )
-}
-
-fn command_affects_host_prompts(command: &wire::Command) -> bool {
-    matches!(
-        command,
-        wire::Command::SetSlotStatus { .. }
-            | wire::Command::ApplyEffectPlan { .. }
-            | wire::Command::ResolvePhase { .. }
-            | wire::Command::ResolveHostPrompt { .. }
-    )
-}
-
-fn command_affects_player_private(command: &wire::Command) -> bool {
-    matches!(
-        command,
-        wire::Command::ResolvePhase { .. }
-            | wire::Command::ResolveHostPrompt { .. }
-            | wire::Command::ApplyEffectPlan { .. }
-            | wire::Command::ResolveDayEvent { .. }
-            | wire::Command::SubmitAction { .. }
-            | wire::Command::WithdrawAction { .. }
-    )
-}
-
-fn command_affects_player_command_state(command: &wire::Command) -> bool {
-    matches!(
-        command,
-        wire::Command::AssignRole { .. }
-            | wire::Command::SetSlotStatus { .. }
-            | wire::Command::AddSlotStatusTag { .. }
-            | wire::Command::RemoveSlotStatusTag { .. }
-            | wire::Command::StartGame { .. }
-            | wire::Command::OpenDayPhase { .. }
-            | wire::Command::AdvancePhase { .. }
-            | wire::Command::AdvancePhaseByDeadline { .. }
-            | wire::Command::LockThread { .. }
-            | wire::Command::UnlockThread { .. }
-            | wire::Command::ResolvePhase { .. }
-            | wire::Command::ResolveHostPrompt { .. }
-            | wire::Command::CompleteGame { .. }
-            | wire::Command::SetPostPolicy { .. }
-            | wire::Command::ControlItaSession { .. }
-            | wire::Command::ApplyEffectPlan { .. }
-            | wire::Command::AttachDayProgram { .. }
-            | wire::Command::ScheduleDayEvent { .. }
-            | wire::Command::OpenDayEvent { .. }
-            | wire::Command::LockDayEvent { .. }
-            | wire::Command::CancelDayEvent { .. }
-            | wire::Command::ResolveDayEvent { .. }
-            | wire::Command::ProcessReplacement { .. }
-    )
-}
-
-fn command_affects_votecount(command: &wire::Command) -> bool {
-    matches!(
-        command,
-        wire::Command::SubmitVote { .. }
-            | wire::Command::WithdrawVote { .. }
-            | wire::Command::ResolvePhase { .. }
-            | wire::Command::ApplyEffectPlan { .. }
-    )
 }
 
 fn protocol_reject(message: impl Into<String>) -> RejectMsg {
@@ -518,67 +518,86 @@ pub(super) fn command_reject_api_error(reject: commands::Reject) -> ApiError {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        command_affects_host_console, command_affects_host_prompts,
-        command_affects_player_command_state, command_affects_player_private,
-        command_affects_thread, command_affects_votecount, command_game,
-    };
+    use super::{classify_command, DirtySurfaces};
     use uuid::Uuid;
 
     #[test]
     fn host_prompt_resolution_refreshes_player_command_and_outcome_state() {
-        assert!(command_affects_player_command_state(
-            &wire::Command::ResolveHostPrompt {
-                game: Uuid::new_v4(),
-                prompt_id: "D01:pk:Tie".to_string(),
-                decision: wire::HostPromptDecision::SelectSlot {
-                    slot: "slot-2".to_string(),
-                },
+        let game = Uuid::new_v4();
+        let classified = classify_command(&wire::Command::ResolveHostPrompt {
+            game,
+            prompt_id: "D01:pk:Tie".to_string(),
+            decision: wire::HostPromptDecision::SelectSlot {
+                slot: "slot-2".to_string(),
             },
-        ));
+        });
+
+        assert_eq!(classified.game, game);
+        assert_eq!(
+            classified.dirty,
+            DirtySurfaces {
+                host_console: true,
+                host_prompts: true,
+                player_private: true,
+                player_command_state: true,
+                ..DirtySurfaces::default()
+            }
+        );
     }
 
     #[test]
     fn effect_plan_routes_and_refreshes_every_state_surface_it_can_change() {
         let game = Uuid::new_v4();
-        let command = wire::Command::ApplyEffectPlan {
+        let classified = classify_command(&wire::Command::ApplyEffectPlan {
             game,
             effects: Vec::new(),
             reason: "classification fixture".to_string(),
-        };
+        });
 
-        assert_eq!(command_game(&command), Some(game));
-        assert!(command_affects_host_console(&command));
-        assert!(command_affects_host_prompts(&command));
-        assert!(command_affects_player_private(&command));
-        assert!(command_affects_player_command_state(&command));
-        assert!(!command_affects_thread(&command));
-        assert!(command_affects_votecount(&command));
+        assert_eq!(classified.game, game);
+        assert_eq!(
+            classified.dirty,
+            DirtySurfaces {
+                thread: false,
+                host_console: true,
+                host_prompts: true,
+                player_private: true,
+                player_command_state: true,
+                votecount: true,
+            }
+        );
     }
 
     #[test]
-    fn vote_and_participation_do_not_force_full_resync() {
-        let game = Uuid::new_v4();
-        assert!(command_affects_votecount(&wire::Command::SubmitVote {
-            game,
+    fn votes_dirty_only_votecounts_and_posts_never_dirty_host_console() {
+        let vote = classify_command(&wire::Command::SubmitVote {
+            game: Uuid::new_v4(),
             actor_slot: "slot-1".to_string(),
             target: wire::VoteTarget::NoLynch,
-        }));
-        assert!(!command_affects_player_command_state(
-            &wire::Command::SubmitVote {
-                game,
-                actor_slot: "slot-1".to_string(),
-                target: wire::VoteTarget::NoLynch,
+        });
+        assert_eq!(
+            vote.dirty,
+            DirtySurfaces {
+                votecount: true,
+                ..DirtySurfaces::default()
             }
-        ));
-        assert!(!command_affects_host_console(&wire::Command::SubmitPost {
-            game,
+        );
+
+        let post = classify_command(&wire::Command::SubmitPost {
+            game: Uuid::new_v4(),
             channel_id: "main".to_string(),
             actor_slot: "slot-1".to_string(),
             body: "hi".to_string(),
             media: None,
             quotations: None,
             embed: None,
-        }));
+        });
+        assert_eq!(
+            post.dirty,
+            DirtySurfaces {
+                thread: true,
+                ..DirtySurfaces::default()
+            }
+        );
     }
 }

@@ -10,10 +10,8 @@ import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
-import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -23,6 +21,12 @@ const evidencePath = path.join(artifactDir, "discussion-proof.json");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
 const pageSize = 12;
+
+function authorityPrincipalId(aliasOrId) {
+  return isPrincipalId(aliasOrId)
+    ? String(aliasOrId)
+    : principalFixtureId(aliasOrId);
+}
 
 if (!migrationUrl) {
   throw new Error("DATABASE_MIGRATION_URL is required for the local discussion role proof");
@@ -69,7 +73,7 @@ try {
       member,
       frontendBaseUrl,
       apiBaseUrl,
-      sessions.memberUserId,
+      sessions.memberPrincipalAlias,
       browserTopic.topic,
     );
     const quotations = await proveQuotations(member, frontendBaseUrl, browserTopic.topic);
@@ -133,24 +137,24 @@ try {
 }
 
 async function createSessions(apiBaseUrl) {
-  const memberUserId = "discussion_member";
-  const memberToken = await createDevSession(apiBaseUrl, memberUserId, []);
+  const memberPrincipalAlias = "discussion_member";
+  const memberToken = await createDevSession(apiBaseUrl, memberPrincipalAlias, []);
   const moderatorToken = await createDevSession(apiBaseUrl, "discussion_moderator", ["GlobalAdmin", "GlobalMod"]);
-  await createAccount(apiBaseUrl, moderatorToken, "member@example.test", memberUserId, []);
+  await createAccount(apiBaseUrl, moderatorToken, "member@example.test", memberPrincipalAlias, []);
   await createAccount(apiBaseUrl, moderatorToken, "moderator@example.test", "discussion_moderator", ["GlobalAdmin", "GlobalMod"]);
   await createProfile(apiBaseUrl, memberToken, "member_profile", "Discussion Member");
   await createProfile(apiBaseUrl, moderatorToken, "moderator_profile", "Discussion Moderator");
-  return { memberToken, moderatorToken, memberUserId };
+  return { memberToken, moderatorToken, memberPrincipalAlias };
 }
 
-async function createAccount(apiBaseUrl, adminToken, accountId, principalUserId, globalCapabilities) {
+async function createAccount(apiBaseUrl, adminToken, accountId, principalId, globalCapabilities) {
   await fetchJson(`${apiBaseUrl}/auth/accounts`, {
     method: "POST",
     headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
     body: JSON.stringify({
       account_id: accountId,
       password: "correct horse battery staple",
-      principal_user_id: principalUserId,
+      principal_id: authorityPrincipalId(principalId),
       global_capabilities: globalCapabilities,
     }),
   });
@@ -169,21 +173,21 @@ async function createProfile(apiBaseUrl, token, handle, displayName) {
   });
 }
 
-async function createDevSession(apiBaseUrl, principalUserId, globalCapabilities) {
+async function createDevSession(apiBaseUrl, principalId, globalCapabilities) {
   const response = await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      principal_user_id: principalUserId,
+      principal_id: authorityPrincipalId(principalId),
       expires_at: 4_102_444_800,
       global_capabilities: globalCapabilities,
     }),
   });
-  if (response.principal_user_id !== principalUserId) {
-    throw new Error(`local discussion session did not resolve ${principalUserId}`);
+  if (response.principal_id !== authorityPrincipalId(principalId)) {
+    throw new Error(`local discussion session did not resolve ${principalId}`);
   }
   if (typeof response.session_token !== "string" || response.session_token === "") {
-    throw new Error(`local discussion session omitted token for ${principalUserId}`);
+    throw new Error(`local discussion session omitted token for ${principalId}`);
   }
   return response.session_token;
 }
@@ -274,16 +278,16 @@ async function seedTopics(apiBaseUrl, token, slug) {
   return { status: "passed", count: pageSize };
 }
 
-async function provePagination(context, frontendBaseUrl, apiBaseUrl, memberUserId, browserTopic) {
+async function provePagination(context, frontendBaseUrl, apiBaseUrl, memberPrincipalAlias, browserTopic) {
   const page = await context.newPage({ viewport: { width: 1024, height: 768 } });
   try {
     await page.goto(`${frontendBaseUrl}/discussions/general`, { waitUntil: "networkidle" });
     const firstCardCount = await page.locator('article[data-testid^="discussion-topic-"]').count();
     if (firstCardCount !== pageSize) throw new Error(`expected ${pageSize} discussion topics, got ${firstCardCount}`);
     const apiPage = await fetchJson(`${apiBaseUrl}/discussions/areas/general?limit=${pageSize}`);
-    assertPublicDiscussionPage(apiPage, memberUserId);
+    assertPublicDiscussionPage(apiPage, memberPrincipalAlias);
     const thread = await fetchJson(`${apiBaseUrl}/discussions/areas/general/topics/${browserTopic}?limit=50`);
-    assertPublicDiscussionThread(thread, memberUserId);
+    assertPublicDiscussionThread(thread, memberPrincipalAlias);
     const older = page.getByTestId("discussion-topic-older");
     await Promise.all([page.waitForURL(/\?cursor=/, { timeout: 15000 }), older.click()]);
     await page.waitForLoadState("networkidle");
@@ -293,7 +297,7 @@ async function provePagination(context, frontendBaseUrl, apiBaseUrl, memberUserI
     const reloadCardCount = await page.locator('article[data-testid^="discussion-topic-"]').count();
     if (reloadCardCount !== 1) throw new Error(`older discussion page did not survive reload: ${reloadCardCount}`);
     const body = await page.getByTestId("discussion-topic-index").innerText();
-    if (body.includes(memberUserId) || body.includes("author_user_id")) {
+    if (body.includes(memberPrincipalAlias) || body.includes("author_user_id")) {
       throw new Error("public discussion route leaked an account identifier");
     }
     return {
@@ -309,7 +313,7 @@ async function provePagination(context, frontendBaseUrl, apiBaseUrl, memberUserI
   }
 }
 
-function assertPublicDiscussionThread(thread, memberUserId) {
+function assertPublicDiscussionThread(thread, memberPrincipalAlias) {
   const allowedArea = new Set(["slug", "title", "description"]);
   const allowedAuthor = new Set(["handle", "display_name"]);
   const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"]);
@@ -326,14 +330,14 @@ function assertPublicDiscussionThread(thread, memberUserId) {
       (post) =>
         Object.keys(post).some((key) => !allowedPost.has(key)) ||
         Object.keys(post.author ?? {}).some((key) => !allowedAuthor.has(key)) ||
-        JSON.stringify(post).includes(memberUserId),
+        JSON.stringify(post).includes(memberPrincipalAlias),
     )
   ) {
     throw new Error(`public discussion thread leaked or drifted: ${JSON.stringify(thread)}`);
   }
 }
 
-function assertPublicDiscussionPage(page, memberUserId) {
+function assertPublicDiscussionPage(page, memberPrincipalAlias) {
   const allowedArea = new Set(["slug", "title", "description"]);
   const allowedAuthor = new Set(["handle", "display_name"]);
   const allowedTopic = new Set(["topic", "title", "author", "posting_state", "visibility", "post_count", "updated_seq", "created_at", "updated_at", "last_post_seq", "last_post_at"]);
@@ -346,7 +350,7 @@ function assertPublicDiscussionPage(page, memberUserId) {
       (topic) =>
         Object.keys(topic).some((key) => !allowedTopic.has(key)) ||
         Object.keys(topic.author ?? {}).some((key) => !allowedAuthor.has(key)) ||
-        JSON.stringify(topic).includes(memberUserId),
+        JSON.stringify(topic).includes(memberPrincipalAlias),
     )
   ) {
     throw new Error(`public discussion API leaked or drifted: ${JSON.stringify(page)}`);
@@ -497,7 +501,7 @@ async function startApi(applicationUrl) {
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
-    env: { ...applicationDatabaseEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: process.env.RUST_LOG ?? "warn" },
+    env: { ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: process.env.RUST_LOG ?? "warn" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (chunk) => { serverOutput += chunk.toString(); });

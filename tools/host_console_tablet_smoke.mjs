@@ -7,10 +7,12 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+  assertPrincipalTransport,
+  fixturePrincipalAuthorityId,
+  fixturePrincipalTransport,
+} from "./principal_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -421,7 +423,7 @@ function startRustServer(port) {
   const child = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...applicationDatabaseEnvironment({ applicationUrl: smokeDatabase.applicationUrl }),
+      ...serverRuntimeEnvironment({ applicationUrl: smokeDatabase.applicationUrl }),
       FMARCH_BIND: `127.0.0.1:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_DEV_AUTH: "1",
@@ -522,21 +524,21 @@ function sanitizeDatabaseName(name) {
 async function seedLiveHostGame() {
   // Every persona/replacement target must exist before the command names it.
   // Dev sessions are this scratch fixture's canonical principal provisioner.
-  for (const principalUserId of [
+  for (const principalId of [
     hostPrincipal,
     "player-mira",
     "player-target",
     "player-rowan",
   ]) {
     const session = await postJson(`${apiBaseUrl}/auth/dev-session`, {
-      principal_user_id: principalUserId,
+      principal_id: fixturePrincipalAuthorityId(principalId),
       expires_at: 4_102_444_800,
     });
-    commandSessionTokens[principalUserId] = requiredSessionToken(session);
+    commandSessionTokens[principalId] = requiredSessionToken(session);
   }
   sessionToken = commandSessionTokens[hostPrincipal];
   bootstrapSessionToken = requiredSessionToken(await postJson(`${apiBaseUrl}/auth/dev-session`, {
-    principal_user_id: hostPrincipal,
+    principal_id: fixturePrincipalAuthorityId(hostPrincipal),
     expires_at: 4_102_444_800,
     global_capabilities: ["GlobalAdmin"],
   }));
@@ -600,15 +602,19 @@ async function seedLiveHostGame() {
 
 async function postCommand(
   id,
-  principalUserId,
+  principalId,
   command,
   { sessionTokenOverride } = {},
 ) {
   const actorSessionToken =
-    sessionTokenOverride ?? commandSessionTokens[principalUserId];
+    sessionTokenOverride ?? commandSessionTokens[principalId];
   if (actorSessionToken === undefined) {
-    throw new Error(`seed command actor has no session: ${principalUserId}`);
+    throw new Error(`seed command actor has no session: ${principalId}`);
   }
+  const transportCommand = fixturePrincipalTransport(
+    command,
+    "tablet seed command transport",
+  );
   const envelope = {
     v: 2,
     id,
@@ -616,7 +622,7 @@ async function postCommand(
       kind: "Command",
       body: {
         command_id: randomUUID(),
-        command,
+        command: transportCommand,
       },
     },
   };
@@ -686,7 +692,7 @@ function assertCommandEnvelope(envelope, expectedAction) {
     throw new Error(`${expectedAction.id} did not send a Command frame`);
   }
   const commandBody = envelope.body.body;
-  if (commandBody.principal_user_id !== undefined) {
+  if (commandBody.principal_id !== undefined) {
     throw new Error(
       `${expectedAction.id} included a client-supplied command principal`,
     );
@@ -695,6 +701,10 @@ function assertCommandEnvelope(envelope, expectedAction) {
     throw new Error(`${expectedAction.id} command_id was not a UUID`);
   }
   const command = commandBody.command;
+  assertPrincipalTransport(
+    command,
+    `${expectedAction.id} browser command transport`,
+  );
   const variant = Object.keys(command)[0];
   if (variant !== expectedAction.commandVariant) {
     throw new Error(

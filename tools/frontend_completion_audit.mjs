@@ -934,7 +934,7 @@ function adminBrowserOperationalEvidenceComplete() {
     entry.commandResult?.recovery?.form?.action === "?/checkRecoveryGate" &&
     includesAll(
       entry.commandResult?.recovery?.form?.fieldNames,
-      ["game", "principalUserId"],
+      ["game", "principalId"],
     ) &&
     entry.commandResult?.activity?.acknowledged?.state === "ack",
   );

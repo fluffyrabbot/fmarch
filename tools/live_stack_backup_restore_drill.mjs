@@ -1,15 +1,16 @@
 import { spawn } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { seedCommandPlanForGame } from "./dev_test_game.mjs";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+  fixturePrincipalAuthorityId,
+  fixturePrincipalTransport,
+} from "./principal_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "live-stack-backup-restore-drill");
@@ -22,7 +23,7 @@ const dumpPath = path.join(artifactDir, "local-live-stack.dump");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
 const game = randomUUID();
-const rootAdminSessionToken = canonicalSessionToken(`backup-restore-root-admin-${game}`);
+let rootAdminSessionToken;
 let hostSessionToken;
 let playerSessionToken;
 let adminSessionToken;
@@ -121,62 +122,22 @@ try {
 }
 
 async function seedSourceGame(apiBaseUrl) {
-  // The root GlobalAdmin session must exist before the seed loop: every seed
-  // command now authenticates through a session granted by this root token.
-  await runSql(sourceDatabase.applicationUrl, `
-    INSERT INTO platform_principal (
-      principal_user_id, status, global_capabilities, created_at, disabled_at
-    ) VALUES ('root_admin', 'active', ARRAY[]::TEXT[], 0, NULL)
-    ON CONFLICT (principal_user_id) DO NOTHING;
-  `);
-  await runSql(sourceDatabase.applicationUrl, `
-    INSERT INTO auth_account (
-      account_id,
-      principal_user_id,
-      password_hash,
-      created_at,
-      disabled_at,
-      global_capabilities
-    )
-    VALUES (
-      'backup-restore-root@local.fmarch.test',
-      'root_admin',
-      'seed-only-not-a-real-hash',
-      0,
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[]
-    )
-    ON CONFLICT (account_id) DO NOTHING;
-  `);
-  await runSql(sourceDatabase.applicationUrl, `
-    INSERT INTO auth_session (
-      token_hash,
-      principal_user_id,
-      created_at,
-      expires_at,
-      revoked_at,
-      global_capabilities,
-      idle_expires_at,
-      assurance,
-      authenticated_at
-    )
-    VALUES (
-      ${sqlLiteral(hashSessionToken(rootAdminSessionToken))},
-      'root_admin',
-      0,
-      4102444800,
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[],
-      4102444800,
-      'admin_grant',
-      0
-    )
-    ON CONFLICT (token_hash) DO UPDATE SET
-      principal_user_id = EXCLUDED.principal_user_id,
-      expires_at = EXCLUDED.expires_at,
-      revoked_at = NULL,
-      global_capabilities = EXCLUDED.global_capabilities;
-  `);
+  // The disposable dev endpoint is the root fixture's only authority mint.
+  // This keeps auth_account creation behind the classic-method invariant.
+  const rootSession = await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      principal_id: fixturePrincipalAuthorityId("root_admin"),
+      expires_at: 4102444800,
+      global_capabilities: ["GlobalAdmin"],
+    }),
+  });
+  if (typeof rootSession.session_token !== "string" || rootSession.session_token === "") {
+    throw new Error("root fixture session response omitted its issued token");
+  }
+  rootAdminSessionToken = rootSession.session_token;
+  seedSessionTokens.set("root_admin", rootAdminSessionToken);
 
   const seedPlan = [
     ...seedCommandPlanForGame(game),
@@ -194,21 +155,21 @@ async function seedSourceGame(apiBaseUrl) {
       },
     ],
   ];
-  const authenticatedPrincipals = new Set(seedPlan.map(([principalUserId]) => principalUserId));
+  const authenticatedPrincipals = new Set(seedPlan.map(([principalId]) => principalId));
   for (const [, command] of seedPlan) {
     const seatedPrincipal = command.SeatPersona?.principal_id;
     if (typeof seatedPrincipal === "string" && seatedPrincipal !== "") {
       authenticatedPrincipals.add(seatedPrincipal);
     }
   }
-  for (const principalUserId of authenticatedPrincipals) {
-    await seedSessionToken(apiBaseUrl, principalUserId);
+  for (const principalId of authenticatedPrincipals) {
+    await seedSessionToken(apiBaseUrl, principalId);
   }
 
   const seedCommands = [];
-  for (const [principalUserId, command] of seedPlan) {
+  for (const [principalId, command] of seedPlan) {
     seedCommands.push(
-      await sendCommand(apiBaseUrl, seedCommands.length + 1, principalUserId, command),
+      await sendCommand(apiBaseUrl, seedCommands.length + 1, principalId, command),
     );
   }
 
@@ -216,16 +177,16 @@ async function seedSourceGame(apiBaseUrl) {
   const grants = {
     admin: await createGrantedSession({
       apiBaseUrl,
-      principalUserId: "admin_a",
+      principalId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
     host: await createGrantedSession({
       apiBaseUrl,
-      principalUserId: "host_h",
+      principalId: "host_h",
     }),
     player: await createGrantedSession({
       apiBaseUrl,
-      principalUserId: "player-mira",
+      principalId: "player-mira",
     }),
   };
   adminSessionToken = grants.admin.sessionToken;
@@ -235,7 +196,7 @@ async function seedSourceGame(apiBaseUrl) {
     Object.entries(grants).map(([role, grant]) => [
       role,
       {
-        principalUserId: grant.principalUserId,
+        principalId: grant.principalId,
         capabilityKinds: grant.capabilityKinds,
       },
     ]),
@@ -247,7 +208,7 @@ async function seedSourceGame(apiBaseUrl) {
     seedCommandKinds: seedCommands.map((command) => command.kind),
     grantedSessions,
     boundary:
-      "Source DB is seeded through the real Rust /commands API plus /auth/session-grants; the root GlobalAdmin token is inserted directly into the disposable local auth_session table.",
+      "Source DB is seeded through the real Rust auth and /commands APIs; fixture aliases become UUID authority only at account, session, and command transports.",
   };
 }
 
@@ -468,10 +429,17 @@ async function databaseFingerprint(url) {
       'authSessions', (
         SELECT jsonb_build_object(
           'total', COUNT(*),
-          'principals', COALESCE(jsonb_agg(principal_user_id ORDER BY principal_user_id), '[]'::jsonb)
+          'principals', COALESCE(jsonb_agg(principal_id ORDER BY principal_id), '[]'::jsonb)
         )
         FROM auth_session
-        WHERE principal_user_id IN ('root_admin', 'admin_a', 'host_h', 'player-mira')
+        WHERE principal_id IN (${[
+          "root_admin",
+          "admin_a",
+          "host_h",
+          "player-mira",
+        ]
+          .map((alias) => `${sqlLiteral(fixturePrincipalAuthorityId(alias))}::uuid`)
+          .join(", ")})
       )
     ) AS fingerprint;
   `);
@@ -584,7 +552,7 @@ async function startApi(applicationUrl, label) {
   const child = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
-      ...applicationDatabaseEnvironment({ applicationUrl }),
+      ...serverRuntimeEnvironment({ applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_EVENT_WRAP_KEY:
@@ -636,16 +604,20 @@ async function startApi(applicationUrl, label) {
 
 // The strict wire rejects any actor field in the envelope; seed commands act
 // as a principal by presenting a granted session for that principal instead.
-async function seedSessionToken(apiBaseUrl, principalUserId) {
-  if (principalUserId === "root_admin") {
+async function seedSessionToken(apiBaseUrl, principalId) {
+  if (principalId === "root_admin") {
+    if (typeof rootAdminSessionToken !== "string" || rootAdminSessionToken === "") {
+      throw new Error("root fixture session was not created");
+    }
     return rootAdminSessionToken;
   }
-  const cached = seedSessionTokens.get(principalUserId);
+  const cached = seedSessionTokens.get(principalId);
   if (cached !== undefined) {
     return cached;
   }
   const globalCapabilities =
-    principalUserId === "host_h" ? ["GlobalAdmin"] : [];
+    principalId === "host_h" ? ["GlobalAdmin"] : [];
+  const authorityPrincipalId = fixturePrincipalAuthorityId(principalId);
   await fetchJson(`${apiBaseUrl}/auth/accounts`, {
     method: "POST",
     headers: {
@@ -653,9 +625,9 @@ async function seedSessionToken(apiBaseUrl, principalUserId) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      account_id: `backup-restore-${principalUserId}@local.fmarch.test`,
-      password: `backup restore seed password ${principalUserId}`,
-      principal_user_id: principalUserId,
+      account_id: `backup-restore-${principalId}@local.fmarch.test`,
+      password: `backup restore seed password ${principalId}`,
+      principal_id: authorityPrincipalId,
       global_capabilities: globalCapabilities,
     }),
   });
@@ -666,20 +638,20 @@ async function seedSessionToken(apiBaseUrl, principalUserId) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      principal_user_id: principalUserId,
+      principal_id: authorityPrincipalId,
       expires_at: 4102444800,
       global_capabilities: globalCapabilities,
     }),
   });
   if (typeof granted.session_token !== "string" || granted.session_token === "") {
-    throw new Error(`session grant for ${principalUserId} returned no session_token`);
+    throw new Error(`session grant for ${principalId} returned no session_token`);
   }
-  seedSessionTokens.set(principalUserId, granted.session_token);
+  seedSessionTokens.set(principalId, granted.session_token);
   return granted.session_token;
 }
 
-async function sendCommand(apiBaseUrl, id, principalUserId, command) {
-  const sessionToken = await seedSessionToken(apiBaseUrl, principalUserId);
+async function sendCommand(apiBaseUrl, id, principalId, command) {
+  const sessionToken = await seedSessionToken(apiBaseUrl, principalId);
   const result = await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
     headers: {
@@ -693,7 +665,7 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
         kind: "Command",
         body: {
           command_id: randomUUID(),
-          command,
+          command: fixturePrincipalTransport(command, "backup restore command transport"),
         },
       },
     }),
@@ -702,7 +674,7 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
     throw new Error(`command rejected: ${JSON.stringify(result)}`);
   }
   return {
-    principalUserId,
+    principalId,
     kind: Object.keys(command)[0],
     streamSeqs: result.body.body.stream_seqs,
   };
@@ -710,9 +682,10 @@ async function sendCommand(apiBaseUrl, id, principalUserId, command) {
 
 async function createGrantedSession({
   apiBaseUrl,
-  principalUserId,
+  principalId,
   globalCapabilities = [],
 }) {
+  const authorityPrincipalId = fixturePrincipalAuthorityId(principalId);
   const session = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
     method: "POST",
     headers: {
@@ -720,14 +693,14 @@ async function createGrantedSession({
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      principal_user_id: principalUserId,
+      principal_id: authorityPrincipalId,
       expires_at: 4102444800,
       global_capabilities: globalCapabilities,
     }),
   });
   return {
     sessionToken: session.session_token,
-    principalUserId: session.principal_user_id,
+    principalId: session.principal_id,
     capabilityKinds: capabilityKinds(session),
   };
 }
@@ -744,10 +717,6 @@ async function queryJson(url, sql) {
     sql,
   ]);
   return JSON.parse(output.trim());
-}
-
-async function runSql(url, sql) {
-  return await runProcess("psql", [url, "-v", "ON_ERROR_STOP=1", "-c", sql]);
 }
 
 async function runProcess(command, args) {
@@ -863,14 +832,6 @@ function assertDeepEqual(actual, expected, label) {
   if (actualJson !== expectedJson) {
     throw new Error(`${label} mismatch\nactual: ${actualJson}\nexpected: ${expectedJson}`);
   }
-}
-
-function hashSessionToken(token) {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-function canonicalSessionToken(seed) {
-  return `fmss_${hashSessionToken(seed)}`;
 }
 
 function sqlLiteral(value) {

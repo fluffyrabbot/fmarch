@@ -1,4 +1,5 @@
 use eventstore::decrypt_delivery_credential;
+use principal::PrincipalId;
 use reqwest::{Client, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -40,7 +41,7 @@ pub struct IdentityDeliveryAttempt {
     pub delivery_id: Uuid,
     pub kind: IdentityDeliveryKind,
     pub account_id: String,
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub credential_hash: String,
     pub credential_expires_at: i64,
     pub credential_material: Option<String>,
@@ -54,7 +55,7 @@ impl fmt::Debug for IdentityDeliveryAttempt {
             .field("delivery_id", &self.delivery_id)
             .field("kind", &self.kind)
             .field("account_id", &self.account_id)
-            .field("principal_user_id", &self.principal_user_id)
+            .field("principal_id", &self.principal_id)
             .field("credential_hash", &self.credential_hash)
             .field("credential_expires_at", &self.credential_expires_at)
             .field(
@@ -299,7 +300,7 @@ impl HttpJsonIdentityDeliveryGateway {
             delivery_id: attempt.delivery_id,
             delivery_kind: attempt.kind.as_str(),
             account_id: &attempt.account_id,
-            principal_user_id: &attempt.principal_user_id,
+            principal_id: &attempt.principal_id,
             credential,
             attempt_number: attempt.attempt_number,
             idempotency_key: attempt.delivery_id,
@@ -366,7 +367,7 @@ struct IdentityDeliveryProviderRequest<'a> {
     delivery_id: Uuid,
     delivery_kind: &'static str,
     account_id: &'a str,
-    principal_user_id: &'a str,
+    principal_id: &'a PrincipalId,
     credential: &'a str,
     attempt_number: i32,
     idempotency_key: Uuid,
@@ -433,7 +434,7 @@ struct IdentityDeliveryCancellationRequest<'a> {
     delivery_id: Uuid,
     kind: IdentityDeliveryKind,
     account_id: &'a str,
-    principal_user_id: &'a str,
+    principal_id: &'a PrincipalId,
     credential_hash: &'a str,
     provider_id: &'a str,
     cancelled_at: i64,
@@ -443,8 +444,8 @@ struct IdentityDeliveryCancellationRequest<'a> {
 struct IdentityDeliveryAuditRecord<'a> {
     event_at: i64,
     event_kind: &'a str,
-    actor_user_id: &'a str,
-    principal_user_id: &'a str,
+    actor_principal_id: &'a PrincipalId,
+    principal_id: &'a PrincipalId,
     credential_hash: &'a str,
     delivery_id: Uuid,
     delivery_kind: IdentityDeliveryKind,
@@ -459,7 +460,7 @@ pub async fn process_identity_delivery_intent(
     pool: &PgPool,
     gateway: &dyn IdentityDeliveryGateway,
     delivery_id: Uuid,
-    actor_user_id: &str,
+    actor_principal_id: &PrincipalId,
     event_kind: &str,
     now: i64,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
@@ -467,7 +468,15 @@ pub async fn process_identity_delivery_intent(
     else {
         return Ok(None);
     };
-    deliver_and_finalize(pool, claim, gateway, actor_user_id, Some(event_kind), now).await
+    deliver_and_finalize(
+        pool,
+        claim,
+        gateway,
+        actor_principal_id,
+        Some(event_kind),
+        now,
+    )
+    .await
 }
 
 pub async fn process_next_identity_delivery(
@@ -478,8 +487,8 @@ pub async fn process_next_identity_delivery(
     let Some(claim) = claim_delivery(pool, gateway.provider_id(), None, now).await? else {
         return Ok(None);
     };
-    let actor_user_id = claim.attempt.principal_user_id.clone();
-    deliver_and_finalize(pool, claim, gateway, &actor_user_id, None, now).await
+    let actor_principal_id = claim.attempt.principal_id;
+    deliver_and_finalize(pool, claim, gateway, &actor_principal_id, None, now).await
 }
 
 pub fn spawn_identity_delivery_worker(
@@ -632,9 +641,9 @@ async fn claim_delivery(
     now: i64,
 ) -> Result<Option<ClaimedIdentityDelivery>, IdentityDeliveryError> {
     let mut tx = pool.begin().await?;
-    let row = sqlx::query_as::<_, (Uuid, String, String, String, String, i64, i32, Option<Value>)>(
+    let row = sqlx::query_as::<_, (Uuid, String, String, Uuid, String, i64, i32, Option<Value>)>(
         r#"
-        SELECT delivery_id, delivery_kind, account_id, principal_user_id, credential_hash, credential_expires_at, attempt_count, credential_envelope
+        SELECT delivery_id, delivery_kind, account_id, principal_id, credential_hash, credential_expires_at, attempt_count, credential_envelope
         FROM auth_delivery_intent
         WHERE provider_id = $1
           AND ($2::UUID IS NULL OR delivery_id = $2)
@@ -657,7 +666,7 @@ async fn claim_delivery(
         delivery_id,
         delivery_kind,
         account_id,
-        principal_user_id,
+        principal_id,
         credential_hash,
         credential_expires_at,
         attempt_count,
@@ -668,12 +677,13 @@ async fn claim_delivery(
         return Ok(None);
     };
     let kind = IdentityDeliveryKind::parse(&delivery_kind).expect("validated delivery kind");
+    let principal_id = PrincipalId::from_uuid(principal_id);
     if !credential_is_active(&mut tx, kind, credential_hash.as_str()).await? {
         let request = IdentityDeliveryCancellationRequest {
             delivery_id,
             kind,
             account_id: account_id.as_str(),
-            principal_user_id: principal_user_id.as_str(),
+            principal_id: &principal_id,
             credential_hash: credential_hash.as_str(),
             provider_id,
             cancelled_at: now,
@@ -712,7 +722,7 @@ async fn claim_delivery(
             delivery_id,
             kind,
             account_id,
-            principal_user_id,
+            principal_id,
             credential_hash,
             credential_expires_at,
             credential_material: None,
@@ -853,8 +863,8 @@ async fn cancel_claimed_delivery(
         IdentityDeliveryAuditRecord {
             event_at: request.cancelled_at,
             event_kind: "auth_delivery_cancelled",
-            actor_user_id: request.principal_user_id,
-            principal_user_id: request.principal_user_id,
+            actor_principal_id: request.principal_id,
+            principal_id: request.principal_id,
             credential_hash: request.credential_hash,
             delivery_id: request.delivery_id,
             delivery_kind: request.kind,
@@ -915,7 +925,7 @@ async fn deliver_and_finalize(
     pool: &PgPool,
     mut claim: ClaimedIdentityDelivery,
     gateway: &dyn IdentityDeliveryGateway,
-    actor_user_id: &str,
+    actor_principal_id: &PrincipalId,
     requested_event_kind: Option<&str>,
     now: i64,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
@@ -942,7 +952,7 @@ async fn deliver_and_finalize(
         (IdentityDeliveryOutcome::PermanentFailure(_), None) => "auth_delivery_permanent_failed",
     };
     let receipt =
-        finalize_delivery(&mut tx, claim, outcome, actor_user_id, event_kind, now).await?;
+        finalize_delivery(&mut tx, claim, outcome, actor_principal_id, event_kind, now).await?;
     tx.commit().await?;
     Ok(receipt)
 }
@@ -951,7 +961,7 @@ async fn finalize_delivery(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     claim: ClaimedIdentityDelivery,
     outcome: IdentityDeliveryOutcome,
-    actor_user_id: &str,
+    actor_principal_id: &PrincipalId,
     event_kind: &str,
     now: i64,
 ) -> Result<Option<IdentityDeliveryReceipt>, IdentityDeliveryError> {
@@ -998,8 +1008,8 @@ async fn finalize_delivery(
         IdentityDeliveryAuditRecord {
             event_at: now,
             event_kind,
-            actor_user_id,
-            principal_user_id: claim.attempt.principal_user_id.as_str(),
+            actor_principal_id,
+            principal_id: &claim.attempt.principal_id,
             credential_hash: claim.attempt.credential_hash.as_str(),
             delivery_id: claim.attempt.delivery_id,
             delivery_kind: claim.attempt.kind,
@@ -1031,14 +1041,14 @@ async fn record_delivery_audit(
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
-            event_at, event_kind, actor_user_id, principal_user_id, token_hash, related_token_hash, metadata
+            event_at, event_kind, actor_principal_id, principal_id, token_hash, related_token_hash, metadata
         ) VALUES ($1, $2, $3, $4, $5, NULL, $6::JSONB)
         "#,
     )
     .bind(record.event_at)
     .bind(record.event_kind)
-    .bind(record.actor_user_id)
-    .bind(record.principal_user_id)
+    .bind(record.actor_principal_id.as_uuid())
+    .bind(record.principal_id.as_uuid())
     .bind(record.credential_hash)
     .bind(
         serde_json::json!({
@@ -1073,6 +1083,7 @@ mod tests {
         IdentityDeliveryOutcome, LocalDeterministicIdentityDeliveryGateway, DISABLED_PROVIDER_ID,
         LOCAL_DETERMINISTIC_PROVIDER_ID,
     };
+    use principal::PrincipalId;
     use uuid::Uuid;
 
     #[tokio::test]
@@ -1117,7 +1128,7 @@ mod tests {
             delivery_id: Uuid::nil(),
             kind: IdentityDeliveryKind::Invite,
             account_id: "member@example.test".to_string(),
-            principal_user_id: "member_a".to_string(),
+            principal_id: PrincipalId::fixture("member_a"),
             credential_hash: "redacted-hash".to_string(),
             credential_expires_at: 4_102_444_800,
             credential_material: None,

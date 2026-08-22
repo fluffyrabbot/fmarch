@@ -1508,7 +1508,7 @@ async function proveDayThreePlayerObservation({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       [slotField]: expectedSlot,
-      principalUserId: expectedPrincipalUserId,
+      principalId: expectedPrincipalUserId,
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,
@@ -1831,7 +1831,7 @@ async function provePostDayThreeResolutionSurface({
     roleUrl: actionPlayerRoleUrl,
     cookieValue: "fixture-player",
     expectedSlot: "slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     slotField: "actionPlayerSlot",
     commandState: seededNightThreeActionPlayerCommandState({
       boundary:
@@ -1870,7 +1870,7 @@ async function proveNightThreeEmptyResolutionSurface({
     roleUrl: actionPlayerRoleUrl,
     cookieValue: "fixture-player",
     expectedSlot: "slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     slotField: "actionPlayerSlot",
     commandState: seededNightThreeActionPlayerCommandState({
       boundary:
@@ -1891,7 +1891,7 @@ async function proveNightThreeEmptyResolutionSurface({
     roleUrl: actionPlayerRoleUrl,
     cookieValue: "fixture-player",
     expectedSlot: "slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     slotField: "actionPlayerSlot",
     commandState: seededDayFourActionPlayerCommandState({
       boundary:
@@ -1928,7 +1928,7 @@ async function proveDayFourSurvivorRoleSurface({
     roleUrl,
     cookieValue: "fixture-survivor",
     expectedSlot: "slot-5",
-    principalUserId: "player_sage",
+    principalId: "player_sage",
     slotField: "survivorSlot",
     commandState: seededDayFourSurvivorCommandState({
       boundary:
@@ -2048,7 +2048,7 @@ async function provePostNightFourTransitionSurface({
     roleUrl: deadPlayerRoleUrl,
     cookieValue: "fixture-night-target",
     expectedSlot: "slot-3",
-    principalUserId: "player-seed",
+    principalId: "player-seed",
     slotField: "deadPlayerSlot",
     commandState: seededDayFiveDeadPlayerCommandState({
       boundary:
@@ -2075,7 +2075,7 @@ async function provePostNightFourTransitionSurface({
     roleUrl: actionPlayerRoleUrl,
     cookieValue: "fixture-player",
     expectedSlot: "slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     slotField: "actionPlayerSlot",
     commandState: seededDayFiveActionPlayerCommandState({
       boundary:
@@ -2136,7 +2136,7 @@ async function proveDayFiveNoLynchResolutionSurface({
     roleUrl: actionPlayerRoleUrl,
     cookieValue: "fixture-player",
     expectedSlot: "slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     slotField: "actionPlayerSlot",
     commandState: seededNightFiveActionPlayerCommandState({
       boundary:
@@ -2213,7 +2213,7 @@ async function proveCompletedGameEndgameSurface({
     roleUrl: actionPlayerRoleUrl,
     cookieValue: "fixture-player",
     expectedSlot: "slot-7",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     slotField: "actionPlayerSlot",
     commandState: seededCompletedActionPlayerCommandState({
       boundary:
@@ -3813,7 +3813,7 @@ async function provePostDayThreePlayerSurface({
   roleUrl,
   cookieValue,
   expectedSlot,
-  principalUserId,
+  principalId,
   slotField,
   commandState,
   notifications,
@@ -3905,7 +3905,7 @@ async function provePostDayThreePlayerSurface({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       [slotField]: expectedSlot,
-      principalUserId,
+      principalId,
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,
@@ -5597,7 +5597,7 @@ async function proveTargetResolutionReceiptSurface({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       targetSlot: "slot-2",
-      principalUserId: "player_ilya",
+      principalId: "player_ilya",
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,
@@ -5761,7 +5761,7 @@ async function proveNormalResolutionPrivacySurface({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       normalSlot: "slot-4",
-      principalUserId: "player_rowan",
+      principalId: "player_rowan",
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,
@@ -5918,7 +5918,7 @@ async function proveTargetDayVoteReceiptSurface({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       targetSlot: "slot-2",
-      principalUserId: "player_ilya",
+      principalId: "player_ilya",
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,
@@ -6051,7 +6051,7 @@ async function proveNormalDayVotePrivacySurface({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       normalSlot: "slot-4",
-      principalUserId: "player_rowan",
+      principalId: "player_rowan",
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,
@@ -6178,7 +6178,7 @@ async function proveTargetPostDayVoteAdvanceSurface({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       targetSlot: "slot-2",
-      principalUserId: "player_ilya",
+      principalId: "player_ilya",
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,
@@ -6314,7 +6314,7 @@ async function proveNormalPostDayVoteAdvanceSurface({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       normalSlot: "slot-4",
-      principalUserId: "player_rowan",
+      principalId: "player_rowan",
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,
@@ -6441,7 +6441,7 @@ async function proveNightActionResolutionReceiptSurface({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       targetSlot: "slot-3",
-      principalUserId: "player-seed",
+      principalId: "player-seed",
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,
@@ -6575,7 +6575,7 @@ async function proveNormalNightActionResolutionPrivacySurface({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       normalSlot: "slot-4",
-      principalUserId: "player_rowan",
+      principalId: "player_rowan",
       checkpoint: {
         phaseId: checkpointPhaseId,
         phaseState: checkpointPhaseState,

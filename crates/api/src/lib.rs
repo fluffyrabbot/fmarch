@@ -49,6 +49,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use identity::{AccessTokenVerifier, FilesystemSubjectKeyStore, SubjectKeyStore};
 use media::{MediaRepository, VariantLimits};
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use std::collections::HashMap;
@@ -69,7 +70,7 @@ pub struct ApiState {
     live_projection: LiveProjectionPublisher,
     live_projection_delivery_delay: Duration,
     live_connection_slots: Arc<Semaphore>,
-    live_principal_slots: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
+    live_principal_slots: Arc<Mutex<HashMap<PrincipalId, Arc<Semaphore>>>>,
     live_principal_limit: usize,
     media_slots: Arc<Semaphore>,
     media_account_quota_bytes: i64,

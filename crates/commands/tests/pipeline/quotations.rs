@@ -150,7 +150,7 @@ async fn submit_post_rejects_quoting_a_private_channel_seq_from_main(pool: PgPoo
             Command::SeatPersona {
                 game,
                 slot: slot.into(),
-                principal_id: occupant.into(),
+                principal_id: crate::common::fixture_principal_id(occupant),
                 public_name: format!("Persona {slot}"),
             },
         )

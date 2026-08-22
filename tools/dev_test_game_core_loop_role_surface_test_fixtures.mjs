@@ -592,7 +592,7 @@ export function privateReceiptProofFixture({ game, scenario }) {
     visitedRolePath: `/g/${game}?private=notification-1`,
     surfaceTestId: "player-surface",
     [scenario.slotField]: scenario.expectedSlot,
-    principalUserId: scenario.principalUserId,
+    principalId: scenario.principalId,
     checkpoint: {
       phaseId: scenario.phaseId,
       phaseState: scenario.phaseState,
@@ -665,7 +665,7 @@ export function postDayVoteAdvanceProofFixture({ game, surfaceCase }) {
     visitedRolePath: `/g/${game}?private=notification-1`,
     surfaceTestId: "player-surface",
     [surfaceCase.slotField]: surfaceCase.expectedSlot,
-    principalUserId: surfaceCase.principalUserId,
+    principalId: surfaceCase.principalId,
     checkpoint: {
       phaseId: surfaceCase.phaseId,
       phaseState: surfaceCase.phaseState,

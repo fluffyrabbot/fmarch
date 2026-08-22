@@ -123,7 +123,7 @@ export async function runSeededSetupBootstrapScenario({
       await assignSetupSlot({
         setupPage,
         slotId: row.slot,
-        principalUserId: row.user,
+        principalId: row.user,
       }),
     );
     commands.push(
@@ -176,7 +176,7 @@ export async function runSeededSetupBootstrapScenario({
     proof:
       "Seeded local game bootstrap used the /setup route to add slots, assign occupants, assign roles, round-trip main post policy, and start D01 before gameplay priming.",
     roleUrl,
-    sessionPrincipalUserId: bootstrapSession.principalUserId,
+    sessionPrincipalUserId: bootstrapSession.principalId,
     credentialKind: bootstrapSession.credentialKind,
     capabilityLabel,
     readinessSummary,
@@ -293,13 +293,13 @@ export async function addSetupSlot({ setupPage, slotId }) {
 export async function assignSetupSlot({
   setupPage,
   slotId,
-  principalUserId,
+  principalId,
 }) {
   await selectHostSetupStage(setupPage, "roster");
   const row = setupPage.getByTestId(`host-setup-slot-${slotId}`);
   await row
-    .locator('input[name="principalUserId"]')
-    .fill(principalUserId);
+    .locator('input[name="principalId"]')
+    .fill(principalId);
   await row
     .locator('input[name="publicName"]')
     .fill(`Persona ${slotId}`);
@@ -310,13 +310,13 @@ export async function assignSetupSlot({
     commandKind: "SeatPersona",
     commandPredicate: (command) =>
       command?.slot === slotId &&
-      command?.principal_id === principalUserId &&
+      command?.principal_id === principalId &&
       command?.public_name === `Persona ${slotId}`,
     statePredicate: (setupState) =>
       setupState?.slots?.some(
         (slot) =>
           slot.slotId === slotId &&
-          slot.assignedPrincipalId === principalUserId,
+          slot.assignedPrincipalId === principalId,
       ),
   });
 }
@@ -532,7 +532,7 @@ async function waitForHostSetupPolicyCommand({
   if (
     policyText !== expectedPolicyText ||
     statusState !== "ack" ||
-    outcome?.requestEnvelope?.body?.body?.principal_user_id !== undefined ||
+    outcome?.requestEnvelope?.body?.body?.principal_id !== undefined ||
     outcome?.requestEnvelope?.body?.body?.command?.SetPostPolicy?.channel_id !==
       "main" ||
     outcome?.requestEnvelope?.body?.body?.command?.SetPostPolicy

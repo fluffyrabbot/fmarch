@@ -866,7 +866,7 @@ test("static role contract artifact records shared nav focus and route state mat
     label: "Technical access",
     value: "HostOf(midsummer) · @host_h",
     gameId: "midsummer",
-    principalUserId: "host_h",
+    principalId: "host_h",
     capabilityLabel: "HostOf(midsummer)",
     commandEndpoint: "/commands",
   });
@@ -1496,7 +1496,7 @@ test("route-state render artifact covers every forced board and role page state"
     commandContext: {
       testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
       gameId: "midsummer",
-      principalUserId: "host_h",
+      principalId: "host_h",
       capabilityLabel: "HostOf(midsummer)",
       commandEndpoint: "/commands",
     },
@@ -1726,7 +1726,7 @@ test("dispatch bridge artifact maps trace metadata into typed command lifecycles
     },
     commandKind: "AddCohost",
     commandEndpoint: "/commands",
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     optimisticState: "pending",
     finalState: "ack",
     projectionRefreshKeys: [],
@@ -2397,7 +2397,7 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
     targetTestId: "admin-recovery-confirm-recovery-gate",
     form: {
       action: "?/checkRecoveryGate",
-      fieldNames: ["game", "principalUserId"],
+      fieldNames: ["game", "principalId"],
     },
   });
   assertNoBindInteractionEntries(noBindInteractions.interactions.player, {
@@ -6144,7 +6144,7 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
       formTestId: "admin-recovery-form-recovery-gate",
       action: "?/checkRecoveryGate",
       fieldTestIds: [],
-      fieldNames: ["game", "principalUserId"],
+      fieldNames: ["game", "principalId"],
     });
     assert.deepEqual(entry.commandResult.activity.rejected, {
       activityTestId: "admin-command-activity",

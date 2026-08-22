@@ -126,6 +126,28 @@ fn narrative_day_program(program_id: &str, event_ids: &[&str]) -> game_platform:
     program
 }
 
+fn assert_service_audit_initiator(metadata: &serde_json::Value, service_id: &str) {
+    assert_eq!(
+        metadata["initiator"],
+        serde_json::json!({
+            "kind": "service",
+            "service_id": service_id,
+        })
+    );
+    assert!(metadata.get("principal_id").is_none());
+}
+
+fn assert_principal_audit_initiator(metadata: &serde_json::Value, principal_label: &str) {
+    assert_eq!(
+        metadata["initiator"],
+        serde_json::json!({
+            "kind": "principal",
+            "principal_id": fixture_principal_id(principal_label),
+        })
+    );
+    assert!(metadata.get("principal_id").is_none());
+}
+
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn day_program_attachment_compiles_atomically_and_preserves_generations(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
@@ -492,13 +514,14 @@ async fn scheduler_worker_catches_up_missed_boundaries_and_records_service_autho
     assert_eq!(event.open_due_at, Some(100));
     assert_eq!(event.lock_due_at, Some(200));
 
-    let meta = stored_events(&pool, game)
+    let event = stored_events(&pool, game)
         .await
         .into_iter()
         .find(|event| event.kind == "DayEventOpenDue")
-        .expect("DayEventOpenDue event")
-        .meta;
-    assert_eq!(meta["principal_user_id"], "service:day-event-automation");
+        .expect("DayEventOpenDue event");
+    assert_eq!(event.actor, ActorId::System);
+    let meta = &event.meta;
+    assert_service_audit_initiator(meta, "day-event-automation");
     assert_eq!(
         meta["authority_used"],
         format!("DayEventAutomation({game})")
@@ -746,15 +769,23 @@ async fn day_event_narratives_compile_publish_and_rebuild_as_host_notices(pool: 
         .filter(|event| event.kind == "DayEventNarrativePublished")
         .count();
     assert_eq!(published, 5);
-    assert!(stream
+    let narrative_posts = stream
         .iter()
-        .filter(|event| event.kind == "PostSubmitted"
-            && event.payload.get("day_event_narrative").is_some())
-        .all(|event| {
-            event.actor == ActorId::Host
-                && event.meta["principal_user_id"] == "service:day-event-narrative"
-                && event.meta["authority_used"] == format!("DayEventNarrative({game})")
-        }));
+        .filter(|event| {
+            event.kind == "PostSubmitted" && event.payload.get("day_event_narrative").is_some()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(narrative_posts.len(), published);
+    for event in narrative_posts {
+        // A narrative is authored by the in-game host narrator, while the
+        // scheduler service remains its initiating authority.
+        assert_eq!(event.actor, ActorId::Host);
+        assert_service_audit_initiator(&event.meta, "day-event-narrative");
+        assert_eq!(
+            event.meta["authority_used"],
+            format!("DayEventNarrative({game})")
+        );
+    }
 
     let caught_up = run_day_event_scheduler_once(&pool, &config, Uuid::new_v4(), 103)
         .await
@@ -914,7 +945,7 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
             game,
             slot: slot.into(),
             outgoing_persona_id: current_slot_persona_id(&pool, game, slot).await,
-            incoming_principal_id: incoming.into(),
+            incoming_principal_id: fixture_principal_id(incoming),
         },
     )
     .await
@@ -1187,10 +1218,7 @@ async fn automatic_day_event_records_lock_seed_and_resolves_atomically_as_system
         .find(|event| event.kind == "DayEventResolved")
         .expect("automatic resolution fact");
     assert_eq!(resolution.actor, eventstore::ActorId::System);
-    assert_eq!(
-        resolution.meta["principal_user_id"],
-        "service:day-event-automation"
-    );
+    assert_service_audit_initiator(&resolution.meta, "day-event-automation");
     assert_eq!(
         resolution.meta["authority_used"],
         format!("DayEventAutomation({game})")
@@ -1565,7 +1593,7 @@ async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool:
         resolved_batch[1].meta["command_id"],
         resolution_command_id.to_string()
     );
-    assert_eq!(resolved_batch[1].meta["principal_user_id"], "host_h");
+    assert_principal_audit_initiator(&resolved_batch[1].meta, "host_h");
     assert_eq!(
         resolved_batch[1].meta["authority_used"],
         format!("HostOf({game})")
@@ -1707,7 +1735,7 @@ async fn day_event_ops_and_resolution_honor_independent_cohost_denials(pool: PgP
         &user("host_h"),
         Command::AddCohost {
             game,
-            user: "user_c".into(),
+            principal_id: fixture_principal_id("user_c"),
         },
     )
     .await

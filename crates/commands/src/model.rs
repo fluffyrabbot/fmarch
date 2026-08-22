@@ -1,5 +1,6 @@
 //! Command / Ack / Reject types: the typed surface of the pipeline.
 
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -150,7 +151,7 @@ pub enum Command {
     SeatPersona {
         game: Uuid,
         slot: String,
-        principal_id: String,
+        principal_id: PrincipalId,
         public_name: String,
     },
     /// Change a game persona's public game-local name. Host-team (Setup class).
@@ -183,12 +184,21 @@ pub enum Command {
         slot: String,
         tag: String,
     },
-    /// Delegate cohost authority to a user. **Primary host only** (structural).
-    AddCohost { game: Uuid, user: String },
+    /// Delegate cohost authority to a principal. **Primary host only** (structural).
+    AddCohost {
+        game: Uuid,
+        principal_id: PrincipalId,
+    },
     /// Grant read-only access to the fixed spectator room. Host-team (Setup class).
-    GrantSpectator { game: Uuid, user: String },
+    GrantSpectator {
+        game: Uuid,
+        principal_id: PrincipalId,
+    },
     /// Revoke read-only access to the fixed spectator room. Host-team (Setup class).
-    RevokeSpectator { game: Uuid, user: String },
+    RevokeSpectator {
+        game: Uuid,
+        principal_id: PrincipalId,
+    },
     /// Freeze the roster and start the game at `phase`. Host-team (PhaseResolve).
     StartGame { game: Uuid, phase: String },
     /// Open a Day phase (the votable window). Host-team (PhaseResolve).
@@ -346,7 +356,7 @@ pub enum Command {
         game: Uuid,
         slot: String,
         outgoing_persona_id: game_platform::GamePersonaId,
-        incoming_principal_id: String,
+        incoming_principal_id: PrincipalId,
     },
 }
 

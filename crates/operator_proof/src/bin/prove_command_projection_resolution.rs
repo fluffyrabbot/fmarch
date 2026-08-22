@@ -13,6 +13,7 @@ use operator_proof::{
     build_operator_command_projection_resolution_report,
     build_operator_projection_rebuild_audit_report, build_operator_resolution_diff_report,
 };
+use principal::PrincipalId;
 use projections::audit_rebuild;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
@@ -157,7 +158,7 @@ async fn seed_and_resolve_fixture_game(
     fixture: &NightFixture,
 ) -> Result<Uuid, Box<dyn std::error::Error>> {
     let game = Uuid::new_v4();
-    let host = Principal::user("fixture_host");
+    let host = Principal::authenticated(PrincipalId::fixture("fixture_host"));
     handle_fixture_command(
         pool,
         &host,
@@ -214,10 +215,10 @@ async fn seed_and_resolve_fixture_game(
     for action in &fixture.actions {
         handle_fixture_command(
             pool,
-            &Principal::user(format!(
+            &Principal::authenticated(PrincipalId::fixture(format!(
                 "fixture_user_{}",
                 slot_number(&action.actor_slot).unwrap_or(0)
-            )),
+            ))),
             Command::SubmitAction {
                 game,
                 action_id: action.action_id.clone(),

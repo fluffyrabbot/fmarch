@@ -13,6 +13,14 @@ const scriptPath = fileURLToPath(import.meta.url);
 const defaultCacheNamespace = "fmarch-exact-image-rust-1.95";
 export const requiredExactImageEngine = "podman";
 
+export const exactImageRuntimeBinaries = Object.freeze([
+  "fmarch-server",
+  "fmarch-migrate",
+  "fmarch-schema-gate",
+  "fmarch-event-key-admin",
+  "fmarch-profile-index-admin",
+]);
+
 export const exactImageTimingPhases = Object.freeze([
   "engine_probe",
   "host_content_check",
@@ -24,10 +32,7 @@ export const exactImageTimingPhases = Object.freeze([
 
 const checkScript = [
   'test "$(id -u)" = "10001"',
-  "test -x /usr/local/bin/fmarch-server",
-  "test -x /usr/local/bin/fmarch-migrate",
-  "test -x /usr/local/bin/fmarch-schema-gate",
-  "test -x /usr/local/bin/fmarch-event-key-admin",
+  ...exactImageRuntimeBinaries.map((binary) => `test -x /usr/local/bin/${binary}`),
   "test ! -e /packs",
   "test ! -e /programs",
   "test ! -e /app",
@@ -229,6 +234,7 @@ function exactContentEvidence({ hostOutput, first, second, imageId, engine }) {
     image_id: imageId,
     runtime_uid: 10001,
     event_key_admin_binary: true,
+    profile_handle_index_admin_binary: true,
     runtime_content_directories: false,
     registry_hash: report.registry_hash,
     host_registry_match: true,

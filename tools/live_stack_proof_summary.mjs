@@ -68,7 +68,7 @@ export function buildLiveStackProofSummary(
       setupUrl: hostSetup?.setupUrl ?? null,
       hostConsoleUrl: hostSetup?.hostConsoleUrl ?? null,
       slotId: hostSetup?.slotId ?? null,
-      principalUserId: hostSetup?.principalUserId ?? null,
+      principalId: hostSetup?.principalId ?? null,
       roleKey: hostSetup?.roleKey ?? null,
       policyBefore: hostSetup?.policyBefore ?? null,
       policyAfter: hostSetup?.policyAfter ?? null,
@@ -120,7 +120,7 @@ export function buildLiveStackProofSummary(
       channelId: rolePmReplacement?.channelId ?? null,
       slotId: rolePmReplacement?.slotId ?? null,
       incomingPrincipalId:
-        rolePmReplacement?.incoming?.principalUserId ?? null,
+        rolePmReplacement?.incoming?.principalId ?? null,
       incomingSubmitState:
         rolePmReplacement?.incoming?.submitOutcome?.state ?? null,
       initialLiveDeltaKind:
@@ -209,7 +209,7 @@ export function buildLiveStackProofSummary(
       slotLifecycleState: moderator?.slotLifecycle?.commandStatus?.state ?? null,
       playerInviteStatus: moderator?.playerInviteTarget?.status ?? null,
       playerInvitePrincipalUserId:
-        moderator?.playerInviteTarget?.principalUserId ?? null,
+        moderator?.playerInviteTarget?.principalId ?? null,
       stalePlayerInviteState: moderator?.stalePlayerInviteReject?.state ?? null,
       stalePlayerInviteRetryState:
         moderator?.stalePlayerInviteReject?.retry?.state ?? null,
@@ -405,7 +405,7 @@ export function markdownLiveStackProofSummary(summary) {
     `| status | ${summary.hostSetupWorkflow.status} |`,
     `| game | ${summary.hostSetupWorkflow.game ?? ""} |`,
     `| slot | ${summary.hostSetupWorkflow.slotId ?? ""} |`,
-    `| principal | ${summary.hostSetupWorkflow.principalUserId ?? ""} |`,
+    `| principal | ${summary.hostSetupWorkflow.principalId ?? ""} |`,
     `| role | ${summary.hostSetupWorkflow.roleKey ?? ""} |`,
     `| policy | ${summary.hostSetupWorkflow.policyBefore ?? ""} -> ${summary.hostSetupWorkflow.policyAfter ?? ""} |`,
     `| ready | ${summary.hostSetupWorkflow.readyReadinessSummary ?? ""} |`,

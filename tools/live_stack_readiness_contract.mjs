@@ -22,7 +22,7 @@ const CHECKS = Object.freeze([
         "actionPlayer",
         "racePlayer",
         "cohost",
-      ].every((key) => evidence?.grantedSessions?.[key]?.principalUserId),
+      ].every((key) => evidence?.grantedSessions?.[key]?.principalId),
   },
   {
     id: "admin-identity",
@@ -196,7 +196,7 @@ const CHECKS = Object.freeze([
       evidence?.browser?.moderator?.hostPrompt?.commandStatus?.state === "ack" &&
       evidence?.browser?.moderator?.slotLifecycle?.commandStatus?.state === "ack" &&
       evidence?.browser?.moderator?.playerInviteTarget?.status === "passed" &&
-      evidence?.browser?.moderator?.playerInviteTarget?.principalUserId ===
+      evidence?.browser?.moderator?.playerInviteTarget?.principalId ===
         "player-rowan" &&
       evidence?.browser?.moderator?.stalePlayerInviteReject?.state === "recovered" &&
       evidence?.browser?.moderator?.stalePlayerInviteReject?.reject?.message?.includes(
@@ -205,7 +205,7 @@ const CHECKS = Object.freeze([
       evidence?.browser?.moderator?.stalePlayerInviteReject?.retry?.state ===
         "ack" &&
       evidence?.browser?.moderator?.stalePlayerInviteReject?.retry?.target
-        ?.principalUserId === "player-rowan" &&
+        ?.principalId === "player-rowan" &&
       evidence?.slotLifecycleApiState?.slots?.some(
         (slot) => slot.slot_id === "slot-7" && slot.alive === false,
       ),

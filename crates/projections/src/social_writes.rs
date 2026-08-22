@@ -1,6 +1,7 @@
 //! Social application service for private profile-mute overlays.
 
 use eventstore::EventInput;
+use principal::PrincipalId;
 use social::{self, MemberMuteCommand, MemberMuteEvent};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
@@ -10,25 +11,25 @@ use crate::{fold_member_mute_event, member_mute_state, MemberMuteStateRow, Proje
 
 pub async fn mute_public_profile(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     target_handle: &str,
     occurred_at: i64,
 ) -> Result<MemberMuteStateRow, ProjectionError> {
-    change_public_profile_mute(pool, principal_user_id, target_handle, true, occurred_at).await
+    change_public_profile_mute(pool, principal_id, target_handle, true, occurred_at).await
 }
 
 pub async fn unmute_public_profile(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     target_handle: &str,
     occurred_at: i64,
 ) -> Result<MemberMuteStateRow, ProjectionError> {
-    change_public_profile_mute(pool, principal_user_id, target_handle, false, occurred_at).await
+    change_public_profile_mute(pool, principal_id, target_handle, false, occurred_at).await
 }
 
 async fn change_public_profile_mute(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     target_handle: &str,
     mute: bool,
     occurred_at: i64,
@@ -48,16 +49,15 @@ async fn change_public_profile_mute(
     .await?
     .ok_or(ProjectionError::MuteTargetNotPublic)?;
     let target_profile_id: Uuid = target.get("profile_id");
-    if target.get::<String, _>("owner_principal_id") == principal_user_id {
+    let owner_principal_id = PrincipalId::from_uuid(target.get("owner_principal_id"));
+    if owner_principal_id == principal_id {
         return Err(ProjectionError::CannotMuteSelf);
     }
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!(
-            "profile-mute:{principal_user_id}:{target_profile_id}"
-        ))
+        .bind(format!("profile-mute:{principal_id}:{target_profile_id}"))
         .execute(&mut *tx)
         .await?;
-    let existing = member_mute_domain_state(&mut tx, principal_user_id, target_profile_id).await?;
+    let existing = member_mute_domain_state(&mut tx, principal_id, target_profile_id).await?;
     let relationship_id = existing
         .as_ref()
         .map_or_else(Uuid::new_v4, |state| state.relationship_id);
@@ -73,29 +73,29 @@ async fn change_public_profile_mute(
         relationship_id,
         existing.as_ref().map_or(0, |state| state.version),
         events,
-        principal_user_id,
+        principal_id,
         occurred_at,
     )
     .await?;
     tx.commit().await?;
-    member_mute_state(pool, principal_user_id, target_handle).await
+    member_mute_state(pool, principal_id, target_handle).await
 }
 
 async fn member_mute_domain_state(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     target_profile_id: Uuid,
 ) -> Result<Option<social::MemberMuteState>, ProjectionError> {
     let row = sqlx::query(
-        "SELECT relationship_id, active, version FROM profile_mute WHERE principal_user_id = $1 AND target_profile_id = $2",
+        "SELECT relationship_id, active, version FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(target_profile_id)
     .fetch_optional(&mut **tx)
     .await?;
     Ok(row.map(|row| social::MemberMuteState {
         relationship_id: row.get("relationship_id"),
-        principal_user_id: principal_user_id.to_string(),
+        principal_id,
         target_profile_id,
         active: row.get("active"),
         version: row.get("version"),
@@ -116,7 +116,7 @@ async fn append_member_mute_events(
     relationship_id: Uuid,
     expected_stream_seq: i64,
     events: Vec<MemberMuteEvent>,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     occurred_at: i64,
 ) -> Result<(), ProjectionError> {
     let inputs: Vec<_> = events
@@ -126,7 +126,7 @@ async fn append_member_mute_events(
                 event.kind(),
                 1,
                 event.payload(),
-                eventstore::ActorId::Principal(principal_user_id.to_string()),
+                eventstore::ActorId::Principal(principal_id),
                 occurred_at,
             )
         })

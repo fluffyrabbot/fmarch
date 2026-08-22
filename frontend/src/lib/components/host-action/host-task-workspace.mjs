@@ -1,4 +1,8 @@
 import { visibleHostCommandStatus } from "./host-command-status.mjs";
+import {
+  canonicalPrincipalId,
+  FIXTURE_PRINCIPAL_IDS,
+} from "../../principal-id.mjs";
 
 export const HOST_TASK_WORKSPACE_CONTRACT = Object.freeze({
   rootClassName: "host-task-workspace fm-primary-action-zone",
@@ -364,15 +368,22 @@ function taskSummary(tasks) {
 
 function buildCommandContext(commandContext) {
   const gameId = String(commandContext.gameId ?? "game");
-  const principalUserId = String(commandContext.principalUserId ?? "host");
+  const suppliedPrincipalId = commandContext.principalId;
+  const principalId =
+    suppliedPrincipalId === undefined || suppliedPrincipalId === null
+      ? FIXTURE_PRINCIPAL_IDS.hostH
+      : canonicalPrincipalId(suppliedPrincipalId);
+  if (principalId === null) {
+    throw new TypeError("host task workspace principal must be a canonical UUID");
+  }
   const capabilityLabel = String(commandContext.capabilityLabel ?? "HostOf(game)");
   return Object.freeze({
     testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
-    summary: `Hosting as @${principalUserId}`,
+    summary: `Hosting as @${principalId}`,
     label: "Technical access",
-    value: `${capabilityLabel} · @${principalUserId}`,
+    value: `${capabilityLabel} · @${principalId}`,
     gameId,
-    principalUserId,
+    principalId,
     capabilityLabel,
     commandEndpoint: String(commandContext.commandEndpoint ?? "/commands"),
   });

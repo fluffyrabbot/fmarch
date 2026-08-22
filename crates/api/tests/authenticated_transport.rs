@@ -4,6 +4,7 @@ use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
 use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
 use media::{MediaLimits, MediaRepository, MediaStore};
+use principal::PrincipalId;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,16 +32,16 @@ fn decode_server_envelope(message: Message) -> ServerEnvelope {
     ciborium::from_reader(bytes.as_ref()).expect("decode server CBOR envelope")
 }
 
-fn host_console_slot_assigned(body: &ServerMsg, principal_user_id: &str) -> bool {
+fn host_console_slot_assigned(body: &ServerMsg, principal_id: PrincipalId) -> bool {
     match body {
         ServerMsg::Delta(wire::ProjectionDelta::HostConsoleStateChanged(delta)) => delta
             .slots
             .iter()
-            .any(|slot| slot.assigned_principal_id == principal_user_id),
+            .any(|slot| slot.assigned_principal_id == principal_id),
         ServerMsg::Delta(wire::ProjectionDelta::HostConsoleSlotsChanged(delta)) => delta
             .slots
             .iter()
-            .any(|slot| slot.assigned_principal_id == principal_user_id),
+            .any(|slot| slot.assigned_principal_id == principal_id),
         _ => false,
     }
 }
@@ -61,40 +62,71 @@ fn token_hash(token: &str) -> String {
 
 async fn insert_account_session(
     pool: &sqlx::PgPool,
-    principal: &str,
+    principal_label: &str,
     token: &str,
     expires_at: i64,
     revoked_at: Option<i64>,
     disabled_at: Option<i64>,
+    global_capabilities: &[&str],
 ) {
-    sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ($1, $2, ARRAY['GlobalAdmin'], 1, $3) ON CONFLICT (principal_user_id) DO NOTHING",
+    let principal_id = PrincipalId::fixture(principal_label);
+    let global_capabilities = global_capabilities
+        .iter()
+        .map(|capability| (*capability).to_string())
+        .collect::<Vec<_>>();
+    let mut transaction = pool.begin().await.unwrap();
+    identity::methods::ensure_principal(&mut transaction, &principal_id, &global_capabilities, 1)
+        .await
+        .unwrap();
+    let method_id = identity::methods::create_method(
+        &mut transaction,
+        &principal_id,
+        identity::MethodKind::ClassicPassword,
+        1,
     )
-    .bind(principal)
-    .bind(if disabled_at.is_some() { "disabled" } else { "active" })
+    .await
+    .unwrap();
+    if let Some(disabled_at) = disabled_at {
+        sqlx::query(
+            "UPDATE platform_principal SET status = 'disabled', disabled_at = $2 WHERE principal_id = $1",
+        )
+        .bind(principal_id.as_uuid())
+        .bind(disabled_at)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE authentication_method SET status = 'disabled', disabled_at = $2 WHERE method_id = $1",
+        )
+        .bind(method_id)
+        .bind(disabled_at)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+    }
+    sqlx::query(
+        "INSERT INTO auth_account (account_id, principal_id, method_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, $3, 'test-only', 1, $4, $5)",
+    )
+    .bind(format!("{principal_label}@example.test"))
+    .bind(principal_id.as_uuid())
+    .bind(method_id)
     .bind(disabled_at)
-    .execute(pool)
+    .bind(&global_capabilities)
+    .execute(&mut *transaction)
     .await
     .unwrap();
     sqlx::query(
-        "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ($1, $2, 'test-only', 1, $3, ARRAY['GlobalAdmin'])",
-    )
-    .bind(format!("{principal}@example.test"))
-    .bind(principal)
-    .bind(disabled_at)
-    .execute(pool)
-    .await
-    .unwrap();
-    sqlx::query(
-        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities, idle_expires_at, assurance, authenticated_at) VALUES ($1, $2, 1, $3, $4, ARRAY['GlobalAdmin'], $3, 'admin_grant', 1)",
+        "INSERT INTO auth_session (token_hash, principal_id, created_at, expires_at, revoked_at, global_capabilities, idle_expires_at, assurance, authenticated_at) VALUES ($1, $2, 1, $3, $4, $5, $3, 'admin_grant', 1)",
     )
     .bind(token_hash(token))
-    .bind(principal)
+    .bind(principal_id.as_uuid())
     .bind(expires_at)
     .bind(revoked_at)
-    .execute(pool)
+    .bind(&global_capabilities)
+    .execute(&mut *transaction)
     .await
     .unwrap();
+    transaction.commit().await.unwrap();
 }
 
 fn command_body(id: u64, command: Command) -> Vec<u8> {
@@ -170,7 +202,7 @@ async fn create_classic_account_session(
     admin_token: &str,
     account_id: &str,
     password: &str,
-    principal_user_id: &str,
+    principal_label: &str,
     global_capabilities: &[&str],
 ) -> String {
     let response = app
@@ -185,7 +217,7 @@ async fn create_classic_account_session(
                     serde_json::json!({
                         "account_id": account_id,
                         "password": password,
-                        "principal_user_id": principal_user_id,
+                        "principal_id": PrincipalId::fixture(principal_label),
                         "global_capabilities": global_capabilities,
                     })
                     .to_string(),
@@ -279,8 +311,26 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
 ) {
     let root = tempfile::tempdir().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
-    insert_account_session(&pool, "active", ACTIVE_TOKEN, 4_102_444_800, None, None).await;
-    insert_account_session(&pool, "expired", EXPIRED_TOKEN, 2, None, None).await;
+    insert_account_session(
+        &pool,
+        "active",
+        ACTIVE_TOKEN,
+        4_102_444_800,
+        None,
+        None,
+        &["GlobalAdmin"],
+    )
+    .await;
+    insert_account_session(
+        &pool,
+        "expired",
+        EXPIRED_TOKEN,
+        2,
+        None,
+        None,
+        &["GlobalAdmin"],
+    )
+    .await;
     insert_account_session(
         &pool,
         "revoked",
@@ -288,6 +338,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
         4_102_444_800,
         Some(2),
         None,
+        &["GlobalAdmin"],
     )
     .await;
     insert_account_session(
@@ -297,25 +348,19 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
         4_102_444_800,
         None,
         Some(2),
+        &["GlobalAdmin"],
     )
     .await;
-    sqlx::query("INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at, disabled_at) VALUES ('member', 'active', ARRAY[]::TEXT[], 1, NULL)")
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query(
-        "INSERT INTO auth_account (account_id, principal_user_id, password_hash, created_at, disabled_at, global_capabilities) VALUES ('member@example.test', 'member', 'test-only', 1, NULL, ARRAY[]::TEXT[])",
+    insert_account_session(
+        &pool,
+        "member",
+        MEMBER_TOKEN,
+        4_102_444_800,
+        None,
+        None,
+        &[],
     )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query(
-        "INSERT INTO auth_session (token_hash, principal_user_id, created_at, expires_at, revoked_at, global_capabilities, idle_expires_at, assurance, authenticated_at) VALUES ($1, 'member', 1, 4102444800, NULL, ARRAY[]::TEXT[], 4102444800, 'admin_grant', 1)",
-    )
-    .bind(token_hash(MEMBER_TOKEN))
-    .execute(&pool)
-    .await
-    .unwrap();
+    .await;
 
     for (id, token) in [
         (1, None),
@@ -379,7 +424,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
             "kind": "Command",
             "body": {
                 "command_id": Uuid::new_v4(),
-                "principal_user_id": "someone-else",
+                "principal_id": "someone-else",
                 "command": { "CreateGame": { "game": Uuid::new_v4(), "pack": "mafiascum" } }
             }
         }
@@ -427,7 +472,8 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
         .oneshot(
             Request::builder()
                 .uri(format!(
-                    "/games/{game}/host-console-state?principal_user_id=active"
+                    "/games/{game}/host-console-state?principal_id={}",
+                    PrincipalId::fixture("active")
                 ))
                 .body(Body::empty())
                 .unwrap(),
@@ -446,7 +492,16 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
     let root = tempfile::tempdir().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
     let game = Uuid::new_v4();
-    insert_account_session(&pool, "host", HOST_TOKEN, 4_102_444_800, None, None).await;
+    insert_account_session(
+        &pool,
+        "host",
+        HOST_TOKEN,
+        4_102_444_800,
+        None,
+        None,
+        &["GlobalAdmin"],
+    )
+    .await;
     let response = post_command(
         &app,
         1,
@@ -575,8 +630,9 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
         .await
         .unwrap();
     sqlx::query(
-        "UPDATE platform_principal SET status = 'disabled', disabled_at = 2 WHERE principal_user_id = 'host'",
+        "UPDATE platform_principal SET status = 'disabled', disabled_at = 2 WHERE principal_id = $1",
     )
+        .bind(PrincipalId::fixture("host").as_uuid())
         .execute(&pool)
         .await
         .unwrap();
@@ -592,8 +648,9 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
             if response.status() == StatusCode::UNAUTHORIZED
     ));
     sqlx::query(
-        "UPDATE platform_principal SET status = 'active', disabled_at = NULL WHERE principal_user_id = 'host'",
+        "UPDATE platform_principal SET status = 'active', disabled_at = NULL WHERE principal_id = $1",
     )
+        .bind(PrincipalId::fixture("host").as_uuid())
         .execute(&pool)
         .await
         .unwrap();
@@ -640,7 +697,16 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
         .with_live_projection_delivery_delay(Duration::from_millis(300));
     let app = api::router_with_state(state);
     let game = Uuid::new_v4();
-    insert_account_session(&pool, "host", HOST_TOKEN, 4_102_444_800, None, None).await;
+    insert_account_session(
+        &pool,
+        "host",
+        HOST_TOKEN,
+        4_102_444_800,
+        None,
+        None,
+        &["GlobalAdmin"],
+    )
+    .await;
     assert_eq!(
         post_command(
             &app,
@@ -795,7 +861,7 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
         .await
         .unwrap();
     sqlx::query(
-        "UPDATE platform_principal SET status = 'disabled', disabled_at = 2 WHERE principal_user_id = (SELECT principal_user_id FROM external_identity WHERE provider = 'workos' AND subject = 'workos-user')",
+        "UPDATE platform_principal SET status = 'disabled', disabled_at = 2 WHERE principal_id = (SELECT principal_id FROM external_identity WHERE provider = 'workos' AND subject = 'workos-user')",
     )
     .execute(&pool)
     .await
@@ -838,6 +904,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         4_102_444_800,
         None,
         None,
+        &["GlobalAdmin"],
     )
     .await;
     let host_token = create_classic_account_session(
@@ -916,7 +983,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         wire::seat_persona! {
             game,
             slot: "slot_1".into(),
-            user: "player_a".into()
+            user: "player_a"
         },
     )
     .await;
@@ -931,7 +998,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
         loop {
             let message = socket.next().await.unwrap().unwrap();
             let envelope = decode_server_envelope(message);
-            if host_console_slot_assigned(&envelope.body, "player_a") {
+            if host_console_slot_assigned(&envelope.body, PrincipalId::fixture("player_a")) {
                 break envelope;
             }
         }
@@ -960,7 +1027,9 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
                     if delta
                         .slots
                         .iter()
-                        .any(|slot| slot.assigned_principal_id == "player_a")
+                        .any(|slot| {
+                            slot.assigned_principal_id == PrincipalId::fixture("player_a")
+                        })
             ) {
                 break;
             }
@@ -987,7 +1056,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
             wire::seat_persona! {
                 game,
                 slot: "slot_2".into(),
-                user: "host".into(),
+                user: "host",
             },
         ),
         (

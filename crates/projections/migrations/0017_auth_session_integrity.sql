@@ -1,16 +1,6 @@
 -- 0017_auth_session_integrity.sql — canonical session ownership and websocket provenance.
 
--- Nullable idle deadlines were a transitional shape. Retire any such bearer
--- before making the deadline mandatory; no credential is allowed to escape
--- both absolute and idle expiry policy.
-UPDATE public.auth_session
-SET revoked_at = COALESCE(revoked_at, created_at),
-    idle_expires_at = expires_at
-WHERE idle_expires_at IS NULL;
-
-ALTER TABLE public.auth_session
-    ALTER COLUMN idle_expires_at SET NOT NULL;
-
+-- Every session has both absolute and idle expiry from issuance.
 ALTER TABLE public.auth_session
     DROP CONSTRAINT auth_session_idle_expiry_check;
 
@@ -19,17 +9,10 @@ ALTER TABLE public.auth_session
     CHECK (idle_expires_at > created_at AND idle_expires_at <= expires_at);
 
 ALTER TABLE ONLY public.auth_session
-    ADD CONSTRAINT auth_session_principal_user_id_fkey
-    FOREIGN KEY (principal_user_id)
-    REFERENCES public.platform_principal(principal_user_id)
+    ADD CONSTRAINT auth_session_principal_id_fkey
+    FOREIGN KEY (principal_id)
+    REFERENCES public.platform_principal(principal_id)
     ON DELETE RESTRICT;
-
-ALTER TABLE public.auth_websocket_ticket
-    DROP CONSTRAINT auth_websocket_ticket_auth_kind_check;
-
-ALTER TABLE public.auth_websocket_ticket
-    ADD CONSTRAINT auth_websocket_ticket_auth_kind_check
-    CHECK (auth_kind IN ('classic', 'workos', 'dev', 'admin_grant'));
 
 -- A durable visibility outbox lets every API instance observe moderation
 -- changes without coupling websocket correctness to process-local broadcasts.

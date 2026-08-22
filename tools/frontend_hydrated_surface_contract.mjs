@@ -60,6 +60,9 @@ import {
   buildHostConsoleRouteData,
 } from "../frontend/src/routes/g/[game]/host/host-route-model.mjs";
 import {
+  FIXTURE_PRINCIPAL_IDS,
+} from "../frontend/src/lib/principal-id.mjs";
+import {
   appendHostActionEvent,
   appendHostCommandOutcome,
   attachEventConfirmationTrace,
@@ -89,22 +92,22 @@ const artifactDir = path.join(repoRoot, "target", "frontend-hydrated-surfaces");
 const evidencePath = path.join(artifactDir, "hydrated-surfaces.json");
 
 const boardData = buildBoardRouteData({
-  principalUserId: "player_mira",
+  principalId: "player_mira",
   capabilities: [{ kind: "SlotOccupant", game: "midsummer", slot: "slot-7" }],
   gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 });
 const adminData = await buildAdminRouteData({
-  principalUserId: "admin_a",
+  principalId: "admin_a",
   capabilities: [{ kind: "GlobalAdmin" }],
 });
 const adminAuditDetailData = await buildAdminAuditDetailData({
   audit: "proof-runs",
-  principalUserId: "admin_a",
+  principalId: "admin_a",
   capabilities: [{ kind: "GlobalAdmin" }],
 });
 const playerData = await buildGameRouteData({
   game: "midsummer",
-  principalUserId: "player_mira",
+  principalId: "player_mira",
   capabilities: [
     { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
     { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
@@ -112,7 +115,7 @@ const playerData = await buildGameRouteData({
 });
 const moderatorData = await buildHostConsoleRouteData({
   game: "midsummer",
-  principalUserId: "host_h",
+  principalId: FIXTURE_PRINCIPAL_IDS.hostH,
   capabilities: [{ kind: "HostOf", game: "midsummer" }],
 });
 
@@ -238,7 +241,7 @@ async function proveAdminSurfaceAdapter() {
     id: "session-grants",
     state: "ack",
     message: "Granted GlobalMod to mod_a",
-    principalUserId: "mod_a",
+    principalId: "mod_a",
     capabilityKinds: "GlobalMod",
   };
   const sessionGrant = recordAdminFormStatus({
@@ -270,7 +273,7 @@ async function proveAdminSurfaceAdapter() {
   assert.equal(adminData.audit[0].inspectHref, "/admin/audit/proof-runs?game=midsummer");
   assert.equal(adminAuditDetailData.overviewHref, "/admin?game=midsummer");
   assert.equal(adminAuditDetailData.surfaceHeader.title, "Proof runs");
-  assert.equal(only(sent).command.AddCohost.user, "cohost_c");
+  assert.equal(only(sent).command.AddCohost.principal_id, "cohost_c");
   assert.equal(windowRef.__fmarchAdminCommandDispatchBridgePlan, plan);
   assert.equal(windowRef.__fmarchAdminSessionGrantResult.id, "session-grants");
   assert.equal(windowRef.__fmarchAdminRecoveryGateResult.id, "recovery-gate");
@@ -805,7 +808,10 @@ function fakeProjectionStore(snapshot) {
       this.refreshed.push([...keys]);
       snapshot = {
         ...snapshot,
-        ...Object.fromEntries(keys.map((key) => [key, refreshedValue(key)])),
+        ...Object.fromEntries(keys.map((key) => [
+          key,
+          key === "host" ? snapshot.host : refreshedValue(key),
+        ])),
       };
       return snapshot;
     },

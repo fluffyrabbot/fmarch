@@ -29,14 +29,14 @@ export async function fmarchIdentityHandle({ event, resolve }) {
     } else if (rotation.status === "stale") {
       event.cookies.delete("fmarch_session", { path: "/" });
       session = {
-        principalUserId: null,
+        principalId: null,
         rotationRequired: false,
         resolvedCapabilities: [],
       };
     }
   }
 
-  event.locals.principalUserId = session.principalUserId;
+  event.locals.principalId = session.principalId;
   event.locals.viewerProfile = session.viewerProfile ?? null;
   event.locals.resolvedCapabilities = session.resolvedCapabilities;
 

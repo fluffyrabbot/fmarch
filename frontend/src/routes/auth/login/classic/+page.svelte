@@ -25,9 +25,9 @@
   </section>
 
   <section class="auth-login__panel fm-panel" aria-label="Account login">
-    {#if login.principalUserId}
+    {#if login.principalId}
       <p class="auth-login__status" data-testid="auth-login-current-session">
-        Current session: {login.principalUserId}
+        Current session: {login.principalId}
       </p>
     {/if}
 

@@ -7,11 +7,16 @@ export const localDatabaseRoleNames = Object.freeze({
 
 const defaultApplicationPassword = "fmarch-local-application-password";
 const defaultKeyAdminPassword = "fmarch-local-key-admin-password";
+const defaultProfileHandleIndexKey = "fmarch-local-profile-index-key-material-v1";
+const defaultProfileHandleIndexKid = "local-profile-index-v1";
 const authorityOnlyEnvironmentKeys = Object.freeze([
   "DATABASE_MIGRATION_URL",
   "DATABASE_KEY_ADMIN_URL",
   "FMARCH_DATABASE_APPLICATION_PASSWORD",
   "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
+  "FMARCH_PROFILE_HANDLE_INDEX_KEY",
+  "FMARCH_PROFILE_HANDLE_INDEX_KID",
+  "FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY",
 ]);
 
 /**
@@ -54,6 +59,22 @@ function explicitLocalTransport(databaseUrl) {
 export function applicationDatabaseEnvironment({ applicationUrl, env = process.env }) {
   const childEnv = withoutAuthorityOnlyEnvironment(env);
   childEnv.DATABASE_URL = requiredDatabaseUrl(applicationUrl);
+  return childEnv;
+}
+
+/**
+ * Build the complete least-authority environment for a local server process.
+ * The active profile handle-index key belongs only to the running application;
+ * migration and maintenance processes must never inherit it. A deterministic
+ * local key keeps disposable proof harnesses hermetic while callers can still
+ * supply explicit custody material for an intentional local rehearsal.
+ */
+export function serverRuntimeEnvironment({ applicationUrl, env = process.env }) {
+  const childEnv = applicationDatabaseEnvironment({ applicationUrl, env });
+  childEnv.FMARCH_PROFILE_HANDLE_INDEX_KEY =
+    env.FMARCH_PROFILE_HANDLE_INDEX_KEY ?? defaultProfileHandleIndexKey;
+  childEnv.FMARCH_PROFILE_HANDLE_INDEX_KID =
+    env.FMARCH_PROFILE_HANDLE_INDEX_KID ?? defaultProfileHandleIndexKid;
   return childEnv;
 }
 

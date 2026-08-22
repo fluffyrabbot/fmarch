@@ -572,7 +572,7 @@ async function proveRouteSource({
 function adminData() {
   return {
     operator: {
-      principalUserId: "admin_a",
+      principalId: "admin_a",
     },
     command: {
       endpoint: "/commands",
@@ -584,7 +584,7 @@ function adminData() {
       cohost: {
         action: "add_cohost",
         game: "midsummer",
-        user: "cohost_c",
+        principalId: "cohost_c",
       },
     },
   };
@@ -593,7 +593,7 @@ function adminData() {
 function playerData({ channel }) {
   return {
     game: { id: "midsummer" },
-    player: { principalUserId: "player_mira", slotId: "slot-7" },
+    player: { principalId: "player_mira", slotId: "slot-7" },
     composer: {
       commandEndpoint: "/commands",
       voteTargetSlot: "slot-2",
@@ -605,7 +605,7 @@ function playerData({ channel }) {
 function moderatorData() {
   return {
     game: { id: "midsummer" },
-    session: { principalUserId: "host_h" },
+    session: { principalId: "host_h" },
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
     hostVotecountEndpoint: "/games/midsummer/votecount",
@@ -616,7 +616,7 @@ function moderatorData() {
 function hostSetupData() {
   return {
     game: { id: "midsummer" },
-    session: { principalUserId: "host_h" },
+    session: { principalId: "host_h" },
     commandEndpoint: "/commands",
     setupStateEndpoint: "/games/midsummer/setup-state",
     start: { defaultPhase: "D01" },

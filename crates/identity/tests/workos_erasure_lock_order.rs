@@ -1,5 +1,5 @@
 use identity::workos::{attach_subject, resolve_subject};
-use identity::{methods, MethodKind, VerifiedIdentity, WorkosSessionId};
+use identity::{methods, MethodKind, PrincipalId, VerifiedIdentity, WorkosSessionId};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -15,22 +15,21 @@ fn verified(subject: String) -> VerifiedIdentity {
 async fn seed_workos_identity(
     pool: &PgPool,
     disabled: bool,
-) -> (String, String, Uuid, VerifiedIdentity) {
-    let principal_user_id = format!("principal-{}", Uuid::new_v4().simple());
+) -> (PrincipalId, String, Uuid, VerifiedIdentity) {
+    let principal_id = PrincipalId::random();
     let assertion = verified(format!("workos-{}", Uuid::new_v4().simple()));
     let mut tx = pool.begin().await.unwrap();
-    methods::ensure_principal(&mut tx, principal_user_id.as_str(), &[], 10)
+    methods::ensure_principal(&mut tx, &principal_id, &[], 10)
         .await
         .unwrap();
-    let method_id =
-        methods::create_method(&mut tx, principal_user_id.as_str(), MethodKind::Workos, 10)
-            .await
-            .unwrap();
+    let method_id = methods::create_method(&mut tx, &principal_id, MethodKind::Workos, 10)
+        .await
+        .unwrap();
     sqlx::query(
-        "INSERT INTO external_identity (provider, subject, principal_user_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, 10, 10, $4)",
+        "INSERT INTO external_identity (provider, subject, principal_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, 10, 10, $4)",
     )
     .bind(assertion.subject.as_str())
-    .bind(principal_user_id.as_str())
+    .bind(principal_id.as_uuid())
     .bind(assertion.email.as_deref())
     .bind(method_id)
     .execute(&mut *tx)
@@ -47,7 +46,7 @@ async fn seed_workos_identity(
     }
     tx.commit().await.unwrap();
     (
-        principal_user_id,
+        principal_id,
         assertion.subject.clone(),
         method_id,
         assertion,
@@ -114,17 +113,17 @@ async fn first_sight_workos_provisions_privacy_subject_before_provider_binding(p
         SELECT subject.lifecycle_state, method.kind, method.method_id, identity.method_id
         FROM platform_principal AS principal
         JOIN privacy_subject AS subject
-          ON subject.principal_user_id = principal.principal_user_id
+          ON subject.principal_id = principal.principal_id
         JOIN authentication_method AS method
-          ON method.principal_user_id = principal.principal_user_id
+          ON method.principal_id = principal.principal_id
         JOIN external_identity AS identity
-          ON identity.principal_user_id = principal.principal_user_id
-        WHERE principal.principal_user_id = $1
+          ON identity.principal_id = principal.principal_id
+        WHERE principal.principal_id = $1
           AND identity.provider = 'workos'
           AND identity.subject = $2
         "#,
     )
-    .bind(resolution.principal_user_id.as_str())
+    .bind(resolution.principal_id.as_uuid())
     .bind(assertion.subject.as_str())
     .fetch_one(&mut *tx)
     .await
@@ -138,8 +137,7 @@ async fn first_sight_workos_provisions_privacy_subject_before_provider_binding(p
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn workos_sign_in_locks_method_before_external_identity_erasure_tail(pool: PgPool) {
-    let (principal_user_id, subject, method_id, assertion) =
-        seed_workos_identity(&pool, false).await;
+    let (principal_id, subject, method_id, assertion) = seed_workos_identity(&pool, false).await;
     let mut erasure_tail = lock_method_for_erasure_tail(&pool, method_id).await;
     let application_name = format!("workos-sign-in-{}", Uuid::new_v4().simple());
 
@@ -169,9 +167,9 @@ async fn workos_sign_in_locks_method_before_external_identity_erasure_tail(pool:
     assert!(authentication.await.unwrap().is_err());
     assert_eq!(
         sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM external_identity WHERE principal_user_id = $1",
+            "SELECT COUNT(*) FROM external_identity WHERE principal_id = $1",
         )
-        .bind(principal_user_id)
+        .bind(principal_id.as_uuid())
         .fetch_one(&pool)
         .await
         .unwrap(),
@@ -182,18 +180,17 @@ async fn workos_sign_in_locks_method_before_external_identity_erasure_tail(pool:
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn workos_attach_locks_method_before_external_identity_erasure_tail(pool: PgPool) {
-    let (principal_user_id, subject, method_id, assertion) =
-        seed_workos_identity(&pool, true).await;
+    let (principal_id, subject, method_id, assertion) = seed_workos_identity(&pool, true).await;
     let mut erasure_tail = lock_method_for_erasure_tail(&pool, method_id).await;
     let application_name = format!("workos-attach-{}", Uuid::new_v4().simple());
 
     let auth_pool = pool.clone();
     let auth_application_name = application_name.clone();
-    let attached_principal = principal_user_id.clone();
+    let attached_principal = principal_id;
     let authentication = tokio::spawn(async move {
         let mut tx = auth_pool.begin().await.unwrap();
         name_transaction(&mut tx, auth_application_name.as_str()).await;
-        let result = attach_subject(&mut tx, &assertion, attached_principal.as_str(), 100).await;
+        let result = attach_subject(&mut tx, &assertion, &attached_principal, 100).await;
         tx.rollback().await.unwrap();
         result
     });

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { FIXTURE_PRINCIPAL_IDS } from "../../../../lib/principal-id.mjs";
 import {
   buildSetupCommandDispatchBridgePlan,
   refreshSetupState,
@@ -8,9 +9,12 @@ import {
   setupCommandConfigForAction,
 } from "./setup-route-controller.mjs";
 
+const HOST_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.hostH;
+const PLAYER_MIRA_PRINCIPAL_ID = FIXTURE_PRINCIPAL_IDS.setupPlayerMira;
+
 const data = Object.freeze({
   game: Object.freeze({ id: "00000000-0000-0000-0000-000000000123" }),
-  session: Object.freeze({ principalUserId: "host_h" }),
+  session: Object.freeze({ principalId: HOST_PRINCIPAL_ID }),
   commandEndpoint: "/commands",
   start: Object.freeze({ defaultPhase: "D01" }),
 });
@@ -65,7 +69,7 @@ test("setup form actions map to typed bootstrap command configs", () => {
       data,
       formData: formData({
         slotId: "slot_1",
-        principalUserId: "player_mira",
+        principalId: PLAYER_MIRA_PRINCIPAL_ID,
         publicName: "Mira",
       }),
     }),
@@ -73,7 +77,7 @@ test("setup form actions map to typed bootstrap command configs", () => {
       action: "assign_slot",
       game: data.game.id,
       slot: "slot_1",
-      user: "player_mira",
+      principalId: PLAYER_MIRA_PRINCIPAL_ID,
       publicName: "Mira",
     },
   );
@@ -118,6 +122,20 @@ test("setup form actions map to typed bootstrap command configs", () => {
       phase: "N01",
     },
   );
+
+  assert.throws(
+    () =>
+      setupCommandConfigForAction({
+        actionId: "assign-slot",
+        data,
+        formData: formData({
+          slotId: "slot_1",
+          principalId: "player_mira",
+          publicName: "Mira",
+        }),
+      }),
+    /principalId must be a canonical UUID/,
+  );
 });
 
 test("setup command sender dispatches Rust wire command envelopes", async () => {
@@ -133,13 +151,39 @@ test("setup command sender dispatches Rust wire command envelopes", async () => 
   });
 
   assert.equal(outcome.state, "ack");
-  assert.equal("principalUserId" in captured, false);
+  assert.equal("principalId" in captured, false);
   assert.equal(captured.endpoint, "/commands");
   assert.deepEqual(captured.command, {
     AssignRole: {
       game: data.game.id,
       slot: "slot_1",
       role_key: "mafia_goon",
+    },
+  });
+});
+
+test("setup SeatPersona command carries only a canonical principal UUID", async () => {
+  let captured = null;
+  await sendHostSetupCommand({
+    actionId: "assign-slot",
+    data,
+    formData: formData({
+      slotId: "slot_1",
+      principalId: PLAYER_MIRA_PRINCIPAL_ID,
+      publicName: "Mira",
+    }),
+    sendCommandImpl: async (request) => {
+      captured = request;
+      return { state: "ack", message: "Ack: stream seqs 4" };
+    },
+  });
+
+  assert.deepEqual(captured.command, {
+    SeatPersona: {
+      game: data.game.id,
+      slot: "slot_1",
+      principal_id: PLAYER_MIRA_PRINCIPAL_ID,
+      public_name: "Mira",
     },
   });
 });
@@ -220,7 +264,7 @@ test("setup state refresh bypasses cached browser state after command ack", asyn
             slot_id: "slot_1",
             persona_id: "00000000-0000-0000-0000-000000000701",
             public_name: "Mira",
-            assigned_principal_id: "player_mira",
+            assigned_principal_id: PLAYER_MIRA_PRINCIPAL_ID,
             alive: true,
             status: "alive",
             status_tags: [],
@@ -254,7 +298,7 @@ test("setup dispatch bridge plan records StartGame and setup refresh", () => {
   assert.equal(plan.role, "host-setup");
   assert.equal(plan.commandKind, "StartGame");
   assert.equal(plan.commandEndpoint, "/commands");
-  assert.equal("principalUserId" in plan, false);
+  assert.equal("principalId" in plan, false);
   assert.deepEqual(plan.projectionRefreshKeys, ["setupState"]);
 });
 

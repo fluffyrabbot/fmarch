@@ -11,7 +11,7 @@ test("security evidence recursively redacts credentials, identities, personal da
   const raw = {
     authorization: "Bearer secret-token-value",
     nested: {
-      principal_user_id: "principal-private",
+      principal_id: "principal-private",
       contact: "person@private.invalid",
       signed: "https://objects.example.test/a?X-Amz-Signature=private-signature",
       session: "fmss_private-session-token",
@@ -19,7 +19,7 @@ test("security evidence recursively redacts credentials, identities, personal da
   };
   const redacted = redactSecurityEvidence(raw);
   assert.deepEqual(redacted.authorization, "[redacted]");
-  assert.deepEqual(redacted.nested.principal_user_id, "[redacted]");
+  assert.deepEqual(redacted.nested.principal_id, "[redacted]");
   assert.deepEqual(redacted.nested.session, "[redacted]");
   assert.match(redacted.nested.contact, /\[redacted-email\]/);
   assert.match(redacted.nested.signed, /X-Amz-Signature=\[redacted\]/);
@@ -37,7 +37,7 @@ test("telemetry source rejects concrete identities and unbounded error or path f
   assert.throws(
     () =>
       validateTelemetrySource(
-        'tracing::warn!(principal_user_id = %principal, "capacity");',
+        'tracing::warn!(principal_id = %principal, "capacity");',
         "identity.rs",
       ),
     /concrete identity/,

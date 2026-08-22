@@ -26,21 +26,15 @@ pub(super) struct HostPromptResolutionRequest {
 
 pub(super) struct HostPromptResolutionContext<'operation, 'transaction> {
     tx: &'operation mut Transaction<'transaction, Postgres>,
-    resolved_by: String,
     request: HostPromptResolutionRequest,
 }
 
 impl<'operation, 'transaction> HostPromptResolutionContext<'operation, 'transaction> {
     pub(super) fn new(
         tx: &'operation mut Transaction<'transaction, Postgres>,
-        resolved_by: String,
         request: HostPromptResolutionRequest,
     ) -> Self {
-        Self {
-            tx,
-            resolved_by,
-            request,
-        }
+        Self { tx, request }
     }
 }
 
@@ -65,7 +59,6 @@ struct PkResolutionContext<'prompt> {
     selected: String,
     contenders: Vec<String>,
     decision_json: serde_json::Value,
-    resolved_by: String,
     prompt_resolved_seq: i64,
 }
 
@@ -85,11 +78,7 @@ struct HostPromptPhaseControlPayload {
 pub(super) async fn resolve_host_prompt(
     context: HostPromptResolutionContext<'_, '_>,
 ) -> Result<Ack, Reject> {
-    let HostPromptResolutionContext {
-        tx,
-        resolved_by,
-        request,
-    } = context;
+    let HostPromptResolutionContext { tx, request } = context;
     let HostPromptResolutionRequest {
         game,
         prompt_id,
@@ -131,7 +120,6 @@ pub(super) async fn resolve_host_prompt(
             "reason": prompt.reason,
             "decision": decision_json,
             "public_resolution": public_resolution,
-            "resolved_by": resolved_by,
         }),
         ActorId::Host,
         next_seq,
@@ -151,7 +139,6 @@ pub(super) async fn resolve_host_prompt(
                 selected,
                 contenders,
                 decision_json: decision_json.clone(),
-                resolved_by: resolved_by.clone(),
                 prompt_resolved_seq: next_seq,
             })?;
 
@@ -207,7 +194,6 @@ pub(super) fn rerun_stored_host_prompt(
         serde_json::from_value(decision_json.clone()).map_err(|error| {
             Reject::Internal(format!("malformed HostPromptResolved decision: {error}"))
         })?;
-    let resolved_by = str_payload(resolved, "resolved_by")?;
     let pack = load_pack(&pack_artifact_from_stream(prefix)?)?;
     let stored_public_resolution: domain::HostPromptPublicResolution =
         serde_json::from_value(resolved.payload["public_resolution"].clone()).map_err(|error| {
@@ -241,7 +227,6 @@ pub(super) fn rerun_stored_host_prompt(
             selected,
             contenders,
             decision_json,
-            resolved_by,
             prompt_resolved_seq: resolved.stream_seq,
         })?)),
         HostPromptEffect::AdvancePhase { .. } | HostPromptEffect::AcknowledgeOnly => Ok(None),
@@ -281,7 +266,6 @@ fn host_prompt_from_stream(
                 status: "resolved".to_string(),
                 decision: None,
                 public_resolution: None,
-                resolved_by: None,
                 resolved_at: None,
             });
         }
@@ -300,7 +284,6 @@ fn build_pk_prompt_resolution(
         selected,
         contenders,
         decision_json,
-        resolved_by,
         prompt_resolved_seq,
     } = context;
     let phase_kind = phase_kind(&prompt.phase_id)?;
@@ -376,7 +359,6 @@ fn build_pk_prompt_resolution(
                 "selected_slot": selected,
                 "contenders": contenders,
                 "decision": decision_json,
-                "resolved_by": resolved_by,
             })
             .into(),
         }],
@@ -588,24 +570,24 @@ fn next_revote_phase_id(stream: &[StoredEvent], source_phase_id: &str) -> String
 }
 
 fn revote_base_phase_id(source_phase_id: &str) -> &str {
-    if let Some((base, suffix)) = source_phase_id.split_once('R') {
-        if !base.is_empty() && suffix.parse::<u32>().is_ok() {
-            return base;
-        }
-    }
-    source_phase_id
+    domain::phase::PhaseId::parse(source_phase_id)
+        .map(|phase| phase.revote_base())
+        .unwrap_or(source_phase_id)
 }
 
 fn no_majority_advance_night_target(source_phase_id: &str) -> Result<String, Reject> {
     let base_phase_id = revote_base_phase_id(source_phase_id);
     let number = phase_number(base_phase_id)?;
-    Ok(format!("N{:02}", number))
+    Ok(domain::phase::PhaseId::compose(
+        domain::pack::PhaseKind::Night,
+        number,
+    ))
 }
 
 fn skip_next_day_target(source_phase_id: &str) -> Result<(String, String), Reject> {
     let number = phase_number(source_phase_id)?;
-    let skipped_day = format!("D{:02}", number + 1);
-    let next_night = format!("N{:02}", number + 1);
+    let skipped_day = domain::phase::PhaseId::compose(domain::pack::PhaseKind::Day, number + 1);
+    let next_night = domain::phase::PhaseId::compose(domain::pack::PhaseKind::Night, number + 1);
     Ok((skipped_day, next_night))
 }
 
@@ -637,7 +619,6 @@ mod tests {
             status: "pending".to_string(),
             decision: None,
             public_resolution: None,
-            resolved_by: None,
             resolved_at: None,
         }
     }

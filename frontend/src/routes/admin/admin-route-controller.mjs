@@ -147,7 +147,7 @@ export function buildAdminCommandDispatchBridgePlan({
     role: "admin",
     trace,
     request: {
-      principalUserId: data.operator.principalUserId,
+      principalId: data.operator.principalId,
       endpoint: data.command.endpoint,
       command: buildAdminCommand(commandConfigForAdminItem({ item, data })),
     },
@@ -165,7 +165,7 @@ export async function sendAdminSetupCommand({
   sendCommandImpl = sendCommand,
 }) {
   const outcome = await sendCommandImpl({
-    principalUserId: data.operator.principalUserId,
+    principalId: data.operator.principalId,
     endpoint: data.command.endpoint,
     command: buildAdminCommand(commandConfigForAdminItem({ item, data })),
     fetchImpl,

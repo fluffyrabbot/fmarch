@@ -4,10 +4,11 @@ import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+  fixturePrincipalAuthorityId,
+  fixturePrincipalTransport,
+} from "./principal_fixture.mjs";
 
 const root = process.cwd();
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
@@ -1246,7 +1247,7 @@ async function main() {
   const server = spawn("cargo", ["run", "-p", "server"], {
     cwd: root,
     env: {
-      ...applicationDatabaseEnvironment({ applicationUrl: authority.applicationUrl }),
+      ...serverRuntimeEnvironment({ applicationUrl: authority.applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_DEV_AUTH: "1",
@@ -1914,24 +1915,24 @@ async function waitForHealth() {
 
 // The strict wire rejects any actor field in the envelope; seed commands act
 // as a principal by presenting that principal's dev session as the bearer.
-async function seedSessionToken(principalUserId) {
-  const cached = seedSessionTokens.get(principalUserId);
+async function seedSessionToken(principalId) {
+  const cached = seedSessionTokens.get(principalId);
   if (cached !== undefined) {
     return cached;
   }
-  const token = `fmss_operator-smoke-seed-${principalUserId}`;
-  const sessionToken = await createOperatorSession(token, principalUserId, {
+  const token = `fmss_operator-smoke-seed-${principalId}`;
+  const sessionToken = await createOperatorSession(token, principalId, {
     globalCapabilities:
-      principalUserId === "host_h" || principalUserId === "fixture_host"
+      principalId === "host_h" || principalId === "fixture_host"
         ? ["GlobalAdmin"]
         : [],
   });
-  seedSessionTokens.set(principalUserId, sessionToken);
+  seedSessionTokens.set(principalId, sessionToken);
   return sessionToken;
 }
 
-async function sendCommand(principalUserId, command) {
-  const sessionToken = await seedSessionToken(principalUserId);
+async function sendCommand(principalId, command) {
+  const sessionToken = await seedSessionToken(principalId);
   const response = await fetchWithTimeout(
     `${baseUrl}/commands`,
     {
@@ -1947,7 +1948,7 @@ async function sendCommand(principalUserId, command) {
           kind: "Command",
           body: {
             command_id: crypto.randomUUID(),
-            command,
+            command: fixturePrincipalTransport(command, "operator browser command transport"),
           },
         },
       }),
@@ -1962,7 +1963,7 @@ async function sendCommand(principalUserId, command) {
 
 async function createOperatorSession(
   sessionAlias,
-  principalUserId,
+  principalId,
   { globalCapabilities = [] } = {},
 ) {
   const deadline = Date.now() + 15_000;
@@ -1973,7 +1974,7 @@ async function createOperatorSession(
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          principal_user_id: principalUserId,
+          principal_id: fixturePrincipalAuthorityId(principalId),
           expires_at: 4_102_444_800,
           global_capabilities: globalCapabilities,
         }),
@@ -1994,7 +1995,7 @@ async function createOperatorSession(
     }
     await delay(100);
   }
-  throw new Error(`operator fixture session remained unavailable for ${principalUserId}`);
+  throw new Error(`operator fixture session remained unavailable for ${principalId}`);
 }
 
 async function checkedAuditGameHasTrace() {
@@ -2038,14 +2039,14 @@ async function seedCheckedAuditGame() {
   await sendCommand("fixture_host", {
     CreateGame: { game: checkedAuditGame, pack: "mafiascum" },
   });
-  for (const [slot, user, role] of [
+  for (const [slot, principalAlias, role] of [
     ["slot_1", "fixture_user_1", "doctor"],
     ["slot_2", "fixture_user_2", "mafia_goon"],
     ["slot_3", "fixture_user_3", "vanilla_townie"],
   ]) {
     await sendCommand("fixture_host", { AddSlot: { game: checkedAuditGame, slot } });
     await sendCommand("fixture_host", {
-      SeatPersona: { game: checkedAuditGame, slot, principal_id: user, public_name: user },
+      SeatPersona: { game: checkedAuditGame, slot, principal_id: principalAlias, public_name: principalAlias },
     });
     await sendCommand("fixture_host", {
       AssignRole: { game: checkedAuditGame, slot, role_key: role },
@@ -2081,7 +2082,7 @@ async function seedCheckedAuditGame() {
 
 async function seedGame() {
   await sendCommand("host_h", { CreateGame: { game, pack: "mafiascum" } });
-  for (const [slot, user, role] of [
+  for (const [slot, principalAlias, role] of [
     ["slot_1", "user_1", "beloved_princess"],
     ["slot_2", "user_2", "vanilla_townie"],
     ["slot_3", "user_3", "vanilla_townie"],
@@ -2090,17 +2091,17 @@ async function seedGame() {
     ["slot_6", "user_6", "vanilla_townie"],
   ]) {
     await sendCommand("host_h", { AddSlot: { game, slot } });
-    await sendCommand("host_h", { SeatPersona: { game, slot, principal_id: user, public_name: user } });
+    await sendCommand("host_h", { SeatPersona: { game, slot, principal_id: principalAlias, public_name: principalAlias } });
     await sendCommand("host_h", { AssignRole: { game, slot, role_key: role } });
   }
   await sendCommand("host_h", { StartGame: { game, phase: "D01" } });
-  for (const [user, actorSlot] of [
+  for (const [principalAlias, actorSlot] of [
     ["user_2", "slot_2"],
     ["user_3", "slot_3"],
     ["user_4", "slot_4"],
     ["user_5", "slot_5"],
   ]) {
-    await sendCommand(user, {
+    await sendCommand(principalAlias, {
       SubmitVote: {
         game,
         actor_slot: actorSlot,

@@ -22,8 +22,8 @@
   </section>
 
   <section class="auth-invite__panel fm-panel" aria-label="Invitation redemption">
-    {#if invite.principalUserId}
-      <p class="auth-invite__status">Current session: {invite.principalUserId}</p>
+    {#if invite.principalId}
+      <p class="auth-invite__status">Current session: {invite.principalId}</p>
     {/if}
     <form method="POST" class="auth-invite__form" data-testid="auth-invite-form">
       <input type="hidden" name="returnTo" value={returnTo} />

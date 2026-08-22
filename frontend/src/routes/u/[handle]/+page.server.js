@@ -18,7 +18,7 @@ export async function load({ params, locals, cookies, fetch }) {
     shellOwner: "layout",
     shell: buildAppShell({
       activeSurface: "community",
-      principalUserId: locals.principalUserId,
+      principalId: locals.principalId,
       capabilities: locals.resolvedCapabilities,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({

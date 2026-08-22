@@ -9,6 +9,8 @@ pub mod subject_privacy;
 pub mod token;
 pub mod workos;
 
+pub use principal::PrincipalId;
+
 pub use data_lifecycle::{
     apply_lifecycle_events, decide_member_lifecycle, disposition, DataClass,
     MemberLifecycleCommand, MemberLifecycleEvent, MemberLifecycleReject, MemberLifecycleState,
@@ -106,7 +108,7 @@ impl Assurance {
 /// issuance. Both classic and WorkOS verification end here.
 #[derive(Debug, Clone)]
 pub struct AuthenticationGrant {
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub method_id: uuid::Uuid,
     pub method_kind: MethodKind,
     pub authenticated_at: i64,

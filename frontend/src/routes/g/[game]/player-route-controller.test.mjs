@@ -963,7 +963,7 @@ test("player route controller toggles private item expansion and validates priva
 function fixtureData(overrides = {}) {
   return {
     game: { id: "midsummer" },
-    player: { principalUserId: "player_mira", slotId: "slot-7" },
+    player: { principalId: "player_mira", slotId: "slot-7" },
     composer: {
       commandEndpoint: "/commands",
       mediaUploadEndpoint: "/media/uploads",

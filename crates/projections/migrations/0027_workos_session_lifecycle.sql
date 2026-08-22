@@ -1,9 +1,4 @@
 -- 0027_workos_session_lifecycle.sql — exact-assertion replay and upstream logout custody.
-
--- Existing WorkOS app sessions predate custody of the signed provider `sid`.
--- The unvalidated constraint leaves those rows in place without granting them
--- authority: runtime eligibility rejects a missing sid, while every new write
--- is checked and must carry canonical provider-session custody.
 ALTER TABLE public.auth_session
     ADD COLUMN workos_session_id text;
 
@@ -25,7 +20,7 @@ ALTER TABLE public.auth_session
             assurance IS DISTINCT FROM 'external_sso'
             AND workos_session_id IS NULL
         )
-    ) NOT VALID;
+    );
 
 CREATE INDEX auth_session_workos_session_idx
     ON public.auth_session (workos_session_id)
@@ -41,7 +36,7 @@ ALTER TABLE public.external_identity
 CREATE TABLE public.workos_provider_session (
     provider_session_id text PRIMARY KEY,
     subject text NOT NULL,
-    principal_user_id text NOT NULL,
+    principal_id uuid NOT NULL,
     method_id uuid NOT NULL,
     status text NOT NULL DEFAULT 'active',
     created_at bigint NOT NULL,
@@ -70,12 +65,12 @@ CREATE TABLE public.workos_provider_session (
             )
         ),
     CONSTRAINT workos_provider_session_principal_fkey
-        FOREIGN KEY (principal_user_id)
-        REFERENCES public.platform_principal(principal_user_id)
+        FOREIGN KEY (principal_id)
+        REFERENCES public.platform_principal(principal_id)
         ON DELETE RESTRICT,
     CONSTRAINT workos_provider_session_method_identity_fkey
-        FOREIGN KEY (method_id, principal_user_id, method_kind)
-        REFERENCES public.authentication_method(method_id, principal_user_id, kind)
+        FOREIGN KEY (method_id, principal_id, method_kind)
+        REFERENCES public.authentication_method(method_id, principal_id, kind)
         ON DELETE RESTRICT,
     CONSTRAINT workos_provider_session_external_identity_fkey
         FOREIGN KEY (method_id, subject)
@@ -85,43 +80,10 @@ CREATE TABLE public.workos_provider_session (
 
 ALTER TABLE public.workos_provider_session
     ADD CONSTRAINT workos_provider_session_identity_key
-    UNIQUE (provider_session_id, principal_user_id, method_id);
+    UNIQUE (provider_session_id, principal_id, method_id);
 
 CREATE INDEX workos_provider_session_principal_idx
-    ON public.workos_provider_session (principal_user_id, status);
-
--- Any provider sessions observed before this migration lack local `sid`
--- custody. Preserve their assertion history and retire the complete provider
--- session so no already-minted sibling assertion can cross the new boundary.
-INSERT INTO public.workos_provider_session (
-    provider_session_id,
-    subject,
-    principal_user_id,
-    method_id,
-    status,
-    created_at,
-    last_seen_at,
-    access_expires_at,
-    logged_out_at
-)
-SELECT exchange.provider_session_id,
-       exchange.subject,
-       identity.principal_user_id,
-       identity.method_id,
-       'logged_out',
-       MIN(exchange.exchanged_at),
-       MAX(exchange.exchanged_at),
-       MAX(exchange.access_expires_at),
-       MAX(exchange.exchanged_at)
-FROM public.workos_session_exchange AS exchange
-JOIN public.external_identity AS identity
-  ON identity.provider = 'workos'
- AND identity.subject = exchange.subject
-WHERE identity.method_id IS NOT NULL
-GROUP BY exchange.provider_session_id,
-         exchange.subject,
-         identity.principal_user_id,
-         identity.method_id;
+    ON public.workos_provider_session (principal_id, status);
 
 -- Permanent deny evidence retains only a one-way fingerprint of the
 -- high-entropy provider sid. The PII-bound provider-session row may therefore
@@ -133,38 +95,8 @@ CREATE TABLE public.workos_provider_session_tombstone (
     CONSTRAINT workos_provider_session_tombstone_hash_check
         CHECK (provider_session_hash ~ '^[0-9a-f]{64}$'),
     CONSTRAINT workos_provider_session_tombstone_reason_check
-        CHECK (reason IN ('logout', 'link_completed', 'method_disabled', 'subject_erasure', 'migration_cutover'))
+        CHECK (reason IN ('logout', 'link_completed', 'method_disabled', 'subject_erasure'))
 );
-
-INSERT INTO public.workos_provider_session_tombstone (
-    provider_session_hash,
-    tombstoned_at,
-    reason
-)
-SELECT encode(sha256(convert_to(provider_session_id, 'UTF8')), 'hex'),
-       logged_out_at,
-       'migration_cutover'
-FROM public.workos_provider_session
-WHERE status = 'logged_out';
-
--- An old assertion row whose external-identity binding is incomplete cannot
--- enter the new custody registry. Retire its sid permanently; the unvalidated
--- foreign key below grandfathers only that historical assertion evidence while
--- rejecting every new unmatched exchange.
-INSERT INTO public.workos_provider_session_tombstone (
-    provider_session_hash,
-    tombstoned_at,
-    reason
-)
-SELECT encode(sha256(convert_to(exchange.provider_session_id, 'UTF8')), 'hex'),
-       MAX(exchange.exchanged_at),
-       'migration_cutover'
-FROM public.workos_session_exchange AS exchange
-LEFT JOIN public.workos_provider_session AS provider_session
-  ON provider_session.provider_session_id = exchange.provider_session_id
-WHERE provider_session.provider_session_id IS NULL
-GROUP BY exchange.provider_session_id
-ON CONFLICT DO NOTHING;
 
 CREATE TRIGGER workos_provider_session_tombstone_no_mutation
     BEFORE UPDATE OR DELETE OR TRUNCATE
@@ -193,16 +125,15 @@ ALTER TABLE public.auth_session
     ADD CONSTRAINT auth_session_workos_provider_session_fkey
     FOREIGN KEY (
         workos_session_id,
-        principal_user_id,
+        principal_id,
         authenticated_via_method_id
     )
     REFERENCES public.workos_provider_session (
         provider_session_id,
-        principal_user_id,
+        principal_id,
         method_id
     )
-    ON DELETE RESTRICT
-    NOT VALID;
+    ON DELETE RESTRICT;
 
 -- A WorkOS session may mint several distinct access tokens. Each exact signed
 -- assertion can be exchanged once; the provider session id is lifecycle
@@ -218,8 +149,7 @@ ALTER TABLE public.workos_session_exchange
     ADD CONSTRAINT workos_session_exchange_provider_session_fkey
         FOREIGN KEY (provider_session_id)
         REFERENCES public.workos_provider_session(provider_session_id)
-        ON DELETE RESTRICT
-        NOT VALID,
+        ON DELETE RESTRICT,
     ADD CONSTRAINT workos_session_exchange_assertion_hash_check
         CHECK (access_token_hash ~ '^[0-9a-f]{64}$'),
     ADD CONSTRAINT workos_session_exchange_linking_session_hash_check
@@ -274,7 +204,7 @@ BEGIN
             SELECT 1
             FROM public.subject_erasure_outbox AS outbox
             JOIN public.subject_erasure AS erasure USING (erasure_id)
-            WHERE outbox.principal_user_id = OLD.principal_user_id
+            WHERE outbox.principal_id = OLD.principal_id
               AND erasure.state = 'pending'
               AND erasure.claim_token IS NOT NULL
         ) AND EXISTS (
@@ -292,7 +222,7 @@ BEGIN
 
     IF NEW.provider_session_id <> OLD.provider_session_id
        OR NEW.subject <> OLD.subject
-       OR NEW.principal_user_id <> OLD.principal_user_id
+       OR NEW.principal_id <> OLD.principal_id
        OR NEW.method_id <> OLD.method_id
        OR NEW.created_at <> OLD.created_at
        OR NEW.method_kind <> OLD.method_kind THEN

@@ -51,7 +51,7 @@ export const PLAYER_ROUTE_CONTRACT = Object.freeze({
 
 export async function buildGameRouteData({
   game,
-  principalUserId,
+  principalId,
   capabilities = [],
   fetchImpl = null,
   apiBaseUrl = "",
@@ -60,7 +60,7 @@ export async function buildGameRouteData({
 }) {
   const gameId = normalizeGame(game);
   const channelId = normalizeChannel(activeChannel);
-  const hasPrincipal = hasPrincipalUserId(principalUserId);
+  const hasPrincipal = hasPrincipalId(principalId);
   const normalizedCapabilities = normalizeCapabilities(capabilities);
   const pendingReplacement = hasPrincipal && normalizedCapabilities.length === 0;
   const access = pendingReplacement ? pendingPlayerAccess(gameId) : resolveSurfaceAccess({
@@ -97,7 +97,7 @@ export async function buildGameRouteData({
   const coldLoad = await loadPlayerColdData({
     game: gameId,
     activeChannel: channelId,
-    principalUserId,
+    principalId,
     actorSlot: playerCommandStateSlot,
     fetchImpl: canColdLoadActiveChannel ? fetchImpl : null,
     apiBaseUrl,
@@ -140,7 +140,7 @@ export async function buildGameRouteData({
     shell: buildAppShell({
       game: gameId,
       activeSurface: "player",
-      principalUserId,
+      principalId,
       capabilities: normalizedCapabilities,
       phase,
     }),
@@ -158,7 +158,7 @@ export async function buildGameRouteData({
         })
       : null,
     player: Object.freeze({
-      principalUserId,
+      principalId,
       slotId: playerSlotId,
       alive: coldLoad.commandState.actorAlive,
       status: coldLoad.commandState.actorStatus,
@@ -586,8 +586,8 @@ function normalizeChannel(channel) {
   return channel;
 }
 
-function hasPrincipalUserId(principalUserId) {
-  return typeof principalUserId === "string" && principalUserId.trim() !== "";
+function hasPrincipalId(principalId) {
+  return typeof principalId === "string" && principalId.trim() !== "";
 }
 
 export function buildPrivateQueueRouteItems(snapshot, { game, channel }) {

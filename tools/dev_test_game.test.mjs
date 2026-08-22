@@ -30,6 +30,7 @@ import {
   assertDevTestGameProofRun,
   buildDevTestGameProofRun,
 } from "./dev_test_game_proof_contract.mjs";
+import { principalFixtureId } from "./principal_fixture.mjs";
 import {
   assertDevTestGameEarliestReachedProof,
   devTestGameEarliestReachedProofSummary,
@@ -11567,7 +11568,7 @@ test("seed plan creates a playable mafiascum D01 game shape", () => {
       },
     },
   ]);
-  assert(plan.some(([, command]) => command.AddCohost?.user === "cohost_c"));
+  assert(plan.some(([, command]) => command.AddCohost?.principal_id === "cohost_c"));
   assert(plan.some(([, command]) => command.SetPostPolicy?.allow_media_only === true));
   assert(plan.some(([, command]) => command.SetPostPolicy?.allow_media_only === false));
   assert(plan.some(([, command]) => command.StartGame?.phase === "D01"));
@@ -11745,7 +11746,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       browserCredentialIssuer: "/auth/accounts + /auth/invites",
       browserCredentialKinds: ["account", "account-bound-invite"],
       browserSessionGrantUsage: false,
-      rootPrincipalUserId: "root_admin",
+      rootPrincipalId: "root_admin",
       rootCapabilityKinds: ["GlobalAdmin"],
       rawRootTokenStored: false,
       boundary:
@@ -11753,7 +11754,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     },
     sessions: {
       host: {
-        principalUserId: "host_h",
+        principalId: "host_h",
         credentialKind: "invite",
         token: tokens.host,
         inviteToken: tokens.host,
@@ -11763,7 +11764,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         expectedCapabilityKind: "HostOf",
       },
       hostSetup: {
-        principalUserId: "host_h",
+        principalId: "host_h",
         credentialKind: "invite",
         token: tokens.hostSetup,
         inviteToken: tokens.hostSetup,
@@ -11773,7 +11774,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         expectedCapabilityKind: "HostOf",
       },
       player: {
-        principalUserId: "player-mira",
+        principalId: "player-mira",
         credentialKind: "invite",
         token: tokens.player,
         inviteToken: tokens.player,
@@ -11783,7 +11784,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         expectedCapabilityKind: "SlotOccupant",
       },
       replacementPlayer: {
-        principalUserId: "player-rowan",
+        principalId: "player-rowan",
         credentialKind: "invite",
         token: tokens.replacementPlayer,
         inviteToken: tokens.replacementPlayer,
@@ -11793,7 +11794,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         expectedCapabilityKind: "SlotOccupant",
       },
       cohost: {
-        principalUserId: "cohost_c",
+        principalId: "cohost_c",
         credentialKind: "invite",
         token: tokens.cohost,
         inviteToken: tokens.cohost,
@@ -11847,7 +11848,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         cookie: { valuePrefix: "fmss_" },
       },
       replacementPlayer: {
-        principalUserId: "player-rowan",
+        principalId: "player-rowan",
         capabilityKinds: ["SlotOccupant", "ChannelMember"],
         cookie: { valuePrefix: "fmss_" },
       },
@@ -12091,7 +12092,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         initialDeadline: 1_782_014_400,
         commands: [
           {
-            principalUserId: "host_h",
+            principalId: "host_h",
             command: {
               ExtendDeadline: {
                 game: laterPhaseDeadlineGame,
@@ -12106,7 +12107,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       initialDeadline: 1_782_014_400,
       expectedDeadline: 1_782_100_800,
       cohostEntry: {
-        principalUserId: "cohost_c",
+        principalId: "cohost_c",
         capabilityKinds: ["CohostOf"],
       },
       capabilityLabel: `CohostOf(${laterPhaseDeadlineGame})`,
@@ -14011,7 +14012,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         inviteTokenPrefix: `replacement-${game}-`,
         tokenPresent: true,
         session: {
-          principalUserId: "player-rowan",
+          principalId: "player-rowan",
           credentialKind: "invite",
           token: `replacement-${game}-fixture`,
           inviteToken: `replacement-${game}-fixture`,
@@ -14021,7 +14022,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           expectedCapabilityKind: "SlotOccupant",
           globalCapabilities: [],
           issuedBy: {
-            principalUserId: "host_h",
+            principalId: "host_h",
             capabilityKind: "HostOf",
             game,
             surface: "host-replacement-invite-panel",
@@ -14030,7 +14031,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       pendingIncomingPlayer: {
         status: "passed",
-        principalUserId: "player-rowan",
+        principalId: "player-rowan",
         capabilityKinds: [],
         capabilityLabel: `PendingReplacement(${game})`,
         routeStateText:
@@ -14077,7 +14078,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       replacementSessionRefresh: {
         status: "passed",
         session: {
-          principalUserId: "player-rowan",
+          principalId: "player-rowan",
           credentialKind: "account",
           accountId: "player-rowan@local.fmarch.test",
           loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&account=player-rowan%40local.fmarch.test`,
@@ -14094,7 +14095,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           landedOnDirectUrl: true,
         },
         browserEntry: {
-          principalUserId: "player-rowan",
+          principalId: "player-rowan",
           capabilityKinds: ["SlotOccupant", "ChannelMember"],
           cookie: { valuePrefix: "fmss_" },
         },
@@ -14157,14 +14158,14 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       replacementReconnectRecovery: {
         status: "passed",
-        principalUserId: "player-rowan",
+        principalId: "player-rowan",
         actorSlot: "slot-7",
         reconnectingStatus: { state: "reconnecting" },
         reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
         recoveredSnapshotContainsPost: true,
         recoveredPostBody: "Replacement Rowan reconnect proof from dev:test-game",
         reconnectCommand: {
-          principalUserId: "player-rowan",
+          principalId: "player-rowan",
           command: {
             SubmitPost: {
               actor_slot: "slot-7",
@@ -14232,7 +14233,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           assigned_principal_id: "player-mira",
         },
         pendingAfterReject: {
-          principalUserId: "player-rowan",
+          principalId: "player-rowan",
           capabilityKinds: [],
           capabilityLabel: `PendingReplacement(${game})`,
           commandState: {
@@ -14332,8 +14333,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       staleHostInviteRecovery: {
         status: "passed",
         beforeSubmit: {
-          principalUserId: "player-mira",
-          expectedOccupantUserId: "player-mira",
+          principalId: principalFixtureId("player-mira"),
+          expectedOccupantPrincipalId: principalFixtureId("player-mira"),
           slotId: "slot-7",
         },
         reject: {
@@ -14344,8 +14345,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         retry: {
           state: "ack",
           target: {
-            principalUserId: "player-rowan",
-            expectedOccupantUserId: "player-rowan",
+            principalId: principalFixtureId("player-rowan"),
+            expectedOccupantPrincipalId: principalFixtureId("player-rowan"),
             slotId: "slot-7",
           },
           message: "Player invite issued",
@@ -14477,7 +14478,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       incomingPlayer: {
         status: "passed",
         browserEntry: {
-          principalUserId: "player-rowan",
+          principalId: "player-rowan",
           capabilityKinds: ["SlotOccupant", "ChannelMember"],
         },
         commandState: {
@@ -16054,13 +16055,13 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         reconnect: {
           status: "passed",
-          principalUserId: replacementActionReconnectCase.replacementPrincipalUserId,
+          principalId: replacementActionReconnectCase.replacementPrincipalUserId,
           actorSlot: replacementActionReconnectCase.actorSlot,
           reconnectingStatus: { state: "reconnecting" },
           reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
           recoveredSnapshotContainsPost: true,
           reconnectCommand: {
-            principalUserId:
+            principalId:
               replacementActionReconnectCase.replacementPrincipalUserId,
             command: {
               SubmitPost: {
@@ -16359,7 +16360,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           reconnectingStatus: { state: "reconnecting" },
           reconnectPostBody: replacementResolvedPrivatePost.reconnectPostBody,
           reconnectCommand: {
-            principalUserId:
+            principalId:
               replacementResolvedPrivatePost.replacementPrincipalUserId,
             command: {
               SubmitPost: {
@@ -17384,13 +17385,13 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         reconnectAfterReject: {
           status: "passed",
-          principalUserId: "player-goon-a",
+          principalId: "player-goon-a",
           actorSlot: "slot_4",
           reconnectingStatus: { state: "reconnecting" },
           reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
           recoveredSnapshotContainsPost: true,
           reconnectCommand: {
-            principalUserId: "player-goon-a",
+            principalId: "player-goon-a",
             command: {
               SubmitPost: {
                 actor_slot: "slot_4",
@@ -17477,7 +17478,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         privateThreadPagerVisibleAfterReject: true,
         reconnectAfterReject: {
           status: "passed",
-          principalUserId: "player-goon-a",
+          principalId: "player-goon-a",
           actorSlot: "slot_4",
           reconnectingStatus: { state: "reconnecting" },
           reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
@@ -19247,7 +19248,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.deepEqual(
     [
       replacementCheck.roleUrl,
-      replacementCheck.principalUserId,
+      replacementCheck.principalId,
       replacementCheck.commandStateSlot,
       replacementCheck.capabilityKinds,
       replacementCheck.hostIssuedInvite,
@@ -19264,7 +19265,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "slot-7",
       ["SlotOccupant", "ChannelMember"],
       {
-        principalUserId: "player-rowan",
+        principalId: "player-rowan",
         issuedBy: "host_h",
         issuedByCapability: "HostOf",
         returnTo: "/g/<seeded-game>",
@@ -21580,7 +21581,7 @@ function identityAdapterProofFixture(game) {
       accountRegistrationRoleSurfacePattern:
         "/auth/register?account=<account-id>&returnTo=<role-surface>",
       capabilityAuthority:
-        "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
+        "auth_session resolves principal_id and committed game/global capabilities at the API boundary",
     },
     identityAdapterContract,
     identityAdapterContractDiff:
@@ -21604,7 +21605,7 @@ function identityAdapterProofFixture(game) {
         registrationSurfaceTestId: "auth-registration-classic-surface",
         securitySurfaceTestId: "account-security-surface",
         accountId: "registered@example.test",
-        principalUserId: "registered-user",
+        principalId: "registered-user",
         sessionCookiePrefix: "fmss_",
         sessionHasNoGameCapabilities: true,
         gameRolePendingReplacement: true,
@@ -21619,7 +21620,7 @@ function identityAdapterProofFixture(game) {
       },
       sessionRotation: {
         status: "passed",
-        principalUserId: "host_h",
+        principalId: "host_h",
         oldSessionRejected: true,
         rotatedSessionCapabilityKinds: ["HostOf"],
         sameRoleSurface: true,
@@ -21644,12 +21645,12 @@ function identityAdapterProofFixture(game) {
       },
       sessionRevocation: {
         status: "passed",
-        principalUserId: "host_h",
+        principalId: "host_h",
         revokedSessionRejected: true,
       },
       inviteRevocation: {
         status: "passed",
-        principalUserId: "host_h",
+        principalId: "host_h",
         revokedInviteRejected: true,
         recoveryCapabilityKinds: ["HostOf"],
         sameRoleSurface: true,
@@ -21664,7 +21665,7 @@ function identityAdapterProofFixture(game) {
         issuedByPrincipalUserId: "host_h",
         issuedForGame: game,
         storedGameScope: game,
-        principalUserId: "player-mira",
+        principalId: "player-mira",
         globalCapabilitiesGranted: 0,
         redeemedCapabilityKinds: ["SlotOccupant"],
         sameRoleSurface: true,
@@ -21673,7 +21674,7 @@ function identityAdapterProofFixture(game) {
       },
       accountLogin: {
         status: "passed",
-        principalUserId: "host_h",
+        principalId: "host_h",
         accountId: "host@example.test",
         capabilityKinds: ["HostOf"],
         sameRoleSurface: true,
@@ -21775,14 +21776,14 @@ function identityAdapterProofFixture(game) {
         adminControlSurface: {
           status: "passed",
           detailRoleUrl:
-            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
           controlsTestId: "admin-identity-account-controls",
           visitedDetailRoleUrl: true,
           staleConflictStatusText:
             "stale account lifecycle state for host@example.test; refresh and use current account controls before enable",
           reloadRecoveryStatus: "disabled",
           reloadRecoveryDetailRoleUrl:
-            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
           reloadRecoveryTargetText: "host@example.test host_h disabled",
         },
         disabledStatus: "disabled",
@@ -21800,7 +21801,7 @@ function identityAdapterProofFixture(game) {
       },
       auditTrail: {
         status: "passed",
-        principalUserId: "host_h",
+        principalId: "host_h",
         eventKinds: [
           "account_created",
           "account_disabled",
@@ -21817,14 +21818,14 @@ function identityAdapterProofFixture(game) {
           "session_revoked",
           "session_rotated",
         ],
-        actorUserIds: ["admin_a", "host_h"],
+        actorPrincipalIds: ["admin_a", "host_h"],
         rawTokensStored: false,
       },
       adminAuditSurface: {
         status: "passed",
         overviewRoleUrl: "/admin?game=<seeded-game>",
         detailRoleUrl:
-          "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+          "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h",
         linkTestId: "admin-audit-link-identity-lifecycle",
         surfaceTestId: "admin-audit-detail-surface",
         clickedThroughFromOverview: true,
@@ -21844,7 +21845,7 @@ function identityAdapterProofFixture(game) {
           "session_revoked",
           "invite_revoked",
         ],
-        principalUserId: "host_h",
+        principalId: "host_h",
         rawTokensVisible: false,
       },
       nonClaims: [
@@ -21856,14 +21857,14 @@ function identityAdapterProofFixture(game) {
     },
     game,
     seedCommands: devTestGameIdentityAdapterSeedCommandKinds.map((kind, index) => ({
-      principalUserId: index === 0 ? "host_h" : "player-mira",
+      principalId: index === 0 ? "host_h" : "player-mira",
       kind,
       streamSeqs: [index + 1],
     })),
     accounts: {
       host: {
         accountId: "host@example.test",
-        principalUserId: "host_h",
+        principalId: "host_h",
         globalCapabilities: [],
       },
     },
@@ -21871,19 +21872,19 @@ function identityAdapterProofFixture(game) {
       admin: identityRole({
         role: "admin",
         loginUrl: "http://127.0.0.1:5173/auth/invite?returnTo=%2Fadmin&invite=admin-invite-token",
-        principalUserId: "admin_a",
+        principalId: "admin_a",
         capabilityKinds: ["GlobalAdmin"],
       }),
       host: identityRole({
         role: "host",
         loginUrl: `http://127.0.0.1:5173/auth/invite?returnTo=%2Fg%2F${game}%2Fhost&invite=host-invite-token`,
-        principalUserId: "host_h",
+        principalId: "host_h",
         capabilityKinds: ["HostOf"],
       }),
       player: identityRole({
         role: "player",
         loginUrl: `http://127.0.0.1:5173/auth/invite?returnTo=%2Fg%2F${game}&invite=player-invite-token`,
-        principalUserId: "player-mira",
+        principalId: "player-mira",
         capabilityKinds: ["SlotOccupant"],
       }),
     },
@@ -22022,11 +22023,11 @@ function devTestGameReleaseReadinessChecklistFixture({
           roleUrl: "http://127.0.0.1:5173/g/<seeded-game>",
           proofBoundary:
             "Seeded dev-test-game replacement player role URL proof from proof-run. Proves host-issued replacement URL, fresh replacement session recovery, incoming player slot authority, stale outgoing player rejection, and private-channel authority transfer; does not prove hosted identity, invite delivery, multi-node races, release readiness, or production readiness.",
-          principalUserId: "player-rowan",
+          principalId: "player-rowan",
           commandStateSlot: "slot-7",
           capabilityKinds: ["SlotOccupant", "ChannelMember"],
           hostIssuedInvite: {
-            principalUserId: "player-rowan",
+            principalId: "player-rowan",
             issuedBy: "host_h",
             issuedByCapability: "HostOf",
             returnTo: "/g/<seeded-game>",
@@ -29918,12 +29919,12 @@ function adminProofRerunCommandFor(id) {
   return `npm run test:dev-test-game-${id}-admin-proof`;
 }
 
-function identityRole({ role, loginUrl, principalUserId, capabilityKinds }) {
+function identityRole({ role, loginUrl, principalId, capabilityKinds }) {
   return {
     role,
     loginUrl,
     returnTo: new URL(loginUrl).searchParams.get("returnTo"),
-    principalUserId,
+    principalId,
     capabilityKinds,
     cookie: {
       httpOnly: true,

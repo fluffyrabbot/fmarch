@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { error, fail } from "@sveltejs/kit";
 import { resolveFixtureRouteState } from "../../../../lib/app/app-route-state-model.mjs";
+import { canonicalPrincipalId } from "../../../../lib/principal-id.mjs";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 import {
   authenticatedApiFetch,
@@ -21,18 +22,18 @@ export async function load({ params, locals, fetch, url, cookies }) {
     game: params.game,
     locals,
   });
-  const principalUserId = resolveHostRoutePrincipal({
+  const principalId = resolveHostRoutePrincipal({
     game: params.game,
     locals,
   });
-  if (principalUserId === "") {
+  if (principalId === "") {
     throw error(403, "Host console requires an authenticated host session.");
   }
 
   const routeData = await buildHostConsoleRouteData({
     game: params.game,
     capabilities,
-    principalUserId,
+    principalId,
     fetchImpl:
       fixtureMode && apiBaseUrl === ""
         ? null
@@ -66,7 +67,6 @@ export const actions = {
       url,
       field: "playerInvite",
       tokenPrefix: "player",
-      defaultPrincipalUserId: "player-mira",
       ackMessage: "Player invite issued",
       rejectMessage: "Player invite was rejected",
     }),
@@ -80,7 +80,6 @@ export const actions = {
       url,
       field: "replacementInvite",
       tokenPrefix: "replacement",
-      defaultPrincipalUserId: "player-rowan",
       ackMessage: "Replacement invite issued",
       rejectMessage: "Replacement invite was rejected",
     }),
@@ -95,7 +94,6 @@ export async function _issueHostScopedInvite({
   url,
   field,
   tokenPrefix,
-  defaultPrincipalUserId,
   ackMessage,
   rejectMessage,
 }) {
@@ -118,37 +116,65 @@ export async function _issueHostScopedInvite({
       message: "Host session is required",
     }));
   }
-  const principalUserId = invitePrincipal(
-    formData.get("principalUserId"),
-    defaultPrincipalUserId,
-  );
+  const principalId = canonicalPrincipalId(formData.get("principalId"));
+  if (principalId === null) {
+    return fail(400, inviteForm(field, {
+      state: "reject",
+      message: "Invited principal must be a canonical UUID",
+    }));
+  }
   const accountId = inviteAccountId(formData.get("accountId"));
   if (accountId === "") {
     return fail(400, inviteForm(field, {
       state: "reject",
       message: "Invited account is required",
-      principalUserId,
+      principalId,
     }));
   }
   const slotId = inviteSlotId(formData.get("slotId"));
-  const expectedOccupantUserId = invitePrincipal(
-    formData.get("expectedOccupantUserId"),
-    principalUserId,
+  if (slotId === null) {
+    return fail(400, inviteForm(field, {
+      state: "reject",
+      message: "Invite slot is required",
+      principalId,
+    }));
+  }
+  const expectedOccupantPrincipalId = canonicalPrincipalId(
+    formData.get("expectedOccupantPrincipalId"),
   );
-  const currentOccupant = await currentInviteTargetOccupant({
-    fetch,
-    game: params.game,
-    slotId,
-    sessionToken,
-  });
-  if (currentOccupant !== expectedOccupantUserId) {
+  if (expectedOccupantPrincipalId === null) {
+    return fail(400, inviteForm(field, {
+      state: "reject",
+      message: "Expected occupant principal must be a canonical UUID",
+      principalId,
+      slotId,
+    }));
+  }
+  let currentOccupant;
+  try {
+    currentOccupant = await currentInviteTargetOccupant({
+      fetch,
+      game: params.game,
+      slotId,
+      sessionToken,
+    });
+  } catch {
+    return fail(502, inviteForm(field, {
+      state: "reject",
+      message: "Invite target projection is unavailable",
+      principalId,
+      slotId,
+      expectedOccupantPrincipalId,
+    }));
+  }
+  if (currentOccupant !== expectedOccupantPrincipalId) {
     return fail(409, inviteForm(field, {
       state: "reject",
       message: `Invite target is stale; ${slotId} is currently occupied by ${currentOccupant}`,
-      principalUserId,
+      principalId,
       slotId,
-      expectedOccupantUserId,
-      currentOccupantUserId: currentOccupant,
+      expectedOccupantPrincipalId,
+      currentOccupantPrincipalId: currentOccupant,
     }));
   }
   const returnTo = `/g/${params.game}`;
@@ -157,9 +183,9 @@ export async function _issueHostScopedInvite({
     return inviteForm(field, {
       state: "ack",
       message: ackMessage,
-      principalUserId,
+      principalId,
       accountId,
-      invitedByUserId: principalForProjection,
+      invitedByPrincipalId: principalForProjection,
       game: params.game,
       returnTo,
       loginUrl: `${url.origin}${loginPath}`,
@@ -179,7 +205,7 @@ export async function _issueHostScopedInvite({
     body: JSON.stringify({
       invite_token: inviteToken,
       account_id: accountId,
-      expected_principal_user_id: principalUserId,
+      expected_principal_id: principalId,
       expires_at: expiresAt,
       game: params.game,
     }),
@@ -192,7 +218,28 @@ export async function _issueHostScopedInvite({
     }));
   }
 
-  const invite = await response.json();
+  let invite;
+  try {
+    invite = await response.json();
+  } catch {
+    return fail(502, inviteForm(field, {
+      state: "reject",
+      message: "Invite service returned an invalid response",
+    }));
+  }
+  const issuedPrincipalId = canonicalPrincipalId(invite?.principal_id);
+  const invitedByPrincipalId = canonicalPrincipalId(invite?.invited_by_principal_id);
+  if (
+    issuedPrincipalId !== principalId ||
+    invitedByPrincipalId !== principalForProjection ||
+    invite?.account_id !== accountId ||
+    invite?.game !== params.game
+  ) {
+    return fail(502, inviteForm(field, {
+      state: "reject",
+      message: "Invite service returned mismatched principal authority",
+    }));
+  }
   const loginPath = inviteLoginPath({
     returnTo,
     inviteToken,
@@ -201,9 +248,9 @@ export async function _issueHostScopedInvite({
   return inviteForm(field, {
     state: "ack",
     message: ackMessage,
-    principalUserId: invite.principal_user_id,
+    principalId: issuedPrincipalId,
     accountId: invite.account_id,
-    invitedByUserId: invite.invited_by_user_id,
+    invitedByPrincipalId,
     game: invite.game,
     returnTo,
     loginUrl: `${url.origin}${loginPath}`,
@@ -226,16 +273,12 @@ function inviteForm(field, invite) {
   };
 }
 
-function invitePrincipal(value, fallback) {
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
-}
-
 function inviteAccountId(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
 function inviteSlotId(value) {
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : "slot-7";
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
 function inviteLoginPath({ returnTo, inviteToken, accountId }) {
@@ -275,13 +318,11 @@ async function currentInviteTargetOccupant({
   const slot = Array.isArray(state?.slots)
     ? state.slots.find((candidate) => candidate.slot_id === slotId)
     : null;
-  if (
-    typeof slot?.assigned_principal_id !== "string"
-    || slot.assigned_principal_id.trim() === ""
-  ) {
-    throw new Error(`host invite target projection missing ${slotId}`);
+  const principalId = canonicalPrincipalId(slot?.assigned_principal_id);
+  if (principalId === null) {
+    throw new Error(`host invite target projection missing canonical principal for ${slotId}`);
   }
-  return slot.assigned_principal_id;
+  return principalId;
 }
 
 function authInvitesUrl(env) {

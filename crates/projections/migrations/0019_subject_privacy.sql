@@ -14,12 +14,19 @@ CREATE TABLE public.subject_authority_binding (
 
 CREATE TABLE public.privacy_subject (
     subject_id uuid PRIMARY KEY,
-    principal_user_id text UNIQUE REFERENCES public.platform_principal(principal_user_id) ON DELETE RESTRICT,
+    principal_id uuid UNIQUE REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT,
     created_at bigint NOT NULL,
     lifecycle_state text NOT NULL DEFAULT 'active',
     CONSTRAINT privacy_subject_lifecycle_state_check
         CHECK (lifecycle_state IN ('active', 'erased'))
 );
+
+-- A subject's owning principal is part of the stable identity relation.  The
+-- pair is referenced by profile rows so a profile can never be rebound to a
+-- principal that owns a different subject.
+ALTER TABLE public.privacy_subject
+    ADD CONSTRAINT privacy_subject_exact_owner_unique
+        UNIQUE (subject_id, principal_id);
 
 CREATE TABLE public.subject_private_claim (
     claim_id uuid PRIMARY KEY,
@@ -61,17 +68,25 @@ CREATE TABLE public.subject_key_destruction_receipt (
 );
 
 ALTER TABLE public.member_profile
-    ADD COLUMN subject_id uuid REFERENCES public.privacy_subject(subject_id) ON DELETE RESTRICT,
-    ADD COLUMN current_claim_id uuid REFERENCES public.subject_private_claim(claim_id) ON DELETE SET NULL;
+    ADD COLUMN subject_id uuid,
+    ADD COLUMN current_claim_id uuid;
 
 ALTER TABLE public.member_profile
     ALTER COLUMN subject_id SET NOT NULL;
 
 ALTER TABLE ONLY public.member_profile
     ADD CONSTRAINT member_profile_active_principal_id_fkey
-        FOREIGN KEY (active_principal_id)
-        REFERENCES public.platform_principal(principal_user_id)
+        FOREIGN KEY (subject_id, active_principal_id)
+        REFERENCES public.privacy_subject(subject_id, principal_id)
         ON DELETE RESTRICT,
+    ADD CONSTRAINT member_profile_subject_id_fkey
+        FOREIGN KEY (subject_id)
+        REFERENCES public.privacy_subject(subject_id)
+        ON DELETE RESTRICT,
+    ADD CONSTRAINT member_profile_current_claim_id_fkey
+        FOREIGN KEY (current_claim_id, subject_id)
+        REFERENCES public.subject_private_claim(claim_id, subject_id)
+        ON DELETE SET NULL (current_claim_id),
     ADD CONSTRAINT member_profile_subject_id_key UNIQUE (subject_id),
     ADD CONSTRAINT member_profile_active_redacted_shape_check CHECK (
         (

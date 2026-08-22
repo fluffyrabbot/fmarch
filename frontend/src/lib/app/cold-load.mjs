@@ -1,5 +1,6 @@
 import { normalizeDayEventRoom } from "./day-event-room.mjs";
 import { normalizeGameThreadAuthor } from "./game-thread-author.mjs";
+import { canonicalPrincipalId } from "../principal-id.mjs";
 
 export const DEFAULT_SSR_FETCH_TIMEOUT_MS = 2000;
 
@@ -32,7 +33,7 @@ export function fetchTimeoutSignal(timeoutMs) {
 export async function loadPlayerColdData({
   game,
   activeChannel = "main",
-  principalUserId,
+  principalId,
   actorSlot = null,
   fetchImpl,
   apiBaseUrl = "",
@@ -40,7 +41,7 @@ export async function loadPlayerColdData({
   timeoutMs = ssrFetchTimeoutMs(),
 }) {
   const canLoadPrivate =
-    typeof principalUserId === "string" && principalUserId.trim() !== "";
+    typeof principalId === "string" && principalId.trim() !== "";
   const canLoadCommandState =
     canLoadPrivate && typeof actorSlot === "string" && actorSlot.trim() !== "";
   const canLoadPlayerPrivate = canLoadCommandState;
@@ -146,14 +147,17 @@ export async function loadPlayerColdData({
 
 export async function loadAdminColdData({
   game,
-  principalUserId,
+  principalId,
   fetchImpl,
   apiBaseUrl = "",
   sessionToken = null,
-  identityPrincipalUserId = "host_h",
+  identityPrincipalId = principalId,
   fallback,
   timeoutMs = ssrFetchTimeoutMs(),
 }) {
+  const auditPrincipalId = canonicalPrincipalId(identityPrincipalId);
+  const hasAuthenticatedSession =
+    typeof sessionToken === "string" && sessionToken.trim() !== "";
   const [proofStatus, identityLifecycleAudit] = await Promise.all([
     fetchJson({
       fetchImpl,
@@ -164,14 +168,11 @@ export async function loadAdminColdData({
         game,
         path: "operator/proof-runs/status",
       }),
-      headers:
-        sessionToken === null ||
-        sessionToken === undefined ||
-        sessionToken.trim() === ""
-          ? undefined
-          : { authorization: `Bearer ${sessionToken}` },
+      headers: hasAuthenticatedSession
+        ? { authorization: `Bearer ${sessionToken}` }
+        : undefined,
     }),
-    sessionToken === null || sessionToken === undefined || sessionToken.trim() === ""
+    !hasAuthenticatedSession || auditPrincipalId === null
       ? null
       : fetchJson({
           fetchImpl,
@@ -179,7 +180,7 @@ export async function loadAdminColdData({
           fallback: null,
           url: identityLifecycleAuditUrl({
             apiBaseUrl,
-            principalUserId: identityPrincipalUserId,
+            principalId: auditPrincipalId,
           }),
           headers: {
             authorization: `Bearer ${sessionToken}`,
@@ -188,13 +189,13 @@ export async function loadAdminColdData({
   ]);
   const audit = normalizeAdminAudit(proofStatus, fallback.audit, {
     game,
-    principalUserId,
+    principalId,
   });
 
   return Object.freeze({
     audit: appendIdentityLifecycleAudit(audit, identityLifecycleAudit, {
       game,
-      identityPrincipalUserId,
+      identityPrincipalId: auditPrincipalId,
     }),
   });
 }
@@ -989,7 +990,12 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
     "session_rotated",
   ];
   const complete = requiredEvents.every((eventKind) => eventKinds.includes(eventKind));
-  const principalUserId = String(context.identityPrincipalUserId ?? entries[0].principalUserId);
+  const principalId =
+    canonicalPrincipalId(context.identityPrincipalId) ??
+    canonicalPrincipalId(entries[0].principalId);
+  if (principalId === null) {
+    return null;
+  }
 
   return Object.freeze({
     id: "identity-lifecycle",
@@ -1003,24 +1009,24 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
       "/auth/identity-lifecycle-audit records account, session, and invite lifecycle events without raw credential echoes",
     href: adminIdentityLifecycleAuditHref({
       game: context.game,
-      principalUserId,
+      principalId,
     }),
     inspectHref: adminIdentityLifecycleAuditHref({
       game: context.game,
-      principalUserId,
+      principalId,
     }),
     entries: Object.freeze(entries),
     eventKinds: Object.freeze(eventKinds),
-    principalUserId,
+    principalId,
     accountControls: identityLifecycleAccountControls({
       entries,
-      principalUserId,
+      principalId,
     }),
     rawTokensStored: false,
   });
 }
 
-function identityLifecycleAccountControls({ entries, principalUserId }) {
+function identityLifecycleAccountControls({ entries, principalId }) {
   const accountEntry = entries.find(
     (entry) =>
       typeof entry.metadata?.account_id === "string" &&
@@ -1040,7 +1046,7 @@ function identityLifecycleAccountControls({ entries, principalUserId }) {
   const currentDisabled = latestLifecycleEntry?.eventKind === "account_disabled";
   return Object.freeze({
     accountId,
-    principalUserId,
+    principalId,
     currentDisabled,
     disableAction: "?/disableAccount",
     enableAction: "?/enableAccount",
@@ -1053,19 +1059,19 @@ function normalizeIdentityLifecycleEntry(entry) {
     return null;
   }
   const eventKind = firstNonEmptyString(entry.event_kind, entry.eventKind);
-  const principalUserId = firstNonEmptyString(
-    entry.principal_user_id,
-    entry.principalUserId,
+  const principalId = firstNonEmptyString(
+    entry.principal_id,
+    entry.principalId,
   );
-  if (eventKind === null || principalUserId === null) {
+  if (eventKind === null || principalId === null) {
     return null;
   }
   return Object.freeze({
     id: Number(entry.id ?? 0),
     eventAt: Number(entry.event_at ?? entry.eventAt ?? 0),
     eventKind,
-    actorUserId: firstNonEmptyString(entry.actor_user_id, entry.actorUserId),
-    principalUserId,
+    actorPrincipalId: firstNonEmptyString(entry.actor_principal_id, entry.actorPrincipalId),
+    principalId,
     metadata: entry.metadata ?? {},
   });
 }
@@ -1088,23 +1094,28 @@ function operatorStatusRows(proofStatus) {
 
 export function identityLifecycleAuditUrl({
   apiBaseUrl = "",
-  principalUserId,
+  principalId,
   limit = 50,
 }) {
-  if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
-    throw new TypeError("principalUserId is required for identity lifecycle audit URLs");
+  const canonicalId = canonicalPrincipalId(principalId);
+  if (canonicalId === null) {
+    throw new TypeError("principalId must be a canonical UUID for identity lifecycle audit URLs");
   }
   const params = new URLSearchParams({
-    principal_user_id: principalUserId,
+    principal_id: canonicalId,
     limit: String(limit),
   });
   return `${apiBaseUrl}/auth/identity-lifecycle-audit?${params.toString()}`;
 }
 
-export function adminIdentityLifecycleAuditHref({ game, principalUserId }) {
+export function adminIdentityLifecycleAuditHref({ game, principalId }) {
+  const canonicalId = canonicalPrincipalId(principalId);
+  if (canonicalId === null) {
+    throw new TypeError("principalId must be a canonical UUID for identity lifecycle audit URLs");
+  }
   const params = new URLSearchParams({
     game,
-    principal_user_id: principalUserId,
+    principal_id: canonicalId,
   });
   return `/admin/audit/identity-lifecycle?${params.toString()}`;
 }

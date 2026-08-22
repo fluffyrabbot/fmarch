@@ -615,7 +615,7 @@ function voteSubmissionChecks({
   return [
     [submission?.state === "ack", `${label} did not ack`],
     [
-      submission?.requestEnvelope?.body?.body?.principal_user_id === undefined,
+      submission?.requestEnvelope?.body?.body?.principal_id === undefined,
       `${label} included a client-supplied principal`,
     ],
     [

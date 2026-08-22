@@ -21,8 +21,8 @@ use crate::{
     build_host_notice, current_pack, current_phase, next_stream_logical_time, persist, phase_kind,
     phase_number, plan_effect_events, require_game, require_game_not_completed, require_game_run,
     require_slot_alive, require_slot_occupant, resolve_capabilities_in_tx, unix_seconds_now,
-    validate_game_post_body, Ack, CommandAuditContext, EffectApplication, HostNoticeSpec, Reject,
-    COMMAND_AUDIT_CONTEXT,
+    validate_game_post_body, Ack, AuditInitiator, CommandAuditContext, EffectApplication,
+    HostNoticeSpec, Reject, SystemAuditService, COMMAND_AUDIT_CONTEXT,
 };
 
 /// Execute one schedule observation under the sealed scheduler authority.
@@ -67,7 +67,7 @@ async fn advance_day_event_mechanics_as_scheduler(
         .map_err(|error| Reject::Internal(error.to_string()))?;
     require_game_not_completed(&mut tx, game).await?;
     let audit_context = CommandAuditContext {
-        principal_user_id: "service:day-event-automation".to_string(),
+        initiator: AuditInitiator::Service(SystemAuditService::DayEventAutomation),
         command_id,
         command_kind: "AdvanceDayEventAutomation".to_string(),
         authority_used: format!("DayEventAutomation({game})"),
@@ -99,7 +99,7 @@ async fn publish_day_event_narratives_as_scheduler(
         .map_err(|error| Reject::Internal(error.to_string()))?;
     require_game_not_completed(&mut tx, game).await?;
     let audit_context = CommandAuditContext {
-        principal_user_id: "service:day-event-narrative".to_string(),
+        initiator: AuditInitiator::Service(SystemAuditService::DayEventNarrative),
         command_id,
         command_kind: "PublishDayEventNarratives".to_string(),
         authority_used: format!("DayEventNarrative({game})"),

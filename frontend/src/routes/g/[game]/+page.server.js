@@ -13,7 +13,7 @@ export async function load({ params, locals, fetch, url, cookies }) {
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const data = await buildGameRouteData({
     game: params.game,
-    principalUserId: locals.principalUserId,
+    principalId: locals.principalId,
     capabilities: locals.resolvedCapabilities,
     fetchImpl:
       fixtureMode && apiBaseUrl === ""

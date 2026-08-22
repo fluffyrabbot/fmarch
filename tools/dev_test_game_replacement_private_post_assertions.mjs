@@ -18,10 +18,10 @@ const ackedSubmitPostCommand = (proof) =>
   proof?.stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost;
 
 const ackedPostOmitsClientPrincipal = (proof) =>
-  proof?.stalePost?.requestEnvelope?.body?.body?.principal_user_id === undefined;
+  proof?.stalePost?.requestEnvelope?.body?.body?.principal_id === undefined;
 
 const rejectedPostOmitsClientPrincipal = (proof) =>
-  proof?.reject?.requestEnvelope?.body?.body?.principal_user_id === undefined;
+  proof?.reject?.requestEnvelope?.body?.body?.principal_id === undefined;
 
 const completedCommandStateMatches = (commandState, scenario) =>
   commandState?.actorSlot === scenario.actorSlot &&
@@ -159,7 +159,7 @@ export function buildReplacementResolvedPrivatePostReconnectProof(
       actor_slot: reconnectCommand?.actor_slot ?? null,
       body: reconnectCommand?.body ?? reconnectProof?.reconnectPostBody ?? null,
     },
-    principalUserId: reconnectProof?.reconnectCommand?.principalUserId ?? null,
+    principalId: reconnectProof?.reconnectCommand?.principalId ?? null,
     reconnectingStatus: reconnectProof?.reconnectingStatus ?? null,
     reconnectRecoveryEvent: reconnectProof?.reconnectRecoveryEvent ?? null,
     recoveredCommandState: reconnectProof?.recoveredCommandState ?? null,
@@ -324,7 +324,7 @@ export function replacementResolvedPrivatePostReconnectMatches(
     ) &&
     noVoteButtonsPresent(reconnectProof?.reconnectButtonsBeforeDrop) &&
     reconnectProof?.reconnectingStatus?.state === "reconnecting" &&
-    reconnectProof?.reconnectCommand?.principalUserId ===
+    reconnectProof?.reconnectCommand?.principalId ===
       scenario.replacementPrincipalUserId &&
     reconnectPost?.channel_id === scenario.channelId &&
     reconnectPost?.actor_slot === scenario.actorSlot &&

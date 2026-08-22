@@ -1,10 +1,6 @@
 -- 0023_erasure_outbox.sql — crash-safe, externally completed subject erasure.
 
 ALTER TABLE public.privacy_subject
-    ADD CONSTRAINT privacy_subject_exact_owner_unique
-        UNIQUE (subject_id, principal_user_id);
-
-ALTER TABLE public.privacy_subject
     DROP CONSTRAINT privacy_subject_lifecycle_state_check,
     ADD CONSTRAINT privacy_subject_lifecycle_state_check
         CHECK (lifecycle_state IN ('active', 'erasure_pending', 'erased'));
@@ -14,7 +10,7 @@ ALTER TABLE public.privacy_subject
 CREATE TABLE public.subject_erasure_outbox (
     erasure_id uuid PRIMARY KEY,
     subject_id uuid NOT NULL UNIQUE,
-    principal_user_id text NOT NULL UNIQUE,
+    principal_id uuid NOT NULL UNIQUE,
     receipt_id uuid NOT NULL UNIQUE,
     replacement_alias text NOT NULL UNIQUE,
     key_fingerprint_sha256 text NOT NULL,
@@ -24,8 +20,8 @@ CREATE TABLE public.subject_erasure_outbox (
     authority_manifest_sha256 text,
     payload_version smallint NOT NULL DEFAULT 1,
     CONSTRAINT subject_erasure_outbox_exact_owner_fkey
-        FOREIGN KEY (subject_id, principal_user_id)
-        REFERENCES public.privacy_subject (subject_id, principal_user_id)
+        FOREIGN KEY (subject_id, principal_id)
+        REFERENCES public.privacy_subject (subject_id, principal_id)
         ON DELETE RESTRICT,
     CONSTRAINT subject_erasure_outbox_fingerprint_check
         CHECK (key_fingerprint_sha256 ~ '^[0-9a-f]{64}$'),
@@ -92,11 +88,11 @@ CREATE INDEX subject_erasure_pending_claim_idx
 -- the owner-locked transaction bounded under the service's 5s statement
 -- timeout instead of turning account erasure into unrelated table scans.
 CREATE INDEX auth_delivery_intent_principal_idx
-    ON public.auth_delivery_intent (principal_user_id);
+    ON public.auth_delivery_intent (principal_id);
 CREATE INDEX auth_websocket_ticket_principal_idx
-    ON public.auth_websocket_ticket (principal_user_id);
+    ON public.auth_websocket_ticket (principal_id);
 CREATE INDEX identity_lifecycle_audit_actor_idx
-    ON public.identity_lifecycle_audit (actor_user_id);
+    ON public.identity_lifecycle_audit (actor_principal_id);
 CREATE INDEX game_persona_subject_binding_erasure_idx
     ON public.game_persona_subject_binding (subject_id)
     WHERE lifecycle = 'active';

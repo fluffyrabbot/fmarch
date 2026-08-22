@@ -317,9 +317,9 @@
                     <form class="host-setup__slot-form" on:submit={(event) => handleSetupSubmit(event, "assign-slot")}>
                       <input type="hidden" name="slotId" value={slot.slotId} />
                       <label class="fm-field">
-                        <span>Principal user ID</span>
+                        <span>Principal ID</span>
                         <input
-                          name="principalUserId"
+                          name="principalId"
                           type="text"
                           required
                           spellcheck="false"
@@ -341,9 +341,9 @@
                 <h3>Player access</h3>
                 {#each inviteTargets as target}
                   <form class="host-setup__invite" method="POST" action="?/issuePlayerInvite" data-testid={`host-setup-invite-${target.slotId}`}>
-                    <input type="hidden" name="principalUserId" value={target.principalUserId} />
+                    <input type="hidden" name="principalId" value={target.principalId} />
                     <input type="hidden" name="slotId" value={target.slotId} />
-                    <input type="hidden" name="expectedOccupantUserId" value={target.expectedOccupantUserId} />
+                    <input type="hidden" name="expectedOccupantPrincipalId" value={target.expectedOccupantPrincipalId} />
                     <span>{target.targetLabel}</span>
                     <label class="fm-field">
                       <span>Account ID</span>
@@ -359,11 +359,11 @@
                   {/if}
                   {#if form.playerInvite.loginUrl}
                     <a href={form.playerInvite.loginUrl} data-testid="host-setup-player-invite-url">{form.playerInvite.loginUrl}</a>
-                  {:else if form.playerInvite.currentOccupantUserId}
+                  {:else if form.playerInvite.currentOccupantPrincipalId}
                     <form method="POST" action="?/issuePlayerInvite">
-                      <input type="hidden" name="principalUserId" value={form.playerInvite.currentOccupantUserId} />
+                      <input type="hidden" name="principalId" value={form.playerInvite.currentOccupantPrincipalId} />
                       <input type="hidden" name="slotId" value={form.playerInvite.slotId} />
-                      <input type="hidden" name="expectedOccupantUserId" value={form.playerInvite.currentOccupantUserId} />
+                      <input type="hidden" name="expectedOccupantPrincipalId" value={form.playerInvite.currentOccupantPrincipalId} />
                       <label class="fm-field">
                         <span>Account ID</span>
                         <input name="accountId" type="text" autocomplete="username" required />

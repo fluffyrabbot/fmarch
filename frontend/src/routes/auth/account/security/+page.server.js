@@ -11,7 +11,7 @@ import { workosAuthKitConfigured } from "../../../../lib/server/workos-authkit.m
 export async function load({ cookies, fetch, locals, url }) {
   const accountId = optionalField(url.searchParams.get("account"));
   const returnTo = authReturnPath(url.searchParams.get("returnTo"));
-  if (typeof locals.principalUserId !== "string" || locals.principalUserId.trim() === "") {
+  if (typeof locals.principalId !== "string" || locals.principalId.trim() === "") {
     throw redirect(
       303,
       loginPath({
@@ -24,7 +24,7 @@ export async function load({ cookies, fetch, locals, url }) {
   return {
     accountSecurity: {
       accountId,
-      principalUserId: locals.principalUserId,
+      principalId: locals.principalId,
       returnTo,
       methods: await accountMethods({ cookies, fetch }),
       workosAvailable: workosAuthKitConfigured(),

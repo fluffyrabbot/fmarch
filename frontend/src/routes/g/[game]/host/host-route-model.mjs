@@ -26,6 +26,10 @@ import {
   dayVoteOutcomesUrl,
   loadHostColdData,
 } from "../../../../lib/app/cold-load.mjs";
+import {
+  canonicalPrincipalId,
+  FIXTURE_PRINCIPAL_IDS,
+} from "../../../../lib/principal-id.mjs";
 
 export const HOST_CONSOLE_REQUIRED_CAPABILITIES = Object.freeze([
   "HostOf",
@@ -42,26 +46,20 @@ export const HOST_CONSOLE_ROUTE_CONTRACT = Object.freeze({
 export async function buildHostConsoleRouteData({
   game,
   capabilities = [],
-  principalUserId = "host_h",
+  principalId = FIXTURE_PRINCIPAL_IDS.hostH,
   fetchImpl = null,
   apiBaseUrl = "",
 }) {
   const gameId = normalizeGame(game);
-  const commandPrincipalUserId = normalizePrincipal(principalUserId);
+  const commandPrincipalId = normalizePrincipal(principalId);
   const access = resolveHostConsoleAccess({
     game: gameId,
     capabilities,
   });
-  const replacement = Object.freeze({
-    slotId: "slot-7",
-    occupantLabel: "player-mira",
-    assignedPrincipalId: "player-mira",
-    lifecycleLabel: "Alive",
-    historyLabel: "Waiting for replacement command proof",
-  });
+  const replacement = HOST_FIXTURE_REPLACEMENT;
   const authorityFallback = buildHostAuthorityFallback({
     access,
-    principalUserId: commandPrincipalUserId,
+    principalId: commandPrincipalId,
   });
   const serverHostConsoleStateEndpoint = buildHostConsoleStateEndpoint({
     gameId,
@@ -113,7 +111,7 @@ export async function buildHostConsoleRouteData({
     actionGroups: moderatorActionGroups,
     commandContext: {
       gameId,
-      principalUserId: commandPrincipalUserId,
+      principalId: commandPrincipalId,
       capabilityLabel: access.capabilityLabel ?? "HostOf(game)",
       commandEndpoint: "/commands",
     },
@@ -123,7 +121,7 @@ export async function buildHostConsoleRouteData({
     shell: buildAppShell({
       game: gameId,
       activeSurface: "moderator",
-      principalUserId: commandPrincipalUserId,
+      principalId: commandPrincipalId,
       capabilities,
       phase: hostProjection.phase,
     }),
@@ -132,7 +130,7 @@ export async function buildHostConsoleRouteData({
       label: gameId,
     }),
     session: Object.freeze({
-      principalUserId: commandPrincipalUserId,
+      principalId: commandPrincipalId,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "moderator",
@@ -143,11 +141,11 @@ export async function buildHostConsoleRouteData({
       capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
       liveStatusTestId: HOST_CONSOLE_ROUTE_CONTRACT.liveStatusTestId,
     }),
-    commandPrincipalUserId,
+    commandPrincipalId,
     commandEndpoint: "/commands",
     commandContext: Object.freeze({
       gameId,
-      principalUserId: commandPrincipalUserId,
+      principalId: commandPrincipalId,
       capabilityLabel: access.capabilityLabel ?? "HostOf(game)",
       commandEndpoint: "/commands",
     }),
@@ -181,12 +179,7 @@ export async function buildHostConsoleRouteData({
     completed: hostProjection.completed,
     phase: hostProjection.phase,
     replacement: hostProjection.replacement,
-    inviteTargets: buildHostInviteTargets({
-      replacement: {
-        slotId: "slot-7",
-        occupantLabel: "player-mira",
-      },
-    }),
+    inviteTargets: buildHostInviteTargets({ replacement: hostProjection.replacement }),
     hostPrompts: coldLoad.hostPrompts,
     hostTasks: hostProjection.tasks,
     hostDayEvents: hostProjection.dayEvents,
@@ -242,17 +235,14 @@ export function buildHostWorkQueues({
 }
 
 export function buildHostInviteTargets({
-  replacement = {},
-  replacementPrincipalUserId = "player-rowan",
+  replacement = HOST_FIXTURE_REPLACEMENT,
+  replacementPrincipalId = FIXTURE_PRINCIPAL_IDS.playerRowan,
+  replacementLabel = "player-rowan",
 } = {}) {
   const slotId = normalizeSlotId(replacement.slotId ?? "slot-7");
-  const occupant = normalizePrincipal(firstNonEmptyText(
-    replacement.assignedPrincipalId,
-    replacement.occupantLabel,
-    "player-mira",
-  ));
-  const publicName = normalizePublicPersonaName(replacement.occupantLabel, occupant);
-  const replacementPrincipal = normalizePrincipal(replacementPrincipalUserId);
+  const occupant = normalizePrincipal(replacement.assignedPrincipalId);
+  const publicName = normalizePublicPersonaName(replacement.occupantLabel, "player-mira");
+  const replacementPrincipal = normalizePrincipal(replacementPrincipalId);
   return Object.freeze({
     player: Object.freeze({
       id: "player",
@@ -265,8 +255,8 @@ export function buildHostInviteTargets({
       urlTestId: "host-player-invite-url",
       accountTestId: "host-player-invite-account",
       slotId,
-      principalUserId: occupant,
-      expectedOccupantUserId: occupant,
+      principalId: occupant,
+      expectedOccupantPrincipalId: occupant,
       targetLabel: `${slotDisplayLabel(slotId)} / ${publicName}`,
       submitLabel: "Issue player invite",
     }),
@@ -281,9 +271,9 @@ export function buildHostInviteTargets({
       urlTestId: "host-replacement-invite-url",
       accountTestId: "host-replacement-invite-account",
       slotId,
-      principalUserId: replacementPrincipal,
-      expectedOccupantUserId: occupant,
-      targetLabel: `${slotDisplayLabel(slotId)} / ${replacementPrincipal}`,
+      principalId: replacementPrincipal,
+      expectedOccupantPrincipalId: occupant,
+      targetLabel: `${slotDisplayLabel(slotId)} / ${replacementLabel}`,
       submitLabel: "Issue invite",
     }),
   });
@@ -311,9 +301,9 @@ function buildModeratorControls({ actionGroups }) {
   );
 }
 
-function buildHostAuthorityFallback({ access, principalUserId }) {
+function buildHostAuthorityFallback({ access, principalId }) {
   return Object.freeze({
-    principalUserId,
+    principalId,
     capabilityKind: access.capability?.kind === "CohostOf" ? "CohostOf" : "HostOf",
     allowedClasses: Object.freeze([]),
     deniedClasses: Object.freeze([]),
@@ -353,14 +343,7 @@ export function resolveHostRouteCapabilities({ game, locals = {} }) {
 }
 
 export function resolveHostRoutePrincipal({ game, locals = {} }) {
-  if (
-    typeof locals.principalUserId === "string" &&
-    locals.principalUserId.trim() !== ""
-  ) {
-    return locals.principalUserId;
-  }
-
-  return "";
+  return canonicalPrincipalId(locals.principalId) ?? "";
 }
 
 export function hostConsoleForbiddenMessage(game) {
@@ -397,6 +380,14 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
       decisionKind: "acknowledge",
     }),
   ]),
+});
+
+const HOST_FIXTURE_REPLACEMENT = Object.freeze({
+  slotId: "slot-7",
+  occupantLabel: "player-mira",
+  assignedPrincipalId: FIXTURE_PRINCIPAL_IDS.playerMira,
+  lifecycleLabel: "Alive",
+  historyLabel: "Waiting for replacement command proof",
 });
 
 const HOST_FIXTURE_HOST_TASKS = Object.freeze([
@@ -483,22 +474,18 @@ function normalizeGame(game) {
   return game;
 }
 
-function normalizePrincipal(principalUserId) {
-  if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
-    throw new TypeError("host route principal must be a non-empty string");
+function normalizePrincipal(principalId) {
+  const canonicalId = canonicalPrincipalId(principalId);
+  if (canonicalId === null) {
+    throw new TypeError("host route principal must be a canonical UUID");
   }
-  return principalUserId;
+  return canonicalId;
 }
 
 function normalizePublicPersonaName(publicName, fallback) {
   return typeof publicName === "string" && publicName.trim() !== ""
     ? publicName.trim()
     : fallback;
-}
-
-function firstNonEmptyText(...values) {
-  return values.find((value) => typeof value === "string" && value.trim() !== "")
-    ?? "";
 }
 
 function normalizeSlotId(slotId) {

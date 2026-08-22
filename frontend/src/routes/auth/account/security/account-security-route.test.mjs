@@ -13,7 +13,7 @@ test("security load exposes the principal's sign-in methods", async () => {
     fetch: async (url, init) => {
       observed = { url, authorization: init.headers.authorization };
       return jsonResponse({
-        principal_user_id: "host_h",
+        principal_id: "host_h",
         methods: [
           {
             method_id: "00000000-0000-0000-0000-00000000000a",
@@ -33,7 +33,7 @@ test("security load exposes the principal's sign-in methods", async () => {
         ],
       });
     },
-    locals: { principalUserId: "host_h" },
+    locals: { principalId: "host_h" },
     url: new URL(
       "http://localhost/auth/account/security?account=host%40example.test&returnTo=%2Fg%2Fgame-1%2Fhost",
     ),
@@ -43,7 +43,7 @@ test("security load exposes the principal's sign-in methods", async () => {
   assert.deepEqual(result, {
     accountSecurity: {
       accountId: "host@example.test",
-      principalUserId: "host_h",
+      principalId: "host_h",
       returnTo: "/g/game-1/host",
       methods: [
         {
@@ -112,7 +112,7 @@ test("adding a classic method surfaces the display-once recovery codes", async (
         status: "added",
         method_id: "00000000-0000-0000-0000-00000000000c",
         login_name: "converted@example.test",
-        principal_user_id: "host_h",
+        principal_id: "host_h",
         recovery_codes: ["fmrc-one", "fmrc-two", "fmrc-three"],
         recovery_codes_expire_at: 4_102_444_800,
         session_token: "fmss_classic-session",
@@ -188,7 +188,7 @@ test("disabling a method reports the revocation outcome", async () => {
         status: "disabled",
         method_id: "00000000-0000-0000-0000-00000000000b",
         kind: "workos",
-        principal_user_id: "host_h",
+        principal_id: "host_h",
         revoked_session_count: 1,
       });
     },
@@ -255,7 +255,7 @@ test("password rotation revokes the browser cookie and preserves the game return
         return jsonResponse({
           status: "rotated",
           account_id: "host@example.test",
-          principal_user_id: "host_h",
+          principal_id: "host_h",
           revoked_session_count: 2,
           password_algorithm: "argon2id",
         });
@@ -335,7 +335,7 @@ test("security action issues a one-time recovery credential", async () => {
         recovery_id: "00000000-0000-0000-0000-000000000001",
         recovery_token: "account-recovery-once-only",
         account_id: "host@example.test",
-        principal_user_id: "host_h",
+        principal_id: "host_h",
         expires_at: 4_102_444_800,
       });
     },
@@ -374,7 +374,7 @@ test("security action revokes a recovery credential", async () => {
         status: "revoked",
         recovery_id: "00000000-0000-0000-0000-000000000001",
         account_id: "host@example.test",
-        principal_user_id: "host_h",
+        principal_id: "host_h",
       });
     },
     request: formRequest({

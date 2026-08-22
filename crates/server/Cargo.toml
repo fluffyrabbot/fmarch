@@ -13,6 +13,7 @@ eventstore = { path = "../eventstore", version = "0.1.0" }
 identity = { path = "../identity", version = "0.1.0" }
 media = { path = "../media", version = "0.1.0" }
 operator_api = { path = "../operator_api", version = "0.1.0" }
+profile_handle_index = { path = "../profile_handle_index", version = "0.1.0" }
 projections = { path = "../projections", version = "0.1.0" }
 profile_application = { path = "../profile_application", version = "0.1.0" }
 axum = "0.8"
@@ -29,4 +30,6 @@ percent-encoding = "2"
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
+social = { path = "../social", version = "0.1.0" }
+tempfile = "3"
 tower = { version = "0.5", features = ["util"] }

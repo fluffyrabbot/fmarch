@@ -164,9 +164,9 @@ and persona identity remain stable, but presentation and cache revision change. 
 the narrow, explicit exception to pure as-of naming required by the 1.0 member-data
 lifecycle policy.
 
-No response or public projection may contain `principal_user_id`, raw
-`outgoing_user`, raw `incoming_user`, account id, external subject, or another
-credential identifier. Public replacement copy is rendered from persona and occupancy
+No response or public projection may contain a raw `PrincipalId` (including
+`principal_id`, `outgoing_principal_id`, or `incoming_principal_id`), account id,
+external subject, or another credential identifier. Public replacement copy is rendered from persona and occupancy
 facts only: **Lark replaced Rowan in Slot 7**.
 
 ### Persona and occupancy facts

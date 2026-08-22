@@ -16,11 +16,11 @@ CREATE INDEX workos_session_exchange_expiry_idx
 
 CREATE TABLE public.media_upload_ledger (
     upload_id UUID PRIMARY KEY,
-    principal_user_id TEXT NOT NULL REFERENCES public.platform_principal(principal_user_id) ON DELETE RESTRICT,
+    principal_id uuid NOT NULL REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT,
     encoded_bytes BIGINT NOT NULL CHECK (encoded_bytes > 0),
     content_id TEXT,
     created_at BIGINT NOT NULL
 );
 
 CREATE INDEX media_upload_ledger_principal_idx
-    ON public.media_upload_ledger (principal_user_id, created_at);
+    ON public.media_upload_ledger (principal_id, created_at);

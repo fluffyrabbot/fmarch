@@ -144,7 +144,7 @@ identifier!(OptionId, "option id");
 identifier!(Tag, "tag");
 identifier!(ContentRef, "content reference");
 identifier!(ChannelId, "channel id");
-identifier!(PrincipalId, "principal id");
+pub use principal::PrincipalId;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -1154,12 +1154,17 @@ pub enum DayEventEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
     fn id<T>(value: &str) -> T
     where
         T: TryFrom<String, Error = ModelError>,
     {
         T::try_from(value.to_owned()).unwrap()
+    }
+
+    fn principal(value: u128) -> PrincipalId {
+        PrincipalId::from_uuid(Uuid::from_u128(value))
     }
 
     macro_rules! impl_try_from_string {
@@ -1187,7 +1192,6 @@ mod tests {
         Tag,
         ContentRef,
         ChannelId,
-        PrincipalId,
     );
 
     fn reward() -> RewardBinding {
@@ -1287,7 +1291,7 @@ mod tests {
     fn fiat_plans_validate_the_same_concrete_catalog() {
         let error = EffectPlan::try_new(
             EffectOrigin::HostFiat {
-                principal_id: id("host-1"),
+                principal_id: principal(1),
             },
             vec![ConcreteEffect::Grant {
                 target: id("slot-2"),

@@ -25,30 +25,30 @@ use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPool, PgConnection, Postgres, Row, Transaction};
 use uuid::Uuid;
 
+pub use principal::PrincipalId;
+
 // Re-export the id aliases so callers speak one vocabulary.
-pub type UserId = String;
 pub type GameId = Uuid;
 pub type SlotId = String;
 pub type ChannelId = String;
 
-/// A principal is *who is acting*. For now only platform users exist; auth
-/// (sessions, tokens) is a later phase, so a [`Principal`] is taken as given at
-/// the boundary rather than authenticated here.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Principal {
-    User(UserId),
-}
+/// An authenticated authority admitted to capability resolution.
+///
+/// This boundary wrapper deliberately carries only the canonical platform
+/// [`PrincipalId`]. Provider subjects and account names never enter capability
+/// resolution as identities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Principal(PrincipalId);
 
 impl Principal {
-    pub fn user(id: impl Into<UserId>) -> Self {
-        Principal::User(id.into())
+    pub const fn authenticated(id: PrincipalId) -> Self {
+        Self(id)
     }
 
-    /// The underlying user id (the only principal kind today).
-    pub fn user_id(&self) -> &str {
-        match self {
-            Principal::User(u) => u,
-        }
+    /// The UUID-backed authority whose capabilities are being resolved.
+    pub const fn id(self) -> PrincipalId {
+        self.0
     }
 }
 
@@ -189,14 +189,14 @@ async fn resolve_with(
     principal: &Principal,
     game: GameId,
 ) -> Result<CapabilitySet, CapError> {
-    let user = principal.user_id();
+    let principal_id = principal.id().as_uuid();
     let mut set = CapabilitySet::new();
 
     let authority = sqlx::query(
-        "SELECT role FROM game_authority WHERE game_id = $1 AND user_id = $2 ORDER BY role",
+        "SELECT role FROM game_authority WHERE game_id = $1 AND principal_id = $2 ORDER BY role",
     )
     .bind(game)
-    .bind(user)
+    .bind(principal_id)
     .fetch_all(&mut *conn)
     .await?;
     for row in authority {
@@ -208,10 +208,10 @@ async fn resolve_with(
     }
 
     let spectator: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM spectator_membership WHERE game_id = $1 AND user_id = $2)",
+        "SELECT EXISTS(SELECT 1 FROM spectator_membership WHERE game_id = $1 AND principal_id = $2)",
     )
     .bind(game)
-    .bind(user)
+    .bind(principal_id)
     .fetch_one(&mut *conn)
     .await?;
     if spectator {
@@ -222,10 +222,10 @@ async fn resolve_with(
         "SELECT o.slot_id FROM slot_occupancy_epoch o \
          JOIN game_persona_subject_binding binding ON binding.game_id = o.game_id AND binding.persona_id = o.persona_id AND binding.lifecycle = 'active' \
          JOIN privacy_subject subject ON subject.subject_id = binding.subject_id \
-         WHERE o.game_id = $1 AND subject.principal_user_id = $2 AND o.ended_seq IS NULL ORDER BY o.slot_id",
+         WHERE o.game_id = $1 AND subject.principal_id = $2 AND o.ended_seq IS NULL ORDER BY o.slot_id",
     )
     .bind(game)
-    .bind(user)
+    .bind(principal_id)
     .fetch_all(&mut *conn)
     .await?
     .into_iter()
@@ -241,11 +241,11 @@ async fn resolve_with(
             JOIN game_persona_subject_binding binding ON binding.game_id = o.game_id AND binding.persona_id = o.persona_id AND binding.lifecycle = 'active' \
             JOIN privacy_subject subject ON subject.subject_id = binding.subject_id \
             JOIN slot_state s ON s.game_id = o.game_id AND s.slot_id = o.slot_id \
-            WHERE o.game_id = $1 AND subject.principal_user_id = $2 AND o.ended_seq IS NULL AND NOT s.alive\
+            WHERE o.game_id = $1 AND subject.principal_id = $2 AND o.ended_seq IS NULL AND NOT s.alive\
          )",
     )
     .bind(game)
-    .bind(user)
+    .bind(principal_id)
     .fetch_one(&mut *conn)
     .await?;
     if dead_occupant {
@@ -257,10 +257,10 @@ async fn resolve_with(
          JOIN slot_occupancy_epoch o ON o.game_id = m.game_id AND o.slot_id = m.slot_id AND o.ended_seq IS NULL \
          JOIN game_persona_subject_binding binding ON binding.game_id = o.game_id AND binding.persona_id = o.persona_id AND binding.lifecycle = 'active' \
          JOIN privacy_subject subject ON subject.subject_id = binding.subject_id \
-         WHERE m.game_id = $1 AND subject.principal_user_id = $2 ORDER BY m.channel_id",
+         WHERE m.game_id = $1 AND subject.principal_id = $2 ORDER BY m.channel_id",
     )
     .bind(game)
-    .bind(user)
+    .bind(principal_id)
     .fetch_all(&mut *conn)
     .await?;
     for row in channels {

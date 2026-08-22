@@ -14,10 +14,11 @@ import {
 } from "./capacity_overload_contract.mjs";
 import { seedSetupCommandPlanForGame } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { decodeServerEnvelopeFrame } from "../frontend/src/lib/app/live-transport.mjs";
+import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import {
-  applicationDatabaseEnvironment,
-  runFmarchMigrations,
-} from "./run_fmarch_migrations.mjs";
+  fixturePrincipalAuthorityId,
+  fixturePrincipalTransport,
+} from "./principal_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultMigrationUrl =
@@ -142,7 +143,7 @@ async function startServer({ baseUrl, port, databaseUrl, env }) {
   server = spawn(serverBinary, [], {
     cwd: repoRoot,
     env: {
-      ...applicationDatabaseEnvironment({ applicationUrl: databaseUrl, env }),
+      ...serverRuntimeEnvironment({ applicationUrl: databaseUrl, env }),
       FMARCH_BIND: `127.0.0.1:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
       FMARCH_DB_MAX_CONNECTIONS: "10",
@@ -369,8 +370,8 @@ async function proveSingleGamePostBurst({ baseUrl }) {
 }
 
 async function seedPostBurstGame(baseUrl) {
-  for (const [principalUserId, command] of seedSetupCommandPlanForGame(postBurstGame)) {
-    const seeded = await sendCommand(baseUrl, principalUserId, command);
+  for (const [principalId, command] of seedSetupCommandPlanForGame(postBurstGame)) {
+    const seeded = await sendCommand(baseUrl, principalId, command);
     assert(seeded.kind === "Ack", `game seed rejected: ${JSON.stringify(seeded)}`);
   }
 }
@@ -537,8 +538,8 @@ async function submitPostWithRetry({ baseUrl, index, prefix }) {
 // The strict wire rejects any actor field in the envelope; seed and burst
 // commands act as a principal by presenting that principal's dev session as
 // the bearer.
-async function seedSessionToken(baseUrl, principalUserId) {
-  const cached = seedSessionTokens.get(principalUserId);
+async function seedSessionToken(baseUrl, principalId) {
+  const cached = seedSessionTokens.get(principalId);
   if (cached !== undefined) {
     return cached;
   }
@@ -546,7 +547,7 @@ async function seedSessionToken(baseUrl, principalUserId) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      principal_user_id: principalUserId,
+      principal_id: fixturePrincipalAuthorityId(principalId),
       expires_at: 4_102_444_800,
       global_capabilities: ["GlobalAdmin"],
     }),
@@ -554,14 +555,14 @@ async function seedSessionToken(baseUrl, principalUserId) {
   const body = await response.json();
   assert(
     response.status === 200 && typeof body.session_token === "string",
-    `dev session mint for ${principalUserId} returned ${response.status}`,
+    `dev session mint for ${principalId} returned ${response.status}`,
   );
-  seedSessionTokens.set(principalUserId, body.session_token);
+  seedSessionTokens.set(principalId, body.session_token);
   return body.session_token;
 }
 
-async function issueWebsocketTicket(baseUrl, principalUserId, game, channel) {
-  const sessionToken = await seedSessionToken(baseUrl, principalUserId);
+async function issueWebsocketTicket(baseUrl, principalId, game, channel) {
+  const sessionToken = await seedSessionToken(baseUrl, principalId);
   const response = await fetch(`${baseUrl}/auth/websocket-tickets`, {
     method: "POST",
     headers: {
@@ -578,18 +579,18 @@ async function issueWebsocketTicket(baseUrl, principalUserId, game, channel) {
   const body = await response.json();
   assert(
     response.status === 200 && typeof body.ticket === "string",
-    `websocket ticket mint for ${principalUserId} returned ${response.status}`,
+    `websocket ticket mint for ${principalId} returned ${response.status}`,
   );
   return body.ticket;
 }
 
 async function sendCommand(
   baseUrl,
-  principalUserId,
+  principalId,
   command,
   { tolerate503 = false } = {},
 ) {
-  const sessionToken = await seedSessionToken(baseUrl, principalUserId);
+  const sessionToken = await seedSessionToken(baseUrl, principalId);
   const response = await fetch(`${baseUrl}/commands`, {
     method: "POST",
     headers: {
@@ -603,7 +604,7 @@ async function sendCommand(
         kind: "Command",
         body: {
           command_id: randomUUID(),
-          command,
+          command: fixturePrincipalTransport(command, "capacity command transport"),
         },
       },
     }),

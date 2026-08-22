@@ -32,6 +32,7 @@ import {
   roles,
   routeStateScenarios,
 } from "./frontend_role_smoke_scenarios.mjs";
+import { principalFixtureId } from "./principal_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -47,6 +48,13 @@ const tempEntryDir = path.join(artifactDir, ".tmp-route-state-render");
 const bundleDir = path.join(artifactDir, "bundle");
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const stampPath = path.join(artifactDir, "input-stamp.json");
+const renderFixturePrincipalIds = Object.freeze({
+  adminA: principalFixtureId("admin_a"),
+  hostH: principalFixtureId("host_h"),
+  // The frontend's player-mira fixture intentionally uses the same UUID as
+  // the Rust proof alias with its hyphenated name.
+  playerMira: principalFixtureId("player-mira"),
+});
 
 // Content-addressed skip: this contract is rerun by every harness that needs
 // the SSR bundle, and its output is a pure function of the hashed inputs.
@@ -1750,17 +1758,21 @@ async function proveRenderedModeratorSurface(bundle) {
     `data-testid="${HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId}"`,
     "moderator command authority context",
   );
-  assertIncludes(html, "Hosting as @host_h", "moderator command authority summary");
+  assertIncludes(
+    html,
+    `Hosting as @${renderFixturePrincipalIds.hostH}`,
+    "moderator command authority summary",
+  );
   assertIncludes(html, "Technical access", "moderator command authority label");
   assertIncludes(
     html,
-    "HostOf(midsummer) · @host_h",
+    `HostOf(midsummer) · @${renderFixturePrincipalIds.hostH}`,
     "moderator command authority value",
   );
   assertIncludes(html, 'data-game-id="midsummer"', "moderator command authority game");
   assertIncludes(
     html,
-    'data-principal-user-id="host_h"',
+    `data-principal-id="${renderFixturePrincipalIds.hostH}"`,
     "moderator command authority principal",
   );
   assertIncludes(
@@ -1891,7 +1903,7 @@ async function proveRenderedModeratorSurface(bundle) {
     commandContext: {
       testId: HOST_TASK_WORKSPACE_CONTRACT.commandContextTestId,
       gameId: "midsummer",
-      principalUserId: "host_h",
+      principalId: renderFixturePrincipalIds.hostH,
       capabilityLabel: "HostOf(midsummer)",
       commandEndpoint: "/commands",
     },
@@ -2390,10 +2402,25 @@ import {
   buildPrivateQueueBoundary,
 } from "../src/lib/components/player-private-queue/player-private-queue-model.mjs";
 
+const fixturePrincipalIds = Object.freeze({
+  adminA: "${renderFixturePrincipalIds.adminA}",
+  hostH: "${renderFixturePrincipalIds.hostH}",
+  playerMira: "${renderFixturePrincipalIds.playerMira}",
+});
+const fixturePrincipalIdByAlias = Object.freeze({
+  admin_a: fixturePrincipalIds.adminA,
+  host_h: fixturePrincipalIds.hostH,
+  player_mira: fixturePrincipalIds.playerMira,
+});
+
+function canonicalFixturePrincipalId(value) {
+  return fixturePrincipalIdByAlias[value] ?? value;
+}
+
 function fixtureRouteInput({ token, game = "midsummer" }) {
   const session = resolveFixtureSession({ token, game });
   return {
-    principalUserId: session.principalUserId,
+    principalId: canonicalFixturePrincipalId(session.principalId),
     capabilities: session.resolvedCapabilities,
   };
 }
@@ -2420,10 +2447,10 @@ function fixtureRouteInput({ token, game = "midsummer" }) {
 
 	function appSessionForData(data) {
 	  return {
-	    principalUserId: data.session?.principalUserId ??
-	      data.operator?.principalUserId ??
-	      data.player?.principalUserId ??
-	      data.commandPrincipalUserId ??
+	    principalId: data.session?.principalId ??
+	      data.operator?.principalId ??
+	      data.player?.principalId ??
+	      data.commandPrincipalId ??
 	      null,
 	    viewerProfile: data.session?.viewerProfile ?? null,
 	    resolvedCapabilities: data.session?.resolvedCapabilities ?? [],
@@ -2453,7 +2480,7 @@ function fixtureRouteInput({ token, game = "midsummer" }) {
 
 export async function renderBoardSurface() {
 	  const appSession = {
-	    principalUserId: "admin_a",
+	    principalId: fixturePrincipalIds.adminA,
 	    resolvedCapabilities: [
       { kind: "GlobalAdmin" },
       { kind: "HostOf", game: "midsummer" },
@@ -2462,7 +2489,7 @@ export async function renderBoardSurface() {
 	    ],
 	  };
 	  const data = buildBoardRouteData({
-	    principalUserId: appSession.principalUserId,
+	    principalId: appSession.principalId,
 	    capabilities: appSession.resolvedCapabilities,
 		gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 	  });
@@ -2476,7 +2503,7 @@ export async function renderBoardPlayerSurface() {
 		gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
 	  });
 	  return renderWithRootLayout({ page: "board", data, appSession: {
-	    principalUserId: appSession.principalUserId,
+	    principalId: appSession.principalId,
 	    resolvedCapabilities: appSession.capabilities,
 	  } });
 	}
@@ -2490,7 +2517,7 @@ export async function renderRouteErrorSurface() {
     url: new URL("http://localhost/g/midsummer/c/private%3Arole_pm%3Aslot-7"),
     data: {
       appSession: {
-        principalUserId: "player_mira",
+        principalId: fixturePrincipalIds.playerMira,
         resolvedCapabilities: [
           { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
           { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
@@ -2505,7 +2532,7 @@ export async function renderRouteLoadingSurface() {
   return render(RouteLoading, {
     props: {
       path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
-      principalUserId: "player_mira",
+      principalId: fixturePrincipalIds.playerMira,
       capabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
         { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
@@ -2518,7 +2545,7 @@ export async function renderNavigationPendingLayer() {
   return render(AppNavigationPending, {
     props: {
       path: "/g/midsummer/c/private%3Arole_pm%3Aslot-7",
-      principalUserId: "player_mira",
+      principalId: fixturePrincipalIds.playerMira,
       capabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
         { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
@@ -2531,7 +2558,7 @@ export async function renderNavigationPendingLayerHidden() {
   return render(AppNavigationPending, {
     props: {
       path: null,
-      principalUserId: "player_mira",
+      principalId: fixturePrincipalIds.playerMira,
       capabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       ],
@@ -2550,7 +2577,7 @@ export async function renderScenario(role, state) {
 	      routeState: buildRouteStateRouteData({ surface: "board", state }),
 	    };
 	    return renderWithRootLayout({ page: "board", data, appSession: {
-	      principalUserId: fixture.principalUserId,
+	      principalId: fixture.principalId,
 	      resolvedCapabilities: fixture.capabilities,
 	    } });
 	  }
@@ -2816,7 +2843,7 @@ export async function renderAdminRecoveryConfirmation() {
         "recovery-gate": adminConfirmStatus(recoveryGate),
       },
       game: data.shell.game,
-      principalUserId: data.operator.principalUserId,
+      principalId: data.operator.principalId,
       onRecoveryTask: () => {},
       onCancelRecoveryTask: () => {},
     },
@@ -3089,7 +3116,7 @@ const pageState = writable({
   url: new URL("http://localhost/g/midsummer/c/private%3Arole_pm%3Aslot-7"),
   data: {
     appSession: {
-      principalUserId: "player_mira",
+      principalId: "${renderFixturePrincipalIds.playerMira}",
       resolvedCapabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
         { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },

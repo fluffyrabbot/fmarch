@@ -34,7 +34,7 @@
             <strong>{item.attemptCount} {item.attemptCount === 1 ? "attempt" : "attempts"}</strong>
           </header>
           <dl>
-            <div><dt>Principal</dt><dd>{item.principalUserId}</dd></div>
+            <div><dt>Principal</dt><dd>{item.principalId}</dd></div>
             <div><dt>Provider</dt><dd>{item.providerId}</dd></div>
             <div><dt>Outcome</dt><dd>{item.outcomeCode ?? "awaiting attempt"}</dd></div>
           </dl>

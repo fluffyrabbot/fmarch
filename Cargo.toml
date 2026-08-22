@@ -2,10 +2,12 @@
 resolver = "2"
 members = [
     "crates/content_registry",
+    "crates/principal",
     "crates/identity",
     "crates/content_reference",
     "crates/attention",
     "crates/social",
+    "crates/profile_handle_index",
     "crates/profile_application",
     "crates/game_persona_application",
     "crates/trust_safety",

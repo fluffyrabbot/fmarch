@@ -16,9 +16,10 @@ use eventstore::{ActorId, EventInput};
 use forum::{
     self, ForumReject, PostingState, TopicCommand, TopicEvent, TopicState, TopicVisibility,
 };
+use principal::PrincipalId;
 use serde::Deserialize;
 use social::{
-    PrincipalId, ProfileBio, ProfileDisplayName, ProfileEdit, ProfileHandle, ProfilePresentation,
+    ProfileBio, ProfileDisplayName, ProfileEdit, ProfileHandle, ProfilePresentation,
     ProfileRevision, ProfileVisibility,
 };
 use sqlx::postgres::PgPool;
@@ -136,10 +137,10 @@ async fn subscription_target_state(
     Path(surface_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let target = subscription_target(surface_id);
     Ok(Json(
-        projections::subscription_target_state(&state.pool, principal_user_id.as_str(), target)
+        projections::subscription_target_state(&state.pool, principal_id, target)
             .await
             .map_err(subscription_projection_api_error)?
             .into(),
@@ -151,12 +152,12 @@ async fn subscribe_to_target(
     Path(surface_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let target = subscription_target(surface_id);
     let state = projections::subscribe_to_public_target(
         &state.pool,
         target,
-        principal_user_id.as_str(),
+        principal_id,
         unix_now_seconds(),
     )
     .await
@@ -169,12 +170,12 @@ async fn unsubscribe_from_target(
     Path(surface_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let target = subscription_target(surface_id);
     let state = projections::unsubscribe_from_public_target(
         &state.pool,
         target,
-        principal_user_id.as_str(),
+        principal_id,
         unix_now_seconds(),
     )
     .await
@@ -188,12 +189,12 @@ async fn advance_subscription_read(
     headers: HeaderMap,
     Json(request): Json<AdvanceSubscriptionReadRequest>,
 ) -> Result<Json<SubscriptionTargetState>, ApiError> {
-    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let target = subscription_target(surface_id);
     let state = projections::advance_subscription_read_cursor(
         &state.pool,
         target,
-        principal_user_id.as_str(),
+        principal_id,
         request.read_through_seq,
         unix_now_seconds(),
     )
@@ -207,7 +208,7 @@ async fn public_inbox(
     Query(query): Query<PublicInboxQuery>,
     headers: HeaderMap,
 ) -> Result<Json<PublicInboxPage>, ApiError> {
-    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let principal_id = authenticated_member(&state.auth, &headers).await?;
     if query.before_seq.is_some_and(|seq| seq <= 0) {
         return Err(subscription_bad_request(
             "inbox before_seq must be a positive event sequence",
@@ -216,7 +217,7 @@ async fn public_inbox(
     Ok(Json(
         projections::public_inbox(
             &state.pool,
-            principal_user_id.as_str(),
+            principal_id,
             query.before_seq,
             query.limit.unwrap_or(50),
         )
@@ -230,19 +231,15 @@ async fn member_mutes(
     Query(query): Query<MemberMuteQuery>,
     headers: HeaderMap,
 ) -> Result<Json<MemberMutePage>, ApiError> {
-    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let principal_id = authenticated_member(&state.auth, &headers).await?;
     let cursor = query
         .cursor
         .as_deref()
         .map(parse_member_mute_cursor)
         .transpose()?;
-    let page = projections::member_mutes(
-        &state.pool,
-        principal_user_id.as_str(),
-        cursor,
-        query.limit.unwrap_or(50),
-    )
-    .await?;
+    let page =
+        projections::member_mutes(&state.pool, principal_id, cursor, query.limit.unwrap_or(50))
+            .await?;
     Ok(Json(MemberMutePage {
         members: page
             .members
@@ -260,9 +257,9 @@ async fn member_mute_state(
     Path(handle): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<MemberMuteState>, ApiError> {
-    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let principal_id = authenticated_member(&state.auth, &headers).await?;
     Ok(Json(
-        projections::member_mute_state(&state.pool, principal_user_id.as_str(), handle.as_str())
+        projections::member_mute_state(&state.pool, principal_id, handle.as_str())
             .await
             .map_err(member_mute_projection_api_error)?
             .into(),
@@ -274,11 +271,11 @@ async fn mute_public_profile(
     Path(handle): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<MemberMuteState>, ApiError> {
-    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let principal_id = authenticated_member(&state.auth, &headers).await?;
     Ok(Json(
         projections::mute_public_profile(
             &state.pool,
-            principal_user_id.as_str(),
+            principal_id,
             handle.as_str(),
             unix_now_seconds(),
         )
@@ -293,11 +290,11 @@ async fn unmute_public_profile(
     Path(handle): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<MemberMuteState>, ApiError> {
-    let principal_user_id = authenticated_member(&state.auth, &headers).await?;
+    let principal_id = authenticated_member(&state.auth, &headers).await?;
     Ok(Json(
         projections::unmute_public_profile(
             &state.pool,
-            principal_user_id.as_str(),
+            principal_id,
             handle.as_str(),
             unix_now_seconds(),
         )
@@ -310,7 +307,7 @@ async fn unmute_public_profile(
 async fn authenticated_member(
     auth: &AuthHttpState,
     headers: &HeaderMap,
-) -> Result<String, ApiError> {
+) -> Result<PrincipalId, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
     require_authorized_principal(auth, token).await
 }
@@ -318,7 +315,7 @@ async fn authenticated_member(
 pub(super) async fn optional_authenticated_member(
     auth: &AuthHttpState,
     headers: &HeaderMap,
-) -> Result<Option<String>, ApiError> {
+) -> Result<Option<PrincipalId>, ApiError> {
     if !headers.contains_key(AUTHORIZATION) {
         return Ok(None);
     }
@@ -428,7 +425,7 @@ async fn public_search(
     Query(query): Query<PublicSearchQuery>,
     headers: HeaderMap,
 ) -> Result<Json<PublicSearchPage>, ApiError> {
-    let viewer_principal_user_id = optional_authenticated_member(&state.auth, &headers).await?;
+    let viewer_principal_id = optional_authenticated_member(&state.auth, &headers).await?;
     let normalized_query = query.q.trim();
     if normalized_query.chars().count() < 2 || normalized_query.chars().count() > 200 {
         return Err(ApiError::Reject {
@@ -461,7 +458,7 @@ async fn public_search(
         filter,
         cursor,
         query.limit.unwrap_or(20),
-        viewer_principal_user_id.as_deref(),
+        viewer_principal_id,
     )
     .await?;
     Ok(Json(PublicSearchPage {
@@ -606,7 +603,7 @@ async fn discussion_area_topics(
     Query(query): Query<DiscussionPageQuery>,
     headers: HeaderMap,
 ) -> Result<Json<DiscussionTopicPage>, ApiError> {
-    let viewer_principal_user_id = optional_authenticated_member(&state.auth, &headers).await?;
+    let viewer_principal_id = optional_authenticated_member(&state.auth, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
@@ -620,7 +617,7 @@ async fn discussion_area_topics(
         area.area_id,
         cursor,
         query.limit.unwrap_or(20),
-        viewer_principal_user_id.as_deref(),
+        viewer_principal_id,
     )
     .await?;
     Ok(Json(DiscussionTopicPage {
@@ -638,7 +635,7 @@ async fn discussion_topic_thread(
     Query(query): Query<DiscussionPostQuery>,
     headers: HeaderMap,
 ) -> Result<Json<DiscussionThreadPage>, ApiError> {
-    let viewer_principal_user_id = optional_authenticated_member(&state.auth, &headers).await?;
+    let viewer_principal_id = optional_authenticated_member(&state.auth, &headers).await?;
     let area = projections::discussion_area_by_slug(&state.pool, slug.as_str())
         .await?
         .ok_or_else(|| discussion_not_found("discussion area"))?;
@@ -651,7 +648,7 @@ async fn discussion_topic_thread(
         topic.topic_id,
         query.before_seq,
         query.limit.unwrap_or(50),
-        viewer_principal_user_id.as_deref(),
+        viewer_principal_id,
     )
     .await?;
     Ok(Json(DiscussionThreadPage {
@@ -668,7 +665,7 @@ async fn create_discussion_area(
     Json(request): Json<CreateDiscussionAreaRequest>,
 ) -> Result<(StatusCode, Json<DiscussionArea>), ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_user_id = require_global_mod(&state, token, "discussion area creation").await?;
+    let principal_id = require_global_mod(&state, token, "discussion area creation").await?;
     let slug = validate_discussion_slug(request.slug.as_str())?;
     let title = validate_discussion_text(request.title.as_str(), "discussion area title", 160)?;
     let description = validate_discussion_text(
@@ -697,7 +694,7 @@ async fn create_discussion_area(
             created.kind(),
             1,
             created.payload(),
-            ActorId::Principal(principal_user_id),
+            ActorId::Principal(principal_id),
             unix_now_seconds(),
         )],
     )
@@ -732,7 +729,7 @@ async fn create_discussion_topic(
         },
     )
     .map_err(forum_reject_api_error)?;
-    append_forum_events(&state.pool, topic_id, 0, events, profile.principal_user_id).await?;
+    append_forum_events(&state.pool, topic_id, 0, events, profile.principal_id).await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic_id)
         .await?
         .expect("projected discussion topic is readable");
@@ -753,7 +750,7 @@ async fn create_discussion_post(
     let thread = projections::quotation_thread_for_discussion(
         &state.pool,
         topic,
-        Some(profile.principal_user_id.as_str()),
+        Some(profile.principal_id),
     )
     .await?;
     let quotations = content_reference::decide_quotations(&thread, &request.quotations)
@@ -780,7 +777,7 @@ async fn create_discussion_post(
         topic,
         current.version,
         events,
-        profile.principal_user_id,
+        profile.principal_id,
     )
     .await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic)
@@ -796,11 +793,11 @@ async fn discussion_post_citations(
     headers: HeaderMap,
 ) -> Result<Json<PublicPostCitationPage>, ApiError> {
     let _topic = visible_discussion_topic(&state, topic).await?;
-    let viewer_principal_user_id = optional_authenticated_member(&state.auth, &headers).await?;
+    let viewer_principal_id = optional_authenticated_member(&state.auth, &headers).await?;
     let page = projections::visible_public_incoming_citations(
         &state.pool,
         content_reference::PublicContentRef::new(topic, source_seq),
-        viewer_principal_user_id.as_deref(),
+        viewer_principal_id,
         query.limit.unwrap_or(DEFAULT_POST_CITATION_LIMIT),
     )
     .await?
@@ -815,7 +812,7 @@ async fn moderate_discussion_topic(
     Json(request): Json<ModerateDiscussionTopicRequest>,
 ) -> Result<Json<DiscussionTopic>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_user_id = require_global_mod(&state, token, "discussion moderation").await?;
+    let principal_id = require_global_mod(&state, token, "discussion moderation").await?;
     let current = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .ok_or_else(|| discussion_not_found("discussion topic"))?;
@@ -842,14 +839,7 @@ async fn moderate_discussion_topic(
     };
     let events =
         forum::decide_topic(Some(&topic_state), command).map_err(forum_reject_api_error)?;
-    append_forum_events(
-        &state.pool,
-        topic,
-        current.version,
-        events,
-        principal_user_id,
-    )
-    .await?;
+    append_forum_events(&state.pool, topic, current.version, events, principal_id).await?;
     let topic = projections::discussion_topic_by_id(&state.pool, topic)
         .await?
         .expect("projected discussion topic is readable");
@@ -862,7 +852,7 @@ async fn submit_moderation_report(
     Json(request): Json<SubmitModerationReportRequest>,
 ) -> Result<(StatusCode, Json<ModerationReportReceipt>), ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_account)?;
-    let principal_user_id = require_authorized_principal(&state.auth, token).await?;
+    let principal_id = require_authorized_principal(&state.auth, token).await?;
     if request.source_seq <= 0 {
         return Err(moderation_bad_request("report source_seq must be positive"));
     }
@@ -881,7 +871,7 @@ async fn submit_moderation_report(
         &state.pool,
         target,
         Uuid::new_v4(),
-        principal_user_id.as_str(),
+        principal_id,
         reason,
         details.to_string(),
         unix_now_seconds(),
@@ -897,11 +887,10 @@ async fn moderation_report_receipt(
     headers: HeaderMap,
 ) -> Result<Json<ModerationReportReceipt>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_account)?;
-    let principal_user_id = require_authorized_principal(&state.auth, token).await?;
-    let receipt =
-        projections::moderation_report_receipt(&state.pool, report, principal_user_id.as_str())
-            .await?
-            .ok_or_else(|| discussion_not_found("moderation report receipt"))?;
+    let principal_id = require_authorized_principal(&state.auth, token).await?;
+    let receipt = projections::moderation_report_receipt(&state.pool, report, principal_id)
+        .await?
+        .ok_or_else(|| discussion_not_found("moderation report receipt"))?;
     Ok(Json(receipt.into()))
 }
 
@@ -955,7 +944,7 @@ async fn moderate_case(
     Json(request): Json<ModerateCaseRequest>,
 ) -> Result<Json<ModerationCaseDetail>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    let principal_user_id = require_global_mod(&state, token, "moderation case action").await?;
+    let principal_id = require_global_mod(&state, token, "moderation case action").await?;
     let reason = validate_discussion_text(request.reason.as_str(), "moderation reason", 500)?;
     let current = projections::moderation_case_state(&state.pool, case)
         .await?
@@ -977,7 +966,7 @@ async fn moderate_case(
         case,
         current.version,
         events,
-        principal_user_id.as_str(),
+        principal_id,
         unix_now_seconds(),
     )
     .await
@@ -1063,7 +1052,7 @@ async fn visible_discussion_topic(
 
 struct AuthenticatedDiscussionProfile {
     profile_id: Uuid,
-    principal_user_id: String,
+    principal_id: PrincipalId,
 }
 
 async fn authenticated_discussion_profile(
@@ -1071,16 +1060,13 @@ async fn authenticated_discussion_profile(
     headers: &HeaderMap,
 ) -> Result<AuthenticatedDiscussionProfile, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    let principal_user_id = require_authorized_principal(&state.auth, token).await?;
-    let profile_id =
-        projections::public_profile_id_by_principal(&state.pool, principal_user_id.as_str())
-            .await?
-            .ok_or_else(|| {
-                discussion_conflict("create a public profile before posting publicly")
-            })?;
+    let principal_id = require_authorized_principal(&state.auth, token).await?;
+    let profile_id = projections::public_profile_id_by_principal(&state.pool, principal_id)
+        .await?
+        .ok_or_else(|| discussion_conflict("create a public profile before posting publicly"))?;
     Ok(AuthenticatedDiscussionProfile {
         profile_id,
-        principal_user_id,
+        principal_id,
     })
 }
 
@@ -1088,14 +1074,14 @@ async fn require_global_mod(
     state: &PublicPlatformHttpState,
     token: &str,
     action: &str,
-) -> Result<String, ApiError> {
+) -> Result<PrincipalId, ApiError> {
     let authorization = authorization_context(&state.auth, token).await?;
     if authorization
         .global_capabilities
         .iter()
         .any(|capability| matches!(capability.as_str(), "GlobalAdmin" | "GlobalMod"))
     {
-        return Ok(authorization.principal_user_id);
+        return Ok(authorization.principal_id);
     }
     Err(ApiError::Reject {
         status: StatusCode::FORBIDDEN,
@@ -1170,7 +1156,7 @@ async fn append_forum_events(
     topic_id: Uuid,
     expected_version: i64,
     events: Vec<TopicEvent>,
-    principal_user_id: String,
+    principal_id: PrincipalId,
 ) -> Result<(), ApiError> {
     let occurred_at = unix_now_seconds();
     let events: Vec<_> = events
@@ -1180,7 +1166,7 @@ async fn append_forum_events(
                 event.kind(),
                 1,
                 event.payload(),
-                ActorId::Principal(principal_user_id.clone()),
+                ActorId::Principal(principal_id),
                 occurred_at,
             )
         })
@@ -1307,14 +1293,9 @@ async fn create_profile(
         request.bio.as_str(),
         request.visibility.as_str(),
     )?;
-    profile_application::create_profile(
-        &state.pool,
-        owner.clone(),
-        presentation,
-        unix_now_seconds(),
-    )
-    .await
-    .map_err(profile_application_api_error)?;
+    profile_application::create_profile(&state.pool, owner, presentation, unix_now_seconds())
+        .await
+        .map_err(profile_application_api_error)?;
     let profile = profile_application::owner_profile(&state.pool, &owner)
         .await
         .map_err(profile_application_api_error)?
@@ -1344,7 +1325,7 @@ async fn update_profile(
     profile_application::update_profile(
         &state.pool,
         profile.profile_id,
-        owner.clone(),
+        owner,
         expected_revision,
         edit,
         unix_now_seconds(),
@@ -1363,8 +1344,7 @@ async fn authenticated_profile_principal(
     headers: &HeaderMap,
 ) -> Result<PrincipalId, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_account)?;
-    let principal_user_id = require_authorized_principal(&state.auth, token).await?;
-    profile_principal_id(principal_user_id.as_str())
+    require_authorized_principal(&state.auth, token).await
 }
 
 fn profile_presentation_from_input(
@@ -1395,10 +1375,6 @@ fn profile_edit_from_input(
             .parse::<ProfileVisibility>()
             .map_err(profile_value_api_error)?,
     ))
-}
-
-fn profile_principal_id(value: &str) -> Result<PrincipalId, ApiError> {
-    PrincipalId::new(value).map_err(profile_value_api_error)
 }
 
 fn profile_revision(value: i64) -> Result<ProfileRevision, ApiError> {

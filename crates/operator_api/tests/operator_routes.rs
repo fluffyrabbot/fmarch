@@ -1,5 +1,6 @@
 use axum::body::{to_bytes, Body};
 use axum::http::{header::AUTHORIZATION, Request, StatusCode};
+use principal::PrincipalId;
 use sha2::{Digest, Sha256};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -21,22 +22,23 @@ fn token_hash(token: &str) -> String {
 }
 
 async fn create_session(pool: &sqlx::PgPool, token: &str, user: &str, globals: &[&str]) {
+    let principal_id = PrincipalId::fixture(user);
     sqlx::query(
-        "INSERT INTO platform_principal (principal_user_id, status, global_capabilities, created_at) \
-         VALUES ($1, 'active', $2, 0) ON CONFLICT (principal_user_id) DO UPDATE SET global_capabilities = EXCLUDED.global_capabilities",
+        "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) \
+         VALUES ($1, 'active', $2, 0) ON CONFLICT (principal_id) DO UPDATE SET global_capabilities = EXCLUDED.global_capabilities",
     )
-    .bind(user)
+    .bind(principal_id.as_uuid())
     .bind(globals)
     .execute(pool)
     .await
     .expect("insert operator principal");
     sqlx::query(
         "INSERT INTO auth_session \
-         (token_hash, principal_user_id, created_at, expires_at, global_capabilities, idle_expires_at, assurance, authenticated_at) \
+         (token_hash, principal_id, created_at, expires_at, global_capabilities, idle_expires_at, assurance, authenticated_at) \
          VALUES ($1, $2, 0, 4102444800, $3, 4102444800, 'admin_grant', 0)",
     )
     .bind(token_hash(token))
-    .bind(user)
+    .bind(principal_id.as_uuid())
     .bind(globals)
     .execute(pool)
     .await
@@ -44,9 +46,9 @@ async fn create_session(pool: &sqlx::PgPool, token: &str, user: &str, globals: &
 }
 
 async fn grant_game_authority(pool: &sqlx::PgPool, game: Uuid, user: &str, role: &str) {
-    sqlx::query("INSERT INTO game_authority (game_id, user_id, role) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO game_authority (game_id, principal_id, role) VALUES ($1, $2, $3)")
         .bind(game)
-        .bind(user)
+        .bind(PrincipalId::fixture(user).as_uuid())
         .bind(role)
         .execute(pool)
         .await
@@ -68,7 +70,10 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!("/games/{game}/operator?principal_user_id=outsider"))
+                .uri(format!(
+                    "/games/{game}/operator?principal_id={}",
+                    PrincipalId::fixture("outsider")
+                ))
                 .header(AUTHORIZATION, format!("Bearer {HOST_TOKEN}"))
                 .body(Body::empty())
                 .unwrap(),
@@ -80,7 +85,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
     let html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(html.contains("Operator Index"));
     assert!(html.contains(&format!("/games/{game}/operator/proof-runs")));
-    assert!(!html.contains("principal_user_id="));
+    assert!(!html.contains("principal_id="));
 
     let response = app
         .clone()
@@ -88,7 +93,8 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status?principal_user_id=host_h"
+                    "/games/{game}/operator/proof-runs/status?principal_id={}",
+                    PrincipalId::fixture("host_h")
                 ))
                 .header(AUTHORIZATION, format!("Bearer {COHOST_TOKEN}"))
                 .body(Body::empty())
@@ -133,7 +139,8 @@ async fn active_global_operator_session_can_read_status_without_dev_auth(pool: s
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status?principal_user_id=outsider"
+                    "/games/{game}/operator/proof-runs/status?principal_id={}",
+                    PrincipalId::fixture("outsider")
                 ))
                 .header(AUTHORIZATION, format!("Bearer {ADMIN_TOKEN}"))
                 .body(Body::empty())
@@ -148,7 +155,8 @@ async fn active_global_operator_session_can_read_status_without_dev_auth(pool: s
             Request::builder()
                 .method("GET")
                 .uri(format!(
-                    "/games/{game}/operator/proof-runs/status?principal_user_id=admin_a"
+                    "/games/{game}/operator/proof-runs/status?principal_id={}",
+                    PrincipalId::fixture("admin_a")
                 ))
                 .body(Body::empty())
                 .unwrap(),

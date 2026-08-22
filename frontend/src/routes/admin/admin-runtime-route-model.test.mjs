@@ -15,6 +15,8 @@ const gameIndexPage = Object.freeze({
   ]),
 });
 
+const ADMIN_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000004";
+
 test("admin game selection includes setup games and prefers the requested workspace", () => {
   const selection = normalizeAdminGameSelection(gameIndexPage, "active-game");
   assert.equal(selection.status, "ready");
@@ -31,13 +33,39 @@ test("admin game selection includes setup games and prefers the requested worksp
 
 test("admin route selects a live game without requiring a query parameter", async () => {
   const data = await buildAdminRuntimeRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     gameIndexPage,
   });
   assert.equal(data.gameSelection.selectedGame, "setup-game");
   assert.equal(data.shell.game, "setup-game");
   assert.equal(data.gameSetup[0].href, "/g/setup-game/setup");
+  assert.equal("cohost" in data.command, false);
+});
+
+test("runtime admin defaults the identity audit to the current canonical principal", async () => {
+  const seen = [];
+  await buildAdminRuntimeRouteData({
+    principalId: ADMIN_PRINCIPAL_ID,
+    capabilities: [{ kind: "GlobalAdmin" }],
+    gameIndexPage,
+    sessionToken: "admin-session",
+    fetchImpl: async (url) => {
+      seen.push(String(url));
+      return Response.json(
+        String(url).startsWith("/auth/identity-lifecycle-audit")
+          ? { entries: [] }
+          : { rows: [] },
+      );
+    },
+  });
+
+  assert.equal(
+    seen.includes(
+      `/auth/identity-lifecycle-audit?principal_id=${ADMIN_PRINCIPAL_ID}&limit=50`,
+    ),
+    true,
+  );
 });
 
 test("admin game discovery uses the authenticated operator boundary", async () => {
@@ -58,7 +86,7 @@ test("admin game discovery uses the authenticated operator boundary", async () =
 
 test("fresh-install admin receives a pack catalog without inventing a game workspace", async () => {
   const data = await buildAdminRuntimeRouteData({
-    principalUserId: "admin_a",
+    principalId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     gameIndexPage: { games: [], next_cursor: null },
     bootstrapCatalog: {

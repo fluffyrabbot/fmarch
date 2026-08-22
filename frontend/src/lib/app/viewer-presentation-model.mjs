@@ -6,8 +6,8 @@
  * as a profile handle. A profile summary is deliberately optional because
  * authentication does not require a social profile.
  */
-export function buildViewerPresentation({ principalUserId = null, profile = null } = {}) {
-  if (!hasText(principalUserId)) {
+export function buildViewerPresentation({ principalId = null, profile = null } = {}) {
+  if (!hasText(principalId)) {
     return Object.freeze({
       state: "signed-out",
       kind: "anonymous",

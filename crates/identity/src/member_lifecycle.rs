@@ -4,8 +4,8 @@ use crate::session::revoke_sessions_for_principal;
 use crate::subject_privacy::SubjectErasureWork;
 use crate::{
     decide_member_lifecycle, ClaimId, IdentityFlowError, MemberLifecycleCommand,
-    MemberLifecycleEvent, MemberLifecycleState, MemberLifecycleStatus, SubjectClaimEnvelope,
-    SubjectId, SubjectKeyStore,
+    MemberLifecycleEvent, MemberLifecycleState, MemberLifecycleStatus, PrincipalId,
+    SubjectClaimEnvelope, SubjectId, SubjectKeyStore,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -15,7 +15,7 @@ const PERSONAL_EXPORT_TTL_SECONDS: i64 = 60 * 60 * 24 * 14;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemberLifecycleSnapshot {
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub status: MemberLifecycleStatus,
     pub last_seq: i64,
     pub pseudonym: Option<String>,
@@ -24,7 +24,7 @@ pub struct MemberLifecycleSnapshot {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PersonalExport {
     pub export_id: String,
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub requested_at: i64,
     pub expires_at: i64,
     pub artifact: serde_json::Value,
@@ -36,20 +36,20 @@ pub struct PersonalExport {
 /// impossible to complete safely.
 pub async fn apply_member_lifecycle(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     command: MemberLifecycleCommand,
     now: i64,
 ) -> Result<MemberLifecycleStatus, IdentityFlowError> {
     let mut tx = pool.begin().await?;
-    crate::methods::ensure_principal(&mut tx, principal_user_id, &[], now).await?;
+    crate::methods::ensure_principal(&mut tx, principal_id, &[], now).await?;
     crate::methods::lock_identity_mutation(
         &mut tx,
-        principal_user_id,
+        principal_id,
         crate::methods::IdentityMutationExtent::Complete,
     )
     .await?
     .require_active()?;
-    let snapshot = locked_snapshot(&mut tx, principal_user_id).await?;
+    let snapshot = locked_snapshot(&mut tx, principal_id).await?;
     let events = decide_member_lifecycle(
         &MemberLifecycleState {
             status: snapshot.status,
@@ -57,18 +57,10 @@ pub async fn apply_member_lifecycle(
         command,
     )
     .map_err(|error| IdentityFlowError::Invalid(error.to_string()))?;
-    let next = append_and_project(
-        &mut tx,
-        principal_user_id,
-        snapshot,
-        &events,
-        now,
-        None,
-        None,
-    )
-    .await?;
+    let next =
+        append_and_project(&mut tx, principal_id, snapshot, &events, now, None, None).await?;
     if next != MemberLifecycleStatus::Active {
-        revoke_sessions_for_principal(&mut tx, principal_user_id, now).await?;
+        revoke_sessions_for_principal(&mut tx, principal_id, now).await?;
     }
     tx.commit().await?;
     Ok(next)
@@ -80,14 +72,14 @@ pub async fn apply_member_lifecycle(
 /// resumption; it never rolls the security cutoff back.
 pub async fn erase_member(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     now: i64,
 ) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
     let key_store = crate::active_subject_key_store()
         .await
         .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
     let (pending, work) =
-        request_member_erasure_with_store(pool, key_store.as_ref(), principal_user_id, now).await?;
+        request_member_erasure_with_store(pool, key_store.as_ref(), principal_id, now).await?;
     let worker_id = format!("inline-{}", Uuid::new_v4().simple());
     let processed = crate::subject_privacy::process_subject_erasure_with_store(
         pool,
@@ -101,7 +93,7 @@ pub async fn erase_member(
     if !processed {
         return Ok(pending);
     }
-    member_lifecycle_snapshot(pool, principal_user_id).await
+    member_lifecycle_snapshot(pool, principal_id).await
 }
 
 /// Step one of durable erasure: no object-authority call occurs after the
@@ -110,13 +102,13 @@ pub async fn erase_member(
 /// cutoff and pending-presentation redaction.
 pub async fn request_member_erasure(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     now: i64,
 ) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
     let key_store = crate::active_subject_key_store()
         .await
         .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
-    request_member_erasure_with_store(pool, key_store.as_ref(), principal_user_id, now)
+    request_member_erasure_with_store(pool, key_store.as_ref(), principal_id, now)
         .await
         .map(|(snapshot, _)| snapshot)
 }
@@ -124,16 +116,16 @@ pub async fn request_member_erasure(
 pub async fn request_member_erasure_with_store(
     pool: &PgPool,
     key_store: &dyn SubjectKeyStore,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     now: i64,
 ) -> Result<(MemberLifecycleSnapshot, SubjectErasureWork), IdentityFlowError> {
     if let Some(existing) =
-        crate::subject_privacy::load_subject_erasure_work_by_principal(pool, principal_user_id)
+        crate::subject_privacy::load_subject_erasure_work_by_principal(pool, principal_id)
             .await
             .map_err(|error| IdentityFlowError::Internal(error.to_string()))?
     {
         return Ok((
-            member_lifecycle_snapshot(pool, principal_user_id).await?,
+            member_lifecycle_snapshot(pool, principal_id).await?,
             existing,
         ));
     }
@@ -142,8 +134,8 @@ pub async fn request_member_erasure_with_store(
     // immutable; the transaction revalidates the exact subject and immutable
     // database authority tuple before persisting this fingerprint.
     let discovered_subject_id: Uuid =
-        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1")
-            .bind(principal_user_id)
+        sqlx::query_scalar("SELECT subject_id FROM privacy_subject WHERE principal_id = $1")
+            .bind(principal_id.as_uuid())
             .fetch_optional(pool)
             .await?
             .ok_or(IdentityFlowError::Unauthorized)?;
@@ -155,7 +147,7 @@ pub async fn request_member_erasure_with_store(
     let authority_before = authority_binding(pool).await?;
     let work = SubjectErasureWork {
         erasure_id: Uuid::new_v4(),
-        principal_user_id: principal_user_id.to_string(),
+        principal_id: *principal_id,
         record: crate::SubjectRevocationRecord {
             subject_id,
             replacement_alias: crate::random_tombstone_alias(),
@@ -170,14 +162,17 @@ pub async fn request_member_erasure_with_store(
     };
 
     let mut tx = pool.begin().await?;
+    profile_handle_index::acquire_profile_handle_index_writer_lease(&mut tx)
+        .await
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
     let owner = crate::methods::lock_identity_mutation(
         &mut tx,
-        principal_user_id,
+        principal_id,
         crate::methods::IdentityMutationExtent::Complete,
     )
     .await?;
-    if let Some(existing) = load_subject_erasure_work_in_tx(&mut tx, principal_user_id).await? {
-        let snapshot = locked_snapshot(&mut tx, principal_user_id).await?;
+    if let Some(existing) = load_subject_erasure_work_in_tx(&mut tx, principal_id).await? {
+        let snapshot = locked_snapshot(&mut tx, principal_id).await?;
         tx.commit().await?;
         return Ok((snapshot, existing));
     }
@@ -189,7 +184,7 @@ pub async fn request_member_erasure_with_store(
             "subject or authority changed while erasure was requested".to_string(),
         ));
     }
-    let snapshot = locked_snapshot(&mut tx, principal_user_id).await?;
+    let snapshot = locked_snapshot(&mut tx, principal_id).await?;
     let mut events = Vec::new();
     let mut state = snapshot.status;
     if state == MemberLifecycleStatus::Active {
@@ -211,7 +206,7 @@ pub async fn request_member_erasure_with_store(
     events.extend(requested);
     let next = append_and_project(
         &mut tx,
-        principal_user_id,
+        principal_id,
         snapshot.clone(),
         &events,
         now,
@@ -226,19 +221,14 @@ pub async fn request_member_erasure_with_store(
     .execute(&mut *tx)
     .await?;
     insert_subject_erasure_work(&mut tx, &work).await?;
-    revoke_sessions_for_principal(&mut tx, principal_user_id, now).await?;
-    disable_auth_for_erasure(&mut tx, principal_user_id, work.erasure_id, now).await?;
-    apply_retained_authorship_redaction(
-        &mut tx,
-        principal_user_id,
-        &work.record.replacement_alias,
-        now,
-    )
-    .await?;
+    revoke_sessions_for_principal(&mut tx, principal_id, now).await?;
+    disable_auth_for_erasure(&mut tx, principal_id, work.erasure_id, now).await?;
+    apply_retained_authorship_redaction(&mut tx, principal_id, &work.record.replacement_alias, now)
+        .await?;
     tx.commit().await?;
     Ok((
         MemberLifecycleSnapshot {
-            principal_user_id: principal_user_id.to_string(),
+            principal_id: *principal_id,
             status: next,
             last_seq: snapshot.last_seq + events.len() as i64,
             pseudonym: Some(work.record.replacement_alias.clone()),
@@ -269,24 +259,24 @@ async fn authority_binding_in_tx(
 
 async fn load_subject_erasure_work_in_tx(
     tx: &mut Transaction<'_, Postgres>,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<Option<SubjectErasureWork>, IdentityFlowError> {
     let row = sqlx::query(
         r#"
-        SELECT erasure_id, subject_id, principal_user_id, receipt_id,
+        SELECT erasure_id, subject_id, principal_id, receipt_id,
                replacement_alias, key_fingerprint_sha256, requested_at,
                authority_id, authority_revision, authority_manifest_sha256
         FROM subject_erasure_outbox
-        WHERE principal_user_id = $1
+        WHERE principal_id = $1
         "#,
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(&mut **tx)
     .await?;
     row.map(|row| {
         Ok(SubjectErasureWork {
             erasure_id: row.try_get("erasure_id")?,
-            principal_user_id: row.try_get("principal_user_id")?,
+            principal_id: PrincipalId::from_uuid(row.try_get("principal_id")?),
             record: crate::SubjectRevocationRecord {
                 subject_id: SubjectId::from_uuid(row.try_get("subject_id")?),
                 replacement_alias: row.try_get("replacement_alias")?,
@@ -310,7 +300,7 @@ async fn insert_subject_erasure_work(
     sqlx::query(
         r#"
         INSERT INTO subject_erasure_outbox
-            (erasure_id, subject_id, principal_user_id, receipt_id,
+            (erasure_id, subject_id, principal_id, receipt_id,
              replacement_alias, key_fingerprint_sha256, requested_at,
              authority_id, authority_revision, authority_manifest_sha256)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -318,7 +308,7 @@ async fn insert_subject_erasure_work(
     )
     .bind(work.erasure_id)
     .bind(work.record.subject_id.as_uuid())
-    .bind(&work.principal_user_id)
+    .bind(work.principal_id.as_uuid())
     .bind(work.record.receipt_id)
     .bind(&work.record.replacement_alias)
     .bind(&work.record.key_fingerprint_sha256)
@@ -337,42 +327,42 @@ async fn insert_subject_erasure_work(
 
 async fn disable_auth_for_erasure(
     tx: &mut Transaction<'_, Postgres>,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     erasure_id: Uuid,
     now: i64,
 ) -> Result<(), IdentityFlowError> {
-    sqlx::query("UPDATE authentication_method SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2) WHERE principal_user_id = $1")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_account SET disabled_at = COALESCE(disabled_at, $2), password_hash = $3, global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
-        .bind(principal_user_id).bind(now).bind(format!("erasure-pending:{erasure_id}")).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_account_recovery_credential SET revoked_at = COALESCE(revoked_at, $2) WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_user_id = $1) AND used_at IS NULL")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_invite SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_user_id = $1 AND redeemed_at IS NULL")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_delivery_intent SET status = 'cancelled', outcome_kind = 'cancelled', outcome_code = 'member_erasure_pending', next_attempt_at = NULL, delivered_at = NULL, provider_receipt_id = NULL, claim_token = NULL, claim_expires_at = NULL, credential_envelope = NULL, updated_at = $2 WHERE principal_user_id = $1 AND status IN ('queued', 'processing', 'retryable_failed')")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
-    sqlx::query("DELETE FROM auth_websocket_ticket WHERE principal_user_id = $1")
-        .bind(principal_user_id)
+    sqlx::query("UPDATE authentication_method SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2) WHERE principal_id = $1")
+        .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
+    sqlx::query("UPDATE auth_account SET disabled_at = COALESCE(disabled_at, $2), password_hash = $3, global_capabilities = '{}'::text[] WHERE principal_id = $1")
+        .bind(principal_id.as_uuid()).bind(now).bind(format!("erasure-pending:{erasure_id}")).execute(&mut **tx).await?;
+    sqlx::query("UPDATE auth_account_recovery_credential SET revoked_at = COALESCE(revoked_at, $2) WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1) AND used_at IS NULL")
+        .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
+    sqlx::query("UPDATE auth_invite SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_id = $1 AND redeemed_at IS NULL")
+        .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
+    sqlx::query("UPDATE auth_delivery_intent SET status = 'cancelled', outcome_kind = 'cancelled', outcome_code = 'member_erasure_pending', next_attempt_at = NULL, delivered_at = NULL, provider_receipt_id = NULL, claim_token = NULL, claim_expires_at = NULL, credential_envelope = NULL, updated_at = $2 WHERE principal_id = $1 AND status IN ('queued', 'processing', 'retryable_failed')")
+        .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
+    sqlx::query("DELETE FROM auth_websocket_ticket WHERE principal_id = $1")
+        .bind(principal_id.as_uuid())
         .execute(&mut **tx)
         .await?;
-    sqlx::query("UPDATE platform_principal SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2), global_capabilities = '{}'::text[] WHERE principal_user_id = $1")
-        .bind(principal_user_id).bind(now).execute(&mut **tx).await?;
+    sqlx::query("UPDATE platform_principal SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2), global_capabilities = '{}'::text[] WHERE principal_id = $1")
+        .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
     Ok(())
 }
 
 async fn member_lifecycle_snapshot(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
     let row = sqlx::query(
-        "SELECT status, last_seq, pseudonym FROM member_lifecycle_projection WHERE principal_user_id = $1",
+        "SELECT status, last_seq, pseudonym FROM member_lifecycle_projection WHERE principal_id = $1",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(pool)
     .await?
     .ok_or_else(|| IdentityFlowError::Invalid("member lifecycle projection is missing".into()))?;
     Ok(MemberLifecycleSnapshot {
-        principal_user_id: principal_user_id.to_string(),
+        principal_id: *principal_id,
         status: MemberLifecycleStatus::parse(row.try_get::<String, _>("status")?.as_str())
             .ok_or_else(|| IdentityFlowError::Invalid("unknown lifecycle status".into()))?,
         last_seq: row.try_get("last_seq")?,
@@ -395,14 +385,14 @@ pub(crate) async fn recover_member_erasure_from_revocation(
     {
         return Ok(existing);
     }
-    let principal_user_id =
+    let principal_id =
         crate::subject_privacy::discover_revoked_subject_owner(pool, record.subject_id)
             .await
             .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
     let authority = authority_binding(pool).await?;
     let work = SubjectErasureWork {
         erasure_id: Uuid::new_v4(),
-        principal_user_id: principal_user_id.clone(),
+        principal_id,
         record: record.clone(),
         authority_id: authority.as_ref().map(|binding| binding.0),
         authority_revision: authority.as_ref().map(|binding| binding.1.clone()),
@@ -410,9 +400,12 @@ pub(crate) async fn recover_member_erasure_from_revocation(
         requested_at: record.destroyed_at,
     };
     let mut tx = pool.begin().await?;
+    profile_handle_index::acquire_profile_handle_index_writer_lease(&mut tx)
+        .await
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
     let owner = crate::methods::lock_identity_mutation(
         &mut tx,
-        &principal_user_id,
+        &principal_id,
         crate::methods::IdentityMutationExtent::Complete,
     )
     .await?;
@@ -421,11 +414,11 @@ pub(crate) async fn recover_member_erasure_from_revocation(
             "external revocation owner changed during restore recovery".to_string(),
         ));
     }
-    if let Some(existing) = load_subject_erasure_work_in_tx(&mut tx, &principal_user_id).await? {
+    if let Some(existing) = load_subject_erasure_work_in_tx(&mut tx, &principal_id).await? {
         tx.commit().await?;
         return Ok(existing);
     }
-    let snapshot = locked_snapshot(&mut tx, &principal_user_id).await?;
+    let snapshot = locked_snapshot(&mut tx, &principal_id).await?;
     let mut events = Vec::new();
     let mut state = snapshot.status;
     if state == MemberLifecycleStatus::Active {
@@ -452,7 +445,7 @@ pub(crate) async fn recover_member_erasure_from_revocation(
     if !events.is_empty() {
         append_and_project(
             &mut tx,
-            &principal_user_id,
+            &principal_id,
             snapshot,
             &events,
             record.destroyed_at,
@@ -461,8 +454,8 @@ pub(crate) async fn recover_member_erasure_from_revocation(
         )
         .await?;
     } else {
-        sqlx::query("UPDATE member_lifecycle_projection SET pseudonym = COALESCE(pseudonym, $2), subject_id = COALESCE(subject_id, $3) WHERE principal_user_id = $1")
-            .bind(&principal_user_id).bind(&record.replacement_alias).bind(record.subject_id.as_uuid()).execute(&mut *tx).await?;
+        sqlx::query("UPDATE member_lifecycle_projection SET pseudonym = COALESCE(pseudonym, $2), subject_id = COALESCE(subject_id, $3) WHERE principal_id = $1")
+            .bind(principal_id.as_uuid()).bind(&record.replacement_alias).bind(record.subject_id.as_uuid()).execute(&mut *tx).await?;
     }
     if owner.subject_lifecycle_state == "active" {
         sqlx::query(
@@ -473,17 +466,11 @@ pub(crate) async fn recover_member_erasure_from_revocation(
         .await?;
     }
     insert_subject_erasure_work(&mut tx, &work).await?;
-    revoke_sessions_for_principal(&mut tx, &principal_user_id, record.destroyed_at).await?;
-    disable_auth_for_erasure(
-        &mut tx,
-        &principal_user_id,
-        work.erasure_id,
-        record.destroyed_at,
-    )
-    .await?;
+    revoke_sessions_for_principal(&mut tx, &principal_id, record.destroyed_at).await?;
+    disable_auth_for_erasure(&mut tx, &principal_id, work.erasure_id, record.destroyed_at).await?;
     apply_retained_authorship_redaction(
         &mut tx,
-        &principal_user_id,
+        &principal_id,
         &record.replacement_alias,
         record.destroyed_at,
     )
@@ -496,19 +483,19 @@ pub(crate) async fn recover_member_erasure_from_revocation(
 /// passwords, recovery tokens, session tokens, and raw provider credentials.
 pub async fn create_personal_export(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     now: i64,
 ) -> Result<PersonalExport, IdentityFlowError> {
     let mut tx = pool.begin().await?;
-    crate::methods::ensure_principal(&mut tx, principal_user_id, &[], now).await?;
+    crate::methods::ensure_principal(&mut tx, principal_id, &[], now).await?;
     crate::methods::lock_identity_mutation(
         &mut tx,
-        principal_user_id,
+        principal_id,
         crate::methods::IdentityMutationExtent::Complete,
     )
     .await?
     .require_active()?;
-    let snapshot = locked_snapshot(&mut tx, principal_user_id).await?;
+    let snapshot = locked_snapshot(&mut tx, principal_id).await?;
     if snapshot.status == MemberLifecycleStatus::Erased {
         return Err(IdentityFlowError::Invalid(
             "an erased member cannot create a personal export".to_string(),
@@ -516,11 +503,11 @@ pub async fn create_personal_export(
     }
     let export_id = Uuid::new_v4();
     let expires_at = now.saturating_add(PERSONAL_EXPORT_TTL_SECONDS);
-    let artifact = assemble_personal_export(&mut tx, principal_user_id).await?;
+    let artifact = assemble_personal_export(&mut tx, principal_id).await?;
     let subject_id: Uuid = sqlx::query_scalar(
-        "SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1 AND lifecycle_state = 'active' FOR UPDATE",
+        "SELECT subject_id FROM privacy_subject WHERE principal_id = $1 AND lifecycle_state = 'active' FOR UPDATE",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_one(&mut *tx)
     .await?;
     let subject_id = SubjectId::from_uuid(subject_id);
@@ -542,7 +529,7 @@ pub async fn create_personal_export(
     let events = [MemberLifecycleEvent::PersonalExportRecorded];
     let next = append_and_project(
         &mut tx,
-        principal_user_id,
+        principal_id,
         snapshot.clone(),
         &events,
         now,
@@ -551,10 +538,10 @@ pub async fn create_personal_export(
     )
     .await?;
     sqlx::query(
-        "INSERT INTO member_personal_export (export_id, principal_user_id, requested_at, expires_at, envelope, recorded_seq, subject_id) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+        "INSERT INTO member_personal_export (export_id, principal_id, requested_at, expires_at, envelope, recorded_seq, subject_id) VALUES ($1,$2,$3,$4,$5,$6,$7)",
     )
     .bind(export_id)
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(now)
     .bind(expires_at)
     .bind(envelope)
@@ -566,7 +553,7 @@ pub async fn create_personal_export(
     tx.commit().await?;
     Ok(PersonalExport {
         export_id: export_id.to_string(),
-        principal_user_id: principal_user_id.to_string(),
+        principal_id: *principal_id,
         requested_at: now,
         expires_at,
         artifact,
@@ -575,15 +562,15 @@ pub async fn create_personal_export(
 
 pub async fn load_personal_export(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     export_id: Uuid,
     now: i64,
 ) -> Result<Option<PersonalExport>, IdentityFlowError> {
     let mut tx = pool.begin().await?;
     let principal_status: Option<String> = sqlx::query_scalar(
-        "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+        "SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(&mut *tx)
     .await?;
     if principal_status.as_deref() != Some("active") {
@@ -595,16 +582,16 @@ pub async fn load_personal_export(
         FROM member_personal_export AS export
         JOIN privacy_subject AS subject
           ON subject.subject_id = export.subject_id
-         AND subject.principal_user_id = $2
+         AND subject.principal_id = $2
          AND subject.lifecycle_state = 'active'
         WHERE export.export_id = $1
-          AND export.principal_user_id = $2
+          AND export.principal_id = $2
           AND export.expires_at > $3
         FOR UPDATE OF subject
         "#,
     )
     .bind(export_id)
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(now)
     .fetch_optional(&mut *tx)
     .await?;
@@ -630,7 +617,7 @@ pub async fn load_personal_export(
     .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
     let export = PersonalExport {
         export_id: export_id.to_string(),
-        principal_user_id: principal_user_id.to_string(),
+        principal_id: *principal_id,
         requested_at: row.try_get("requested_at")?,
         expires_at: row.try_get("expires_at")?,
         artifact,
@@ -644,23 +631,26 @@ pub async fn load_personal_export(
 /// append handler is the only authority that erases credentials/identifiers.
 pub async fn rebuild_member_lifecycle(
     pool: &PgPool,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
     let mut tx = pool.begin().await?;
+    profile_handle_index::acquire_profile_handle_index_writer_lease(&mut tx)
+        .await
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
     crate::methods::lock_identity_mutation(
         &mut tx,
-        principal_user_id,
+        principal_id,
         crate::methods::IdentityMutationExtent::Complete,
     )
     .await?;
     let rows = sqlx::query(
-        "SELECT seq, kind, payload, occurred_at, subject_id FROM member_lifecycle_event WHERE principal_user_id = $1 ORDER BY seq",
+        "SELECT seq, kind, payload, occurred_at, subject_id FROM member_lifecycle_event WHERE principal_id = $1 ORDER BY seq",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_all(&mut *tx)
     .await?;
     let mut snapshot = MemberLifecycleSnapshot {
-        principal_user_id: principal_user_id.to_string(),
+        principal_id: *principal_id,
         status: MemberLifecycleStatus::Active,
         last_seq: 0,
         pseudonym: None,
@@ -725,7 +715,7 @@ pub async fn rebuild_member_lifecycle(
     }
     upsert_snapshot(&mut tx, &snapshot, timestamps, subject_id).await?;
     if let Some(pseudonym) = snapshot.pseudonym.as_deref() {
-        apply_retained_authorship_redaction(&mut tx, principal_user_id, pseudonym, 0).await?;
+        apply_retained_authorship_redaction(&mut tx, principal_id, pseudonym, 0).await?;
     }
     tx.commit().await?;
     Ok(snapshot)
@@ -742,24 +732,24 @@ struct LifecycleTimestamps {
 
 async fn locked_snapshot(
     tx: &mut Transaction<'_, Postgres>,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
     let row = sqlx::query(
-        "SELECT status, last_seq, pseudonym FROM member_lifecycle_projection WHERE principal_user_id = $1 FOR UPDATE",
+        "SELECT status, last_seq, pseudonym FROM member_lifecycle_projection WHERE principal_id = $1 FOR UPDATE",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(&mut **tx)
     .await?;
     match row {
         Some(row) => Ok(MemberLifecycleSnapshot {
-            principal_user_id: principal_user_id.to_string(),
+            principal_id: *principal_id,
             status: MemberLifecycleStatus::parse(row.try_get::<String, _>("status")?.as_str())
                 .ok_or_else(|| IdentityFlowError::Invalid("unknown lifecycle status".into()))?,
             last_seq: row.try_get("last_seq")?,
             pseudonym: row.try_get("pseudonym")?,
         }),
         None => Ok(MemberLifecycleSnapshot {
-            principal_user_id: principal_user_id.to_string(),
+            principal_id: *principal_id,
             status: MemberLifecycleStatus::Active,
             last_seq: 0,
             pseudonym: None,
@@ -769,7 +759,7 @@ async fn locked_snapshot(
 
 async fn append_and_project(
     tx: &mut Transaction<'_, Postgres>,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     mut snapshot: MemberLifecycleSnapshot,
     events: &[MemberLifecycleEvent],
     now: i64,
@@ -779,8 +769,8 @@ async fn append_and_project(
     let mut timestamps = LifecycleTimestamps::default();
     for event in events {
         snapshot.last_seq += 1;
-        sqlx::query("INSERT INTO member_lifecycle_event (principal_user_id, seq, kind, payload, occurred_at, subject_id) VALUES ($1,$2,$3,$4::jsonb,$5,$6)")
-            .bind(principal_user_id)
+        sqlx::query("INSERT INTO member_lifecycle_event (principal_id, seq, kind, payload, occurred_at, subject_id) VALUES ($1,$2,$3,$4::jsonb,$5,$6)")
+            .bind(principal_id.as_uuid())
             .bind(snapshot.last_seq)
             .bind(event.kind())
             .bind(event.payload().to_string())
@@ -844,11 +834,11 @@ async fn upsert_snapshot(
     sqlx::query(
         r#"
         INSERT INTO member_lifecycle_projection
-            (principal_user_id, status, last_seq, deactivated_at, erasure_requested_at,
+            (principal_id, status, last_seq, deactivated_at, erasure_requested_at,
              credentials_erased_at, authorship_pseudonymized_at,
              personal_export_recorded_at, pseudonym, subject_id)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-        ON CONFLICT (principal_user_id) DO UPDATE SET
+        ON CONFLICT (principal_id) DO UPDATE SET
             status = EXCLUDED.status,
             last_seq = EXCLUDED.last_seq,
             deactivated_at = COALESCE(member_lifecycle_projection.deactivated_at, EXCLUDED.deactivated_at),
@@ -860,7 +850,7 @@ async fn upsert_snapshot(
             subject_id = COALESCE(member_lifecycle_projection.subject_id, EXCLUDED.subject_id)
         "#,
     )
-    .bind(snapshot.principal_user_id.as_str())
+    .bind(snapshot.principal_id.as_uuid())
     .bind(snapshot.status.as_str())
     .bind(snapshot.last_seq)
     .bind(timestamps.deactivated_at)
@@ -877,33 +867,33 @@ async fn upsert_snapshot(
 
 async fn assemble_personal_export(
     tx: &mut Transaction<'_, Postgres>,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<serde_json::Value, IdentityFlowError> {
     let account = json_scalar(
         tx,
-        "SELECT jsonb_agg(jsonb_build_object('account_id', account_id, 'created_at', created_at, 'disabled_at', disabled_at) ORDER BY account_id)::text FROM auth_account WHERE principal_user_id = $1",
-        principal_user_id,
+        "SELECT jsonb_agg(jsonb_build_object('account_id', account_id, 'created_at', created_at, 'disabled_at', disabled_at) ORDER BY account_id)::text FROM auth_account WHERE principal_id = $1",
+        principal_id,
     )
     .await?;
     let methods = json_scalar(
         tx,
-        "SELECT jsonb_agg(jsonb_build_object('kind', kind, 'status', status, 'created_at', created_at, 'disabled_at', disabled_at) ORDER BY created_at, method_id)::text FROM authentication_method WHERE principal_user_id = $1",
-        principal_user_id,
+        "SELECT jsonb_agg(jsonb_build_object('kind', kind, 'status', status, 'created_at', created_at, 'disabled_at', disabled_at) ORDER BY created_at, method_id)::text FROM authentication_method WHERE principal_id = $1",
+        principal_id,
     )
     .await?;
     // A private profile is deliberately absent from the public projection.
     // Personal export is the owner-authorized path, so open its current sealed
     // claim instead of treating a read model as an authority for private data.
-    let profiles = personal_profile_export(tx, principal_user_id).await?;
+    let profiles = personal_profile_export(tx, principal_id).await?;
     let personas = json_scalar(
         tx,
-        "SELECT jsonb_agg(jsonb_build_object('game_id', persona.game_id, 'persona_id', persona.persona_id, 'registered_seq', persona.registered_seq) ORDER BY persona.game_id, persona.persona_id)::text FROM game_persona AS persona JOIN game_persona_subject_binding AS binding USING (game_id, persona_id) JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1 AND binding.lifecycle = 'active'",
-        principal_user_id,
+        "SELECT jsonb_agg(jsonb_build_object('game_id', persona.game_id, 'persona_id', persona.persona_id, 'registered_seq', persona.registered_seq) ORDER BY persona.game_id, persona.persona_id)::text FROM game_persona AS persona JOIN game_persona_subject_binding AS binding USING (game_id, persona_id) JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_id = $1 AND binding.lifecycle = 'active'",
+        principal_id,
     )
     .await?;
     Ok(serde_json::json!({
         "schema_version": 1,
-        "principal_user_id": principal_user_id,
+        "principal_id": principal_id,
         "accounts": account.unwrap_or_else(|| serde_json::json!([])),
         "authentication_methods": methods.unwrap_or_else(|| serde_json::json!([])),
         "profiles": profiles,
@@ -913,7 +903,7 @@ async fn assemble_personal_export(
 
 async fn personal_profile_export(
     tx: &mut Transaction<'_, Postgres>,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<serde_json::Value, IdentityFlowError> {
     let rows = sqlx::query(
         r#"
@@ -923,7 +913,7 @@ async fn personal_profile_export(
         ORDER BY profile_id
         "#,
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_all(&mut **tx)
     .await?;
     let mut profiles = Vec::with_capacity(rows.len());
@@ -966,10 +956,10 @@ async fn personal_profile_export(
 async fn json_scalar(
     tx: &mut Transaction<'_, Postgres>,
     query: &'static str,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
 ) -> Result<Option<serde_json::Value>, IdentityFlowError> {
     let raw = sqlx::query_scalar::<_, Option<String>>(query)
-        .bind(principal_user_id)
+        .bind(principal_id.as_uuid())
         .fetch_one(&mut **tx)
         .await?;
     raw.map(|value| {
@@ -983,7 +973,7 @@ async fn json_scalar(
 /// update converges on the same externally journaled random pseudonym.
 async fn apply_retained_authorship_redaction(
     tx: &mut Transaction<'_, Postgres>,
-    principal_user_id: &str,
+    principal_id: &PrincipalId,
     pseudonym: &str,
     redacted_at: i64,
 ) -> Result<(), IdentityFlowError> {
@@ -991,18 +981,18 @@ async fn apply_retained_authorship_redaction(
     // attribution lives only on the redacted identity root; it cannot leak a
     // former private profile through a live public profile join.
     sqlx::query("DELETE FROM public_profile WHERE profile_id IN (SELECT profile_id FROM member_profile WHERE active_principal_id = $1 AND lifecycle = 'active')")
-        .bind(principal_user_id).execute(&mut **tx).await?;
+        .bind(principal_id.as_uuid()).execute(&mut **tx).await?;
     sqlx::query("DELETE FROM publication_surface WHERE surface_id IN (SELECT profile_id FROM member_profile WHERE active_principal_id = $1 AND lifecycle = 'active')")
-        .bind(principal_user_id).execute(&mut **tx).await?;
+        .bind(principal_id.as_uuid()).execute(&mut **tx).await?;
     sqlx::query("UPDATE member_profile SET active_principal_id = NULL, lifecycle = 'redacted', redacted_alias = $2, current_claim_id = NULL, handle_hmac = NULL WHERE active_principal_id = $1 AND lifecycle = 'active'")
-        .bind(principal_user_id)
+        .bind(principal_id.as_uuid())
         .bind(pseudonym)
         .execute(&mut **tx)
         .await?;
-    sqlx::query("INSERT INTO game_persona_redaction (game_id, persona_id, replacement_public_name, redacted_at) SELECT binding.game_id, binding.persona_id, $2, $3 FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1 ON CONFLICT (game_id, persona_id) DO UPDATE SET replacement_public_name = EXCLUDED.replacement_public_name")
-        .bind(principal_user_id).bind(pseudonym).bind(redacted_at).execute(&mut **tx).await?;
-    sqlx::query("DELETE FROM game_persona_name_claim WHERE (game_id, persona_id) IN (SELECT binding.game_id, binding.persona_id FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1)")
-        .bind(principal_user_id).execute(&mut **tx).await?;
+    sqlx::query("INSERT INTO game_persona_redaction (game_id, persona_id, replacement_public_name, redacted_at) SELECT binding.game_id, binding.persona_id, $2, $3 FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_id = $1 ON CONFLICT (game_id, persona_id) DO UPDATE SET replacement_public_name = EXCLUDED.replacement_public_name")
+        .bind(principal_id.as_uuid()).bind(pseudonym).bind(redacted_at).execute(&mut **tx).await?;
+    sqlx::query("DELETE FROM game_persona_name_claim WHERE (game_id, persona_id) IN (SELECT binding.game_id, binding.persona_id FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_id = $1)")
+        .bind(principal_id.as_uuid()).execute(&mut **tx).await?;
     // The randomized alias is public presentation, never an authority token,
     // but it still owns its normalized game-local name. Retain that invariant
     // after releasing the erased private names so a later command cannot make
@@ -1013,21 +1003,21 @@ async fn apply_retained_authorship_redaction(
          FROM game_persona_subject_binding AS binding \
          JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id \
          JOIN game_persona AS persona USING (game_id, persona_id) \
-         WHERE subject.principal_user_id = $1",
+         WHERE subject.principal_id = $1",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(pseudonym)
     .execute(&mut **tx)
     .await?;
-    sqlx::query("UPDATE game_persona_name_history AS history SET public_name = $2 FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1 AND history.game_id = binding.game_id AND history.persona_id = binding.persona_id")
-        .bind(principal_user_id).bind(pseudonym).execute(&mut **tx).await?;
-    sqlx::query("UPDATE game_persona_public AS public SET current_public_name = $2, renamed_seq = COALESCE(public.renamed_seq, public.registered_seq) FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_user_id = $1 AND public.game_id = binding.game_id AND public.persona_id = binding.persona_id")
-    .bind(principal_user_id)
+    sqlx::query("UPDATE game_persona_name_history AS history SET public_name = $2 FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_id = $1 AND history.game_id = binding.game_id AND history.persona_id = binding.persona_id")
+        .bind(principal_id.as_uuid()).bind(pseudonym).execute(&mut **tx).await?;
+    sqlx::query("UPDATE game_persona_public AS public SET current_public_name = $2, renamed_seq = COALESCE(public.renamed_seq, public.registered_seq) FROM game_persona_subject_binding AS binding JOIN privacy_subject AS subject ON subject.subject_id = binding.subject_id WHERE subject.principal_id = $1 AND public.game_id = binding.game_id AND public.persona_id = binding.persona_id")
+    .bind(principal_id.as_uuid())
     .bind(pseudonym)
     .execute(&mut **tx)
     .await?;
-    sqlx::query("UPDATE game_persona_subject_binding AS binding SET lifecycle = 'redacted', current_claim_id = NULL FROM privacy_subject AS subject WHERE subject.principal_user_id = $1 AND subject.subject_id = binding.subject_id AND binding.lifecycle = 'active'")
-        .bind(principal_user_id)
+    sqlx::query("UPDATE game_persona_subject_binding AS binding SET lifecycle = 'redacted', current_claim_id = NULL FROM privacy_subject AS subject WHERE subject.principal_id = $1 AND subject.subject_id = binding.subject_id AND binding.lifecycle = 'active'")
+        .bind(principal_id.as_uuid())
         .execute(&mut **tx)
         .await?;
     Ok(())

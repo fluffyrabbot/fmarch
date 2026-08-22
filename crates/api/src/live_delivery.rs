@@ -20,6 +20,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use caps::{Capability, Principal};
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::{PgListener, PgPool};
 use std::collections::HashMap;
@@ -194,7 +195,7 @@ pub(super) struct LiveDeliveryState {
     live_projection: LiveProjectionPublisher,
     live_projection_delivery_delay: Duration,
     live_connection_slots: Arc<Semaphore>,
-    live_principal_slots: Arc<Mutex<HashMap<String, Arc<Semaphore>>>>,
+    live_principal_slots: Arc<Mutex<HashMap<PrincipalId, Arc<Semaphore>>>>,
     live_principal_limit: usize,
     websocket_poll_interval: Duration,
     live_event_wake: GameEventWakeHub,
@@ -255,7 +256,7 @@ struct WsParams {
 struct WebsocketTicketClaim {
     session_reference: String,
     access_expires_at: i64,
-    principal_user_id: String,
+    principal_id: PrincipalId,
     game: Uuid,
     channel: String,
     slot_id: Option<String>,
@@ -282,9 +283,9 @@ async fn create_websocket_ticket(
 ) -> Result<Json<WebsocketTicketResponse>, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let authorization = authorization_context(&state.auth, token).await?;
-    let principal_user_id = authorization.principal_user_id.clone();
+    let principal_id = authorization.principal_id;
     let ticket_scope =
-        hash_session_token(format!("websocket-ticket-principal:{principal_user_id}").as_str());
+        hash_session_token(format!("websocket-ticket-principal:{principal_id}").as_str());
     enforce_public_request_limit(
         &state.auth,
         ticket_scope.as_str(),
@@ -316,14 +317,14 @@ async fn create_websocket_ticket(
             &state.pool,
             request.game,
             channel,
-            Some(principal_user_id.as_str()),
+            Some(principal_id),
         )
         .await?;
     }
     if let Some(slot_id) = request.slot_id.as_deref() {
         let capabilities = caps::resolve(
             &state.pool,
-            &Principal::user(principal_user_id.as_str()),
+            &Principal::authenticated(principal_id),
             request.game,
         )
         .await?;
@@ -351,7 +352,7 @@ async fn create_websocket_ticket(
         r#"
         INSERT INTO auth_websocket_ticket (
             token_hash, auth_kind, session_reference, access_expires_at,
-            principal_user_id, audience,
+            principal_id, audience,
             game_id, channel_id, slot_id, after_seq, issued_at, expires_at, consumed_at
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULL)
@@ -361,7 +362,7 @@ async fn create_websocket_ticket(
     .bind(authorization_kind(&authorization))
     .bind(authorization.session_reference)
     .bind(authorization.idle_expires_at.min(authorization.expires_at))
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(audience)
     .bind(request.game)
     .bind(channel)
@@ -392,7 +393,7 @@ async fn redeem_websocket_ticket(
         return Err(unauthorized_session());
     }
     let now = unix_now_seconds();
-    let row = sqlx::query_as::<_, (String, i64, String, Uuid, String, Option<String>, i64)>(
+    let row = sqlx::query_as::<_, (String, i64, Uuid, Uuid, String, Option<String>, i64)>(
         r#"
         UPDATE auth_websocket_ticket AS ticket
         SET consumed_at = $3
@@ -402,7 +403,7 @@ async fn redeem_websocket_ticket(
           AND ticket.expires_at > $3
           AND ticket.access_expires_at > $3
         RETURNING ticket.session_reference, ticket.access_expires_at,
-                  ticket.principal_user_id,
+                  ticket.principal_id,
                   ticket.game_id, ticket.channel_id, ticket.slot_id, ticket.after_seq
         "#,
     )
@@ -415,7 +416,7 @@ async fn redeem_websocket_ticket(
     let claim = WebsocketTicketClaim {
         session_reference: row.0,
         access_expires_at: row.1,
-        principal_user_id: row.2,
+        principal_id: PrincipalId::from_uuid(row.2),
         game: row.3,
         channel: row.4,
         slot_id: row.5,
@@ -479,7 +480,7 @@ async fn websocket_authorization_context(
     )
     .await
     .ok()?;
-    (authorization.principal_user_id == claim.principal_user_id).then_some(authorization)
+    (authorization.principal_id == claim.principal_id).then_some(authorization)
 }
 
 async fn ws(
@@ -512,7 +513,7 @@ async fn ws(
     let principal_slots = {
         let mut slots = state.live_principal_slots.lock().await;
         slots
-            .entry(claim.principal_user_id.clone())
+            .entry(claim.principal_id)
             .or_insert_with(|| Arc::new(Semaphore::new(state.live_principal_limit)))
             .clone()
     };
@@ -533,15 +534,15 @@ async fn ws(
     upgrade
         .on_upgrade(move |socket| async move {
             let _permit = permit;
-            let principal_user_id = claim.principal_user_id.clone();
+            let principal_id = claim.principal_id;
             ws_session(socket, state.clone(), claim).await;
             drop(principal_permit);
             let mut slots = state.live_principal_slots.lock().await;
-            if slots.get(&principal_user_id).is_some_and(|entry| {
+            if slots.get(&principal_id).is_some_and(|entry| {
                 Arc::ptr_eq(entry, &principal_slots)
                     && entry.available_permits() == state.live_principal_limit
             }) {
-                slots.remove(&principal_user_id);
+                slots.remove(&principal_id);
             }
         })
         .into_response()
@@ -554,12 +555,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
         return;
     }
     let host_console_interested = socket_has_host_console_interest(&state, &claim).await;
-    let hello = hello_for(
-        &state,
-        Some(claim.principal_user_id.as_str()),
-        Some(claim.game),
-    )
-    .await;
+    let hello = hello_for(&state, Some(claim.principal_id), Some(claim.game)).await;
     if !session.active(&state, &claim).await {
         return;
     }
@@ -612,7 +608,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
     if let Some(delta) = thread_posts_delta_for_ws(
         &state,
         game,
-        Some(claim.principal_user_id.as_str()),
+        Some(claim.principal_id),
         claim.channel.as_str(),
     )
     .await
@@ -639,8 +635,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
         }
         next_envelope_id = send_projection_deltas(&mut socket, next_envelope_id, vec![delta]).await;
     }
-    let private_deltas =
-        player_private_deltas_for_ws(&state, game, Some(claim.principal_user_id.as_str())).await;
+    let private_deltas = player_private_deltas_for_ws(&state, game, Some(claim.principal_id)).await;
     if !private_deltas.is_empty() {
         if !session.active(&state, &claim).await {
             return;
@@ -704,7 +699,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                 let Some(delta) = thread_posts_delta_for_ws(
                     &state,
                     game,
-                    Some(claim.principal_user_id.as_str()),
+                    Some(claim.principal_id),
                     claim.channel.as_str(),
                 )
                 .await
@@ -723,7 +718,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
                 let citation_deltas = post_citations_deltas_for_ws(
                     &state,
                     game,
-                    Some(claim.principal_user_id.as_str()),
+                    Some(claim.principal_id),
                     claim.channel.as_str(),
                     &hidden_quoting_seqs,
                 )
@@ -845,7 +840,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
             thread_posts_after_delta_for_ws(
                 &state,
                 game,
-                Some(claim.principal_user_id.as_str()),
+                Some(claim.principal_id),
                 claim.channel.as_str(),
                 after_seq,
             )
@@ -854,7 +849,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
             thread_posts_delta_for_ws(
                 &state,
                 game,
-                Some(claim.principal_user_id.as_str()),
+                Some(claim.principal_id),
                 claim.channel.as_str(),
             )
             .await
@@ -873,7 +868,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
             let citation_deltas = post_citations_deltas_for_ws(
                 &state,
                 game,
-                Some(claim.principal_user_id.as_str()),
+                Some(claim.principal_id),
                 claim.channel.as_str(),
                 &[],
             )
@@ -922,9 +917,7 @@ async fn ws_session(mut socket: WebSocket, state: LiveDeliveryState, claim: Webs
             }
         }
         if update.player_private_dirty {
-            let deltas =
-                player_private_deltas_for_ws(&state, game, Some(claim.principal_user_id.as_str()))
-                    .await;
+            let deltas = player_private_deltas_for_ws(&state, game, Some(claim.principal_id)).await;
             if deltas.is_empty() {
                 continue;
             }
@@ -1046,7 +1039,7 @@ async fn send_current_projection_snapshot(
     if let Some(delta) = thread_posts_delta_for_ws(
         state,
         claim.game,
-        Some(claim.principal_user_id.as_str()),
+        Some(claim.principal_id),
         claim.channel.as_str(),
     )
     .await
@@ -1073,9 +1066,7 @@ async fn send_current_projection_snapshot(
         }
         next_envelope_id = send_projection_deltas(socket, next_envelope_id, vec![delta]).await;
     }
-    let deltas =
-        player_private_deltas_for_ws(state, claim.game, Some(claim.principal_user_id.as_str()))
-            .await;
+    let deltas = player_private_deltas_for_ws(state, claim.game, Some(claim.principal_id)).await;
     if !websocket_session_active(state, claim).await {
         return next_envelope_id;
     }
@@ -1085,19 +1076,14 @@ async fn send_current_projection_snapshot(
 async fn thread_posts_delta_for_ws(
     state: &LiveDeliveryState,
     game: Uuid,
-    principal_user_id: Option<&str>,
+    principal_id: Option<PrincipalId>,
     channel: &str,
 ) -> Option<ProjectionDelta> {
     if channel != "main" {
-        let principal_user_id = principal_user_id?;
-        game_http::require_channel_thread_access(
-            &state.pool,
-            game,
-            channel,
-            Some(principal_user_id),
-        )
-        .await
-        .ok()?;
+        let principal_id = principal_id?;
+        game_http::require_channel_thread_access(&state.pool, game, channel, Some(principal_id))
+            .await
+            .ok()?;
     }
     game_http::current_thread_posts_delta(&state.pool, game, channel)
         .await
@@ -1107,20 +1093,15 @@ async fn thread_posts_delta_for_ws(
 async fn thread_posts_after_delta_for_ws(
     state: &LiveDeliveryState,
     game: Uuid,
-    principal_user_id: Option<&str>,
+    principal_id: Option<PrincipalId>,
     channel: &str,
     after_seq: i64,
 ) -> Option<ProjectionDelta> {
     if channel != "main" {
-        let principal_user_id = principal_user_id?;
-        game_http::require_channel_thread_access(
-            &state.pool,
-            game,
-            channel,
-            Some(principal_user_id),
-        )
-        .await
-        .ok()?;
+        let principal_id = principal_id?;
+        game_http::require_channel_thread_access(&state.pool, game, channel, Some(principal_id))
+            .await
+            .ok()?;
     }
     game_http::current_thread_posts_after_delta(&state.pool, game, channel, after_seq)
         .await
@@ -1131,22 +1112,17 @@ async fn thread_posts_after_delta_for_ws(
 async fn post_citations_deltas_for_ws(
     state: &LiveDeliveryState,
     game: Uuid,
-    principal_user_id: Option<&str>,
+    principal_id: Option<PrincipalId>,
     channel: &str,
     extra_quoting_seqs: &[i64],
 ) -> Vec<ProjectionDelta> {
     if channel != "main" {
-        let Some(principal_user_id) = principal_user_id else {
+        let Some(principal_id) = principal_id else {
             return Vec::new();
         };
-        if game_http::require_channel_thread_access(
-            &state.pool,
-            game,
-            channel,
-            Some(principal_user_id),
-        )
-        .await
-        .is_err()
+        if game_http::require_channel_thread_access(&state.pool, game, channel, Some(principal_id))
+            .await
+            .is_err()
         {
             return Vec::new();
         }
@@ -1240,15 +1216,15 @@ async fn host_prompts_delta_for_ws(
 async fn player_private_deltas_for_ws(
     state: &LiveDeliveryState,
     game: Uuid,
-    principal_user_id: Option<&str>,
+    principal_id: Option<PrincipalId>,
 ) -> Vec<ProjectionDelta> {
-    let Some(principal_user_id) = principal_user_id else {
+    let Some(principal_id) = principal_id else {
         return Vec::new();
     };
 
     let mut deltas = Vec::new();
     if let Ok(notifications) =
-        game_http::player_notifications_for_principal(&state.pool, game, principal_user_id).await
+        game_http::player_notifications_for_principal(&state.pool, game, principal_id).await
     {
         deltas.push(ProjectionDelta::PlayerNotificationsChanged(
             PlayerNotificationsDelta {
@@ -1258,8 +1234,7 @@ async fn player_private_deltas_for_ws(
         ));
     }
     if let Ok(results) =
-        game_http::player_investigation_results_for_principal(&state.pool, game, principal_user_id)
-            .await
+        game_http::player_investigation_results_for_principal(&state.pool, game, principal_id).await
     {
         deltas.push(ProjectionDelta::PlayerInvestigationResultsChanged(
             PlayerInvestigationResultsDelta { game, results },
@@ -1294,14 +1269,16 @@ fn server_envelope_frame(envelope: &ServerEnvelope) -> Option<Message> {
 
 async fn hello_for(
     state: &LiveDeliveryState,
-    principal_user_id: Option<&str>,
+    principal_id: Option<PrincipalId>,
     game: Option<Uuid>,
 ) -> Hello {
-    let caps = match (principal_user_id, game) {
-        (Some(user), Some(game)) => caps::resolve(&state.pool, &Principal::user(user), game)
-            .await
-            .map(|set| set.iter().map(CapabilityGrant::from).collect())
-            .unwrap_or_default(),
+    let caps = match (principal_id, game) {
+        (Some(principal_id), Some(game)) => {
+            caps::resolve(&state.pool, &Principal::authenticated(principal_id), game)
+                .await
+                .map(|set| set.iter().map(CapabilityGrant::from).collect())
+                .unwrap_or_default()
+        }
         _ => Vec::new(),
     };
 

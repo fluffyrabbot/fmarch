@@ -7,7 +7,7 @@
 //! canonical events without making a read-model crate an authority boundary.
 
 use crate::{
-    active_subject_key_store, open_subject_claim, seal_subject_claim, ClaimId,
+    active_subject_key_store, open_subject_claim, seal_subject_claim, ClaimId, PrincipalId,
     SubjectClaimEnvelope, SubjectId, SubjectPrivacyError,
 };
 use serde::{Deserialize, Serialize};
@@ -37,8 +37,8 @@ async fn lock_active_subject(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     subject_id: SubjectId,
 ) -> Result<(), PrivateClaimError> {
-    let principal_id: String = sqlx::query_scalar::<_, Option<String>>(
-        "SELECT principal_user_id FROM privacy_subject WHERE subject_id = $1",
+    let principal_id: Uuid = sqlx::query_scalar::<_, Option<Uuid>>(
+        "SELECT principal_id FROM privacy_subject WHERE subject_id = $1",
     )
     .bind(subject_id.as_uuid())
     .fetch_optional(&mut **tx)
@@ -46,15 +46,15 @@ async fn lock_active_subject(
     .flatten()
     .ok_or(PrivateClaimError::SubjectUnavailable)?;
     let principal_status: String = sqlx::query_scalar(
-        "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+        "SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE",
     )
-    .bind(&principal_id)
+    .bind(principal_id)
     .fetch_optional(&mut **tx)
     .await?
     .ok_or(PrivateClaimError::PrincipalUnavailable)?;
     let row = sqlx::query(
         r#"
-        SELECT subject.principal_user_id, subject.lifecycle_state,
+        SELECT subject.principal_id, subject.lifecycle_state,
                EXISTS (
                    SELECT 1 FROM subject_tombstone AS tombstone
                    WHERE tombstone.subject_id = subject.subject_id
@@ -68,10 +68,10 @@ async fn lock_active_subject(
     .fetch_optional(&mut **tx)
     .await?
     .ok_or(PrivateClaimError::SubjectUnavailable)?;
-    let locked_principal_id: Option<String> = row.try_get("principal_user_id")?;
+    let locked_principal_id: Option<Uuid> = row.try_get("principal_id")?;
     let lifecycle_state: String = row.try_get("lifecycle_state")?;
     let tombstoned: bool = row.try_get("tombstoned")?;
-    if locked_principal_id.as_deref() != Some(principal_id.as_str())
+    if locked_principal_id != Some(principal_id)
         || lifecycle_state != "active"
         || principal_status != "active"
         || tombstoned
@@ -85,22 +85,22 @@ async fn lock_active_subject(
 /// atomically with the new binding when needed.
 pub async fn ensure_active_subject(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    principal_id: &str,
+    principal_id: PrincipalId,
     created_at: i64,
 ) -> Result<SubjectId, PrivateClaimError> {
     let principal_status: Option<String> = sqlx::query_scalar(
-        "SELECT status FROM platform_principal WHERE principal_user_id = $1 FOR UPDATE",
+        "SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE",
     )
-    .bind(principal_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(&mut **tx)
     .await?;
     if principal_status.as_deref() != Some("active") {
         return Err(PrivateClaimError::PrincipalUnavailable);
     }
     if let Some(subject_id) = sqlx::query_scalar::<_, Uuid>(
-        "SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1 FOR UPDATE",
+        "SELECT subject_id FROM privacy_subject WHERE principal_id = $1 FOR UPDATE",
     )
-    .bind(principal_id)
+    .bind(principal_id.as_uuid())
     .fetch_optional(&mut **tx)
     .await?
     {
@@ -114,14 +114,14 @@ pub async fn ensure_active_subject(
     key_store.create(candidate).await?;
     let inserted = sqlx::query_scalar::<_, Uuid>(
         r#"
-        INSERT INTO privacy_subject (subject_id, principal_user_id, created_at)
+        INSERT INTO privacy_subject (subject_id, principal_id, created_at)
         VALUES ($1, $2, $3)
-        ON CONFLICT (principal_user_id) DO NOTHING
+        ON CONFLICT (principal_id) DO NOTHING
         RETURNING subject_id
         "#,
     )
     .bind(candidate.as_uuid())
-    .bind(principal_id)
+    .bind(principal_id.as_uuid())
     .bind(created_at)
     .fetch_optional(&mut **tx)
     .await?;
@@ -133,9 +133,9 @@ pub async fn ensure_active_subject(
     // remove the unattached key we created before joining that subject.
     key_store.destroy(candidate).await?;
     let subject_id = sqlx::query_scalar::<_, Uuid>(
-        "SELECT subject_id FROM privacy_subject WHERE principal_user_id = $1",
+        "SELECT subject_id FROM privacy_subject WHERE principal_id = $1",
     )
-    .bind(principal_id)
+    .bind(principal_id.as_uuid())
     .fetch_one(&mut **tx)
     .await?;
     let subject_id = SubjectId::from_uuid(subject_id);

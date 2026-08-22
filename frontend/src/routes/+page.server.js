@@ -13,7 +13,7 @@ export async function load({ locals, fetch, url }) {
       ? fixtureBoardGameIndexPage()
       : await loadBoardGameIndex({ fetchImpl: fetch, apiBaseUrl, url });
   const data = buildBoardRouteData({
-    principalUserId: locals.principalUserId,
+    principalId: locals.principalId,
     capabilities: locals.resolvedCapabilities,
     gameIndexPage,
   });

@@ -1995,13 +1995,13 @@ function buildRealHostedObservabilitySummarySections(artifactSummary) {
 }
 
 export async function buildAdminRouteData({
-  principalUserId,
+  principalId,
   capabilities = [],
   game = "midsummer",
   fetchImpl = null,
   apiBaseUrl = "",
   sessionToken = null,
-  identityPrincipalUserId = "host_h",
+  identityPrincipalId = principalId,
   proofRun = null,
   opsArtifacts = null,
   seedFixtureSummary = null,
@@ -2038,7 +2038,7 @@ export async function buildAdminRouteData({
       shell: buildAppShell({
         game,
         activeSurface: "admin",
-        principalUserId,
+        principalId,
         capabilities,
       }),
       surfaceHeader: buildAppSurfaceHeaderViewModel({
@@ -2052,7 +2052,7 @@ export async function buildAdminRouteData({
       }),
       access,
       operator: Object.freeze({
-        principalUserId,
+        principalId,
         capabilityLabel: access.capabilityLabel,
       }),
       audit: Object.freeze([]),
@@ -2061,11 +2061,11 @@ export async function buildAdminRouteData({
 
   const coldData = await loadAdminColdData({
     game,
-    principalUserId,
+    principalId,
     fetchImpl,
     apiBaseUrl,
     sessionToken,
-    identityPrincipalUserId,
+    identityPrincipalId,
     fallback: adminFixtureColdLoad({ game }),
   });
 
@@ -2073,7 +2073,7 @@ export async function buildAdminRouteData({
     shell: buildAppShell({
       game,
       activeSurface: "admin",
-      principalUserId,
+      principalId,
       capabilities,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
@@ -2087,7 +2087,7 @@ export async function buildAdminRouteData({
     }),
     access,
     operator: Object.freeze({
-      principalUserId,
+      principalId,
       capabilityLabel: access.capabilityLabel,
     }),
     command: Object.freeze({
@@ -2100,11 +2100,11 @@ export async function buildAdminRouteData({
       cohost: Object.freeze({
         action: "add_cohost",
         game,
-        user: "cohost_c",
+        principalId: "cohost_c",
       }),
       sessionGrant: Object.freeze({
         action: "grant_session",
-        principalUserId: "mod_a",
+        principalId: "mod_a",
         expiresAt: 4_102_444_800,
         globalCapabilities: Object.freeze(["GlobalMod"]),
       }),
@@ -2282,13 +2282,13 @@ export async function buildAdminRouteData({
 
 export async function buildAdminAuditDetailData({
   audit,
-  principalUserId,
+  principalId,
   capabilities = [],
   game = "midsummer",
   fetchImpl = null,
   apiBaseUrl = "",
   sessionToken = null,
-  identityPrincipalUserId = "host_h",
+  identityPrincipalId = principalId,
   proofRun = null,
   opsArtifacts = null,
   seedFixtureSummary = null,
@@ -2313,13 +2313,13 @@ export async function buildAdminAuditDetailData({
   proofFreshness = null,
 }) {
   const data = await buildAdminRouteData({
-    principalUserId,
+    principalId,
     capabilities,
     game,
     fetchImpl,
     apiBaseUrl,
     sessionToken,
-    identityPrincipalUserId,
+    identityPrincipalId,
     proofRun,
     opsArtifacts,
     seedFixtureSummary,
@@ -9556,7 +9556,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       ?.globalCapabilitiesGranted !== 0 ||
     identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance?.rawInviteTokenStored !==
       false ||
-    identityAdapterProof.identityLifecycle?.accountLogin?.principalUserId !== "host_h" ||
+    identityAdapterProof.identityLifecycle?.accountLogin?.principalId !== "host_h" ||
     !identityAdapterProof.identityLifecycle?.accountLogin?.capabilityKinds?.includes(
       "HostOf",
     ) ||
@@ -9657,7 +9657,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       ?.reloadRecoveryStatus !== "disabled" ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
       ?.reloadRecoveryDetailRoleUrl !==
-      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h" ||
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_id=host_h" ||
     !String(
       identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
         ?.reloadRecoveryTargetText ?? "",
@@ -9739,8 +9739,8 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
           ?.clickedThroughFromHostRoleUrl === true,
     }),
     accountLogin: Object.freeze({
-      principalUserId: String(
-        identityAdapterProof.identityLifecycle.accountLogin?.principalUserId ?? "",
+      principalId: String(
+        identityAdapterProof.identityLifecycle.accountLogin?.principalId ?? "",
       ),
       accountId: String(
         identityAdapterProof.identityLifecycle.accountLogin?.accountId ?? "",
@@ -9813,8 +9813,8 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       accountId: String(
         identityAdapterProof.identityLifecycle.accountRegistration?.accountId ?? "",
       ),
-      principalUserId: String(
-        identityAdapterProof.identityLifecycle.accountRegistration?.principalUserId ?? "",
+      principalId: String(
+        identityAdapterProof.identityLifecycle.accountRegistration?.principalId ?? "",
       ),
       registrationRoleUrl: String(
         identityAdapterProof.identityLifecycle.accountRegistration?.registrationRoleUrl ?? "",

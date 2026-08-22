@@ -5,13 +5,13 @@ import { loadAdminColdData, operatorProofRunUrl } from "../../lib/app/cold-load.
 import { ADMIN_ROUTE_CONTRACT } from "./admin-route-contract.mjs";
 
 export async function buildAdminRuntimeRouteData({
-  principalUserId,
+  principalId,
   capabilities = [],
   game = null,
   fetchImpl = null,
   apiBaseUrl = "",
   sessionToken = null,
-  identityPrincipalUserId = "host_h",
+  identityPrincipalId = principalId,
   gameIndexPage = null,
   bootstrapCatalog = null,
   includeLegacyIdentityOps = true,
@@ -22,12 +22,12 @@ export async function buildAdminRuntimeRouteData({
   const shell = buildAppShell({
     game: selectedGame,
     activeSurface: "admin",
-    principalUserId,
+    principalId,
     capabilities,
   });
   const surfaceHeader = adminSurfaceHeader(access.capabilityLabel);
   const operator = Object.freeze({
-    principalUserId,
+    principalId,
     capabilityLabel: access.capabilityLabel,
   });
 
@@ -49,11 +49,11 @@ export async function buildAdminRuntimeRouteData({
 
   const coldData = await loadAdminColdData({
     game: selectedGame,
-    principalUserId,
+    principalId,
     fetchImpl,
     apiBaseUrl,
     sessionToken,
-    identityPrincipalUserId,
+    identityPrincipalId,
     fallback: runtimeAuditFallback({ game: selectedGame }),
   });
 
@@ -67,7 +67,6 @@ export async function buildAdminRuntimeRouteData({
     command: Object.freeze({
       endpoint: "/commands",
       createGame: Object.freeze({ action: "create_game", game: selectedGame, pack: "mafiascum" }),
-      cohost: Object.freeze({ action: "add_cohost", game: selectedGame, user: "cohost_c" }),
       sessionGrant: null,
     }),
     gameSetup: Object.freeze([

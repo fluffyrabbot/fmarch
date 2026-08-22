@@ -416,7 +416,7 @@
           tasks={data.recoveryTasks}
           {commandStatuses}
           game={data.shell.game}
-          principalUserId={data.operator.principalUserId}
+          principalId={data.operator.principalId}
           onRecoveryTask={handleRecoveryTask}
           onCancelRecoveryTask={cancelSetupAction}
         />

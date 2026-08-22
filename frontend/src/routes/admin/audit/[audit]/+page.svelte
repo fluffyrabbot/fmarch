@@ -11,7 +11,7 @@
   export let form;
 
   // A bare "?/action" form target would drop the page's own query
-  // (game, principal_user_id) and strand the post-action render.
+  // (game, principal_id) and strand the post-action render.
   function lifecycleActionHref(action) {
     const query = new URLSearchParams($page.url.searchParams).toString();
     const name = action.replace(/^\?\//u, "");
@@ -126,9 +126,9 @@
             data-testid={`admin-audit-entry-${entry.eventKind}`}
           >
             <strong>{entry.eventKind}</strong>
-            <span>{entry.principalUserId}</span>
-            {#if entry.actorUserId}
-              <span>{entry.actorUserId}</span>
+            <span>{entry.principalId}</span>
+            {#if entry.actorPrincipalId}
+              <span>{entry.actorPrincipalId}</span>
             {/if}
             {#if entry.metadata?.provider_id}
               <span
@@ -223,7 +223,7 @@
           data-testid="admin-identity-account-control-target"
         >
           <strong>{data.audit.accountControls.accountId}</strong>
-          <span>{data.audit.accountControls.principalUserId}</span>
+          <span>{data.audit.accountControls.principalId}</span>
           <span>{data.audit.accountControls.currentDisabled ? "disabled" : "enabled"}</span>
         </p>
         {#if form?.id === "account-disable" || form?.id === "account-enable"}

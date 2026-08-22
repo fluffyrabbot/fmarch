@@ -6,7 +6,7 @@ test("public game route loads quote blocks and citation disclosure without a Quo
   const requests = [];
   const data = await load({
     params: { game: "00000000-0000-0000-0000-000000000001" },
-    locals: { principalUserId: null, resolvedCapabilities: [] },
+    locals: { principalId: null, resolvedCapabilities: [] },
     cookies: { get: () => undefined },
     url: new URL("http://localhost/games/00000000-0000-0000-0000-000000000001"),
     fetch: async (url) => {
@@ -63,7 +63,7 @@ test("public game route loads quote blocks and citation disclosure without a Quo
 test("public game route exposes only canonical public thread data", async () => {
   const data = await load({
     params: { game: "00000000-0000-0000-0000-000000000001" },
-    locals: { principalUserId: null, resolvedCapabilities: [] },
+    locals: { principalId: null, resolvedCapabilities: [] },
     cookies: { get: () => undefined },
     url: new URL("http://localhost/games/00000000-0000-0000-0000-000000000001"),
     fetch: async () => ({

@@ -144,7 +144,7 @@ async function proveAdminHandlers() {
   });
   const rejectRow = rowByAction(rejectView.items, item.id);
 
-  assert.equal(only(sent).command.AddCohost.user, "cohost_c");
+  assert.equal(only(sent).command.AddCohost.principal_id, "cohost_c");
   assert.equal(ackRow.state, "ack");
   assert.equal(rejectRow.state, "reject");
   assert.equal(windowRef.__fmarchAdminCommandDispatchBridgePlan, ackPlan);
@@ -157,7 +157,7 @@ async function proveAdminHandlers() {
       id: "session-grants",
       state: "ack",
       message: "Granted GlobalMod to mod_a",
-      principalUserId: "mod_a",
+      principalId: "mod_a",
       capabilityKinds: "GlobalMod",
     },
   });
@@ -515,14 +515,14 @@ async function proveModeratorHandlerPath({ data, event, outcome }) {
 function adminData() {
   return {
     operator: {
-      principalUserId: "admin_a",
+      principalId: "admin_a",
     },
     command: {
       endpoint: "/commands",
       cohost: {
         action: "add_cohost",
         game: "midsummer",
-        user: "cohost_c",
+        principalId: "cohost_c",
       },
     },
   };
@@ -531,7 +531,7 @@ function adminData() {
 function playerData({ channel }) {
   return {
     game: { id: "midsummer" },
-    player: { principalUserId: "player_mira", slotId: "slot-7" },
+    player: { principalId: "player_mira", slotId: "slot-7" },
     composer: {
       commandEndpoint: "/commands",
       voteTargetSlot: "slot-2",
@@ -543,7 +543,7 @@ function playerData({ channel }) {
 function moderatorData() {
   return {
     game: { id: "midsummer" },
-    session: { principalUserId: "host_h" },
+    session: { principalId: "host_h" },
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
     hostVotecountEndpoint: "/games/midsummer/votecount",

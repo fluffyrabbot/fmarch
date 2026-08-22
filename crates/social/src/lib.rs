@@ -2,8 +2,9 @@
 
 pub mod profile;
 
+pub use principal::PrincipalId;
 pub use profile::{
-    decide_profile, fold_profile_event, ActiveProfile, PrincipalId, PrivacySubjectId, ProfileBio,
+    decide_profile, fold_profile_event, ActiveProfile, PrivacySubjectId, ProfileBio,
     ProfileCommand, ProfileDecisionError, ProfileDisplayName, ProfileEdit, ProfileEvent,
     ProfileFoldError, ProfileHandle, ProfileId, ProfileLifecycle, ProfileOwner,
     ProfilePresentation, ProfileRevision, ProfileState, ProfileValueError, ProfileVisibility,
@@ -29,7 +30,7 @@ pub enum SocialReject {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemberMuteState {
     pub relationship_id: Uuid,
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub target_profile_id: Uuid,
     pub active: bool,
     pub version: i64,
@@ -95,7 +96,7 @@ mod tests {
     fn active_state() -> MemberMuteState {
         MemberMuteState {
             relationship_id: Uuid::from_u128(1),
-            principal_user_id: "reader".to_string(),
+            principal_id: PrincipalId::fixture("reader"),
             target_profile_id: Uuid::from_u128(2),
             active: true,
             version: 1,

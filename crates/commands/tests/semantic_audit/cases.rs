@@ -37,7 +37,7 @@ async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -208,7 +208,7 @@ async fn host_resolve_phase_carries_mafia_universe_reveal_town(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -388,7 +388,7 @@ async fn host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal(pool:
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -662,7 +662,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_oracle_reveal(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -939,7 +939,7 @@ async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -1300,7 +1300,7 @@ async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgP
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -1527,7 +1527,7 @@ async fn host_resolve_phase_carries_twilight_self_destruct_window(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -1735,7 +1735,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
             commands::seat_persona! {
                 game: day_game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -1921,7 +1921,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
             commands::seat_persona! {
                 game: night_game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -2105,7 +2105,7 @@ async fn host_resolve_phase_conceals_janitor_and_flipless_death_reveals(pool: Pg
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -2283,7 +2283,7 @@ async fn host_resolve_phase_projects_alignment_only_death_reveal(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -2485,7 +2485,7 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
         let decoy = decoys[rng.index(decoys.len())];
         handle(
             &pool,
-            &Principal::user(format!("seed_{seed}_user_{}", slot_number(voters[0]))),
+            &user(&format!("seed_{seed}_user_{}", slot_number(voters[0]))),
             Command::SubmitVote {
                 game,
                 actor_slot: voters[0].into(),
@@ -2497,7 +2497,7 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
         for voter in voters.iter().take(3) {
             handle(
                 &pool,
-                &Principal::user(format!("seed_{seed}_user_{}", slot_number(voter))),
+                &user(&format!("seed_{seed}_user_{}", slot_number(voter))),
                 Command::SubmitVote {
                     game,
                     actor_slot: (*voter).into(),
@@ -2509,7 +2509,7 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
         }
         handle(
             &pool,
-            &Principal::user(format!("seed_{seed}_user_{}", slot_number(voters[3]))),
+            &user(&format!("seed_{seed}_user_{}", slot_number(voters[3]))),
             Command::SubmitVote {
                 game,
                 actor_slot: voters[3].into(),
@@ -2520,7 +2520,7 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
         .unwrap_or_else(|err| panic!("seed {seed}: trailing vote failed: {err}"));
         handle(
             &pool,
-            &Principal::user(format!("seed_{seed}_user_{}", slot_number(voters[3]))),
+            &user(&format!("seed_{seed}_user_{}", slot_number(voters[3]))),
             Command::WithdrawVote {
                 game,
                 actor_slot: voters[3].into(),
@@ -2690,7 +2690,7 @@ async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(p
             };
             handle(
                 &pool,
-                &Principal::user(format!("night_seed_{seed}_user_{}", index + 1)),
+                &user(&format!("night_seed_{seed}_user_{}", index + 1)),
                 Command::SubmitAction {
                     game,
                     action_id: format!("seed_{seed}_{template_id}"),
@@ -2922,7 +2922,7 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
         for (actor_slot, template_id, action_slug, targets) in actions {
             handle(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "trigger_seed_{seed}_user_{}",
                     slot_number(actor_slot)
                 )),
@@ -3891,7 +3891,7 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
         };
         handle(
             &pool,
-            &Principal::user(format!("persistent_seed_{seed}_user_1")),
+            &user(&format!("persistent_seed_{seed}_user_1")),
             Command::SubmitAction {
                 game,
                 action_id: format!("seed_{seed}_{arm_slug}"),
@@ -3973,7 +3973,7 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
         };
         handle(
             &pool,
-            &Principal::user(format!("persistent_seed_{seed}_user_3")),
+            &user(&format!("persistent_seed_{seed}_user_3")),
             Command::SubmitAction {
                 game,
                 action_id: format!("seed_{seed}_mafia_kills_persistent_trigger_source"),
@@ -4231,7 +4231,7 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
                 for actor_slot in ["slot_3", "slot_4", "slot_5", "slot_2"] {
                     handle(
                         &pool,
-                        &Principal::user(format!(
+                        &user(&format!(
                             "day_trigger_seed_{seed}_user_{}",
                             slot_number(actor_slot)
                         )),
@@ -4252,7 +4252,7 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
             "hero_vote_duel" => {
                 handle(
                     &pool,
-                    &Principal::user(format!("day_trigger_seed_{seed}_user_1")),
+                    &user(&format!("day_trigger_seed_{seed}_user_1")),
                     Command::SubmitAction {
                         game,
                         action_id: format!("seed_{seed}_gladiator_duel"),
@@ -4266,7 +4266,7 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
                 .unwrap_or_else(|err| panic!("seed {seed}: submit Gladiator duel failed: {err}"));
                 handle(
                     &pool,
-                    &Principal::user(format!("day_trigger_seed_{seed}_user_4")),
+                    &user(&format!("day_trigger_seed_{seed}_user_4")),
                     Command::SubmitVote {
                         game,
                         actor_slot: "slot_4".into(),
@@ -4278,7 +4278,7 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
                 for actor_slot in ["slot_3", "slot_5"] {
                     handle(
                         &pool,
-                        &Principal::user(format!(
+                        &user(&format!(
                             "day_trigger_seed_{seed}_user_{}",
                             slot_number(actor_slot)
                         )),
@@ -4655,7 +4655,7 @@ async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: 
     for (actor_slot, template_id, action_slug, targets) in &actions {
         handle(
             &pool,
-            &Principal::user(format!("large_graph_user_{}", slot_number(actor_slot))),
+            &user(&format!("large_graph_user_{}", slot_number(actor_slot))),
             Command::SubmitAction {
                 game,
                 action_id: format!("large_graph_{action_slug}"),
@@ -4996,7 +4996,7 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
         for action in &case.actions {
             generated_handle_or_shrink(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "generated_seed_{seed}_user_{}",
                     slot_number(&action.actor_slot)
                 )),
@@ -5758,7 +5758,7 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
         for action in &case.actions {
             generated_handle_or_shrink(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "chinese_generated_seed_{seed}_user_{}",
                     slot_number(&action.actor_slot)
                 )),
@@ -6139,7 +6139,7 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
         for action in &case.actions {
             generated_handle_or_shrink(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "chinese_day_seed_{seed}_user_{}",
                     slot_number(&action.actor_slot)
                 )),
@@ -6166,7 +6166,7 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
         for voter in ["slot_1", "slot_6", "slot_7"] {
             generated_handle_or_shrink(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "chinese_day_seed_{seed}_user_{}",
                     slot_number(voter)
                 )),
@@ -6676,7 +6676,7 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
         for action in &case.actions {
             generated_handle_or_shrink(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "mafia_universe_ita_seed_{seed}_user_{}",
                     slot_number(&action.actor_slot)
                 )),
@@ -7210,7 +7210,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
         for vote in &case.votes {
             generated_handle_or_shrink(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "epicmafia_pk_seed_{seed}_user_{}",
                     slot_number(&vote.actor_slot)
                 )),
@@ -7555,7 +7555,6 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                         "kind": "select_slot",
                         "slot": case.selected_slot,
                     },
-                    "resolved_by": "host_h",
                 }),
             },
         ) {
@@ -7688,7 +7687,7 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
         for action in &case.actions {
             generated_handle_or_shrink(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "epicmafia_night_seed_{seed}_user_{}",
                     slot_number(&action.actor_slot)
                 )),
@@ -8218,7 +8217,7 @@ async fn host_resolve_phase_carries_default_open_guardian_seer(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -8532,7 +8531,7 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
         for action in &case.actions {
             generated_handle_or_shrink(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "default_open_seed_{seed}_user_{}",
                     slot_number(&action.actor_slot)
                 )),
@@ -8834,7 +8833,7 @@ async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -9108,7 +9107,7 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
         for vote in &case.votes {
             generated_handle_or_shrink(
                 &pool,
-                &Principal::user(format!(
+                &user(&format!(
                     "default_open_day_seed_{seed}_user_{}",
                     slot_number(&vote.actor_slot)
                 )),
@@ -9611,7 +9610,7 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -9802,7 +9801,7 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10105,7 +10104,7 @@ async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10310,7 +10309,7 @@ async fn host_resolve_phase_uses_pack_declared_role_tiebreaker(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10432,7 +10431,7 @@ async fn host_resolve_phase_uses_dynamic_effect_vote_weight(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10641,7 +10640,7 @@ async fn host_resolve_phase_uses_vote_weight_action_grant(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -10868,7 +10867,7 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt(pool
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -11108,7 +11107,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
             commands::seat_persona! {
                 game: loved_game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -11432,7 +11431,7 @@ async fn host_resolve_phase_uses_loved_hated_threshold_adjustments(pool: PgPool)
             commands::seat_persona! {
                 game: hated_game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -11562,7 +11561,7 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -11729,7 +11728,6 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
     let resolved_payload = stored_payload(&pool, game, "HostPromptResolved").await;
     assert_eq!(resolved_payload["prompt_id"], "D01:pk:Tie");
     assert_eq!(resolved_payload["kind"], "pk");
-    assert_eq!(resolved_payload["resolved_by"], host);
     assert_eq!(resolved_payload["decision"]["kind"], "select_slot");
     assert_eq!(resolved_payload["decision"]["slot"], "slot_4");
     assert_eq!(
@@ -11812,7 +11810,6 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
                         "slot": "slot_4",
                     }),
                 ),
-                ("resolved_by", serde_json::json!(host)),
             ],
         },
     );
@@ -11839,7 +11836,6 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
     let resolved_prompts = host_prompts(&pool, game).await.unwrap();
     assert_eq!(resolved_prompts.len(), 1);
     assert_eq!(resolved_prompts[0].status, "resolved");
-    assert_eq!(resolved_prompts[0].resolved_by.as_deref(), Some(host));
     assert_eq!(
         resolved_prompts[0]
             .decision
@@ -11920,7 +11916,7 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -12147,7 +12143,6 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
                         "slot": "slot_3",
                     }),
                 ),
-                ("resolved_by", serde_json::json!(host)),
             ],
         },
     );
@@ -12162,7 +12157,6 @@ async fn host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt(pool: PgP
     let resolved_prompts = host_prompts(&pool, game).await.unwrap();
     assert_eq!(resolved_prompts.len(), 1);
     assert_eq!(resolved_prompts[0].status, "resolved");
-    assert_eq!(resolved_prompts[0].resolved_by.as_deref(), Some(host));
     assert!(
         !slot_state(&pool, game)
             .await
@@ -12252,7 +12246,7 @@ async fn host_resolve_phase_carries_sheriff_badge_lifecycle(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -12539,7 +12533,7 @@ async fn host_resolve_phase_carries_knight_duel_death(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -12671,7 +12665,7 @@ async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -12726,7 +12720,7 @@ async fn host_resolve_phase_carries_knight_duel_failure_before_vote(pool: PgPool
     ] {
         handle(
             &pool,
-            &Principal::user(user_id),
+            &user(user_id),
             Command::SubmitVote {
                 game,
                 actor_slot: voter.into(),
@@ -12860,7 +12854,7 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -13282,7 +13276,7 @@ async fn host_resolve_phase_carries_wolf_beauty_mark_and_drag(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -13524,7 +13518,7 @@ async fn host_resolve_phase_carries_witch_poison_beauty_drag(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -13770,7 +13764,7 @@ async fn host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -14034,7 +14028,7 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -14244,7 +14238,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -14465,7 +14459,7 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -14694,7 +14688,7 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -14953,7 +14947,7 @@ async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -15207,7 +15201,7 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -15537,7 +15531,7 @@ async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -15750,7 +15744,7 @@ async fn host_resolve_phase_releases_buffered_ita_shot_on_later_pass(pool: PgPoo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -15989,7 +15983,7 @@ async fn host_resolve_phase_invalidates_buffered_ita_shot_on_later_release(pool:
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -16264,7 +16258,7 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -16553,7 +16547,7 @@ async fn host_resolve_phase_applies_ita_lifecycle_pause_control(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -16717,7 +16711,7 @@ async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool:
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -17007,7 +17001,7 @@ async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPoo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -17311,7 +17305,7 @@ async fn host_resolve_phase_carries_mafia_universe_basic_nar(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -17492,7 +17486,7 @@ async fn host_resolve_phase_carries_mafia_universe_joat_block_counter(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -17693,7 +17687,7 @@ async fn host_resolve_phase_carries_mafiascum_joat_block_counter(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -17880,7 +17874,7 @@ async fn host_resolve_phase_carries_mafiascum_two_shot_counter(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -18130,7 +18124,7 @@ async fn host_resolve_phase_carries_mafia_universe_night_desperado_kills(pool: P
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -18363,7 +18357,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgP
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -18612,7 +18606,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -18844,7 +18838,7 @@ async fn host_resolve_phase_carries_mafia_universe_cpr_harm(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -19023,7 +19017,7 @@ async fn host_resolve_phase_carries_mafia_universe_framer_investigation(pool: Pg
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -19227,7 +19221,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_framer_investigation(poo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -19431,7 +19425,7 @@ async fn host_resolve_phase_carries_mafiascum_role_scan(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -19607,7 +19601,7 @@ async fn host_resolve_phase_carries_mafiascum_coroner_corpse_inspection(pool: Pg
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -19819,7 +19813,7 @@ async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -20073,7 +20067,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_set_info(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -20352,7 +20346,7 @@ async fn host_resolve_phase_carries_mafia_universe_role_and_full_role_info(pool:
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -20610,7 +20604,7 @@ async fn host_resolve_phase_carries_mafia_universe_culture_aliases(pool: PgPool)
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -20851,7 +20845,7 @@ async fn host_resolve_phase_carries_mafia_universe_parity_scan_memory(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -21153,7 +21147,7 @@ async fn host_resolve_phase_carries_mafia_universe_graph_info(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -21481,7 +21475,7 @@ async fn host_resolve_phase_carries_mafia_universe_voyeur_action_info(pool: PgPo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -21768,7 +21762,7 @@ async fn host_resolve_phase_carries_mafia_universe_ninja_hidden_visit_results(po
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -22111,7 +22105,7 @@ async fn host_resolve_phase_carries_mafia_universe_redirect_graph(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -22341,7 +22335,7 @@ async fn host_resolve_phase_carries_mafia_universe_commute(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -22605,7 +22599,7 @@ async fn host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -22958,7 +22952,7 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -23284,7 +23278,7 @@ async fn host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite(p
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -23657,7 +23651,7 @@ async fn host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alia
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -23917,7 +23911,7 @@ async fn host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends(p
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -24274,7 +24268,7 @@ async fn host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications(po
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -24497,7 +24491,7 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -25094,7 +25088,7 @@ async fn host_resolve_phase_carries_mafia_universe_empower_bypass(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -25292,7 +25286,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -25617,7 +25611,7 @@ async fn host_resolve_phase_uses_pack_declared_night_parity(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -25765,7 +25759,7 @@ async fn host_resolve_phase_uses_pack_declared_cycle_parity(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -25912,7 +25906,7 @@ async fn host_resolve_phase_applies_godfather_investigation_override(pool: PgPoo
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -26035,7 +26029,7 @@ async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -26233,7 +26227,7 @@ async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: Pg
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -26398,7 +26392,7 @@ async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -27809,7 +27803,7 @@ async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -28894,7 +28888,7 @@ async fn host_resolve_phase_vanillaize_then_restore_mutation(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -29245,7 +29239,7 @@ async fn host_resolve_phase_targeted_backup_inherits_chosen_source(pool: PgPool)
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -29468,7 +29462,7 @@ async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_w
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -30834,7 +30828,7 @@ async fn host_resolve_phase_persists_cpr_harm_policy(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -33015,7 +33009,7 @@ async fn host_resolve_phase_strong_willed_bypasses_roleblock(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -33173,7 +33167,7 @@ async fn host_resolve_phase_non_roleblockable_block_survives_roleblock(pool: PgP
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -34429,7 +34423,7 @@ async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -34630,7 +34624,7 @@ async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -34875,7 +34869,7 @@ async fn host_resolve_phase_projects_tracker_private_visit_result(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -36947,7 +36941,7 @@ async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: Pg
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -37224,7 +37218,7 @@ async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) 
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -38085,7 +38079,7 @@ async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await
@@ -38276,7 +38270,7 @@ async fn host_resolve_phase_emits_hammer_vote_outcome(pool: PgPool) {
             commands::seat_persona! {
                 game,
                 slot: slot.into(),
-                user: occupant.into(),
+                user: occupant,
             },
         )
         .await

@@ -3,6 +3,7 @@
 //! Wire types are deliberately separate from domain and storage types. They are
 //! the stable transport contract; server internals may evolve behind them.
 
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -14,7 +15,7 @@ use uuid::Uuid;
 macro_rules! seat_persona {
     ($game:ident, slot: $slot:expr, user: $user:expr $(,)?) => {{
         let slot: String = $slot;
-        let principal_id: String = $user;
+        let principal_id = $crate::fixture_principal_id($user);
         let public_name = format!("Player {slot}");
         $crate::Command::SeatPersona {
             game: $game,
@@ -23,6 +24,12 @@ macro_rules! seat_persona {
             slot,
         }
     }};
+}
+
+/// Deterministic UUID-backed fixture authority for transport tests and proofs.
+#[doc(hidden)]
+pub fn fixture_principal_id(label: impl AsRef<str>) -> PrincipalId {
+    commands::fixture_principal_id(label)
 }
 
 pub const PROTOCOL_VERSION: u16 = 2;
@@ -309,7 +316,7 @@ pub enum Command {
     SeatPersona {
         game: Uuid,
         slot: String,
-        principal_id: String,
+        principal_id: PrincipalId,
         public_name: String,
     },
     RenameGamePersona {
@@ -339,15 +346,15 @@ pub enum Command {
     },
     AddCohost {
         game: Uuid,
-        user: String,
+        principal_id: PrincipalId,
     },
     GrantSpectator {
         game: Uuid,
-        user: String,
+        principal_id: PrincipalId,
     },
     RevokeSpectator {
         game: Uuid,
-        user: String,
+        principal_id: PrincipalId,
     },
     StartGame {
         game: Uuid,
@@ -495,7 +502,7 @@ pub enum Command {
         game: Uuid,
         slot: String,
         outgoing_persona_id: Uuid,
-        incoming_principal_id: String,
+        incoming_principal_id: PrincipalId,
     },
 }
 
@@ -567,12 +574,14 @@ impl Command {
             Command::RemoveSlotStatusTag { game, slot, tag } => {
                 commands::Command::RemoveSlotStatusTag { game, slot, tag }
             }
-            Command::AddCohost { game, user } => commands::Command::AddCohost { game, user },
-            Command::GrantSpectator { game, user } => {
-                commands::Command::GrantSpectator { game, user }
+            Command::AddCohost { game, principal_id } => {
+                commands::Command::AddCohost { game, principal_id }
             }
-            Command::RevokeSpectator { game, user } => {
-                commands::Command::RevokeSpectator { game, user }
+            Command::GrantSpectator { game, principal_id } => {
+                commands::Command::GrantSpectator { game, principal_id }
+            }
+            Command::RevokeSpectator { game, principal_id } => {
+                commands::Command::RevokeSpectator { game, principal_id }
             }
             Command::StartGame { game, phase } => commands::Command::StartGame { game, phase },
             Command::OpenDayPhase { game, phase } => {
@@ -1271,7 +1280,7 @@ pub enum HostConsoleAuthorityKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct HostConsoleAuthorityDelta {
-    pub principal_user_id: String,
+    pub principal_id: PrincipalId,
     pub capability: HostConsoleAuthorityKind,
     pub allowed_classes: Vec<CohostPermissionClass>,
     pub denied_classes: Vec<CohostPermissionClass>,
@@ -1290,7 +1299,7 @@ pub struct HostConsoleSlotOccupancyDelta {
     pub occupancy_id: String,
     pub persona_id: String,
     pub public_name: String,
-    pub assigned_principal_id: String,
+    pub assigned_principal_id: PrincipalId,
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
@@ -1430,7 +1439,6 @@ pub struct HostPromptDelta {
     pub status: String,
     pub decision: Option<HostPromptRecordedDecision>,
     pub public_resolution: Option<HostPromptPublicResolution>,
-    pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
 }
 
@@ -1496,7 +1504,6 @@ impl TryFrom<projections::HostPromptRow> for HostPromptDelta {
             status: row.status,
             decision: decode_opt_field(KIND, "decision", row.decision)?,
             public_resolution: decode_opt_field(KIND, "public_resolution", row.public_resolution)?,
-            resolved_by: row.resolved_by,
             resolved_at: row.resolved_at,
         })
     }
@@ -2283,7 +2290,7 @@ impl From<projections::ModerationCaseRow> for ModerationCase {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ModerationReport {
     pub report_id: Uuid,
-    pub reporter_principal_id: String,
+    pub reporter_principal_id: PrincipalId,
     pub reason_family: String,
     pub details: String,
     pub active: bool,
@@ -2307,7 +2314,7 @@ impl From<projections::ModerationReportRow> for ModerationReport {
 pub struct ModerationHistory {
     pub source_seq: i64,
     pub event_kind: String,
-    pub actor_principal_id: String,
+    pub actor_principal_id: PrincipalId,
     pub reason: Option<String>,
     pub occurred_at: i64,
 }
@@ -2469,7 +2476,6 @@ pub struct HostPhaseControl {
     pub target_phase_id: String,
     pub reason: String,
     pub skipped_phase_id: Option<String>,
-    pub resolved_by: Option<String>,
     pub resolved_at: Option<i64>,
     pub occurred_at: i64,
 }
@@ -2487,7 +2493,6 @@ impl From<projections::HostPhaseControlRow> for HostPhaseControl {
             target_phase_id: row.target_phase_id,
             reason: row.reason,
             skipped_phase_id: row.skipped_phase_id,
-            resolved_by: row.resolved_by,
             resolved_at: row.resolved_at,
             occurred_at: row.occurred_at,
         }
@@ -3021,7 +3026,7 @@ mod host_console_patch_tests {
         HostConsoleStateDelta {
             game,
             authority: HostConsoleAuthorityDelta {
-                principal_user_id: "host".into(),
+                principal_id: PrincipalId::fixture("host"),
                 capability: HostConsoleAuthorityKind::HostOf,
                 allowed_classes: Vec::new(),
                 denied_classes: Vec::new(),
@@ -3046,7 +3051,7 @@ mod host_console_patch_tests {
             occupancy_id: format!("{slot_id}-occ"),
             persona_id: format!("{slot_id}-persona"),
             public_name: slot_id.into(),
-            assigned_principal_id: "player".into(),
+            assigned_principal_id: PrincipalId::fixture("player"),
             alive,
             status: status.into(),
             status_tags: Vec::new(),
@@ -3201,7 +3206,6 @@ mod live_json_map_tests {
                 "selected_slot": "slot-2",
                 "reason": "host_decides_tie"
             })),
-            resolved_by: Some("host".into()),
             resolved_at: Some(44),
         }
     }

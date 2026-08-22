@@ -9,6 +9,7 @@ import {
   browserSessionCookieOptions,
   SESSION_COOKIE_NAME,
 } from "./session-capabilities.mjs";
+import { canonicalPrincipalId } from "../principal-id.mjs";
 import {
   loadAuthKit,
   workosAuthKitConfigured,
@@ -296,6 +297,7 @@ function validSessionResponse(body) {
   return (
     body !== null &&
     typeof body === "object" &&
+    canonicalPrincipalId(body.principal_id) !== null &&
     typeof body.session_token === "string" &&
     body.session_token.startsWith("fmss_")
   );
@@ -308,8 +310,7 @@ function validLinkResponse(body) {
     body.status === "attached" &&
     typeof body.method_id === "string" &&
     body.method_id !== "" &&
-    typeof body.principal_user_id === "string" &&
-    body.principal_user_id !== ""
+    canonicalPrincipalId(body.principal_id) !== null
   );
 }
 

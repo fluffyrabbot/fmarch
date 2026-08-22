@@ -12,6 +12,9 @@ import {
   createProjectionStore,
 } from "../frontend/src/lib/app/projection-store.mjs";
 import {
+  FIXTURE_PRINCIPAL_IDS,
+} from "../frontend/src/lib/principal-id.mjs";
+import {
   buildGameRouteData,
 } from "../frontend/src/routes/g/[game]/game-route-model.mjs";
 import {
@@ -179,7 +182,7 @@ async function provePlayerLiveRuntime() {
   FakeWebSocket.last = null;
   const data = await buildGameRouteData({
     game: "midsummer",
-    principalUserId: "player_mira",
+    principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       { kind: "ChannelMember", game: "midsummer", channel: "private:role_pm:slot-7" },
@@ -355,7 +358,7 @@ async function proveModeratorLiveRuntime() {
   FakeWebSocket.last = null;
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
-    principalUserId: "host_h",
+    principalId: FIXTURE_PRINCIPAL_IDS.hostH,
     capabilities: [{ kind: "HostOf", game: "midsummer" }],
   });
   const store = createProjectionStore({

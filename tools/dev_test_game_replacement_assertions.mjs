@@ -7,7 +7,7 @@ export function replacementCommandEnvelopeMatches(commandStatus, scenario, game)
     typeof command?.outgoing_persona_id === "string" &&
     command.outgoing_persona_id.trim() !== "" &&
     command?.incoming_principal_id === scenario.replacementPrincipalUserId &&
-    body?.principal_user_id === undefined
+    body?.principal_id === undefined
   );
 }
 

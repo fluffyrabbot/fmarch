@@ -21,19 +21,19 @@ export async function load({ params, locals, fetch, url, cookies }) {
     game: params.game,
     locals,
   });
-  const principalUserId = resolveHostRoutePrincipal({
+  const principalId = resolveHostRoutePrincipal({
     game: params.game,
     locals,
   });
   const sessionToken = accessTokenForRequest({ locals, cookies });
-  if (principalUserId === "") {
+  if (principalId === "") {
     throw error(403, "Host setup requires an authenticated host session.");
   }
 
   const routeData = await buildHostSetupRouteData({
     game: params.game,
     capabilities,
-    principalUserId,
+    principalId,
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
     sessionToken,
@@ -65,7 +65,6 @@ export const actions = {
       url,
       field: "playerInvite",
       tokenPrefix: "player",
-      defaultPrincipalUserId: "player-mira",
       ackMessage: "Player invite issued",
       rejectMessage: "Player invite was rejected",
     }),

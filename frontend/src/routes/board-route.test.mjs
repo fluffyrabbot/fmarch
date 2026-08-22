@@ -5,7 +5,7 @@ import { load } from "./+page.server.js";
 test("board load opts into the root-owned shell with an API-backed public index", async () => {
   const data = await load({
     locals: {
-      principalUserId: "player_mira",
+      principalId: "player_mira",
       resolvedCapabilities: [
         { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
       ],
@@ -62,7 +62,7 @@ test("board load exposes fixture route state for root-owned shell proof", async 
   try {
     const data = await load({
       locals: {
-        principalUserId: "player_mira",
+        principalId: "player_mira",
         resolvedCapabilities: [
           { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
         ],
@@ -88,7 +88,7 @@ test("board load exposes fixture route state for root-owned shell proof", async 
 
 test("board load keeps a failed public query explicit", async () => {
   const data = await load({
-    locals: { principalUserId: null, resolvedCapabilities: [] },
+    locals: { principalId: null, resolvedCapabilities: [] },
     fetch: async () => new Response("unavailable", { status: 503 }),
     url: new URL("https://fmarch.local/?cursor=bad"),
   });

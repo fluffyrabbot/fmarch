@@ -11,6 +11,7 @@ use super::auth_http::{
 use super::identity_delivery::{delivery_aad, IdentityDeliveryKind};
 use super::ApiError;
 use axum::http::{HeaderMap, StatusCode};
+use principal::PrincipalId;
 use sqlx::postgres::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -53,7 +54,7 @@ pub(super) struct AuthAttemptAudit<'a> {
 pub(super) struct AuthCredentialDeliveryRequest<'a> {
     pub delivery_kind: IdentityDeliveryKind,
     pub account_id: &'a str,
-    pub principal_user_id: &'a str,
+    pub principal_id: &'a PrincipalId,
     pub credential_hash: &'a str,
     pub credential_material: &'a str,
     pub credential_expires_at: i64,
@@ -66,8 +67,8 @@ pub(super) struct AuthDeliveryAudit<'a> {
     pub event_kind: &'a str,
     pub delivery_kind: &'a str,
     pub account_id: &'a str,
-    pub actor_user_id: &'a str,
-    pub principal_user_id: &'a str,
+    pub actor_principal_id: &'a PrincipalId,
+    pub principal_id: &'a PrincipalId,
     pub credential_hash: &'a str,
     pub delivery_id: Uuid,
     pub now: i64,
@@ -475,8 +476,8 @@ async fn record_auth_attempt_rate_limited(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -484,7 +485,7 @@ async fn record_auth_attempt_rate_limited(
         SELECT $1,
                'auth_attempt_rate_limited',
                NULL,
-               principal_user_id,
+               principal_id,
                $2,
                NULL,
                $3::JSONB
@@ -578,7 +579,7 @@ pub(super) async fn deliver_auth_credential(
             delivery_id,
             delivery_kind,
             account_id,
-            principal_user_id,
+            principal_id,
             credential_hash,
             credential_expires_at,
             credential_envelope,
@@ -599,7 +600,7 @@ pub(super) async fn deliver_auth_credential(
     .bind(delivery_id)
     .bind(request.delivery_kind.as_str())
     .bind(request.account_id)
-    .bind(request.principal_user_id)
+    .bind(request.principal_id.as_uuid())
     .bind(request.credential_hash)
     .bind(request.credential_expires_at)
     .bind(credential_envelope.to_string())
@@ -613,8 +614,8 @@ pub(super) async fn deliver_auth_credential(
             event_kind: "auth_delivery_queued",
             delivery_kind: request.delivery_kind.as_str(),
             account_id: request.account_id,
-            actor_user_id: request.principal_user_id,
-            principal_user_id: request.principal_user_id,
+            actor_principal_id: request.principal_id,
+            principal_id: request.principal_id,
             credential_hash: request.credential_hash,
             delivery_id,
             now: request.now,
@@ -637,11 +638,11 @@ pub(super) async fn deliver_auth_credential(
 pub(super) async fn cancel_auth_delivery_intent(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     credential_hash: &str,
-    actor_user_id: Option<&str>,
+    actor_principal_id: Option<&PrincipalId>,
     outcome_code: &str,
     now: i64,
 ) -> Result<i64, ApiError> {
-    let cancelled = sqlx::query_as::<_, (Uuid, String, String, String, String)>(
+    let cancelled = sqlx::query_as::<_, (Uuid, String, String, Uuid, String)>(
         r#"
         UPDATE auth_delivery_intent
         SET status = 'cancelled',
@@ -657,7 +658,7 @@ pub(super) async fn cancel_auth_delivery_intent(
             updated_at = $3
         WHERE credential_hash = $1
           AND status IN ('queued', 'retryable_failed', 'processing')
-        RETURNING delivery_id, delivery_kind, account_id, principal_user_id, provider_id
+        RETURNING delivery_id, delivery_kind, account_id, principal_id, provider_id
         "#,
     )
     .bind(credential_hash)
@@ -665,15 +666,16 @@ pub(super) async fn cancel_auth_delivery_intent(
     .bind(now)
     .fetch_all(&mut **tx)
     .await?;
-    for (delivery_id, delivery_kind, account_id, principal_user_id, provider_id) in &cancelled {
+    for (delivery_id, delivery_kind, account_id, principal_id, provider_id) in &cancelled {
+        let principal_id = PrincipalId::from_uuid(*principal_id);
         record_auth_delivery_audit(
             tx,
             &AuthDeliveryAudit {
                 event_kind: "auth_delivery_cancelled",
                 delivery_kind: delivery_kind.as_str(),
                 account_id: account_id.as_str(),
-                actor_user_id: actor_user_id.unwrap_or(principal_user_id.as_str()),
-                principal_user_id: principal_user_id.as_str(),
+                actor_principal_id: actor_principal_id.unwrap_or(&principal_id),
+                principal_id: &principal_id,
                 credential_hash,
                 delivery_id: *delivery_id,
                 now,
@@ -696,8 +698,8 @@ async fn record_auth_delivery_audit(
         INSERT INTO identity_lifecycle_audit (
             event_at,
             event_kind,
-            actor_user_id,
-            principal_user_id,
+            actor_principal_id,
+            principal_id,
             token_hash,
             related_token_hash,
             metadata
@@ -707,8 +709,8 @@ async fn record_auth_delivery_audit(
     )
     .bind(audit.now)
     .bind(audit.event_kind)
-    .bind(audit.actor_user_id)
-    .bind(audit.principal_user_id)
+    .bind(audit.actor_principal_id.as_uuid())
+    .bind(audit.principal_id.as_uuid())
     .bind(audit.credential_hash)
     .bind(
         serde_json::json!({

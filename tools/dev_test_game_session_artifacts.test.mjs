@@ -35,7 +35,7 @@ function sessionCardFixture(overrides = {}) {
     seedCommands: [{ command: { CreateGame: { game: "game-a" } } }],
     sessions: {
       host: {
-        principalUserId: "host_h",
+        principalId: "host_h",
         credentialKind: "invite",
         token: "host-token",
         inviteToken: "host-token",
@@ -45,7 +45,7 @@ function sessionCardFixture(overrides = {}) {
         expectedCapabilityKind: "HostOf",
       },
       player: {
-        principalUserId: "player-p",
+        principalId: "player-p",
         credentialKind: "account",
         accountId: "player-p@local.fmarch.test",
         password: "player-password",

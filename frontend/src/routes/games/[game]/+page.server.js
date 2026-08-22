@@ -41,7 +41,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
     shellOwner: "layout",
     shell: buildAppShell({
       activeSurface: "board",
-      principalUserId: locals.principalUserId,
+      principalId: locals.principalId,
       capabilities: locals.resolvedCapabilities,
     }),
     publication: buildPublicGamePublication({
@@ -53,7 +53,7 @@ export async function load({ params, locals, cookies, fetch, url }) {
       game: available ? page.game : null,
       posts,
       nextBeforeSeq: optionalSequence(page?.next_before_seq),
-      hasSession: typeof locals.principalUserId === "string",
+      hasSession: typeof locals.principalId === "string",
       subscription,
     },
   };

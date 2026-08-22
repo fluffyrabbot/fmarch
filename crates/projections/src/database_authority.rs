@@ -533,7 +533,7 @@ const EXPECTED_FUNCTION_SOURCE_HASHES: &[(&str, &str)] = &[
     ),
     (
         "workos_provider_session_guard_mutation",
-        "b9d146558b09e52913c7a86d2706571130d648a44c9677e6ceac54f8b69cbb22",
+        "18947844d9f3c03453eb2cf771c020ed92e0577fad5c278e0e6a69b6a4b4c558",
     ),
 ];
 const EXPECTED_TABLES: &[&str] = &[

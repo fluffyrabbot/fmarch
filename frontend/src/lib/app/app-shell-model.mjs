@@ -60,7 +60,7 @@ export function gameActionTestId(game, id) {
 export function buildAppShell({
   game = null,
   activeSurface,
-  principalUserId = null,
+  principalId = null,
   viewerProfile = null,
   capabilities = [],
   phase = null,
@@ -70,7 +70,7 @@ export function buildAppShell({
       capability?.kind === "GlobalAdmin" || capability?.kind === "GlobalMod");
   const session = buildSessionSummary({
     game,
-    principalUserId,
+    principalId,
     viewerProfile,
     capabilities,
   });
@@ -108,7 +108,7 @@ export function buildAppShell({
       label: "Inbox",
       href: "/inbox",
       active: activeSurface === "inbox",
-      allowed: typeof principalUserId === "string" && principalUserId.trim() !== "",
+      allowed: typeof principalId === "string" && principalId.trim() !== "",
       capabilityLabel: "Authenticated account",
       group: "primary",
     }),
@@ -156,14 +156,14 @@ export function buildAppShell({
 // the authority/session model.
 export function applyViewerPresentationToShell(
   shell,
-  { principalUserId = null, viewerProfile = null } = {},
+  { principalId = null, viewerProfile = null } = {},
 ) {
   if (shell === null || typeof shell !== "object" || shell.session === null || typeof shell.session !== "object") {
     return shell;
   }
   const session = withViewerPresentation(
     shell.session,
-    buildViewerPresentation({ principalUserId, profile: viewerProfile }),
+    buildViewerPresentation({ principalId, profile: viewerProfile }),
   );
   return Object.freeze({
     ...shell,
@@ -173,7 +173,7 @@ export function applyViewerPresentationToShell(
 }
 
 export function buildBoardRouteData({
-  principalUserId = null,
+  principalId = null,
   viewerProfile = null,
   capabilities = [],
   gameIndexPage = null,
@@ -183,7 +183,7 @@ export function buildBoardRouteData({
   const shell = buildAppShell({
     game,
     activeSurface: "board",
-    principalUserId,
+    principalId,
     viewerProfile,
     capabilities,
   });
@@ -199,7 +199,7 @@ export function buildBoardRouteData({
     board: Object.freeze({
       ...board,
       games: Object.freeze(
-        board.games.map((entry) => boardGameCard({ entry, principalUserId, capabilities })),
+        board.games.map((entry) => boardGameCard({ entry, principalId, capabilities })),
       ),
     }),
   });
@@ -272,11 +272,11 @@ function normalizeBoardGameIndexEntry(entry) {
   });
 }
 
-function boardGameCard({ entry, principalUserId, capabilities }) {
+function boardGameCard({ entry, principalId, capabilities }) {
   const gameShell = buildAppShell({
     game: entry.id,
     activeSurface: "board",
-    principalUserId,
+    principalId,
     capabilities,
   });
   return Object.freeze({
@@ -357,7 +357,7 @@ export function buildRouteErrorData({
   status = 500,
   message = "The requested surface is unavailable.",
   path = "/",
-  principalUserId = null,
+  principalId = null,
   viewerProfile = null,
   capabilities = [],
 } = {}) {
@@ -365,7 +365,7 @@ export function buildRouteErrorData({
   const shell = buildAppShell({
     game: route.game,
     activeSurface: route.activeSurface,
-    principalUserId,
+    principalId,
     viewerProfile,
     capabilities,
   });
@@ -385,7 +385,7 @@ export function buildRouteErrorData({
 
 export function buildRouteLoadingData({
   path = "/",
-  principalUserId = null,
+  principalId = null,
   viewerProfile = null,
   capabilities = [],
 } = {}) {
@@ -393,7 +393,7 @@ export function buildRouteLoadingData({
   const shell = buildAppShell({
     game: route.game,
     activeSurface: route.activeSurface,
-    principalUserId,
+    principalId,
     viewerProfile,
     capabilities,
   });
@@ -410,7 +410,7 @@ export function buildRouteLoadingData({
 
 export function buildNavigationPendingData({
   path = null,
-  principalUserId = null,
+  principalId = null,
   viewerProfile = null,
   capabilities = [],
 } = {}) {
@@ -420,7 +420,7 @@ export function buildNavigationPendingData({
 
   const loading = buildRouteLoadingData({
     path,
-    principalUserId,
+    principalId,
     viewerProfile,
     capabilities,
   });
@@ -453,7 +453,7 @@ function surfaceSummary({ surface, game, capabilities }) {
   };
 }
 
-function buildSessionSummary({ game, principalUserId, viewerProfile, capabilities }) {
+function buildSessionSummary({ game, principalId, viewerProfile, capabilities }) {
   const normalizedCapabilities = Array.isArray(capabilities) ? capabilities : [];
   const capabilityKinds = Object.freeze(
     [...new Set(
@@ -474,7 +474,7 @@ function buildSessionSummary({ game, principalUserId, viewerProfile, capabilitie
     capabilityCount: normalizedCapabilities.length,
     capabilityKinds,
     capabilitySummary: summarizeCapabilityKinds(capabilityKinds),
-  }, buildViewerPresentation({ principalUserId, profile: viewerProfile }));
+  }, buildViewerPresentation({ principalId, profile: viewerProfile }));
 }
 
 function withViewerPresentation(session, viewer) {

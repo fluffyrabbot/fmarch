@@ -39,6 +39,7 @@ use operator_proof::{
     OperatorTraceInspectionRun as SharedOperatorTraceInspectionRun, ProofRunArtifactFreshness,
     ProofRunArtifactState,
 };
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use std::{fs, path::Path as FsPath, sync::Arc};
@@ -375,7 +376,7 @@ async fn operator_index(
     Path(game): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -383,7 +384,7 @@ async fn operator_index(
     )
     .await?;
 
-    Ok(Html(render_operator_index_html(game, &principal_user_id)))
+    Ok(Html(render_operator_index_html(game, &principal_id)))
 }
 
 async fn operator_proof_runs(
@@ -392,7 +393,7 @@ async fn operator_proof_runs(
     headers: HeaderMap,
     Query(query): Query<OperatorProofRunsQuery>,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -402,7 +403,7 @@ async fn operator_proof_runs(
 
     Ok(Html(render_operator_proof_runs_html(
         game,
-        &principal_user_id,
+        &principal_id,
         query.fixture,
     )))
 }
@@ -452,7 +453,7 @@ async fn operator_proof_run_status_audit_view(
     headers: HeaderMap,
     Query(query): Query<OperatorProofStatusAuditQuery>,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -463,7 +464,7 @@ async fn operator_proof_run_status_audit_view(
     let response = load_operator_proof_status_audit_response(query.fixture)?;
     Ok(Html(render_operator_proof_status_audit_html(
         game,
-        &principal_user_id,
+        &principal_id,
         query.fixture,
         &response,
     )))
@@ -492,7 +493,7 @@ async fn operator_proof_run_go_no_go_view(
     headers: HeaderMap,
     Query(query): Query<OperatorProofGoNoGoQuery>,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -503,7 +504,7 @@ async fn operator_proof_run_go_no_go_view(
     let response = load_operator_proof_go_no_go_response(query.fixture)?;
     Ok(Html(render_operator_proof_go_no_go_html(
         game,
-        &principal_user_id,
+        &principal_id,
         &response,
     )))
 }
@@ -531,7 +532,7 @@ async fn operator_proof_run_retention_view(
     headers: HeaderMap,
     Query(query): Query<OperatorProofRetentionQuery>,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -542,7 +543,7 @@ async fn operator_proof_run_retention_view(
     let response = load_operator_proof_retention_response(query.fixture)?;
     Ok(Html(render_operator_proof_retention_html(
         game,
-        &principal_user_id,
+        &principal_id,
         &response,
     )))
 }
@@ -572,7 +573,7 @@ async fn operator_proof_run_projection_rebuild_view(
     headers: HeaderMap,
     Query(query): Query<OperatorProofProjectionRebuildQuery>,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -583,7 +584,7 @@ async fn operator_proof_run_projection_rebuild_view(
     let response = load_operator_proof_projection_rebuild_response(query.fixture)?;
     Ok(Html(render_operator_proof_projection_rebuild_html(
         game,
-        &principal_user_id,
+        &principal_id,
         &response,
     )))
 }
@@ -613,7 +614,7 @@ async fn operator_proof_run_resolution_diff_view(
     headers: HeaderMap,
     Query(query): Query<OperatorProofResolutionDiffQuery>,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -624,7 +625,7 @@ async fn operator_proof_run_resolution_diff_view(
     let response = load_operator_proof_resolution_diff_response(query.fixture)?;
     Ok(Html(render_operator_proof_resolution_diff_html(
         game,
-        &principal_user_id,
+        &principal_id,
         &response,
     )))
 }
@@ -654,7 +655,7 @@ async fn operator_proof_run_trace_inspection_view(
     headers: HeaderMap,
     Query(query): Query<OperatorProofTraceInspectionQuery>,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -665,7 +666,7 @@ async fn operator_proof_run_trace_inspection_view(
     let response = load_operator_proof_trace_inspection_response(query.fixture)?;
     Ok(Html(render_operator_proof_trace_inspection_html(
         game,
-        &principal_user_id,
+        &principal_id,
         &response,
     )))
 }
@@ -695,7 +696,7 @@ async fn operator_proof_run_large_action_graph_performance_view(
     headers: HeaderMap,
     Query(query): Query<OperatorProofLargeActionGraphPerformanceQuery>,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -705,11 +706,7 @@ async fn operator_proof_run_large_action_graph_performance_view(
 
     let response = load_operator_proof_large_action_graph_performance_response(query.fixture)?;
     Ok(Html(
-        render_operator_proof_large_action_graph_performance_html(
-            game,
-            &principal_user_id,
-            &response,
-        ),
+        render_operator_proof_large_action_graph_performance_html(game, &principal_id, &response),
     ))
 }
 
@@ -738,7 +735,7 @@ async fn operator_proof_run_determinism_fuzz_view(
     headers: HeaderMap,
     Query(query): Query<OperatorProofDeterminismFuzzQuery>,
 ) -> Result<Html<String>, ApiError> {
-    let principal_user_id = require_host_audit_access(
+    let principal_id = require_host_audit_access(
         &state,
         &headers,
         game,
@@ -749,7 +746,7 @@ async fn operator_proof_run_determinism_fuzz_view(
     let response = load_operator_proof_determinism_fuzz_response(query.fixture)?;
     Ok(Html(render_operator_proof_determinism_fuzz_html(
         game,
-        &principal_user_id,
+        &principal_id,
         &response,
     )))
 }
@@ -911,21 +908,16 @@ async fn require_host_audit_access(
     message: &'static str,
 ) -> Result<String, ApiError> {
     let token = bearer_token(headers).ok_or_else(unauthorized_operator_session)?;
-    let (principal_user_id, global_capabilities) = active_operator_session(state, token).await?;
-    let caps = caps::resolve(
-        &state.pool,
-        &Principal::user(principal_user_id.as_str()),
-        game,
-    )
-    .await?;
+    let (principal_id, global_capabilities) = active_operator_session(state, token).await?;
+    let caps = caps::resolve(&state.pool, &Principal::authenticated(principal_id), game).await?;
     if caps.grants(&Capability::HostOf(game)) || caps.grants(&Capability::CohostOf(game)) {
-        return Ok(principal_user_id);
+        return Ok(principal_id.to_string());
     }
     if global_capabilities
         .iter()
         .any(|capability| capability == "GlobalAdmin" || capability == "GlobalMod")
     {
-        return Ok(principal_user_id);
+        return Ok(principal_id.to_string());
     }
 
     Err(ApiError::Reject {
@@ -938,7 +930,7 @@ async fn require_host_audit_access(
 async fn active_operator_session(
     state: &OperatorApiState,
     token: &str,
-) -> Result<(String, Vec<String>), ApiError> {
+) -> Result<(PrincipalId, Vec<String>), ApiError> {
     if !identity::token::is_app_session_token(token) {
         return Err(unauthorized_operator_session());
     }
@@ -953,7 +945,7 @@ async fn active_operator_session(
                 identity::IdentityFlowError::Db(error) => ApiError::Db(error),
                 _ => unauthorized_operator_session(),
             })?;
-    Ok((session.principal_user_id, session.global_capabilities))
+    Ok((session.principal_id, session.global_capabilities))
 }
 
 fn bearer_token(headers: &HeaderMap) -> Option<&str> {
@@ -980,7 +972,7 @@ fn operator_audit_capacity_exhausted() -> ApiError {
     }
 }
 
-fn render_operator_index_html(game: Uuid, principal_user_id: &str) -> String {
+fn render_operator_index_html(game: Uuid, principal_id: &str) -> String {
     struct Link<'a> {
         label: &'a str,
         detail: &'a str,
@@ -1143,7 +1135,7 @@ fn render_operator_index_html(game: Uuid, principal_user_id: &str) -> String {
     html.push_str("<p>Read-only host and cohost operational surfaces for this game.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     html.push_str("</section><table><thead><tr><th>Surface</th><th>Scope</th><th>Link</th></tr></thead><tbody>");
     for link in links {
         html.push_str("<tr><td><a href=\"");
@@ -1162,7 +1154,7 @@ fn render_operator_index_html(game: Uuid, principal_user_id: &str) -> String {
 
 fn render_operator_proof_runs_html(
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     fixture: Option<OperatorProofRunFixture>,
 ) -> String {
     let status = shared_build_operator_proof_run_status(game, fixture);
@@ -1193,7 +1185,7 @@ fn render_operator_proof_runs_html(
     html.push_str("<p>Read-only local command index. These entries document commands to run from the workspace; this server page does not execute background jobs.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     metric(&mut html, "Execution", "local-only command copy", None);
     metric(
         &mut html,
@@ -2032,7 +2024,7 @@ fn apply_operator_status_audit_drift_fixture(actual: &mut serde_json::Value) {
 
 fn render_operator_proof_determinism_fuzz_html(
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     response: &OperatorProofDeterminismFuzzResponse,
 ) -> String {
     let status_class = if response.report.ok { "ok" } else { "drift" };
@@ -2067,7 +2059,7 @@ fn render_operator_proof_determinism_fuzz_html(
     html.push_str("<p>Read-only local evidence. This page reads a saved seeded scenario-family report and does not execute fuzz commands.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     metric(&mut html, "Status", status_text, Some(status_class));
     metric(&mut html, "Artifact State", response.artifact_state, None);
     metric(&mut html, "Report", &response.report.artifact_path, None);
@@ -2145,7 +2137,7 @@ fn render_operator_proof_determinism_fuzz_html(
 
 fn render_operator_proof_large_action_graph_performance_html(
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     response: &OperatorProofLargeActionGraphPerformanceResponse,
 ) -> String {
     let status_class = if response.report.ok
@@ -2185,7 +2177,7 @@ fn render_operator_proof_large_action_graph_performance_html(
     html.push_str("<p>Read-only local evidence. This page reads the saved dense Mafiascum N01 performance artifact and does not execute the performance command.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     metric(&mut html, "Status", status_text, Some(status_class));
     metric(&mut html, "Artifact State", response.artifact_state, None);
     metric(&mut html, "Report", &response.report.artifact_path, None);
@@ -2266,7 +2258,7 @@ fn render_operator_proof_large_action_graph_performance_html(
 
 fn render_operator_proof_trace_inspection_html(
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     response: &OperatorProofTraceInspectionResponse,
 ) -> String {
     let status_class = if response.report.ok { "ok" } else { "drift" };
@@ -2302,7 +2294,7 @@ fn render_operator_proof_trace_inspection_html(
     html.push_str("<p>Read-only local evidence. This page reads a saved trace inspection report and does not execute trace commands.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     metric(&mut html, "Status", status_text, Some(status_class));
     metric(&mut html, "Artifact State", response.artifact_state, None);
     metric(&mut html, "Report", &response.report.artifact_path, None);
@@ -2403,7 +2395,7 @@ fn render_operator_proof_trace_inspection_html(
 
 fn render_operator_proof_resolution_diff_html(
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     response: &OperatorProofResolutionDiffResponse,
 ) -> String {
     let status_class = if response.report.ok { "ok" } else { "drift" };
@@ -2439,7 +2431,7 @@ fn render_operator_proof_resolution_diff_html(
     html.push_str("<p>Read-only local evidence. This page reads a saved resolution replay diff report and does not execute replay commands.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     metric(&mut html, "Status", status_text, Some(status_class));
     metric(&mut html, "Artifact State", response.artifact_state, None);
     metric(&mut html, "Report", &response.report.artifact_path, None);
@@ -2552,7 +2544,7 @@ fn render_operator_proof_resolution_diff_html(
 
 fn render_operator_proof_projection_rebuild_html(
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     response: &OperatorProofProjectionRebuildResponse,
 ) -> String {
     let status_class = if response.report.ok { "ok" } else { "drift" };
@@ -2588,7 +2580,7 @@ fn render_operator_proof_projection_rebuild_html(
     html.push_str("<p>Read-only local evidence. This page reads a saved rollback-only projection rebuild report and does not execute rebuild commands.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     metric(&mut html, "Status", status_text, Some(status_class));
     metric(&mut html, "Artifact State", response.artifact_state, None);
     metric(&mut html, "Report", &response.report.artifact_path, None);
@@ -2661,7 +2653,7 @@ fn render_operator_proof_projection_rebuild_html(
 
 fn render_operator_proof_go_no_go_html(
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     response: &OperatorProofGoNoGoResponse,
 ) -> String {
     let status_class = if response.report.ok { "ok" } else { "drift" };
@@ -2693,7 +2685,7 @@ fn render_operator_proof_go_no_go_html(
     html.push_str("<p>Read-only local evidence. This page reads a saved go/no-go report and does not execute proof commands.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     metric(&mut html, "Status", status_text, Some(status_class));
     metric(
         &mut html,
@@ -2837,7 +2829,7 @@ fn render_operator_proof_go_no_go_html(
 
 fn render_operator_proof_retention_html(
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     response: &OperatorProofRetentionResponse,
 ) -> String {
     let status_class = if response.report.ok { "ok" } else { "drift" };
@@ -2873,7 +2865,7 @@ fn render_operator_proof_retention_html(
     html.push_str("<p>Read-only local evidence. This page reads a saved retention comparison report and does not execute proof commands.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     metric(&mut html, "Status", status_text, Some(status_class));
     metric(
         &mut html,
@@ -2934,7 +2926,7 @@ fn render_retention_change_table(
 
 fn render_operator_proof_status_audit_html(
     game: Uuid,
-    principal_user_id: &str,
+    principal_id: &str,
     fixture: Option<OperatorProofStatusAuditFixture>,
     response: &OperatorProofStatusAuditResponse,
 ) -> String {
@@ -2969,7 +2961,7 @@ fn render_operator_proof_status_audit_html(
     html.push_str("<p>Read-only local evidence. This page reads a saved audit report and does not execute proof commands.</p>");
     html.push_str("<section class=\"meta\">");
     metric(&mut html, "Game", &game.to_string(), None);
-    metric(&mut html, "Principal", principal_user_id, None);
+    metric(&mut html, "Principal", principal_id, None);
     metric(&mut html, "Status", status_text, Some(status_class));
     metric(&mut html, "Diffs", &report.diffs.len().to_string(), None);
     metric(
@@ -3304,8 +3296,7 @@ fn render_host_phase_controls_html(game: Uuid, controls: &[HostPhaseControl]) ->
                 &optional_str(control.skipped_phase_id.as_deref()),
             );
             html.push_str("</code></td><td>");
-            html_escape_into(&mut html, &optional_str(control.resolved_by.as_deref()));
-            html.push_str("<br>at: <code>");
+            html.push_str("at: <code>");
             html_escape_into(&mut html, &optional_i64(control.resolved_at));
             html.push_str("</code></td><td>source: <code>");
             html_escape_into(&mut html, &control.source_seq.to_string());

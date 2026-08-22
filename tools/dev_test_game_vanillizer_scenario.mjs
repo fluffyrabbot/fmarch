@@ -8,12 +8,12 @@ export function vanillizerRoleActionScenario() {
     nextEligiblePhaseId: "N02",
     templateId: "vanillaize",
     actor: Object.freeze({
-      principalUserId: "player-vanillizer",
+      principalId: "player-vanillizer",
       slotId: "slot_1",
       roleKey: "vanillizer",
     }),
     target: Object.freeze({
-      principalUserId: "player-cop",
+      principalId: "player-cop",
       slotId: "slot_2",
       initialRoleKey: "cop",
       initialActionTemplateId: "cop_investigate",
@@ -27,10 +27,10 @@ export function vanillizerSeedCommandPlan(game) {
   return [
     ["host_h", { CreateGame: { game, pack: "mafiascum" } }],
     ...[
-      [scenario.actor.slotId, scenario.actor.principalUserId, scenario.actor.roleKey],
+      [scenario.actor.slotId, scenario.actor.principalId, scenario.actor.roleKey],
       [
         scenario.target.slotId,
-        scenario.target.principalUserId,
+        scenario.target.principalId,
         scenario.target.initialRoleKey,
       ],
       ["slot_3", "player-mafia", "mafia_goon"],

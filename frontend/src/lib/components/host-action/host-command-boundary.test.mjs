@@ -291,7 +291,7 @@ test("host action map tags appear in generated wire Command union", () => {
 test("host command envelope uses the Rust wire ClientEnvelope shape", () => {
   const envelope = buildHostCommandEnvelope({
     actionEvent: EXTEND_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandId: "11111111-1111-4111-8111-111111111111",
     envelopeId: 7,
   });
@@ -319,7 +319,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
   const sent = [];
   const ack = await sendHostActionCommand({
     actionEvent: EXTEND_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     endpoint: "/commands",
     commandIdFactory: () => "11111111-1111-4111-8111-111111111111",
     envelopeIdFactory: () => 7,
@@ -341,7 +341,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const reject = await sendHostActionCommand({
     actionEvent: REPLACEMENT_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "22222222-2222-4222-8222-222222222222",
     envelopeIdFactory: () => 8,
     fetchImpl: async () =>
@@ -365,7 +365,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const stalePhaseReject = await sendHostActionCommand({
     actionEvent: LOCK_THREAD_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "44444444-4444-4444-8444-444444444444",
     envelopeIdFactory: () => 10,
     fetchImpl: async () =>
@@ -391,7 +391,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const staleAdvanceReject = await sendHostActionCommand({
     actionEvent: ADVANCE_PHASE_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "45454545-4545-4545-8545-454545454545",
     envelopeIdFactory: () => 15,
     fetchImpl: async () =>
@@ -418,7 +418,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const stalePublishReject = await sendHostActionCommand({
     actionEvent: PUBLISH_VOTECOUNT_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "46464646-4646-4646-8646-464646464646",
     envelopeIdFactory: () => 16,
     fetchImpl: async () =>
@@ -445,7 +445,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const staleLifecycleReject = await sendHostActionCommand({
     actionEvent: MARK_DEAD_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "47474747-4747-4747-8747-474747474747",
     envelopeIdFactory: () => 17,
     fetchImpl: async () =>
@@ -472,7 +472,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const staleReplacementReject = await sendHostActionCommand({
     actionEvent: REPLACEMENT_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "55555555-5555-4555-8555-555555555555",
     envelopeIdFactory: () => 11,
     fetchImpl: async () =>
@@ -498,7 +498,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const staleDeadlineReject = await sendHostActionCommand({
     actionEvent: ADVANCE_PHASE_BY_DEADLINE_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "66666666-6666-4666-8666-666666666666",
     envelopeIdFactory: () => 12,
     fetchImpl: async () =>
@@ -524,7 +524,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const stalePromptReject = await sendHostActionCommand({
     actionEvent: RESOLVE_PROMPT_SELECT_POLICY_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "77777777-7777-4777-8777-777777777777",
     envelopeIdFactory: () => 13,
     fetchImpl: async () =>
@@ -551,7 +551,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const retryableReject = await sendHostActionCommand({
     actionEvent: REPLACEMENT_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "33333333-3333-4333-8333-333333333333",
     envelopeIdFactory: () => 9,
     fetchImpl: async () =>
@@ -577,7 +577,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
 
   const retryableRejectWithGuidance = await sendHostActionCommand({
     actionEvent: REPLACEMENT_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     commandIdFactory: () => "33333333-3333-4333-8333-333333333334",
     envelopeIdFactory: () => 10,
     fetchImpl: async () =>
@@ -606,7 +606,7 @@ test("host command sender can refresh projected host console state after ack", a
   const sent = [];
   const ack = await sendHostActionCommand({
     actionEvent: REPLACEMENT_EVENT,
-    principalUserId: "host_h",
+    principalId: "host_h",
     endpoint: "/commands",
     stateEndpoint:
       "/api/gameplay/games/00000000-0000-0000-0000-000000000001/host-console-state?slot_id=slot-7",
@@ -650,7 +650,7 @@ test("host console projection maps deadline and stable slot history to labels", 
   const projection = projectHostConsoleState(
     {
       authority: {
-        principal_user_id: "cohost_c",
+        principal_id: "cohost_c",
         capability: "CohostOf",
         allowed_classes: ["replacement", "deadline"],
         denied_classes: ["phase_resolve", "lifecycle"],
@@ -774,7 +774,7 @@ test("host console projection maps deadline and stable slot history to labels", 
     lastError: null,
   });
   assert.deepEqual(projection.authority, {
-    principalUserId: "cohost_c",
+    principalId: "cohost_c",
     capabilityKind: "CohostOf",
     allowedClasses: ["deadline", "replacement"],
     deniedClasses: ["lifecycle", "phase_resolve"],

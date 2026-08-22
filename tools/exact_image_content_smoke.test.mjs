@@ -5,10 +5,21 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  exactImageRuntimeBinaries,
   requiredExactImageEngine,
   resolveExactImageEngine,
   runExactImageContentSmoke,
 } from "./exact_image_content_smoke.mjs";
+
+test("exact-image runtime contract includes every shipped server binary", () => {
+  assert.deepEqual(exactImageRuntimeBinaries, [
+    "fmarch-server",
+    "fmarch-migrate",
+    "fmarch-schema-gate",
+    "fmarch-event-key-admin",
+    "fmarch-profile-index-admin",
+  ]);
+});
 
 test("exact-image content smoke selects Podman only", () => {
   assert.equal(requiredExactImageEngine, "podman");

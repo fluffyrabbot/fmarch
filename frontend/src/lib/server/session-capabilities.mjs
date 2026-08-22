@@ -1,11 +1,16 @@
 import { normalizeCapabilities } from "../app/capabilities.mjs";
 import { fetchTimeoutSignal, ssrFetchTimeoutMs } from "../app/cold-load.mjs";
+import {
+  canonicalPrincipalId,
+  FIXTURE_SESSION_PRINCIPAL_IDS,
+} from "../principal-id.mjs";
 import { normalizeViewerProfile } from "../app/viewer-presentation-model.mjs";
 import { serverApiBaseUrl } from "./api-base.mjs";
 
 export const SESSION_COOKIE_NAME = "fmarch_session";
 export const FIXTURE_SESSION_COOKIE_NAME = "fmarch_fixture_session";
 export const DEFAULT_SESSION_CACHE_TTL_MS = 30_000;
+export { FIXTURE_SESSION_PRINCIPAL_IDS };
 
 const SESSION_CACHE_MAX_ENTRIES = 1000;
 const sessionCache = new Map();
@@ -91,7 +96,7 @@ export async function resolveAuthenticatedSessionCached({
   const session = await resolveAuthenticatedSession({ cookies, request, fetchImpl, env });
   // Rotation-required sessions must re-resolve, and empty sessions may just
   // be an API blip — caching either would pin a worse state for a full TTL.
-  if (session.rotationRequired !== true && session.principalUserId !== null) {
+  if (session.rotationRequired !== true && session.principalId !== null) {
     if (sessionCache.size >= SESSION_CACHE_MAX_ENTRIES) {
       sessionCache.delete(sessionCache.keys().next().value);
     }
@@ -245,13 +250,8 @@ function normalizeSessionPayload(payload, context = null) {
     return emptySession();
   }
 
-  const principalUserId = firstString(
-    payload.principalUserId,
-    payload.principal_user_id,
-    payload.userId,
-    payload.user_id,
-  );
-  if (principalUserId === null) {
+  const principalId = canonicalPrincipalId(payload.principal_id);
+  if (principalId === null) {
     return emptySession();
   }
 
@@ -265,7 +265,7 @@ function normalizeSessionPayload(payload, context = null) {
   );
 
   return Object.freeze({
-    principalUserId,
+    principalId,
     ...(viewerProfile === null ? {} : { viewerProfile }),
     ...(payload.rotation_required === true ? { rotationRequired: true } : {}),
     resolvedCapabilities: normalizeCapabilities(
@@ -282,7 +282,7 @@ function normalizeSessionPayload(payload, context = null) {
 
 function emptySession() {
   return Object.freeze({
-    principalUserId: null,
+    principalId: null,
     resolvedCapabilities: Object.freeze([]),
   });
 }
@@ -295,7 +295,7 @@ function fixtureSession({ token, context }) {
   switch (token) {
     case "fixture-admin":
       return Object.freeze({
-        principalUserId: "admin_a",
+        principalId: FIXTURE_SESSION_PRINCIPAL_IDS.admin,
         resolvedCapabilities: normalizeCapabilities([
           { kind: "GlobalAdmin", source: "fixture" },
           { kind: "GlobalMod", source: "fixture" },
@@ -304,7 +304,7 @@ function fixtureSession({ token, context }) {
       });
     case "fixture-player":
       return Object.freeze({
-        principalUserId: "player_mira",
+        principalId: FIXTURE_SESSION_PRINCIPAL_IDS.player,
         resolvedCapabilities: normalizeCapabilities([
           {
             kind: "SlotOccupant",
@@ -328,7 +328,7 @@ function fixtureSession({ token, context }) {
       });
     case "fixture-target":
       return Object.freeze({
-        principalUserId: "player_ilya",
+        principalId: FIXTURE_SESSION_PRINCIPAL_IDS.target,
         resolvedCapabilities: normalizeCapabilities([
           {
             kind: "SlotOccupant",
@@ -340,7 +340,7 @@ function fixtureSession({ token, context }) {
       });
     case "fixture-night-target":
       return Object.freeze({
-        principalUserId: "player-seed",
+        principalId: FIXTURE_SESSION_PRINCIPAL_IDS.nightTarget,
         resolvedCapabilities: normalizeCapabilities([
           {
             kind: "SlotOccupant",
@@ -352,7 +352,7 @@ function fixtureSession({ token, context }) {
       });
     case "fixture-normal":
       return Object.freeze({
-        principalUserId: "player_rowan",
+        principalId: FIXTURE_SESSION_PRINCIPAL_IDS.normal,
         resolvedCapabilities: normalizeCapabilities([
           {
             kind: "SlotOccupant",
@@ -364,7 +364,7 @@ function fixtureSession({ token, context }) {
       });
     case "fixture-survivor":
       return Object.freeze({
-        principalUserId: "player_sage",
+        principalId: FIXTURE_SESSION_PRINCIPAL_IDS.survivor,
         resolvedCapabilities: normalizeCapabilities([
           {
             kind: "SlotOccupant",
@@ -376,7 +376,7 @@ function fixtureSession({ token, context }) {
       });
     case "fixture-host":
       return Object.freeze({
-        principalUserId: "host_h",
+        principalId: FIXTURE_SESSION_PRINCIPAL_IDS.host,
         resolvedCapabilities: normalizeCapabilities([
           { kind: "HostOf", game, source: "fixture" },
           { kind: "ChannelMember", game, channel: "main", source: "fixture" },
@@ -391,8 +391,7 @@ function validSessionPayload(payload) {
   return (
     payload !== null &&
     typeof payload === "object" &&
-    typeof payload.principal_user_id === "string" &&
-    payload.principal_user_id.trim() !== "" &&
+    canonicalPrincipalId(payload.principal_id) !== null &&
     Array.isArray(payload.capabilities)
   );
 }

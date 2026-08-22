@@ -43,13 +43,9 @@ fn command_http_has_one_typed_owner_without_decision_or_publication_drift() {
         "fn command_api_error_response(",
         "async fn import_completed_game_export(",
         "async fn authenticated_transport_principal(",
-        "fn command_game(",
-        "fn command_affects_host_console(",
-        "fn command_affects_thread(",
-        "fn command_affects_host_prompts(",
-        "fn command_affects_player_private(",
-        "fn command_affects_player_command_state(",
-        "fn command_affects_votecount(",
+        "struct CommandClassification",
+        "struct DirtySurfaces",
+        "fn classify_command(",
         "fn protocol_reject(",
         "pub(super) fn command_reject_api_error(",
     ] {
@@ -83,6 +79,15 @@ fn command_http_has_one_typed_owner_without_decision_or_publication_drift() {
     assert!(commands.contains("pub async fn handle_idempotent("));
     assert!(live_projection.contains("struct LiveProjectionPublisher"));
     assert!(live_projection.contains("fn assemble_update("));
+    assert!(
+        !command_http.contains("fn command_game(") && !command_http.contains("command_affects_"),
+        "wire command classification must stay in the single classify_command table"
+    );
+    assert!(
+        !live_projection.contains("inflight_guard(None")
+            && !live_projection.contains("game: Option<Uuid>"),
+        "every wire command carries a game; the inflight guard must not regress to Option"
+    );
     assert!(game_http.contains("use super::command_http::command_reject_api_error;"));
     assert!(!game_http.contains("async fn command("));
     assert!(!live_delivery.contains("async fn command("));

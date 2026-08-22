@@ -7,7 +7,7 @@ test("GlobalMod queue loads typed summaries and a selected audit detail", async 
   const data = await load({
     cookies: { get: () => "moderator-session" },
     locals: {
-      principalUserId: "moderator_a",
+      principalId: "moderator_a",
       resolvedCapabilities: [{ kind: "GlobalMod", source: "auth-session" }],
     },
     url: new URL("http://localhost/moderation?status=all&case=case-1"),
@@ -30,7 +30,7 @@ test("member without GlobalMod cannot load the queue", async () => {
   await assert.rejects(
     load({
       cookies: { get: () => "member-session" },
-      locals: { principalUserId: "member", resolvedCapabilities: [] },
+      locals: { principalId: "member", resolvedCapabilities: [] },
       url: new URL("http://localhost/moderation"),
       fetch: async () => { throw new Error("unreachable"); },
     }),

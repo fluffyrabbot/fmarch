@@ -4,12 +4,12 @@
   import { buildRouteLoadingData } from "./app-shell-model.mjs";
 
   export let path = "/";
-  export let principalUserId = null;
+  export let principalId = null;
   export let capabilities = [];
 
   $: loadingData = buildRouteLoadingData({
     path,
-    principalUserId,
+    principalId,
     capabilities,
   });
 </script>

@@ -2,6 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { serverApiBaseUrl } from "../../../../lib/server/api-base.mjs";
 import { authReturnPath } from "../../../../lib/server/auth-return-path.mjs";
 import { authSourceHeader } from "../../../../lib/server/auth-source.mjs";
+import { canonicalPrincipalId } from "../../../../lib/principal-id.mjs";
 import {
   browserSessionCookieOptions,
   SESSION_COOKIE_NAME,
@@ -97,8 +98,7 @@ function validRegistrationBody(body, accountId) {
     typeof body === "object" &&
     typeof body.account_id === "string" &&
     body.account_id === accountId.trim().toLowerCase() &&
-    typeof body.principal_user_id === "string" &&
-    body.principal_user_id.trim() !== "" &&
+    canonicalPrincipalId(body.principal_id) !== null &&
     typeof body.session_token === "string" &&
     body.session_token.trim() !== "" &&
     Number.isSafeInteger(body.expires_at)

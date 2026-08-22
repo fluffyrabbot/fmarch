@@ -83,7 +83,7 @@ export const roleSurfaceSpineCases = Object.freeze({
       "replacement-stale-private-receipts",
     ]),
     readinessDetails: (evidence) => ({
-      principalUserId: evidence.principalUserId,
+      principalId: evidence.principalId,
       commandStateSlot: evidence.commandStateSlot,
       capabilityKinds: evidence.capabilityKinds,
       hostIssuedInvite: evidence.hostIssuedInvite,

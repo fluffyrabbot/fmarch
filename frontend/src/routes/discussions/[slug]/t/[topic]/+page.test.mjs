@@ -17,7 +17,7 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
   const data = await load({
     params: { slug: "general", topic },
     locals: {
-      principalUserId: "member_a",
+      principalId: "member_a",
       resolvedCapabilities: [{ kind: "GlobalMod", source: "auth-session" }],
     },
     cookies: { get: () => "session-token" },
@@ -75,7 +75,7 @@ test("canonical discussion topic keeps area scope, bylines, and older-post curso
 test("canonical discussion topic keeps wrong-area and hidden responses unavailable", async () => {
   const data = await load({
     params: { slug: "wrong", topic },
-    locals: { principalUserId: null, resolvedCapabilities: [] },
+    locals: { principalId: null, resolvedCapabilities: [] },
     cookies: { get: () => undefined },
     fetch: async () => new Response(null, { status: 404 }),
     url: new URL(`https://fmarch.local/discussions/wrong/t/${topic}`),
@@ -134,7 +134,7 @@ test("quote query seeds composer chips without copying excerpt into the body fie
   const data = await load({
     params: { slug: "general", topic },
     locals: {
-      principalUserId: "member_a",
+      principalId: "member_a",
       resolvedCapabilities: [],
     },
     cookies: { get: () => "session-token" },

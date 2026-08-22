@@ -18,6 +18,7 @@ use media::{
     ContentId, IngestStatus, MediaError, VariantFormat, VariantGenerationStatus, VariantKind,
     VARIANT_RECIPE_REVISION,
 };
+use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -69,7 +70,7 @@ async fn media_upload(
 ) -> Result<impl IntoResponse, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let authorization = require_method_authorization(&state.auth, token).await?;
-    let principal_user_id = authorization.principal_user_id;
+    let principal_id = authorization.principal_id;
     let _media_permit = acquire_workload_slot(
         &state.media_slots,
         "media processing capacity is exhausted; retry shortly",
@@ -85,8 +86,7 @@ async fn media_upload(
     let store = state.media_store.clone();
     let variant_limits = state.variant_limits;
     let encoded = body.to_vec();
-    let upload_id =
-        reserve_media_quota(&state, principal_user_id.as_str(), encoded.len() as i64).await?;
+    let upload_id = reserve_media_quota(&state, principal_id, encoded.len() as i64).await?;
     let committed = match store
         .prepare_and_commit_upload(encoded, variant_limits)
         .await
@@ -138,20 +138,20 @@ async fn media_upload(
 
 async fn reserve_media_quota(
     state: &ApiState,
-    principal_user_id: &str,
+    principal_id: PrincipalId,
     encoded_bytes: i64,
 ) -> Result<Uuid, ApiError> {
     let upload_id = Uuid::new_v4();
     let now = unix_now_seconds();
     let mut tx = state.pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("media-quota:{principal_user_id}"))
+        .bind(format!("media-quota:{principal_id}"))
         .execute(&mut *tx)
         .await?;
     let used = sqlx::query_scalar::<_, i64>(
-        "SELECT COALESCE(SUM(encoded_bytes), 0)::BIGINT FROM media_upload_ledger WHERE principal_user_id = $1",
+        "SELECT COALESCE(SUM(encoded_bytes), 0)::BIGINT FROM media_upload_ledger WHERE principal_id = $1",
     )
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .fetch_one(&mut *tx)
     .await?;
     if used.saturating_add(encoded_bytes) > state.media_account_quota_bytes {
@@ -162,10 +162,10 @@ async fn reserve_media_quota(
         });
     }
     sqlx::query(
-        "INSERT INTO media_upload_ledger (upload_id, principal_user_id, encoded_bytes, content_id, created_at) VALUES ($1, $2, $3, NULL, $4)",
+        "INSERT INTO media_upload_ledger (upload_id, principal_id, encoded_bytes, content_id, created_at) VALUES ($1, $2, $3, NULL, $4)",
     )
     .bind(upload_id)
-    .bind(principal_user_id)
+    .bind(principal_id.as_uuid())
     .bind(encoded_bytes)
     .bind(now)
     .execute(&mut *tx)
@@ -269,15 +269,10 @@ async fn media_thread_variant(
 ) -> Result<Response, ApiError> {
     let token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let authorization = require_method_authorization(&state.auth, token).await?;
-    let principal_user_id = authorization.principal_user_id;
+    let principal_id = authorization.principal_id;
     if channel != "main" {
-        require_channel_thread_access(
-            &state.pool,
-            game,
-            channel.as_str(),
-            Some(principal_user_id.as_str()),
-        )
-        .await?;
+        require_channel_thread_access(&state.pool, game, channel.as_str(), Some(principal_id))
+            .await?;
     }
 
     let id = content_id

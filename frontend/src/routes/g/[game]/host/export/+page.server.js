@@ -4,8 +4,8 @@ import { serverApiBaseUrl } from "../../../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../../../lib/server/session-capabilities.mjs";
 
 export async function load({ params, locals, fetch, cookies }) {
-  const principalUserId = locals.principalUserId;
-  if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
+  const principalId = locals.principalId;
+  if (typeof principalId !== "string" || principalId.trim() === "") {
     throw error(403, "Completed-game export requires an authenticated host session.");
   }
   const sessionToken = accessTokenForRequest({ locals, cookies });
