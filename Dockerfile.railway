@@ -1,0 +1,69 @@
+# syntax=docker/dockerfile:1.7
+
+# Hosted Railway build target for the api and migrator services.
+#
+# The root `Dockerfile` is the exact-image proof recipe: its cargo cache
+# mounts are namespaced per local proof lane and are rejected by Railway's
+# Metal builder ("cache mount id is missing the cacheKey prefix"). This file
+# builds the same binaries from the same pinned base images with plain layer
+# caching instead, so hosted deploys attest the same sources without
+# duplicating the proof-lane cache design.
+
+FROM rust:1.95-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1 AS chef
+
+RUN cargo install --locked --version 0.1.78 cargo-chef
+
+WORKDIR /app
+
+FROM chef AS planner
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY docs ./docs
+COPY packs ./packs
+COPY programs ./programs
+
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+
+COPY --from=planner /app/recipe.json ./recipe.json
+
+RUN cargo chef cook --release --locked --package server --bins --recipe-path recipe.json
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY docs ./docs
+COPY packs ./packs
+COPY programs ./programs
+
+RUN cargo build --release --locked -p server --bins \
+    && install -D -m 0755 /app/target/release/server /out/fmarch-server \
+    && install -D -m 0755 /app/target/release/fmarch-migrate /out/fmarch-migrate \
+    && install -D -m 0755 /app/target/release/fmarch-schema-gate /out/fmarch-schema-gate \
+    && install -D -m 0755 /app/target/release/fmarch-event-key-admin /out/fmarch-event-key-admin \
+    && install -D -m 0755 /app/target/release/fmarch-profile-index-admin /out/fmarch-profile-index-admin
+
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS runtime-base
+
+LABEL org.opencontainers.image.source="https://github.com/fluffyrabbot/fmarch" \
+      org.opencontainers.image.title="fmarch-api"
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 fmarch
+
+FROM runtime-base AS runtime
+
+COPY --from=builder /out/fmarch-server /usr/local/bin/fmarch-server
+COPY --from=builder /out/fmarch-migrate /usr/local/bin/fmarch-migrate
+COPY --from=builder /out/fmarch-schema-gate /usr/local/bin/fmarch-schema-gate
+COPY --from=builder /out/fmarch-event-key-admin /usr/local/bin/fmarch-event-key-admin
+COPY --from=builder /out/fmarch-profile-index-admin /usr/local/bin/fmarch-profile-index-admin
+
+USER fmarch
+
+EXPOSE 4000
+
+CMD ["fmarch-server"]

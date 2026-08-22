@@ -20,6 +20,7 @@ async function contract() {
     await Promise.all(
       [
         "Dockerfile",
+        "Dockerfile.railway",
         ".dockerignore",
         ".env.example",
         "railway.toml",
@@ -115,10 +116,32 @@ async function contract() {
   assert.doesNotMatch(source["railway.toml"], /fmarch-migrate/);
   assert.match(source["railway.toml"], /numReplicas = 2/);
   assert.doesNotMatch(source["railway.toml"], /watchPatterns/);
+  // Hosted api and migrator builds use the mount-free deploy recipe: the
+  // root Dockerfile's proof-lane cache mounts are rejected by Railway's
+  // Metal builder ("missing the cacheKey prefix").
+  assert.match(source["railway.toml"], /dockerfilePath = "Dockerfile\.railway"/);
   assert.match(
     source["deploy/railway/migrator.railway.toml"],
-    /dockerfilePath = "Dockerfile"/,
+    /dockerfilePath = "Dockerfile\.railway"/,
   );
+  assert.match(
+    source["deploy/railway/frontend.railway.toml"],
+    /dockerfilePath = "Dockerfile\.frontend"/,
+  );
+  assert.doesNotMatch(source["Dockerfile.railway"], /--mount=type=cache/);
+  assert.match(source["Dockerfile.railway"], /^FROM rust:[^\n]+@sha256:[a-f0-9]{64} AS chef$/m);
+  for (const binary of [
+    "fmarch-server",
+    "fmarch-migrate",
+    "fmarch-schema-gate",
+    "fmarch-event-key-admin",
+    "fmarch-profile-index-admin",
+  ]) {
+    assert.match(
+      source["Dockerfile.railway"],
+      new RegExp(`COPY --from=builder /out/${binary} `),
+    );
+  }
   assert.match(
     source["deploy/railway/migrator.railway.toml"],
     /startCommand = "fmarch-migrate"/,

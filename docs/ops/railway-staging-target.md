@@ -18,7 +18,11 @@ managed database, and two purpose-separated object stores:
 
 All repo-backed services retain the repository root as their Railway root
 directory because frontend server routes import shared root-level `tools/`
-modules. The `api` service uses the root `Dockerfile`. Configure `migrator` with
+modules. The `api` service builds from `Dockerfile.railway`: the root
+`Dockerfile` stays the exact-image proof recipe, but its per-lane cargo
+cache mounts are rejected by Railway's Metal builder ("missing the
+cacheKey prefix"), so hosted deploys use the mount-free recipe over the
+same pinned base images. Configure `migrator` with
 `/deploy/railway/migrator.railway.toml` and `frontend` with
 `/deploy/railway/frontend.railway.toml`. The former runs the exact image's
 `fmarch-migrate` binary once; the latter selects `Dockerfile.frontend`.
