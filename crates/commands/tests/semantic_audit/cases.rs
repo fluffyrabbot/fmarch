@@ -16359,10 +16359,17 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
         .await
         .expect("host releases buffered ITA refund on D01R1");
 
-    let release_payload =
-        stored_payload_where(&pool, game, "ResolutionApplied", &[("phase_id", "D01R1")]).await;
+    let release_payload = latest_stored_payload_with_prefix(
+        &pool,
+        game,
+        "ResolutionApplied",
+        "run_id",
+        "resolution:",
+    )
+    .await;
     let release = domain::validate_resolution_json(&release_payload, domain::RESULT_VERSION)
         .expect("released refund ResolutionApplied validates");
+    assert_eq!(release.phase_id.as_str(), "D01R1");
     let refunded = release
         .events
         .iter()
