@@ -20,6 +20,18 @@ The remaining work packages below are intentionally narrowed: resume, migration
 of the remaining mutable npm proof artifacts, and measured expansion beyond the
 initial conservative resource capacities.
 
+### Mash-scale timing observation — 2026-08-23
+
+A serial push receipt recorded `test:mash-scale-acceptance` failing its
+scheduler ceiling (9.7s against 5s) while the reported Darwin host observation
+was a load average near 21 with `mediaanalysisd` using roughly 328% CPU.
+Isolated reruns, both with and without the Batch A resolver diff, passed; the
+later serial 44-lane Batch B sweep also passed the scheduler in 928ms. Treat
+this as host-contention evidence, not a resolver regression or a reason to
+relax the product ceiling. Preserve the receipt and host-load evidence if it
+recurs, and complete the planned runner-owned database/artifact migration before
+enabling parallel execution for this legacy lane.
+
 The original command lane accumulated 365 tests and later measured 1,059s on a
 warm checkout. It is now four truthful leaves: hermetic unit/boundary tests,
 parallel ordinary Postgres integration, serial cancellation/concurrency proof,
