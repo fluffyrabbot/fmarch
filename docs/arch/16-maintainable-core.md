@@ -301,12 +301,17 @@ Completed families: target-state save catalog/policy, target-state gate
 catalog/policy, night-resolution conflict-family completeness (including its
 tag-derived required set), source/classifier/ownership grammar (protection and
 suppression source shapes, generated-kill ownership, and kill-cause, Strongman,
-and suppression classifiers), and scalar kill-stacking/Strongman-bypass policy.
-Remaining families: action-bucket shapes, cause-policy guards, suppression
-precedence, and the per-action dual-mode accessors, which relocate to their
-consuming resolver submodules rather than becoming artifact state. Suppression
-precedence remains a separate tranche because it proves execution ordering, not
-only declaration and classifier completeness.
+and suppression classifiers), scalar kill-stacking/Strongman-bypass policy,
+core Block/Protect/Kill/Strongman/Jailkeeper action-declaration completeness,
+the kill-cause catalog, guard-retaliation cause grammar, and action-chance
+grammar. Remaining
+action-bucket guards enforce modifier-to-bucket routing or resolve ambiguous
+shared action ids more strictly than validation; remaining cause-policy guards
+still reject surplus entries when their source set is empty, which validation
+must learn before they can retire. Suppression precedence remains a separate
+tranche because it proves execution ordering, not only declaration and
+classifier completeness. The per-action dual-mode accessors relocate to their
+consuming resolver submodules rather than becoming artifact state.
 
 ## Closed resolver boundary: night-action preparation
 

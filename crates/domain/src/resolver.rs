@@ -650,48 +650,6 @@ fn require_night_resolution_intercept_cause_policy(pack: &Pack) {
     }
 }
 
-fn require_night_resolution_guard_retaliation_cause_policy(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let intercept_sources = pack
-        .night_resolution
-        .bodyguard_action_ids
-        .iter()
-        .chain(pack.night_resolution.martyr_action_ids.iter())
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    let kill_causes = pack
-        .night_resolution
-        .kill_cause_ids
-        .iter()
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-
-    for (source, cause) in &pack.night_resolution.guard_retaliation_cause_policy {
-        if source.trim().is_empty() {
-            panic!(
-                "invalid night_resolution guard retaliation cause policy: source id must not be empty"
-            );
-        }
-        if !intercept_sources.contains(source.as_str()) {
-            panic!(
-                "invalid night_resolution guard retaliation cause policy: source `{source}` must also be an intercept source"
-            );
-        }
-        if cause.trim().is_empty() {
-            panic!(
-                "invalid night_resolution guard retaliation cause policy: source `{source}` must declare non-empty retaliation cause"
-            );
-        }
-        if !kill_causes.contains(cause.as_str()) {
-            panic!(
-                "invalid night_resolution guard retaliation cause policy: cause `{cause}` must be declared in kill_cause_ids"
-            );
-        }
-    }
-}
-
 fn require_night_resolution_cpr_harm_cause_policy(pack: &Pack) {
     if !pack.night_resolution.is_explicit() {
         return;
@@ -791,67 +749,6 @@ fn require_night_resolution_guard_dependency_cause_policy(pack: &Pack) {
         if !guard_sources.contains(source.as_str()) {
             panic!(
                 "invalid night_resolution guard dependency cause policy: unknown guard dependency source `{source}`"
-            );
-        }
-    }
-}
-
-fn require_night_resolution_block_action_policy(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let declared_blocks = pack
-        .night_resolution
-        .block_action_ids
-        .iter()
-        .chain(pack.night_resolution.jailkeep_action_ids.iter())
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    for action in pack
-        .roles
-        .values()
-        .flat_map(|role| role.actions.iter())
-        .chain(pack.item_actions.values())
-        .filter(|action| {
-            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Block)
-        })
-    {
-        if !declared_blocks.contains(action.id.as_str()) {
-            panic!(
-                "invalid night_resolution block action policy: Block action `{}` must be declared in block_action_ids or jailkeep_action_ids",
-                action.id
-            );
-        }
-    }
-}
-
-fn require_night_resolution_protect_action_policy(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let declared_protects = pack
-        .night_resolution
-        .protect_action_ids
-        .iter()
-        .chain(pack.night_resolution.bodyguard_action_ids.iter())
-        .chain(pack.night_resolution.martyr_action_ids.iter())
-        .chain(pack.night_resolution.cpr_action_ids.iter())
-        .chain(pack.night_resolution.jailkeep_action_ids.iter())
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    for action in pack
-        .roles
-        .values()
-        .flat_map(|role| role.actions.iter())
-        .chain(pack.item_actions.values())
-        .filter(|action| {
-            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Protect)
-        })
-    {
-        if !declared_protects.contains(action.id.as_str()) {
-            panic!(
-                "invalid night_resolution protect action policy: Protect action `{}` must be declared in protect_action_ids, bodyguard_action_ids, martyr_action_ids, cpr_action_ids, or jailkeep_action_ids",
-                action.id
             );
         }
     }
@@ -1136,168 +1033,6 @@ fn night_resolution_pack_action<'a>(pack: &'a Pack, action_id: &str) -> Option<&
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
         .find(|action| action.id == action_id)
-}
-
-fn require_night_resolution_jailkeep_action_policy(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let block_ids = pack
-        .night_resolution
-        .block_action_ids
-        .iter()
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    let protect_ids = pack
-        .night_resolution
-        .protect_action_ids
-        .iter()
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    for action_id in &pack.night_resolution.jailkeep_action_ids {
-        if !block_ids.contains(action_id.as_str()) {
-            panic!(
-                "invalid night_resolution jailkeep action policy: Jailkeeper action `{action_id}` must also be declared in block_action_ids"
-            );
-        }
-        if !protect_ids.contains(action_id.as_str()) {
-            panic!(
-                "invalid night_resolution jailkeep action policy: Jailkeeper action `{action_id}` must also be declared in protect_action_ids"
-            );
-        }
-    }
-}
-
-fn require_night_resolution_kill_action_policy(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    for action in pack
-        .roles
-        .values()
-        .flat_map(|role| role.actions.iter())
-        .chain(pack.item_actions.values())
-        .filter(|action| {
-            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Kill)
-        })
-    {
-        if pack
-            .night_resolution
-            .cpr_action_ids
-            .iter()
-            .any(|action_id| action_id == &action.id)
-        {
-            continue;
-        }
-        let declared = pack
-            .night_resolution
-            .kill_action_ids
-            .iter()
-            .chain(pack.night_resolution.strongman_action_ids.iter())
-            .any(|action_id| action_id == &action.id);
-        if !declared {
-            panic!(
-                "invalid night_resolution kill action policy: Kill action `{}` must be declared in kill_action_ids or strongman_action_ids",
-                action.id
-            );
-        }
-    }
-}
-
-fn require_night_resolution_strongman_action_policy(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let declared_strongman_kills = pack
-        .night_resolution
-        .strongman_action_ids
-        .iter()
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    for action in pack
-        .roles
-        .values()
-        .flat_map(|role| role.actions.iter())
-        .chain(pack.item_actions.values())
-        .filter(|action| {
-            action.window.is_night_resolution_window()
-                && action.has_ability(IrAbility::Kill)
-                && action.has_modifier(Modifier::Strongman)
-        })
-    {
-        if !declared_strongman_kills.contains(action.id.as_str()) {
-            panic!(
-                "invalid night_resolution strongman action policy: Strongman Kill action `{}` must be declared in strongman_action_ids",
-                action.id
-            );
-        }
-    }
-}
-
-fn require_night_resolution_kill_cause_catalog(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    if pack.night_resolution.kill_cause_ids.is_empty() {
-        panic!(
-            "invalid night_resolution kill cause catalog: explicit night_resolution policy must declare kill_cause_ids"
-        );
-    }
-    let expected = night_resolution_derived_kill_cause_ids(pack);
-    let mut declared = BTreeSet::new();
-    for cause in &pack.night_resolution.kill_cause_ids {
-        if cause.trim().is_empty() {
-            panic!("invalid night_resolution kill cause catalog: kill cause id must not be empty");
-        }
-        if !declared.insert(cause.as_str()) {
-            panic!("invalid night_resolution kill cause catalog: duplicate kill cause `{cause}`");
-        }
-        if !expected.contains(cause.as_str()) {
-            panic!("invalid night_resolution kill cause catalog: unknown kill cause `{cause}`");
-        }
-    }
-    for cause in expected {
-        if !declared.contains(cause.as_str()) {
-            panic!(
-                "invalid night_resolution kill cause catalog: kill_cause_ids must include `{cause}`"
-            );
-        }
-    }
-}
-
-fn night_resolution_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
-    let mut causes = BTreeSet::new();
-    for action in pack
-        .roles
-        .values()
-        .flat_map(|role| role.actions.iter())
-        .chain(pack.item_actions.values())
-        .filter(|action| {
-            action.window.is_night_resolution_window()
-                && (action.has_ability(IrAbility::Kill) || action.has_ability(IrAbility::Retaliate))
-                && !pack
-                    .night_resolution
-                    .cpr_action_ids
-                    .iter()
-                    .any(|action_id| action_id == &action.id)
-        })
-    {
-        causes.insert(action.id.clone());
-    }
-    for trigger in pack
-        .triggers
-        .iter()
-        .filter(|trigger| trigger.produces.ability == IrAbility::Kill)
-    {
-        causes.insert(trigger.id.clone());
-    }
-    causes.extend(
-        pack.night_resolution
-            .guard_retaliation_cause_policy
-            .values()
-            .cloned(),
-    );
-    causes
 }
 
 fn require_night_resolution_chosen_retaliation_cause_policy(pack: &Pack) {
@@ -2158,14 +1893,10 @@ fn treestump_applies(
 /// at phase end, on the state produced by folding this resolution's events
 /// (`apply_events`); it never runs mid-resolution.
 fn resolve_inner(input: &ResolutionInput) -> InnerResolution {
-    require_night_resolution_kill_cause_catalog(input.pack.document());
     require_night_resolution_specialized_protect_action_policy(input.pack.document());
     require_night_resolution_team_kill_action_policy(input.pack.document());
     require_night_resolution_action_bucket_shapes(input.pack.document());
-    require_night_resolution_block_action_policy(input.pack.document());
-    require_night_resolution_protect_action_policy(input.pack.document());
     require_conversion_policy(input.pack.document());
-    require_night_resolution_strongman_action_policy(input.pack.document());
     require_night_resolution_chosen_retaliation_cause_policy(input.pack.document());
     require_night_resolution_generated_kill_cause_policy(input.pack.document());
     require_night_resolution_trigger_fixpoint_policy(input.pack.document());
@@ -2816,21 +2547,13 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     require_conversion_policy(pack);
     require_visibility_families(pack);
     require_ninja_visibility_policy(pack);
-    require_night_resolution_kill_cause_catalog(pack);
     require_night_resolution_specialized_protect_action_policy(pack);
     require_night_resolution_team_kill_action_policy(pack);
     require_night_resolution_action_bucket_shapes(pack);
     require_night_resolution_intercept_cause_policy(pack);
-    require_night_resolution_guard_retaliation_cause_policy(pack);
     require_night_resolution_cpr_harm_cause_policy(pack);
     require_night_resolution_guard_dependency_cause_policy(pack);
-    require_night_resolution_block_action_policy(pack);
-    require_night_resolution_protect_action_policy(pack);
-    require_night_resolution_jailkeep_action_policy(pack);
-    require_night_resolution_strongman_action_policy(pack);
-    require_night_resolution_kill_action_policy(pack);
     require_night_resolution_chosen_retaliation_cause_policy(pack);
-    require_night_resolution_action_chance_policy(pack);
     require_night_resolution_hide_dependency_cause_policy(pack);
     require_night_resolution_trigger_fixpoint_policy(pack);
     require_night_resolution_suppression_precedence(pack);
@@ -4651,33 +4374,6 @@ fn action_chance_allows(
         }),
     });
     allowed
-}
-
-fn require_night_resolution_action_chance_policy(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    for (action_id, policy) in &pack.night_resolution.action_chance {
-        if action_id.trim().is_empty() {
-            panic!("invalid night_resolution action chance policy: action id must not be empty");
-        }
-        if !policy.chance.is_finite() || !(0.0..=1.0).contains(&policy.chance) {
-            panic!(
-                "invalid night_resolution action chance policy: action `{action_id}` chance must be finite and between 0.0 and 1.0"
-            );
-        }
-        if !pack
-            .roles
-            .values()
-            .flat_map(|role| role.actions.iter())
-            .chain(pack.item_actions.values())
-            .any(|action| action.window.is_night_resolution_window() && action.id == *action_id)
-        {
-            panic!(
-                "invalid night_resolution action chance policy: unknown night/any action `{action_id}`"
-            );
-        }
-    }
 }
 
 fn night_resolution_cpr_harm_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {

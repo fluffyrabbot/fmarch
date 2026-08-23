@@ -231,7 +231,7 @@ fn public_win_evaluation_requires_a_validated_pack() {
 }
 
 #[test]
-fn resolver_retires_validation_owned_source_classifier_ownership_and_scalar_policy_guards() {
+fn resolver_retires_validation_owned_night_resolution_policy_guards() {
     let coordinator = resolver_coordinator_source();
 
     for retired_guard in [
@@ -260,6 +260,26 @@ fn resolver_retires_validation_owned_source_classifier_ownership_and_scalar_poli
             "the retired save-tag derivation must not return to the coordinator: `{retired_save_tag_derivation}`"
         );
     }
+
+    for retired_guard in [
+        "fn require_night_resolution_kill_cause_catalog(",
+        "fn require_night_resolution_guard_retaliation_cause_policy(",
+        "fn require_night_resolution_block_action_policy(",
+        "fn require_night_resolution_protect_action_policy(",
+        "fn require_night_resolution_jailkeep_action_policy(",
+        "fn require_night_resolution_kill_action_policy(",
+        "fn require_night_resolution_strongman_action_policy(",
+        "fn require_night_resolution_action_chance_policy(",
+    ] {
+        assert!(
+            !coordinator.contains(retired_guard),
+            "validation owns this policy grammar; the coordinator must not reintroduce `{retired_guard}`"
+        );
+    }
+    assert!(
+        !coordinator.contains("fn night_resolution_derived_kill_cause_ids("),
+        "the kill-cause catalog derivation belongs exclusively to validation"
+    );
 }
 
 #[test]
