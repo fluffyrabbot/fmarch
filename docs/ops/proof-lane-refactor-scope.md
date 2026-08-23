@@ -5,7 +5,7 @@ command proof cost boundaries and bounded generated-shrink execution delivered
 2026-08-06; physical command-target extraction and exact selector ownership
 delivered 2026-08-08; manifest-v5 resource scheduling, run receipts, disposable
 local proof databases, and the role-smoke/visual artifact handoff delivered
-2026-08-20.
+2026-08-20; runner-scoped mutable npm proof leaves delivered 2026-08-23.
 
 ## Delivered foundation
 
@@ -17,8 +17,8 @@ canonical execution key after cost ordering, and the manifest contract rejects
 an npm leaf that invokes another declared leaf.
 
 The remaining work packages below are intentionally narrowed: resume, migration
-of the remaining mutable npm proof artifacts, and measured expansion beyond the
-initial conservative resource capacities.
+or retirement of direct legacy callers outside the manifest, and measured
+expansion beyond the initial conservative resource capacities.
 
 ### Mash-scale timing observation — 2026-08-23
 
@@ -29,8 +29,10 @@ Isolated reruns, both with and without the Batch A resolver diff, passed; the
 later serial 44-lane Batch B sweep also passed the scheduler in 928ms. Treat
 this as host-contention evidence, not a resolver regression or a reason to
 relax the product ceiling. Preserve the receipt and host-load evidence if it
-recurs, and complete the planned runner-owned database/artifact migration before
-enabling parallel execution for this legacy lane.
+recurs. The planned migration is now complete: the 2026-08-23 five-lane
+`--jobs 2` receipt exercised mash-scale with a runner-owned disposable database
+and artifact root. That receipt proves isolation, not a throughput improvement
+while `cargo-target` and `postgres-admin` remain capacity-one resources.
 
 The original command lane accumulated 365 tests and later measured 1,059s on a
 warm checkout. It is now four truthful leaves: hermetic unit/boundary tests,
@@ -69,13 +71,14 @@ longer declares are pruned on load.
 ## Problem
 
 The proof selector now has a sound path-to-leaf model, a fast ordinary push
-path, and physically separate ordinary and semantic-audit command targets, but
-the resource model still contains the dominant latency:
+path, physically separate ordinary and semantic-audit command targets, and
+runner-owned mutable npm leaves. The remaining resource-model work is:
 
-- Database-dependent npm lanes rely on ambient `DATABASE_URL`; concurrent runs
-  can share the mutable `fmarch` database and contaminate one another.
-- The tracked baseline now covers every lane, but execution still has no
-  timeout, checkpoint, resume token, structured receipt, or resource scheduler.
+- Manifest-scheduled mutable npm leaves receive an injected disposable database
+  and run-scoped artifact directory. Direct compatibility callers retain their
+  self-managed scratch lifecycle only outside the canonical runner.
+- The tracked baseline covers every lane, while checkpoint/resume support and
+  evidence-backed expansion of conservative resource capacities remain open.
 
 The desired shape is a manifest-owned DAG of independently executable leaf
 lanes. Aggregates remain useful user-facing aliases, but they must not appear as
@@ -171,9 +174,10 @@ only for the same commit and manifest digest.
 - The runner uses the declared local loopback proof endpoint, or initializes the
   repo-local server through `tools/dev_postgres.mjs` when that endpoint is
   absent. It never adopts an arbitrary ambient `DATABASE_URL`.
-- Every migrated Cargo Postgres lane receives a generated
-  `fmarch_proof_<run>_<lane>` database and an injected `DATABASE_URL`; it is
-  removed on success and named in the receipt if retained after failure.
+- Every migrated Cargo or scoped npm Postgres lane receives a generated
+  `fmarch_proof_<run>_<lane>` database and an injected declared URL environment
+  (`DATABASE_URL` or `DATABASE_MIGRATION_URL`); it is removed on success and
+  named in the receipt if retained after failure.
 - The local-endpoint guard applies to both `DATABASE_URL` and
   `FMARCH_DEV_POSTGRES_*` overrides. Provisioning is bounded by the lane
   deadline; a failed database cleanup is recorded as retained rather than
@@ -196,9 +200,11 @@ only for the same commit and manifest digest.
 - Role smoke and visual regression now use distinct run-scoped artifact roots;
   visual receives the exact producer path through a hard dependency. The TLS
   proof also puts its temporary cluster and evidence under its lane root.
-- Unmigrated leaves conservatively claim the legacy lock. Hosted evidence and
-  production promotion remain outside parallel local proof until their mutable
-  database/artifact roots are migrated.
+- Auth-invite, day-event live-stack, mash-scale, exact-image, and the event-key
+  rehearsal now declare typed runner resources and no `legacy` lock. Their
+  direct compatibility aliases preserve self-managed scratch databases only
+  outside runner context, where applicable. Hosted evidence and production
+  promotion remain outside parallel local proof.
 
 ### 7. Keep canonical `--run` on the Darwin checkout
 
@@ -257,12 +263,13 @@ That is extra evidence beside Darwin push/sprint/full.
 
 ## Recommended Implementation Order
 
-1. Migrate auth-invite, live-stack, mash-scale, and exact-image mutable roots to
-   runner-provided databases/artifact directories, removing their legacy lock.
+1. Migrate or retire direct legacy callers, including the identity-spine and
+   non-manifest live-stack aliases, to the same runner contract without
+   reintroducing a global legacy lock.
 2. Add `--only` and commit-safe `--resume` on top of the existing receipt
    schema.
-3. Run a measured Darwin jobs=2 sweep, then raise only capacities supported by
-   the receipt evidence.
+3. Run a measured Darwin jobs=2 full sweep, then raise only capacities supported
+   by the receipt evidence.
 4. Simplify compatibility npm aliases that are no longer operationally useful.
 
 ## Non-Goals

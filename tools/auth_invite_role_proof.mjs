@@ -23,7 +23,10 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
-const artifactDir = path.join(repoRoot, "target", "auth-invite-role-proof");
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ??
+    path.join(repoRoot, "target", "auth-invite-role-proof"),
+);
 const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
 if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
   throw new Error("FMARCH_MEDIA_ROOT must not be empty");
@@ -34,6 +37,11 @@ const mediaRoot =
     : path.resolve(repoRoot, configuredMediaRoot);
 const evidencePath = path.join(artifactDir, "invite-role-proof.json");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
+const runnerOwnsDatabase =
+  process.env.FMARCH_PROOF_LANE_ID === "test:auth-invite-role-proof";
+if (runnerOwnsDatabase && configuredMediaRoot !== undefined) {
+  throw new Error("runner-owned auth-invite proof may not override FMARCH_MEDIA_ROOT");
+}
 const eventWrapKey =
   process.env.FMARCH_EVENT_WRAP_KEY ??
   "fmarch-auth-invite-role-proof-event-encryption-key-v1";
@@ -165,7 +173,9 @@ const previousAuthSourceSigningKey = process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY;
 try {
   await mkdir(artifactDir, { recursive: true });
   subjectKeyRoot = await mkdtemp(path.join(artifactDir, "subject-authority-"));
-  proofDatabase = await createScratchDatabase(migrationUrl);
+  proofDatabase = runnerOwnsDatabase
+    ? runnerOwnedDatabase(migrationUrl)
+    : await createScratchDatabase(migrationUrl);
   const authority = await runFmarchMigrations({
     cwd: repoRoot,
     migrationUrl: proofDatabase.migrationUrl,
@@ -281,7 +291,9 @@ try {
     game,
     database: {
       name: proofDatabase.name,
-      lifecycle: "created-and-dropped-per-proof-run",
+      lifecycle: proofDatabase.runnerOwned
+        ? "runner-owned-disposable-per-proof-run"
+        : "created-and-dropped-per-proof-run",
     },
     apiBaseUrl,
     frontendBaseUrl,
@@ -317,7 +329,7 @@ try {
   if (server !== undefined) {
     await stopChild(server);
   }
-  if (proofDatabase !== undefined) {
+  if (proofDatabase !== undefined && !proofDatabase.runnerOwned) {
     await dropScratchDatabase(proofDatabase);
   }
   if (subjectKeyRoot !== undefined) {
@@ -3688,6 +3700,12 @@ async function createScratchDatabase(sourceDatabaseUrl) {
     `CREATE DATABASE "${name}"`,
   ]);
   return { name, adminUrl: admin.toString(), migrationUrl: scratch.toString() };
+}
+
+function runnerOwnedDatabase(migrationUrl) {
+  const name = decodeURIComponent(new URL(migrationUrl).pathname).replace(/^\/+/, "");
+  if (!name) throw new Error("runner-owned DATABASE_MIGRATION_URL must name a database");
+  return { name, migrationUrl, runnerOwned: true };
 }
 
 async function dropScratchDatabase({ adminUrl, name }) {

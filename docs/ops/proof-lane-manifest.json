@@ -98,15 +98,15 @@
         ]
       }
     },
-    "test:auth-invite-role-proof": { "kind": "npm" },
+    "test:auth-invite-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:auth-invite-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:projection-baseline:static": { "kind": "npm" },
-    "test:event-key-rotation-rehearsal": { "kind": "npm" },
+    "test:event-key-rotation-rehearsal": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["npm", "run", "test:event-key-rotation-rehearsal"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:database-tls-boundary": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 300, "argv": ["npm", "run", "test:database-tls-boundary"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "postgres-admin" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:dev-test-game-contract": { "kind": "npm" },
     "test:dev-postgres-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["npm", "run", "test:dev-postgres-contract"], "resources": [] } },
-    "test:host-console-live-stack-contract": { "kind": "npm" },
-    "test:host-console-day-event-room-live-stack": { "kind": "npm" },
-    "test:mash-scale-acceptance": { "kind": "npm" },
+    "test:host-console-live-stack-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:host-console-live-stack-contract"], "resources": [] } },
+    "test:host-console-day-event-room-live-stack": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:host-console-day-event-room-live-stack"], "env": { "FMARCH_DEV_AUTH": "1", "FMARCH_AUTH_SOURCE_SIGNING_KEY": "local-proof-signing-key-at-least-32-bytes", "FMARCH_LIVE_STACK_SCOPE": "day-event-room" }, "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "test:mash-scale-acceptance": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["npm", "run", "test:mash-scale-acceptance"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:completeness-scorecard": {
       "kind": "npm",
       "write_command": "npm run generate:completeness-scorecard",
@@ -126,7 +126,7 @@
     "test:dependency-policy": { "kind": "npm" },
     "test:frontend-csp-browser": { "kind": "npm" },
     "check:build-posture": { "kind": "npm" },
-    "test:exact-image-content": { "kind": "npm", "execution": { "class": "container", "timeout_seconds": 900, "argv": ["npm", "run", "test:exact-image-content"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "container-engine" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } }
+    "test:exact-image-content": { "kind": "npm", "execution": { "class": "container", "timeout_seconds": 900, "argv": ["npm", "run", "test:exact-image-content"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "container-engine" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } }
   },
   "areas": [
     {

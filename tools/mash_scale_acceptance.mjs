@@ -10,9 +10,14 @@ import {
 } from "./run_fmarch_migrations.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const artifactDir = path.join(repoRoot, "target", "mash-scale-acceptance");
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ??
+    path.join(repoRoot, "target", "mash-scale-acceptance"),
+);
 const artifactPath = path.join(artifactDir, "report.json");
 const sourceDatabaseUrl = process.env.DATABASE_MIGRATION_URL;
+const runnerOwnsDatabase =
+  process.env.FMARCH_PROOF_LANE_ID === "test:mash-scale-acceptance";
 
 if (!sourceDatabaseUrl) {
   throw new Error(
@@ -21,7 +26,9 @@ if (!sourceDatabaseUrl) {
 }
 
 await mkdir(artifactDir, { recursive: true });
-const scratch = await createScratchDatabase(sourceDatabaseUrl);
+const scratch = runnerOwnsDatabase
+  ? runnerOwnedDatabase(sourceDatabaseUrl)
+  : await createScratchDatabase(sourceDatabaseUrl);
 try {
   const authority = await runFmarchMigrations({
     cwd: repoRoot,
@@ -55,7 +62,13 @@ try {
       `${report.rebuild.elapsed_ms}ms rebuild`,
   );
 } finally {
-  await dropScratchDatabase(scratch);
+  if (!scratch.runnerOwned) await dropScratchDatabase(scratch);
+}
+
+function runnerOwnedDatabase(url) {
+  const name = decodeURIComponent(new URL(url).pathname).replace(/^\/+/, "");
+  if (!name) throw new Error("runner-owned DATABASE_MIGRATION_URL must name a database");
+  return { name, url, runnerOwned: true };
 }
 
 async function createScratchDatabase(sourceUrl) {

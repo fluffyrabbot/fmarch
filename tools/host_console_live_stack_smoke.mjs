@@ -58,7 +58,9 @@ const dayEventRoomOnly =
 const smokeName = dayEventRoomOnly
   ? "host-console-day-event-room-live-stack"
   : "host-console-live-stack-smoke";
-const artifactDir = path.join(repoRoot, "target", smokeName);
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ?? path.join(repoRoot, "target", smokeName),
+);
 const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
 if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
   throw new Error("FMARCH_MEDIA_ROOT must not be empty");
@@ -71,6 +73,12 @@ const evidencePath = path.join(artifactDir, "live-stack-proof.json");
 const summaryPath = path.join(artifactDir, "live-stack-summary.json");
 const summaryMarkdownPath = path.join(artifactDir, "live-stack-summary.md");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
+const runnerOwnsDatabase =
+  process.env.FMARCH_PROOF_LANE_ID ===
+  "test:host-console-day-event-room-live-stack";
+if (runnerOwnsDatabase && configuredMediaRoot !== undefined) {
+  throw new Error("runner-owned live-stack proof may not override FMARCH_MEDIA_ROOT");
+}
 const host = "127.0.0.1";
 const {
   createScratchDatabase,
@@ -362,7 +370,9 @@ try {
   subjectKeyRoot = await mkdtemp(path.join(artifactDir, "subject-authority-"));
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   await writeProgress({ stage: "create-temp-database" });
-  smokeDatabase = await createScratchDatabase(migrationUrl);
+  smokeDatabase = runnerOwnsDatabase
+    ? runnerOwnedDatabase(migrationUrl)
+    : await createScratchDatabase(migrationUrl);
   const authority = await runFmarchMigrations({
     cwd: repoRoot,
     migrationUrl: smokeDatabase.url,
@@ -535,7 +545,9 @@ try {
     game: dayEventRoomOnly ? dayEventRoomGame : game,
     database: {
       name: smokeDatabase.name,
-      lifecycle: "created-and-dropped-per-smoke-run",
+      lifecycle: smokeDatabase.runnerOwned
+        ? "runner-owned-disposable-per-smoke-run"
+        : "created-and-dropped-per-smoke-run",
     },
     apiBaseUrl,
     frontendBaseUrl,
@@ -609,7 +621,7 @@ try {
   if (server !== undefined) {
     await stopChild(server, "rust server");
   }
-  if (smokeDatabase !== undefined) {
+  if (smokeDatabase !== undefined && !smokeDatabase.runnerOwned) {
     await writeProgress({
       stage: primaryError === null ? "drop-temp-database" : "failed",
       database: smokeDatabase.name,
@@ -648,6 +660,12 @@ try {
   } else {
     process.env.FMARCH_API_INTERNAL_URL = previousApiInternalUrl;
   }
+}
+
+function runnerOwnedDatabase(url) {
+  const name = decodeURIComponent(new URL(url).pathname).replace(/^\/+/, "");
+  if (!name) throw new Error("runner-owned DATABASE_MIGRATION_URL must name a database");
+  return { name, url, runnerOwned: true };
 }
 
 async function seedGame() {

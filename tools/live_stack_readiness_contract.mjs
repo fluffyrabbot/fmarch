@@ -4,12 +4,17 @@ import {
 
 export const LIVE_STACK_READINESS_VERSION = 1;
 
+const LOCAL_DISPOSABLE_DATABASE_LIFECYCLES = new Set([
+  "created-and-dropped-per-smoke-run",
+  "runner-owned-disposable-per-smoke-run",
+]);
+
 const CHECKS = Object.freeze([
   {
     id: "scratch-database",
-    label: "Scratch database lifecycle is local and disposable",
+    label: "Proof database lifecycle is local and disposable",
     predicate: (evidence) =>
-      evidence?.database?.lifecycle === "created-and-dropped-per-smoke-run",
+      LOCAL_DISPOSABLE_DATABASE_LIFECYCLES.has(evidence?.database?.lifecycle),
   },
   {
     id: "role-sessions",

@@ -600,6 +600,69 @@ test('runner-owned Postgres overrides ambient URLs and releases successful dispo
   assert.deepEqual(released, [{ database: 'fmarch_proof_run_pg', success: true }]);
 });
 
+test('mutable proof leaves bind real runner-owned databases and artifact roots without legacy serialization', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = loadManifest();
+  validateExecutionManifest(manifest);
+  const acquired = [];
+  const released = [];
+  const provider = {
+    async acquire({ laneId }) {
+      const database = `fmarch_proof_real_${laneId.replaceAll(':', '_')}`;
+      acquired.push(database);
+      return {
+        database,
+        url: `postgres://local/${database}`,
+        retained: false,
+        async release({ success }) { released.push({ database, success }); },
+      };
+    },
+  };
+  const run = createRunContext({ root, runId: 'real-mutable-leaves' });
+  for (const [laneId, databaseEnvironment] of [
+    ['test:auth-invite-role-proof', 'DATABASE_MIGRATION_URL'],
+    ['test:host-console-day-event-room-live-stack', 'DATABASE_MIGRATION_URL'],
+    ['test:mash-scale-acceptance', 'DATABASE_MIGRATION_URL'],
+    ['test:event-key-rotation-rehearsal', 'DATABASE_URL'],
+  ]) {
+    const lane = manifest.lanes[laneId];
+    assert.ok(
+      !lane.execution.resources.some((resource) => resource.kind === 'lock' && resource.name === 'legacy'),
+      `${laneId} must not retain the legacy lock`,
+    );
+    assert.ok(
+      lane.execution.resources.some((resource) => resource.kind === 'lock' && resource.name === 'cargo-target'),
+      `${laneId} must serialize its Cargo build access`,
+    );
+    const invocation = await prepareLaneInvocation({
+      laneId,
+      manifest,
+      run,
+      env: { [databaseEnvironment]: 'postgres://ambient/wrong' },
+      databaseProvider: provider,
+    });
+    assert.equal(invocation.env[databaseEnvironment], `postgres://local/${invocation.database.database}`);
+    assert.equal(invocation.env.FMARCH_PROOF_ARTIFACT_DIR, invocation.artifactDir);
+    await invocation.releaseResources({ success: true });
+  }
+
+  const exactImage = manifest.lanes['test:exact-image-content'];
+  assert.ok(
+    !exactImage.execution.resources.some((resource) => resource.kind === 'lock' && resource.name === 'legacy'),
+    'exact-image must use its typed container resources rather than the legacy lock',
+  );
+  const exactInvocation = await prepareLaneInvocation({
+    laneId: 'test:exact-image-content',
+    manifest,
+    run,
+    env: { FMARCH_PROOF_ARTIFACT_DIR: '/ambient/incorrect' },
+  });
+  assert.equal(exactInvocation.env.FMARCH_PROOF_ARTIFACT_DIR, exactInvocation.artifactDir);
+  assert.equal(acquired.length, 4);
+  assert.equal(released.length, 4);
+});
+
 test('runner-owned Postgres rejects a non-loopback dev-postgres override before provisioning', async (t) => {
   const root = await temporaryRoot();
   t.after(() => rm(root, { recursive: true, force: true }));

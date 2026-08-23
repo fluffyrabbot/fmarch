@@ -90,6 +90,15 @@ test("spectator readiness requires read-only private denial and lifecycle revoca
   );
 });
 
+test("readiness accepts the runner-owned disposable database lifecycle", () => {
+  const evidence = liveStackReadinessFixture();
+  evidence.database.lifecycle = "runner-owned-disposable-per-smoke-run";
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "scratch-database"),
+    "passed",
+  );
+});
+
 function checkStatus(readiness, id) {
   return readiness.checks.find((check) => check.id === id)?.status;
 }

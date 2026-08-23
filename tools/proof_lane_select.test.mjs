@@ -418,10 +418,54 @@ test('Postgres-backed npm lanes own a role-appropriate repo-local database defau
     /DATABASE_MIGRATION_URL=\$\{DATABASE_MIGRATION_URL:-postgres:\/\/fmarch:fmarch@127\.0\.0\.1:5544\/fmarch\}/;
   assert.match(packageScripts['test:mash-scale-acceptance'], localMigrationDatabase);
   assert.match(packageScripts['test:release-topology'], localRuntimeDatabase);
+  assert.match(packageScripts['test:event-key-rotation-rehearsal'], localRuntimeDatabase);
   assert.match(packageScripts['test:auth-invite-role-proof'], localMigrationDatabase);
   assert.match(
     packageScripts['test:host-console-day-event-room-live-stack'],
     localMigrationDatabase,
+  );
+});
+
+test('migrated mutable proof leaves consume runner-owned database and artifact resources', () => {
+  for (const laneId of [
+    'test:auth-invite-role-proof',
+    'test:host-console-day-event-room-live-stack',
+    'test:mash-scale-acceptance',
+    'test:event-key-rotation-rehearsal',
+  ]) {
+    const lane = manifest.lanes[laneId];
+    assert.equal(usesRunnerOwnedPostgres(lane), true, `${laneId} must lease a disposable database`);
+    assert.ok(
+      lane.execution.resources.some(
+        (resource) => resource.kind === 'artifact-dir' && resource.env === 'FMARCH_PROOF_ARTIFACT_DIR',
+      ),
+      `${laneId} must receive a runner-scoped artifact directory`,
+    );
+    assert.ok(
+      !lane.execution.resources.some((resource) => resource.kind === 'lock' && resource.name === 'legacy'),
+      `${laneId} must not retain the legacy lock`,
+    );
+    assert.ok(
+      lane.execution.resources.some((resource) => resource.kind === 'lock' && resource.name === 'cargo-target'),
+      `${laneId} must serialize its Cargo build access`,
+    );
+  }
+
+  for (const sourcePath of [
+    join(REPO_ROOT, 'tools', 'auth_invite_role_proof.mjs'),
+    join(REPO_ROOT, 'tools', 'host_console_live_stack_smoke.mjs'),
+    join(REPO_ROOT, 'tools', 'mash_scale_acceptance.mjs'),
+  ]) {
+    const source = readFileSync(sourcePath, 'utf8');
+    assert.match(source, /FMARCH_PROOF_ARTIFACT_DIR/);
+    assert.match(source, /FMARCH_PROOF_LANE_ID/);
+    assert.match(source, /runnerOwnedDatabase/);
+  }
+
+  const exactImage = manifest.lanes['test:exact-image-content'];
+  assert.ok(
+    !exactImage.execution.resources.some((resource) => resource.kind === 'lock' && resource.name === 'legacy'),
+    'exact-image must retain only typed container resources',
   );
 });
 
