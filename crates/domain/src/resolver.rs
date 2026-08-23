@@ -28,7 +28,7 @@ use crate::pack::{
     ConversionPendingDeathPolicy, DayNoteRolePayload, DeathRetaliationTiming, DeathRevealMode,
     EffectDuration, EffectSourceDeathRevealKind, EffectVisibility, GrantKind, GrantSpec,
     GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy,
-    ItaVoteConflictPolicy, KillStackingPolicy, NightResolutionConflictFamily, Pack,
+    ItaVoteConflictPolicy, KillStackingPolicy, Pack,
     ResultMemoryOutput, ResultMemoryScope, RoleModifier, SuppressionScope, TargetRef, TargetSpec,
     TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule, ValidatedPack, VisibilityFamily,
     VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
@@ -577,108 +577,6 @@ fn target_state_gate_reason<'a>(
     }
 }
 
-fn require_night_resolution_target_state_save_catalog(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let save_tags = night_resolution_derived_target_state_save_tags(pack);
-    if !save_tags.is_empty() && pack.night_resolution.target_state_save_tags.is_empty() {
-        panic!(
-            "invalid night_resolution target-state save catalog: explicit night_resolution policy must declare target-state save tags"
-        );
-    }
-}
-
-fn require_night_resolution_target_state_save_policy(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let save_tags = night_resolution_target_state_save_tags(pack);
-    if save_tags.is_empty() {
-        return;
-    }
-    let kill_causes = pack
-        .night_resolution
-        .kill_cause_ids
-        .iter()
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    for tag in &save_tags {
-        let Some(policy) = pack.night_resolution.target_state_save_policy.get(*tag) else {
-            panic!(
-                "invalid night_resolution target-state save policy: target-state save `{tag}` must classify every kill cause"
-            );
-        };
-        if policy.blocks.is_empty() && policy.bypasses.is_empty() {
-            panic!(
-                "invalid night_resolution target-state save policy: target-state save `{tag}` must classify kill causes"
-            );
-        }
-        require_night_resolution_target_state_save_policy_causes(
-            tag,
-            "blocks",
-            &policy.blocks,
-            &kill_causes,
-        );
-        require_night_resolution_target_state_save_policy_causes(
-            tag,
-            "bypasses",
-            &policy.bypasses,
-            &kill_causes,
-        );
-        let blocked = policy
-            .blocks
-            .iter()
-            .map(String::as_str)
-            .collect::<BTreeSet<_>>();
-        for cause in &policy.bypasses {
-            if blocked.contains(cause.as_str()) {
-                panic!(
-                    "invalid night_resolution target-state save policy: target-state save `{tag}` kill cause `{cause}` cannot be both blocked and bypassed"
-                );
-            }
-        }
-    }
-    for tag in pack.night_resolution.target_state_save_policy.keys() {
-        if tag.trim().is_empty() {
-            panic!(
-                "invalid night_resolution target-state save policy: target-state save tag must not be empty"
-            );
-        }
-        if !save_tags.contains(tag.as_str()) {
-            panic!(
-                "invalid night_resolution target-state save policy: unknown target-state save `{tag}`"
-            );
-        }
-    }
-}
-
-fn require_night_resolution_target_state_save_policy_causes(
-    tag: &str,
-    field: &str,
-    causes: &[String],
-    kill_causes: &BTreeSet<&str>,
-) {
-    let mut seen = BTreeSet::new();
-    for cause in causes {
-        if cause.trim().is_empty() {
-            panic!(
-                "invalid night_resolution target-state save policy: target-state save `{tag}` {field} contains empty kill cause"
-            );
-        }
-        if !seen.insert(cause.as_str()) {
-            panic!(
-                "invalid night_resolution target-state save policy: target-state save `{tag}` {field} contains duplicate kill cause `{cause}`"
-            );
-        }
-        if !kill_causes.contains(cause.as_str()) {
-            panic!(
-                "invalid night_resolution target-state save policy: target-state save `{tag}` {field} references unknown kill cause `{cause}`"
-            );
-        }
-    }
-}
-
 fn night_resolution_target_state_save_tags(pack: &Pack) -> BTreeSet<&str> {
     if pack.night_resolution.is_explicit() {
         return pack
@@ -710,72 +608,6 @@ fn record_night_resolution_target_state_save_tag<'a>(
 ) {
     if effect == "bulletproof" || effect == "bulletproof_vest" {
         tags.insert(effect);
-    }
-}
-
-fn require_night_resolution_target_state_gate_catalog(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let gate_tags = night_resolution_derived_target_state_gate_tags(pack);
-    if !gate_tags.is_empty() && pack.night_resolution.target_state_gate_tags.is_empty() {
-        panic!(
-            "invalid night_resolution target-state gate catalog: explicit night_resolution policy must declare target-state gate tags"
-        );
-    }
-}
-
-fn require_night_resolution_target_state_gate_policy(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let gate_tags = night_resolution_target_state_gate_tags(pack);
-    if gate_tags.is_empty() {
-        return;
-    }
-    for tag in &gate_tags {
-        let Some(policy) = pack.night_resolution.target_state_gate_policy.get(*tag) else {
-            panic!(
-                "invalid night_resolution target-state gate policy: target-state gate `{tag}` must classify blocked abilities"
-            );
-        };
-        if policy.blocks.is_empty() {
-            panic!(
-                "invalid night_resolution target-state gate policy: target-state gate `{tag}` must declare blocked abilities"
-            );
-        }
-        let mut seen = BTreeSet::new();
-        for ability in &policy.blocks {
-            if !seen.insert(*ability) {
-                panic!(
-                    "invalid night_resolution target-state gate policy: target-state gate `{tag}` contains duplicate blocked ability `{ability:?}`"
-                );
-            }
-            if !matches!(
-                ability,
-                IrAbility::Kill
-                    | IrAbility::Protect
-                    | IrAbility::Investigate
-                    | IrAbility::Convert
-                    | IrAbility::Mark
-            ) {
-                panic!(
-                    "invalid night_resolution target-state gate policy: target-state gate `{tag}` only supports Kill, Protect, Investigate, Convert, or Mark, got `{ability:?}`"
-                );
-            }
-        }
-    }
-    for tag in pack.night_resolution.target_state_gate_policy.keys() {
-        if tag.trim().is_empty() {
-            panic!(
-                "invalid night_resolution target-state gate policy: target-state gate tag must not be empty"
-            );
-        }
-        if !gate_tags.contains(tag.as_str()) {
-            panic!(
-                "invalid night_resolution target-state gate policy: unknown target-state gate `{tag}`"
-            );
-        }
     }
 }
 
@@ -2426,45 +2258,6 @@ fn require_night_resolution_hide_dependency_cause_policy(pack: &Pack) {
     }
 }
 
-fn night_resolution_target_state_gate_tags(pack: &Pack) -> BTreeSet<&str> {
-    if pack.night_resolution.is_explicit() {
-        return pack
-            .night_resolution
-            .target_state_gate_tags
-            .iter()
-            .map(String::as_str)
-            .collect();
-    }
-    night_resolution_derived_target_state_gate_tags(pack)
-}
-
-fn night_resolution_derived_target_state_gate_tags(pack: &Pack) -> BTreeSet<&str> {
-    let mut tags = BTreeSet::new();
-    for role in pack.roles.values() {
-        for effect in &role.effects {
-            record_night_resolution_target_state_gate_tag(&mut tags, effect);
-        }
-        for action in &role.actions {
-            if let Some(effect) = action.effect.as_deref() {
-                record_night_resolution_target_state_gate_tag(&mut tags, effect);
-            }
-        }
-    }
-    for effect in pack.effects.keys() {
-        record_night_resolution_target_state_gate_tag(&mut tags, effect);
-    }
-    tags
-}
-
-fn record_night_resolution_target_state_gate_tag<'a>(
-    tags: &mut BTreeSet<&'a str>,
-    effect: &'a str,
-) {
-    if effect == "ascetic" || effect == "commuted" || effect == "untargetable" {
-        tags.insert(effect);
-    }
-}
-
 fn require_ninja_visibility_policy(pack: &Pack) {
     if !pack_has_ninja_action(pack) {
         return;
@@ -2970,9 +2763,6 @@ fn resolve_inner(input: &ResolutionInput) -> InnerResolution {
     require_night_resolution_team_kill_action_policy(input.pack.document());
     require_night_resolution_action_bucket_shapes(input.pack.document());
     require_night_resolution_block_action_policy(input.pack.document());
-    require_night_resolution_target_state_save_catalog(input.pack.document());
-    require_night_resolution_target_state_save_policy(input.pack.document());
-    require_night_resolution_target_state_gate_catalog(input.pack.document());
     require_night_resolution_kill_stacking_policy(input.pack.document());
     require_night_resolution_strongman_bypass_policy(input.pack.document());
     require_night_resolution_protect_action_policy(input.pack.document());
@@ -3655,11 +3445,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     require_night_resolution_kill_cause_classifiers(pack);
     require_night_resolution_hide_dependency_cause_policy(pack);
     require_night_resolution_trigger_fixpoint_policy(pack);
-    require_night_resolution_target_state_save_catalog(pack);
-    require_night_resolution_target_state_save_policy(pack);
-    require_night_resolution_target_state_gate_catalog(pack);
-    require_night_resolution_target_state_gate_policy(pack);
-    require_night_resolution_conflict_families(pack);
     require_night_resolution_kill_stacking_policy(pack);
     require_night_resolution_strongman_bypass_policy(pack);
     require_night_resolution_suppression_classifiers(pack);
@@ -5508,90 +5293,6 @@ fn require_night_resolution_action_chance_policy(pack: &Pack) {
             );
         }
     }
-}
-
-fn require_night_resolution_conflict_families(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let declared = pack
-        .night_resolution
-        .conflict_families
-        .iter()
-        .copied()
-        .collect::<BTreeSet<_>>();
-    if declared.len() != pack.night_resolution.conflict_families.len() {
-        panic!(
-            "invalid night_resolution conflict families: conflict_families must not contain duplicates"
-        );
-    }
-    if declared.is_empty() {
-        panic!(
-            "invalid night_resolution conflict families: explicit night_resolution policy must declare conflict_families"
-        );
-    }
-    let required = night_resolution_required_conflict_families(pack);
-    for family in &required {
-        if !declared.contains(family) {
-            panic!(
-                "invalid night_resolution conflict families: conflict_families must include `{family:?}`"
-            );
-        }
-    }
-    for family in &declared {
-        if !required.contains(family) {
-            panic!(
-                "invalid night_resolution conflict families: declared conflict family `{family:?}` has no matching policy surface"
-            );
-        }
-    }
-}
-
-fn night_resolution_required_conflict_families(
-    pack: &Pack,
-) -> BTreeSet<NightResolutionConflictFamily> {
-    let policy = &pack.night_resolution;
-    let mut required = BTreeSet::from([
-        NightResolutionConflictFamily::BlockSuppressesActions,
-        NightResolutionConflictFamily::ProtectBlocksKills,
-        NightResolutionConflictFamily::StrongmanBypassesProtect,
-        NightResolutionConflictFamily::KillStacking,
-    ]);
-    if !policy.intercept_cause_policy.is_empty()
-        || !policy.bodyguard_action_ids.is_empty()
-        || !policy.martyr_action_ids.is_empty()
-    {
-        required.insert(NightResolutionConflictFamily::InterceptProtection);
-    }
-    if !policy.guard_retaliation_cause_policy.is_empty() {
-        required.insert(NightResolutionConflictFamily::GuardRetaliation);
-    }
-    if !policy.cpr_action_ids.is_empty() || !policy.cpr_harm_cause_policy.is_empty() {
-        required.insert(NightResolutionConflictFamily::CprProtection);
-    }
-    if !policy.guard_dependency_cause_policy.is_empty() {
-        required.insert(NightResolutionConflictFamily::GuardDependency);
-    }
-    if !policy.hide_dependency_cause_policy.is_empty() {
-        required.insert(NightResolutionConflictFamily::HideDependency);
-    }
-    if !policy.chosen_retaliation_cause_policy.is_empty() {
-        required.insert(NightResolutionConflictFamily::ChosenRetaliation);
-    }
-    if !policy.generated_kill_cause_policy.is_empty() || !policy.trigger_fixpoint_policy.is_empty()
-    {
-        required.insert(NightResolutionConflictFamily::GeneratedKillReentry);
-    }
-    if !night_resolution_target_state_save_tags(pack).is_empty() {
-        required.insert(NightResolutionConflictFamily::TargetStateSave);
-    }
-    if !night_resolution_target_state_gate_tags(pack).is_empty() {
-        required.insert(NightResolutionConflictFamily::TargetStateGate);
-    }
-    if !policy.action_chance.is_empty() {
-        required.insert(NightResolutionConflictFamily::ActionChance);
-    }
-    required
 }
 
 fn night_resolution_cpr_harm_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {
