@@ -4,14 +4,19 @@
     "game_id": "game_mu_parity_scan_memory_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -24,9 +29,7 @@
           "result": "town",
           "source_action": "mu_mafia_parity_scan_n01",
           "template_id": "parity_scan",
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ],
       "slots": [
@@ -72,7 +75,9 @@
         "action_id": "mu_town_parity_scan_n02",
         "actor": "slot_1",
         "template_id": "parity_scan",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N02",
         "submitted_at": 1,
         "withdrawn": false,
@@ -82,7 +87,9 @@
         "action_id": "mu_mafia_parity_scan_n02",
         "actor": "slot_2",
         "template_id": "parity_scan",
-        "targets": ["slot_4"],
+        "targets": [
+          "slot_4"
+        ],
         "phase_id": "N02",
         "submitted_at": 2,
         "withdrawn": false,
@@ -114,9 +121,7 @@
         "result": "scum",
         "source_action": "mu_town_parity_scan_n02",
         "template_id": "parity_scan",
-        "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2
+        "phase_id": "N02"
       }
     },
     {
@@ -140,9 +145,7 @@
         "result": "town",
         "source_action": "mu_mafia_parity_scan_n02",
         "template_id": "parity_scan",
-        "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2
+        "phase_id": "N02"
       }
     },
     {

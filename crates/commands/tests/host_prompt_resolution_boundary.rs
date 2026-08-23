@@ -14,7 +14,9 @@ fn host_prompt_resolution_has_one_typed_owner_without_admission_or_persistence_d
     assert!(composition_root.contains("host_prompt_resolution::HostPromptResolutionRequest {"));
     // The stored-host-prompt replay seam is consumed by the operator audit
     // family, not by the ordinary pipeline composition root.
-    assert!(operator_audit.contains("host_prompt_resolution::rerun_stored_host_prompt(game, prefix)?"));
+    assert!(
+        operator_audit.contains("host_prompt_resolution::rerun_stored_host_prompt(game, prefix)?")
+    );
 
     for owned_symbol in [
         "struct HostPromptResolutionRequest",

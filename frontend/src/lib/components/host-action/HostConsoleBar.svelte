@@ -11,12 +11,12 @@
 <header class="host-console-bar" data-testid="host-console-bar">
   <div>
     <span>{game.label}</span>
-    <h1>Host · {phase.label}</h1>
+    <h1>Host · {phase?.label ?? "Awaiting first phase"}</h1>
     <span class="fm-sr-only" data-testid="host-console-capability">{capabilityLabel}</span>
   </div>
   <dl>
     <div data-testid="host-console-attention"><dt>Attention</dt><dd>{attentionCount} tasks</dd></div>
-    {#if phase.deadlineLabel}<div data-testid="host-console-bar-deadline"><dt>Deadline</dt><dd>{phase.deadlineLabel}</dd></div>{/if}
+    {#if phase?.deadlineLabel}<div data-testid="host-console-bar-deadline"><dt>Deadline</dt><dd>{phase.deadlineLabel}</dd></div>{/if}
   </dl>
   {#if degraded}
     <p data-state={liveStatus.state} data-testid="host-live-status">

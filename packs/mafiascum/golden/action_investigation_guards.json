@@ -4,14 +4,17 @@
     "game_id": "game_ms_action_investigation_guards_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["main"]
+          "Day": [
+            "main"
+          ]
         },
         "twilight": false
       },
@@ -72,7 +75,9 @@
         "action_id": "role_watcher_n01",
         "actor": "slot_1",
         "template_id": "role_watcher",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -82,7 +87,9 @@
         "action_id": "role_guard_n01",
         "actor": "slot_2",
         "template_id": "role_guard",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -92,7 +99,9 @@
         "action_id": "security_guard_n01",
         "actor": "slot_3",
         "template_id": "security_guard",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 3,
         "withdrawn": false,
@@ -102,7 +111,9 @@
         "action_id": "doctor_protect_n01",
         "actor": "slot_4",
         "template_id": "doctor_protect",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 4,
         "withdrawn": false,
@@ -112,7 +123,9 @@
         "action_id": "friendly_neighbor_n01",
         "actor": "slot_6",
         "template_id": "friendly_neighbor",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 5,
         "withdrawn": false,
@@ -122,7 +135,9 @@
         "action_id": "ninja_kill_n01",
         "actor": "slot_7",
         "template_id": "factional_kill",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 6,
         "withdrawn": false,
@@ -138,8 +153,12 @@
       "kind": "PlayerSaved",
       "payload": {
         "slot_id": "slot_5",
-        "sources": ["slot_4"],
-        "reasons": ["protected"]
+        "sources": [
+          "slot_4"
+        ],
+        "reasons": [
+          "protected"
+        ]
       }
     },
     {
@@ -150,7 +169,10 @@
         "investigator": "slot_1",
         "target": "slot_5",
         "result": {
-          "visitor_roles": ["doctor", "friendly_neighbor"]
+          "visitor_roles": [
+            "doctor",
+            "friendly_neighbor"
+          ]
         }
       }
     },
@@ -162,7 +184,10 @@
         "investigator": "slot_2",
         "target": "slot_5",
         "result": {
-          "visitor_roles": ["doctor", "friendly_neighbor"]
+          "visitor_roles": [
+            "doctor",
+            "friendly_neighbor"
+          ]
         }
       }
     },
@@ -174,7 +199,10 @@
         "investigator": "slot_3",
         "target": "slot_5",
         "result": {
-          "visitors": ["slot_4", "slot_6"]
+          "visitors": [
+            "slot_4",
+            "slot_6"
+          ]
         }
       }
     },
@@ -187,8 +215,6 @@
         "template_id": "friendly_neighbor",
         "source_action": "friendly_neighbor_n01",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "visible": true
       }
     },

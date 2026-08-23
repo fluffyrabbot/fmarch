@@ -173,7 +173,7 @@ async fn submit_post_rejects_quoting_a_private_channel_seq_from_main(pool: PgPoo
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await

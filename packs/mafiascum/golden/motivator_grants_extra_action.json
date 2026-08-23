@@ -4,8 +4,6 @@
     "game_id": "game_demo_motivator_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
@@ -74,9 +72,7 @@
         "target": "slot_2",
         "source_action": "sub_001",
         "uses": 1,
-        "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1
+        "phase_id": "N01"
       }
     },
     {

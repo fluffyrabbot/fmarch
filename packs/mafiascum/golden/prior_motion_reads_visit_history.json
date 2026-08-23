@@ -4,8 +4,6 @@
     "game_id": "game_mafiascum_prior_motion_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
@@ -29,8 +27,6 @@
           "template_id": "visit",
           "source_action": "visit_n01",
           "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1,
           "visible": true
         }
       ],

@@ -25,7 +25,7 @@ test("player private queue model derives scoped private projection boundary", ()
       kind: "notification",
       label: "Commuted",
       value: "Delivered",
-      detail: "Phase N02",
+      detail: "Phase Night 2",
       buttonLabel: "Review",
     },
     {

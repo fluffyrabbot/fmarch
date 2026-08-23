@@ -144,11 +144,11 @@ fn assemble_update(
 ) -> Option<LiveProjectionUpdate> {
     let mut deltas = Vec::new();
     if let Some(previous) = change.previous_vote_counts {
-        let current_keys: HashSet<(String, String)> = current
+        let current_keys: HashSet<(domain::phase::PhaseId, String)> = current
             .iter()
             .map(|delta| (delta.phase_id.clone(), delta.candidate_slot.clone()))
             .collect();
-        let previous_counts: HashMap<(String, String), i64> = previous
+        let previous_counts: HashMap<(domain::phase::PhaseId, String), i64> = previous
             .iter()
             .map(|delta| {
                 (
@@ -236,10 +236,14 @@ pub(super) fn try_receive(
 mod tests {
     use super::*;
 
+    fn phase_id() -> domain::phase::PhaseId {
+        domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical")
+    }
+
     fn vote(game: Uuid, candidate_slot: &str, count: i64) -> VoteCountDelta {
         VoteCountDelta {
             game,
-            phase_id: "D01".to_string(),
+            phase_id: phase_id(),
             candidate_slot: candidate_slot.to_string(),
             count,
         }
@@ -272,7 +276,7 @@ mod tests {
                 ProjectionDelta::VoteCountChanged(vote(game, "slot-2", 2)),
                 ProjectionDelta::VoteCountCleared(VoteCountClearedDelta {
                     game,
-                    phase_id: "D01".to_string(),
+                    phase_id: phase_id(),
                     candidate_slot: "slot-1".to_string(),
                 }),
             ]

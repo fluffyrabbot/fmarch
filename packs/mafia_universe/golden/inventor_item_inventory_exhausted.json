@@ -4,14 +4,19 @@
     "game_id": "game_mu_inventor_item_counter_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -46,9 +51,7 @@
           "target": "slot_2",
           "source_action": "fixture:mu_preloaded_parity_scanner_item",
           "uses": 1,
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ],
       "use_counters": [
@@ -62,9 +65,7 @@
           "limit": 1,
           "used": 1,
           "remaining": 0,
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ]
     },
@@ -73,7 +74,9 @@
         "action_id": "mu_item_investigate_002",
         "actor": "slot_2",
         "template_id": "parity_scanner_item",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N02",
         "submitted_at": 1,
         "withdrawn": false,

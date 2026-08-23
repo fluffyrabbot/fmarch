@@ -40,6 +40,7 @@ import {
   buildPrivateQueue,
   buildPrivateQueueBoundary,
 } from "../../../lib/components/player-private-queue/player-private-queue-model.mjs";
+import { phaseLabelFromId } from "../../../lib/phase-id.mjs";
 import { buildPlayerRouteLayoutViewModel } from "./player-route-layout.mjs";
 
 export const PLAYER_ROUTE_CONTRACT = Object.freeze({
@@ -336,10 +337,10 @@ export function buildPlayerPhaseView(commandState) {
     });
   }
   const phase = commandState?.phase;
-  if (phase === null || phase === undefined || phase.phaseId === "") {
-    return FIXTURE_PHASE;
+  const label = phaseLabelFromId(phase?.phaseId);
+  if (label === null) {
+    return PRE_PHASE_VIEW;
   }
-  const label = `${phase.phaseKind} ${phase.phaseNumber}`;
   const state = phase.locked ? "locked" : "open";
   return Object.freeze({
     label,
@@ -629,11 +630,11 @@ function formatDeadline(value) {
   });
 }
 
-const FIXTURE_PHASE = Object.freeze({
-  label: "Day 2",
-  state: "open",
-  deadlineLabel: "Jun 19, 2026, 9:00 PM",
-  summary: "Seven votes to hammer. Thread is open.",
+const PRE_PHASE_VIEW = Object.freeze({
+  label: "Awaiting first phase",
+  state: "pre-phase",
+  deadlineLabel: "",
+  summary: "The game has not opened a phase.",
 });
 
 const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
@@ -642,13 +643,17 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
     actorSlot: "slot-7",
     roleKey: null,
     role: null,
-    phase: null,
+    phase: Object.freeze({
+      phase_id: "D02",
+      locked: false,
+      deadline: 1781928000,
+    }),
     actions: Object.freeze([]),
     dayEvents: Object.freeze([
       Object.freeze({
         eventId: "event-cookie",
         templateKey: "theme.raffle",
-        phaseId: "D01",
+        phase_id: "D01",
         participationStatus: "available",
         participantCount: 2,
         minimumParticipants: 1,
@@ -674,7 +679,7 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
   endgameSummary: null,
   dayVoteOutcomes: Object.freeze([
     Object.freeze({
-      phaseId: "D01",
+      phase_id: "D01",
       sourceSeq: 41,
       eventIndex: 0,
       status: "Lynch",
@@ -745,9 +750,7 @@ const PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD = Object.freeze({
     }),
     gameCompleted: false,
     phase: Object.freeze({
-      phaseId: "N02",
-      phaseKind: "Night",
-      phaseNumber: 2,
+      phase_id: "N02",
       locked: false,
     }),
     actions: Object.freeze([

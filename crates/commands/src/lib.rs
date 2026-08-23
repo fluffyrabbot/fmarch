@@ -185,7 +185,7 @@ async fn command_runtime_checkpoint(checkpoint: CommandRuntimeCheckpoint) {
 pub struct EngineInputBuilder<'a> {
     game: Uuid,
     stream: &'a [eventstore::StoredEvent],
-    phase_id: &'a str,
+    phase_id: domain::phase::PhaseId,
 }
 
 #[derive(Debug, Clone)]
@@ -193,9 +193,7 @@ pub struct EnginePhaseInput {
     pub game: Uuid,
     pub pack_ref: content_registry::PackRef,
     pub pack: Arc<domain::Pack>,
-    pub phase_id: String,
-    pub phase_kind: domain::pack::PhaseKind,
-    pub phase_number: u32,
+    pub phase_id: domain::phase::PhaseId,
     pub state: domain::StateSnapshot,
     pub submissions: Vec<domain::Submission>,
     pub day_phase_inputs: domain::DayPhaseInputs,
@@ -219,7 +217,11 @@ pub enum EngineRunKind<'a> {
 }
 
 impl<'a> EngineInputBuilder<'a> {
-    pub fn new(game: Uuid, stream: &'a [eventstore::StoredEvent], phase_id: &'a str) -> Self {
+    pub fn new(
+        game: Uuid,
+        stream: &'a [eventstore::StoredEvent],
+        phase_id: domain::phase::PhaseId,
+    ) -> Self {
         Self {
             game,
             stream,
@@ -231,28 +233,17 @@ impl<'a> EngineInputBuilder<'a> {
         let pack_artifact = pack_artifact_from_stream(self.stream)?;
         let pack_ref = pack_artifact.pack_ref.clone();
         let pack = load_pack(&pack_artifact)?;
-        let phase_kind = phase_kind(self.phase_id)?;
-        let phase_number = phase_number(self.phase_id)?;
-        let state = current_snapshot(
-            None,
-            self.stream,
-            &pack,
-            self.phase_id,
-            phase_kind,
-            phase_number,
-        )?;
-        let submissions = current_submissions(self.stream, self.phase_id);
-        let day_phase_inputs =
-            current_day_phase_inputs(self.stream, &state, phase_kind, phase_number, None, 0)?;
+        let phase_id = self.phase_id;
+        let state = current_snapshot(None, self.stream, &pack, &phase_id)?;
+        let submissions = current_submissions(self.stream, &phase_id);
+        let day_phase_inputs = current_day_phase_inputs(self.stream, &state, &phase_id, None, 0)?;
         let next_stream_seq = self.stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1);
 
         Ok(EnginePhaseInput {
             game: self.game,
             pack_ref,
             pack,
-            phase_id: self.phase_id.to_string(),
-            phase_kind,
-            phase_number,
+            phase_id,
             state,
             submissions,
             day_phase_inputs,
@@ -264,7 +255,7 @@ impl<'a> EngineInputBuilder<'a> {
 pub(crate) async fn load_engine_phase_input_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &domain::phase::PhaseId,
 ) -> Result<(EnginePhaseInput, bool), Reject> {
     let pack_artifact = current_pack_artifact(tx, game).await?;
     let pack_ref = pack_artifact.pack_ref.clone();
@@ -279,32 +270,28 @@ pub(crate) async fn load_engine_phase_input_in_tx(
     let tail = eventstore::load_stream_after_in_tx(tx, game, after_seq)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let phase_kind = phase_kind(phase_id)?;
-    let phase_number = phase_number(phase_id)?;
+    let phase_id = phase_id.clone();
     let last_resolution = usable.as_ref().and_then(|row| row.last_resolution.clone());
     let seed = usable.as_ref().map(|row| &row.snapshot);
-    let state = current_snapshot(seed, &tail, &pack, phase_id, phase_kind, phase_number)?;
-    let submissions = current_submissions(&tail, phase_id);
+    let state = current_snapshot(seed, &tail, &pack, &phase_id)?;
+    let submissions = current_submissions(&tail, &phase_id);
     let day_phase_inputs = current_day_phase_inputs(
         &tail,
         &state,
-        phase_kind,
-        phase_number,
+        &phase_id,
         last_resolution.as_ref(),
         after_seq,
     )?;
     let next_stream_seq = eventstore::next_stream_seq_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let already_resolved = official_resolution_applied(last_resolution.as_ref(), &tail, phase_id);
+    let already_resolved = official_resolution_applied(last_resolution.as_ref(), &tail, &phase_id);
     Ok((
         EnginePhaseInput {
             game,
             pack_ref,
             pack,
-            phase_id: phase_id.to_string(),
-            phase_kind,
-            phase_number,
+            phase_id,
             state,
             submissions,
             day_phase_inputs,
@@ -317,10 +304,10 @@ pub(crate) async fn load_engine_phase_input_in_tx(
 fn official_resolution_applied(
     last_resolution: Option<&serde_json::Value>,
     tail: &[eventstore::StoredEvent],
-    phase_id: &str,
+    phase_id: &domain::phase::PhaseId,
 ) -> bool {
     let payload_matches = |payload: &serde_json::Value| {
-        payload["phase_id"].as_str() == Some(phase_id)
+        payload["phase_id"].as_str() == Some(phase_id.as_str())
             && payload["run_id"]
                 .as_str()
                 .is_some_and(|run_id| run_id.starts_with("resolution:"))
@@ -1236,7 +1223,7 @@ async fn host_phase_lifecycle(
     principal: &Principal,
     game: Uuid,
     kind: &str,
-    phase: String,
+    phase: domain::phase::PhaseId,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
@@ -1246,7 +1233,7 @@ async fn host_phase_lifecycle(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
-    validate_pack_phase_id(&pack, &phase)?;
+    validate_phase_id_for_policy(&pack.phases, &phase)?;
     let phase_opened_at = unix_seconds_now()?;
 
     persist(
@@ -1331,7 +1318,7 @@ async fn start_game(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    phase: String,
+    phase: domain::phase::PhaseId,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
@@ -1341,7 +1328,7 @@ async fn start_game(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
-    validate_pack_phase_id(&pack, &phase)?;
+    validate_phase_id_for_policy(&pack.phases, &phase)?;
     let phase_opened_at = unix_seconds_now()?;
 
     let mut events = vec![EventInput::new(
@@ -1397,7 +1384,7 @@ async fn advance_phase_by_deadline(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    phase_id: String,
+    phase_id: domain::phase::PhaseId,
     observed_at: i64,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
@@ -1435,7 +1422,7 @@ async fn advance_phase_by_deadline(
         1,
         serde_json::json!({
             "phase_id": next_phase_id,
-            "source_phase_id": source_phase_id,
+        "source_phase_id": source_phase_id,
             "reason": "deadline_elapsed",
             "source_event_kind": "PhaseDeadlineElapsed",
             "source_deadline_at": deadline_at,
@@ -1464,7 +1451,7 @@ async fn resolved_locked_phase_stream(
         .map_err(|e| Reject::Internal(e.to_string()))?;
     if !stream.iter().any(|event| {
         event.kind == "ResolutionApplied"
-            && event.payload["phase_id"].as_str() == Some(&phase.phase_id)
+            && event.payload["phase_id"].as_str() == Some(phase.phase_id.as_str())
     }) {
         return Err(Reject::InvalidTarget);
     }
@@ -1617,8 +1604,7 @@ pub(crate) async fn plan_effect_events(
     let phase = projections::phase_state(&mut **tx, game)
         .await?
         .ok_or_else(|| effect_spec_reject("effect plans require an active phase"))?;
-    let phase_kind = phase_kind(&phase.phase_id)?;
-    let phase_number = phase_number(&phase.phase_id)?;
+    let phase_id = phase.phase_id.clone();
     let pack = current_pack(tx, game).await?;
     // Preflight the entire plan before appending anything. Lifecycle validation
     // advances this in-memory view so multiple operations on one slot are
@@ -1644,10 +1630,8 @@ pub(crate) async fn plan_effect_events(
                 let mut event = plan_slot_status_change(&target, &current, status)?;
                 event.payload["source_action"] =
                     serde_json::Value::String(application.source_action("set_slot_lifecycle"));
-                event.payload["phase_id"] = serde_json::Value::String(phase.phase_id.clone());
-                event.payload["phase_kind"] = serde_json::to_value(phase_kind)
-                    .map_err(|error| Reject::Internal(format!("serialize phase kind: {error}")))?;
-                event.payload["phase_number"] = serde_json::json!(phase_number);
+                event.payload["phase_id"] = serde_json::to_value(&phase_id)
+                    .map_err(|error| Reject::Internal(format!("serialize phase id: {error}")))?;
                 lifecycle_states.insert(
                     target,
                     match status {
@@ -1670,9 +1654,7 @@ pub(crate) async fn plan_effect_events(
                         "target": target.as_str(),
                         "actor": "external",
                         "source_action": application.source_action("mark"),
-                        "phase_id": phase.phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
+                        "phase_id": phase_id,
                         "duration": "Persistent",
                         "visibility": policy.visibility,
                     }),
@@ -1691,9 +1673,7 @@ pub(crate) async fn plan_effect_events(
                         "targets": [target.as_str()],
                         "actor": "external",
                         "source_action": application.source_action("clear"),
-                        "phase_id": phase.phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
+                        "phase_id": phase_id,
                     }),
                     ActorId::Host,
                     0,
@@ -1715,9 +1695,7 @@ pub(crate) async fn plan_effect_events(
                         "source_action": source_action,
                         "uses": grant.uses,
                         "vote_weight": grant.vote_weight,
-                        "phase_id": phase.phase_id.clone(),
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
+                        "phase_id": phase_id,
                     }),
                     ActorId::Host,
                     0,
@@ -1732,7 +1710,7 @@ pub(crate) async fn plan_effect_events(
                             "effect": "grant",
                             "status": grant.grant_id.as_str(),
                             "audience": audience,
-                            "phase_id": phase.phase_id.clone(),
+                            "phase_id": phase_id,
                         }),
                         ActorId::Host,
                         0,
@@ -2290,7 +2268,7 @@ pub(crate) struct HostNoticeSpec {
     pub(crate) channel_id: String,
     pub(crate) body: String,
     pub(crate) media: Vec<model::ThreadPostMedia>,
-    pub(crate) phase_id: String,
+    pub(crate) phase_id: Option<domain::phase::PhaseId>,
     pub(crate) occurred_at: i64,
     pub(crate) narrative_receipt: Option<serde_json::Value>,
 }
@@ -2443,7 +2421,7 @@ async fn submit_post(
     // A post is attributed to the SLOT (doc 01: post authorship attaches to the
     // slot, not the user), so it survives a replacement. Phase id is recorded
     // for partitioning.
-    let phase = current_phase(tx, game).await?.unwrap_or_default();
+    let phase = current_phase(tx, game).await?;
     let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
@@ -2482,7 +2460,7 @@ async fn publish_spectator_post(
     require_game(tx, game).await?;
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::Narrative).await?;
-    let phase = current_phase(tx, game).await?.unwrap_or_default();
+    let phase = current_phase(tx, game).await?;
     let occurred_at = eventstore::next_stream_seq_in_tx(tx, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
@@ -2544,8 +2522,8 @@ async fn publish_votecount(
         .into_iter()
         .filter(|row| row.phase_id == phase)
         .collect::<Vec<_>>();
-    let body = official_votecount_body(&phase, &rows);
-    if official_votecount_already_published(tx, game, &phase, &body).await? {
+    let body = official_votecount_body(phase.as_str(), &rows);
+    if official_votecount_already_published(tx, game, phase.as_str(), &body).await? {
         return Err(Reject::InvalidTarget);
     }
     let ev = EventInput::new(
@@ -2603,7 +2581,7 @@ async fn extend_deadline(
     tx: &mut Transaction<'_, Postgres>,
     principal: &Principal,
     game: Uuid,
-    phase: String,
+    phase: domain::phase::PhaseId,
     at: i64,
 ) -> Result<Ack, Reject> {
     require_game(tx, game).await?;
@@ -2728,13 +2706,15 @@ async fn resolve_phase(
         return Err(Reject::PhaseLocked);
     }
 
+    let phase_id = phase.phase_id.clone();
     let (phase_input, already_resolved) =
-        load_engine_phase_input_in_tx(tx, game, &phase.phase_id).await?;
+        load_engine_phase_input_in_tx(tx, game, &phase_id).await?;
     if already_resolved {
         return Err(Reject::InvalidTarget);
     }
 
-    let output = domain::resolve(phase_input.resolve_input(EngineRunKind::ResolvePhase { seed }));
+    let output = domain::resolve(phase_input.resolve_input(EngineRunKind::ResolvePhase { seed }))
+        .map_err(|error| Reject::Internal(format!("invalid resolution input: {error}")))?;
     domain::validate_resolution_applied(&output.applied, domain::RESULT_VERSION)
         .map_err(|e| Reject::Internal(format!("invalid resolution result: {e}")))?;
     domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION)
@@ -2795,7 +2775,7 @@ async fn control_ita_session(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::ItaControl).await?;
     let phase = require_open_day_phase(tx, game).await?;
-    let phase_number = phase_number(&phase)?;
+    let phase_number = phase_number(&phase);
 
     let pack = current_pack(tx, game).await?;
     if !pack.ita.lifecycle.allows(control) {
@@ -2862,10 +2842,10 @@ async fn admit_host_prompt_resolution(
 }
 fn next_declared_phase_id(
     phase_policy: &domain::pack::PhasePolicy,
-    source_phase_id: &str,
-) -> Result<String, Reject> {
-    let source_kind = phase_kind(source_phase_id).map_err(|_| Reject::InvalidTarget)?;
-    let source_number = phase_number(source_phase_id).map_err(|_| Reject::InvalidTarget)?;
+    source_phase_id: &domain::phase::PhaseId,
+) -> Result<domain::phase::PhaseId, Reject> {
+    let source_kind = phase_kind(source_phase_id);
+    let source_number = phase_number(source_phase_id);
     if phase_policy.cadence.is_empty() {
         return Err(Reject::InvalidTarget);
     }
@@ -2877,11 +2857,12 @@ fn next_declared_phase_id(
     let next_index = (source_index + 1) % phase_policy.cadence.len();
     let next_kind = phase_policy.cadence[next_index];
     let next_number = if next_index <= source_index {
-        source_number + 1
+        source_number.checked_add(1).ok_or(Reject::InvalidTarget)?
     } else {
         source_number
     };
-    let phase_id = domain::phase::PhaseId::compose(next_kind, next_number);
+    let phase_id = domain::phase::PhaseId::compose(next_kind, next_number)
+        .map_err(|_| Reject::InvalidTarget)?;
     validate_phase_id_for_policy(phase_policy, &phase_id)?;
     Ok(phase_id)
 }
@@ -3146,35 +3127,27 @@ pub(crate) async fn current_pack(
     load_pack(&current_pack_artifact(tx, game).await?)
 }
 
-pub(crate) fn phase_kind(phase_id: &str) -> Result<domain::pack::PhaseKind, Reject> {
-    domain::phase::PhaseId::parse(phase_id)
-        .map(|phase| phase.kind())
-        .map_err(|error| Reject::Internal(error.to_string()))
+pub(crate) fn parse_phase_id(phase_id: &str) -> Result<domain::phase::PhaseId, Reject> {
+    domain::phase::PhaseId::parse(phase_id).map_err(|_| Reject::InvalidTarget)
 }
 
-pub(crate) fn phase_number(phase_id: &str) -> Result<u32, Reject> {
-    domain::phase::PhaseId::parse(phase_id)
-        .map(|phase| phase.number())
-        .map_err(|error| Reject::Internal(error.to_string()))
+pub(crate) const fn phase_kind(phase_id: &domain::phase::PhaseId) -> domain::phase::PhaseKind {
+    phase_id.kind()
 }
 
-fn validate_pack_phase_id(pack: &domain::Pack, phase_id: &str) -> Result<(), Reject> {
-    validate_phase_id_for_policy(&pack.phases, phase_id)
+pub(crate) const fn phase_number(phase_id: &domain::phase::PhaseId) -> u32 {
+    phase_id.number()
 }
 
 fn validate_phase_id_for_policy(
     phase_policy: &domain::pack::PhasePolicy,
-    phase_id: &str,
+    phase_id: &domain::phase::PhaseId,
 ) -> Result<(), Reject> {
-    let kind = phase_kind(phase_id).map_err(|_| Reject::InvalidTarget)?;
-    let number = phase_number(phase_id).map_err(|_| Reject::InvalidTarget)?;
-    if number == 0 {
-        return Err(Reject::InvalidTarget);
-    }
+    let kind = phase_kind(phase_id);
     if !phase_policy.cadence.contains(&kind) {
         return Err(Reject::InvalidTarget);
     }
-    if kind == domain::pack::PhaseKind::Twilight && !phase_policy.twilight {
+    if kind == domain::phase::PhaseKind::Twilight && !phase_policy.twilight {
         return Err(Reject::InvalidTarget);
     }
     Ok(())
@@ -3184,13 +3157,12 @@ fn current_snapshot(
     seed: Option<&domain::StateSnapshot>,
     stream: &[eventstore::StoredEvent],
     pack: &domain::Pack,
-    phase_id: &str,
-    phase_kind: domain::pack::PhaseKind,
-    phase_number: u32,
+    phase_id: &domain::phase::PhaseId,
 ) -> Result<domain::StateSnapshot, Reject> {
+    validate_persisted_phase_ids(stream)?;
     let phase_policy = pack.phases.clone();
     let phase_deadline = current_phase_deadline(stream, phase_id).or_else(|| {
-        seed.filter(|snapshot| snapshot.phase_id == phase_id)
+        seed.filter(|snapshot| snapshot.phase_id == *phase_id)
             .and_then(|snapshot| snapshot.phase_deadline)
     });
     let mut slots: BTreeMap<String, domain::SlotState> = seed
@@ -3304,8 +3276,6 @@ fn current_snapshot(
                         source: slot_id.clone(),
                         source_action: Some("role-assignment".to_string()),
                         phase_id: None,
-                        phase_kind: None,
-                        phase_number: None,
                         duration: domain::EffectDuration::Persistent,
                         visibility: domain::EffectVisibility::Hidden,
                     });
@@ -3315,9 +3285,7 @@ fn current_snapshot(
                 let applied = domain::validate_resolution_json(&ev.payload, domain::RESULT_VERSION)
                     .map_err(|e| Reject::Internal(format!("malformed ResolutionApplied: {e}")))?;
                 let snapshot = domain::StateSnapshot {
-                    phase_id: phase_id.to_string(),
-                    phase_kind,
-                    phase_number,
+                    phase_id: phase_id.clone(),
                     phase_deadline,
                     phase_policy: phase_policy.clone(),
                     slots: slots.values().cloned().collect(),
@@ -3446,10 +3414,9 @@ fn current_snapshot(
                 let target = str_payload(ev, "target")?;
                 let actor = str_payload(ev, "actor")?;
                 let source_action = optional_str_payload(ev, "source_action");
-                let marked_phase_id = optional_str_payload(ev, "phase_id");
-                let marked_phase_kind =
-                    optional_payload_enum::<domain::pack::PhaseKind>(ev, "phase_kind")?;
-                let marked_phase_number = optional_u32_payload(ev, "phase_number")?;
+                let marked_phase_id = optional_str_payload(ev, "phase_id")
+                    .map(|phase_id| parse_phase_id(&phase_id))
+                    .transpose()?;
                 let duration = payload_enum_or_default::<domain::EffectDuration>(ev, "duration")?;
                 let visibility =
                     payload_enum_or_default::<domain::EffectVisibility>(ev, "visibility")?;
@@ -3475,8 +3442,6 @@ fn current_snapshot(
                         source: actor,
                         source_action,
                         phase_id: marked_phase_id,
-                        phase_kind: marked_phase_kind,
-                        phase_number: marked_phase_number,
                         duration,
                         visibility,
                     });
@@ -3516,8 +3481,6 @@ fn current_snapshot(
                     uses,
                     vote_weight,
                     phase_id: granted_phase_id,
-                    phase_kind: granted_phase_kind,
-                    phase_number: granted_phase_number,
                 } = inner
                 else {
                     unreachable!("ActionGranted payload decoded to another inner event")
@@ -3532,8 +3495,6 @@ fn current_snapshot(
                     uses,
                     vote_weight,
                     phase_id: granted_phase_id,
-                    phase_kind: granted_phase_kind,
-                    phase_number: granted_phase_number,
                 });
             }
             "SlotStatusChanged" => {
@@ -3604,9 +3565,7 @@ fn current_snapshot(
     }
 
     Ok(domain::StateSnapshot {
-        phase_id: phase_id.to_string(),
-        phase_kind,
-        phase_number,
+        phase_id: phase_id.clone(),
         phase_deadline,
         phase_policy,
         slots,
@@ -3628,6 +3587,104 @@ fn current_snapshot(
         badges,
         buffered_ita_shots,
     })
+}
+
+/// Stored platform events remain JSON for the event store, but every phase
+/// coordinate embedded in those payloads must still satisfy the domain value
+/// grammar before command reduction can observe it. This makes corrupted
+/// historical payloads fail atomically rather than silently influencing a
+/// subset of projections or resolver input.
+pub(crate) fn validate_persisted_phase_ids(
+    stream: &[eventstore::StoredEvent],
+) -> Result<(), Reject> {
+    for event in stream {
+        validate_phase_ids_in_json(
+            &event.payload,
+            &format!("{}#{}", event.kind, event.stream_seq),
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_phase_ids_in_json(value: &serde_json::Value, path: &str) -> Result<(), Reject> {
+    match value {
+        serde_json::Value::Array(values) => {
+            for (index, value) in values.iter().enumerate() {
+                validate_phase_ids_in_json(value, &format!("{path}[{index}]"))?;
+            }
+        }
+        serde_json::Value::Object(fields) => {
+            validate_primary_phase_context(fields, path)?;
+            for (field, value) in fields {
+                let field_path = format!("{path}.{field}");
+                if matches!(
+                    field.as_str(),
+                    "phase_id" | "source_phase_id" | "target_phase_id" | "skipped_phase_id"
+                ) {
+                    match value {
+                        serde_json::Value::Null => {}
+                        serde_json::Value::String(phase_id) => {
+                            domain::phase::PhaseId::parse(phase_id).map_err(|error| {
+                                Reject::Internal(format!(
+                                    "invalid persisted phase id at {field_path}: {error}"
+                                ))
+                            })?;
+                        }
+                        _ => {
+                            return Err(Reject::Internal(format!(
+                                "invalid persisted phase id at {field_path}: expected string or null"
+                            )));
+                        }
+                    }
+                }
+                validate_phase_ids_in_json(value, &field_path)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// A persisted phase coordinate is only its canonical opaque id.  SQL may
+/// materialize kind/number for indexing, but stream JSON must never carry a
+/// second coordinate representation.
+fn validate_primary_phase_context(
+    fields: &serde_json::Map<String, serde_json::Value>,
+    path: &str,
+) -> Result<(), Reject> {
+    // A payload may name an id as the primary coordinate or as one side of a
+    // phase transition. In every form the opaque id is authoritative; a
+    // sibling kind/number pair would be an independently constructible second
+    // coordinate and must fail before any reducer observes it.
+    for prefix in ["", "source_", "target_", "skipped_"] {
+        let id_key = format!("{prefix}phase_id");
+        let Some(raw_phase_id) = fields.get(&id_key) else {
+            continue;
+        };
+        let kind_key = format!("{prefix}phase_kind");
+        let number_key = format!("{prefix}phase_number");
+        if fields.contains_key(&kind_key) || fields.contains_key(&number_key) {
+            return Err(Reject::Internal(format!(
+                "redundant persisted phase coordinates at {path}; use {id_key} only"
+            )));
+        }
+        match raw_phase_id {
+            serde_json::Value::String(raw_phase_id) => {
+                domain::phase::PhaseId::parse(raw_phase_id).map_err(|error| {
+                    Reject::Internal(format!(
+                        "invalid persisted phase id at {path}.{id_key}: {error}"
+                    ))
+                })?;
+            }
+            serde_json::Value::Null => {}
+            _ => {
+                return Err(Reject::Internal(format!(
+                    "malformed persisted phase id at {path}.{id_key}"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn refresh_pack_visible_status_tags(pack: &domain::Pack, slot: &mut domain::SlotState) {
@@ -3658,11 +3715,14 @@ fn refresh_pack_visible_status_tags(pack: &domain::Pack, slot: &mut domain::Slot
     slot.status_tags = tags.into_iter().collect();
 }
 
-fn current_phase_deadline(stream: &[eventstore::StoredEvent], phase_id: &str) -> Option<i64> {
+fn current_phase_deadline(
+    stream: &[eventstore::StoredEvent],
+    phase_id: &domain::phase::PhaseId,
+) -> Option<i64> {
     stream
         .iter()
         .filter(|ev| matches!(ev.kind.as_str(), "DeadlineSet" | "DeadlineExtended"))
-        .filter(|ev| ev.payload["phase_id"].as_str() == Some(phase_id))
+        .filter(|ev| ev.payload["phase_id"].as_str() == Some(phase_id.as_str()))
         .filter_map(|ev| ev.payload["at"].as_i64())
         .next_back()
 }
@@ -3673,13 +3733,13 @@ pub(crate) fn next_stream_logical_time(stream: &[eventstore::StoredEvent]) -> i6
 
 fn current_submissions(
     stream: &[eventstore::StoredEvent],
-    phase_id: &str,
+    phase_id: &domain::phase::PhaseId,
 ) -> Vec<domain::Submission> {
     let mut submissions = Vec::new();
 
     for ev in stream {
         match ev.kind.as_str() {
-            "VoteSubmitted" if ev.payload["phase_id"].as_str() == Some(phase_id) => {
+            "VoteSubmitted" if ev.payload["phase_id"].as_str() == Some(phase_id.as_str()) => {
                 if let (Some(actor), Some(target)) =
                     (ev.payload["actor"].as_str(), ev.payload["target"].as_str())
                 {
@@ -3688,28 +3748,28 @@ fn current_submissions(
                         actor: actor.to_string(),
                         template_id: "day_vote".to_string(),
                         targets: vec![target.to_string()],
-                        phase_id: phase_id.to_string(),
+                        phase_id: phase_id.clone(),
                         submitted_at: ev.stream_seq as u64,
                         withdrawn: false,
                         metadata: metadata_from_payload(&ev.payload),
                     });
                 }
             }
-            "VoteWithdrawn" if ev.payload["phase_id"].as_str() == Some(phase_id) => {
+            "VoteWithdrawn" if ev.payload["phase_id"].as_str() == Some(phase_id.as_str()) => {
                 if let Some(actor) = ev.payload["actor"].as_str() {
                     submissions.push(domain::Submission {
                         action_id: format!("vote:{}:{actor}", ev.stream_seq),
                         actor: actor.to_string(),
                         template_id: "day_vote".to_string(),
                         targets: Vec::new(),
-                        phase_id: phase_id.to_string(),
+                        phase_id: phase_id.clone(),
                         submitted_at: ev.stream_seq as u64,
                         withdrawn: true,
                         metadata: BTreeMap::new(),
                     });
                 }
             }
-            "ActionSubmitted" if ev.payload["phase_id"].as_str() == Some(phase_id) => {
+            "ActionSubmitted" if ev.payload["phase_id"].as_str() == Some(phase_id.as_str()) => {
                 if ev.payload["instant_resolved"].as_bool().unwrap_or(false) {
                     continue;
                 }
@@ -3731,7 +3791,7 @@ fn current_submissions(
                                     .collect()
                             })
                             .unwrap_or_default(),
-                        phase_id: phase_id.to_string(),
+                        phase_id: phase_id.clone(),
                         submitted_at: ev.stream_seq as u64,
                         withdrawn: false,
                         metadata: metadata_from_payload(&ev.payload),
@@ -3741,7 +3801,7 @@ fn current_submissions(
             "ActionWithdrawn" => {
                 let applies_to_phase = ev.payload["phase_id"]
                     .as_str()
-                    .map(|withdraw_phase| withdraw_phase == phase_id)
+                    .map(|withdraw_phase| withdraw_phase == phase_id.as_str())
                     .unwrap_or(true);
                 let actor = ev.payload["actor"].as_str();
                 if applies_to_phase {
@@ -3791,8 +3851,8 @@ fn collect_night_victims_from_applied(
     recorded_at: u64,
     night_victims: &mut Vec<domain::DayAnnouncementInput>,
 ) {
-    if applied.phase_kind != domain::pack::PhaseKind::Night
-        || applied.phase_number.saturating_add(1) != phase_number
+    if applied.phase_id.kind() != domain::phase::PhaseKind::Night
+        || applied.phase_id.number().checked_add(1) != Some(phase_number)
     {
         return;
     }
@@ -3827,14 +3887,14 @@ fn collect_night_victims_from_applied(
 fn current_day_phase_inputs(
     stream: &[eventstore::StoredEvent],
     state: &domain::StateSnapshot,
-    phase_kind: domain::pack::PhaseKind,
-    phase_number: u32,
+    phase_id: &domain::phase::PhaseId,
     last_resolution: Option<&serde_json::Value>,
     last_resolution_seq: i64,
 ) -> Result<domain::DayPhaseInputs, Reject> {
-    if phase_kind != domain::pack::PhaseKind::Day || phase_number == 0 {
+    if phase_id.kind() != domain::phase::PhaseKind::Day {
         return Ok(domain::DayPhaseInputs::default());
     }
+    let phase_number = phase_id.number();
 
     let mut night_victims = Vec::new();
     let mut ita_session_controls = Vec::new();
@@ -3853,7 +3913,7 @@ fn current_day_phase_inputs(
     }
     for ev in stream {
         if ev.kind == "ItaSessionControlRecorded"
-            && ev.payload["phase_id"].as_str() == Some(&state.phase_id)
+            && ev.payload["phase_id"].as_str() == Some(state.phase_id.as_str())
         {
             let control = serde_json::from_value::<domain::ItaSessionControlKind>(
                 ev.payload["control"].clone(),
@@ -3901,27 +3961,6 @@ fn optional_str_payload(ev: &eventstore::StoredEvent, key: &str) -> Option<Strin
         .get(key)
         .and_then(|value| value.as_str())
         .map(str::to_string)
-}
-
-fn optional_u32_payload(ev: &eventstore::StoredEvent, key: &str) -> Result<Option<u32>, Reject> {
-    let Some(value) = ev.payload.get(key) else {
-        return Ok(None);
-    };
-    if value.is_null() {
-        return Ok(None);
-    }
-    let Some(number) = value.as_u64() else {
-        return Err(Reject::Internal(format!(
-            "event {}#{} has non-u32 payload `{key}`",
-            ev.kind, ev.stream_seq
-        )));
-    };
-    u32::try_from(number).map(Some).map_err(|_| {
-        Reject::Internal(format!(
-            "event {}#{} has out-of-range u32 payload `{key}`",
-            ev.kind, ev.stream_seq
-        ))
-    })
 }
 
 fn string_array_payload(ev: &eventstore::StoredEvent, key: &str) -> Result<Vec<String>, Reject> {
@@ -4112,14 +4151,15 @@ async fn require_channel_actor_can_post(
 async fn require_open_phase(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-) -> Result<String, Reject> {
+) -> Result<domain::phase::PhaseId, Reject> {
     match projections::phase_state(&mut **tx, game).await? {
         Some(ps) if ps.locked => Err(Reject::PhaseLocked),
         Some(ps) => {
-            if phase_has_pending_prompt(tx, game, &ps.phase_id).await? {
+            let phase_id = ps.phase_id;
+            if phase_has_pending_prompt(tx, game, &phase_id).await? {
                 Err(Reject::PhaseLocked)
             } else {
-                Ok(ps.phase_id)
+                Ok(phase_id)
             }
         }
         None => Err(Reject::PhaseLocked), // no phase open → cannot act
@@ -4129,21 +4169,21 @@ async fn require_open_phase(
 async fn phase_has_pending_prompt(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &domain::phase::PhaseId,
 ) -> Result<bool, Reject> {
     Ok(projections::host_prompts(&mut **tx, game)
         .await?
         .into_iter()
-        .any(|prompt| prompt.phase_id == phase_id && prompt.status == "pending"))
+        .any(|prompt| prompt.phase_id == *phase_id && prompt.status == "pending"))
 }
 
 /// Votes are legal only while the current open phase is a Day window.
 async fn require_open_day_phase(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-) -> Result<String, Reject> {
+) -> Result<domain::phase::PhaseId, Reject> {
     let phase = require_open_phase(tx, game).await?;
-    if phase_kind(&phase)? != domain::pack::PhaseKind::Day {
+    if phase_kind(&phase) != domain::phase::PhaseKind::Day {
         return Err(Reject::PhaseLocked);
     }
     Ok(phase)
@@ -4153,10 +4193,10 @@ async fn require_open_day_phase(
 pub(crate) async fn current_phase(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-) -> Result<Option<String>, Reject> {
+) -> Result<Option<domain::phase::PhaseId>, Reject> {
     Ok(projections::phase_state(&mut **tx, game)
         .await?
-        .map(|p| p.phase_id))
+        .map(|phase| phase.phase_id))
 }
 
 pub(crate) async fn require_slot_alive(
@@ -4200,7 +4240,7 @@ async fn require_slot_can_post(
 pub async fn active_action_templates_for_actor_phase(
     pool: &PgPool,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &domain::phase::PhaseId,
     actor_slot: &str,
 ) -> Result<BTreeSet<String>, Reject> {
     Ok(
@@ -4228,7 +4268,7 @@ pub struct CurrentAction {
 pub async fn active_actions_view_for_actor_phase(
     pool: &PgPool,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &domain::phase::PhaseId,
     actor_slot: &str,
 ) -> Result<Vec<CurrentAction>, Reject> {
     Ok(
@@ -4323,7 +4363,7 @@ fn hammer_lock_event(
         return Ok(None);
     }
 
-    if phase_input.phase_kind != domain::pack::PhaseKind::Day {
+    if phase_input.phase_id.kind() != domain::phase::PhaseKind::Day {
         return Ok(None);
     }
     let mut preview_input = phase_input.clone();
@@ -4337,7 +4377,8 @@ fn hammer_lock_event(
         withdrawn: false,
         metadata: BTreeMap::new(),
     });
-    let output = domain::resolve(preview_input.resolve_input(EngineRunKind::HammerPreview));
+    let output = domain::resolve(preview_input.resolve_input(EngineRunKind::HammerPreview))
+        .map_err(|error| Reject::Internal(format!("invalid hammer preview input: {error}")))?;
     let hammers = output.applied.events.iter().any(|event| {
         matches!(
             &event.event,
@@ -4504,17 +4545,89 @@ mod tests {
     use super::*;
 
     #[test]
+    fn phase_progression_rejects_storage_ordinal_limit() {
+        let policy = domain::pack::PhasePolicy {
+            twilight: false,
+            cadence: vec![
+                domain::phase::PhaseKind::Night,
+                domain::phase::PhaseKind::Day,
+            ],
+            subsegments: std::collections::BTreeMap::new(),
+        };
+        let source =
+            domain::phase::PhaseId::compose(domain::phase::PhaseKind::Day, i32::MAX as u32)
+                .expect("the largest persistence-safe ordinal is canonical");
+
+        assert_eq!(
+            next_declared_phase_id(&policy, &source),
+            Err(Reject::InvalidTarget)
+        );
+    }
+
+    #[test]
+    fn persisted_phase_payloads_reject_noncanonical_ids_before_reduction() {
+        let event = eventstore::StoredEvent {
+            seq: 1,
+            stream_id: Uuid::nil(),
+            stream_seq: 1,
+            kind: "PhaseAdvanced".to_string(),
+            version: 1,
+            payload: serde_json::json!({ "phase_id": "D01R02" }),
+            actor: eventstore::ActorId::Host,
+            occurred_at: 0,
+            causation_id: None,
+            meta: serde_json::json!({}),
+        };
+
+        assert!(matches!(
+            validate_persisted_phase_ids(&[event]),
+            Err(Reject::Internal(message)) if message.contains("D01R02")
+        ));
+    }
+
+    #[test]
+    fn persisted_phase_payloads_reject_redundant_primary_coordinates() {
+        let payload = serde_json::json!({
+            "phase_id": "D01",
+            "phase_kind": "Night",
+            "phase_number": 1,
+        });
+
+        assert!(matches!(
+            validate_phase_ids_in_json(&payload, "test"),
+            Err(Reject::Internal(message)) if message.contains("phase_id only")
+        ));
+    }
+
+    #[test]
+    fn persisted_phase_payloads_reject_redundant_transition_coordinates() {
+        let payload = serde_json::json!({
+            "source_phase_id": "D01",
+            "source_phase_kind": "Day",
+            "target_phase_id": "N01",
+            "target_phase_number": 1,
+        });
+
+        assert!(matches!(
+            validate_phase_ids_in_json(&payload, "test"),
+            Err(Reject::Internal(message)) if message.contains("source_phase_id only")
+        ));
+    }
+
+    #[test]
     fn official_votecount_body_is_projection_derived_and_deterministic() {
         let rows = vec![
             projections::VoteCountRow {
                 game_id: Uuid::nil(),
-                phase_id: "D01".to_string(),
+                phase_id: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
                 candidate_slot: "slot_2".to_string(),
                 count: 4,
             },
             projections::VoteCountRow {
                 game_id: Uuid::nil(),
-                phase_id: "D01".to_string(),
+                phase_id: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
                 candidate_slot: "no_lynch".to_string(),
                 count: 1,
             },

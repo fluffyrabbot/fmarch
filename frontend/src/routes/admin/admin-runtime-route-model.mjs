@@ -2,6 +2,7 @@ import { buildAppShell } from "../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../lib/app/app-surface-header-model.mjs";
 import { resolveSurfaceAccess } from "../../lib/app/capabilities.mjs";
 import { loadAdminColdData, operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
+import { canonicalPhaseId, phaseLabelFromId } from "../../lib/phase-id.mjs";
 import { ADMIN_ROUTE_CONTRACT } from "./admin-route-contract.mjs";
 
 export async function buildAdminRuntimeRouteData({
@@ -343,12 +344,12 @@ function normalizeAdminGameOption(entry) {
   if (id === null || pack === null || !["setup", "active", "completed"].includes(status)) {
     return null;
   }
-  const phase = nonemptyString(entry?.phase_id, entry?.phaseId);
+  const phase = canonicalPhaseId(entry?.phase_id);
   return Object.freeze({
     id,
     pack,
     status,
-    label: `${pack} · ${status}${phase === null ? "" : ` · ${phase}`}`,
+    label: `${pack} · ${status}${phase === null ? "" : ` · ${phaseLabelFromId(phase)}`}`,
   });
 }
 

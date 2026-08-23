@@ -109,7 +109,7 @@ async fn host_phase_movement_respects_pack_cadence(pool: PgPool) {
         &host,
         Command::StartGame {
             game,
-            phase: "T01".into(),
+            phase: domain::phase::PhaseId::parse("T01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -125,14 +125,14 @@ async fn host_phase_movement_respects_pack_cadence(pool: PgPool) {
         &host,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
     .expect("declared Day cadence is legal");
     assert_eq!(
         phase_state(&pool, game).await.unwrap().unwrap().phase_id,
-        "D01"
+        domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical")
     );
 
     let err = handle(
@@ -140,7 +140,7 @@ async fn host_phase_movement_respects_pack_cadence(pool: PgPool) {
         &host,
         Command::OpenDayPhase {
             game,
-            phase: "T01".into(),
+            phase: domain::phase::PhaseId::parse("T01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -148,7 +148,7 @@ async fn host_phase_movement_respects_pack_cadence(pool: PgPool) {
     assert_eq!(err, Reject::InvalidTarget);
     assert_eq!(
         phase_state(&pool, game).await.unwrap().unwrap().phase_id,
-        "D01",
+        domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         "rejected phase advance must not mutate phase_state"
     );
 
@@ -212,7 +212,7 @@ async fn start_game_declares_mason_neighbor_private_channels(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -350,7 +350,7 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -548,7 +548,7 @@ async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -1189,8 +1189,8 @@ async fn resolve_phase_folds_night_kill_into_faction_win_and_rebuild(pool: PgPoo
     let applied_payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .expect("default_open night win ResolutionApplied validates");
-    assert_eq!(applied.phase_id, "N01");
-    assert_eq!(applied.phase_kind, domain::pack::PhaseKind::Night);
+    assert_eq!(applied.phase_id.as_str(), "N01");
+    assert_eq!(applied.phase_id.kind(), domain::phase::PhaseKind::Night);
     assert_eq!(applied.seed, 9911);
     let killed_index = applied
         .events
@@ -1275,7 +1275,8 @@ async fn resolve_phase_folds_night_kill_into_faction_win_and_rebuild(pool: PgPoo
         result.reason
     );
     assert_eq!(
-        result.phase_id, "N01",
+        result.phase_id,
+        domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         "game_result pins the phase the win landed in"
     );
     let slots_before = serde_json::to_string(&slots).unwrap();
@@ -1363,7 +1364,7 @@ async fn resolve_phase_folds_three_faction_elimination_win_and_rebuild(pool: PgP
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -1749,7 +1750,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
         &user(host),
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -2131,7 +2132,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
         &user(host),
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -2675,7 +2676,7 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -3052,7 +3053,7 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
         &host,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -3228,7 +3229,7 @@ async fn incoming_replacement_can_submit_and_resolve_action(pool: PgPool) {
         &host,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -3328,7 +3329,7 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
         &user("user_a"),
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 999,
         },
     )
@@ -3342,7 +3343,7 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
         &user("host_h"),
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 999,
         },
     )
@@ -3368,7 +3369,7 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
         cohost_command_id,
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 1000,
         },
     )
@@ -3531,8 +3532,8 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
     assert_eq!(planned[0].payload["actor"], "external");
     assert_eq!(planned[0].payload["source_action"], "host_fiat:mark");
     assert_eq!(planned[0].payload["phase_id"], "D01");
-    assert_eq!(planned[0].payload["phase_kind"], "Day");
-    assert_eq!(planned[0].payload["phase_number"], 1);
+    assert!(planned[0].payload.get("phase_kind").is_none());
+    assert!(planned[0].payload.get("phase_number").is_none());
     assert_eq!(planned[0].payload["duration"], "Persistent");
     assert_eq!(planned[1].kind, "SlotStatusChanged");
     assert_eq!(
@@ -3548,7 +3549,10 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
         .expect("persistent mark projected");
     assert_eq!(bomb.source_slot, "external");
     assert_eq!(bomb.source_action.as_deref(), Some("host_fiat:mark"));
-    assert_eq!(bomb.phase_id.as_deref(), Some("D01"));
+    assert_eq!(
+        bomb.phase_id.as_ref().map(domain::phase::PhaseId::as_str),
+        Some("D01")
+    );
     assert_eq!(bomb.duration, "Persistent");
     let projected_slots = slot_state(&pool, game).await.unwrap();
     assert_eq!(
@@ -3560,7 +3564,7 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
         "dead"
     );
 
-    let phase_input = load_engine_phase_input(&pool, game, "D01")
+    let phase_input = load_engine_phase_input(&pool, game, &fixture_phase("D01"))
         .await
         .expect("build the exact subsequent ResolvePhase input");
     let marked_slot = phase_input
@@ -3621,8 +3625,8 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
     assert_eq!(clear.payload["actor"], "external");
     assert_eq!(clear.payload["source_action"], "host_fiat:clear");
     assert_eq!(clear.payload["phase_id"], "D01");
-    assert_eq!(clear.payload["phase_kind"], "Day");
-    assert_eq!(clear.payload["phase_number"], 1);
+    assert!(clear.payload.get("phase_kind").is_none());
+    assert!(clear.payload.get("phase_number").is_none());
     assert!(slot_effects(&pool, game)
         .await
         .unwrap()
@@ -3757,8 +3761,8 @@ async fn apply_effect_plan_grants_extra_action_and_item_inventory(pool: PgPool) 
         assert_eq!(grant.payload["actor"], "external");
         assert_eq!(grant.payload["target"], "slot_1");
         assert_eq!(grant.payload["phase_id"], "D01");
-        assert_eq!(grant.payload["phase_kind"], "Day");
-        assert_eq!(grant.payload["phase_number"], 1);
+        assert!(grant.payload.get("phase_kind").is_none());
+        assert!(grant.payload.get("phase_number").is_none());
         let source_action = grant.payload["source_action"].as_str().unwrap();
         assert!(source_action.starts_with("host_fiat:grant:"));
         assert!(source_action.ends_with(&format!(":{effect_index}")));
@@ -3789,7 +3793,7 @@ async fn apply_effect_plan_grants_extra_action_and_item_inventory(pool: PgPool) 
     assert_eq!(grants[1].source_slot, "external");
     assert_eq!(grants[1].uses, 1);
 
-    let snapshot = load_engine_snapshot(&pool, game, "D01")
+    let snapshot = load_engine_snapshot(&pool, game, &fixture_phase("D01"))
         .await
         .expect("top-level grants fold into the exact engine snapshot");
     assert_eq!(snapshot.action_grants.len(), 2);
@@ -3811,7 +3815,7 @@ async fn apply_effect_plan_grants_extra_action_and_item_inventory(pool: PgPool) 
     let notices = player_notifications(&pool, game).await.unwrap();
     assert_eq!(notices.len(), 2);
     assert!(notices.iter().all(|notice| {
-        notice.audience_slot == "slot_1" && notice.effect == "grant" && notice.phase_id == "D01"
+        notice.audience_slot == "slot_1" && notice.effect == "grant" && notice.phase_id.as_str() == "D01"
     }));
     let projection_audit = audit_rebuild(&pool, game).await.unwrap();
     assert!(
@@ -3884,7 +3888,7 @@ async fn host_fiat_vote_weight_grant_hammers_from_folded_snapshot(pool: PgPool) 
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -3931,7 +3935,7 @@ async fn host_fiat_vote_weight_grant_hammers_from_folded_snapshot(pool: PgPool) 
     assert!(grant_source_action.ends_with(":0"));
     assert!(!grant_source_action.contains("host_h"));
 
-    let n01_snapshot = load_engine_snapshot(&pool, game, "N01")
+    let n01_snapshot = load_engine_snapshot(&pool, game, &fixture_phase("N01"))
         .await
         .expect("host-fiat VoteWeight grant folds before any resolution");
     assert!(n01_snapshot.action_grants.iter().any(|grant| {
@@ -3962,7 +3966,7 @@ async fn host_fiat_vote_weight_grant_hammers_from_folded_snapshot(pool: PgPool) 
         .await
         .expect("advance to the vote-weighted day");
 
-    let d02_snapshot = load_engine_snapshot(&pool, game, "D02")
+    let d02_snapshot = load_engine_snapshot(&pool, game, &fixture_phase("D02"))
         .await
         .expect("host-fiat grant survives the phase boundary");
     assert!(d02_snapshot.action_grants.iter().any(|grant| {
@@ -4068,7 +4072,7 @@ async fn cohost_denied_lifecycle_and_effect_spec_while_deadline_still_allowed(po
         &user("host_h"),
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -4078,7 +4082,7 @@ async fn cohost_denied_lifecycle_and_effect_spec_while_deadline_still_allowed(po
         &user("host_h"),
         Command::OpenDayPhase {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -4099,7 +4103,7 @@ async fn cohost_denied_lifecycle_and_effect_spec_while_deadline_still_allowed(po
         &user("user_c"),
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 4242,
         },
     )
@@ -4168,7 +4172,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
         &user("user_c"),
         Command::ExtendDeadline {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
             at: 111,
         },
     )
@@ -4176,7 +4180,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
     .expect_err("cohost cannot extend a non-current phase");
     assert_eq!(wrong_phase_err, Reject::PhaseLocked);
     let d01_before_deadline = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(d01_before_deadline.phase_id, "D01");
+    assert_eq!(d01_before_deadline.phase_id.as_str(), "D01");
     assert_eq!(d01_before_deadline.deadline, None);
 
     handle(
@@ -4184,7 +4188,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
         &user("user_c"),
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 222,
         },
     )
@@ -4207,7 +4211,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
         &user("user_c"),
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 333,
         },
     )
@@ -4223,7 +4227,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
         .await
         .expect("host advances to night");
     let n01 = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(n01.phase_id, "N01");
+    assert_eq!(n01.phase_id.as_str(), "N01");
     assert_eq!(n01.deadline, None);
 
     let stale_phase_err = handle(
@@ -4231,7 +4235,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
         &user("user_c"),
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 444,
         },
     )
@@ -4239,7 +4243,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
     .expect_err("cohost cannot extend a stale phase");
     assert_eq!(stale_phase_err, Reject::PhaseLocked);
     let after_stale_reject = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(after_stale_reject.phase_id, "N01");
+    assert_eq!(after_stale_reject.phase_id.as_str(), "N01");
     assert_eq!(after_stale_reject.deadline, None);
 
     append_and_project(
@@ -4256,7 +4260,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
     .await
     .expect("bypass stale deadline event appends");
     let after_bypass_event = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(after_bypass_event.phase_id, "N01");
+    assert_eq!(after_bypass_event.phase_id.as_str(), "N01");
     assert_eq!(
         after_bypass_event.deadline, None,
         "projection must not let stale deadline events mutate the current phase",
@@ -4324,7 +4328,7 @@ async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: 
         &host,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -4353,10 +4357,10 @@ async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: 
     .await
     .unwrap();
 
-    let first = load_engine_snapshot(&pool, game, "D01")
+    let first = load_engine_snapshot(&pool, game, &fixture_phase("D01"))
         .await
         .expect("first engine snapshot load");
-    let second = load_engine_snapshot(&pool, game, "D01")
+    let second = load_engine_snapshot(&pool, game, &fixture_phase("D01"))
         .await
         .expect("second engine snapshot load");
     let first_json = serde_json::to_value(&first).expect("snapshot serializes");
@@ -4366,9 +4370,9 @@ async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: 
         first_json, second_json,
         "loading the same stored stream twice should produce identical engine snapshots"
     );
-    assert_eq!(first.phase_id, "D01");
-    assert_eq!(first.phase_kind, domain::pack::PhaseKind::Day);
-    assert_eq!(first.phase_number, 1);
+    assert_eq!(first.phase_id.as_str(), "D01");
+    assert_eq!(first.phase_id.kind(), domain::phase::PhaseKind::Day);
+    assert_eq!(first.phase_id.number(), 1);
     assert_eq!(
         first
             .slots
@@ -4467,7 +4471,7 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
         &host,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -4496,11 +4500,11 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
     .await
     .unwrap();
 
-    let audit = audit_engine_snapshot_identity_boundary(&pool, game, "D01")
+    let audit = audit_engine_snapshot_identity_boundary(&pool, game, &fixture_phase("D01"))
         .await
         .expect("identity boundary audit");
 
-    assert_eq!(audit.phase_id, "D01");
+    assert_eq!(audit.phase_id.as_str(), "D01");
     assert_eq!(audit.snapshot_slot_ids, vec!["slot_blue", "slot_red"]);
     for expected_principal in [
         "user_host_alpha",
@@ -4594,7 +4598,7 @@ async fn stored_game_stream_loads_phase_metadata_deadline_and_pack_policy(pool: 
         &host,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -4604,31 +4608,31 @@ async fn stored_game_stream_loads_phase_metadata_deadline_and_pack_policy(pool: 
         &host,
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 1_799_999_999,
         },
     )
     .await
     .unwrap();
 
-    let snapshot = load_engine_snapshot(&pool, game, "D01")
+    let snapshot = load_engine_snapshot(&pool, game, &fixture_phase("D01"))
         .await
         .expect("load engine snapshot with phase metadata");
 
-    assert_eq!(snapshot.phase_id, "D01");
-    assert_eq!(snapshot.phase_kind, domain::pack::PhaseKind::Day);
-    assert_eq!(snapshot.phase_number, 1);
+    assert_eq!(snapshot.phase_id.as_str(), "D01");
+    assert_eq!(snapshot.phase_id.kind(), domain::phase::PhaseKind::Day);
+    assert_eq!(snapshot.phase_id.number(), 1);
     assert_eq!(snapshot.phase_deadline, Some(1_799_999_999));
     assert_eq!(
         snapshot.phase_policy.cadence,
-        vec![domain::pack::PhaseKind::Day, domain::pack::PhaseKind::Night],
+        vec![domain::phase::PhaseKind::Day, domain::phase::PhaseKind::Night],
         "snapshot must carry the declared pack cadence"
     );
     assert_eq!(
         snapshot
             .phase_policy
             .subsegments
-            .get(&domain::pack::PhaseKind::Day)
+            .get(&domain::phase::PhaseKind::Day)
             .cloned()
             .unwrap_or_default(),
         vec!["sod", "main", "eod"],
@@ -4702,7 +4706,7 @@ async fn stored_game_stream_loads_slot_lifecycle_and_pack_visible_status_tags(po
         &host,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -4746,7 +4750,7 @@ async fn stored_game_stream_loads_slot_lifecycle_and_pack_visible_status_tags(po
     .await
     .expect("host tags slot");
 
-    let snapshot = load_engine_snapshot(&pool, game, "D01")
+    let snapshot = load_engine_snapshot(&pool, game, &fixture_phase("D01"))
         .await
         .expect("load engine snapshot with slot status");
     let slot_1 = snapshot
@@ -4857,7 +4861,7 @@ async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: P
         &host,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -5042,7 +5046,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
         &host,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -5066,7 +5070,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
     assert!(!sealed_role.body_contains("godfather"));
     assert!(!sealed_role.body_contains("mafia"));
 
-    let snapshot = load_engine_snapshot(&pool, game, "D01")
+    let snapshot = load_engine_snapshot(&pool, game, &fixture_phase("D01"))
         .await
         .expect("load engine snapshot with private role facts");
     let godfather = snapshot
@@ -5110,7 +5114,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
         .await
         .expect("host completes game");
 
-    let completed_snapshot = load_engine_snapshot(&pool, game, "D01")
+    let completed_snapshot = load_engine_snapshot(&pool, game, &fixture_phase("D01"))
         .await
         .expect("load completed engine snapshot");
     let completed_godfather = completed_snapshot
@@ -5355,7 +5359,7 @@ async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
         &host,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -5480,7 +5484,7 @@ async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
         .expect("thread view includes instant announcement");
     assert!(
         thread.posts.iter().any(|post| {
-            post.phase_id == "D01"
+            post.phase_id.as_ref().is_some_and(|phase_id| phase_id.as_str() == "D01")
                 && matches!(&post.author, projections::GameThreadAuthor::System)
                 && post.body.contains(
                     "Phase D01 announcement: slot_2 (instant_self_destruct), slot_1 (instant_self_destruct).",
@@ -5585,7 +5589,7 @@ async fn host_resolve_phase_reveals_killed_slot_without_endgame(pool: PgPool) {
         &host,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -5627,7 +5631,7 @@ async fn host_resolve_phase_reveals_killed_slot_without_endgame(pool: PgPool) {
         "scenario should stay mid-game so only the death flip reveals"
     );
 
-    let snapshot = load_engine_snapshot(&pool, game, "N01")
+    let snapshot = load_engine_snapshot(&pool, game, &fixture_phase("N01"))
         .await
         .expect("load post-death snapshot");
     let killed = snapshot
@@ -5744,7 +5748,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -5818,8 +5822,8 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
 
     let payload = stored_payload(&pool, game, "ResolutionApplied").await;
     let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION).unwrap();
-    assert_eq!(applied.phase_id, "D01");
-    assert_eq!(applied.phase_kind, domain::pack::PhaseKind::Day);
+    assert_eq!(applied.phase_id.as_str(), "D01");
+    assert_eq!(applied.phase_id.kind(), domain::phase::PhaseKind::Day);
     assert_eq!(applied.seed, 777);
     assert_eq!(applied.counts.kills, 1);
     let day_vote_index = applied
@@ -5893,7 +5897,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
             _ => None,
         })
         .expect("trailer event is PhaseAnnouncement");
-    assert_eq!(announcement.phase_id, "D01");
+    assert_eq!(announcement.phase_id.as_str(), "D01");
     assert!(
         announcement
             .deaths
@@ -5912,7 +5916,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
     let trace_payload = stored_payload(&pool, game, "ResolutionTrace").await;
     let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
     assert_eq!(trace.run_id, applied.run_id);
-    assert_eq!(trace.phase_id, "D01");
+    assert_eq!(trace.phase_id.as_str(), "D01");
     let assert_stored_trace_decision =
         |stage: &str, source: &str, outcome: &str, detail: serde_json::Value| {
             let decision = trace
@@ -5979,7 +5983,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
     );
 
     let phase_after_resolution = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase_after_resolution.phase_id, "D01");
+    assert_eq!(phase_after_resolution.phase_id.as_str(), "D01");
     assert!(
         phase_after_resolution.locked,
         "prompt-free ResolvePhase closes the resolved phase"
@@ -6048,7 +6052,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
     assert_eq!(audit.summary.skipped, 0);
     assert!(audit.summary.first_drift_paths.is_empty());
     assert_eq!(audit.phases.len(), 1);
-    assert_eq!(audit.phases[0].phase_id, "D01");
+    assert_eq!(audit.phases[0].phase_id.as_str(), "D01");
     assert_eq!(audit.phases[0].run_id, applied.run_id);
     assert_eq!(
         audit.phases[0].status,
@@ -6067,7 +6071,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
         "run-id filtered trace inspection should return only the resolved phase"
     );
     assert_eq!(filtered_trace_report.traces[0].run_id, applied.run_id);
-    assert_eq!(filtered_trace_report.traces[0].phase_id, "D01");
+    assert_eq!(filtered_trace_report.traces[0].phase_id.as_str(), "D01");
     assert_eq!(
         filtered_trace_report.traces[0].applied_stream_seq,
         Some(audit.phases[0].applied_stream_seq),
@@ -6146,7 +6150,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
         .await
         .expect("host advances to the next declared cadence phase");
     let phase_after_advance = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase_after_advance.phase_id, "N01");
+    assert_eq!(phase_after_advance.phase_id.as_str(), "N01");
     assert!(
         !phase_after_advance.locked,
         "host-controlled cadence advance reopens the next declared phase"
@@ -6230,7 +6234,7 @@ async fn host_advance_phase_wraps_night_to_next_day_from_pack_cadence(pool: PgPo
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -6253,7 +6257,7 @@ async fn host_advance_phase_wraps_night_to_next_day_from_pack_cadence(pool: PgPo
         .await
         .expect("host advances from resolved night to next day");
     let phase_after_advance = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase_after_advance.phase_id, "D02");
+    assert_eq!(phase_after_advance.phase_id.as_str(), "D02");
     assert!(
         !phase_after_advance.locked,
         "wrapped cadence advance opens the next numbered day"
@@ -6338,7 +6342,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -6348,7 +6352,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         &h,
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 100,
         },
     )
@@ -6374,7 +6378,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
     .await
     .expect("standalone timer evidence appends");
     let phase_after_evidence = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase_after_evidence.phase_id, "D01");
+    assert_eq!(phase_after_evidence.phase_id.as_str(), "D01");
     assert!(!phase_after_evidence.locked);
     assert_eq!(
         phase_after_evidence.deadline,
@@ -6394,7 +6398,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         &h,
         Command::AdvancePhaseByDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             observed_at: 101,
         },
     )
@@ -6406,7 +6410,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         .await
         .expect("host resolves current phase");
     let locked = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(locked.phase_id, "D01");
+    assert_eq!(locked.phase_id.as_str(), "D01");
     assert!(locked.locked);
     assert_eq!(locked.deadline, Some(100));
 
@@ -6415,7 +6419,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         &h,
         Command::AdvancePhaseByDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             observed_at: 99,
         },
     )
@@ -6428,7 +6432,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         &h,
         Command::AdvancePhaseByDeadline {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
             observed_at: 101,
         },
     )
@@ -6444,7 +6448,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         &user("user_1"),
         Command::AdvancePhaseByDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             observed_at: 101,
         },
     )
@@ -6464,7 +6468,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
         &h,
         Command::AdvancePhaseByDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             observed_at: 101,
         },
     )
@@ -6477,7 +6481,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
     );
 
     let phase_after_deadline_advance = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase_after_deadline_advance.phase_id, "N01");
+    assert_eq!(phase_after_deadline_advance.phase_id.as_str(), "N01");
     assert!(!phase_after_deadline_advance.locked);
     assert_eq!(
         phase_after_deadline_advance.deadline, None,
@@ -6579,7 +6583,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -6625,16 +6629,19 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
     .await
     .unwrap();
 
-    let night_input = load_engine_phase_input(&pool, game, "N01")
+    let night_input = load_engine_phase_input(&pool, game, &fixture_phase("N01"))
         .await
         .expect("load N01 resolver input");
-    assert_eq!(night_input.phase_id, "N01");
-    assert_eq!(night_input.phase_kind, domain::pack::PhaseKind::Night);
-    assert_eq!(night_input.phase_number, 1);
+    assert_eq!(night_input.phase_id.as_str(), "N01");
+    assert_eq!(night_input.phase_id.kind(), domain::phase::PhaseKind::Night);
+    assert_eq!(night_input.phase_id.number(), 1);
     assert_eq!(night_input.pack_ref.key, "mafiascum");
-    assert_eq!(night_input.state.phase_id, "N01");
-    assert_eq!(night_input.state.phase_kind, domain::pack::PhaseKind::Night);
-    assert_eq!(night_input.state.phase_number, 1);
+    assert_eq!(night_input.state.phase_id.as_str(), "N01");
+    assert_eq!(
+        night_input.state.phase_id.kind(),
+        domain::phase::PhaseKind::Night
+    );
+    assert_eq!(night_input.state.phase_id.number(), 1);
     let mafia_actor = night_input
         .state
         .slots
@@ -6682,7 +6689,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -6745,7 +6752,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
         "event stream remains the audit history even when projections expose current state"
     );
 
-    let day_input = load_engine_phase_input(&pool, game, "D01")
+    let day_input = load_engine_phase_input(&pool, game, &fixture_phase("D01"))
         .await
         .expect("load D01 resolver input");
     let day_submissions: Vec<_> = day_input
@@ -6776,7 +6783,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
     assert_eq!(
         current_votes
             .iter()
-            .find(|row| row.phase_id == "D01" && row.candidate_slot == "slot_5")
+            .find(|row| row.phase_id.as_str() == "D01" && row.candidate_slot == "slot_5")
             .map(|row| row.count),
         Some(3),
         "projection current ballots keep the latest non-withdrawn slot_1/2/3 votes"
@@ -6784,7 +6791,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
     assert!(
         !current_votes
             .iter()
-            .any(|row| row.phase_id == "D01" && row.candidate_slot == "slot_4"),
+            .any(|row| row.phase_id.as_str() == "D01" && row.candidate_slot == "slot_4"),
         "slot_2's overwritten decoy vote is absent from the current ballot projection"
     );
     let votes_before = serde_json::to_string(&current_votes).unwrap();
@@ -6807,7 +6814,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
     assert_eq!(
         stale_votes
             .iter()
-            .find(|row| row.phase_id == "D01" && row.candidate_slot == "slot_4")
+            .find(|row| row.phase_id.as_str() == "D01" && row.candidate_slot == "slot_4")
             .map(|row| row.count),
         Some(1),
         "test setup proves the running votecount projection can be stale without a log event"
@@ -6878,7 +6885,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
         .await
         .expect("official day vote outcome projection");
     assert_eq!(official_rows.len(), 1);
-    assert_eq!(official_rows[0].phase_id, "D01");
+    assert_eq!(official_rows[0].phase_id.as_str(), "D01");
     assert_eq!(official_rows[0].status, "Lynch");
     assert_eq!(official_rows[0].winner_slot.as_deref(), Some("slot_5"));
     assert_eq!(
@@ -6910,7 +6917,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
             .await
             .unwrap()
             .iter()
-            .find(|row| row.phase_id == "D01" && row.candidate_slot == "slot_4")
+            .find(|row| row.phase_id.as_str() == "D01" && row.candidate_slot == "slot_4")
             .map(|row| row.count),
         Some(1),
         "the stale projection row remains projection-local and is not the official outcome source"
@@ -7009,7 +7016,7 @@ async fn action_submission_rejects_invalid_target_shape_state_and_window(pool: P
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -7135,7 +7142,7 @@ async fn action_submission_rejects_invalid_target_shape_state_and_window(pool: P
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -7231,7 +7238,7 @@ async fn action_submission_rejects_day_specific_action_in_night_window(pool: PgP
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -7290,7 +7297,7 @@ async fn audit_resolution_reports_structural_drift_path_expected_and_actual(pool
     assert_eq!(audit.summary.skipped, 0);
     assert_eq!(audit.phases.len(), 1);
     let phase = &audit.phases[0];
-    assert_eq!(phase.phase_id, "D01");
+    assert_eq!(phase.phase_id.as_str(), "D01");
     assert_eq!(phase.status, ResolutionEnvelopeAuditStatus::Drifted);
     assert!(!phase.applied_matches);
     assert!(phase.trace_matches);
@@ -7304,7 +7311,7 @@ async fn audit_resolution_reports_structural_drift_path_expected_and_actual(pool
     assert_eq!(diff.expected, serde_json::json!(expected_winner));
     assert_eq!(diff.actual, serde_json::json!("slot_2"));
     assert_eq!(audit.summary.first_drift_paths.len(), 1);
-    assert_eq!(audit.summary.first_drift_paths[0].phase_id, "D01");
+    assert_eq!(audit.summary.first_drift_paths[0].phase_id.as_str(), "D01");
     assert_eq!(
         audit.summary.first_drift_paths[0].envelope,
         ResolutionEnvelopeAuditEnvelope::Applied
@@ -7335,7 +7342,7 @@ async fn audit_resolution_reports_trace_drift_path_expected_and_actual(pool: PgP
     assert_eq!(audit.summary.skipped, 0);
     assert_eq!(audit.phases.len(), 1);
     let phase = &audit.phases[0];
-    assert_eq!(phase.phase_id, "D01");
+    assert_eq!(phase.phase_id.as_str(), "D01");
     assert_eq!(phase.status, ResolutionEnvelopeAuditStatus::Drifted);
     assert!(phase.applied_matches);
     assert!(!phase.trace_matches);
@@ -7382,7 +7389,7 @@ async fn audit_resolution_reports_missing_trace_root_diff(pool: PgPool) {
     assert_eq!(audit.summary.skipped, 0);
     assert_eq!(audit.phases.len(), 1);
     let phase = &audit.phases[0];
-    assert_eq!(phase.phase_id, "D01");
+    assert_eq!(phase.phase_id.as_str(), "D01");
     assert_eq!(phase.status, ResolutionEnvelopeAuditStatus::Drifted);
     assert!(phase.applied_matches);
     assert!(!phase.trace_matches);
@@ -8314,7 +8321,7 @@ async fn submit_vote_hammer_uses_folded_vote_weight_grant(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -8352,7 +8359,7 @@ async fn submit_vote_hammer_uses_folded_vote_weight_grant(pool: PgPool) {
         .await
         .expect("host advances N01 to D02 after dynamic hammer grant");
 
-    let snapshot = load_engine_snapshot(&pool, game, "D02")
+    let snapshot = load_engine_snapshot(&pool, game, &fixture_phase("D02"))
         .await
         .expect("load dynamic hammer snapshot");
     assert!(
@@ -8495,7 +8502,7 @@ async fn host_prompt_skip_next_day_rejects_unsupported_pack_cadence(pool: PgPool
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -8526,7 +8533,7 @@ async fn host_prompt_skip_next_day_rejects_unsupported_pack_cadence(pool: PgPool
         .await
         .unwrap()
         .expect("day phase remains current");
-    assert_eq!(phase_before.phase_id, "D01");
+    assert_eq!(phase_before.phase_id.as_str(), "D01");
     let prompt_before = host_prompts(&pool, game).await.unwrap();
     assert_eq!(prompt_before.len(), 1);
     assert_eq!(prompt_before[0].prompt_id, "D01:skip_next_day:slot_1");
@@ -8557,7 +8564,7 @@ async fn host_prompt_skip_next_day_rejects_unsupported_pack_cadence(pool: PgPool
     );
     assert_eq!(
         phase_state(&pool, game).await.unwrap().unwrap().phase_id,
-        "D01",
+        domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         "rejected prompt transition must preserve phase_state"
     );
 
@@ -8642,7 +8649,7 @@ async fn host_resolve_phase_loads_action_submissions_from_stream(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -8856,7 +8863,7 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -8932,8 +8939,6 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
                 template_id,
                 targets,
                 phase_id,
-                phase_kind,
-                phase_number,
                 reason,
                 grant_id,
             } if action_id == "historical_bad_kill" => Some((
@@ -8942,8 +8947,6 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
                 template_id,
                 targets,
                 phase_id,
-                phase_kind,
-                phase_number,
                 reason,
                 grant_id,
             )),
@@ -8954,11 +8957,9 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
     assert_eq!(halt.1.as_deref(), Some("doctor"));
     assert_eq!(halt.2, "factional_kill");
     assert_eq!(halt.3, &vec!["slot_1".to_string()]);
-    assert_eq!(halt.4, "N01");
-    assert_eq!(*halt.5, domain::pack::PhaseKind::Night);
-    assert_eq!(*halt.6, 1);
-    assert_eq!(halt.7, "template_not_available_to_actor");
-    assert_eq!(halt.8.as_deref(), None);
+    assert_eq!(halt.4.as_str(), "N01");
+    assert_eq!(halt.5, "template_not_available_to_actor");
+    assert_eq!(halt.6.as_deref(), None);
 
     let trace_payload =
         stored_payload_where(&pool, game, "ResolutionTrace", &[("phase_id", "N01")]).await;
@@ -9062,7 +9063,7 @@ async fn action_submission_requires_open_matching_phase(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -9088,7 +9089,7 @@ async fn action_submission_requires_open_matching_phase(pool: PgPool) {
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -9182,7 +9183,7 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -9304,7 +9305,7 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
                 && counter.limit == 1
                 && counter.used == 1
                 && counter.remaining == 0
-                && counter.phase_id == "N01"
+                && counter.phase_id.as_str() == "N01"
                 && counter.phase_kind == "Night"
                 && counter.phase_number == 1
         }),
@@ -9321,7 +9322,7 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
                 && counter.limit == 1
                 && counter.used == 1
                 && counter.remaining == 1
-                && counter.phase_id == "N01"
+                && counter.phase_id.as_str() == "N01"
                 && counter.phase_kind == "Night"
                 && counter.phase_number == 1
         }),
@@ -9348,7 +9349,7 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N02".into(),
+            phase: domain::phase::PhaseId::parse("N02").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -9508,7 +9509,7 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
             .any(|record| {
                 record.slot_id == "slot_3"
                     && record.template_id == "investigate_alignment"
-                    && record.phase_id == "N02"
+                    && record.phase_id.as_str() == "N02"
                     && record.targets == vec!["slot_6".to_string()]
                     && record.status == "resolved"
             }),
@@ -9539,7 +9540,7 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N03".into(),
+            phase: domain::phase::PhaseId::parse("N03").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -9647,7 +9648,7 @@ async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -9682,7 +9683,7 @@ async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
                 && counter.limit == 2
                 && counter.used == 1
                 && counter.remaining == 2
-                && counter.phase_id == "N01"
+                && counter.phase_id.as_str() == "N01"
                 && counter.phase_kind == "Night"
                 && counter.phase_number == 1
         }),
@@ -9695,7 +9696,8 @@ async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
             &h,
             Command::OpenDayPhase {
                 game,
-                phase: phase.into(),
+                phase: domain::phase::PhaseId::parse(phase)
+                    .expect("static test phase id is canonical"),
             },
         )
         .await
@@ -9734,7 +9736,7 @@ async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N04".into(),
+            phase: domain::phase::PhaseId::parse("N04").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -9787,7 +9789,7 @@ async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
                 && counter.limit == 2
                 && counter.used == 1
                 && counter.remaining == 2
-                && counter.phase_id == "N04"
+                && counter.phase_id.as_str() == "N04"
                 && counter.phase_kind == "Night"
                 && counter.phase_number == 4
         }),
@@ -9870,7 +9872,7 @@ async fn action_submission_rejects_disabled_endgame_threshold_before_append(pool
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -9963,7 +9965,7 @@ async fn action_submission_rejects_lost_team_kill_with_teammate_alive(pool: PgPo
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10056,7 +10058,7 @@ async fn action_submission_rejects_recluse_team_kill_with_non_recluse_teammate_a
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10153,7 +10155,7 @@ async fn action_submission_allows_simultaneous_duplicate_base_template(pool: PgP
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10305,7 +10307,7 @@ async fn action_submission_rejects_inactive_novice_and_activated_actions(pool: P
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10345,7 +10347,7 @@ async fn action_submission_rejects_inactive_novice_and_activated_actions(pool: P
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N02".into(),
+            phase: domain::phase::PhaseId::parse("N02").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10460,7 +10462,7 @@ async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10488,7 +10490,7 @@ async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N02".into(),
+            phase: domain::phase::PhaseId::parse("N02").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10645,7 +10647,7 @@ async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N03".into(),
+            phase: domain::phase::PhaseId::parse("N03").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10728,7 +10730,7 @@ async fn action_submission_spends_inventor_item_grant(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10765,7 +10767,7 @@ async fn action_submission_spends_inventor_item_grant(pool: PgPool) {
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N02".into(),
+            phase: domain::phase::PhaseId::parse("N02").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10903,7 +10905,7 @@ async fn action_submission_spends_inventor_item_grant(pool: PgPool) {
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N03".into(),
+            phase: domain::phase::PhaseId::parse("N03").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -10986,7 +10988,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -11014,7 +11016,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N02".into(),
+            phase: domain::phase::PhaseId::parse("N02").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -11068,7 +11070,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
 
     let notifications = player_notifications(&pool, game).await.unwrap();
     assert!(
-        notifications.iter().any(|notice| notice.phase_id == "N02"
+        notifications.iter().any(|notice| notice.phase_id.as_str() == "N02"
             && notice.audience_slot == "slot_2"
             && notice.effect == "bulletproof_vest"
             && notice.status == "marked"),
@@ -11093,7 +11095,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "N03".into(),
+            phase: domain::phase::PhaseId::parse("N03").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -11185,7 +11187,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
     let before_notifications = player_notifications(&pool, game).await.unwrap();
     assert!(
         before_notifications.iter().all(|notice| {
-            notice.phase_id != "N03"
+            notice.phase_id.as_str() != "N03"
                 || notice.effect != "bulletproof_vest"
                 || notice.status != "cleared"
         }),
@@ -11261,7 +11263,7 @@ async fn resolution_scoped_effects_do_not_enter_command_snapshot(pool: PgPool) {
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -11279,8 +11281,6 @@ async fn resolution_scoped_effects_do_not_enter_command_snapshot(pool: PgPool) {
                 "actor": "slot_1",
                 "source_action": "fixture:send_fruit_n01",
                 "phase_id": "N01",
-                "phase_kind": "Night",
-                "phase_number": 1,
                 "duration": "Resolution",
                 "visibility": "Target"
             }),
@@ -11291,7 +11291,7 @@ async fn resolution_scoped_effects_do_not_enter_command_snapshot(pool: PgPool) {
     .await
     .unwrap();
 
-    let snapshot = load_engine_snapshot(&pool, game, "N01")
+    let snapshot = load_engine_snapshot(&pool, game, &fixture_phase("N01"))
         .await
         .expect("load snapshot after resolution-scoped fixture mark");
     let slot = snapshot
@@ -11604,7 +11604,7 @@ async fn concurrent_cohost_deadline_and_host_resolve_phase_serializes_deadline_b
             &user("cohost_c"),
             Command::ExtendDeadline {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
                 at: 72_501,
             },
         )
@@ -11671,7 +11671,7 @@ async fn concurrent_cohost_deadline_and_host_resolve_phase_serializes_deadline_b
     );
 
     let phase = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase.phase_id, "D01");
+    assert_eq!(phase.phase_id.as_str(), "D01");
     assert!(phase.locked);
     assert_eq!(
         phase.deadline,
@@ -11714,7 +11714,7 @@ async fn concurrent_host_advance_phase_serializes_to_one_ack(pool: PgPool) {
     );
 
     let phase = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase.phase_id, "N01");
+    assert_eq!(phase.phase_id.as_str(), "N01");
     assert!(
         !phase.locked,
         "winning advance should leave the next phase open"
@@ -11730,7 +11730,7 @@ async fn concurrent_host_deadline_advance_serializes_to_one_ack(pool: PgPool) {
         &host,
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 100,
         },
     )
@@ -11746,7 +11746,7 @@ async fn concurrent_host_deadline_advance_serializes_to_one_ack(pool: PgPool) {
             &host,
             Command::AdvancePhaseByDeadline {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
                 observed_at: 101,
             },
         ),
@@ -11755,7 +11755,7 @@ async fn concurrent_host_deadline_advance_serializes_to_one_ack(pool: PgPool) {
             &host,
             Command::AdvancePhaseByDeadline {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
                 observed_at: 101,
             },
         ),
@@ -11805,7 +11805,7 @@ async fn concurrent_host_deadline_advance_serializes_to_one_ack(pool: PgPool) {
     );
 
     let phase = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase.phase_id, "N01");
+    assert_eq!(phase.phase_id.as_str(), "N01");
     assert!(
         !phase.locked,
         "winning deadline advance should leave the next phase open"
@@ -11825,7 +11825,7 @@ async fn concurrent_host_mixed_advance_serializes_to_one_ack(pool: PgPool) {
         &host,
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 100,
         },
     )
@@ -11842,7 +11842,7 @@ async fn concurrent_host_mixed_advance_serializes_to_one_ack(pool: PgPool) {
             &host,
             Command::AdvancePhaseByDeadline {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
                 observed_at: 101,
             },
         ),
@@ -11887,7 +11887,7 @@ async fn concurrent_host_mixed_advance_serializes_to_one_ack(pool: PgPool) {
     );
 
     let phase = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase.phase_id, "N01");
+    assert_eq!(phase.phase_id.as_str(), "N01");
     assert!(
         !phase.locked,
         "winning mixed advance should leave the next phase open"
@@ -11944,7 +11944,7 @@ async fn concurrent_player_action_and_host_advance_phase_rejects_late_action(poo
         &host,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -11994,7 +11994,7 @@ async fn concurrent_player_action_and_host_advance_phase_rejects_late_action(poo
     assert_eq!(advance.stream_seqs.len(), 1);
 
     let phase = phase_state(&pool, game).await.unwrap().unwrap();
-    assert_eq!(phase.phase_id, "D02");
+    assert_eq!(phase.phase_id.as_str(), "D02");
     assert!(
         !phase.locked,
         "host advance should leave the next day phase open"
@@ -12521,7 +12521,7 @@ async fn submit_vote_hammer_locks_phase_when_threshold_is_reached(pool: PgPool) 
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -12593,9 +12593,8 @@ async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
 
     // Kill slot_1 via a ResolutionApplied envelope (the engine's seam).
     let applied = domain::events::ResolutionApplied {
-        phase_id: "N01".into(),
-        phase_kind: domain::pack::PhaseKind::Night,
-        phase_number: 1,
+        phase_id: domain::phase::PhaseId::parse("N01")
+            .expect("static test phase id is canonical"),
         run_id: "r1".into(),
         result_version: domain::RESULT_VERSION,
         seed: 1,
@@ -12618,7 +12617,8 @@ async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
             domain::events::IndexedEvent {
                 index: 1,
                 event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
-                    phase_id: "N01".into(),
+                    phase_id: domain::phase::PhaseId::parse("N01")
+                        .expect("static test phase id is canonical"),
                     template_id: None,
                     audience: None,
                     deaths: vec![domain::Death {
@@ -12790,7 +12790,7 @@ async fn no_lynch_votes_resolve_to_official_engine_outcome(pool: PgPool) {
         .await
         .expect("official day vote outcomes");
     assert_eq!(official.len(), 1);
-    assert_eq!(official[0].phase_id, "D01");
+    assert_eq!(official[0].phase_id.as_str(), "D01");
     assert_eq!(official[0].status, "NoLynch");
     assert_eq!(official[0].winner_slot, None);
     assert_eq!(official[0].tallies["no_lynch"], serde_json::json!(2.0));
@@ -12822,7 +12822,7 @@ async fn defensive_unique_conflict_surfaces_as_retryable_stream_conflict(pool: P
         &user("host_h"),
         Command::ExtendDeadline {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
             at: 5,
         },
     )
@@ -12896,7 +12896,7 @@ async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool)
         &host,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await

@@ -18,7 +18,9 @@ fn pack_model_validation_and_private_tests_keep_separate_owners() {
     assert!(facade.contains("mod validation;"));
     assert!(facade.contains("mod validation_tests;"));
     assert!(!model.contains("PackValidationContext"));
-    assert!(validation.contains("struct PackValidationContext"));
+    assert!(!validation.contains("PackValidationContext"));
+    assert!(validation.contains("pub struct ValidatedPack"));
+    assert!(validation.contains("pub fn validate_pack_validated"));
     assert!(validation_tests.contains("pack_required_ir_version_covers_versioned_action_features"));
 
     for (owner, source) in [("model", model), ("validation", validation)] {

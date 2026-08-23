@@ -32,8 +32,12 @@ async function contract() {
         "deploy/railway/api.env.example",
         "deploy/railway/migrator.env.example",
         "deploy/railway/key-admin.env.example",
+        "deploy/railway/profile-index-admin.env.example",
         "deploy/railway/frontend.env.example",
         "docs/ops/release-secret-custody.json",
+        "docs/ops/profile-handle-index-rotation.md",
+        "docs/ops/profile-handle-index-rotation-receipt.schema.json",
+        "tools/profile_handle_index_rotation_receipt.mjs",
         "docs/ops/railway-staging-target.md",
         "tools/production_promotion.mjs",
         "tools/workos_oidc_preflight.mjs",
@@ -249,6 +253,51 @@ async function contract() {
     source["deploy/railway/key-admin.env.example"],
     /^(?:DATABASE_URL|DATABASE_MIGRATION_URL|FMARCH_DATABASE_APPLICATION_PASSWORD|FMARCH_DATABASE_KEY_ADMIN_PASSWORD|FMARCH_PROFILE_HANDLE_INDEX_KEY|FMARCH_PROFILE_HANDLE_INDEX_KID)=/m,
   );
+  const profileIndexAdminTemplate = source["deploy/railway/profile-index-admin.env.example"];
+  assert.match(
+    profileIndexAdminTemplate,
+    /^DATABASE_URL=<required-fmarch_application-url-rewritten-to-127.0.0.1-tunnel-port-with-sslmode=require>$/m,
+  );
+  assert.deepEqual(
+    [...profileIndexAdminTemplate.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map(
+      (match) => match[1],
+    ),
+    [
+      "DATABASE_URL",
+      "FMARCH_PROFILE_HANDLE_INDEX_KEY",
+      "FMARCH_PROFILE_HANDLE_INDEX_KID",
+      "FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY",
+      "FMARCH_SUBJECT_AUTHORITY_ENDPOINT",
+      "FMARCH_SUBJECT_AUTHORITY_REGION",
+      "FMARCH_SUBJECT_AUTHORITY_BUCKET",
+      "FMARCH_SUBJECT_AUTHORITY_ACCESS_KEY_ID",
+      "FMARCH_SUBJECT_AUTHORITY_SECRET_ACCESS_KEY",
+      "FMARCH_SUBJECT_AUTHORITY_URL_STYLE",
+      "FMARCH_SUBJECT_KEY_AUTHORITY_REVISION",
+      "FMARCH_SUBJECT_AUTHORITY_ID",
+      "FMARCH_SUBJECT_AUTHORITY_WRAP_KID",
+      "FMARCH_SUBJECT_AUTHORITY_WRAP_KEY",
+      "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID",
+      "FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY",
+    ],
+  );
+  for (const forbidden of [
+    "DATABASE_MIGRATION_URL",
+    "DATABASE_KEY_ADMIN_URL",
+    "FMARCH_DATABASE_APPLICATION_PASSWORD",
+    "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",
+    "FMARCH_AUTH_SOURCE_SIGNING_KEY",
+    "FMARCH_EVENT_WRAP_KEY",
+    "FMARCH_EVENT_ARCHIVE_KEY",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "WORKOS_API_KEY",
+    "WORKOS_COOKIE_PASSWORD",
+    "FMARCH_SUBJECT_KEY_DIR",
+    "FMARCH_SUBJECT_AUTHORITY_ALLOW_HTTP",
+  ]) {
+    assert.doesNotMatch(profileIndexAdminTemplate, new RegExp(`^${forbidden}=`, "m"));
+  }
   assert.doesNotMatch(
     source["deploy/railway/frontend.env.example"],
     /^(?:DATABASE_URL|DATABASE_MIGRATION_URL|DATABASE_KEY_ADMIN_URL|FMARCH_DATABASE_APPLICATION_PASSWORD|FMARCH_DATABASE_KEY_ADMIN_PASSWORD|FMARCH_PROFILE_HANDLE_INDEX_KEY|FMARCH_PROFILE_HANDLE_INDEX_KID)=/m,
@@ -381,6 +430,130 @@ async function contract() {
       "subject-key-authority",
       "workos",
     ],
+  );
+  const profileHandleIndexCustody = custody.families.find(
+    (family) => family.id === "profile-handle-index",
+  );
+  assert.deepEqual(profileHandleIndexCustody.secret_variables, [
+    "FMARCH_PROFILE_HANDLE_INDEX_KEY",
+    "FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY",
+  ]);
+  assert.deepEqual(profileHandleIndexCustody.consumers, [
+    "api",
+    "fmarch-profile-index-admin",
+  ]);
+  assert.deepEqual(profileHandleIndexCustody.receipt_contract, {
+    schema: "docs/ops/profile-handle-index-rotation-receipt.schema.json",
+    storage:
+      "access-controlled append-only release-evidence ledger outside repository, Railway variables, application database, and service logs",
+    recovery_window_days: 30,
+    retention_after_escrow_destruction_years: 7,
+  });
+  assert.match(profileHandleIndexCustody.rotation, /SSH database tunnel/);
+  assert.match(profileHandleIndexCustody.rotation, /replacement-key service variable/);
+  assert.doesNotMatch(profileHandleIndexCustody.custody, /env -i/);
+
+  const profileIndexRunbook = source["docs/ops/profile-handle-index-rotation.md"];
+  for (const requiredText of [
+    "railway connect \"$POSTGRES_SERVICE\" --ssh --tunnel-only",
+    "railway run --project",
+    "spawnSync(adminBinary, args, { env: childEnv",
+    "FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY",
+    "deploy.numReplicas 0",
+    "deploy.numReplicas 2",
+    "--writers-drained --execute",
+    "railway variable set",
+    "profile_handle_index_rotation",
+    "profile_handle_index_escrow_destruction",
+    "30 calendar days",
+    "seven years after the destruction receipt",
+    "railway service status",
+    "profile_handle_index_rotation_receipt.mjs",
+  ]) {
+    assert.ok(profileIndexRunbook.includes(requiredText), `profile-index runbook missing ${requiredText}`);
+  }
+  assert.match(
+    profileIndexRunbook,
+    /Never use `railway run env`, `railway run printenv`/,
+  );
+  assert.doesNotMatch(profileIndexRunbook, /env -i/);
+  assert.match(
+    profileIndexRunbook,
+    /^API_SERVICE=replace-with-api-service-name-or-id$/m,
+  );
+  assert.match(
+    profileIndexRunbook,
+    /^POSTGRES_SERVICE=replace-with-postgres-service-name-or-id$/m,
+  );
+  assert.doesNotMatch(profileIndexRunbook, /^API_SERVICE=api$/m);
+  assert.doesNotMatch(profileIndexRunbook, /railway connect Postgres/);
+  assert.match(
+    profileIndexRunbook,
+    /FMARCH_PROFILE_HANDLE_INDEX_KID: process\.env\.FMARCH_PROFILE_HANDLE_INDEX_KID/,
+  );
+  assert.match(
+    profileIndexRunbook,
+    /childEnv\.FMARCH_PROFILE_HANDLE_INDEX_KID !== currentKid/,
+  );
+  assert.match(
+    profileIndexRunbook,
+    /FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID: process\.env\.FMARCH_SUBJECT_AUTHORITY_JOURNAL_KID/,
+  );
+  assert.match(
+    profileIndexRunbook,
+    /FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY: process\.env\.FMARCH_SUBJECT_AUTHORITY_JOURNAL_KEY/,
+  );
+  assert.match(
+    profileIndexRunbook,
+    /FMARCH_SUBJECT_AUTHORITY_URL_STYLE: process\.env\.FMARCH_SUBJECT_AUTHORITY_URL_STYLE \?\? "path"/,
+  );
+
+  const profileIndexReceiptSchema = JSON.parse(
+    source["docs/ops/profile-handle-index-rotation-receipt.schema.json"],
+  );
+  assert.equal(
+    profileIndexReceiptSchema.$schema,
+    "https://json-schema.org/draft/2020-12/schema",
+  );
+  assert.deepEqual(
+    profileIndexReceiptSchema.oneOf.map((entry) => entry.$ref),
+    [
+      "#/$defs/rotation_receipt",
+      "#/$defs/escrow_destruction_receipt",
+    ],
+  );
+  for (const [name, definition] of Object.entries(profileIndexReceiptSchema.$defs)) {
+    assertClosedReceiptObjects(definition, `$defs.${name}`);
+  }
+  assert.equal(
+    profileIndexReceiptSchema.$defs.rotation_receipt.properties.recovery_escrow
+      .properties.recovery_window_days.const,
+    30,
+  );
+  assert.equal(
+    profileIndexReceiptSchema.$defs.escrow_destruction_receipt.properties
+      .recovery_window_days.const,
+    30,
+  );
+  assert.equal(
+    profileIndexReceiptSchema.$defs.escrow_destruction_receipt.properties
+      .retention_years.const,
+    7,
+  );
+  assert.match(profileIndexReceiptSchema.$defs.timestamp.pattern, /Z\$/);
+  assert.equal(
+    profileIndexReceiptSchema.$defs.escrow_destruction_receipt.required.includes(
+      "retain_until",
+    ),
+    true,
+  );
+  assert.match(
+    source["tools/profile_handle_index_rotation_receipt.mjs"],
+    /validateEscrowDestructionReceipt/,
+  );
+  assert.match(
+    source["tools/profile_handle_index_rotation_receipt.mjs"],
+    /rotationReceiptSha256/,
   );
 
   assert.match(source["crates/server/src/main.rs"], /platform_port/);
@@ -517,6 +690,23 @@ async function contract() {
     /"preflight:workos-oidc": "node tools\/workos_oidc_preflight\.mjs"/,
   );
   assert.match(source["tools/production_promotion.mjs"], /origin\/production must be an ancestor/);
+}
+
+function assertClosedReceiptObjects(schema, location) {
+  if (schema?.type === "object") {
+    assert.equal(
+      schema.additionalProperties,
+      false,
+      `profile-index receipt ${location} must reject unstructured evidence`,
+    );
+  }
+  for (const [name, child] of Object.entries(schema?.properties ?? {})) {
+    assertClosedReceiptObjects(child, `${location}.properties.${name}`);
+  }
+  for (const [index, child] of (schema?.oneOf ?? []).entries()) {
+    assertClosedReceiptObjects(child, `${location}.oneOf[${index}]`);
+  }
+  if (schema?.items) assertClosedReceiptObjects(schema.items, `${location}.items`);
 }
 
 async function read(relativePath) {

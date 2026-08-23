@@ -1,36 +1,122 @@
-//! The game-phase identifier grammar: one owner for parsing, composing, and
-//! revote-suffix arithmetic over ids like `D01`, `N12`, and `D03R2`.
+//! Canonical game-phase vocabulary.
+//!
+//! A phase id is a domain value, not an arbitrary storage string. Its only
+//! accepted wire form is `{D|N|T}{ordinal}` with an optional `R{revote}`:
+//! `D01`, `N12`, and `D03R2` are valid; abbreviated, zero, padded, or trailing
+//! variants are not. Keeping the grammar and phase kind together means every
+//! consumer reasons over one representation instead of re-parsing a string.
 
-use crate::pack::PhaseKind;
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
+use std::str::FromStr;
 
-/// A parsed game-phase identifier borrowing its source text.
-///
-/// The grammar is `{D|N|T}{digits}` with an optional trailing revote suffix
-/// `{base}R{attempt}`. Parsing tolerates trailing characters after the leading
-/// digits (for example `D01R2` parses with number `1`) and canonical
-/// composition zero-pads the number to two digits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PhaseId<'id> {
-    raw: &'id str,
-    kind: PhaseKind,
-    number: u32,
+/// The finite phase families supported by the engine and pack model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+pub enum PhaseKind {
+    Day,
+    Night,
+    Twilight,
 }
 
+impl PhaseKind {
+    /// The single-character phase-id prefix (`D`, `N`, or `T`).
+    pub const fn code(self) -> char {
+        match self {
+            Self::Day => 'D',
+            Self::Night => 'N',
+            Self::Twilight => 'T',
+        }
+    }
+
+    /// The serialized enum name used by existing pack and event contracts.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Day => "Day",
+            Self::Night => "Night",
+            Self::Twilight => "Twilight",
+        }
+    }
+
+    const fn from_code(code: u8) -> Option<Self> {
+        match code {
+            b'D' => Some(Self::Day),
+            b'N' => Some(Self::Night),
+            b'T' => Some(Self::Twilight),
+            _ => None,
+        }
+    }
+}
+
+/// A validated, canonical phase identifier.
+///
+/// The representation is deliberately private. Callers must obtain one from
+/// [`PhaseId::parse`] at an ingress boundary or compose it from typed parts.
+/// Serialization remains a JSON string so persisted event and wire contracts
+/// retain their compact shape while rejecting malformed values on read.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript", ts(type = "string"))]
+pub struct PhaseId {
+    canonical: String,
+    kind: PhaseKind,
+    number: u32,
+    revote: Option<u32>,
+}
+
+/// Why a candidate phase id cannot become a [`PhaseId`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PhaseIdError {
     UnknownKind { phase_id: String },
-    MissingNumber { phase_id: String },
+    MissingOrdinal { phase_id: String },
+    InvalidOrdinal { phase_id: String },
+    ZeroOrdinal { phase_id: String },
+    OrdinalOutOfRange { phase_id: String },
+    NonCanonicalOrdinal { phase_id: String },
+    MissingRevote { phase_id: String },
+    InvalidRevote { phase_id: String },
+    ZeroRevote { phase_id: String },
+    NonCanonicalRevote { phase_id: String },
 }
 
 impl fmt::Display for PhaseIdError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PhaseIdError::UnknownKind { phase_id } => {
-                write!(f, "unknown phase id `{phase_id}`")
+            Self::UnknownKind { phase_id } => {
+                write!(f, "unknown phase id kind in `{phase_id}`")
             }
-            PhaseIdError::MissingNumber { phase_id } => {
-                write!(f, "phase id `{phase_id}` has no numeric number")
+            Self::MissingOrdinal { phase_id } => {
+                write!(f, "phase id `{phase_id}` has no ordinal")
+            }
+            Self::InvalidOrdinal { phase_id } => {
+                write!(f, "phase id `{phase_id}` has an invalid ordinal")
+            }
+            Self::ZeroOrdinal { phase_id } => {
+                write!(f, "phase id `{phase_id}` has ordinal zero")
+            }
+            Self::OrdinalOutOfRange { phase_id } => {
+                write!(
+                    f,
+                    "phase id `{phase_id}` exceeds the supported ordinal range"
+                )
+            }
+            Self::NonCanonicalOrdinal { phase_id } => {
+                write!(f, "phase id `{phase_id}` has a non-canonical ordinal")
+            }
+            Self::MissingRevote { phase_id } => {
+                write!(f, "phase id `{phase_id}` has no revote attempt")
+            }
+            Self::InvalidRevote { phase_id } => {
+                write!(f, "phase id `{phase_id}` has an invalid revote attempt")
+            }
+            Self::ZeroRevote { phase_id } => {
+                write!(f, "phase id `{phase_id}` has revote attempt zero")
+            }
+            Self::NonCanonicalRevote { phase_id } => {
+                write!(
+                    f,
+                    "phase id `{phase_id}` has a non-canonical revote attempt"
+                )
             }
         }
     }
@@ -38,136 +124,325 @@ impl fmt::Display for PhaseIdError {
 
 impl std::error::Error for PhaseIdError {}
 
-impl<'id> PhaseId<'id> {
-    pub fn parse(phase_id: &'id str) -> Result<Self, PhaseIdError> {
-        let kind = match phase_id.chars().next() {
-            Some('D') => PhaseKind::Day,
-            Some('N') => PhaseKind::Night,
-            Some('T') => PhaseKind::Twilight,
-            _ => {
-                return Err(PhaseIdError::UnknownKind {
-                    phase_id: phase_id.to_string(),
-                })
-            }
+impl PhaseId {
+    /// Parse exactly one canonical phase id.
+    pub fn parse(value: impl AsRef<str>) -> Result<Self, PhaseIdError> {
+        let value = value.as_ref();
+        let bytes = value.as_bytes();
+        let Some(&kind_code) = bytes.first() else {
+            return Err(PhaseIdError::UnknownKind {
+                phase_id: value.to_owned(),
+            });
         };
-        let digits: String = phase_id
-            .chars()
-            .skip(1)
-            .take_while(char::is_ascii_digit)
-            .collect();
-        let number = digits.parse().map_err(|_| PhaseIdError::MissingNumber {
-            phase_id: phase_id.to_string(),
+        let kind = PhaseKind::from_code(kind_code).ok_or_else(|| PhaseIdError::UnknownKind {
+            phase_id: value.to_owned(),
         })?;
+
+        let remainder = &value[1..];
+        let (ordinal, revote) = match remainder.split_once('R') {
+            Some((ordinal, revote)) => (ordinal, Some(revote)),
+            None => (remainder, None),
+        };
+        let number = parse_ordinal(value, ordinal)?;
+        let revote = revote
+            .map(|attempt| parse_revote(value, attempt))
+            .transpose()?;
+
         Ok(Self {
-            raw: phase_id,
+            canonical: value.to_owned(),
             kind,
             number,
+            revote,
         })
     }
 
-    pub fn as_str(self) -> &'id str {
-        self.raw
+    /// Compose a non-revote phase id from typed parts.
+    pub fn compose(kind: PhaseKind, number: u32) -> Result<Self, PhaseIdError> {
+        Self::compose_with_revote(kind, number, None)
     }
 
-    pub fn kind(self) -> PhaseKind {
+    /// Compose a phase id with an optional typed, nonzero revote attempt.
+    pub fn compose_with_revote(
+        kind: PhaseKind,
+        number: u32,
+        revote: Option<u32>,
+    ) -> Result<Self, PhaseIdError> {
+        let canonical = match revote {
+            Some(revote) => format!("{}{number:02}R{revote}", kind.code()),
+            None => format!("{}{number:02}", kind.code()),
+        };
+        if number == 0 {
+            return Err(PhaseIdError::ZeroOrdinal {
+                phase_id: canonical,
+            });
+        }
+        if number > i32::MAX as u32 {
+            return Err(PhaseIdError::OrdinalOutOfRange {
+                phase_id: canonical,
+            });
+        }
+        if revote == Some(0) {
+            return Err(PhaseIdError::ZeroRevote {
+                phase_id: canonical,
+            });
+        }
+        Ok(Self {
+            canonical,
+            kind,
+            number,
+            revote,
+        })
+    }
+
+    /// The canonical string representation carried over storage and wire
+    /// boundaries.
+    pub fn as_str(&self) -> &str {
+        &self.canonical
+    }
+
+    pub const fn kind(&self) -> PhaseKind {
         self.kind
     }
 
-    pub fn number(self) -> u32 {
+    /// The one-based phase ordinal, bounded by the relational `INTEGER`
+    /// representation shared by command and projection storage.
+    pub const fn number(&self) -> u32 {
         self.number
     }
 
-    /// The number only when the identifier is exactly `{code}{digits}` —
-    /// no revote suffix and no trailing characters (`D03` -> `Some(3)`,
-    /// `D03R1` and `D03x` -> `None`).
-    pub fn plain_number(self) -> Option<u32> {
-        let rest = &self.raw[1..];
-        (!rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit())).then_some(self.number)
+    /// The optional one-based revote attempt.
+    pub const fn revote_attempt(&self) -> Option<u32> {
+        self.revote
     }
 
-    /// Strips a trailing numeric revote suffix (`D03R2` -> `D03`). Ids whose
-    /// suffix is absent or non-numeric are returned unchanged.
-    pub fn revote_base(self) -> &'id str {
-        if let Some((base, suffix)) = self.raw.split_once('R') {
-            if !base.is_empty() && suffix.parse::<u32>().is_ok() {
-                return base;
-            }
+    /// Whether this is an ordinary, non-revote phase id.
+    pub const fn is_plain(&self) -> bool {
+        self.revote.is_none()
+    }
+
+    /// The ordinal only for an ordinary phase id. This preserves the scheduler
+    /// distinction between a day and a later revote of that day.
+    pub fn plain_number(&self) -> Option<u32> {
+        self.is_plain().then_some(self.number)
+    }
+
+    /// The ordinary phase id underlying this id (`D03R2` becomes `D03`).
+    pub fn revote_base(&self) -> Self {
+        Self {
+            canonical: format!("{}{:02}", self.kind.code(), self.number),
+            kind: self.kind,
+            number: self.number,
+            revote: None,
         }
-        self.raw
     }
+}
 
-    /// Composes the canonical form carried on the wire and in storage.
-    pub fn compose(kind: PhaseKind, number: u32) -> String {
-        format!("{}{number:02}", kind.code())
+fn parse_ordinal(phase_id: &str, ordinal: &str) -> Result<u32, PhaseIdError> {
+    if ordinal.is_empty() {
+        return Err(PhaseIdError::MissingOrdinal {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    if ordinal.len() < 2 {
+        return Err(PhaseIdError::NonCanonicalOrdinal {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    if !ordinal.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(PhaseIdError::InvalidOrdinal {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    let number = ordinal
+        .parse::<u32>()
+        .map_err(|_| PhaseIdError::InvalidOrdinal {
+            phase_id: phase_id.to_owned(),
+        })?;
+    if number == 0 {
+        return Err(PhaseIdError::ZeroOrdinal {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    if number > i32::MAX as u32 {
+        return Err(PhaseIdError::OrdinalOutOfRange {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    if format!("{number:02}") != ordinal {
+        return Err(PhaseIdError::NonCanonicalOrdinal {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    Ok(number)
+}
+
+fn parse_revote(phase_id: &str, revote: &str) -> Result<u32, PhaseIdError> {
+    if revote.is_empty() {
+        return Err(PhaseIdError::MissingRevote {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    if !revote.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(PhaseIdError::InvalidRevote {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    let attempt = revote
+        .parse::<u32>()
+        .map_err(|_| PhaseIdError::InvalidRevote {
+            phase_id: phase_id.to_owned(),
+        })?;
+    if attempt == 0 {
+        return Err(PhaseIdError::ZeroRevote {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    if attempt.to_string() != revote {
+        return Err(PhaseIdError::NonCanonicalRevote {
+            phase_id: phase_id.to_owned(),
+        });
+    }
+    Ok(attempt)
+}
+
+impl fmt::Display for PhaseId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.canonical.fmt(f)
+    }
+}
+
+impl AsRef<str> for PhaseId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl FromStr for PhaseId {
+    type Err = PhaseIdError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+    }
+}
+
+impl TryFrom<&str> for PhaseId {
+    type Error = PhaseIdError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::parse(value)
+    }
+}
+
+impl TryFrom<String> for PhaseId {
+    type Error = PhaseIdError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(value)
+    }
+}
+
+impl Serialize for PhaseId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for PhaseId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(value).map_err(D::Error::custom)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{PhaseId, PhaseIdError};
-    use crate::pack::PhaseKind;
+    use super::{PhaseId, PhaseIdError, PhaseKind};
 
     #[test]
-    fn parse_extracts_kind_and_leading_number() {
-        let parsed = PhaseId::parse("D12").expect("canonical day id parses");
-        assert_eq!(parsed.kind(), PhaseKind::Day);
-        assert_eq!(parsed.number(), 12);
-        assert_eq!(parsed.as_str(), "D12");
+    fn parse_accepts_exact_canonical_ids() {
+        let day = PhaseId::parse("D01").expect("canonical day id parses");
+        assert_eq!(day.kind(), PhaseKind::Day);
+        assert_eq!(day.number(), 1);
+        assert_eq!(day.revote_attempt(), None);
+        assert_eq!(day.as_str(), "D01");
 
-        let night = PhaseId::parse("N3").expect("single-digit night id parses");
+        let night = PhaseId::parse("N12").expect("multi-digit night id parses");
         assert_eq!(night.kind(), PhaseKind::Night);
-        assert_eq!(night.number(), 3);
+        assert_eq!(night.number(), 12);
 
-        assert_eq!(
-            PhaseId::parse("T07").expect("twilight id parses").kind(),
-            PhaseKind::Twilight
-        );
+        let revote = PhaseId::parse("D03R2").expect("canonical revote parses");
+        assert_eq!(revote.number(), 3);
+        assert_eq!(revote.revote_attempt(), Some(2));
+        assert_eq!(revote.revote_base().as_str(), "D03");
+        assert_eq!(revote.plain_number(), None);
     }
 
     #[test]
-    fn parse_tolerates_trailing_suffix_and_rejects_malformed_ids() {
-        let revote = PhaseId::parse("D01R2").expect("revote id parses");
-        assert_eq!(revote.number(), 1);
-
-        assert_eq!(
+    fn parse_rejects_noncanonical_or_trailing_forms() {
+        for invalid in ["D00", "D3", "D003", "D01junk", "D01R0", "D01R02"] {
+            assert!(
+                PhaseId::parse(invalid).is_err(),
+                "{invalid} must not become a PhaseId"
+            );
+        }
+        assert!(matches!(
             PhaseId::parse("X01"),
-            Err(PhaseIdError::UnknownKind {
-                phase_id: "X01".to_string()
-            })
+            Err(PhaseIdError::UnknownKind { .. })
+        ));
+        assert!(matches!(
+            PhaseId::parse("D"),
+            Err(PhaseIdError::MissingOrdinal { .. })
+        ));
+        assert!(matches!(
+            PhaseId::parse("D2147483648"),
+            Err(PhaseIdError::OrdinalOutOfRange { .. })
+        ));
+    }
+
+    #[test]
+    fn compose_round_trips_only_valid_parts() {
+        assert_eq!(PhaseId::compose(PhaseKind::Day, 1).unwrap().as_str(), "D01");
+        assert_eq!(
+            PhaseId::compose(PhaseKind::Twilight, 255).unwrap().as_str(),
+            "T255"
         );
         assert_eq!(
-            PhaseId::parse("D"),
-            Err(PhaseIdError::MissingNumber {
-                phase_id: "D".to_string()
-            })
+            PhaseId::compose_with_revote(PhaseKind::Night, 12, Some(3))
+                .unwrap()
+                .as_str(),
+            "N12R3"
         );
+        assert!(PhaseId::compose(PhaseKind::Day, 0).is_err());
+        assert_eq!(
+            PhaseId::compose(PhaseKind::Day, i32::MAX as u32)
+                .unwrap()
+                .as_str(),
+            "D2147483647"
+        );
+        assert!(matches!(
+            PhaseId::compose(PhaseKind::Day, i32::MAX as u32 + 1),
+            Err(PhaseIdError::OrdinalOutOfRange { .. })
+        ));
+        assert!(PhaseId::compose_with_revote(PhaseKind::Day, 1, Some(0)).is_err());
     }
 
     #[test]
-    fn revote_base_strips_only_numeric_suffixes() {
-        assert_eq!(PhaseId::parse("D03").unwrap().revote_base(), "D03");
-        assert_eq!(PhaseId::parse("D03R2").unwrap().revote_base(), "D03");
-        assert_eq!(PhaseId::parse("D03Rx").unwrap().revote_base(), "D03Rx");
+    fn serde_refuses_invalid_storage_values() {
+        let value: PhaseId = serde_json::from_str("\"D01R1\"").unwrap();
+        assert_eq!(value.as_str(), "D01R1");
+        assert!(serde_json::from_str::<PhaseId>("\"D01R02\"").is_err());
     }
 
     #[test]
-    fn plain_number_requires_the_exact_canonical_form() {
-        assert_eq!(PhaseId::parse("D03").unwrap().plain_number(), Some(3));
-        assert_eq!(PhaseId::parse("D3").unwrap().plain_number(), Some(3));
-        assert_eq!(PhaseId::parse("D03R1").unwrap().plain_number(), None);
-        assert_eq!(PhaseId::parse("D03x").unwrap().plain_number(), None);
-        assert_eq!(PhaseId::parse("N02").unwrap().plain_number(), Some(2));
-    }
-
-    #[test]
-    fn compose_is_the_canonical_two_digit_form() {
-        assert_eq!(PhaseId::compose(PhaseKind::Day, 1), "D01");
-        assert_eq!(PhaseId::compose(PhaseKind::Night, 41), "N41");
-        assert_eq!(PhaseId::compose(PhaseKind::Twilight, 255), "T255");
-
-        let composed = PhaseId::compose(PhaseKind::Day, 7);
-        let reparsed = PhaseId::parse(&composed).expect("composed id re-parses");
-        assert_eq!(reparsed.kind(), PhaseKind::Day);
-        assert_eq!(reparsed.number(), 7);
+    fn owned_string_conversion_uses_the_strict_domain_parser() {
+        let value = PhaseId::try_from("N12".to_owned()).expect("canonical phase id converts");
+        assert_eq!(value.as_str(), "N12");
+        assert!(PhaseId::try_from("N3".to_owned()).is_err());
     }
 }

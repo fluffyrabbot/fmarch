@@ -4,14 +4,19 @@
     "game_id": "game_mu_poison_town_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -44,7 +49,9 @@
         "action_id": "mu_town_poison_001",
         "actor": "slot_1",
         "template_id": "poison",
-        "targets": ["slot_2"],
+        "targets": [
+          "slot_2"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -59,7 +66,9 @@
       "index": 0,
       "kind": "EffectNotification",
       "payload": {
-        "audience": ["slot_2"],
+        "audience": [
+          "slot_2"
+        ],
         "effect": "poisoned",
         "status": "marked"
       }
@@ -72,8 +81,6 @@
         "duration": "Persistent",
         "effect": "poisoned",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "source_action": "mu_town_poison_001",
         "target": "slot_2",
         "visibility": "Target"
@@ -89,9 +96,7 @@
         "effect": "poisoned",
         "source": "slot_1",
         "source_action": "mu_town_poison_001",
-        "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1
+        "phase_id": "N01"
       }
     },
     {

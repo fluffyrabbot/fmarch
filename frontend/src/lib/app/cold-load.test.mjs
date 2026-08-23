@@ -431,8 +431,6 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
           role_key: "mafia_goon",
           phase: {
             phase_id: "N01",
-            phase_kind: "Night",
-            phase_number: 1,
             locked: false,
           },
           actions: [
@@ -502,8 +500,6 @@ test("normalizes player command state into route action configs", () => {
         game_completed: true,
         phase: {
           phase_id: "N01",
-          phase_kind: "Night",
-          phase_number: 1,
           locked: false,
           deadline: 1781928000,
         },
@@ -562,8 +558,6 @@ test("normalizes player command state into route action configs", () => {
       gameCompleted: true,
       phase: {
         phaseId: "N01",
-        phaseKind: "Night",
-        phaseNumber: 1,
         locked: false,
         deadline: 1781928000,
       },
@@ -922,7 +916,7 @@ test("host prompt cold-load infers slot selection from HostDecides contenders", 
 });
 
 test("host prompt normalization falls back when payload is not an array", () => {
-  assert.equal(normalizeHostPrompts(null, FALLBACK.hostPrompts), FALLBACK.hostPrompts);
+  assert.deepEqual(normalizeHostPrompts(null, FALLBACK.hostPrompts), FALLBACK.hostPrompts);
 });
 
 test("host prompt normalization preserves typed public resolution", () => {

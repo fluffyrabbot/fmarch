@@ -7,6 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use domain::phase::PhaseId;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
@@ -139,7 +140,6 @@ identifier!(ProgramId, "program id");
 identifier!(TemplateKey, "template key");
 identifier!(RewardKey, "reward key");
 identifier!(SlotId, "slot id");
-identifier!(PhaseId, "phase id");
 identifier!(OptionId, "option id");
 identifier!(Tag, "tag");
 identifier!(ContentRef, "content reference");
@@ -1187,7 +1187,6 @@ mod tests {
         TemplateKey,
         RewardKey,
         SlotId,
-        PhaseId,
         OptionId,
         Tag,
         ContentRef,

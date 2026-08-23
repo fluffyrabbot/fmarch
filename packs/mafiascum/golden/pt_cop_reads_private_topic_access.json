@@ -4,14 +4,19 @@
     "game_id": "game_mafiascum_pt_cop_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["sod", "main", "eod"]
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -35,7 +40,9 @@
           "role_key": "mason",
           "alignment": "town",
           "status": "alive",
-          "effects": ["mason"]
+          "effects": [
+            "mason"
+          ]
         },
         {
           "slot_id": "slot_4",
@@ -49,7 +56,9 @@
           "role_key": "mason",
           "alignment": "town",
           "status": "alive",
-          "effects": ["mason"]
+          "effects": [
+            "mason"
+          ]
         },
         {
           "slot_id": "slot_6",
@@ -83,7 +92,9 @@
         "action_id": "pt_cop_positive_001",
         "actor": "slot_1",
         "template_id": "investigate_pt",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -93,7 +104,9 @@
         "action_id": "pt_cop_negative_001",
         "actor": "slot_2",
         "template_id": "investigate_pt",
-        "targets": ["slot_4"],
+        "targets": [
+          "slot_4"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -112,7 +125,9 @@
         "investigator": "slot_1",
         "target": "slot_3",
         "result": {
-          "pt_access": ["private:mason"]
+          "pt_access": [
+            "private:mason"
+          ]
         }
       }
     },

@@ -4,8 +4,6 @@
     "game_id": "game_demo_nonconsecutive_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
@@ -60,8 +58,6 @@
             "slot_2"
           ],
           "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1,
           "status": "resolved"
         }
       ]
@@ -102,8 +98,6 @@
           "slot_2"
         ],
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "status": "suppressed"
       }
     },

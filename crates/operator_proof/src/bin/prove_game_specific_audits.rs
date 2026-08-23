@@ -9,6 +9,7 @@ use std::{
 
 use caps::Principal;
 use commands::Command;
+use domain::phase::{PhaseId, PhaseKind};
 use operator_proof::minimizer::handle_fixture_command;
 use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
@@ -24,7 +25,7 @@ struct NightFixture {
     #[serde(default = "default_pack")]
     pack: String,
     #[serde(default = "default_phase")]
-    phase: String,
+    phase: PhaseId,
     roster: Vec<FixtureSlot>,
     actions: Vec<FixtureAction>,
 }
@@ -144,8 +145,8 @@ fn default_pack() -> String {
     "mafiascum".to_string()
 }
 
-fn default_phase() -> String {
-    "N01".to_string()
+fn default_phase() -> PhaseId {
+    PhaseId::compose(PhaseKind::Night, 1).expect("one is a valid canonical phase ordinal")
 }
 
 #[tokio::main]

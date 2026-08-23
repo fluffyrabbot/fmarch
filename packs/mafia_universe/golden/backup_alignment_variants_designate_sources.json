@@ -4,14 +4,19 @@
     "game_id": "game_mu_backup_designate_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -58,7 +63,9 @@
         "action_id": "mu_town_backup_n01",
         "actor": "slot_1",
         "template_id": "target_backup",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -68,7 +75,9 @@
         "action_id": "mu_mafia_backup_n01",
         "actor": "slot_2",
         "template_id": "target_backup",
-        "targets": ["slot_4"],
+        "targets": [
+          "slot_4"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -87,8 +96,6 @@
         "target": "slot_3",
         "effect": "backup_target",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "duration": "Persistent",
         "visibility": "Hidden",
         "source_action": "mu_town_backup_n01"
@@ -102,9 +109,7 @@
         "source_target": "slot_3",
         "source_role": "town_cop",
         "source_action": "mu_town_backup_n01",
-        "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1
+        "phase_id": "N01"
       }
     },
     {
@@ -115,8 +120,6 @@
         "target": "slot_4",
         "effect": "backup_target",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "duration": "Persistent",
         "visibility": "Hidden",
         "source_action": "mu_mafia_backup_n01"
@@ -130,9 +133,7 @@
         "source_target": "slot_4",
         "source_role": "mafia_goon",
         "source_action": "mu_mafia_backup_n01",
-        "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1
+        "phase_id": "N01"
       }
     },
     {

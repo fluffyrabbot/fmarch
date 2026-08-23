@@ -4,14 +4,20 @@
     "game_id": "chinese_white_wolf_king_night_kill_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["sheriff", "wolf_self_destruct", "main", "eod"],
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
           "Night": [
             "cupid_link",
             "heal_potion",
@@ -83,7 +89,9 @@
         "action_id": "wwk_night_kill_001",
         "actor": "slot_1",
         "template_id": "wolf_night_kill",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -100,7 +108,9 @@
       "payload": {
         "slot_id": "slot_3",
         "cause": "wolf_night_kill",
-        "attackers": ["slot_1"],
+        "attackers": [
+          "slot_1"
+        ],
         "unstoppable": false
       }
     },

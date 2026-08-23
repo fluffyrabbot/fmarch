@@ -4,14 +4,19 @@
     "game_id": "game_mu_night_desperado_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -93,7 +98,9 @@
         "action_id": "mu_town_night_desperado_success_001",
         "actor": "slot_1",
         "template_id": "night_desperado",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -103,7 +110,9 @@
         "action_id": "mu_mafia_night_desperado_success_001",
         "actor": "slot_2",
         "template_id": "night_desperado",
-        "targets": ["slot_6"],
+        "targets": [
+          "slot_6"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -113,7 +122,9 @@
         "action_id": "mu_town_night_desperado_failback_001",
         "actor": "slot_3",
         "template_id": "night_desperado",
-        "targets": ["slot_7"],
+        "targets": [
+          "slot_7"
+        ],
         "phase_id": "N01",
         "submitted_at": 3,
         "withdrawn": false,
@@ -123,7 +134,9 @@
         "action_id": "mu_mafia_night_desperado_failback_001",
         "actor": "slot_4",
         "template_id": "night_desperado",
-        "targets": ["slot_8"],
+        "targets": [
+          "slot_8"
+        ],
         "phase_id": "N01",
         "submitted_at": 4,
         "withdrawn": false,
@@ -140,7 +153,9 @@
       "payload": {
         "slot_id": "slot_5",
         "cause": "night_desperado",
-        "attackers": ["slot_1"],
+        "attackers": [
+          "slot_1"
+        ],
         "unstoppable": false
       }
     },
@@ -150,7 +165,9 @@
       "payload": {
         "slot_id": "slot_6",
         "cause": "night_desperado",
-        "attackers": ["slot_2"],
+        "attackers": [
+          "slot_2"
+        ],
         "unstoppable": false
       }
     },
@@ -160,7 +177,9 @@
       "payload": {
         "slot_id": "slot_3",
         "cause": "night_desperado",
-        "attackers": ["slot_3"],
+        "attackers": [
+          "slot_3"
+        ],
         "unstoppable": false
       }
     },
@@ -170,7 +189,9 @@
       "payload": {
         "slot_id": "slot_4",
         "cause": "night_desperado",
-        "attackers": ["slot_4"],
+        "attackers": [
+          "slot_4"
+        ],
         "unstoppable": false
       }
     },

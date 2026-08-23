@@ -4,14 +4,19 @@
     "game_id": "game_mu_basic_nar_doctor_saves_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -44,7 +49,9 @@
         "action_id": "mu_kill_001",
         "actor": "slot_1",
         "template_id": "factional_kill",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -54,7 +61,9 @@
         "action_id": "mu_protect_001",
         "actor": "slot_2",
         "template_id": "doctor_protect",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -70,8 +79,12 @@
       "kind": "PlayerSaved",
       "payload": {
         "slot_id": "slot_3",
-        "reasons": ["protected"],
-        "sources": ["slot_2"]
+        "reasons": [
+          "protected"
+        ],
+        "sources": [
+          "slot_2"
+        ]
       }
     },
     {

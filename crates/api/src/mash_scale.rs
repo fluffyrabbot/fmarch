@@ -560,7 +560,7 @@ async fn seed_game(pool: &PgPool, game: Uuid) -> Result<(), MashScaleError> {
         &Principal::authenticated(host_principal_id()),
         Command::StartGame {
             game,
-            phase: "D01".to_string(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static phase id is canonical"),
         },
     )
     .await?;

@@ -200,9 +200,15 @@ pub enum Command {
         principal_id: PrincipalId,
     },
     /// Freeze the roster and start the game at `phase`. Host-team (PhaseResolve).
-    StartGame { game: Uuid, phase: String },
+    StartGame {
+        game: Uuid,
+        phase: domain::phase::PhaseId,
+    },
     /// Open a Day phase (the votable window). Host-team (PhaseResolve).
-    OpenDayPhase { game: Uuid, phase: String },
+    OpenDayPhase {
+        game: Uuid,
+        phase: domain::phase::PhaseId,
+    },
     /// Advance from a resolved, locked phase to the next phase declared by the
     /// pack cadence. Host-team (PhaseResolve).
     AdvancePhase { game: Uuid },
@@ -211,7 +217,7 @@ pub enum Command {
     /// scheduler principal exists.
     AdvancePhaseByDeadline {
         game: Uuid,
-        phase: String,
+        phase: domain::phase::PhaseId,
         observed_at: i64,
     },
     /// Lock the main thread (votes/posts blocked). Host-team (PhaseResolve).
@@ -349,7 +355,11 @@ pub enum Command {
         embed_snapshot: Option<game_platform::embed::EmbedSnapshot>,
     },
     /// Extend a phase deadline. Host-team (Deadline class).
-    ExtendDeadline { game: Uuid, phase: String, at: i64 },
+    ExtendDeadline {
+        game: Uuid,
+        phase: domain::phase::PhaseId,
+        at: i64,
+    },
     /// End the named persona's current occupancy epoch and seat the incoming
     /// principal in a new epoch. Host-team (Replacement class).
     ProcessReplacement {

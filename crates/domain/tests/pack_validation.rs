@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use domain::pack::PhaseKind;
+use domain::phase::PhaseKind;
 use domain::{load_pack_from_json, night_ability_order, validate_pack, IrAbility, Pack};
 use serde_json::{json, Value};
 

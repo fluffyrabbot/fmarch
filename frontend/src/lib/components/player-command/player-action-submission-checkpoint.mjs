@@ -1,3 +1,5 @@
+import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
+
 export const PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT = Object.freeze({
   proofCheckId: "player-action-submission",
   rootClassName: "player-action-submission-checkpoint fm-proof-disclosure",
@@ -26,8 +28,12 @@ export function buildPlayerActionSubmissionCheckpoint({
       String(command?.action ?? "").startsWith("submit_action:"),
     ) ?? null;
   const phase = commandState?.phase ?? {};
-  const phaseId = String(phase.phaseId ?? "");
-  const phaseState = phase.locked === true ? "locked" : "open";
+  const phaseId = canonicalPhaseId(phase.phaseId);
+  const phaseState = phaseId === null
+    ? "pre-phase"
+    : phase.locked === true
+      ? "locked"
+      : "open";
   const actorSlot = String(commandState?.actorSlot ?? player.slotId ?? "");
   const selectedAction = String(legalAction?.templateId ?? "");
   const targetSlots = Array.isArray(legalAction?.targets)
@@ -51,7 +57,7 @@ export function buildPlayerActionSubmissionCheckpoint({
       data: Object.freeze({
         component: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.componentName,
         proofCheckId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.proofCheckId,
-        phaseId,
+        phaseId: phaseId ?? "",
         phaseState,
         actorSlot,
         actionState,
@@ -65,7 +71,7 @@ export function buildPlayerActionSubmissionCheckpoint({
     phase: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.phaseTestId,
       label: "Current phase",
-      value: `${phaseId || "unknown"} / ${phaseState}`,
+      value: `${phaseLabelFromId(phaseId) ?? "No phase open"} / ${phaseState}`,
     }),
     actor: Object.freeze({
       testId: PLAYER_ACTION_SUBMISSION_CHECKPOINT_CONTRACT.actorTestId,

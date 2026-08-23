@@ -136,7 +136,7 @@ export async function buildHostConsoleRouteData({
       surface: "moderator",
       eyebrow: gameId,
       title: "Host console",
-      summary: "Day 2 deadline is active. Slot 7 / Mira has a pending replacement.",
+      summary: "Day 1 deadline is active. Slot 7 / Mira has a pending replacement.",
       capabilityLabel: access.capabilityLabel,
       capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
       liveStatusTestId: HOST_CONSOLE_ROUTE_CONTRACT.liveStatusTestId,
@@ -359,11 +359,11 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
   ]),
   dayVoteOutcomes: Object.freeze([
     Object.freeze({
-      phaseId: "D01",
-      sourceSeq: 41,
-      eventIndex: 0,
+      phase_id: "D01",
+      source_seq: 41,
+      event_index: 0,
       status: "Lynch",
-      winnerSlot: "slot-2",
+      winner_slot: "slot-2",
       tallies: Object.freeze({ "slot-2": 4, "slot-7": 2 }),
       majority: 4,
       reason: null,
@@ -371,13 +371,12 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
   ]),
   hostPrompts: Object.freeze([
     Object.freeze({
-      id: "D01:skip_next_day:slot_1",
-      label: "skip_next_day",
-      value: "beloved_princess_death",
+      prompt_id: "D01:skip_next_day:slot_1",
+      kind: "skip_next_day",
+      reason: "beloved_princess_death",
       status: "pending",
-      phaseId: "D01",
-      subjectSlot: "slot_1",
-      decisionKind: "acknowledge",
+      phase_id: "D01",
+      subject_slot: "slot_1",
     }),
   ]),
 });
@@ -454,10 +453,10 @@ const HOST_FIXTURE_DAY_EVENTS = Object.freeze([
 
 const HOST_FIXTURE_PHASE = Object.freeze({
   id: "D01",
-  label: "Day 2",
+  label: "Day 1",
   state: "open",
   locked: false,
-  summary: "Day 2 deadline is active. Slot 7 / Mira has a pending replacement.",
+  summary: "Day 1 deadline is active. Slot 7 / Mira has a pending replacement.",
   deadline: 1781841600,
   deadlineLabel: "No deadline extension committed",
   lockedLabel: "Thread open",

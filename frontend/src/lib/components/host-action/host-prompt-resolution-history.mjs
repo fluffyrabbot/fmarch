@@ -46,19 +46,19 @@ function hostPromptResolutionRow(prompt) {
     case "day_vote_elimination":
       return Object.freeze({
         ...row,
-        label: `${resolution.phase_id ?? prompt.phaseId ?? "Day"} official elimination`,
+        label: `${phaseLabelFromId(resolution.phase_id ?? prompt.phaseId) ?? "Day"} official elimination`,
         detail: `${slotLabel(resolution.selected_slot)} selected after host decision`,
       });
     case "phase_advance":
       return Object.freeze({
         ...row,
-        label: `${resolution.source_phase_id} -> ${resolution.target_phase_id}`,
+        label: `${phaseLabelFromId(resolution.source_phase_id) ?? "Phase"} -> ${phaseLabelFromId(resolution.target_phase_id) ?? "Phase"}`,
         detail: `${reasonLabel(resolution.reason)} recorded`,
       });
     case "acknowledged":
       return Object.freeze({
         ...row,
-        label: `${resolution.phase_id ?? prompt.phaseId ?? "Phase"} acknowledgement`,
+        label: `${phaseLabelFromId(resolution.phase_id ?? prompt.phaseId) ?? "Phase"} acknowledgement`,
         detail: `${reasonLabel(resolution.reason)} recorded`,
       });
     default:
@@ -76,3 +76,4 @@ function reasonLabel(reason) {
   const value = String(reason ?? "Host resolution").replaceAll("_", " ");
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
+import { phaseLabelFromId } from "../../phase-id.mjs";

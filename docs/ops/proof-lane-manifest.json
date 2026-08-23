@@ -741,7 +741,15 @@
     {
       "id": "ops:railway-staging-target",
       "tier": "active",
-      "paths": ["tools/railway_staging_target_contract.mjs"],
+      "paths": [
+        "tools/railway_staging_target_contract.mjs",
+        "tools/profile_handle_index_rotation_receipt.mjs",
+        "tools/profile_handle_index_rotation_receipt.test.mjs",
+        "deploy/railway/profile-index-admin.env.example",
+        "docs/ops/profile-handle-index-rotation.md",
+        "docs/ops/profile-handle-index-rotation-receipt.schema.json",
+        "docs/ops/release-secret-custody.json"
+      ],
       "lanes": ["test:railway-staging-target"]
     },
     {

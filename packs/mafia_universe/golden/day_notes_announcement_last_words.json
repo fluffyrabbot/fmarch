@@ -161,8 +161,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D02",
-      "phase_kind": "Day",
-      "phase_number": 2,
       "phase_policy": {
         "cadence": [
           "Day",

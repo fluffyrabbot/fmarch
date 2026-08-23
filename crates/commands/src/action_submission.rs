@@ -56,15 +56,14 @@ struct ActionValidationContext<'operation, 'transaction> {
     tx: &'operation mut Transaction<'transaction, Postgres>,
     game: Uuid,
     pack: &'operation domain::Pack,
-    phase_id: &'operation str,
+    phase_id: &'operation domain::phase::PhaseId,
     request: &'operation ActionSubmissionRequest,
 }
 
 struct ActionCapacityContext<'operation, 'transaction> {
     tx: &'operation mut Transaction<'transaction, Postgres>,
     game: Uuid,
-    phase_id: &'operation str,
-    phase_number: u32,
+    phase_id: &'operation domain::phase::PhaseId,
     actor_slot: &'operation str,
     template_id: &'operation str,
     template: &'operation ActionTemplate,
@@ -156,7 +155,8 @@ pub(super) async fn submit_action(
         phase_input.day_phase_inputs = domain::DayPhaseInputs::default();
         let output = domain::resolve_instant(phase_input.resolve_input(EngineRunKind::Instant {
             action_id: &request.action_id,
-        }));
+        }))
+        .map_err(|error| Reject::Internal(format!("invalid instant resolution input: {error}")))?;
         domain::validate_resolution_applied(&output.applied, domain::RESULT_VERSION).map_err(
             |error| Reject::Internal(format!("invalid instant resolution result: {error}")),
         )?;
@@ -189,8 +189,8 @@ async fn validate_action_submission(
         phase_id,
         request,
     } = context;
-    let phase_kind = phase_kind(phase_id)?;
-    let phase_number = phase_number(phase_id)?;
+    let phase_kind = phase_kind(phase_id);
+    let phase_number = phase_number(phase_id);
     let slots = projections::slot_state(&mut **tx, game).await?;
     let actor = slots
         .iter()
@@ -228,8 +228,8 @@ async fn validate_action_submission(
     }
     if let Some(parity) = template.constraints.phase_parity {
         let matches = match parity {
-            PhaseParity::Odd => phase_number % 2 == 1,
-            PhaseParity::Even => phase_number % 2 == 0,
+            PhaseParity::Odd => !phase_number.is_multiple_of(2),
+            PhaseParity::Even => phase_number.is_multiple_of(2),
         };
         if !matches {
             return Err(Reject::InvalidTarget);
@@ -237,8 +237,8 @@ async fn validate_action_submission(
     }
     if let Some(parity) = template.constraints.cycle_parity {
         let matches = match parity {
-            PhaseParity::Odd => phase_number % 2 == 1,
-            PhaseParity::Even => phase_number % 2 == 0,
+            PhaseParity::Odd => !phase_number.is_multiple_of(2),
+            PhaseParity::Even => phase_number.is_multiple_of(2),
         };
         if !matches {
             return Err(Reject::InvalidTarget);
@@ -331,8 +331,12 @@ async fn validate_action_submission(
             .any(|counter| {
                 counter.slot_id == request.actor_slot
                     && counter.counter_id == counter_id
-                    && counter.phase_kind == phase_kind.name()
-                    && phase_number as i32 <= counter.phase_number + i32::from(cooldown_cycles)
+                    && counter.phase_id.kind() == phase_kind
+                    && phase_is_on_cooldown(
+                        phase_number,
+                        counter.phase_id.number(),
+                        cooldown_cycles,
+                    )
             });
         if on_cooldown {
             return Err(Reject::InvalidTarget);
@@ -379,9 +383,10 @@ async fn validate_action_submission(
             .iter()
             .any(|record| {
                 let in_scope = if template.has_modifier(Modifier::Roaming) {
-                    record.phase_kind == "Night"
+                    record.phase_id.kind() == domain::phase::PhaseKind::Night
                 } else {
-                    record.phase_kind == "Night" && record.phase_number + 1 == phase_number as i32
+                    record.phase_id.kind() == domain::phase::PhaseKind::Night
+                        && is_immediately_following_phase(phase_number, record.phase_id.number())
                 };
                 record.slot_id == request.actor_slot
                     && record.template_id == template.id
@@ -400,7 +405,6 @@ async fn validate_action_submission(
         tx,
         game,
         phase_id,
-        phase_number,
         actor_slot: &request.actor_slot,
         template_id: &request.template_id,
         template,
@@ -424,6 +428,18 @@ async fn validate_action_submission(
         }
     }
     Ok(template.window)
+}
+
+fn phase_is_on_cooldown(
+    current_phase_number: u32,
+    recorded_phase_number: u32,
+    cycles: u16,
+) -> bool {
+    current_phase_number <= recorded_phase_number.saturating_add(u32::from(cycles))
+}
+
+fn is_immediately_following_phase(current_phase_number: u32, recorded_phase_number: u32) -> bool {
+    current_phase_number == recorded_phase_number.saturating_add(1)
 }
 
 fn target_role_filter_rejected(
@@ -529,13 +545,13 @@ async fn validate_action_slot_capacity(
         tx,
         game,
         phase_id,
-        phase_number,
         actor_slot,
         template_id,
         template,
         grant_id,
         source,
     } = context;
+    let phase_number = phase_id.number();
     let active = active_actions_from_rows(
         projections::active_action_submissions(&mut **tx, game, phase_id, actor_slot).await?,
     );
@@ -572,7 +588,7 @@ async fn validate_action_slot_capacity(
                     grant.slot_id == actor_slot
                         && grant.grant_id == grant_id
                         && grant.kind == grant_kind_name(required_kind)
-                        && grant.phase_number < phase_number as i32
+                        && grant.phase_id.number() < phase_number
                 })
                 .map(|grant| grant.uses.max(0) as usize)
                 .sum::<usize>();
@@ -600,7 +616,7 @@ fn grant_kind_name(kind: GrantKind) -> &'static str {
 pub(super) async fn active_actions_for_actor_phase(
     pool: &PgPool,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &domain::phase::PhaseId,
     actor_slot: &str,
 ) -> Result<BTreeMap<String, ActiveAction>, Reject> {
     Ok(active_actions_from_rows(
@@ -653,7 +669,7 @@ fn ita_session_for_phase(
 
 fn activation_gate_reason(
     template: &ActionTemplate,
-    phase_kind: domain::pack::PhaseKind,
+    phase_kind: domain::phase::PhaseKind,
     phase_number: u32,
 ) -> Option<&'static str> {
     let gate = template.constraints.active_from.as_ref()?;
@@ -664,4 +680,18 @@ fn activation_gate_reason(
         ActivationGateReason::Novice => "novice_inactive",
         ActivationGateReason::Activated => "activated_inactive",
     })
+}
+
+#[cfg(test)]
+mod phase_number_tests {
+    use super::{is_immediately_following_phase, phase_is_on_cooldown};
+
+    #[test]
+    fn phase_admission_comparisons_remain_safe_at_storage_ordinal_limit() {
+        let maximum = i32::MAX as u32;
+        assert!(phase_is_on_cooldown(maximum, maximum, 1));
+        assert!(phase_is_on_cooldown(maximum, maximum - 1, 1));
+        assert!(is_immediately_following_phase(maximum, maximum - 1));
+        assert!(!is_immediately_following_phase(maximum, maximum));
+    }
 }

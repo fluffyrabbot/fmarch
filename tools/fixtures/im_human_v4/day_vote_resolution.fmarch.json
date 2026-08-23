@@ -1,7 +1,5 @@
 {
   "phase_id": "D01",
-  "phase_kind": "Day",
-  "phase_number": 1,
   "run_id": "imhuman:v4:day_vote_resolution",
   "result_version": 21,
   "seed": 17,

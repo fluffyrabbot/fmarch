@@ -399,7 +399,7 @@ function surfaceScenarios() {
       path: "/g/midsummer?private=notification-1",
       render: "renderPlayerPrivateReviewRoute",
       surfaceTestId: "player-surface",
-      requiredText: ["Private queue", "Phase N02"],
+      requiredText: ["Private queue", "Phase Night 2"],
       requiredTestIds: [
         "player-private-review-notification-1",
         "player-private-link-notification-1",

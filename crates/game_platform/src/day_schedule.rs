@@ -6,20 +6,22 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{DayEvent, DayEventSchedule, DayEventState, PhaseScope, ProgramTrigger, UnixSeconds};
+use crate::{
+    DayEvent, DayEventSchedule, DayEventState, PhaseId, PhaseScope, ProgramTrigger, UnixSeconds,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScheduleOpening {
     Manual,
     Absolute { open_at: i64 },
-    RelativeToPhase { phase_id: String, open_offset: i64 },
+    RelativeToPhase { phase_id: PhaseId, open_offset: i64 },
     OnTrigger { trigger: ProgramTrigger },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScheduleLock {
     Absolute { lock_at: i64 },
-    RelativeToPhase { phase_id: String, lock_offset: i64 },
+    RelativeToPhase { phase_id: PhaseId, lock_offset: i64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,11 +46,11 @@ pub fn compile(schedule: &DayEventSchedule) -> CompiledSchedule {
             lock_offset,
         } => CompiledSchedule {
             opening: ScheduleOpening::RelativeToPhase {
-                phase_id: phase_id.as_str().to_string(),
+                phase_id: phase_id.clone(),
                 open_offset: open_offset.get(),
             },
             lock: lock_offset.map(|lock_offset| ScheduleLock::RelativeToPhase {
-                phase_id: phase_id.as_str().to_string(),
+                phase_id: phase_id.clone(),
                 lock_offset: lock_offset.get(),
             }),
         },
@@ -75,19 +77,19 @@ pub enum PhaseSignalKind {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PhaseSignal {
     pub kind: PhaseSignalKind,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ScheduleTimeline {
-    pub phase_opened_at: BTreeMap<String, i64>,
+    pub phase_opened_at: BTreeMap<PhaseId, i64>,
     pub phase_signals: BTreeSet<PhaseSignal>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScheduleContext {
     pub observed_at: i64,
-    pub current_phase_id: String,
+    pub current_phase_id: PhaseId,
     pub current_day_number: Option<u32>,
     pub timeline: ScheduleTimeline,
 }
@@ -152,7 +154,7 @@ pub fn evaluate(
 pub fn next_observation_at(
     event: &DayEvent,
     state: DayEventState,
-    current_phase_id: Option<&str>,
+    current_phase_id: Option<&PhaseId>,
     current_day_number: Option<u32>,
     phase_opened_at: Option<i64>,
     recorded_open_due_at: Option<i64>,
@@ -177,7 +179,7 @@ pub fn next_observation_at(
                     ref phase_id,
                     open_offset,
                 } => {
-                    if current_phase_id != Some(phase_id.as_str()) {
+                    if current_phase_id != Some(phase_id) {
                         return None;
                     }
                     phase_opened_at?.checked_add(open_offset)?
@@ -201,7 +203,7 @@ pub fn next_observation_at(
                     ref phase_id,
                     lock_offset,
                 }) => {
-                    let anchor = if current_phase_id == Some(phase_id.as_str()) {
+                    let anchor = if current_phase_id == Some(phase_id) {
                         phase_opened_at
                     } else {
                         match (&schedule.opening, recorded_open_due_at) {
@@ -258,7 +260,7 @@ fn opening_due(opening: &ScheduleOpening, context: &ScheduleContext) -> Option<S
             )
         }
         ScheduleOpening::OnTrigger { trigger } => {
-            if trigger_phase_id(trigger) != context.current_phase_id
+            if trigger_phase_id(trigger) != &context.current_phase_id
                 || !trigger_seen(trigger, &context.timeline.phase_signals)
             {
                 return None;
@@ -336,7 +338,7 @@ fn trigger_seen(trigger: &ProgramTrigger, signals: &BTreeSet<PhaseSignal>) -> bo
     };
     signals.contains(&PhaseSignal {
         kind,
-        phase_id: phase_id.as_str().to_string(),
+        phase_id: phase_id.clone(),
     })
 }
 
@@ -354,11 +356,11 @@ fn trigger_source(trigger: &ProgramTrigger) -> String {
     }
 }
 
-fn trigger_phase_id(trigger: &ProgramTrigger) -> &str {
+fn trigger_phase_id(trigger: &ProgramTrigger) -> &PhaseId {
     match trigger {
         ProgramTrigger::PhaseOpened { phase_id }
         | ProgramTrigger::PhaseLocked { phase_id }
-        | ProgramTrigger::PhaseResolved { phase_id } => phase_id.as_str(),
+        | ProgramTrigger::PhaseResolved { phase_id } => phase_id,
     }
 }
 
@@ -416,7 +418,7 @@ mod tests {
     fn context(observed_at: i64) -> ScheduleContext {
         ScheduleContext {
             observed_at,
-            current_phase_id: "D01".to_string(),
+            current_phase_id: PhaseId::parse("D01").unwrap(),
             current_day_number: Some(1),
             timeline: ScheduleTimeline::default(),
         }
@@ -441,13 +443,16 @@ mod tests {
     #[test]
     fn relative_schedule_requires_an_explicit_phase_open_anchor() {
         let event = event(DayEventSchedule::RelativeToPhase {
-            phase_id: PhaseId::new("D01").unwrap(),
+            phase_id: PhaseId::parse("D01").unwrap(),
             open_offset: DurationSeconds::new(10).unwrap(),
             lock_offset: Some(DurationSeconds::new(20).unwrap()),
         });
         assert!(evaluate(&event, DayEventState::Scheduled, &context(120)).is_empty());
         let mut context = context(120);
-        context.timeline.phase_opened_at.insert("D01".into(), 100);
+        context
+            .timeline
+            .phase_opened_at
+            .insert(PhaseId::parse("D01").unwrap(), 100);
         assert_eq!(
             evaluate(&event, DayEventState::Scheduled, &context)
                 .iter()
@@ -460,7 +465,7 @@ mod tests {
     #[test]
     fn trigger_and_terminal_cancellation_are_deterministic() {
         let trigger = ProgramTrigger::PhaseResolved {
-            phase_id: PhaseId::new("D01").unwrap(),
+            phase_id: PhaseId::parse("D01").unwrap(),
         };
         let event = event(DayEventSchedule::OnTrigger {
             trigger: trigger.clone(),
@@ -468,7 +473,7 @@ mod tests {
         let mut context = context(300);
         context.timeline.phase_signals.insert(PhaseSignal {
             kind: PhaseSignalKind::Resolved,
-            phase_id: "D01".into(),
+            phase_id: PhaseId::parse("D01").unwrap(),
         });
         assert_eq!(
             evaluate(&event, DayEventState::Scheduled, &context)[0].source,
@@ -479,6 +484,7 @@ mod tests {
 
     #[test]
     fn next_observation_tracks_timed_boundaries_without_polling_manual_or_trigger_work() {
+        let day = PhaseId::parse("D01").unwrap();
         let absolute = event(DayEventSchedule::Absolute {
             open_at: unix_seconds(100),
             lock_at: Some(unix_seconds(200)),
@@ -487,7 +493,7 @@ mod tests {
             next_observation_at(
                 &absolute,
                 DayEventState::Scheduled,
-                Some("D01"),
+                Some(&day),
                 Some(1),
                 Some(50),
                 None,
@@ -498,7 +504,7 @@ mod tests {
             next_observation_at(
                 &absolute,
                 DayEventState::Open,
-                Some("D01"),
+                Some(&day),
                 Some(1),
                 Some(50),
                 Some(100),
@@ -508,14 +514,14 @@ mod tests {
 
         let trigger = event(DayEventSchedule::OnTrigger {
             trigger: ProgramTrigger::PhaseResolved {
-                phase_id: PhaseId::new("D01").unwrap(),
+                phase_id: PhaseId::parse("D01").unwrap(),
             },
         });
         assert_eq!(
             next_observation_at(
                 &trigger,
                 DayEventState::Scheduled,
-                Some("D01"),
+                Some(&day),
                 Some(1),
                 Some(50),
                 None,
@@ -526,8 +532,9 @@ mod tests {
 
     #[test]
     fn relative_lock_keeps_its_original_anchor_after_phase_advance() {
+        let night = PhaseId::parse("N01").unwrap();
         let relative = event(DayEventSchedule::RelativeToPhase {
-            phase_id: PhaseId::new("D01").unwrap(),
+            phase_id: PhaseId::parse("D01").unwrap(),
             open_offset: DurationSeconds::new(10).unwrap(),
             lock_offset: Some(DurationSeconds::new(20).unwrap()),
         });
@@ -535,7 +542,7 @@ mod tests {
             next_observation_at(
                 &relative,
                 DayEventState::Open,
-                Some("N01"),
+                Some(&night),
                 None,
                 Some(500),
                 Some(110),

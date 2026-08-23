@@ -9,8 +9,6 @@ use serde_json::json;
 fn valid_resolution() -> serde_json::Value {
     json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:1",
         "result_version": RESULT_VERSION,
         "seed": 7,
@@ -96,6 +94,40 @@ fn current_resolution_payload_upcast_is_identity() {
     let upcast = upcast_resolution_applied(payload.clone(), RESULT_VERSION)
         .expect("current contract should not rewrite");
     assert_eq!(upcast, payload);
+}
+
+#[test]
+fn resolution_rejects_redundant_phase_coordinate() {
+    let mut payload = valid_resolution();
+    payload["phase_kind"] = json!("Night");
+
+    assert!(matches!(
+        validate_resolution_json(&payload, RESULT_VERSION),
+        Err(domain::ResultValidationError::MalformedJson(_))
+    ));
+}
+
+#[test]
+fn resolution_rejects_redundant_inner_event_phase_coordinate() {
+    let mut payload = valid_resolution();
+    payload["counts"]["kills"] = json!(0);
+    payload["events"][0] = json!({
+        "index": 0,
+        "kind": "ActionRecorded",
+        "payload": {
+            "actor": "slot_1",
+            "template_id": "cop_investigate",
+            "targets": ["slot_2"],
+            "phase_id": "D01",
+            "status": "accepted",
+            "phase_number": 1
+        }
+    });
+
+    assert!(matches!(
+        validate_resolution_json(&payload, RESULT_VERSION),
+        Err(domain::ResultValidationError::MalformedJson(_))
+    ));
 }
 
 #[test]
@@ -338,7 +370,7 @@ fn imported_im_human_v4_fixture_payload_passes_contract_validation() {
 
     let applied = validate_resolution_json(&payload, RESULT_VERSION)
         .expect("imported im-human V4 fixture should pass fmarch result validation");
-    assert_eq!(applied.phase_id, "D01");
+    assert_eq!(applied.phase_id.as_str(), "D01");
     assert_eq!(applied.counts.events, 4);
     assert_eq!(applied.counts.kills, 1);
     assert_eq!(applied.counts.saves, 0);
@@ -378,8 +410,6 @@ fn concealed_death_reveal_payload_passes_contract_validation() {
 fn info_result_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:info",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -406,8 +436,6 @@ fn info_result_payload_passes_contract_validation() {
                     "source_action": "mailman_n01",
                     "template_id": "mailman",
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1
                 }
             }
         ],
@@ -427,8 +455,6 @@ fn info_result_payload_passes_contract_validation() {
 fn effect_notification_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:effect-notification",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -464,8 +490,6 @@ fn effect_notification_payload_passes_contract_validation() {
 fn effect_notification_missing_audience_fails_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:effect-notification",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -500,8 +524,6 @@ fn effect_notification_missing_audience_fails_contract_validation() {
 fn info_result_missing_audience_fails_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:info",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -522,8 +544,6 @@ fn info_result_missing_audience_fails_contract_validation() {
                     "source_action": "mailman_n01",
                     "template_id": "mailman",
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1
                 }
             }
         ],
@@ -543,8 +563,6 @@ fn info_result_missing_audience_fails_contract_validation() {
 fn action_recorded_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "run_id": "resolution:test:N02:1",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -562,8 +580,6 @@ fn action_recorded_payload_passes_contract_validation() {
                     "template_id": "investigate_alignment",
                     "targets": ["slot_2"],
                     "phase_id": "N02",
-                    "phase_kind": "Night",
-                    "phase_number": 2,
                     "status": "resolved"
                 }
             }
@@ -581,8 +597,6 @@ fn action_recorded_payload_passes_contract_validation() {
 fn action_ingest_halted_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:ingest_halt",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -602,8 +616,6 @@ fn action_ingest_halted_payload_passes_contract_validation() {
                     "template_id": "factional_kill",
                     "targets": ["slot_1"],
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1,
                     "reason": "template_not_available_to_actor",
                     "grant_id": null
                 }
@@ -622,8 +634,6 @@ fn action_ingest_halted_payload_passes_contract_validation() {
 fn investigation_memory_recorded_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "run_id": "resolution:test:N02:memory",
         "result_version": RESULT_VERSION,
         "seed": 9,
@@ -644,8 +654,6 @@ fn investigation_memory_recorded_payload_passes_contract_validation() {
                     "source_action": "compare_n02",
                     "template_id": "compare_parity",
                     "phase_id": "N02",
-                    "phase_kind": "Night",
-                    "phase_number": 2
                 }
             }
         ],
@@ -662,8 +670,6 @@ fn investigation_memory_recorded_payload_passes_contract_validation() {
 fn investigator_scoped_investigation_memory_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "run_id": "resolution:test:N02:investigator-memory",
         "result_version": RESULT_VERSION,
         "seed": 9,
@@ -685,8 +691,6 @@ fn investigator_scoped_investigation_memory_payload_passes_contract_validation()
                     "source_action": "parity_n02",
                     "template_id": "parity_scan",
                     "phase_id": "N02",
-                    "phase_kind": "Night",
-                    "phase_number": 2
                 }
             }
         ],
@@ -703,8 +707,6 @@ fn investigator_scoped_investigation_memory_payload_passes_contract_validation()
 fn delayed_death_payloads_pass_contract_validation() {
     let payload = json!({
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "run_id": "resolution:test:N02:delayed-death",
         "result_version": RESULT_VERSION,
         "seed": 10,
@@ -725,8 +727,6 @@ fn delayed_death_payloads_pass_contract_validation() {
                     "source": "slot_1",
                     "source_action": "poison_n01",
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1
                 }
             },
             {
@@ -739,8 +739,6 @@ fn delayed_death_payloads_pass_contract_validation() {
                     "effect": "poisoned",
                     "outcome": "preempted_by_clear",
                     "phase_id": "N02",
-                    "phase_kind": "Night",
-                    "phase_number": 2
                 }
             }
         ],
@@ -757,8 +755,6 @@ fn delayed_death_payloads_pass_contract_validation() {
 fn visit_recorded_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:visit",
         "result_version": RESULT_VERSION,
         "seed": 11,
@@ -777,8 +773,6 @@ fn visit_recorded_payload_passes_contract_validation() {
                     "template_id": "visit",
                     "source_action": "visit_n01",
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1,
                     "visible": true
                 }
             }
@@ -796,8 +790,6 @@ fn visit_recorded_payload_passes_contract_validation() {
 fn day_vote_outcome_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:vote",
         "result_version": RESULT_VERSION,
         "seed": 12,
@@ -854,8 +846,6 @@ fn day_vote_outcome_payload_passes_contract_validation() {
 fn day_vote_recorded_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:vote-history",
         "result_version": RESULT_VERSION,
         "seed": 12,
@@ -917,8 +907,6 @@ fn day_vote_recorded_payload_passes_contract_validation() {
 fn day_note_payloads_pass_contract_validation() {
     let payload = json!({
         "phase_id": "D02",
-        "phase_kind": "Day",
-        "phase_number": 2,
         "run_id": "resolution:test:D02:day_notes",
         "result_version": RESULT_VERSION,
         "seed": 16,
@@ -983,8 +971,6 @@ fn day_note_payloads_pass_contract_validation() {
 fn alignment_revealed_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:alignment_reveal",
         "result_version": RESULT_VERSION,
         "seed": 17,
@@ -1002,8 +988,6 @@ fn alignment_revealed_payload_passes_contract_validation() {
                     "alignment": "town",
                     "source_action": "reveal_town_001",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1020,8 +1004,6 @@ fn alignment_revealed_payload_passes_contract_validation() {
 fn role_revealed_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "run_id": "resolution:test:N02:role_reveal",
         "result_version": RESULT_VERSION,
         "seed": 18,
@@ -1039,8 +1021,6 @@ fn role_revealed_payload_passes_contract_validation() {
                     "role_key": "doctor",
                     "source_action": "role_oracle_001",
                     "phase_id": "N02",
-                    "phase_kind": "Night",
-                    "phase_number": 2
                 }
             }
         ],
@@ -1057,8 +1037,6 @@ fn role_revealed_payload_passes_contract_validation() {
 fn malformed_role_revealed_payload_fails_contract_validation() {
     let payload = json!({
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "run_id": "resolution:test:N02:bad_role_reveal",
         "result_version": RESULT_VERSION,
         "seed": 19,
@@ -1075,8 +1053,6 @@ fn malformed_role_revealed_payload_fails_contract_validation() {
                     "slot_id": "slot_1",
                     "role_key": "doctor",
                     "phase_id": "N02",
-                    "phase_kind": "Night",
-                    "phase_number": 2
                 }
             },
             {
@@ -1103,8 +1079,6 @@ fn malformed_role_revealed_payload_fails_contract_validation() {
 fn vote_duel_declared_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:vote_duel",
         "result_version": RESULT_VERSION,
         "seed": 23,
@@ -1122,8 +1096,6 @@ fn vote_duel_declared_payload_passes_contract_validation() {
                     "target": "slot_2",
                     "source_action": "duel_001",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1140,8 +1112,6 @@ fn vote_duel_declared_payload_passes_contract_validation() {
 fn vote_vetoed_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:veto",
         "result_version": RESULT_VERSION,
         "seed": 24,
@@ -1159,8 +1129,6 @@ fn vote_vetoed_payload_passes_contract_validation() {
                     "target": "slot_2",
                     "source_action": "veto_001",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1177,8 +1145,6 @@ fn vote_vetoed_payload_passes_contract_validation() {
 fn host_prompt_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:host-prompt",
         "result_version": RESULT_VERSION,
         "seed": 12,
@@ -1197,8 +1163,6 @@ fn host_prompt_payload_passes_contract_validation() {
                     "subject": "slot_1",
                     "reason": "beloved_princess_death",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1,
                     "metadata": {
                         "policy": "beloved_princess",
                         "death_cause": "lynch",
@@ -1220,8 +1184,6 @@ fn host_prompt_payload_passes_contract_validation() {
 fn malformed_day_note_payload_fails_contract_validation() {
     let payload = json!({
         "phase_id": "D02",
-        "phase_kind": "Day",
-        "phase_number": 2,
         "run_id": "resolution:test:D02:bad_day_notes",
         "result_version": RESULT_VERSION,
         "seed": 17,
@@ -1264,8 +1226,6 @@ fn malformed_day_note_payload_fails_contract_validation() {
 fn badge_changed_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:sheriff",
         "result_version": RESULT_VERSION,
         "seed": 13,
@@ -1288,8 +1248,6 @@ fn badge_changed_payload_passes_contract_validation() {
                     "reason": "elected",
                     "destroyed": false,
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1306,8 +1264,6 @@ fn badge_changed_payload_passes_contract_validation() {
 fn duel_resolved_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:duel",
         "result_version": RESULT_VERSION,
         "seed": 14,
@@ -1327,8 +1283,6 @@ fn duel_resolved_payload_passes_contract_validation() {
                     "killed": "slot_4",
                     "source_action": "duel_001",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             },
             {
@@ -1356,8 +1310,6 @@ fn duel_resolved_payload_passes_contract_validation() {
 fn wolf_self_destruct_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:self_destruct",
         "result_version": RESULT_VERSION,
         "seed": 18,
@@ -1377,8 +1329,6 @@ fn wolf_self_destruct_payload_passes_contract_validation() {
                     "unstoppable": true,
                     "source_action": "self_001",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             },
             {
@@ -1416,8 +1366,6 @@ fn wolf_self_destruct_payload_passes_contract_validation() {
 fn wolf_carry_payloads_pass_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:wolf_carry",
         "result_version": RESULT_VERSION,
         "seed": 19,
@@ -1436,8 +1384,6 @@ fn wolf_carry_payloads_pass_contract_validation() {
                     "cause": "wolf_carry",
                     "role_key": "white_wolf_king",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             },
             {
@@ -1450,8 +1396,6 @@ fn wolf_carry_payloads_pass_contract_validation() {
                     "effect_id": "white_wolf_carry_token:wolfkill_001:wolf_carry:1",
                     "role_key": "white_wolf_king",
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1468,8 +1412,6 @@ fn wolf_carry_payloads_pass_contract_validation() {
 fn wolf_beauty_payloads_pass_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:wolf_beauty",
         "result_version": RESULT_VERSION,
         "seed": 20,
@@ -1488,8 +1430,6 @@ fn wolf_beauty_payloads_pass_contract_validation() {
                     "effect": "wolf_beauty_mark",
                     "source_action": "beauty_001",
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1
                 }
             },
             {
@@ -1500,8 +1440,6 @@ fn wolf_beauty_payloads_pass_contract_validation() {
                     "dragged_ids": ["slot_2"],
                     "cause": "trigger:wolf_beauty_drag",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1518,8 +1456,6 @@ fn wolf_beauty_payloads_pass_contract_validation() {
 fn ita_session_payloads_pass_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:ita",
         "result_version": RESULT_VERSION,
         "seed": 15,
@@ -1539,8 +1475,6 @@ fn ita_session_payloads_pass_contract_validation() {
                     "window": "ita_sessions",
                     "status": "open",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             },
             {
@@ -1612,8 +1546,6 @@ fn ita_session_payloads_pass_contract_validation() {
                         "per_target": { "slot_4": 1 }
                     },
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             },
             {
@@ -1623,8 +1555,6 @@ fn ita_session_payloads_pass_contract_validation() {
                     "session_id": "d1",
                     "last_status": "open",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1641,8 +1571,6 @@ fn ita_session_payloads_pass_contract_validation() {
 fn ita_session_lifecycle_payloads_pass_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:ita_lifecycle",
         "result_version": RESULT_VERSION,
         "seed": 16,
@@ -1663,8 +1591,6 @@ fn ita_session_lifecycle_payloads_pass_contract_validation() {
                     "message": "Pause for votecount correction",
                     "recorded_at": 42,
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             },
             {
@@ -1676,8 +1602,6 @@ fn ita_session_lifecycle_payloads_pass_contract_validation() {
                     "message": "Pause for votecount correction",
                     "recorded_at": 42,
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             },
             {
@@ -1687,8 +1611,6 @@ fn ita_session_lifecycle_payloads_pass_contract_validation() {
                     "session_id": "d1",
                     "last_status": "paused",
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1705,8 +1627,6 @@ fn ita_session_lifecycle_payloads_pass_contract_validation() {
 fn ita_buffered_invalidated_and_refunded_payloads_pass_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "run_id": "resolution:test:D01:ita_extended",
         "result_version": RESULT_VERSION,
         "seed": 19,
@@ -1787,8 +1707,6 @@ fn ita_buffered_invalidated_and_refunded_payloads_pass_contract_validation() {
 fn action_granted_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:grant",
         "result_version": RESULT_VERSION,
         "seed": 9,
@@ -1810,8 +1728,6 @@ fn action_granted_payload_passes_contract_validation() {
                     "uses": 1,
                     "source_action": "grant_item_n01",
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1828,8 +1744,6 @@ fn action_granted_payload_passes_contract_validation() {
 fn action_grant_consumed_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "run_id": "resolution:test:N02:grant-consumed",
         "result_version": RESULT_VERSION,
         "seed": 9,
@@ -1848,8 +1762,6 @@ fn action_grant_consumed_payload_passes_contract_validation() {
                     "action_id": "cop_extra_n02",
                     "source_action": "motivate_n01",
                     "phase_id": "N02",
-                    "phase_kind": "Night",
-                    "phase_number": 2,
                     "remaining_uses": 0
                 }
             }
@@ -1867,8 +1779,6 @@ fn action_grant_consumed_payload_passes_contract_validation() {
 fn action_grant_consumed_without_source_action_fails_contract_validation() {
     let payload = json!({
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "run_id": "resolution:test:N02:grant-consumed-missing-source",
         "result_version": RESULT_VERSION,
         "seed": 9,
@@ -1886,8 +1796,6 @@ fn action_grant_consumed_without_source_action_fails_contract_validation() {
                     "actor": "slot_2",
                     "action_id": "cop_extra_n02",
                     "phase_id": "N02",
-                    "phase_kind": "Night",
-                    "phase_number": 2,
                     "remaining_uses": 0
                 }
             },
@@ -1915,8 +1823,6 @@ fn action_grant_consumed_without_source_action_fails_contract_validation() {
 fn backup_targeted_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:backup-targeted",
         "result_version": RESULT_VERSION,
         "seed": 10,
@@ -1935,8 +1841,6 @@ fn backup_targeted_payload_passes_contract_validation() {
                     "source_role": "cop",
                     "source_action": "target_backup_n01",
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1953,8 +1857,6 @@ fn backup_targeted_payload_passes_contract_validation() {
 fn target_lynch_win_targeted_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:target-lynch-win-targeted",
         "result_version": RESULT_VERSION,
         "seed": 10,
@@ -1974,8 +1876,6 @@ fn target_lynch_win_targeted_payload_passes_contract_validation() {
                     "effect": "execution_target",
                     "source_action": "executioner_target_n01",
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1
                 }
             }
         ],
@@ -1992,8 +1892,6 @@ fn target_lynch_win_targeted_payload_passes_contract_validation() {
 fn players_linked_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:link",
         "result_version": RESULT_VERSION,
         "seed": 10,
@@ -2026,8 +1924,6 @@ fn players_linked_payload_passes_contract_validation() {
 fn retaliation_armed_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:retaliate",
         "result_version": RESULT_VERSION,
         "seed": 11,
@@ -2061,8 +1957,6 @@ fn retaliation_armed_payload_passes_contract_validation() {
 fn player_converted_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:convert",
         "result_version": RESULT_VERSION,
         "seed": 10,
@@ -2125,8 +2019,6 @@ fn malformed_inner_event_payload_fails_contract_validation() {
 fn malformed_investigation_result_payload_fails_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:investigation-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2170,8 +2062,6 @@ fn malformed_investigation_result_payload_fails_contract_validation() {
 fn full_role_investigation_result_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:full-role-investigation-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2208,8 +2098,6 @@ fn full_role_investigation_result_payload_passes_contract_validation() {
 fn killer_investigation_result_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:killer-investigation-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2245,8 +2133,6 @@ fn killer_investigation_result_payload_passes_contract_validation() {
 fn specialist_investigation_result_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:specialist-investigation-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2282,8 +2168,6 @@ fn specialist_investigation_result_payload_passes_contract_validation() {
 fn pt_access_investigation_result_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:pt-access-investigation-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2323,8 +2207,6 @@ fn visitor_role_investigation_result_payload_passes_contract_validation() {
     ] {
         let payload = json!({
             "phase_id": "N01",
-            "phase_kind": "Night",
-            "phase_number": 1,
             "run_id": run_id,
             "result_version": RESULT_VERSION,
             "seed": 8,
@@ -2361,8 +2243,6 @@ fn visitor_role_investigation_result_payload_passes_contract_validation() {
 fn security_guard_investigation_result_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:security-guard-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2398,8 +2278,6 @@ fn security_guard_investigation_result_payload_passes_contract_validation() {
 fn voyeur_investigation_result_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:voyeur-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2435,8 +2313,6 @@ fn voyeur_investigation_result_payload_passes_contract_validation() {
 fn action_type_investigation_result_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:action-type-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2472,8 +2348,6 @@ fn action_type_investigation_result_payload_passes_contract_validation() {
 fn malformed_visitor_role_investigation_result_payload_fails_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:malformed-role-watcher-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2516,8 +2390,6 @@ fn malformed_visitor_role_investigation_result_payload_fails_contract_validation
 fn malformed_voyeur_investigation_result_payload_fails_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:malformed-voyeur-result",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2560,8 +2432,6 @@ fn malformed_voyeur_investigation_result_payload_fails_contract_validation() {
 fn parity_comparison_result_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "run_id": "resolution:test:N02:parity-comparison",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2599,8 +2469,6 @@ fn parity_comparison_result_payload_passes_contract_validation() {
 fn action_granted_without_source_action_fails_contract_validation() {
     let payload = json!({
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "run_id": "resolution:test:N01:grant",
         "result_version": RESULT_VERSION,
         "seed": 8,
@@ -2620,8 +2488,6 @@ fn action_granted_without_source_action_fails_contract_validation() {
                     "target": "slot_2",
                     "uses": 1,
                     "phase_id": "N01",
-                    "phase_kind": "Night",
-                    "phase_number": 1
                 }
             },
             {
@@ -2822,6 +2688,30 @@ fn final_win_survival_awards_metadata_passes_contract_validation() {
             .map(|award| award.source_event.as_str()),
         Some("win.survivor")
     );
+}
+
+#[test]
+fn win_metadata_rejects_legacy_phase_coordinate_triplets() {
+    let mut payload = valid_resolution();
+    payload["events"].as_array_mut().unwrap().push(json!({
+        "index": 2,
+        "kind": "WinReached",
+        "payload": {
+            "winner": "town",
+            "reason": "all threats eliminated",
+            "metadata": {
+                "target_phase_id": "D01R02",
+                "target_phase_kind": "Day",
+                "target_phase_number": 1
+            }
+        }
+    }));
+    payload["counts"]["events"] = json!(3);
+
+    assert!(matches!(
+        validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION),
+        Err(domain::ResultValidationError::MalformedJson(_))
+    ));
 }
 
 #[test]

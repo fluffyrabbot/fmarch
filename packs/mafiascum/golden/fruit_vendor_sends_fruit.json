@@ -4,14 +4,17 @@
     "game_id": "game_ms_fruit_vendor_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["main"]
+          "Day": [
+            "main"
+          ]
         },
         "twilight": false
       },
@@ -44,7 +47,9 @@
         "action_id": "ms_send_fruit_001",
         "actor": "slot_1",
         "template_id": "send_fruit",
-        "targets": ["slot_2"],
+        "targets": [
+          "slot_2"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -61,7 +66,9 @@
       "payload": {
         "effect": "fruit_received",
         "status": "marked",
-        "audience": ["slot_2"]
+        "audience": [
+          "slot_2"
+        ]
       }
     },
     {

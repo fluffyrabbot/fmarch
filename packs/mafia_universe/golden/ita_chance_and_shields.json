@@ -21,8 +21,6 @@
         "day": 1,
         "label": "Day 1 ITA",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1",
         "status": "open",
         "window": "ita_sessions"
@@ -372,8 +370,6 @@
         },
         "global_shots_fired": 4,
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "queue_delta": -4,
         "queue_length": 0,
         "session_id": "d1",
@@ -386,8 +382,6 @@
       "payload": {
         "last_status": "open",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1"
       }
     },
@@ -396,34 +390,34 @@
       "kind": "DayVoteOutcome",
       "payload": {
         "contenders": [],
-        "majority": 5.0,
+        "majority": 5,
         "reason": null,
         "status": "NoLynch",
         "tallies": {},
         "thresholds": {
-          "slot_1": 5.0,
-          "slot_2": 5.0,
-          "slot_3": 5.0,
-          "slot_4": 5.0,
-          "slot_5": 5.0,
-          "slot_6": 5.0,
-          "slot_7": 5.0,
-          "slot_8": 5.0,
-          "slot_9": 5.0
+          "slot_1": 5,
+          "slot_2": 5,
+          "slot_3": 5,
+          "slot_4": 5,
+          "slot_5": 5,
+          "slot_6": 5,
+          "slot_7": 5,
+          "slot_8": 5,
+          "slot_9": 5
         },
         "tiebreak": null,
-        "total_weight": 9.0,
+        "total_weight": 9,
         "votes": {},
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0,
-          "slot_4": 1.0,
-          "slot_5": 1.0,
-          "slot_6": 1.0,
-          "slot_7": 1.0,
-          "slot_8": 1.0,
-          "slot_9": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1,
+          "slot_4": 1,
+          "slot_5": 1,
+          "slot_6": 1,
+          "slot_7": 1,
+          "slot_8": 1,
+          "slot_9": 1
         },
         "winner": null
       }
@@ -445,8 +439,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

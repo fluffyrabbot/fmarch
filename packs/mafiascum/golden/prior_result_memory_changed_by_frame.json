@@ -9,8 +9,6 @@
         "duration": "Persistent",
         "effect": "framed",
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "source_action": "sub_001",
         "target": "slot_3",
         "visibility": "Hidden"
@@ -37,8 +35,6 @@
         "investigator": "slot_2",
         "mode": "Parity",
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "result": "scum",
         "source_action": "sub_002",
         "target": "slot_3",
@@ -62,8 +58,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "N02",
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_policy": {
         "cadence": [
           "Day",
@@ -83,8 +77,6 @@
           "investigator": "slot_2",
           "mode": "Parity",
           "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1,
           "result": "town",
           "source_action": "sub_prev",
           "target": "slot_3",

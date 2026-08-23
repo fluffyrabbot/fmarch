@@ -100,8 +100,6 @@
         "duration": "Persistent",
         "effect": "idiot_vote_loss",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "source_action": "day_vote",
         "target": "slot_1",
         "visibility": "Public"
@@ -129,8 +127,6 @@
       "linked_slots": [],
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

@@ -11,7 +11,8 @@ use domain::pack::{
     ActionTemplate, ActorRef, BackupPriorityPolicy, Pack, PrecedenceRule, PrecedenceWhen,
     SuppressionPolicy, SuppressionScope, TargetRef, TriggerEvent, TriggerLoopCapPolicy, TriggerOn,
 };
-use domain::resolver::{resolve, DayPhaseInputs, ResolutionInput};
+use domain::phase::PhaseId;
+use domain::resolver::{resolve as try_resolve, DayPhaseInputs, ResolutionInput};
 use domain::state::{StateSnapshot, Submission};
 use domain::{InvestigateMode, IrAbility};
 use serde::Deserialize;
@@ -20,6 +21,10 @@ use serde_json::Value;
 type PackMutation = fn(&mut Pack);
 type InvalidPackCase = (&'static str, PackMutation, &'static str);
 type InvalidPackPolicyCase = (&'static str, PackMutation, &'static str, &'static str);
+
+fn resolve(input: ResolutionInput) -> domain::resolver::ResolutionOutput {
+    try_resolve(input).expect("golden resolution input is coherent")
+}
 
 fn repo_root() -> PathBuf {
     // crates/domain -> repo root is two parents up.
@@ -101,7 +106,7 @@ fn load_golden(name: &str) -> Value {
 /// resolves itself) and `game_id`.
 #[derive(Deserialize)]
 struct GoldenInput {
-    phase_id: String,
+    phase_id: PhaseId,
     state: StateSnapshot,
     submissions: Vec<Submission>,
     #[serde(default)]
@@ -131,7 +136,8 @@ fn run_instant(input_json: &Value, pack: Pack) -> Vec<Value> {
         pack,
         seed: gi.seed,
         logical_time: 0,
-    });
+    })
+    .expect("instant golden resolution input is coherent");
     output
         .applied
         .events
@@ -5291,17 +5297,6 @@ fn trace_records_targeted_backup_inheritance() {
         decision.detail.at("policy_detail").at("target_phase_id"),
         "N01"
     );
-    assert_eq!(
-        decision.detail.at("policy_detail").at("target_phase_kind"),
-        "Night"
-    );
-    assert_eq!(
-        decision
-            .detail
-            .at("policy_detail")
-            .at("target_phase_number"),
-        1
-    );
     assert_eq!(decision.detail.at("new_role"), "cop");
     assert_eq!(decision.detail.at("new_alignment"), "town");
     assert_eq!(decision.detail.at("original_role"), "universal_backup");
@@ -5505,8 +5500,6 @@ fn trace_records_executioner_target_lynch_win() {
     assert_eq!(decision.detail.at("effect"), "execution_target");
     assert_eq!(decision.detail.at("winner"), "executioner");
     assert_eq!(decision.detail.at("target_phase_id"), "N01");
-    assert_eq!(decision.detail.at("target_phase_kind"), "Night");
-    assert_eq!(decision.detail.at("target_phase_number"), 1);
 }
 
 #[test]
@@ -5532,8 +5525,6 @@ fn trace_records_condemner_target_lynch_win() {
     assert_eq!(decision.detail.at("effect"), "condemner_target");
     assert_eq!(decision.detail.at("winner"), "condemner");
     assert_eq!(decision.detail.at("target_phase_id"), "N01");
-    assert_eq!(decision.detail.at("target_phase_kind"), "Night");
-    assert_eq!(decision.detail.at("target_phase_number"), 1);
 }
 
 #[test]

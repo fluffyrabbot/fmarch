@@ -10,8 +10,6 @@
         "grant_id": "bulletproof_vest_item",
         "source_action": "fixture:preloaded_bulletproof_vest_item",
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "remaining_uses": 0
       }
     },
@@ -25,8 +23,6 @@
         "counter_id": "inventory:bulletproof_vest_item",
         "limit": 1,
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "phase_scope": "grant",
         "remaining": 0,
         "template_id": "bulletproof_vest_item",
@@ -52,8 +48,6 @@
         "duration": "Persistent",
         "effect": "bulletproof_vest",
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "source_action": "sub_vest_001",
         "target": "slot_2",
         "visibility": "Target"
@@ -80,8 +74,6 @@
           "grant_id": "bulletproof_vest_item",
           "kind": "Item",
           "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1,
           "source_action": "fixture:preloaded_bulletproof_vest_item",
           "target": "slot_2",
           "uses": 1
@@ -89,8 +81,6 @@
       ],
       "phase_deadline": null,
       "phase_id": "N02",
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_policy": {
         "cadence": [
           "Day",

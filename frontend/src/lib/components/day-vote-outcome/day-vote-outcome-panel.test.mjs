@@ -35,6 +35,7 @@ test("day vote outcome panel summarizes the latest official result", () => {
   });
   assert.deepEqual(view.latest, {
     phaseId: "D01",
+    phaseLabel: "Day 1",
     status: "Lynch",
     winnerSlot: "slot-2",
     winnerLabel: "Slot 2",
@@ -75,6 +76,7 @@ test("day vote outcome panel renders no-lynch without raw engine keys", () => {
 
   assert.deepEqual(view.latest, {
     phaseId: "D01",
+    phaseLabel: "Day 1",
     status: "NoLynch",
     winnerSlot: null,
     winnerLabel: "No lynch",

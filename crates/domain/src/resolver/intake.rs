@@ -10,9 +10,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::events::{DecisionTrace, InnerEvent};
 use crate::ir::{IrAbility, Modifier};
 use crate::pack::{
-    ActionTemplate, ActivationGateReason, FactionVoteTieBreaker, PhaseKind, PhaseParity,
-    RoleModifier, TargetSpec, Window,
+    ActionTemplate, ActivationGateReason, FactionVoteTieBreaker, PhaseParity, RoleModifier,
+    TargetSpec, Window,
 };
+use crate::phase::PhaseKind;
 use crate::state::{SlotId, Submission};
 
 use super::{
@@ -64,7 +65,7 @@ pub(super) fn prepare_night_actions(
         .filter(|submission| !submission.withdrawn)
         .filter_map(|submission| {
             let template = lookup_submission_template(input, submission)?;
-            phase_window_matches(template.window, input.state.phase_kind).then(|| Action {
+            phase_window_matches(template.window, input.state.phase_id.kind()).then(|| Action {
                 sub: submission,
                 template,
                 targets: submission.targets.clone(),
@@ -113,10 +114,10 @@ fn repeated_target_limiter_reason(
     };
     let repeated = input.state.action_history.iter().any(|record| {
         let in_scope = if action.template.has_modifier(Modifier::Roaming) {
-            record.phase_kind == PhaseKind::Night
+            record.phase_id.kind() == PhaseKind::Night
         } else {
-            record.phase_kind == PhaseKind::Night
-                && record.phase_number + 1 == input.state.phase_number
+            record.phase_id.kind() == PhaseKind::Night
+                && record.phase_id.number().checked_add(1) == Some(input.state.phase_id.number())
         };
         record.actor == action.sub.actor
             && record.template_id == action.template.id
@@ -421,8 +422,6 @@ fn emit_missing_compulsive_actions(
                 template_id: template.id.clone(),
                 targets: Vec::new(),
                 phase_id: input.phase_id.clone(),
-                phase_kind: input.state.phase_kind,
-                phase_number: input.state.phase_number,
                 status: "missing".to_string(),
             });
         }
@@ -465,10 +464,11 @@ fn action_on_cooldown(
     input.state.use_counters.iter().any(|counter| {
         counter.actor == actor
             && counter.counter_id == counter_id
-            && counter.phase_kind == input.state.phase_kind
-            && input.state.phase_number
+            && counter.phase_id.kind() == input.state.phase_id.kind()
+            && input.state.phase_id.number()
                 <= counter
-                    .phase_number
+                    .phase_id
+                    .number()
                     .saturating_add(u32::from(cooldown_cycles))
     })
 }
@@ -491,8 +491,6 @@ fn cooldown_use_counted(
         used: 1,
         remaining: cooldown_cycles,
         phase_id: input.phase_id.clone(),
-        phase_kind: input.state.phase_kind,
-        phase_number: input.state.phase_number,
     }
 }
 
@@ -582,7 +580,7 @@ fn apply_action_constraints(
             continue;
         }
         if let Some(parity) = action.template.constraints.phase_parity {
-            if !phase_parity_matches(input.state.phase_number, parity) {
+            if !phase_parity_matches(input.state.phase_id.number(), parity) {
                 let reason = match parity {
                     PhaseParity::Odd => "odd_night",
                     PhaseParity::Even => "even_night",
@@ -592,7 +590,7 @@ fn apply_action_constraints(
             }
         }
         if let Some(parity) = action.template.constraints.cycle_parity {
-            if !phase_parity_matches(input.state.phase_number, parity) {
+            if !phase_parity_matches(input.state.phase_id.number(), parity) {
                 let reason = match parity {
                     PhaseParity::Odd => "odd_cycle",
                     PhaseParity::Even => "even_cycle",
@@ -603,8 +601,8 @@ fn apply_action_constraints(
         }
         if let Some(reason) = activation_gate_reason(
             action.template,
-            input.state.phase_kind,
-            input.state.phase_number,
+            input.state.phase_id.kind(),
+            input.state.phase_id.number(),
         ) {
             suppress(action, events, reason);
             continue;
@@ -683,8 +681,6 @@ fn history_sensitive_action_events(
             template_id: action.template.id.clone(),
             targets: action.targets.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
             status: if action.blocked {
                 "suppressed"
             } else {

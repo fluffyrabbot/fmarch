@@ -4,14 +4,19 @@
     "game_id": "game_mafiascum_specialist_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["sod", "main", "eod"]
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -58,7 +63,9 @@
         "action_id": "specialist_positive_001",
         "actor": "slot_1",
         "template_id": "investigate_specialist",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -68,7 +75,9 @@
         "action_id": "specialist_negative_001",
         "actor": "slot_2",
         "template_id": "investigate_specialist",
-        "targets": ["slot_4"],
+        "targets": [
+          "slot_4"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,

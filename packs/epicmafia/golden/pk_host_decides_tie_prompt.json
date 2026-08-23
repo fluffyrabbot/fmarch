@@ -89,8 +89,6 @@
           "tiebreak": "HostDecides"
         },
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "prompt_id": "D01:pk:Tie",
         "reason": "host_decides_tie",
         "subject": null
@@ -113,8 +111,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

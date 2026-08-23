@@ -8,8 +8,6 @@
         "day": 1,
         "label": "Day 1 Buffered ITA",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1",
         "status": "open",
         "window": "ita_sessions"
@@ -45,8 +43,6 @@
         },
         "global_shots_fired": 0,
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "queue_delta": 0,
         "queue_length": 0,
         "session_id": "d1",
@@ -58,22 +54,22 @@
       "kind": "DayVoteOutcome",
       "payload": {
         "contenders": [],
-        "majority": 2.0,
+        "majority": 2,
         "reason": null,
         "status": "NoLynch",
         "tallies": {},
         "thresholds": {
-          "slot_1": 2.0,
-          "slot_2": 2.0,
-          "slot_3": 2.0
+          "slot_1": 2,
+          "slot_2": 2,
+          "slot_3": 2
         },
         "tiebreak": null,
-        "total_weight": 3.0,
+        "total_weight": 3,
         "votes": {},
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1
         },
         "winner": null
       }
@@ -95,8 +91,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

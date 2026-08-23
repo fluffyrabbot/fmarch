@@ -4,14 +4,19 @@
     "game_id": "game_mu_poison_pending_already_dead_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -28,7 +33,9 @@
           "role_key": "town_vanilla",
           "alignment": "town",
           "status": "dead",
-          "effects": ["poisoned"]
+          "effects": [
+            "poisoned"
+          ]
         },
         {
           "slot_id": "slot_3",
@@ -53,9 +60,7 @@
           "effect": "poisoned",
           "source": "slot_1",
           "source_action": "mu_prev_poison",
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ]
     },
@@ -73,9 +78,7 @@
         "cause": "poison",
         "effect": "poisoned",
         "outcome": "target_already_dead",
-        "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2
+        "phase_id": "N02"
       }
     },
     {

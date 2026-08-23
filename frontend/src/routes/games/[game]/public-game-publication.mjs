@@ -7,6 +7,7 @@ import {
   normalizeGameThreadAuthor,
 } from "../../../lib/app/game-thread-author.mjs";
 import { buildPlayerThreadEmbedView } from "../../../lib/app/youtube-embed.mjs";
+import { phaseLabelFromId } from "../../../lib/phase-id.mjs";
 
 export { GAME_CITATION_PREVIEW_LIMIT };
 
@@ -31,7 +32,11 @@ export function buildPublicGamePublication({ game = null, posts = [] } = {}) {
   const normalizedPosts = Array.isArray(posts) ? posts : [];
   const packLabel = humanize(game.pack ?? "Game");
   const active = game.status === "active";
-  const phase = game.phase_id == null ? "Final record" : humanize(game.phase_id);
+  const phase = game.status === "completed"
+    ? "Final record"
+    : game.phase_id === null
+      ? "Awaiting first phase"
+      : phaseLabelFromId(game.phase_id) ?? "No phase open";
   return Object.freeze({
     status: "ready",
     root: Object.freeze({

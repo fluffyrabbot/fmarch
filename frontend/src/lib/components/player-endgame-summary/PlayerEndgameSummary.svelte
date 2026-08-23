@@ -20,8 +20,8 @@
     <div class="player-endgame-summary__winner fm-well" data-testid={view.winner.testId}>
       <strong>{view.winner.label}</strong>
       <p>{view.winner.detail}</p>
-      {#if view.winner.phaseId}
-        <small>Declared at {view.winner.phaseId}</small>
+      {#if view.winner.phaseLabel}
+        <small>Declared at {view.winner.phaseLabel}</small>
       {/if}
     </div>
 

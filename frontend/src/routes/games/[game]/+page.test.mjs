@@ -21,7 +21,7 @@ test("public game route loads quote blocks and citation disclosure without a Quo
       return {
         ok: true,
         json: async () => ({
-          game: { game: "00000000-0000-0000-0000-000000000001", pack: "mafiascum", status: "active", phase_id: "day-1" },
+          game: { game: "00000000-0000-0000-0000-000000000001", pack: "mafiascum", status: "active", phase_id: "D01" },
           posts: [
             {
               source_seq: 4,
@@ -69,7 +69,7 @@ test("public game route exposes only canonical public thread data", async () => 
     fetch: async () => ({
       ok: true,
       json: async () => ({
-        game: { game: "00000000-0000-0000-0000-000000000001", pack: "mafiascum", status: "active", phase_id: "day-1" },
+        game: { game: "00000000-0000-0000-0000-000000000001", pack: "mafiascum", status: "active", phase_id: "D01" },
         posts: [{ source_seq: 4, author: { kind: "slot", slot_id: "slot-1" }, body: "Public signal", occurred_at: 5 }],
         next_before_seq: 4,
       }),

@@ -4,14 +4,19 @@
     "game_id": "game_mu_role_full_role_info_town_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -42,7 +47,9 @@
           "role_key": "godfather",
           "alignment": "mafia",
           "status": "alive",
-          "effects": ["godfather"]
+          "effects": [
+            "godfather"
+          ]
         },
         {
           "slot_id": "slot_5",
@@ -58,7 +65,9 @@
         "action_id": "mu_town_role_cop_001",
         "actor": "slot_1",
         "template_id": "role_scan",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -68,7 +77,9 @@
         "action_id": "mu_town_full_cop_001",
         "actor": "slot_2",
         "template_id": "full_role_scan",
-        "targets": ["slot_4"],
+        "targets": [
+          "slot_4"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,

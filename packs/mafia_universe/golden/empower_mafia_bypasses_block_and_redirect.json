@@ -4,14 +4,19 @@
     "game_id": "game_mu_empower_mafia_bypass_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -65,7 +70,9 @@
         "action_id": "mu_mafia_empower_001",
         "actor": "slot_1",
         "template_id": "empower",
-        "targets": ["slot_2"],
+        "targets": [
+          "slot_2"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -75,7 +82,9 @@
         "action_id": "mu_block_goon_001",
         "actor": "slot_3",
         "template_id": "roleblocker_block",
-        "targets": ["slot_2"],
+        "targets": [
+          "slot_2"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -85,7 +94,10 @@
         "action_id": "mu_redirect_kill_target_001",
         "actor": "slot_6",
         "template_id": "redirect",
-        "targets": ["slot_4", "slot_5"],
+        "targets": [
+          "slot_4",
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 3,
         "withdrawn": false,
@@ -95,7 +107,9 @@
         "action_id": "mu_kill_empowered_001",
         "actor": "slot_2",
         "template_id": "factional_kill",
-        "targets": ["slot_4"],
+        "targets": [
+          "slot_4"
+        ],
         "phase_id": "N01",
         "submitted_at": 4,
         "withdrawn": false,
@@ -112,7 +126,9 @@
       "payload": {
         "slot_id": "slot_4",
         "cause": "factional_kill",
-        "attackers": ["slot_2"],
+        "attackers": [
+          "slot_2"
+        ],
         "unstoppable": false
       }
     },

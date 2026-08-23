@@ -19,19 +19,20 @@ export function buildPrivateQueueBoundary({
 
 export function buildPrivateQueue({ notifications = [], investigationResults = [] } = {}) {
   return Object.freeze([
-    ...notifications.map((notification, index) =>
-      Object.freeze({
+    ...notifications.map((notification, index) => {
+      const phaseLabel = phaseLabelFromId(notification.phase_id);
+      return Object.freeze({
         id: `notification-${index + 1}`,
         kind: "notification",
         label: notification.effect ?? "Private notification",
-        value: notification.status ?? notification.phase_id ?? "Available",
+        value: notification.status ?? phaseLabel ?? "Available",
         detail:
-          notification.phase_id === undefined
+          phaseLabel === null
             ? "Sent only to you"
-            : `Phase ${notification.phase_id}`,
+            : `Phase ${phaseLabel}`,
         buttonLabel: "Review",
-      }),
-    ),
+      });
+    }),
     ...investigationResults.map((result, index) =>
       Object.freeze({
         id: `investigation-${index + 1}`,
@@ -92,3 +93,4 @@ export function buildPlayerPrivateQueueViewModel({
     ),
   });
 }
+import { phaseLabelFromId } from "../../phase-id.mjs";

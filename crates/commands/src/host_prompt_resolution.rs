@@ -45,9 +45,9 @@ enum HostPromptEffect {
         contenders: Vec<String>,
     },
     AdvancePhase {
-        phase_id: String,
+        phase_id: domain::phase::PhaseId,
         reason: &'static str,
-        skipped_phase_id: Option<String>,
+        skipped_phase_id: Option<domain::phase::PhaseId>,
     },
     AcknowledgeOnly,
 }
@@ -64,13 +64,13 @@ struct PkResolutionContext<'prompt> {
 
 #[derive(Debug, serde::Serialize)]
 struct HostPromptPhaseControlPayload {
-    phase_id: String,
+    phase_id: domain::phase::PhaseId,
     phase_opened_at: i64,
     source_prompt_id: String,
-    source_phase_id: String,
+    source_phase_id: domain::phase::PhaseId,
     reason: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    skipped_phase_id: Option<String>,
+    skipped_phase_id: Option<domain::phase::PhaseId>,
 }
 
 /// Resolve an already-admitted host prompt and persist the resulting events
@@ -108,7 +108,7 @@ pub(super) async fn resolve_host_prompt(
         &decision,
         &stream,
     )?;
-    let public_resolution = host_prompt_public_resolution(&prompt, &effect);
+    let public_resolution = host_prompt_public_resolution(&prompt, &effect)?;
     let phase_opened_at = unix_seconds_now()?;
     let resolved_event = EventInput::new(
         "HostPromptResolved",
@@ -166,7 +166,7 @@ pub(super) async fn resolve_host_prompt(
             skipped_phase_id,
             next_seq + 1,
             phase_opened_at,
-        )),
+        )?),
         HostPromptEffect::AcknowledgeOnly => {}
     }
 
@@ -209,7 +209,7 @@ pub(super) fn rerun_stored_host_prompt(
         &decision,
         prefix,
     )?;
-    let rebuilt_public_resolution = host_prompt_public_resolution(&prompt, &effect);
+    let rebuilt_public_resolution = host_prompt_public_resolution(&prompt, &effect)?;
     if stored_public_resolution != rebuilt_public_resolution {
         return Err(Reject::Internal(
             "HostPromptResolved public_resolution does not match rebuilt prompt effect".to_string(),
@@ -252,14 +252,16 @@ fn host_prompt_from_stream(
             }
             return Ok(projections::HostPromptRow {
                 game_id: event.stream_id,
-                phase_id: prompt.phase_id,
+                phase_id: prompt.phase_id.clone(),
                 event_index: indexed.index as i32,
                 prompt_id: prompt.prompt_id,
                 kind: prompt.kind,
                 subject_slot: prompt.subject,
                 reason: prompt.reason,
-                phase_kind: format!("{:?}", prompt.phase_kind),
-                phase_number: prompt.phase_number as i32,
+                phase_kind: prompt.phase_id.kind().name().to_string(),
+                phase_number: i32::try_from(prompt.phase_id.number()).map_err(|_| {
+                    Reject::Internal("prompt phase ordinal exceeds projection storage range".into())
+                })?,
                 metadata: serde_json::to_value(&prompt.metadata).map_err(|error| {
                     Reject::Internal(format!("serialize HostPromptIssued metadata: {error}"))
                 })?,
@@ -286,8 +288,8 @@ fn build_pk_prompt_resolution(
         decision_json,
         prompt_resolved_seq,
     } = context;
-    let phase_kind = phase_kind(&prompt.phase_id)?;
-    let phase_number = prompt.phase_number as u32;
+    let phase_id = prompt.phase_id.clone();
+    let phase_kind = phase_kind(&phase_id);
     let (template_id, audience, deaths) = domain::day_death_announcement_metadata(
         pack,
         phase_kind,
@@ -303,9 +305,7 @@ fn build_pk_prompt_resolution(
         prompt.phase_id, prompt.prompt_id
     );
     let applied = domain::ResolutionApplied {
-        phase_id: prompt.phase_id.clone(),
-        phase_kind,
-        phase_number,
+        phase_id: phase_id.clone(),
         run_id: run_id.clone(),
         result_version: domain::RESULT_VERSION,
         seed: 0,
@@ -328,7 +328,7 @@ fn build_pk_prompt_resolution(
             domain::events::IndexedEvent {
                 index: 1,
                 event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
-                    phase_id: prompt.phase_id.clone(),
+                    phase_id: phase_id.clone(),
                     template_id,
                     audience,
                     deaths,
@@ -341,7 +341,7 @@ fn build_pk_prompt_resolution(
     domain::validate_resolution_applied(&applied, domain::RESULT_VERSION)
         .map_err(|error| Reject::Internal(format!("invalid prompt resolution result: {error}")))?;
     let trace = domain::ResolutionTrace {
-        phase_id: prompt.phase_id.clone(),
+        phase_id,
         run_id,
         trace_version: domain::TRACE_VERSION,
         edges: Vec::new(),
@@ -377,6 +377,9 @@ fn host_prompt_effect(
     decision: &HostPromptDecision,
     stream: &[StoredEvent],
 ) -> Result<HostPromptEffect, Reject> {
+    // Projection ingress has already decoded and canonicalized this opaque
+    // coordinate. Do not reparse it through a lossy string boundary here.
+    let prompt_phase_id = prompt.phase_id.clone();
     let prompt_policies: Vec<&HostPromptResolutionEffectPolicy> = policies
         .iter()
         .filter(|policy| policy.prompt_kind == prompt.kind && policy.prompt_reason == prompt.reason)
@@ -407,7 +410,7 @@ fn host_prompt_effect(
             ) {
                 return Err(Reject::InvalidPromptDecision);
             }
-            let phase_id = next_revote_phase_id(stream, &prompt.phase_id);
+            let phase_id = next_revote_phase_id(stream, &prompt_phase_id)?;
             validate_phase_id_for_policy(phase_policy, &phase_id)?;
             Ok(HostPromptEffect::AdvancePhase {
                 phase_id,
@@ -419,7 +422,7 @@ fn host_prompt_effect(
             if !matches!(decision, HostPromptDecision::SelectPolicy { .. }) {
                 return Err(Reject::InvalidPromptDecision);
             }
-            let phase_id = no_majority_advance_night_target(&prompt.phase_id)?;
+            let phase_id = no_majority_advance_night_target(&prompt_phase_id)?;
             validate_phase_id_for_policy(phase_policy, &phase_id)?;
             Ok(HostPromptEffect::AdvancePhase {
                 phase_id,
@@ -441,7 +444,7 @@ fn host_prompt_effect(
             if !matches!(decision, HostPromptDecision::Acknowledge { .. }) {
                 return Err(Reject::InvalidPromptDecision);
             }
-            let (skipped_phase_id, phase_id) = skip_next_day_target(&prompt.phase_id)?;
+            let (skipped_phase_id, phase_id) = skip_next_day_target(&prompt_phase_id)?;
             validate_phase_id_for_policy(phase_policy, &skipped_phase_id)?;
             validate_phase_id_for_policy(phase_policy, &phase_id)?;
             Ok(HostPromptEffect::AdvancePhase {
@@ -487,29 +490,30 @@ fn host_prompt_effect(
 fn host_prompt_public_resolution(
     prompt: &projections::HostPromptRow,
     effect: &HostPromptEffect,
-) -> domain::HostPromptPublicResolution {
+) -> Result<domain::HostPromptPublicResolution, Reject> {
+    let prompt_phase_id = prompt.phase_id.clone();
     match effect {
         HostPromptEffect::PkKill { selected, .. } => {
-            domain::HostPromptPublicResolution::DayVoteElimination {
-                phase_id: prompt.phase_id.clone(),
+            Ok(domain::HostPromptPublicResolution::DayVoteElimination {
+                phase_id: prompt_phase_id,
                 selected_slot: selected.clone(),
                 reason: prompt.reason.clone(),
-            }
+            })
         }
         HostPromptEffect::AdvancePhase {
             phase_id,
             reason,
             skipped_phase_id,
-        } => domain::HostPromptPublicResolution::PhaseAdvance {
-            source_phase_id: prompt.phase_id.clone(),
+        } => Ok(domain::HostPromptPublicResolution::PhaseAdvance {
+            source_phase_id: prompt_phase_id,
             target_phase_id: phase_id.clone(),
             reason: (*reason).to_string(),
             skipped_phase_id: skipped_phase_id.clone(),
-        },
-        HostPromptEffect::AcknowledgeOnly => domain::HostPromptPublicResolution::Acknowledged {
-            phase_id: prompt.phase_id.clone(),
+        }),
+        HostPromptEffect::AcknowledgeOnly => Ok(domain::HostPromptPublicResolution::Acknowledged {
+            phase_id: prompt_phase_id,
             reason: prompt.reason.clone(),
-        },
+        }),
     }
 }
 
@@ -530,64 +534,93 @@ fn host_prompt_selected_policy(decision: &HostPromptDecision) -> Option<&str> {
 
 fn phase_advanced_from_prompt(
     prompt: &projections::HostPromptRow,
-    phase_id: String,
+    phase_id: domain::phase::PhaseId,
     reason: &'static str,
-    skipped_phase_id: Option<String>,
+    skipped_phase_id: Option<domain::phase::PhaseId>,
     occurred_at: i64,
     phase_opened_at: i64,
-) -> EventInput {
+) -> Result<EventInput, Reject> {
+    let source_phase_id = prompt.phase_id.clone();
     let payload = serde_json::to_value(HostPromptPhaseControlPayload {
         phase_id,
         phase_opened_at,
         source_prompt_id: prompt.prompt_id.clone(),
-        source_phase_id: prompt.phase_id.clone(),
+        source_phase_id,
         reason,
         skipped_phase_id,
     })
-    .expect("host prompt phase-control payload is serializable");
-    EventInput::new("PhaseAdvanced", 1, payload, ActorId::Host, occurred_at)
+    .map_err(|error| Reject::Internal(format!("serialize prompt phase control: {error}")))?;
+    Ok(EventInput::new(
+        "PhaseAdvanced",
+        1,
+        payload,
+        ActorId::Host,
+        occurred_at,
+    ))
 }
 
-fn next_revote_phase_id(stream: &[StoredEvent], source_phase_id: &str) -> String {
-    let base_phase_id = revote_base_phase_id(source_phase_id);
-    let prefix = format!("{base_phase_id}R");
+fn next_revote_phase_id(
+    stream: &[StoredEvent],
+    source_phase_id: &domain::phase::PhaseId,
+) -> Result<domain::phase::PhaseId, Reject> {
+    let base_phase_id = source_phase_id.revote_base();
     let max_existing = stream
         .iter()
+        .filter(|event| matches!(event.kind.as_str(), "GameStarted" | "PhaseAdvanced"))
         .filter_map(|event| {
-            if !matches!(event.kind.as_str(), "GameStarted" | "PhaseAdvanced") {
-                return None;
-            }
             event
                 .payload
                 .get("phase_id")
                 .and_then(|value| value.as_str())
-                .and_then(|phase_id| phase_id.strip_prefix(&prefix))
-                .and_then(|suffix| suffix.parse::<u32>().ok())
         })
+        .map(|phase_id| {
+            domain::phase::PhaseId::parse(phase_id).map_err(|error| {
+                Reject::Internal(format!(
+                    "invalid persisted phase id in phase advancement: {error}"
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|phase_id| phase_id.revote_base() == base_phase_id)
+        .filter_map(|phase_id| phase_id.revote_attempt())
         .max()
         .unwrap_or(0);
-    format!("{prefix}{}", max_existing + 1)
+    let next_attempt = max_existing.checked_add(1).ok_or_else(|| {
+        Reject::Internal("revote attempt overflowed the canonical phase-id range".to_string())
+    })?;
+    domain::phase::PhaseId::compose_with_revote(
+        base_phase_id.kind(),
+        base_phase_id.number(),
+        Some(next_attempt),
+    )
+    .map_err(|error| Reject::Internal(format!("cannot compose revote phase id: {error}")))
 }
 
-fn revote_base_phase_id(source_phase_id: &str) -> &str {
-    domain::phase::PhaseId::parse(source_phase_id)
-        .map(|phase| phase.revote_base())
-        .unwrap_or(source_phase_id)
+fn no_majority_advance_night_target(
+    source_phase_id: &domain::phase::PhaseId,
+) -> Result<domain::phase::PhaseId, Reject> {
+    domain::phase::PhaseId::compose(
+        domain::phase::PhaseKind::Night,
+        phase_number(source_phase_id),
+    )
+    .map_err(|error| Reject::Internal(format!("cannot compose next night phase: {error}")))
 }
 
-fn no_majority_advance_night_target(source_phase_id: &str) -> Result<String, Reject> {
-    let base_phase_id = revote_base_phase_id(source_phase_id);
-    let number = phase_number(base_phase_id)?;
-    Ok(domain::phase::PhaseId::compose(
-        domain::pack::PhaseKind::Night,
-        number,
-    ))
-}
-
-fn skip_next_day_target(source_phase_id: &str) -> Result<(String, String), Reject> {
-    let number = phase_number(source_phase_id)?;
-    let skipped_day = domain::phase::PhaseId::compose(domain::pack::PhaseKind::Day, number + 1);
-    let next_night = domain::phase::PhaseId::compose(domain::pack::PhaseKind::Night, number + 1);
+fn skip_next_day_target(
+    source_phase_id: &domain::phase::PhaseId,
+) -> Result<(domain::phase::PhaseId, domain::phase::PhaseId), Reject> {
+    let next_number = phase_number(source_phase_id)
+        .checked_add(1)
+        .ok_or_else(|| {
+            Reject::Internal("phase ordinal overflowed the canonical range".to_string())
+        })?;
+    let skipped_day = domain::phase::PhaseId::compose(domain::phase::PhaseKind::Day, next_number)
+        .map_err(|error| {
+        Reject::Internal(format!("cannot compose skipped day phase: {error}"))
+    })?;
+    let next_night = domain::phase::PhaseId::compose(domain::phase::PhaseKind::Night, next_number)
+        .map_err(|error| Reject::Internal(format!("cannot compose next night phase: {error}")))?;
     Ok((skipped_day, next_night))
 }
 
@@ -598,7 +631,12 @@ mod tests {
         HostPromptDecision, HostPromptDecisionKind, HostPromptEffect, HostPromptResolutionEffect,
         HostPromptResolutionEffectPolicy, Reject, Uuid,
     };
+    use domain::phase::PhaseId;
     use std::collections::BTreeMap;
+
+    fn phase(value: &str) -> PhaseId {
+        PhaseId::parse(value).unwrap()
+    }
 
     fn prompt(
         kind: &str,
@@ -607,14 +645,15 @@ mod tests {
     ) -> projections::HostPromptRow {
         projections::HostPromptRow {
             game_id: Uuid::nil(),
-            phase_id: phase_id.to_string(),
+            phase_id: phase(phase_id),
             event_index: 0,
             prompt_id: format!("{phase_id}:{kind}:test"),
             kind: kind.to_string(),
             subject_slot: None,
             reason: "test".to_string(),
-            phase_kind: "Day".to_string(),
-            phase_number: phase_number(phase_id).unwrap() as i32,
+            phase_kind: phase(phase_id).kind().name().to_string(),
+            phase_number: i32::try_from(phase_number(&phase(phase_id)))
+                .expect("test phase ordinal fits projection storage"),
             metadata,
             status: "pending".to_string(),
             decision: None,
@@ -652,9 +691,9 @@ mod tests {
         }
     }
 
-    fn phase_policy(kinds: Vec<domain::pack::PhaseKind>) -> domain::pack::PhasePolicy {
+    fn phase_policy(kinds: Vec<domain::phase::PhaseKind>) -> domain::pack::PhasePolicy {
         domain::pack::PhasePolicy {
-            twilight: kinds.contains(&domain::pack::PhaseKind::Twilight),
+            twilight: kinds.contains(&domain::phase::PhaseKind::Twilight),
             cadence: kinds,
             subsegments: BTreeMap::new(),
         }
@@ -681,7 +720,7 @@ mod tests {
                 "phase advance",
                 prompt("revote", "D03R1", serde_json::json!({})),
                 HostPromptEffect::AdvancePhase {
-                    phase_id: "D03R2".to_string(),
+                    phase_id: phase("D03R2"),
                     reason: "revote",
                     skipped_phase_id: None,
                 },
@@ -696,9 +735,9 @@ mod tests {
                 "skipped phase advance",
                 prompt("skip_next_day", "D01", serde_json::json!({})),
                 HostPromptEffect::AdvancePhase {
-                    phase_id: "N02".to_string(),
+                    phase_id: phase("N02"),
                     reason: "skip_next_day",
-                    skipped_phase_id: Some("D02".to_string()),
+                    skipped_phase_id: Some(phase("D02")),
                 },
                 serde_json::json!({
                     "kind": "phase_advance",
@@ -722,7 +761,8 @@ mod tests {
 
         for (label, prompt, effect, expected) in cases {
             assert_eq!(
-                serde_json::to_value(host_prompt_public_resolution(&prompt, &effect)).unwrap(),
+                serde_json::to_value(host_prompt_public_resolution(&prompt, &effect).unwrap())
+                    .unwrap(),
                 expected,
                 "{label}"
             );
@@ -745,7 +785,7 @@ mod tests {
         assert_eq!(
             host_prompt_effect(
                 &effects,
-                &phase_policy(vec![domain::pack::PhaseKind::Day]),
+                &phase_policy(vec![domain::phase::PhaseKind::Day]),
                 &prompt,
                 &HostPromptDecision::SelectSlot {
                     slot: "slot_4".to_string()
@@ -761,7 +801,7 @@ mod tests {
         assert_eq!(
             host_prompt_effect(
                 &effects,
-                &phase_policy(vec![domain::pack::PhaseKind::Day]),
+                &phase_policy(vec![domain::phase::PhaseKind::Day]),
                 &prompt,
                 &HostPromptDecision::SelectSlot {
                     slot: "slot_1".to_string()
@@ -773,7 +813,7 @@ mod tests {
         assert_eq!(
             host_prompt_effect(
                 &effects,
-                &phase_policy(vec![domain::pack::PhaseKind::Day]),
+                &phase_policy(vec![domain::phase::PhaseKind::Day]),
                 &prompt,
                 &HostPromptDecision::Acknowledge {
                     metadata: serde_json::json!({})
@@ -797,7 +837,7 @@ mod tests {
         assert_eq!(
             host_prompt_effect(
                 &effects,
-                &phase_policy(vec![domain::pack::PhaseKind::Day]),
+                &phase_policy(vec![domain::phase::PhaseKind::Day]),
                 &prompt,
                 &HostPromptDecision::Acknowledge {
                     metadata: serde_json::json!({})
@@ -806,7 +846,7 @@ mod tests {
             )
             .unwrap(),
             HostPromptEffect::AdvancePhase {
-                phase_id: "D01R3".to_string(),
+                phase_id: phase("D01R3"),
                 reason: "revote",
                 skipped_phase_id: None,
             }
@@ -826,7 +866,7 @@ mod tests {
         assert_eq!(
             host_prompt_effect(
                 &effects,
-                &phase_policy(vec![domain::pack::PhaseKind::Day]),
+                &phase_policy(vec![domain::phase::PhaseKind::Day]),
                 &prompt,
                 &HostPromptDecision::Acknowledge {
                     metadata: serde_json::json!({})
@@ -835,7 +875,7 @@ mod tests {
             )
             .unwrap(),
             HostPromptEffect::AdvancePhase {
-                phase_id: "D01R2".to_string(),
+                phase_id: phase("D01R2"),
                 reason: "revote",
                 skipped_phase_id: None,
             }
@@ -867,8 +907,8 @@ mod tests {
             },
         ];
         let phase_policy = phase_policy(vec![
-            domain::pack::PhaseKind::Day,
-            domain::pack::PhaseKind::Night,
+            domain::phase::PhaseKind::Day,
+            domain::phase::PhaseKind::Night,
         ]);
 
         assert_eq!(
@@ -884,7 +924,7 @@ mod tests {
             )
             .unwrap(),
             HostPromptEffect::AdvancePhase {
-                phase_id: "D03R3".to_string(),
+                phase_id: phase("D03R3"),
                 reason: "revote",
                 skipped_phase_id: None,
             }
@@ -902,7 +942,7 @@ mod tests {
             )
             .unwrap(),
             HostPromptEffect::AdvancePhase {
-                phase_id: "N03".to_string(),
+                phase_id: phase("N03"),
                 reason: "no_majority_no_lynch",
                 skipped_phase_id: None,
             }
@@ -935,8 +975,8 @@ mod tests {
             host_prompt_effect(
                 &effects,
                 &phase_policy(vec![
-                    domain::pack::PhaseKind::Day,
-                    domain::pack::PhaseKind::Night
+                    domain::phase::PhaseKind::Day,
+                    domain::phase::PhaseKind::Night
                 ]),
                 &prompt,
                 &HostPromptDecision::Acknowledge {
@@ -946,17 +986,17 @@ mod tests {
             )
             .unwrap(),
             HostPromptEffect::AdvancePhase {
-                phase_id: "N02".to_string(),
+                phase_id: phase("N02"),
                 reason: "skip_next_day",
-                skipped_phase_id: Some("D02".to_string()),
+                skipped_phase_id: Some(phase("D02")),
             }
         );
         assert_eq!(
             host_prompt_effect(
                 &effects,
                 &phase_policy(vec![
-                    domain::pack::PhaseKind::Day,
-                    domain::pack::PhaseKind::Night
+                    domain::phase::PhaseKind::Day,
+                    domain::phase::PhaseKind::Night
                 ]),
                 &prompt,
                 &HostPromptDecision::SelectSlot {
@@ -969,7 +1009,7 @@ mod tests {
         assert_eq!(
             host_prompt_effect(
                 &effects,
-                &phase_policy(vec![domain::pack::PhaseKind::Day]),
+                &phase_policy(vec![domain::phase::PhaseKind::Day]),
                 &prompt,
                 &HostPromptDecision::Acknowledge {
                     metadata: serde_json::json!({})

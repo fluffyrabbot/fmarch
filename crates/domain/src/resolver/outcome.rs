@@ -444,7 +444,7 @@ fn resolve_vote_veto_action(
     outcome: &DayVoteOutcome,
     events: &mut Vec<InnerEvent>,
 ) -> Option<SlotId> {
-    if input.state.phase_kind != PhaseKind::Day {
+    if input.state.phase_id.kind() != PhaseKind::Day {
         return None;
     }
     if !matches!(outcome.status, VoteStatus::Lynch | VoteStatus::Hammer) {
@@ -458,7 +458,7 @@ fn resolve_vote_veto_action(
         .filter(|submission| !submission.withdrawn)
         .filter_map(|submission| {
             let template = lookup_submission_template(input, submission)?;
-            if !phase_window_matches(template.window, input.state.phase_kind) {
+            if !phase_window_matches(template.window, input.state.phase_id.kind()) {
                 return None;
             }
             template
@@ -518,8 +518,6 @@ fn resolve_vote_veto_action(
             target: target.clone(),
             source_action: submission.action_id.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
         return Some(target.clone());
     }
@@ -531,7 +529,7 @@ fn resolve_vote_duel_action(
     vote_state: &StateSnapshot,
     events: &mut Vec<InnerEvent>,
 ) -> Option<BTreeSet<SlotId>> {
-    if input.state.phase_kind != PhaseKind::Day {
+    if input.state.phase_id.kind() != PhaseKind::Day {
         return None;
     }
 
@@ -576,8 +574,6 @@ fn resolve_vote_duel_action(
             target: target_slot.slot_id.clone(),
             source_action: submission.action_id.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
         return Some(BTreeSet::from([
             actor_slot.slot_id.clone(),
@@ -668,8 +664,6 @@ fn resolve_target_lynch_wins(
                 "winner": policy.winner,
                 "source_action": record.source_action,
                 "target_phase_id": record.phase_id,
-                "target_phase_kind": record.phase_kind,
-                "target_phase_number": record.phase_number,
             }),
         });
         events.push(InnerEvent::WinReached {
@@ -685,8 +679,6 @@ fn resolve_target_lynch_wins(
                 effect: Some(record.effect.clone()),
                 source_action: Some(record.source_action.clone()),
                 target_phase_id: Some(record.phase_id.clone()),
-                target_phase_kind: Some(format!("{:?}", record.phase_kind)),
-                target_phase_number: Some(record.phase_number),
                 ..crate::events::WinReachedMetadata::default()
             }),
         });
@@ -731,8 +723,6 @@ fn resolve_day_vote_prompts(
             subject: None,
             reason: policy.prompt_reason.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
             metadata: HostPromptMetadata {
                 policy: Some(policy.id.clone()),
                 status: Some(status_name),
@@ -926,7 +916,8 @@ fn resolve_last_words(
     killed: &SlotId,
     events: &mut Vec<InnerEvent>,
 ) {
-    if !input.pack.day_notes.last_words.day_deaths || input.state.phase_kind != PhaseKind::Day {
+    if !input.pack.day_notes.last_words.day_deaths || input.state.phase_id.kind() != PhaseKind::Day
+    {
         return;
     }
 
@@ -941,7 +932,7 @@ fn resolve_last_words(
         audience: input.pack.day_notes.last_words.audience.clone(),
         window: input.pack.day_notes.last_words.window.clone(),
         sequence,
-        day: input.state.phase_number,
+        day: input.state.phase_id.number(),
         phase_id: input.phase_id.clone(),
         vote: LastWordsVoteSummary {
             status: outcome.status,
@@ -1006,8 +997,6 @@ fn resolve_wolf_beauty_drag(
             "mark_effect": mark.effect.clone(),
             "mark_source_action": mark.source_action.clone(),
             "mark_phase_id": mark.phase_id.clone(),
-            "mark_phase_kind": mark.phase_kind,
-            "mark_phase_number": mark.phase_number,
             "trigger_cause": day_death_cause,
             "cause": policy.drag_cause.clone(),
         }),
@@ -1017,8 +1006,6 @@ fn resolve_wolf_beauty_drag(
         dragged_ids: vec![mark.target_id.clone()],
         cause: policy.drag_cause.clone(),
         phase_id: input.phase_id.clone(),
-        phase_kind: input.state.phase_kind,
-        phase_number: input.state.phase_number,
     });
     events.push(InnerEvent::PlayerKilled {
         slot_id: mark.target_id.clone(),
@@ -1047,7 +1034,7 @@ pub(super) fn resolve_duel_actions(
         .filter(|sub| !sub.withdrawn)
         .filter_map(|sub| {
             let template = lookup_submission_template(input, sub)?;
-            if !phase_window_matches(template.window, input.state.phase_kind) {
+            if !phase_window_matches(template.window, input.state.phase_id.kind()) {
                 return None;
             }
             template
@@ -1124,8 +1111,6 @@ pub(super) fn resolve_duel_actions(
             killed: killed.clone(),
             source_action: sub.action_id.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
         duel_events.push(InnerEvent::PlayerKilled {
             slot_id: killed.clone(),

@@ -34,7 +34,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     statusStackClassName: "fm-status-stack",
     eyebrow: "midsummer",
     title: "Host console",
-    summary: "Day 2 deadline is active. Slot 7 / Mira has a pending replacement.",
+    summary: "Day 1 deadline is active. Slot 7 / Mira has a pending replacement.",
     capability: {
       visible: true,
       label: "Hosting midsummer",
@@ -160,11 +160,11 @@ test("host console route data is allowed for HostOf scoped to the current game",
   assert.equal(extend48.payload.extendsTo, "2026-06-21T04:00:00.000Z");
   assert.equal(
     extend24.confirmationText,
-    "Extend Day 2 deadline by 24 hours: move the deadline 24 hours later to June 19, 2026 at 9:00 PM PT for Day 2 deadline.",
+    "Extend Day 1 deadline by 24 hours: move the deadline 24 hours later to June 19, 2026 at 9:00 PM PT for Day 1 deadline.",
   );
   assert.equal(
     extend48.confirmationText,
-    "Extend Day 2 deadline by 48 hours: move the deadline 48 hours later to June 20, 2026 at 9:00 PM PT for Day 2 deadline.",
+    "Extend Day 1 deadline by 48 hours: move the deadline 48 hours later to June 20, 2026 at 9:00 PM PT for Day 1 deadline.",
   );
   assert.equal(data.deadlineClock.nowSeconds, 1781806740);
   assert.equal(data.phase.deadline, 1781841600);
@@ -558,9 +558,6 @@ test("host console route data is allowed for CohostOf scoped to the current game
   assert.deepEqual(
     data.criticalActions.map((action) => action.id),
     [
-      "extend_deadline",
-      "extend_deadline_24h",
-      "extend_deadline_48h",
       "process_replacement",
       "resolve_host_prompt-D01-skip_next_day-slot_1",
     ],
@@ -574,14 +571,12 @@ test("host console route data is allowed for CohostOf scoped to the current game
   assert.deepEqual(
     data.moderatorControls.map((control) => [control.id, control.authority]),
     [
-      ["deadline", "CohostOf(game) · deadline"],
       ["host-prompts", "CohostOf(game) · host_prompt_resolve"],
     ],
   );
   assert.deepEqual(
     data.moderatorActionGroups.map((group) => [group.id, group.authority]),
     [
-      ["deadline", "CohostOf(game) · deadline"],
       ["replacement", "CohostOf(game) · replacement"],
       ["host-prompts", "CohostOf(game) · host_prompt_resolve"],
     ],

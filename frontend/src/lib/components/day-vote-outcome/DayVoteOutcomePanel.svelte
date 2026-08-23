@@ -42,7 +42,7 @@
     <p class={view.empty.className}>{view.empty.message}</p>
   {:else}
     <div class="day-vote-outcome-panel__summary" data-testid={view.latest.testId}>
-      <strong>{view.latest.phaseId} {view.latest.status}</strong>
+      <strong>{view.latest.phaseLabel} {view.latest.status}</strong>
       <p>{view.latest.summary}</p>
       {#if view.latest.reason}
         <p>{view.latest.reason}</p>

@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::events::VoteStatus;
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
+use crate::phase::PhaseKind;
 
 use super::model::*;
 
@@ -68,37 +69,41 @@ pub fn load_pack_from_json(raw: &str) -> Result<Pack, PackLoadError> {
 /// Keeping these lookups together makes cross-reference validation explicit,
 /// prevents validators from rebuilding subtly different views of the model,
 /// and gives action-policy validation one stable dependency boundary.
-struct PackValidationContext<'a> {
-    pack: &'a Pack,
-    role_keys: BTreeSet<&'a str>,
-    alignments: BTreeSet<&'a str>,
-    effect_tags: BTreeSet<&'a str>,
-    team_kill_action_ids: BTreeSet<&'a str>,
-    cadence: BTreeSet<PhaseKind>,
-    kill_cause_ids: BTreeSet<String>,
-    vote_weight_grant_ids: BTreeSet<String>,
-    uses_vote_duel: bool,
+/// A pack that has passed full semantic validation, carrying the derived
+/// indexes its consumers need. This is the parse-don't-validate artifact:
+/// resolver and command code consume these precomputed sets instead of
+/// re-deriving (and re-encoding) the same policy grammar independently.
+#[derive(Debug, Clone)]
+pub struct ValidatedPack {
+    pub(crate) pack: std::sync::Arc<Pack>,
+    pub role_keys: BTreeSet<String>,
+    pub alignments: BTreeSet<String>,
+    pub effect_tags: BTreeSet<String>,
+    pub team_kill_action_ids: BTreeSet<String>,
+    pub cadence: BTreeSet<PhaseKind>,
+    pub kill_cause_ids: BTreeSet<String>,
+    pub vote_weight_grant_ids: BTreeSet<String>,
+    pub uses_vote_duel: bool,
 }
 
-impl<'a> PackValidationContext<'a> {
-    fn new(pack: &'a Pack) -> Self {
+impl ValidatedPack {
+    pub fn new(pack: std::sync::Arc<Pack>) -> Self {
         Self {
-            pack,
-            role_keys: pack.roles.keys().map(String::as_str).collect(),
+            role_keys: pack.roles.keys().cloned().collect(),
             alignments: pack
                 .roles
                 .values()
-                .filter_map(|role| role.alignment.as_deref())
+                .filter_map(|role| role.alignment.clone())
                 .collect(),
-            effect_tags: declared_effect_tags(pack),
+            effect_tags: declared_effect_tags(&pack),
             team_kill_action_ids: pack
                 .night_resolution
                 .team_kill_action_ids
                 .iter()
-                .map(String::as_str)
+                .cloned()
                 .collect(),
             cadence: pack.phases.cadence.iter().copied().collect(),
-            kill_cause_ids: pack_kill_cause_ids(pack),
+            kill_cause_ids: pack_kill_cause_ids(&pack),
             vote_weight_grant_ids: pack
                 .roles
                 .values()
@@ -107,12 +112,28 @@ impl<'a> PackValidationContext<'a> {
                 .filter(|grant| grant.kind == GrantKind::VoteWeight)
                 .map(|grant| grant.grant_id.clone())
                 .collect(),
-            uses_vote_duel: pack_uses_ability(pack, IrAbility::VoteDuel),
+            uses_vote_duel: pack_uses_ability(&pack, IrAbility::VoteDuel),
+            pack,
         }
+    }
+
+    pub fn pack(&self) -> &Pack {
+        &self.pack
     }
 }
 
 pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
+    validate_pack_validated(std::sync::Arc::new(pack.clone())).map(|_| ())
+}
+
+/// Validates a pack and returns the derived-index artifact that resolver and
+/// command consumers should thread through instead of re-deriving the same
+/// policy grammar themselves.
+pub fn validate_pack_validated(
+    pack: std::sync::Arc<Pack>,
+) -> Result<ValidatedPack, PackValidationError> {
+    let pack_arc = std::sync::Arc::clone(&pack);
+    let pack: &Pack = &pack;
     let mut issues = Vec::new();
 
     if pack.version != SUPPORTED_PACK_VERSION {
@@ -144,7 +165,7 @@ pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
     }
     validate_phase_policy(&mut issues, "phases", &pack.phases);
 
-    let context = PackValidationContext::new(pack);
+    let context = ValidatedPack::new(pack_arc);
     let role_keys = &context.role_keys;
     validate_ita_policy(&mut issues, "ita", &pack.ita, role_keys);
     let alignments = &context.alignments;
@@ -458,7 +479,7 @@ pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
     validate_win_families(&mut issues, pack);
 
     if issues.is_empty() {
-        Ok(())
+        Ok(context)
     } else {
         Err(PackValidationError { issues })
     }
@@ -792,8 +813,8 @@ fn validate_win_policy(
     issues: &mut Vec<PackValidationIssue>,
     win: &WinPolicy,
     ir_version: u16,
-    alignments: &BTreeSet<&str>,
-    role_keys: &BTreeSet<&str>,
+    alignments: &BTreeSet<String>,
+    role_keys: &BTreeSet<String>,
 ) {
     let mut conditions = BTreeSet::new();
     for (idx, rule) in win.rules.iter().enumerate() {
@@ -1072,7 +1093,7 @@ fn validate_conversion_spec(
     issues: &mut Vec<PackValidationIssue>,
     path: &str,
     conversion: &ConversionSpec,
-    role_keys: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
 ) {
     match conversion.mode {
         ConversionMode::AssignRole => match &conversion.role {
@@ -1139,7 +1160,7 @@ fn validate_ita_policy(
     issues: &mut Vec<PackValidationIssue>,
     path: &str,
     ita: &ItaPolicy,
-    role_keys: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
 ) {
     if !ita.default_hit_chance.is_finite()
         || ita.default_hit_chance < 0.0
@@ -1481,7 +1502,7 @@ fn validate_wolf_carry_policy(
     path: &str,
     policy: &WolfCarryPolicy,
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
     cadence: &BTreeSet<PhaseKind>,
 ) {
     if !policy.enabled {
@@ -1554,8 +1575,8 @@ fn validate_wolf_beauty_policy(
     path: &str,
     policy: &WolfBeautyPolicy,
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
-    effect_tags: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
+    effect_tags: &BTreeSet<String>,
     cadence: &BTreeSet<PhaseKind>,
 ) {
     if !policy.enabled {
@@ -1808,7 +1829,7 @@ fn validate_faction_action_policy(
     policy: &FactionActionPolicy,
     ir_version: u16,
     pack: &Pack,
-    alignments: &BTreeSet<&str>,
+    alignments: &BTreeSet<String>,
     cadence: &BTreeSet<PhaseKind>,
 ) {
     if !policy.enabled {
@@ -3217,7 +3238,7 @@ fn validate_lynch_trigger_contracts(issues: &mut Vec<PackValidationIssue>, pack:
 fn validate_trigger_identity_and_filters(
     issues: &mut Vec<PackValidationIssue>,
     pack: &Pack,
-    effect_tags: &BTreeSet<&str>,
+    effect_tags: &BTreeSet<String>,
 ) {
     let mut trigger_ids = BTreeSet::new();
     for (idx, trigger) in pack.triggers.iter().enumerate() {
@@ -3254,7 +3275,7 @@ fn validate_trigger_filter_tags(
     trigger_path: &str,
     field: &str,
     tags: &[String],
-    effect_tags: &BTreeSet<&str>,
+    effect_tags: &BTreeSet<String>,
 ) {
     let path = format!("{trigger_path}.{field}");
     validate_unique_strings(issues, path.clone(), tags);
@@ -4359,7 +4380,7 @@ fn validate_effect_source_death_reveals(
     policies: &[EffectSourceDeathRevealPolicy],
     ir_version: u16,
     pack: &Pack,
-    effect_tags: &BTreeSet<&str>,
+    effect_tags: &BTreeSet<String>,
 ) {
     if policies.is_empty() {
         return;
@@ -5032,7 +5053,7 @@ fn validate_death_retaliation_policy(
     path: &str,
     policy: &DeathRetaliationPolicy,
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
     cadence: &BTreeSet<PhaseKind>,
 ) {
     if !policy.enabled {
@@ -5123,7 +5144,7 @@ fn validate_death_reveal_policy(
     policy: &DeathRevealPolicy,
     ir_version: u16,
     pack: &Pack,
-    effect_tags: &BTreeSet<&str>,
+    effect_tags: &BTreeSet<String>,
 ) {
     if *policy != DeathRevealPolicy::default() && ir_version < 26 {
         issue(
@@ -5172,8 +5193,8 @@ fn validate_idiot_policy(
     path: &str,
     policy: &IdiotPolicy,
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
-    effect_tags: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
+    effect_tags: &BTreeSet<String>,
     cadence: &BTreeSet<PhaseKind>,
 ) {
     if !policy.enabled {
@@ -5241,8 +5262,8 @@ fn validate_saulus_policy(
     path: &str,
     policy: &SaulusPolicy,
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
-    alignments: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
+    alignments: &BTreeSet<String>,
     cadence: &BTreeSet<PhaseKind>,
 ) {
     if !policy.enabled {
@@ -5303,8 +5324,8 @@ fn validate_backup_policy(
     path: &str,
     policy: &BackupPolicy,
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
-    effect_tags: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
+    effect_tags: &BTreeSet<String>,
 ) {
     if !policy.enabled {
         return;
@@ -5385,7 +5406,7 @@ fn validate_private_channel_policy(
     path: &str,
     policy: &PrivateChannelPolicy,
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
 ) {
     if !policy.enabled {
         if !policy.groups.is_empty() {
@@ -5607,7 +5628,7 @@ fn validate_treestump_policy(
     path: &str,
     policy: &TreestumpPolicy,
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
 ) {
     if !policy.enabled {
         if !policy.eligible_roles.is_empty() {
@@ -5663,7 +5684,7 @@ fn validate_treestump_policy(
 
 fn validate_target_lynch_win_policies(
     issues: &mut Vec<PackValidationIssue>,
-    context: &PackValidationContext<'_>,
+    context: &ValidatedPack,
 ) {
     let path = "target_lynch_win_policies";
     let policies = &context.pack.target_lynch_win_policies;
@@ -5765,8 +5786,8 @@ fn validate_self_lynch_win_policies(
     path: &str,
     policies: &[SelfLynchWinPolicy],
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
-    alignments: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
+    alignments: &BTreeSet<String>,
     cadence: &BTreeSet<PhaseKind>,
 ) {
     if policies.is_empty() {
@@ -5863,7 +5884,7 @@ fn validate_beloved_princess_policy(
     path: &str,
     policy: &BelovedPrincessPolicy,
     ir_version: u16,
-    role_keys: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
     cadence: &BTreeSet<PhaseKind>,
 ) {
     if !policy.enabled {
@@ -6154,7 +6175,7 @@ fn validate_lover_policy(
     path: &str,
     policy: &LoverPolicy,
     ir_version: u16,
-    effect_tags: &BTreeSet<&str>,
+    effect_tags: &BTreeSet<String>,
     cadence: &BTreeSet<PhaseKind>,
 ) {
     if !policy.enabled {
@@ -6209,8 +6230,8 @@ fn validate_investigation_result_policy(
     issues: &mut Vec<PackValidationIssue>,
     path: &str,
     policy: &InvestigationResultPolicy,
-    role_keys: &BTreeSet<&str>,
-    alignments: &BTreeSet<&str>,
+    role_keys: &BTreeSet<String>,
+    alignments: &BTreeSet<String>,
 ) {
     if policy.parity.town.trim().is_empty() {
         issue(
@@ -6303,7 +6324,7 @@ fn validate_action(
     issues: &mut Vec<PackValidationIssue>,
     path: &str,
     action: &ActionTemplate,
-    context: &PackValidationContext<'_>,
+    context: &ValidatedPack,
 ) {
     let ir_version = context.pack.ir_version;
     let role_keys = &context.role_keys;
@@ -8010,10 +8031,7 @@ fn validate_source_ids(issues: &mut Vec<PackValidationIssue>, path: &str, action
     }
 }
 
-fn validate_vote_policy(
-    issues: &mut Vec<PackValidationIssue>,
-    context: &PackValidationContext<'_>,
-) {
+fn validate_vote_policy(issues: &mut Vec<PackValidationIssue>, context: &ValidatedPack) {
     let policy = &context.pack.vote;
     let role_keys = &context.role_keys;
     let effect_tags = &context.effect_tags;
@@ -8279,22 +8297,22 @@ fn validate_alignment_ref(
     issues: &mut Vec<PackValidationIssue>,
     path: impl Into<String>,
     alignment: &str,
-    alignments: &BTreeSet<&str>,
+    alignments: &BTreeSet<String>,
 ) {
     if !alignments.contains(alignment) {
         issue(issues, path, format!("unknown alignment `{alignment}`"));
     }
 }
 
-fn declared_effect_tags(pack: &Pack) -> BTreeSet<&str> {
+fn declared_effect_tags(pack: &Pack) -> BTreeSet<String> {
     let mut tags = BTreeSet::new();
-    tags.extend(pack.effects.keys().map(String::as_str));
+    tags.extend(pack.effects.keys().cloned());
     for role in pack.roles.values() {
-        tags.extend(role.effects.iter().map(String::as_str));
+        tags.extend(role.effects.iter().cloned());
         for action in &role.actions {
             if matches!(action.ability, IrAbility::Mark) {
                 if let Some(effect) = &action.effect {
-                    tags.insert(effect.as_str());
+                    tags.insert(effect.clone());
                 }
             }
         }
@@ -8302,7 +8320,7 @@ fn declared_effect_tags(pack: &Pack) -> BTreeSet<&str> {
     for action in pack.item_actions.values() {
         if matches!(action.ability, IrAbility::Mark) {
             if let Some(effect) = &action.effect {
-                tags.insert(effect.as_str());
+                tags.insert(effect.clone());
             }
         }
     }
@@ -8454,4 +8472,59 @@ fn issue(
         path: path.into(),
         message: message.into(),
     });
+}
+
+#[cfg(test)]
+mod validated_pack_tests {
+    use super::{load_pack_from_json, validate_pack_validated, Pack};
+    use std::collections::BTreeSet;
+    use std::sync::Arc;
+
+    fn shipped_default_open() -> Arc<Pack> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packs/default_open/pack.json");
+        let raw = std::fs::read_to_string(path).expect("shipped default_open pack.json");
+        Arc::new(load_pack_from_json(&raw).expect("shipped pack loads and validates"))
+    }
+
+    #[test]
+    fn validated_artifact_carries_derived_indexes() {
+        let pack = shipped_default_open();
+        let validated = validate_pack_validated(Arc::clone(&pack)).expect("shipped pack validates");
+
+        assert!(std::sync::Arc::ptr_eq(&validated.pack, &pack));
+        assert!(!validated.role_keys.is_empty());
+        for key in &validated.role_keys {
+            assert!(pack.roles.contains_key(key), "role index drift: {key}");
+        }
+
+        let cadence: BTreeSet<_> = pack.phases.cadence.iter().copied().collect();
+        assert_eq!(validated.cadence, cadence);
+
+        let team_kill: BTreeSet<_> = pack
+            .night_resolution
+            .team_kill_action_ids
+            .iter()
+            .cloned()
+            .collect();
+        assert_eq!(validated.team_kill_action_ids, team_kill);
+
+        let kill_causes: BTreeSet<String> = validated.kill_cause_ids.clone();
+        assert_eq!(validated.kill_cause_ids, kill_causes);
+    }
+
+    #[test]
+    fn invalid_pack_yields_no_artifact() {
+        let mut pack = (*shipped_default_open()).clone();
+        pack.roles.clear();
+        let error = match validate_pack_validated(Arc::new(pack)) {
+            Ok(_) => panic!("roleless pack must not validate"),
+            Err(error) => error,
+        };
+        assert!(
+            error.issues.iter().any(|issue| issue.path == "roles"),
+            "expected a roles-path issue, got {:?}",
+            error.issues
+        );
+    }
 }

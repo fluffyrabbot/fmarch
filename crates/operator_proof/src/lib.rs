@@ -1,3 +1,4 @@
+use domain::phase::PhaseId;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -471,7 +472,7 @@ pub struct OperatorResolutionDiffReport {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
 pub struct OperatorResolutionDiffPath {
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub run_id: String,
     pub envelope: String,
     pub path: String,
@@ -479,7 +480,7 @@ pub struct OperatorResolutionDiffPath {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
 pub struct OperatorResolutionDiffPhase {
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub run_id: String,
     pub status: String,
     pub applied_matches: bool,
@@ -506,7 +507,7 @@ pub struct OperatorCommandProjectionResolutionReport {
     pub game_id: Uuid,
     pub fixture_path: String,
     pub pack: String,
-    pub phase: String,
+    pub phase: PhaseId,
     pub resolve_seed: u64,
     pub proof_boundary: String,
     pub projection_rebuild: OperatorProjectionRebuildAuditReport,
@@ -532,7 +533,7 @@ pub struct OperatorTraceInspectionReport {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
 pub struct OperatorTraceInspectionRun {
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub run_id: String,
     pub applied_stream_seq: Option<i64>,
     pub trace_stream_seq: i64,
@@ -558,7 +559,7 @@ pub struct OperatorLargeActionGraphPerformanceReport {
     pub ok: bool,
     pub game_id: Uuid,
     pub pack: String,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub seed: u64,
     pub resolve_seed: u64,
     pub roster_count: usize,
@@ -806,7 +807,7 @@ pub fn build_operator_command_projection_resolution_report(
     artifact_path: impl Into<String>,
     fixture_path: impl Into<String>,
     pack: impl Into<String>,
-    phase: impl Into<String>,
+    phase: PhaseId,
     resolve_seed: u64,
     projection_rebuild: OperatorProjectionRebuildAuditReport,
     resolution_diff: OperatorResolutionDiffReport,
@@ -825,7 +826,7 @@ pub fn build_operator_command_projection_resolution_report(
         game_id,
         fixture_path: fixture_path.into(),
         pack: pack.into(),
-        phase: phase.into(),
+        phase,
         resolve_seed,
         proof_boundary: "Local-Postgres-only proof: seeds the checked fixture through commands::handle, runs Command::ResolvePhase against the local DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that generated game, writes this artifact under target/operator-proof, and does not prove hosted, multi-node, production, browser, or exhaustive state-space behavior.".to_string(),
         projection_rebuild,
@@ -4632,7 +4633,7 @@ mod tests {
                     drifted: 1,
                     skipped: 1,
                     first_drift_paths: vec![commands::ResolutionEnvelopeAuditDriftPath {
-                        phase_id: "D01".to_string(),
+                        phase_id: PhaseId::parse("D01").expect("static test phase id is canonical"),
                         run_id: "resolution:D01".to_string(),
                         envelope: commands::ResolutionEnvelopeAuditEnvelope::Applied,
                         path: "$.events[0]".to_string(),
@@ -4640,7 +4641,7 @@ mod tests {
                 },
                 phases: vec![
                     commands::ResolutionEnvelopeAuditPhase {
-                        phase_id: "N01".to_string(),
+                        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
                         run_id: "resolution:N01".to_string(),
                         applied_stream_seq: 10,
                         trace_stream_seq: Some(11),
@@ -4655,7 +4656,7 @@ mod tests {
                         rebuilt_trace: None,
                     },
                     commands::ResolutionEnvelopeAuditPhase {
-                        phase_id: "D01".to_string(),
+                        phase_id: PhaseId::parse("D01").expect("static test phase id is canonical"),
                         run_id: "resolution:D01".to_string(),
                         applied_stream_seq: 12,
                         trace_stream_seq: Some(13),
@@ -4754,7 +4755,7 @@ mod tests {
             commands::ResolutionTraceInspectionReport {
                 game_id: game,
                 traces: vec![commands::ResolutionTraceInspectionRun {
-                    phase_id: "N01".to_string(),
+                    phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
                     run_id: "resolution:N01".to_string(),
                     applied_stream_seq: Some(10),
                     trace_stream_seq: 11,
@@ -4954,7 +4955,7 @@ mod tests {
             commands::LargeActionGraphPerformanceProof {
                 game_id: game,
                 pack: "mafiascum".to_string(),
-                phase_id: "N01".to_string(),
+                phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
                 seed: commands::LARGE_ACTION_GRAPH_PERFORMANCE_SEED,
                 resolve_seed: commands::LARGE_ACTION_GRAPH_PERFORMANCE_SEED + 41_000,
                 roster_count: 40,

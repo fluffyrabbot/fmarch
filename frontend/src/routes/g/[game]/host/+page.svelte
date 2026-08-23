@@ -73,6 +73,7 @@
     phase: data.phase,
     replacement: data.replacement,
   };
+  $: currentPhase = projection.phase;
   let votecount = data.votecount;
   let dayVoteOutcomes = data.dayVoteOutcomes;
   let hostPrompts = data.hostPrompts;
@@ -99,7 +100,7 @@
     replacement: projection.replacement,
   });
   $: workQueues = buildHostWorkQueues({
-    phase: projection.phase ?? data.phase,
+    phase: currentPhase,
     votecountCount: votecount.length,
     nowSeconds: data.deadlineClock?.nowSeconds,
   });
@@ -107,10 +108,10 @@
     (group) => ["deadline", "replacement"].includes(group.id) && group.actions.length > 0,
   ).length;
   $: if (typeof window !== "undefined") {
-    activePhaseTheme.set(phaseThemeKey(projection.phase ?? data.phase));
+    activePhaseTheme.set(phaseThemeKey(currentPhase));
   }
   $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
-    phase: projection.phase ?? data.phase,
+    phase: currentPhase,
     replacement: projection.replacement ?? data.replacement,
     actionGroups: moderatorActionGroups,
     commandContext: data.commandContext,
@@ -404,7 +405,7 @@
 >
   <HostConsoleBar
     game={data.game}
-    phase={projection.phase ?? data.phase}
+    phase={currentPhase}
     capabilityLabel={data.access.capabilityLabel}
     {liveStatus}
     attentionCount={hostAttentionCount}
@@ -420,7 +421,7 @@
         groups={moderatorActionGroups}
         {commandStatuses}
         commandContext={data.commandContext}
-        phase={projection.phase ?? data.phase}
+        phase={currentPhase}
         replacement={projection.replacement ?? data.replacement}
         {hostPrompts}
         {hostTasks}

@@ -85,8 +85,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 actor,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
                 duration,
                 visibility,
             } => {
@@ -99,8 +97,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                         "event_index": indexed.index,
                         "source_action": source_action,
                         "phase_id": phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
                         "duration": duration,
                         "visibility": visibility,
                     }),
@@ -136,8 +132,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 uses,
                 vote_weight,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 generated.push(GeneratedActionTrace {
                     action_id: grant_id.clone(),
@@ -151,8 +145,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                         "uses": uses,
                         "vote_weight": vote_weight,
                         "phase_id": phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
                         "event_index": indexed.index,
                     }),
                 });
@@ -164,8 +156,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 action_id,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
                 remaining_uses,
             } => {
                 generated.push(GeneratedActionTrace {
@@ -177,8 +167,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                         "grant_id": grant_id,
                         "source_action": source_action,
                         "phase_id": phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
                         "remaining_uses": remaining_uses,
                         "event_index": indexed.index,
                     }),
@@ -223,8 +211,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 killed,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 notes.push(format!(
                     "duel {source_action} resolved at event_index {}",
@@ -239,8 +225,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                         "result": result,
                         "killed": killed,
                         "phase_id": phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
                         "event_index": indexed.index,
                     }),
                 });
@@ -253,8 +237,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 unstoppable,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 notes.push(format!(
                     "wolf self-destruct {source_action} resolved at event_index {}",
@@ -269,8 +251,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                         "cause": cause,
                         "unstoppable": unstoppable,
                         "phase_id": phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
                         "event_index": indexed.index,
                     }),
                 });
@@ -282,8 +262,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 cause,
                 role_key,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 notes.push(format!(
                     "wolf carry token {token_id} queued for {owner_id} at event_index {}",
@@ -298,8 +276,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                         "cause": cause,
                         "role_key": role_key,
                         "phase_id": phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
                         "event_index": indexed.index,
                     }),
                 });
@@ -312,8 +288,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 effect_id,
                 role_key,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 notes.push(format!(
                     "wolf carry {source_action_id} used by {owner_id} at event_index {}",
@@ -328,8 +302,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                         "effect_id": effect_id,
                         "role_key": role_key,
                         "phase_id": phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
                         "event_index": indexed.index,
                     }),
                 });
@@ -341,8 +313,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 effect,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 notes.push(format!(
                     "wolf beauty mark {source_action} recorded at event_index {}",
@@ -356,8 +326,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     detail: crate::json_atom!({
                         "effect": effect,
                         "phase_id": phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
                         "event_index": indexed.index,
                     }),
                 });
@@ -368,8 +336,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                 dragged_ids,
                 cause,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 notes.push(format!(
                     "wolf beauty drag by {beauty_id} resolved at event_index {}",
@@ -383,8 +349,6 @@ pub(super) fn build_resolution_trace(input: ResolutionTraceInput<'_>) -> Resolut
                     detail: crate::json_atom!({
                         "cause": cause,
                         "phase_id": phase_id,
-                        "phase_kind": phase_kind,
-                        "phase_number": phase_number,
                         "event_index": indexed.index,
                     }),
                 });

@@ -7,6 +7,7 @@ use crate::{
     EngineRunKind, RebuiltResolutionEnvelope, Reject,
 };
 use caps::Principal;
+use domain::phase::{PhaseId, PhaseKind};
 use eventstore::ActorId;
 use principal::PrincipalId;
 use projections::audit_rebuild;
@@ -38,7 +39,7 @@ pub struct ResolutionEnvelopeAuditSummary {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct ResolutionEnvelopeAuditDriftPath {
-    pub phase_id: String,
+    pub phase_id: domain::phase::PhaseId,
     pub run_id: String,
     pub envelope: ResolutionEnvelopeAuditEnvelope,
     pub path: String,
@@ -47,7 +48,7 @@ pub struct ResolutionEnvelopeAuditDriftPath {
 /// Replay status for one stored `ResolutionApplied` envelope.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct ResolutionEnvelopeAuditPhase {
-    pub phase_id: String,
+    pub phase_id: domain::phase::PhaseId,
     pub run_id: String,
     pub applied_stream_seq: i64,
     pub trace_stream_seq: Option<i64>,
@@ -72,7 +73,7 @@ pub struct ResolutionEnvelopeAuditPhase {
 pub struct LargeActionGraphPerformanceProof {
     pub game_id: Uuid,
     pub pack: String,
-    pub phase_id: String,
+    pub phase_id: domain::phase::PhaseId,
     pub seed: u64,
     pub resolve_seed: u64,
     pub roster_count: usize,
@@ -128,7 +129,7 @@ pub struct ResolutionTraceInspectionReport {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct ResolutionTraceInspectionRun {
-    pub phase_id: String,
+    pub phase_id: domain::phase::PhaseId,
     pub run_id: String,
     pub applied_stream_seq: Option<i64>,
     pub trace_stream_seq: i64,
@@ -661,6 +662,8 @@ pub async fn run_large_action_graph_performance_proof(
     threshold: Duration,
 ) -> Result<LargeActionGraphPerformanceProof, Reject> {
     let host = Principal::authenticated(fixture_principal_id("host_h"));
+    let phase_id = PhaseId::compose(PhaseKind::Night, 1)
+        .map_err(|error| Reject::Internal(format!("static proof phase id is invalid: {error}")))?;
     let roster = large_action_graph_roster();
     let actions = large_action_graph_actions();
 
@@ -710,7 +713,7 @@ pub async fn run_large_action_graph_performance_proof(
         &host,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: phase_id.clone(),
         },
     )
     .await?;
@@ -748,7 +751,7 @@ pub async fn run_large_action_graph_performance_proof(
     let resolve_elapsed = resolve_started.elapsed();
     let resolution_events_appended = ack.stream_seqs.len() == 3;
 
-    let applied_payload = resolution_payload_for_phase(pool, game, "N01").await?;
+    let applied_payload = resolution_payload_for_phase(pool, game, &phase_id).await?;
     let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
         .map_err(|err| Reject::Internal(format!("large graph ResolutionApplied invalid: {err}")))?;
     let resolution_inner_event_count = applied.events.len();
@@ -826,7 +829,7 @@ pub async fn run_large_action_graph_performance_proof(
     Ok(LargeActionGraphPerformanceProof {
         game_id: game,
         pack: "mafiascum".to_string(),
-        phase_id: "N01".to_string(),
+        phase_id,
         seed,
         resolve_seed,
         roster_count: roster.len(),
@@ -853,7 +856,7 @@ pub async fn run_large_action_graph_performance_proof(
 async fn resolution_payload_for_phase(
     pool: &PgPool,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
 ) -> Result<serde_json::Value, Reject> {
     eventstore::load_stream(pool, game)
         .await
@@ -861,7 +864,7 @@ async fn resolution_payload_for_phase(
         .into_iter()
         .find(|event| {
             event.kind == "ResolutionApplied"
-                && event.payload["phase_id"].as_str() == Some(phase_id)
+                && event.payload["phase_id"].as_str() == Some(phase_id.as_str())
         })
         .map(|event| event.payload)
         .ok_or_else(|| {
@@ -1067,12 +1070,14 @@ fn rerun_stored_phase(
     prefix: &[eventstore::StoredEvent],
     stored: &domain::ResolutionApplied,
 ) -> Result<RebuiltResolutionEnvelope, Reject> {
-    let phase_input = EngineInputBuilder::new(game, prefix, &stored.phase_id).build()?;
+    let phase_id = stored.phase_id.clone();
+    let phase_input = EngineInputBuilder::new(game, prefix, phase_id).build()?;
     let output = domain::resolve(phase_input.resolve_input(EngineRunKind::Replay {
         run_id: &stored.run_id,
         seed: stored.seed,
         logical_time: stored.started_at,
-    }));
+    }))
+    .map_err(|error| Reject::Internal(format!("invalid replay resolution input: {error}")))?;
     domain::validate_resolution_applied(&output.applied, domain::RESULT_VERSION)
         .map_err(|e| Reject::Internal(format!("invalid rebuilt resolution result: {e}")))?;
     domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION)
@@ -1085,7 +1090,7 @@ fn rerun_stored_phase(
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct EngineSnapshotIdentityAudit {
-    pub phase_id: String,
+    pub phase_id: domain::phase::PhaseId,
     pub snapshot_slot_ids: Vec<String>,
     pub stream_principal_ids: Vec<PrincipalId>,
     pub leaked_principal_ids: Vec<PrincipalId>,
@@ -1094,9 +1099,7 @@ pub struct EngineSnapshotIdentityAudit {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EnginePhaseInputAudit {
-    pub phase_id: String,
-    pub phase_kind: domain::pack::PhaseKind,
-    pub phase_number: u32,
+    pub phase_id: domain::phase::PhaseId,
     pub pack_ref: content_registry::PackRef,
     pub state: domain::StateSnapshot,
     pub submissions: Vec<domain::Submission>,
@@ -1110,12 +1113,12 @@ pub struct EnginePhaseInputAudit {
 pub async fn load_engine_snapshot(
     pool: &PgPool,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
 ) -> Result<domain::StateSnapshot, Reject> {
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    Ok(EngineInputBuilder::new(game, &stream, phase_id)
+    Ok(EngineInputBuilder::new(game, &stream, phase_id.clone())
         .build()?
         .state)
 }
@@ -1127,17 +1130,15 @@ pub async fn load_engine_snapshot(
 pub async fn load_engine_phase_input(
     pool: &PgPool,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
 ) -> Result<EnginePhaseInputAudit, Reject> {
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let phase_input = EngineInputBuilder::new(game, &stream, phase_id).build()?;
+    let phase_input = EngineInputBuilder::new(game, &stream, phase_id.clone()).build()?;
 
     Ok(EnginePhaseInputAudit {
         phase_id: phase_input.phase_id,
-        phase_kind: phase_input.phase_kind,
-        phase_number: phase_input.phase_number,
         pack_ref: phase_input.pack_ref,
         state: phase_input.state,
         submissions: phase_input.submissions,
@@ -1153,12 +1154,12 @@ pub async fn load_engine_phase_input(
 pub async fn audit_engine_snapshot_identity_boundary(
     pool: &PgPool,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
 ) -> Result<EngineSnapshotIdentityAudit, Reject> {
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let snapshot = EngineInputBuilder::new(game, &stream, phase_id)
+    let snapshot = EngineInputBuilder::new(game, &stream, phase_id.clone())
         .build()?
         .state;
     let snapshot_json = serde_json::to_string(&snapshot)
@@ -1177,7 +1178,7 @@ pub async fn audit_engine_snapshot_identity_boundary(
     let slot_only = leaked_principal_ids.is_empty();
 
     Ok(EngineSnapshotIdentityAudit {
-        phase_id: phase_id.to_string(),
+        phase_id: phase_id.clone(),
         snapshot_slot_ids,
         stream_principal_ids,
         leaked_principal_ids,

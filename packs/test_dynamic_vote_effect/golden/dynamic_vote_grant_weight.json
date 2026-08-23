@@ -127,18 +127,14 @@
           "grant_id": "vote_power_boost",
           "kind": "VoteWeight",
           "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1,
           "source_action": "grant_vote_power_n01",
           "target": "slot_1",
           "uses": 1,
-          "vote_weight": 2.0
+          "vote_weight": 2
         }
       ],
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

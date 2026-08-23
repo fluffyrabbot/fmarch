@@ -8,13 +8,13 @@ use crate::events::InnerEvent;
 use crate::ir::InvestigateMode;
 use crate::pack::DeathRevealMode;
 use crate::pack::{
-    AlignmentKey, EffectDuration, EffectVisibility, GrantKind, PhaseKind, PhasePolicy,
-    ResultMemoryScope, RoleKey, Tag,
+    AlignmentKey, EffectDuration, EffectVisibility, GrantKind, PhasePolicy, ResultMemoryScope,
+    RoleKey, Tag,
 };
+use crate::phase::PhaseId;
 
 pub type SlotId = String;
 pub type GameId = String;
-pub type PhaseId = String;
 pub type Seed = u64;
 pub type LogicalTime = u64;
 
@@ -28,10 +28,9 @@ pub fn role_pm_channel_id(slot_id: &str) -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StateSnapshot {
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
     #[serde(default)]
     pub phase_deadline: Option<i64>,
     pub phase_policy: PhasePolicy,
@@ -123,8 +122,6 @@ pub struct ActionUseRecord {
     #[serde(default)]
     pub targets: Vec<SlotId>,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
     pub status: String,
 }
 
@@ -152,8 +149,6 @@ pub struct ActionCounterRecord {
     pub used: u16,
     pub remaining: u16,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,8 +176,6 @@ pub struct InvestigationMemoryRecord {
     pub source_action: String,
     pub template_id: String,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -195,8 +188,6 @@ pub struct DelayedDeathRecord {
     pub source: SlotId,
     pub source_action: String,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -207,8 +198,6 @@ pub struct VisitRecord {
     pub template_id: String,
     pub source_action: String,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
     pub visible: bool,
 }
 
@@ -226,8 +215,6 @@ pub struct ActionGrantRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vote_weight: Option<f64>,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -265,8 +252,6 @@ pub struct BackupTargetRecord {
     pub source_role: RoleKey,
     pub source_action: String,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -278,8 +263,6 @@ pub struct TargetLynchWinTargetRecord {
     pub effect: Tag,
     pub source_action: String,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -290,8 +273,6 @@ pub struct WolfCarryTokenRecord {
     pub cause: String,
     pub role_key: RoleKey,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -302,8 +283,6 @@ pub struct WolfBeautyMarkRecord {
     pub effect: Tag,
     pub source_action: String,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -319,8 +298,6 @@ pub struct BadgeRecord {
     pub reason: String,
     pub destroyed: bool,
     pub phase_id: PhaseId,
-    pub phase_kind: PhaseKind,
-    pub phase_number: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -333,10 +310,6 @@ pub struct EffectRecord {
     pub source_action: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phase_id: Option<PhaseId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub phase_kind: Option<PhaseKind>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub phase_number: Option<u32>,
     #[serde(default)]
     pub duration: EffectDuration,
     #[serde(default)]
@@ -437,8 +410,8 @@ impl SlotState {
 /// - `BadgeChanged`        → upserts current badge owner/weight for later day votes.
 /// - `WinReached`          → reveals every slot's role/alignment to public post-game state.
 ///
-/// `phase_kind` / `phase_number` are carried through unchanged: advancing the
-/// phase cursor is the engine/platform's job, not this fold's.
+/// The opaque `phase_id` is carried through unchanged: advancing the phase
+/// cursor is the engine/platform's job, not this fold's.
 pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapshot {
     let mut next = state.clone();
     for event in events {
@@ -491,8 +464,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 actor,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
                 duration,
                 visibility,
             } if *duration == EffectDuration::Persistent => {
@@ -509,8 +480,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     source: actor.clone(),
                     source_action: source_action.clone(),
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                     duration: *duration,
                     visibility: *visibility,
                 });
@@ -559,8 +528,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 template_id,
                 targets,
                 phase_id,
-                phase_kind,
-                phase_number,
                 status,
             } => {
                 next.action_history.push(ActionUseRecord {
@@ -568,8 +535,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     template_id: template_id.clone(),
                     targets: targets.clone(),
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                     status: status.clone(),
                 });
             }
@@ -584,8 +549,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 used,
                 remaining,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 next.use_counters
                     .retain(|record| record.actor != *actor || record.counter_id != *counter_id);
@@ -600,8 +563,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     used: *used,
                     remaining: *remaining,
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                 });
             }
             InnerEvent::InvestigationMemoryRecorded {
@@ -613,8 +574,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 source_action,
                 template_id,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 next.investigation_memory.retain(|record| {
                     if *scope == ResultMemoryScope::Investigator {
@@ -634,8 +593,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     source_action: source_action.clone(),
                     template_id: template_id.clone(),
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                 });
             }
             InnerEvent::DelayedDeathQueued {
@@ -646,8 +603,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 source,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 next.delayed_deaths
                     .retain(|record| record.target != *target || record.effect != *effect);
@@ -659,8 +614,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     source: source.clone(),
                     source_action: source_action.clone(),
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                 });
             }
             InnerEvent::DelayedDeathResolved { queue_id, .. } => {
@@ -673,8 +626,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 template_id,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
                 visible,
             } if !next.visit_history.iter().any(|record| {
                 record.actor == *actor
@@ -688,8 +639,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     template_id: template_id.clone(),
                     source_action: source_action.clone(),
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                     visible: *visible,
                 });
             }
@@ -703,8 +652,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 uses,
                 vote_weight,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 next.action_grants.push(ActionGrantRecord {
                     grant_id: grant_id.clone(),
@@ -716,8 +663,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     uses: *uses,
                     vote_weight: *vote_weight,
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                 });
             }
             InnerEvent::ActionGrantConsumed {
@@ -736,8 +681,9 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                             && grant.uses > 0
                     })
                     .min_by(|a, b| {
-                        a.phase_number
-                            .cmp(&b.phase_number)
+                        a.phase_id
+                            .number()
+                            .cmp(&b.phase_id.number())
                             .then(a.phase_id.cmp(&b.phase_id))
                             .then(a.actor.cmp(&b.actor))
                     })
@@ -781,8 +727,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 source_role,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 next.backup_targets
                     .retain(|record| record.backup != *backup);
@@ -792,8 +736,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     source_role: source_role.clone(),
                     source_action: source_action.clone(),
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                 });
             }
             InnerEvent::TargetLynchWinTargeted {
@@ -803,8 +745,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 effect,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 next.target_lynch_win_targets
                     .retain(|record| record.policy != *policy || record.owner != *owner);
@@ -816,8 +756,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                         effect: effect.clone(),
                         source_action: source_action.clone(),
                         phase_id: phase_id.clone(),
-                        phase_kind: *phase_kind,
-                        phase_number: *phase_number,
                     });
             }
             InnerEvent::WolfCarryQueued {
@@ -826,8 +764,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 cause,
                 role_key,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 next.wolf_carry_tokens
                     .retain(|record| record.owner_id != *owner_id);
@@ -837,8 +773,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     cause: cause.clone(),
                     role_key: role_key.clone(),
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                 });
             }
             InnerEvent::WolfCarryUsed { owner_id, .. } => {
@@ -851,8 +785,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 effect,
                 source_action,
                 phase_id,
-                phase_kind,
-                phase_number,
             } => {
                 next.wolf_beauty_marks
                     .retain(|record| record.beauty_id != *beauty_id);
@@ -862,8 +794,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     effect: effect.clone(),
                     source_action: source_action.clone(),
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                 });
             }
             InnerEvent::BadgeChanged {
@@ -875,8 +805,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 reason,
                 destroyed,
                 phase_id,
-                phase_kind,
-                phase_number,
                 ..
             } => {
                 next.badges.retain(|record| record.badge_id != *badge_id);
@@ -889,8 +817,6 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     reason: reason.clone(),
                     destroyed: *destroyed,
                     phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
                 });
             }
             InnerEvent::ItaShotBuffered {

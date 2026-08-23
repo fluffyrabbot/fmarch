@@ -242,7 +242,8 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
             PrincipalId::fixture("host_h"),
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,

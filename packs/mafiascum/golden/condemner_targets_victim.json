@@ -9,8 +9,6 @@
         "duration": "Persistent",
         "effect": "condemner_target",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "source_action": "condemner_target_n01",
         "target": "slot_2",
         "visibility": "Hidden"
@@ -23,8 +21,6 @@
         "effect": "condemner_target",
         "owner": "slot_1",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "policy": "condemner",
         "source_action": "condemner_target_n01",
         "target": "slot_2"
@@ -47,8 +43,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "N01",
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

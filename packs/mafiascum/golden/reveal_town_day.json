@@ -4,8 +4,6 @@
     "game_id": "game_demo_reveal_town_001",
     "phase_id": "D01",
     "state": {
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_id": "D01",
       "phase_deadline": null,
       "phase_policy": {
@@ -69,9 +67,7 @@
         "slot_id": "slot_1",
         "alignment": "town",
         "source_action": "reveal_town_001",
-        "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1
+        "phase_id": "D01"
       }
     },
     {
@@ -84,17 +80,17 @@
         "tallies": {},
         "votes": {},
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1
         },
-        "majority": 2.0,
+        "majority": 2,
         "thresholds": {
-          "slot_1": 2.0,
-          "slot_2": 2.0,
-          "slot_3": 2.0
+          "slot_1": 2,
+          "slot_2": 2,
+          "slot_3": 2
         },
-        "total_weight": 3.0,
+        "total_weight": 3,
         "tiebreak": null,
         "reason": null
       }

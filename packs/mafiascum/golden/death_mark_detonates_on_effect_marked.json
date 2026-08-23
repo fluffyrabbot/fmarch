@@ -4,8 +4,6 @@
     "game_id": "game_demo_death_mark_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
@@ -97,8 +95,6 @@
         "duration": "Persistent",
         "effect": "death_marked",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "source_action": "death_mark_001",
         "target": "slot_2",
         "visibility": "Target"

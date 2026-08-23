@@ -11,8 +11,6 @@
         "counter_id": "x_shot:poison_potion",
         "limit": 1,
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "phase_scope": "game",
         "remaining": 0,
         "template_id": "poison_potion",
@@ -40,9 +38,7 @@
         "dragged_ids": [
           "slot_2"
         ],
-        "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2
+        "phase_id": "N02"
       }
     },
     {
@@ -88,8 +84,6 @@
       "linked_slots": [],
       "phase_deadline": null,
       "phase_id": "N02",
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_policy": {
         "cadence": [
           "Day",
@@ -167,8 +161,6 @@
           "beauty_id": "slot_1",
           "effect": "wolf_beauty_mark",
           "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1,
           "source_action": "beauty_001",
           "target_id": "slot_2"
         }

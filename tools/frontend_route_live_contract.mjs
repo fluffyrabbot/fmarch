@@ -266,8 +266,6 @@ async function provePlayerLiveRuntime() {
         actor_status: "alive",
         phase: {
           phase_id: "D02",
-          phase_kind: "Day",
-          phase_number: 2,
           locked: false,
         },
         actions: [],

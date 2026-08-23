@@ -4,8 +4,6 @@
     "game_id": "game_demo_targeted_backup_inherit_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
@@ -60,9 +58,7 @@
           "source_target": "slot_2",
           "source_role": "cop",
           "source_action": "target_backup_n01",
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ]
     },

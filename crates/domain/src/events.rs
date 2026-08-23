@@ -9,9 +9,10 @@ use crate::ir::InvestigateMode;
 pub use crate::json::JsonAtom;
 use crate::pack::{
     default_death_reveal_mode, is_default_death_reveal_mode, DeathRevealMode, EffectDuration,
-    EffectVisibility, GrantKind, PhaseKind, RoleKey, Tag,
+    EffectVisibility, GrantKind, RoleKey, Tag,
 };
-use crate::state::{LogicalTime, PhaseId, Seed, SlotId};
+use crate::phase::{PhaseId, PhaseKind};
+use crate::state::{LogicalTime, Seed, SlotId};
 use crate::Pack;
 
 /// The closed, enumerated set of inner domain events (doc 10).
@@ -37,8 +38,6 @@ pub enum InnerEvent {
         target: SlotId,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     DayAnnouncement(DayAnnouncement),
     LastWordsRecorded(LastWordsRecorded),
@@ -90,10 +89,6 @@ pub enum InnerEvent {
         source_action: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         phase_id: Option<PhaseId>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        phase_kind: Option<PhaseKind>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        phase_number: Option<u32>,
         #[serde(default)]
         duration: EffectDuration,
         #[serde(default)]
@@ -107,10 +102,6 @@ pub enum InnerEvent {
         source_action: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         phase_id: Option<PhaseId>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        phase_kind: Option<PhaseKind>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        phase_number: Option<u32>,
     },
     ActionGranted {
         grant_id: Tag,
@@ -124,8 +115,6 @@ pub enum InnerEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         vote_weight: Option<f64>,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     ActionGrantConsumed {
         grant_id: Tag,
@@ -133,8 +122,6 @@ pub enum InnerEvent {
         action_id: String,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
         remaining_uses: u16,
     },
     ActionUseCounted {
@@ -148,8 +135,6 @@ pub enum InnerEvent {
         used: u16,
         remaining: u16,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     BadgeChanged {
         badge_id: Tag,
@@ -161,8 +146,6 @@ pub enum InnerEvent {
         reason: String,
         destroyed: bool,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     DuelResolved {
         knight: SlotId,
@@ -171,8 +154,6 @@ pub enum InnerEvent {
         killed: SlotId,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     WolfSelfDestructed {
         wolf_id: SlotId,
@@ -181,8 +162,6 @@ pub enum InnerEvent {
         unstoppable: bool,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     WolfCarryQueued {
         owner_id: SlotId,
@@ -190,8 +169,6 @@ pub enum InnerEvent {
         cause: String,
         role_key: RoleKey,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     WolfCarryUsed {
         owner_id: SlotId,
@@ -200,8 +177,6 @@ pub enum InnerEvent {
         effect_id: String,
         role_key: RoleKey,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     WolfBeautyMarked {
         beauty_id: SlotId,
@@ -209,16 +184,12 @@ pub enum InnerEvent {
         effect: Tag,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     WolfBeautyDragged {
         beauty_id: SlotId,
         dragged_ids: Vec<SlotId>,
         cause: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     ItaSessionOpened {
         session_id: String,
@@ -227,8 +198,6 @@ pub enum InnerEvent {
         window: Option<String>,
         status: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     ItaSessionLifecycleChanged {
         session_id: String,
@@ -239,8 +208,6 @@ pub enum InnerEvent {
         message: Option<String>,
         recorded_at: crate::state::LogicalTime,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     ItaSessionAnnouncement {
         session_id: String,
@@ -249,8 +216,6 @@ pub enum InnerEvent {
         message: Option<String>,
         recorded_at: crate::state::LogicalTime,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     ItaShotQueued {
         session_id: String,
@@ -339,15 +304,11 @@ pub enum InnerEvent {
         global_shots_fired: u32,
         counters: ItaCounters,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     ItaSessionClosed {
         session_id: String,
         last_status: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     PlayersLinked {
         link_id: String,
@@ -366,8 +327,6 @@ pub enum InnerEvent {
         source_role: RoleKey,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     TargetLynchWinTargeted {
         policy: String,
@@ -376,8 +335,6 @@ pub enum InnerEvent {
         effect: Tag,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     DelayedDeathQueued {
         queue_id: String,
@@ -387,8 +344,6 @@ pub enum InnerEvent {
         source: SlotId,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     DelayedDeathResolved {
         queue_id: String,
@@ -397,8 +352,6 @@ pub enum InnerEvent {
         effect: Tag,
         outcome: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     VisitRecorded {
         actor: SlotId,
@@ -406,8 +359,6 @@ pub enum InnerEvent {
         template_id: String,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
         visible: bool,
     },
 
@@ -427,8 +378,6 @@ pub enum InnerEvent {
         source_action: String,
         template_id: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     InvestigationMemoryRecorded {
         investigator: SlotId,
@@ -443,32 +392,24 @@ pub enum InnerEvent {
         source_action: String,
         template_id: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     AlignmentRevealed {
         slot_id: SlotId,
         alignment: crate::pack::AlignmentKey,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     RoleRevealed {
         slot_id: SlotId,
         role_key: RoleKey,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     VoteDuelDeclared {
         challenger: SlotId,
         target: SlotId,
         source_action: String,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
     },
     EffectNotification {
         effect: Tag,
@@ -487,8 +428,6 @@ pub enum InnerEvent {
         template_id: String,
         targets: Vec<SlotId>,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
         reason: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         grant_id: Option<String>,
@@ -502,8 +441,6 @@ pub enum InnerEvent {
         template_id: String,
         targets: Vec<SlotId>,
         phase_id: PhaseId,
-        phase_kind: crate::pack::PhaseKind,
-        phase_number: u32,
         status: String,
     },
 
@@ -566,19 +503,19 @@ pub struct DayVoteOutcome {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum HostPromptPublicResolution {
     DayVoteElimination {
-        phase_id: String,
+        phase_id: PhaseId,
         selected_slot: String,
         reason: String,
     },
     PhaseAdvance {
-        source_phase_id: String,
-        target_phase_id: String,
+        source_phase_id: PhaseId,
+        target_phase_id: PhaseId,
         reason: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        skipped_phase_id: Option<String>,
+        skipped_phase_id: Option<PhaseId>,
     },
     Acknowledged {
-        phase_id: String,
+        phase_id: PhaseId,
         reason: String,
     },
 }
@@ -825,6 +762,7 @@ impl InvestigationResultFields {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct WinReachedMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub policy: Option<String>,
@@ -843,16 +781,13 @@ pub struct WinReachedMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_event: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub target_phase_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub target_phase_kind: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub target_phase_number: Option<u32>,
+    pub target_phase_id: Option<PhaseId>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub survival_awards: Vec<SurvivalWinAward>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SurvivalWinAward {
     pub policy: String,
     pub winner: String,
@@ -869,8 +804,6 @@ pub struct HostPromptIssued {
     pub subject: Option<SlotId>,
     pub reason: String,
     pub phase_id: PhaseId,
-    pub phase_kind: crate::pack::PhaseKind,
-    pub phase_number: u32,
     pub metadata: HostPromptMetadata,
 }
 
@@ -979,8 +912,6 @@ fn is_false(value: &bool) -> bool {
 #[serde(deny_unknown_fields)]
 pub struct ResolutionApplied {
     pub phase_id: PhaseId,
-    pub phase_kind: crate::pack::PhaseKind,
-    pub phase_number: u32,
     pub run_id: String,
     pub result_version: u16,
     pub seed: Seed,
@@ -1372,7 +1303,6 @@ pub fn validate_resolution_applied(
             finished_at: applied.finished_at,
         });
     }
-
     for (expected, indexed) in applied.events.iter().enumerate() {
         if indexed.index != expected {
             return Err(ResultValidationError::IndexMismatch {

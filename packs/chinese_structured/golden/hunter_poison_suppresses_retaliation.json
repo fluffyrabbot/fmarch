@@ -11,8 +11,6 @@
         "counter_id": "x_shot:poison_potion",
         "limit": 1,
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "phase_scope": "game",
         "remaining": 0,
         "template_id": "poison_potion",
@@ -58,8 +56,6 @@
       "linked_slots": [],
       "phase_deadline": null,
       "phase_id": "N02",
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_policy": {
         "cadence": [
           "Day",

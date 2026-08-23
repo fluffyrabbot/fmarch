@@ -42,6 +42,7 @@ export function buildDayVoteOutcomePanelViewModel({
         ? null
         : Object.freeze({
             phaseId: latest.phaseId,
+            phaseLabel: phaseLabelFromId(latest.phaseId) ?? latest.phaseId,
             status: latest.status,
             winnerSlot: latest.winnerSlot,
             winnerLabel: outcomeWinnerLabel(latest),
@@ -117,3 +118,4 @@ function slotDisplayLabel(slotId) {
 function sanitizeTestId(value) {
   return String(value).replace(/[^a-zA-Z0-9_-]+/g, "_");
 }
+import { phaseLabelFromId } from "../../phase-id.mjs";

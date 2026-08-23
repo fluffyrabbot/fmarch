@@ -7,8 +7,6 @@
       "payload": {
         "cause": "self_destruct",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "source_action": "self_001",
         "target_id": "slot_2",
         "unstoppable": true,
@@ -46,8 +44,6 @@
         "cause": "wolf_carry",
         "owner_id": "slot_1",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "role_key": "white_wolf_king",
         "token_id": "white_wolf_carry_token"
       }
@@ -131,8 +127,6 @@
       "linked_slots": [],
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

@@ -1404,7 +1404,8 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         ),
     ] {
@@ -1803,7 +1804,8 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -2226,7 +2228,8 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -3160,7 +3163,8 @@ async fn seed_single_vote_game(app: axum::Router, game: Uuid) {
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -3260,7 +3264,8 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -3313,7 +3318,7 @@ async fn vertical_command_boundary_updates_votecount(pool: sqlx::PgPool) {
         delta,
         ProjectionDelta::VoteCountChanged(v)
             if v.game == game
-                && v.phase_id == "D01"
+                && v.phase_id.as_str() == "D01"
                 && v.candidate_slot == "slot_2"
                 && v.count == 1
     )));
@@ -3403,7 +3408,8 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
             "host_h",
             Command::StartGame {
                 game,
-                phase: "N01".into(),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -3469,7 +3475,7 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
         "winner reason carries the engine's win reason: {}",
         winner.reason
     );
-    assert_eq!(winner.phase_id, "N01");
+    assert_eq!(winner.phase_id.as_str(), "N01");
     assert!(
         !won.completed,
         "the engine win is not the host's GameCompleted fact"
@@ -3537,7 +3543,7 @@ async fn endgame_summary_reveals_vote_history_only_after_completion(pool: sqlx::
     assert!(completed.completed);
     assert_eq!(completed.vote_history.len(), 1);
     let day_one = &completed.vote_history[0];
-    assert_eq!(day_one.phase_id, "D01");
+    assert_eq!(day_one.phase_id.as_str(), "D01");
     assert_eq!(day_one.status, "NoMajority");
     assert_eq!(day_one.winner_slot, None);
     assert_eq!(
@@ -3668,7 +3674,8 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
             7,
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         ),
     ] {
@@ -3868,7 +3875,8 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
             "host_h",
             Command::StartGame {
                 game,
-                phase: "N01".into(),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
         ),
     ] {
@@ -3895,7 +3903,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         .unwrap()
         .contains("factional kill"));
     assert_eq!(state["phase"]["phase_id"], "N01");
-    assert_eq!(state["phase"]["phase_kind"], "Night");
+    assert!(state["phase"].get("phase_kind").is_none());
     assert_eq!(state["actions"][0]["template_id"], "factional_kill");
     assert_eq!(
         state["actions"][0]["targets"],
@@ -4056,7 +4064,8 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
             "host_h",
             Command::OpenDayPhase {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -4184,7 +4193,8 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         ),
     ] {
@@ -4317,7 +4327,7 @@ async fn websocket_game_connection_sends_initial_votecount_delta(pool: sqlx::PgP
         delta.body,
         ServerMsg::Delta(ProjectionDelta::VoteCountChanged(v))
             if v.game == game
-                && v.phase_id == "D01"
+                && v.phase_id.as_str() == "D01"
                 && v.candidate_slot == "slot_2"
                 && v.count == 1
     ));
@@ -4386,7 +4396,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::VoteCountChanged(ref v))
                     if v.game == game
-                        && v.phase_id == "D01"
+                        && v.phase_id.as_str() == "D01"
                         && v.candidate_slot == "slot_2"
                         && v.count == 2
             ) {
@@ -4401,7 +4411,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
         live_delta.body,
         ServerMsg::Delta(ProjectionDelta::VoteCountChanged(v))
             if v.game == game
-                && v.phase_id == "D01"
+                && v.phase_id.as_str() == "D01"
                 && v.candidate_slot == "slot_2"
                 && v.count == 2
     ));
@@ -4570,7 +4580,7 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::VoteCountCleared(ref v))
                     if v.game == game
-                        && v.phase_id == "D01"
+                        && v.phase_id.as_str() == "D01"
                         && v.candidate_slot == "slot_2"
             ) {
                 return envelope;
@@ -4583,7 +4593,7 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
     assert!(matches!(
         live_delta.body,
         ServerMsg::Delta(ProjectionDelta::VoteCountCleared(v))
-            if v.game == game && v.phase_id == "D01" && v.candidate_slot == "slot_2"
+            if v.game == game && v.phase_id.as_str() == "D01" && v.candidate_slot == "slot_2"
     ));
 
     server.abort();
@@ -4854,7 +4864,8 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
             506,
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         ),
         (
@@ -5127,7 +5138,8 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
             "host_h",
             Command::StartGame {
                 game,
-                phase: "N01".into(),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -5303,7 +5315,8 @@ async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -5352,7 +5365,7 @@ async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::
         delta,
         ProjectionDelta::DayVoteOutcomeApplied(outcome)
             if outcome.game == game
-                && outcome.phase_id == "D01"
+                && outcome.phase_id.as_str() == "D01"
                 && outcome.status == "NoLynch"
                 && outcome.winner_slot.is_none()
                 && outcome.tallies.get("no_lynch") == Some(&2.0)
@@ -5422,7 +5435,8 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -5631,7 +5645,13 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
     assert_eq!(latest.games.len(), 1);
     assert_eq!(latest.games[0].game, completed_game);
     assert_eq!(latest.games[0].status, "completed");
-    assert_eq!(latest.games[0].phase_id.as_deref(), Some("D01"));
+    assert_eq!(
+        latest.games[0]
+            .phase_id
+            .as_ref()
+            .map(domain::phase::PhaseId::as_str),
+        Some("D01")
+    );
     let cursor = latest.next_cursor.expect("older game cursor");
 
     let response = app
@@ -7313,7 +7333,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
         },
         commands::Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     ] {
         commands::handle(&pool, &host, command).await.unwrap();
@@ -7668,7 +7688,8 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         ),
     ] {
@@ -7810,7 +7831,8 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -7971,7 +7993,8 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -8013,7 +8036,8 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
             "player_mira",
             Command::ExtendDeadline {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
                 at: 1_781_928_000,
             },
         )
@@ -8027,7 +8051,8 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
             "cohost_c",
             Command::ExtendDeadline {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
                 at: 1_781_928_000,
             },
         )
@@ -11170,7 +11195,8 @@ async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: 
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -11274,7 +11300,8 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
             "host_h",
             Command::StartGame {
                 game,
-                phase: "N01".into(),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -11417,7 +11444,8 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
             "host_h",
             Command::StartGame {
                 game,
-                phase: "N01".into(),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,

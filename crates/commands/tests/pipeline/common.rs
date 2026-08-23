@@ -11,6 +11,10 @@ use uuid::Uuid;
 
 // ───────────────────────── helpers ─────────────────────────
 
+pub fn fixture_phase(value: &str) -> domain::phase::PhaseId {
+    domain::phase::PhaseId::parse(value).expect("static test phase id is canonical")
+}
+
 /// Read logical events through the canonical sealed-body decoder. Tests must
 /// not couple behavioral assertions to the physical event table shape.
 pub async fn stored_events(pool: &PgPool, game: Uuid) -> Vec<eventstore::StoredEvent> {
@@ -421,7 +425,7 @@ pub async fn setup_game_with_pack_and_denied(
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -508,7 +512,7 @@ pub async fn tally_for(pool: &PgPool, game: Uuid, phase: &str, target: &str) -> 
         .await
         .unwrap()
         .into_iter()
-        .find(|r| r.phase_id == phase && r.candidate_slot == target)
+        .find(|r| r.phase_id == fixture_phase(phase) && r.candidate_slot == target)
         .map(|r| r.count)
         .unwrap_or(0)
 }
@@ -692,7 +696,9 @@ pub fn check_anchored_inspection_decision(
     let decision = match report
         .traces
         .iter()
-        .filter(|trace| trace.phase_id == expected.phase_id && trace.applied_stream_seq.is_some())
+        .filter(|trace| {
+            trace.phase_id == fixture_phase(expected.phase_id) && trace.applied_stream_seq.is_some()
+        })
         .flat_map(|trace| trace.decisions.iter())
         .find(|decision| {
             decision.applied_stream_seq.is_some()
@@ -755,7 +761,9 @@ pub fn check_anchored_inspection_generated(
     let generated = match report
         .traces
         .iter()
-        .filter(|trace| trace.phase_id == expected.phase_id && trace.applied_stream_seq.is_some())
+        .filter(|trace| {
+            trace.phase_id == fixture_phase(expected.phase_id) && trace.applied_stream_seq.is_some()
+        })
         .flat_map(|trace| trace.generated.iter())
         .find(|generated| {
             generated.applied_stream_seq.is_some()
@@ -799,7 +807,9 @@ pub fn check_anchored_inspection_note(
     let note = match report
         .traces
         .iter()
-        .filter(|trace| trace.phase_id == phase_id && trace.applied_stream_seq.is_some())
+        .filter(|trace| {
+            trace.phase_id == fixture_phase(phase_id) && trace.applied_stream_seq.is_some()
+        })
         .flat_map(|trace| trace.notes.iter())
         .find(|note| note.applied_stream_seq.is_some() && note.note == expected_note)
     {

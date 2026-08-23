@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { phaseDetailsFromId } from "../phase-id.mjs";
 
 export const PHASE_THEME_CONTRACT = Object.freeze({
   attribute: "data-phase",
@@ -11,20 +12,14 @@ export const PHASE_THEME_CONTRACT = Object.freeze({
  * surfaces carry no data-phase and follow the user's light/dark preference.
  */
 export function phaseThemeKey(phase) {
-  if (phase === null || phase === undefined) {
-    return null;
-  }
-  const source = `${phase.id ?? ""} ${phase.label ?? ""}`.toLowerCase();
-  if (/twilight|dusk/.test(source) || /(^|\s)t\d/.test(source)) {
-    return "twilight";
-  }
-  if (/night/.test(source) || /(^|\s)n\d/.test(source)) {
-    return "night";
-  }
-  if (/day/.test(source) || /(^|\s)d\d/.test(source)) {
-    return "day";
-  }
-  return null;
+  const kind = phaseDetailsFromId(phase?.id)?.kind;
+  return kind === "Twilight"
+    ? "twilight"
+    : kind === "Night"
+      ? "night"
+      : kind === "Day"
+        ? "day"
+        : null;
 }
 
 /*

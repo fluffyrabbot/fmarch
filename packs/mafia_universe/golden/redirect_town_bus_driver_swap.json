@@ -4,14 +4,19 @@
     "game_id": "game_mu_redirect_town_bus_driver_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -58,7 +63,10 @@
         "action_id": "mu_town_bus_swap_001",
         "actor": "slot_4",
         "template_id": "bus_driver_swap",
-        "targets": ["slot_1", "slot_2"],
+        "targets": [
+          "slot_1",
+          "slot_2"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -68,7 +76,9 @@
         "action_id": "mu_goon_kill_003",
         "actor": "slot_3",
         "template_id": "factional_kill",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -85,7 +95,9 @@
       "payload": {
         "slot_id": "slot_2",
         "cause": "factional_kill",
-        "attackers": ["slot_3"],
+        "attackers": [
+          "slot_3"
+        ],
         "unstoppable": false
       }
     },

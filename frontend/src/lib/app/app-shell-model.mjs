@@ -1,4 +1,5 @@
 import { normalizeCapabilities, resolveSurfaceAccess } from "./capabilities.mjs";
+import { canonicalPhaseId, phaseLabelFromId } from "../phase-id.mjs";
 import { phaseThemeKey } from "./phase-theme.mjs";
 import { buildAppSurfaceHeaderViewModel } from "./app-surface-header-model.mjs";
 import { buildRouteStateViewModel } from "./app-route-state-model.mjs";
@@ -259,7 +260,7 @@ function normalizeBoardGameIndexEntry(entry) {
   if (id === null || pack === null || !["active", "completed"].includes(status)) {
     return null;
   }
-  const phaseId = nonemptyString(entry?.phase_id, entry?.phaseId);
+  const phaseId = canonicalPhaseId(entry?.phase_id);
   return Object.freeze({
     id,
     pack,
@@ -268,7 +269,11 @@ function normalizeBoardGameIndexEntry(entry) {
     statusLabel: status === "active" ? "Active" : "Completed",
     phaseId,
     phaseLabel:
-      status === "completed" ? "Completed" : phaseId === null ? "Opening" : phaseId,
+      status === "completed"
+        ? "Completed"
+        : phaseId === null
+          ? "Awaiting first phase"
+          : phaseLabelFromId(phaseId),
   });
 }
 

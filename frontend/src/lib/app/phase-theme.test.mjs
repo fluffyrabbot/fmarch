@@ -14,12 +14,10 @@ test("phase theme contract names the data-phase grammar", () => {
 
 test("phase theme key maps projected phases onto day night and twilight", () => {
   assert.equal(phaseThemeKey({ id: "D01", label: "Day 2" }), "day");
-  assert.equal(phaseThemeKey({ label: "Day 2" }), "day");
   assert.equal(phaseThemeKey({ id: "D01" }), "day");
   assert.equal(phaseThemeKey({ id: "N02", label: "Night 2" }), "night");
   assert.equal(phaseThemeKey({ id: "N02" }), "night");
   assert.equal(phaseThemeKey({ id: "T01", label: "Twilight 1" }), "twilight");
-  assert.equal(phaseThemeKey({ label: "Twilight 1" }), "twilight");
 });
 
 test("phase theme key is null off-game so user preference drives the palette", () => {
@@ -28,6 +26,7 @@ test("phase theme key is null off-game so user preference drives the palette", (
   assert.equal(phaseThemeKey({}), null);
   assert.equal(phaseThemeKey({ id: "", label: "" }), null);
   assert.equal(phaseThemeKey({ label: "Signups" }), null);
+  assert.equal(phaseThemeKey({ label: "Day 2" }), null);
 });
 
 test("active phase theme store starts unset and round-trips", () => {

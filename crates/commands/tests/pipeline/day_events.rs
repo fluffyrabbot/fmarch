@@ -393,7 +393,7 @@ async fn relative_day_event_schedule_uses_explicit_phase_open_clock(pool: PgPool
     let mut event = minimal_day_event(event_id.as_str(), "bomb");
     event.participation.limits.minimum = 0;
     event.schedule = game_platform::DayEventSchedule::RelativeToPhase {
-        phase_id: game_platform::PhaseId::new("D01").unwrap(),
+        phase_id: domain::phase::PhaseId::parse("D01").unwrap(),
         open_offset: game_platform::DurationSeconds::new(10).unwrap(),
         lock_offset: Some(game_platform::DurationSeconds::new(20).unwrap()),
     };
@@ -432,7 +432,7 @@ async fn phase_trigger_observation_and_manual_cancellation_have_stable_precedenc
     let mut triggered = minimal_day_event(triggered_id.as_str(), "bomb");
     triggered.schedule = game_platform::DayEventSchedule::OnTrigger {
         trigger: game_platform::ProgramTrigger::PhaseResolved {
-            phase_id: game_platform::PhaseId::new("D01").unwrap(),
+            phase_id: domain::phase::PhaseId::parse("D01").unwrap(),
         },
     };
     handle(
@@ -1614,7 +1614,7 @@ async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool:
         .unwrap()
         .iter()
         .any(|effect| effect.slot_id == "slot_1" && effect.effect == "bomb"));
-    assert!(load_engine_snapshot(&pool, game, "D01")
+    assert!(load_engine_snapshot(&pool, game, &fixture_phase("D01"))
         .await
         .unwrap()
         .slots

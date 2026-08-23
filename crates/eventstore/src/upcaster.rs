@@ -117,8 +117,6 @@ mod tests {
     fn current_resolution() -> serde_json::Value {
         json!({
             "phase_id": "D01",
-            "phase_kind": "Day",
-            "phase_number": 1,
             "run_id": "resolution:test:D01:1",
             "result_version": domain::RESULT_VERSION,
             "seed": 7,

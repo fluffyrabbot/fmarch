@@ -1063,7 +1063,8 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
             6,
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         ),
         (

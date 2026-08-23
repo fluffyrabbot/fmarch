@@ -5,6 +5,7 @@ import {
   canonicalPrincipalId,
   FIXTURE_PRINCIPAL_IDS,
 } from "../../../../lib/principal-id.mjs";
+import { canonicalPhaseId, phaseLabelFromId } from "../../../../lib/phase-id.mjs";
 import { resolveHostConsoleAccess } from "../host/host-route-model.mjs";
 import { buildHostSetupWorkflow } from "./setup-workflow-model.mjs";
 
@@ -92,6 +93,7 @@ export function normalizeHostSetupState(raw, { game }) {
   const policies = Array.isArray(raw?.post_policies) ? raw.post_policies : [];
   const programCatalog = Array.isArray(raw?.program_catalog) ? raw.program_catalog : [];
   const attachedPrograms = Array.isArray(raw?.attached_programs) ? raw.attached_programs : [];
+  const phaseId = canonicalPhaseId(raw?.phase?.phase_id);
   return Object.freeze({
     game: normalizeId(raw?.game ?? game, "game"),
     created: raw?.created === true,
@@ -188,7 +190,7 @@ export function normalizeHostSetupState(raw, { game }) {
                     (Array.isArray(preview.reward_keys) ? preview.reward_keys : []).map(String),
                   ),
                   mode: normalizeId(preview.mode, "program_catalog.schedule_preview.mode"),
-                  phaseId: normalizeOptionalText(preview.phase_id),
+                  phaseId: canonicalPhaseId(preview.phase_id),
                   openAt: Number.isFinite(preview.open_at) ? Number(preview.open_at) : null,
                   openOffset: Number.isFinite(preview.open_offset)
                     ? Number(preview.open_offset)
@@ -197,7 +199,12 @@ export function normalizeHostSetupState(raw, { game }) {
                   lockOffset: Number.isFinite(preview.lock_offset)
                     ? Number(preview.lock_offset)
                     : null,
-                  trigger: preview.trigger ? deepFreeze(structuredCloneValue(preview.trigger)) : null,
+                  trigger: preview.trigger
+                    ? Object.freeze({
+                        ...deepFreeze(structuredCloneValue(preview.trigger)),
+                        phase_id: canonicalPhaseId(preview.trigger.phase_id),
+                      })
+                    : null,
                 }),
             ),
           ),
@@ -217,9 +224,11 @@ export function normalizeHostSetupState(raw, { game }) {
         }),
       ),
     ),
-    phase: raw?.phase
+    phase: phaseId === null
+      ? null
+      : raw?.phase
       ? Object.freeze({
-          phaseId: String(raw.phase.phase_id),
+          phaseId,
           locked: raw.phase.locked === true,
           deadline: raw.phase.deadline ?? null,
         })
@@ -310,7 +319,7 @@ export function buildHostSetupReadiness(setupState) {
     summary: startAvailable
       ? "Ready to start"
       : setupState.phase !== null
-        ? `Started at ${setupState.phase.phaseId}`
+        ? `Started at ${phaseLabelFromId(setupState.phase.phaseId) ?? setupState.phase.phaseId}`
         : "Setup still needs attention",
   });
 }

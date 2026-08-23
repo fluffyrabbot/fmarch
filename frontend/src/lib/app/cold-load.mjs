@@ -1,6 +1,7 @@
 import { normalizeDayEventRoom } from "./day-event-room.mjs";
 import { normalizeGameThreadAuthor } from "./game-thread-author.mjs";
 import { canonicalPrincipalId } from "../principal-id.mjs";
+import { canonicalPhaseId } from "../phase-id.mjs";
 
 export const DEFAULT_SSR_FETCH_TIMEOUT_MS = 2000;
 
@@ -286,19 +287,23 @@ export async function fetchJsonWithInit({
 
 export function normalizeHostPrompts(rows, fallback) {
   if (!Array.isArray(rows)) {
-    return fallback;
+    return Array.isArray(fallback) ? normalizeHostPrompts(fallback, []) : fallback;
   }
 
   return Object.freeze(
-    rows.map((row, index) =>
-      Object.freeze({
+    rows.map((row, index) => {
+      const phaseId = canonicalPhaseId(row?.phase_id);
+      if (phaseId === null) {
+        return null;
+      }
+      return Object.freeze({
         id: String(
           row.prompt_id ?? row.promptId ?? row.id ?? `prompt-${index + 1}`,
         ),
         label: String(row.kind ?? row.label ?? "Host prompt"),
         value: String(row.reason ?? row.value ?? "Awaiting host decision"),
         status: String(row.status ?? "pending"),
-        phaseId: String(row.phase_id ?? row.phaseId ?? ""),
+        phaseId,
         subjectSlot: row.subject_slot ?? row.subjectSlot ?? null,
         decisionKind: decisionKindForPrompt(row),
         metadata: row.metadata ?? {},
@@ -308,8 +313,8 @@ export function normalizeHostPrompts(rows, fallback) {
                 row.public_resolution ?? row.publicResolution,
             }
           : {}),
-      }),
-    ),
+      });
+    }).filter(Boolean),
   );
 }
 
@@ -520,9 +525,9 @@ function normalizeDayVoteOutcomeRow(row) {
   if (row === null || typeof row !== "object") {
     return null;
   }
-  const phaseId = row.phase_id ?? row.phaseId;
+  const phaseId = canonicalPhaseId(row.phase_id);
   const status = row.status;
-  if (typeof phaseId !== "string" || phaseId.trim() === "" || typeof status !== "string") {
+  if (phaseId === null || typeof status !== "string") {
     return null;
   }
   return Object.freeze({
@@ -696,7 +701,7 @@ function normalizePlayerDayEventAttention(entry) {
   return Object.freeze({
     eventId,
     templateKey: String(entry.template_key ?? entry.templateKey ?? ""),
-    phaseId: String(entry.phase_id ?? entry.phaseId ?? ""),
+    phaseId: canonicalPhaseId(entry.phase_id),
     participationStatus: String(
       entry.participation_status ?? entry.participationStatus ?? "available",
     ),
@@ -761,7 +766,7 @@ export function normalizeEndgameSummary(payload, fallback = null) {
         : Object.freeze({
             alignment: String(winner.alignment ?? ""),
             reason: String(winner.reason ?? ""),
-            phaseId: String(winner.phase_id ?? winner.phaseId ?? ""),
+            phaseId: canonicalPhaseId(winner.phase_id),
           }),
     slots: Object.freeze(
       slots
@@ -793,9 +798,9 @@ function normalizeEndgameDayVote(outcome) {
   if (outcome === null || typeof outcome !== "object") {
     return null;
   }
-  const phaseId = String(outcome.phase_id ?? outcome.phaseId ?? "").trim();
+  const phaseId = canonicalPhaseId(outcome.phase_id);
   const status = String(outcome.status ?? "").trim();
-  if (phaseId === "" || status === "") {
+  if (phaseId === null || status === "") {
     return null;
   }
   return Object.freeze({
@@ -845,10 +850,12 @@ function normalizePlayerCommandPhase(phase) {
   if (phase === null || typeof phase !== "object") {
     return null;
   }
+  const phaseId = canonicalPhaseId(phase.phase_id);
+  if (phaseId === null) {
+    return null;
+  }
   return Object.freeze({
-    phaseId: String(phase.phase_id ?? phase.phaseId ?? ""),
-    phaseKind: String(phase.phase_kind ?? phase.phaseKind ?? "Unknown"),
-    phaseNumber: Number(phase.phase_number ?? phase.phaseNumber ?? 0),
+    phaseId,
     locked: phase.locked === true,
     deadline: phase.deadline ?? null,
   });

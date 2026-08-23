@@ -7,8 +7,6 @@
       "payload": {
         "cause": "twilight_self_destruct",
         "phase_id": "T01",
-        "phase_kind": "Twilight",
-        "phase_number": 1,
         "source_action": "twilight_self_001",
         "target_id": "slot_2",
         "unstoppable": true,
@@ -65,8 +63,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "T01",
-      "phase_kind": "Twilight",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

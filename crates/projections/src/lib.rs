@@ -70,6 +70,7 @@ use content_reference::{
     self, PostKind, PostRef, Quotation, QuotationPostState, QuotationThreadState,
 };
 use content_registry::{ContentHash, PackArtifactSnapshot, PackRef};
+use domain::phase::PhaseId;
 use eventstore::{append_in_tx, EventInput, StoreError, StoredEvent};
 use forum::{self, PostingState, TopicVisibility};
 use identity::{
@@ -114,7 +115,7 @@ pub use social_writes::{mute_public_profile, unmute_public_profile};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VoteCountRow {
     pub game_id: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub candidate_slot: String,
     /// Number of slots whose CURRENT ballot targets `candidate_slot`.
     pub count: i64,
@@ -124,7 +125,7 @@ pub struct VoteCountRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CurrentBallotRow {
     pub game_id: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub actor_slot: String,
     pub target: String,
 }
@@ -133,7 +134,7 @@ pub struct CurrentBallotRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DayVoteOutcomeRow {
     pub game_id: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub source_seq: i64,
     pub event_index: i32,
     pub status: String,
@@ -170,7 +171,7 @@ pub struct ActionHistoryRow {
     pub game_id: Uuid,
     pub slot_id: String,
     pub template_id: String,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub phase_kind: String,
     pub phase_number: i32,
     pub targets: Vec<String>,
@@ -190,7 +191,7 @@ pub struct ActionCounterRow {
     pub limit: i32,
     pub used: i32,
     pub remaining: i32,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub phase_kind: String,
     pub phase_number: i32,
 }
@@ -206,7 +207,7 @@ pub struct InvestigationMemoryRow {
     pub result: serde_json::Value,
     pub source_action: String,
     pub template_id: String,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub phase_kind: String,
     pub phase_number: i32,
 }
@@ -221,7 +222,7 @@ pub struct DelayedDeathQueueRow {
     pub effect: String,
     pub source_slot: String,
     pub source_action: String,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub phase_kind: String,
     pub phase_number: i32,
 }
@@ -234,7 +235,7 @@ pub struct VisitHistoryRow {
     pub target_slot: String,
     pub template_id: String,
     pub source_action: String,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub phase_kind: String,
     pub phase_number: i32,
     pub visible: bool,
@@ -250,7 +251,7 @@ pub struct ActionGrantRow {
     pub kind: String,
     pub source_slot: String,
     pub source_action: String,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub phase_kind: String,
     pub phase_number: i32,
     pub uses: i32,
@@ -268,7 +269,7 @@ pub struct SheriffBadgeRow {
     pub source_action: String,
     pub reason: String,
     pub destroyed: bool,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub phase_kind: String,
     pub phase_number: i32,
 }
@@ -277,7 +278,7 @@ pub struct SheriffBadgeRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerNotificationRow {
     pub game_id: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub event_index: i32,
     pub audience_slot: String,
     pub effect: String,
@@ -288,7 +289,7 @@ pub struct PlayerNotificationRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlayerInvestigationResultRow {
     pub game_id: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub event_index: i32,
     pub audience_slot: String,
     pub mode: String,
@@ -300,7 +301,7 @@ pub struct PlayerInvestigationResultRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlayerInfoResultRow {
     pub game_id: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub event_index: i32,
     pub audience_slot: String,
     pub kind: String,
@@ -315,7 +316,7 @@ pub struct PlayerInfoResultRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostPromptRow {
     pub game_id: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub event_index: i32,
     pub prompt_id: String,
     pub kind: String,
@@ -337,7 +338,7 @@ pub struct DayEventRow {
     pub event_id: String,
     pub definition: game_platform::DayEvent,
     pub state: String,
-    pub phase_id: Option<String>,
+    pub phase_id: Option<PhaseId>,
     pub opened_at: Option<i64>,
     pub locked_at: Option<i64>,
     pub open_due_at: Option<i64>,
@@ -374,7 +375,7 @@ pub struct DayEventParticipationRow {
     pub event_id: String,
     pub actor_slot: String,
     pub payload: game_platform::ParticipationPayload,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub submitted_seq: i64,
 }
 
@@ -420,10 +421,10 @@ pub struct HostPhaseControlRow {
     pub prompt_id: String,
     pub prompt_kind: Option<String>,
     pub prompt_reason: Option<String>,
-    pub source_phase_id: String,
-    pub target_phase_id: String,
+    pub source_phase_id: PhaseId,
+    pub target_phase_id: PhaseId,
     pub reason: String,
-    pub skipped_phase_id: Option<String>,
+    pub skipped_phase_id: Option<PhaseId>,
     pub resolved_at: Option<i64>,
     pub occurred_at: i64,
 }
@@ -458,7 +459,7 @@ pub struct SlotOccupancyRow {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PhaseStateRow {
     pub game_id: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub locked: bool,
     pub deadline: Option<i64>,
     pub phase_opened_at: Option<i64>,
@@ -497,7 +498,9 @@ pub struct ThreadPostRow {
     /// Closed public attribution for the post. A game post never carries a
     /// principal or profile identity.
     pub author: GameThreadAuthor,
-    pub phase_id: String,
+    /// `None` marks a setup post written before the game entered its first
+    /// phase. Present values are validated domain phase identities.
+    pub phase_id: Option<PhaseId>,
     pub body: String,
     pub media: serde_json::Value,
     pub quotations: Vec<Quotation>,
@@ -534,7 +537,7 @@ pub struct GameIndexRow {
     pub game_id: Uuid,
     pub pack_ref: PackRef,
     pub status: String,
-    pub phase_id: Option<String>,
+    pub phase_id: Option<PhaseId>,
     /// `events.seq` for the lifecycle event that last changed this public row.
     pub updated_seq: i64,
     pub completed_seq: Option<i64>,
@@ -935,17 +938,17 @@ pub struct CompletedGameExport {
 
 #[derive(Debug, Deserialize)]
 struct PhaseAdvancedPayload {
-    phase_id: String,
+    phase_id: PhaseId,
     #[serde(default)]
     phase_opened_at: Option<i64>,
     #[serde(default)]
     source_prompt_id: Option<String>,
     #[serde(default)]
-    source_phase_id: Option<String>,
+    source_phase_id: Option<PhaseId>,
     #[serde(default)]
     reason: Option<String>,
     #[serde(default)]
-    skipped_phase_id: Option<String>,
+    skipped_phase_id: Option<PhaseId>,
 }
 
 // ───────────────────────── fold: one event → projection deltas ─────────────────────────
@@ -968,7 +971,7 @@ async fn fold_event(
         "VoteSubmitted" => {
             // OVERWRITE this actor's current ballot for the phase.
             let p = &ev.payload;
-            let phase_id = str_field(p, "phase_id", &ev.kind)?;
+            let phase_id = phase_id_field(p, "phase_id", &ev.kind)?;
             let actor = str_field(p, "actor", &ev.kind)?;
             let target = vote_target(p, &ev.kind)?;
             upsert_ballot(tx, game_id, &phase_id, &actor, &target).await?;
@@ -976,13 +979,13 @@ async fn fold_event(
         "VoteWithdrawn" => {
             // REMOVE this actor's ballot for the phase (no target needed).
             let p = &ev.payload;
-            let phase_id = str_field(p, "phase_id", &ev.kind)?;
+            let phase_id = phase_id_field(p, "phase_id", &ev.kind)?;
             let actor = str_field(p, "actor", &ev.kind)?;
             delete_ballot(tx, game_id, &phase_id, &actor).await?;
         }
         "ActionSubmitted" => {
             let p = &ev.payload;
-            let phase_id = str_field(p, "phase_id", &ev.kind)?;
+            let phase_id = phase_id_field(p, "phase_id", &ev.kind)?;
             let actor = str_field(p, "actor", &ev.kind)?;
             let action_id = str_field(p, "action_id", &ev.kind)?;
             let template_id = str_field(p, "template_id", &ev.kind)?;
@@ -1007,12 +1010,13 @@ async fn fold_event(
         "ActionWithdrawn" => {
             let p = &ev.payload;
             let action_id = str_field(p, "action_id", &ev.kind)?;
+            let phase_id = optional_phase_id_field(p, "phase_id", &ev.kind)?;
             delete_action_submission(
                 tx,
                 game_id,
                 &action_id,
                 p.get("actor").and_then(|value| value.as_str()),
-                p.get("phase_id").and_then(|value| value.as_str()),
+                phase_id.as_ref(),
             )
             .await?;
         }
@@ -1040,7 +1044,7 @@ async fn fold_event(
                 kind: ev.kind.clone(),
                 source,
             })?;
-            let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
+            let phase_id = phase_id_field(&ev.payload, "phase_id", &ev.kind)?;
             fold_inner(tx, game_id, &phase_id, ev.seq, ev.stream_seq as i32, &inner).await?;
         }
 
@@ -1173,7 +1177,7 @@ async fn fold_event(
         // ── phase_state (validation: phase open / locked / deadline) ──
         "GameStarted" => {
             // Set the current phase; a new phase starts unlocked with no deadline.
-            let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
+            let phase_id = phase_id_field(&ev.payload, "phase_id", &ev.kind)?;
             let phase_opened_at = ev.payload["phase_opened_at"].as_i64();
             set_phase(tx, game_id, &phase_id, phase_opened_at).await?;
             activate_game_index(tx, game_id, &phase_id, ev.seq).await?;
@@ -1208,7 +1212,7 @@ async fn fold_event(
         }
         "DeadlineSet" | "DeadlineExtended" => {
             let p = &ev.payload;
-            let phase_id = str_field(p, "phase_id", &ev.kind)?;
+            let phase_id = phase_id_field(p, "phase_id", &ev.kind)?;
             let at =
                 p.get("at")
                     .and_then(|v| v.as_i64())
@@ -1222,7 +1226,7 @@ async fn fold_event(
             )
             .bind(game_id)
             .bind(at)
-            .bind(phase_id)
+            .bind(phase_id.as_str())
             .execute(&mut **tx)
             .await?;
         }
@@ -1246,7 +1250,7 @@ async fn fold_event(
             let p = &ev.payload;
             let channel_id = str_field(p, "channel_id", &ev.kind)?;
             let author = author_from_payload(p, &ev.kind, &ev.actor)?;
-            let phase_id = str_field(p, "phase_id", &ev.kind)?;
+            let phase_id = optional_phase_id_field(p, "phase_id", &ev.kind)?;
             let body = str_field(p, "body", &ev.kind)?;
             let media = thread_media_payload(p);
             let quotations = quotations_from_event(p, &ev.kind)?;
@@ -1344,7 +1348,7 @@ async fn fold_event(
                         stream_seq: ev.stream_seq,
                         channel_id: "main".to_string(),
                         author: GameThreadAuthor::System,
-                        phase_id: applied.phase_id.clone(),
+                        phase_id: Some(applied.phase_id.clone()),
                         body: body.clone(),
                         media: serde_json::json!([]),
                         quotations: Vec::new(),
@@ -1411,7 +1415,7 @@ async fn fold_event(
                        AND status = 'Tie' AND tiebreak = 'HostDecides'",
                 )
                 .bind(game_id)
-                .bind(&phase_id)
+                .bind(phase_id.as_str())
                 .bind(&selected_slot)
                 .bind(&reason)
                 .execute(&mut **tx)
@@ -1589,7 +1593,7 @@ async fn fold_event(
         }
         "DayEventOpened" => {
             let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
-            let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
+            let phase_id = phase_id_field(&ev.payload, "phase_id", &ev.kind)?;
             let opened_at = i64_field(&ev.payload, "opened_at", &ev.kind)?;
             sqlx::query(
                 "UPDATE day_event SET state = 'open', phase_id = $3, opened_at = $4, \
@@ -1597,7 +1601,7 @@ async fn fold_event(
             )
             .bind(game_id)
             .bind(&event_id)
-            .bind(phase_id)
+            .bind(phase_id.as_str())
             .bind(opened_at)
             .bind(ev.seq)
             .execute(&mut **tx)
@@ -1723,7 +1727,7 @@ async fn fold_event(
         "DayEventParticipationSubmitted" => {
             let event_id = str_field(&ev.payload, "event_id", &ev.kind)?;
             let actor_slot = str_field(&ev.payload, "actor_slot", &ev.kind)?;
-            let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
+            let phase_id = phase_id_field(&ev.payload, "phase_id", &ev.kind)?;
             let payload: game_platform::ParticipationPayload =
                 serde_json::from_value(ev.payload["payload"].clone()).map_err(|source| {
                     ProjectionError::Payload {
@@ -1746,7 +1750,7 @@ async fn fold_event(
                     source,
                 })?,
             )
-            .bind(phase_id)
+            .bind(phase_id.as_str())
             .bind(ev.seq)
             .execute(&mut **tx)
             .await?;
@@ -1896,14 +1900,20 @@ async fn refresh_day_event_schedule_work(
         .bind(game_id)
         .fetch_optional(&mut **tx)
         .await?;
-    let phase_id = phase.as_ref().map(|row| row.get::<String, _>("phase_id"));
+    let phase_id = phase
+        .as_ref()
+        .map(|row| domain::phase::PhaseId::parse(row.get::<String, _>("phase_id")))
+        .transpose()
+        .map_err(|source| ProjectionError::Payload {
+            kind: "phase_state".to_string(),
+            source: serde::de::Error::custom(source.to_string()),
+        })?;
     let phase_opened_at = phase
         .as_ref()
         .and_then(|row| row.get::<Option<i64>, _>("phase_opened_at"));
     let current_day_number = phase_id
-        .as_deref()
-        .and_then(|value| domain::phase::PhaseId::parse(value).ok())
-        .filter(|phase| phase.kind() == domain::pack::PhaseKind::Day)
+        .as_ref()
+        .filter(|phase| phase.kind() == domain::phase::PhaseKind::Day)
         .and_then(|phase| phase.plain_number());
 
     let rows = sqlx::query(
@@ -1943,7 +1953,7 @@ async fn refresh_day_event_schedule_work(
         let candidate = game_platform::day_schedule::next_observation_at(
             &definition,
             state,
-            phase_id.as_deref(),
+            phase_id.as_ref(),
             current_day_number,
             phase_opened_at,
             row.get("open_due_at"),
@@ -2104,7 +2114,7 @@ async fn activate_day_event_narrative(
 async fn fold_inner(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     source_seq: i64,
     event_index: i32,
     ev: &domain::InnerEvent,
@@ -2176,17 +2186,17 @@ async fn fold_inner(
             .await?;
         }
         EffectsMarked { .. } | EffectsCleared { .. } | EffectNotification { .. } => {
-            effect_projection::project_inner_event(tx, game_id, phase_id, event_index, ev).await?;
+            effect_projection::project_inner_event(tx, game_id, Some(phase_id), event_index, ev)
+                .await?;
         }
         ActionRecorded {
             actor,
             template_id,
             targets,
             phase_id,
-            phase_kind,
-            phase_number,
             status,
         } => {
+            let (phase_kind, phase_number) = phase_materialization(phase_id, "ActionRecorded")?;
             ensure_slot(tx, game_id, actor).await?;
             sqlx::query(
                 "INSERT INTO action_history \
@@ -2201,9 +2211,9 @@ async fn fold_inner(
             .bind(game_id)
             .bind(actor)
             .bind(template_id)
-            .bind(phase_id)
-            .bind(format!("{phase_kind:?}"))
-            .bind(*phase_number as i32)
+            .bind(phase_id.as_str())
+            .bind(phase_kind)
+            .bind(phase_number)
             .bind(serde_json::to_value(targets).map_err(|e| ProjectionError::Payload {
                 kind: "ActionRecorded".to_string(),
                 source: e,
@@ -2223,9 +2233,8 @@ async fn fold_inner(
             used,
             remaining,
             phase_id,
-            phase_kind,
-            phase_number,
         } => {
+            let (phase_kind, phase_number) = phase_materialization(phase_id, "ActionUseCounted")?;
             ensure_slot(tx, game_id, actor).await?;
             sqlx::query(
                 "INSERT INTO action_counter \
@@ -2254,9 +2263,9 @@ async fn fold_inner(
             .bind(*limit as i32)
             .bind(*used as i32)
             .bind(*remaining as i32)
-            .bind(phase_id)
-            .bind(format!("{phase_kind:?}"))
-            .bind(*phase_number as i32)
+            .bind(phase_id.as_str())
+            .bind(phase_kind)
+            .bind(phase_number)
             .execute(&mut **tx)
             .await?;
         }
@@ -2279,7 +2288,12 @@ async fn fold_inner(
             let result_private = seal_private_projection(
                 tx,
                 "player_investigation_result",
-                &[game.as_str(), phase_id, event.as_str(), audience_slot],
+                &[
+                    game.as_str(),
+                    phase_id.as_str(),
+                    event.as_str(),
+                    audience_slot,
+                ],
                 serde_json::json!({ "result": result }),
             )
             .await?;
@@ -2293,7 +2307,7 @@ async fn fold_inner(
                  result_private = EXCLUDED.result_private",
             )
             .bind(game_id)
-            .bind(phase_id)
+            .bind(phase_id.as_str())
             .bind(event_index)
             .bind(audience_slot)
             .bind(format!("{mode:?}"))
@@ -2310,7 +2324,7 @@ async fn fold_inner(
             result,
             source_action,
             template_id,
-            ..
+            phase_id: event_phase_id,
         } => {
             ensure_slot(tx, game_id, actor).await?;
             ensure_slot(tx, game_id, target).await?;
@@ -2321,7 +2335,12 @@ async fn fold_inner(
                 let result_private = seal_private_projection(
                     tx,
                     "player_info_result",
-                    &[game.as_str(), phase_id, event.as_str(), audience_slot],
+                    &[
+                        game.as_str(),
+                        event_phase_id.as_str(),
+                        event.as_str(),
+                        audience_slot,
+                    ],
                     serde_json::json!({ "result": result }),
                 )
                 .await?;
@@ -2339,7 +2358,7 @@ async fn fold_inner(
                      result_private = EXCLUDED.result_private",
                 )
                 .bind(game_id)
-                .bind(phase_id)
+                .bind(event_phase_id.as_str())
                 .bind(event_index)
                 .bind(audience_slot)
                 .bind(kind)
@@ -2361,9 +2380,9 @@ async fn fold_inner(
             source_action,
             template_id,
             phase_id,
-            phase_kind,
-            phase_number,
         } => {
+            let (phase_kind, phase_number) =
+                phase_materialization(phase_id, "InvestigationMemoryRecorded")?;
             ensure_slot(tx, game_id, investigator).await?;
             ensure_slot(tx, game_id, target).await?;
             if *scope == domain::pack::ResultMemoryScope::Investigator {
@@ -2407,9 +2426,9 @@ async fn fold_inner(
             .bind(result_private)
             .bind(source_action)
             .bind(template_id)
-            .bind(phase_id)
-            .bind(format!("{phase_kind:?}"))
-            .bind(*phase_number as i32)
+            .bind(phase_id.as_str())
+            .bind(phase_kind)
+            .bind(phase_number)
             .execute(&mut **tx)
             .await?;
         }
@@ -2421,9 +2440,8 @@ async fn fold_inner(
             source,
             source_action,
             phase_id,
-            phase_kind,
-            phase_number,
         } => {
+            let (phase_kind, phase_number) = phase_materialization(phase_id, "DelayedDeathQueued")?;
             ensure_slot(tx, game_id, target).await?;
             ensure_slot(tx, game_id, source).await?;
             sqlx::query(
@@ -2447,9 +2465,9 @@ async fn fold_inner(
             .bind(effect)
             .bind(source)
             .bind(source_action)
-            .bind(phase_id)
-            .bind(format!("{phase_kind:?}"))
-            .bind(*phase_number as i32)
+            .bind(phase_id.as_str())
+            .bind(phase_kind)
+            .bind(phase_number)
             .execute(&mut **tx)
             .await?;
         }
@@ -2466,10 +2484,9 @@ async fn fold_inner(
             template_id,
             source_action,
             phase_id,
-            phase_kind,
-            phase_number,
             visible,
         } => {
+            let (phase_kind, phase_number) = phase_materialization(phase_id, "VisitRecorded")?;
             ensure_slot(tx, game_id, actor).await?;
             ensure_slot(tx, game_id, target).await?;
             sqlx::query(
@@ -2488,9 +2505,9 @@ async fn fold_inner(
             .bind(target)
             .bind(template_id)
             .bind(source_action)
-            .bind(phase_id)
-            .bind(format!("{phase_kind:?}"))
-            .bind(*phase_number as i32)
+            .bind(phase_id.as_str())
+            .bind(phase_kind)
+            .bind(phase_number)
             .bind(visible)
             .execute(&mut **tx)
             .await?;
@@ -2505,9 +2522,8 @@ async fn fold_inner(
             uses,
             vote_weight,
             phase_id,
-            phase_kind,
-            phase_number,
         } => {
+            let (phase_kind, phase_number) = phase_materialization(phase_id, "ActionGranted")?;
             ensure_slot(tx, game_id, target).await?;
             sqlx::query(
                 "INSERT INTO action_grant \
@@ -2528,9 +2544,9 @@ async fn fold_inner(
             .bind(format!("{kind:?}"))
             .bind(actor)
             .bind(source_action)
-            .bind(phase_id)
-            .bind(format!("{phase_kind:?}"))
-            .bind(*phase_number as i32)
+            .bind(phase_id.as_str())
+            .bind(phase_kind)
+            .bind(phase_number)
             .bind(*uses as i32)
             .bind(*vote_weight)
             .execute(&mut **tx)
@@ -2565,10 +2581,9 @@ async fn fold_inner(
             reason,
             destroyed,
             phase_id,
-            phase_kind,
-            phase_number,
             ..
         } => {
+            let (phase_kind, phase_number) = phase_materialization(phase_id, "BadgeChanged")?;
             sqlx::query(
                 "INSERT INTO sheriff_badge \
                  (game_id, badge_id, owner_slot, vote_weight, source_slot, source_action, reason, destroyed, phase_id, phase_kind, phase_number) \
@@ -2592,9 +2607,9 @@ async fn fold_inner(
             .bind(source_action)
             .bind(reason)
             .bind(*destroyed)
-            .bind(phase_id)
-            .bind(format!("{phase_kind:?}"))
-            .bind(*phase_number as i32)
+            .bind(phase_id.as_str())
+            .bind(phase_kind)
+            .bind(phase_number)
             .execute(&mut **tx)
             .await?;
         }
@@ -2634,13 +2649,15 @@ async fn fold_inner(
             .bind(winner)
             .bind(reason)
             .bind(metadata)
-            .bind(phase_id)
+            .bind(phase_id.as_str())
             .bind(source_seq)
             .bind(event_index)
             .execute(&mut **tx)
             .await?;
         }
         HostPromptIssued(note) => {
+            let (phase_kind, phase_number) =
+                phase_materialization(&note.phase_id, "HostPromptIssued")?;
             if let Some(subject) = &note.subject {
                 ensure_slot(tx, game_id, subject).await?;
             }
@@ -2669,14 +2686,14 @@ async fn fold_inner(
                  END",
             )
             .bind(game_id)
-            .bind(&note.phase_id)
+            .bind(note.phase_id.as_str())
             .bind(event_index)
             .bind(&note.prompt_id)
             .bind(&note.kind)
             .bind(&note.subject)
             .bind(&note.reason)
-            .bind(format!("{:?}", note.phase_kind))
-            .bind(note.phase_number as i32)
+            .bind(phase_kind)
+            .bind(phase_number)
             .bind(metadata)
             .execute(&mut **tx)
             .await?;
@@ -5493,22 +5510,23 @@ where
     .bind(game_id)
     .fetch_all(executor)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| VoteCountRow {
-            game_id,
-            phase_id: r.get("phase_id"),
-            candidate_slot: r.get("candidate_slot"),
-            count: r.get("n"),
+    rows.into_iter()
+        .map(|r| {
+            Ok(VoteCountRow {
+                game_id,
+                phase_id: phase_id_from_stored_id(r.get("phase_id"), "vote_ballot")?,
+                candidate_slot: r.get("candidate_slot"),
+                count: r.get("n"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read one actor slot's current ballot for a specific phase, if present.
 pub async fn current_ballot(
     pool: &PgPool,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     actor_slot: &str,
 ) -> Result<Option<CurrentBallotRow>, ProjectionError> {
     let row = sqlx::query(
@@ -5517,16 +5535,19 @@ pub async fn current_ballot(
          WHERE game_id = $1 AND phase_id = $2 AND actor_slot = $3",
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .bind(actor_slot)
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(|r| CurrentBallotRow {
-        game_id: r.get("game_id"),
-        phase_id: r.get("phase_id"),
-        actor_slot: r.get("actor_slot"),
-        target: r.get("target"),
-    }))
+    row.map(|r| {
+        Ok(CurrentBallotRow {
+            game_id: r.get("game_id"),
+            phase_id: phase_id_from_stored_id(r.get("phase_id"), "vote_ballot")?,
+            actor_slot: r.get("actor_slot"),
+            target: r.get("target"),
+        })
+    })
+    .transpose()
 }
 
 /// Read official engine day vote outcomes, ordered by source resolution.
@@ -5543,26 +5564,27 @@ pub async fn day_vote_outcomes(
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| DayVoteOutcomeRow {
-            game_id: r.get("game_id"),
-            phase_id: r.get("phase_id"),
-            source_seq: r.get("source_seq"),
-            event_index: r.get("event_index"),
-            status: r.get("status"),
-            winner_slot: r.get("winner_slot"),
-            contenders: r.get("contenders"),
-            tallies: r.get("tallies"),
-            votes: r.get("votes"),
-            weights: r.get("weights"),
-            majority: r.get("majority"),
-            thresholds: r.get("thresholds"),
-            total_weight: r.get("total_weight"),
-            tiebreak: r.get("tiebreak"),
-            reason: r.get("reason"),
+    rows.into_iter()
+        .map(|r| {
+            Ok(DayVoteOutcomeRow {
+                game_id: r.get("game_id"),
+                phase_id: phase_id_from_stored_id(r.get("phase_id"), "day_vote_outcome")?,
+                source_seq: r.get("source_seq"),
+                event_index: r.get("event_index"),
+                status: r.get("status"),
+                winner_slot: r.get("winner_slot"),
+                contenders: r.get("contenders"),
+                tallies: r.get("tallies"),
+                votes: r.get("votes"),
+                weights: r.get("weights"),
+                majority: r.get("majority"),
+                thresholds: r.get("thresholds"),
+                total_weight: r.get("total_weight"),
+                tiebreak: r.get("tiebreak"),
+                reason: r.get("reason"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -5571,7 +5593,7 @@ pub struct GameResultRow {
     pub winner: String,
     pub reason: String,
     pub metadata: serde_json::Value,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub source_seq: i64,
     pub event_index: i32,
 }
@@ -5588,15 +5610,18 @@ pub async fn game_result(
     .bind(game_id)
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(|r| GameResultRow {
-        game_id: r.get("game_id"),
-        winner: r.get("winner"),
-        reason: r.get("reason"),
-        metadata: r.get("metadata"),
-        phase_id: r.get("phase_id"),
-        source_seq: r.get("source_seq"),
-        event_index: r.get("event_index"),
-    }))
+    row.map(|r| {
+        Ok(GameResultRow {
+            game_id: r.get("game_id"),
+            winner: r.get("winner"),
+            reason: r.get("reason"),
+            metadata: r.get("metadata"),
+            phase_id: phase_id_from_stored_id(r.get("phase_id"), "game_result")?,
+            source_seq: r.get("source_seq"),
+            event_index: r.get("event_index"),
+        })
+    })
+    .transpose()
 }
 
 /// Read a game's slot_state rows, ordered deterministically.
@@ -5682,29 +5707,30 @@ where
     E: sqlx::PgExecutor<'e>,
 {
     let rows = sqlx::query(
-        "SELECT game_id, slot_id, template_id, phase_id, phase_kind, phase_number, targets, status \
+        "SELECT game_id, slot_id, template_id, phase_id, targets, status \
          FROM action_history WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, slot_id, template_id",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
-    Ok(rows
-        .into_iter()
+    rows.into_iter()
         .map(|r| {
+            let (phase_id, phase_kind, phase_number) =
+                phase_materialization_from_stored_id(r.get("phase_id"), "action_history")?;
             let targets: serde_json::Value = r.get("targets");
-            ActionHistoryRow {
+            Ok(ActionHistoryRow {
                 game_id: r.get("game_id"),
                 slot_id: r.get("slot_id"),
                 template_id: r.get("template_id"),
-                phase_id: r.get("phase_id"),
-                phase_kind: r.get("phase_kind"),
-                phase_number: r.get("phase_number"),
+                phase_id,
+                phase_kind: phase_kind.to_owned(),
+                phase_number,
                 targets: serde_json::from_value(targets).unwrap_or_default(),
                 status: r.get("status"),
-            }
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded action counters, ordered deterministically.
@@ -5717,31 +5743,34 @@ where
 {
     let rows = sqlx::query(
         "SELECT game_id, slot_id, counter_id, template_id, consumed_action, cadence_policy, \
-         phase_scope, limit_count, used_count, remaining_count, phase_id, phase_kind, phase_number \
+         phase_scope, limit_count, used_count, remaining_count, phase_id \
          FROM action_counter WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, slot_id, counter_id",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| ActionCounterRow {
-            game_id: r.get("game_id"),
-            slot_id: r.get("slot_id"),
-            counter_id: r.get("counter_id"),
-            template_id: r.get("template_id"),
-            consumed_action: r.get("consumed_action"),
-            cadence_policy: r.get("cadence_policy"),
-            phase_scope: r.get("phase_scope"),
-            limit: r.get("limit_count"),
-            used: r.get("used_count"),
-            remaining: r.get("remaining_count"),
-            phase_id: r.get("phase_id"),
-            phase_kind: r.get("phase_kind"),
-            phase_number: r.get("phase_number"),
+    rows.into_iter()
+        .map(|r| {
+            let (phase_id, phase_kind, phase_number) =
+                phase_materialization_from_stored_id(r.get("phase_id"), "action_counter")?;
+            Ok(ActionCounterRow {
+                game_id: r.get("game_id"),
+                slot_id: r.get("slot_id"),
+                counter_id: r.get("counter_id"),
+                template_id: r.get("template_id"),
+                consumed_action: r.get("consumed_action"),
+                cadence_policy: r.get("cadence_policy"),
+                phase_scope: r.get("phase_scope"),
+                limit: r.get("limit_count"),
+                used: r.get("used_count"),
+                remaining: r.get("remaining_count"),
+                phase_id,
+                phase_kind: phase_kind.to_owned(),
+                phase_number,
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded investigation baselines, ordered deterministically.
@@ -5750,7 +5779,7 @@ pub async fn investigation_memory(
     game_id: Uuid,
 ) -> Result<Vec<InvestigationMemoryRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, investigator_slot, target_slot, mode, memory_scope, result_private, source_action, template_id, phase_id, phase_kind, phase_number \
+        "SELECT game_id, investigator_slot, target_slot, mode, memory_scope, result_private, source_action, template_id, phase_id \
          FROM investigation_memory WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, investigator_slot, target_slot, mode",
     )
@@ -5759,6 +5788,8 @@ pub async fn investigation_memory(
     .await?;
     rows.into_iter()
         .map(|r| {
+            let (phase_id, phase_kind, phase_number) =
+                phase_materialization_from_stored_id(r.get("phase_id"), "investigation_memory")?;
             let row_game_id: Uuid = r.get("game_id");
             let investigator_slot: String = r.get("investigator_slot");
             let target_slot: String = r.get("target_slot");
@@ -5783,9 +5814,9 @@ pub async fn investigation_memory(
                 result: required_private_value(&private, "result")?,
                 source_action: r.get("source_action"),
                 template_id: r.get("template_id"),
-                phase_id: r.get("phase_id"),
-                phase_kind: r.get("phase_kind"),
-                phase_number: r.get("phase_number"),
+                phase_id,
+                phase_kind: phase_kind.to_owned(),
+                phase_number,
             })
         })
         .collect()
@@ -5797,28 +5828,31 @@ pub async fn delayed_death_queues(
     game_id: Uuid,
 ) -> Result<Vec<DelayedDeathQueueRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, queue_id, target_slot, cause, effect, source_slot, source_action, phase_id, phase_kind, phase_number \
+        "SELECT game_id, queue_id, target_slot, cause, effect, source_slot, source_action, phase_id \
          FROM delayed_death_queue WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, target_slot, effect, queue_id",
     )
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| DelayedDeathQueueRow {
-            game_id: r.get("game_id"),
-            queue_id: r.get("queue_id"),
-            target_slot: r.get("target_slot"),
-            cause: r.get("cause"),
-            effect: r.get("effect"),
-            source_slot: r.get("source_slot"),
-            source_action: r.get("source_action"),
-            phase_id: r.get("phase_id"),
-            phase_kind: r.get("phase_kind"),
-            phase_number: r.get("phase_number"),
+    rows.into_iter()
+        .map(|r| {
+            let (phase_id, phase_kind, phase_number) =
+                phase_materialization_from_stored_id(r.get("phase_id"), "delayed_death_queue")?;
+            Ok(DelayedDeathQueueRow {
+                game_id: r.get("game_id"),
+                queue_id: r.get("queue_id"),
+                target_slot: r.get("target_slot"),
+                cause: r.get("cause"),
+                effect: r.get("effect"),
+                source_slot: r.get("source_slot"),
+                source_action: r.get("source_action"),
+                phase_id,
+                phase_kind: phase_kind.to_owned(),
+                phase_number,
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded visit history rows, ordered deterministically.
@@ -5827,27 +5861,30 @@ pub async fn visit_history(
     game_id: Uuid,
 ) -> Result<Vec<VisitHistoryRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, actor_slot, target_slot, template_id, source_action, phase_id, phase_kind, phase_number, visible \
+        "SELECT game_id, actor_slot, target_slot, template_id, source_action, phase_id, visible \
          FROM visit_history WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, actor_slot, target_slot, source_action",
     )
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| VisitHistoryRow {
-            game_id: r.get("game_id"),
-            actor_slot: r.get("actor_slot"),
-            target_slot: r.get("target_slot"),
-            template_id: r.get("template_id"),
-            source_action: r.get("source_action"),
-            phase_id: r.get("phase_id"),
-            phase_kind: r.get("phase_kind"),
-            phase_number: r.get("phase_number"),
-            visible: r.get("visible"),
+    rows.into_iter()
+        .map(|r| {
+            let (phase_id, phase_kind, phase_number) =
+                phase_materialization_from_stored_id(r.get("phase_id"), "visit_history")?;
+            Ok(VisitHistoryRow {
+                game_id: r.get("game_id"),
+                actor_slot: r.get("actor_slot"),
+                target_slot: r.get("target_slot"),
+                template_id: r.get("template_id"),
+                source_action: r.get("source_action"),
+                phase_id,
+                phase_kind: phase_kind.to_owned(),
+                phase_number,
+                visible: r.get("visible"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded action grants, ordered deterministically.
@@ -5859,30 +5896,33 @@ where
     E: sqlx::PgExecutor<'e>,
 {
     let rows = sqlx::query(
-        "SELECT game_id, slot_id, grant_id, grant_option, kind, source_slot, source_action, phase_id, phase_kind, phase_number, uses, vote_weight \
+        "SELECT game_id, slot_id, grant_id, grant_option, kind, source_slot, source_action, phase_id, uses, vote_weight \
          FROM action_grant WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, slot_id, grant_id, source_action, source_slot",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| ActionGrantRow {
-            game_id: r.get("game_id"),
-            slot_id: r.get("slot_id"),
-            grant_id: r.get("grant_id"),
-            grant_option: r.get("grant_option"),
-            kind: r.get("kind"),
-            source_slot: r.get("source_slot"),
-            source_action: r.get("source_action"),
-            phase_id: r.get("phase_id"),
-            phase_kind: r.get("phase_kind"),
-            phase_number: r.get("phase_number"),
-            uses: r.get("uses"),
-            vote_weight: r.get("vote_weight"),
+    rows.into_iter()
+        .map(|r| {
+            let (phase_id, phase_kind, phase_number) =
+                phase_materialization_from_stored_id(r.get("phase_id"), "action_grant")?;
+            Ok(ActionGrantRow {
+                game_id: r.get("game_id"),
+                slot_id: r.get("slot_id"),
+                grant_id: r.get("grant_id"),
+                grant_option: r.get("grant_option"),
+                kind: r.get("kind"),
+                source_slot: r.get("source_slot"),
+                source_action: r.get("source_action"),
+                phase_id,
+                phase_kind: phase_kind.to_owned(),
+                phase_number,
+                uses: r.get("uses"),
+                vote_weight: r.get("vote_weight"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded sheriff badge ownership, ordered deterministically.
@@ -5891,29 +5931,32 @@ pub async fn sheriff_badges(
     game_id: Uuid,
 ) -> Result<Vec<SheriffBadgeRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, badge_id, owner_slot, vote_weight, source_slot, source_action, reason, destroyed, phase_id, phase_kind, phase_number \
+        "SELECT game_id, badge_id, owner_slot, vote_weight, source_slot, source_action, reason, destroyed, phase_id \
          FROM sheriff_badge WHERE game_id = $1 \
          ORDER BY badge_id",
     )
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| SheriffBadgeRow {
-            game_id: r.get("game_id"),
-            badge_id: r.get("badge_id"),
-            owner_slot: r.get("owner_slot"),
-            vote_weight: r.get("vote_weight"),
-            source_slot: r.get("source_slot"),
-            source_action: r.get("source_action"),
-            reason: r.get("reason"),
-            destroyed: r.get("destroyed"),
-            phase_id: r.get("phase_id"),
-            phase_kind: r.get("phase_kind"),
-            phase_number: r.get("phase_number"),
+    rows.into_iter()
+        .map(|r| {
+            let (phase_id, phase_kind, phase_number) =
+                phase_materialization_from_stored_id(r.get("phase_id"), "sheriff_badge")?;
+            Ok(SheriffBadgeRow {
+                game_id: r.get("game_id"),
+                badge_id: r.get("badge_id"),
+                owner_slot: r.get("owner_slot"),
+                vote_weight: r.get("vote_weight"),
+                source_slot: r.get("source_slot"),
+                source_action: r.get("source_action"),
+                reason: r.get("reason"),
+                destroyed: r.get("destroyed"),
+                phase_id,
+                phase_kind: phase_kind.to_owned(),
+                phase_number,
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded player notifications, ordered deterministically.
@@ -5929,17 +5972,18 @@ pub async fn player_notifications(
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| PlayerNotificationRow {
-            game_id: r.get("game_id"),
-            phase_id: r.get("phase_id"),
-            event_index: r.get("event_index"),
-            audience_slot: r.get("audience_slot"),
-            effect: r.get("effect"),
-            status: r.get("status"),
+    rows.into_iter()
+        .map(|r| {
+            Ok(PlayerNotificationRow {
+                game_id: r.get("game_id"),
+                phase_id: phase_id_from_stored_id(r.get("phase_id"), "player_notification")?,
+                event_index: r.get("event_index"),
+                audience_slot: r.get("audience_slot"),
+                effect: r.get("effect"),
+                status: r.get("status"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded player notifications for one audience slot.
@@ -5957,17 +6001,18 @@ pub async fn player_notifications_for_slot(
     .bind(audience_slot)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| PlayerNotificationRow {
-            game_id: r.get("game_id"),
-            phase_id: r.get("phase_id"),
-            event_index: r.get("event_index"),
-            audience_slot: r.get("audience_slot"),
-            effect: r.get("effect"),
-            status: r.get("status"),
+    rows.into_iter()
+        .map(|r| {
+            Ok(PlayerNotificationRow {
+                game_id: r.get("game_id"),
+                phase_id: phase_id_from_stored_id(r.get("phase_id"), "player_notification")?,
+                event_index: r.get("event_index"),
+                audience_slot: r.get("audience_slot"),
+                effect: r.get("effect"),
+                status: r.get("status"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read folded private investigation results, ordered deterministically.
@@ -5986,7 +6031,8 @@ pub async fn player_investigation_results(
     rows.into_iter()
         .map(|r| {
             let row_game_id: Uuid = r.get("game_id");
-            let phase_id: String = r.get("phase_id");
+            let phase_id =
+                phase_id_from_stored_id(r.get("phase_id"), "player_investigation_result")?;
             let event_index: i32 = r.get("event_index");
             let audience_slot: String = r.get("audience_slot");
             let game = row_game_id.to_string();
@@ -6032,7 +6078,8 @@ pub async fn player_investigation_results_for_slot(
     rows.into_iter()
         .map(|r| {
             let row_game_id: Uuid = r.get("game_id");
-            let phase_id: String = r.get("phase_id");
+            let phase_id =
+                phase_id_from_stored_id(r.get("phase_id"), "player_investigation_result")?;
             let event_index: i32 = r.get("event_index");
             let audience_slot: String = r.get("audience_slot");
             let game = row_game_id.to_string();
@@ -6077,7 +6124,7 @@ pub async fn player_info_results(
     rows.into_iter()
         .map(|r| {
             let row_game_id: Uuid = r.get("game_id");
-            let phase_id: String = r.get("phase_id");
+            let phase_id = phase_id_from_stored_id(r.get("phase_id"), "player_info_result")?;
             let event_index: i32 = r.get("event_index");
             let audience_slot: String = r.get("audience_slot");
             let game = row_game_id.to_string();
@@ -6127,7 +6174,7 @@ pub async fn player_info_results_for_slot(
     rows.into_iter()
         .map(|r| {
             let row_game_id: Uuid = r.get("game_id");
-            let phase_id: String = r.get("phase_id");
+            let phase_id = phase_id_from_stored_id(r.get("phase_id"), "player_info_result")?;
             let event_index: i32 = r.get("event_index");
             let audience_slot: String = r.get("audience_slot");
             let game = row_game_id.to_string();
@@ -6167,32 +6214,35 @@ where
     E: sqlx::PgExecutor<'e>,
 {
     let rows = sqlx::query(
-        "SELECT game_id, phase_id, event_index, prompt_id, kind, subject_slot, reason, phase_kind, phase_number, metadata, status, decision, public_resolution, resolved_at \
+        "SELECT game_id, phase_id, event_index, prompt_id, kind, subject_slot, reason, metadata, status, decision, public_resolution, resolved_at \
          FROM host_prompt WHERE game_id = $1 \
          ORDER BY phase_id, event_index, prompt_id",
     )
     .bind(game_id)
     .fetch_all(executor)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| HostPromptRow {
-            game_id: r.get("game_id"),
-            phase_id: r.get("phase_id"),
-            event_index: r.get("event_index"),
-            prompt_id: r.get("prompt_id"),
-            kind: r.get("kind"),
-            subject_slot: r.get("subject_slot"),
-            reason: r.get("reason"),
-            phase_kind: r.get("phase_kind"),
-            phase_number: r.get("phase_number"),
-            metadata: r.get("metadata"),
-            status: r.get("status"),
-            decision: r.get("decision"),
-            public_resolution: r.get("public_resolution"),
-            resolved_at: r.get("resolved_at"),
+    rows.into_iter()
+        .map(|r| {
+            let (phase_id, phase_kind, phase_number) =
+                phase_materialization_from_stored_id(r.get("phase_id"), "host_prompt")?;
+            Ok(HostPromptRow {
+                game_id: r.get("game_id"),
+                phase_id,
+                event_index: r.get("event_index"),
+                prompt_id: r.get("prompt_id"),
+                kind: r.get("kind"),
+                subject_slot: r.get("subject_slot"),
+                reason: r.get("reason"),
+                phase_kind: phase_kind.to_owned(),
+                phase_number,
+                metadata: r.get("metadata"),
+                status: r.get("status"),
+                decision: r.get("decision"),
+                public_resolution: r.get("public_resolution"),
+                resolved_at: r.get("resolved_at"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read authoritative DayEvent rows in stable event-id order.
@@ -6262,12 +6312,13 @@ where
                         source,
                     }
                 })?;
+            let phase_id = optional_phase_id_from_stored_id(row.get("phase_id"), "day_event")?;
             Ok(DayEventRow {
                 game_id: row.get("game_id"),
                 event_id: row.get("event_id"),
                 definition,
                 state: row.get("state"),
-                phase_id: row.get("phase_id"),
+                phase_id,
                 opened_at: row.get("opened_at"),
                 locked_at: row.get("locked_at"),
                 open_due_at: row.get("open_due_at"),
@@ -6353,12 +6404,13 @@ where
                     source,
                 }
             })?;
+            let phase_id = phase_id_from_stored_id(row.get("phase_id"), "day_event_participation")?;
             Ok(DayEventParticipationRow {
                 game_id: row.get("game_id"),
                 event_id: row.get("event_id"),
                 actor_slot: row.get("actor_slot"),
                 payload,
-                phase_id: row.get("phase_id"),
+                phase_id,
                 submitted_seq: row.get("submitted_seq"),
             })
         })
@@ -6418,12 +6470,13 @@ pub async fn day_event_participation_page(
                     source,
                 }
             })?;
+            let phase_id = phase_id_from_stored_id(row.get("phase_id"), "day_event_participation")?;
             Ok(DayEventParticipationRow {
                 game_id: row.get("game_id"),
                 event_id: row.get("event_id"),
                 actor_slot: row.get("actor_slot"),
                 payload,
-                phase_id: row.get("phase_id"),
+                phase_id,
                 submitted_seq: row.get("submitted_seq"),
             })
         })
@@ -6466,12 +6519,13 @@ where
                     source,
                 }
             })?;
+            let phase_id = phase_id_from_stored_id(row.get("phase_id"), "day_event_participation")?;
             Ok(DayEventParticipationRow {
                 game_id: row.get("game_id"),
                 event_id: row.get("event_id"),
                 actor_slot: row.get("actor_slot"),
                 payload,
-                phase_id: row.get("phase_id"),
+                phase_id,
                 submitted_seq: row.get("submitted_seq"),
             })
         })
@@ -6602,23 +6656,33 @@ pub async fn host_phase_controls(
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| HostPhaseControlRow {
-            game_id: r.get("game_id"),
-            source_seq: r.get("source_seq"),
-            stream_seq: r.get("stream_seq"),
-            prompt_id: r.get("prompt_id"),
-            prompt_kind: r.get("prompt_kind"),
-            prompt_reason: r.get("prompt_reason"),
-            source_phase_id: r.get("source_phase_id"),
-            target_phase_id: r.get("target_phase_id"),
-            reason: r.get("reason"),
-            skipped_phase_id: r.get("skipped_phase_id"),
-            resolved_at: r.get("resolved_at"),
-            occurred_at: r.get("occurred_at"),
+    rows.into_iter()
+        .map(|r| {
+            Ok(HostPhaseControlRow {
+                game_id: r.get("game_id"),
+                source_seq: r.get("source_seq"),
+                stream_seq: r.get("stream_seq"),
+                prompt_id: r.get("prompt_id"),
+                prompt_kind: r.get("prompt_kind"),
+                prompt_reason: r.get("prompt_reason"),
+                source_phase_id: phase_id_from_stored_id(
+                    r.get("source_phase_id"),
+                    "host_phase_control",
+                )?,
+                target_phase_id: phase_id_from_stored_id(
+                    r.get("target_phase_id"),
+                    "host_phase_control",
+                )?,
+                reason: r.get("reason"),
+                skipped_phase_id: optional_phase_id_from_stored_id(
+                    r.get("skipped_phase_id"),
+                    "host_phase_control",
+                )?,
+                resolved_at: r.get("resolved_at"),
+                occurred_at: r.get("occurred_at"),
+            })
         })
-        .collect())
+        .collect()
 }
 
 /// Read a game's host/cohost authority rows (for `caps` resolution).
@@ -6813,13 +6877,16 @@ where
     .bind(game_id)
     .fetch_optional(executor)
     .await?;
-    Ok(row.map(|r| PhaseStateRow {
-        game_id: r.get("game_id"),
-        phase_id: r.get("phase_id"),
-        locked: r.get("locked"),
-        deadline: r.get("deadline"),
-        phase_opened_at: r.get("phase_opened_at"),
-    }))
+    row.map(|r| {
+        Ok(PhaseStateRow {
+            game_id: r.get("game_id"),
+            phase_id: phase_id_from_stored_id(r.get("phase_id"), "phase_state")?,
+            locked: r.get("locked"),
+            deadline: r.get("deadline"),
+            phase_opened_at: r.get("phase_opened_at"),
+        })
+    })
+    .transpose()
 }
 
 pub async fn post_policy<'e, E>(
@@ -7128,7 +7195,7 @@ pub async fn game_index(
                 game_id: row.get("game_id"),
                 pack_ref: stored_pack_ref(&row)?,
                 status: row.get("status"),
-                phase_id: row.get("phase_id"),
+                phase_id: optional_phase_id_from_stored_id(row.get("phase_id"), "game_index")?,
                 updated_seq: row.get("updated_seq"),
                 completed_seq: row.get("completed_seq"),
             })
@@ -7195,7 +7262,7 @@ pub async fn operator_game_index(
                 game_id: row.get("game_id"),
                 pack_ref: stored_pack_ref(&row)?,
                 status: row.get("status"),
-                phase_id: row.get("phase_id"),
+                phase_id: optional_phase_id_from_stored_id(row.get("phase_id"), "game_index")?,
                 updated_seq: row.get("updated_seq"),
                 completed_seq: row.get("completed_seq"),
             })
@@ -7232,7 +7299,7 @@ pub async fn public_game_by_id(
             game_id: row.get("game_id"),
             pack_ref: stored_pack_ref(&row)?,
             status: row.get("status"),
-            phase_id: row.get("phase_id"),
+            phase_id: optional_phase_id_from_stored_id(row.get("phase_id"), "game_index")?,
             updated_seq: row.get("updated_seq"),
             completed_seq: row.get("completed_seq"),
         })
@@ -8586,13 +8653,14 @@ async fn thread_view_for_channel_with_visibility(
                     (required_private_string(&private, "body")?, quotations)
                 }
             };
+            let phase_id = optional_phase_id_from_stored_id(r.get("phase_id"), "thread_view")?;
             Ok(ThreadPostRow {
                 game_id: row_game_id,
                 source_seq,
                 stream_seq: r.get("stream_seq"),
                 channel_id,
                 author: thread_author_from_row(&r)?,
-                phase_id: r.get("phase_id"),
+                phase_id,
                 body,
                 media: r.get("media"),
                 quotations,
@@ -8627,7 +8695,7 @@ async fn thread_view_for_channel_with_visibility(
 
 struct ActionSubmissionWrite<'a> {
     game_id: Uuid,
-    phase_id: &'a str,
+    phase_id: &'a PhaseId,
     actor_slot: &'a str,
     action_id: &'a str,
     template_id: &'a str,
@@ -8657,7 +8725,7 @@ async fn upsert_action_submission(
         "#,
     )
     .bind(write.game_id)
-    .bind(write.phase_id)
+    .bind(write.phase_id.as_str())
     .bind(write.actor_slot)
     .bind(write.action_id)
     .bind(write.template_id)
@@ -8677,7 +8745,7 @@ async fn delete_action_submission(
     game_id: Uuid,
     action_id: &str,
     actor_slot: Option<&str>,
-    phase_id: Option<&str>,
+    phase_id: Option<&PhaseId>,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
@@ -8691,7 +8759,7 @@ async fn delete_action_submission(
     .bind(game_id)
     .bind(action_id)
     .bind(actor_slot)
-    .bind(phase_id)
+    .bind(phase_id.map(PhaseId::as_str))
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -8701,7 +8769,7 @@ async fn delete_action_submission(
 pub async fn active_action_submissions<'e, E>(
     executor: E,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     actor_slot: &str,
 ) -> Result<Vec<ActionSubmissionRow>, ProjectionError>
 where
@@ -8715,7 +8783,7 @@ where
          ORDER BY action_id",
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .bind(actor_slot)
     .fetch_all(executor)
     .await?;
@@ -8736,7 +8804,7 @@ where
 pub async fn action_submission_is_active<'e, E>(
     executor: E,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     actor_slot: &str,
     action_id: &str,
 ) -> Result<bool, ProjectionError>
@@ -8751,7 +8819,7 @@ where
          )",
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .bind(actor_slot)
     .bind(action_id)
     .fetch_one(executor)
@@ -8845,7 +8913,7 @@ pub async fn store_engine_snapshot_checkpoint(
 async fn upsert_ballot(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     actor_slot: &str,
     target: &str,
 ) -> Result<(), ProjectionError> {
@@ -8858,7 +8926,7 @@ async fn upsert_ballot(
         "#,
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .bind(actor_slot)
     .bind(target)
     .execute(&mut **tx)
@@ -8869,12 +8937,12 @@ async fn upsert_ballot(
 async fn delete_ballot(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     actor_slot: &str,
 ) -> Result<(), ProjectionError> {
     sqlx::query("DELETE FROM vote_ballot WHERE game_id = $1 AND phase_id = $2 AND actor_slot = $3")
         .bind(game_id)
-        .bind(phase_id)
+        .bind(phase_id.as_str())
         .bind(actor_slot)
         .execute(&mut **tx)
         .await?;
@@ -8891,7 +8959,7 @@ fn day_vote_json<T: Serialize>(value: &T) -> Result<serde_json::Value, Projectio
 async fn upsert_day_vote_outcome(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     source_seq: i64,
     event_index: i32,
     outcome: &domain::DayVoteOutcome,
@@ -8919,7 +8987,7 @@ async fn upsert_day_vote_outcome(
         "#,
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .bind(source_seq)
     .bind(event_index)
     .bind(format!("{:?}", outcome.status))
@@ -9521,7 +9589,7 @@ async fn clear_ballots_for_dead_slot(
 async fn upsert_player_notification(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     event_index: i32,
     audience_slot: &str,
     effect: &str,
@@ -9537,7 +9605,7 @@ async fn upsert_player_notification(
          status = EXCLUDED.status",
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .bind(event_index)
     .bind(audience_slot)
     .bind(effect)
@@ -9621,7 +9689,7 @@ async fn insert_host_phase_control(
     let source_phase_id =
         payload
             .source_phase_id
-            .as_deref()
+            .as_ref()
             .ok_or_else(|| ProjectionError::Payload {
                 kind: ev.kind.clone(),
                 source: serde::de::Error::custom("missing string field `source_phase_id`"),
@@ -9644,10 +9712,10 @@ async fn insert_host_phase_control(
     .bind(ev.seq)
     .bind(ev.stream_seq)
     .bind(prompt_id)
-    .bind(source_phase_id)
-    .bind(&payload.phase_id)
+    .bind(source_phase_id.as_str())
+    .bind(payload.phase_id.as_str())
     .bind(reason)
-    .bind(&payload.skipped_phase_id)
+    .bind(payload.skipped_phase_id.as_ref().map(PhaseId::as_str))
     .bind(ev.occurred_at)
     .execute(&mut **tx)
     .await?;
@@ -9658,7 +9726,7 @@ async fn insert_host_phase_control(
 async fn set_phase(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     phase_opened_at: Option<i64>,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
@@ -9671,7 +9739,7 @@ async fn set_phase(
         "#,
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .bind(phase_opened_at)
     .execute(&mut **tx)
     .await?;
@@ -9706,14 +9774,14 @@ async fn insert_game_index_setup(
 async fn activate_game_index(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     event_seq: i64,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         "UPDATE game_index SET status = 'active', phase_id = $2, started_seq = COALESCE(started_seq, $3), updated_seq = $3 WHERE game_id = $1",
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .bind(event_seq)
     .execute(&mut **tx)
     .await?;
@@ -9723,14 +9791,14 @@ async fn activate_game_index(
 async fn update_game_index_phase(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
     event_seq: i64,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         "UPDATE game_index SET phase_id = $2, updated_seq = $3 WHERE game_id = $1 AND status = 'active'",
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .bind(event_seq)
     .execute(&mut **tx)
     .await?;
@@ -9757,7 +9825,7 @@ async fn complete_game_index(
 async fn ensure_phase(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    phase_id: &str,
+    phase_id: &PhaseId,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
@@ -9767,7 +9835,7 @@ async fn ensure_phase(
         "#,
     )
     .bind(game_id)
-    .bind(phase_id)
+    .bind(phase_id.as_str())
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -9846,7 +9914,7 @@ struct ThreadPostInsert {
     stream_seq: i64,
     channel_id: String,
     author: GameThreadAuthor,
-    phase_id: String,
+    phase_id: Option<PhaseId>,
     body: String,
     media: serde_json::Value,
     quotations: Vec<Quotation>,
@@ -9907,7 +9975,7 @@ async fn insert_thread_post(
     .bind(&post.channel_id)
     .bind(author_kind)
     .bind(author_slot_id)
-    .bind(&post.phase_id)
+    .bind(post.phase_id.as_ref().map(PhaseId::as_str))
     .bind(body)
     .bind(body_private)
     .bind(&post.media)
@@ -10150,6 +10218,121 @@ fn str_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<String, Pro
         })
 }
 
+/// Parse a persisted phase identifier at the projection ingress. The event log
+/// is an external boundary during replay just as much as a command payload is
+/// at request time, so a raw storage string must not reach a mutation helper.
+fn phase_id_field(
+    p: &serde_json::Value,
+    key: &str,
+    kind: &str,
+) -> Result<PhaseId, ProjectionError> {
+    let value = str_field(p, key, kind)?;
+    PhaseId::parse(value).map_err(|source| ProjectionError::Payload {
+        kind: kind.to_string(),
+        source: serde::de::Error::custom(source.to_string()),
+    })
+}
+
+/// An absent phase scope is meaningful for legacy-shaped action withdrawals;
+/// a present scope is always validated. `None`, rather than an empty string,
+/// preserves that distinction through the SQL predicate.
+fn optional_phase_id_field(
+    p: &serde_json::Value,
+    key: &str,
+    kind: &str,
+) -> Result<Option<PhaseId>, ProjectionError> {
+    match p.get(key) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(value)) => {
+            PhaseId::parse(value)
+                .map(Some)
+                .map_err(|source| ProjectionError::Payload {
+                    kind: kind.to_string(),
+                    source: serde::de::Error::custom(source.to_string()),
+                })
+        }
+        Some(_) => Err(ProjectionError::Payload {
+            kind: kind.to_string(),
+            source: serde::de::Error::custom(format!("field `{key}` must be a string")),
+        }),
+    }
+}
+
+/// The relational phase columns are cache materializations only. Every writer
+/// derives them from the validated `PhaseId` carried by the domain event,
+/// rather than accepting a second representation of the same fact.
+pub(crate) fn phase_materialization(
+    phase_id: &PhaseId,
+    context: &str,
+) -> Result<(&'static str, i32), ProjectionError> {
+    let number = i32::try_from(phase_id.number()).map_err(|_| ProjectionError::Payload {
+        kind: context.to_owned(),
+        source: serde::de::Error::custom("phase ordinal exceeds signed storage range"),
+    })?;
+    Ok((phase_id.kind().name(), number))
+}
+
+/// Reconstruct the domain value from the sole persisted authority. A corrupt
+/// database value cannot bypass the `PhaseId` grammar on its way back out.
+pub(crate) fn phase_id_from_stored_id(
+    stored_phase_id: String,
+    context: &str,
+) -> Result<PhaseId, ProjectionError> {
+    PhaseId::parse(stored_phase_id).map_err(|source| ProjectionError::Payload {
+        kind: context.to_owned(),
+        source: serde::de::Error::custom(source.to_string()),
+    })
+}
+
+pub(crate) fn optional_phase_id_from_stored_id(
+    stored_phase_id: Option<String>,
+    context: &str,
+) -> Result<Option<PhaseId>, ProjectionError> {
+    stored_phase_id
+        .map(|phase_id| phase_id_from_stored_id(phase_id, context))
+        .transpose()
+}
+
+/// Reconstruct relational phase cache fields from the same authoritative
+/// domain value. `phase_kind` and `phase_number` never supply domain state.
+pub(crate) fn phase_materialization_from_stored_id(
+    stored_phase_id: String,
+    context: &str,
+) -> Result<(PhaseId, &'static str, i32), ProjectionError> {
+    let phase_id = phase_id_from_stored_id(stored_phase_id, context)?;
+    let (phase_kind, phase_number) = phase_materialization(&phase_id, context)?;
+    Ok((phase_id, phase_kind, phase_number))
+}
+
+/// One stored phase id resolved into its typed coordinate.
+#[derive(Debug, Clone)]
+pub(crate) struct OptionalPhaseMaterialization {
+    pub(crate) phase_id: Option<PhaseId>,
+    pub(crate) phase_kind: Option<&'static str>,
+    pub(crate) phase_number: Option<i32>,
+}
+
+pub(crate) fn optional_phase_materialization_from_stored_id(
+    stored_phase_id: Option<String>,
+    context: &str,
+) -> Result<OptionalPhaseMaterialization, ProjectionError> {
+    let Some(materialized) = stored_phase_id
+        .map(|phase_id| phase_materialization_from_stored_id(phase_id, context))
+        .transpose()?
+    else {
+        return Ok(OptionalPhaseMaterialization {
+            phase_id: None,
+            phase_kind: None,
+            phase_number: None,
+        });
+    };
+    Ok(OptionalPhaseMaterialization {
+        phase_id: Some(materialized.0),
+        phase_kind: Some(materialized.1),
+        phase_number: Some(materialized.2),
+    })
+}
+
 fn i64_field(p: &serde_json::Value, key: &str, kind: &str) -> Result<i64, ProjectionError> {
     p.get(key)
         .and_then(serde_json::Value::as_i64)
@@ -10267,10 +10450,6 @@ fn phase_advanced_payload(
             kind: kind.to_string(),
             source,
         })?;
-    if payload.phase_id.trim().is_empty() {
-        return payload_error(kind, "phase_id must not be empty");
-    }
-
     let has_phase_control = payload.source_prompt_id.is_some()
         || payload.source_phase_id.is_some()
         || payload.reason.is_some()
@@ -10279,7 +10458,7 @@ fn phase_advanced_payload(
         return Ok(payload);
     }
 
-    require_nonempty_optional(kind, "source_phase_id", payload.source_phase_id.as_deref())?;
+    require_present_phase_id(kind, "source_phase_id", payload.source_phase_id.as_ref())?;
     let reason = require_nonempty_optional(kind, "reason", payload.reason.as_deref())?;
     match reason {
         "revote" | "no_majority_no_lynch" => {
@@ -10301,11 +10480,7 @@ fn phase_advanced_payload(
                 "source_prompt_id",
                 payload.source_prompt_id.as_deref(),
             )?;
-            require_nonempty_optional(
-                kind,
-                "skipped_phase_id",
-                payload.skipped_phase_id.as_deref(),
-            )?;
+            require_present_phase_id(kind, "skipped_phase_id", payload.skipped_phase_id.as_ref())?;
         }
         "resolved_phase" => {
             if payload.source_prompt_id.is_some() {
@@ -10355,6 +10530,17 @@ fn require_nonempty_optional<'a>(
         Some(value) if !value.trim().is_empty() => Ok(value),
         _ => payload_error(kind, format!("{field} must not be empty")),
     }
+}
+
+fn require_present_phase_id<'a>(
+    kind: &str,
+    field: &str,
+    value: Option<&'a PhaseId>,
+) -> Result<&'a PhaseId, ProjectionError> {
+    value.ok_or_else(|| ProjectionError::Payload {
+        kind: kind.to_string(),
+        source: serde::de::Error::custom(format!("{field} must not be empty")),
+    })
 }
 
 fn payload_error<T>(kind: &str, message: impl Into<String>) -> Result<T, ProjectionError> {

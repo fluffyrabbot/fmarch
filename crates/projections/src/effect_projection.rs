@@ -4,7 +4,11 @@ use sqlx::postgres::{PgPool, PgRow};
 use sqlx::Row;
 use uuid::Uuid;
 
-use crate::{ensure_slot, upsert_player_notification, ProjectionError};
+use crate::{
+    ensure_slot, optional_phase_materialization_from_stored_id, phase_materialization,
+    upsert_player_notification, ProjectionError,
+};
+use domain::phase::PhaseId;
 
 pub(super) const TABLE: &str = "slot_effect";
 pub(super) const AUDIT_ORDER_BY: &str = "slot_id, effect";
@@ -17,7 +21,7 @@ pub struct SlotEffectRow {
     pub effect: String,
     pub source_slot: String,
     pub source_action: Option<String>,
-    pub phase_id: Option<String>,
+    pub phase_id: Option<PhaseId>,
     pub phase_kind: Option<String>,
     pub phase_number: Option<i32>,
     pub duration: String,
@@ -29,9 +33,7 @@ struct EffectProjection<'a> {
     effect: &'a str,
     source_slot: &'a str,
     source_action: Option<&'a str>,
-    phase_id: Option<&'a str>,
-    phase_kind: Option<&'a str>,
-    phase_number: Option<i32>,
+    phase_id: Option<&'a PhaseId>,
     duration: &'a str,
     visibility: &'a str,
 }
@@ -52,8 +54,6 @@ pub(super) async fn project_role_effects(
                 source_slot: slot_id,
                 source_action: Some("role-assignment"),
                 phase_id: None,
-                phase_kind: None,
-                phase_number: None,
                 duration: "Persistent",
                 visibility: "Hidden",
             },
@@ -76,10 +76,9 @@ pub(super) async fn project_stored_event(
         kind: event.kind.clone(),
         source,
     })?;
-    let phase_id = if event.kind == "EffectNotification" {
-        required_string(&event.payload, "phase_id", &event.kind)?
-    } else {
-        event.payload["phase_id"].as_str().unwrap_or("").to_string()
+    let envelope_phase_id = match event.kind.as_str() {
+        "EffectNotification" => Some(phase_id_field(&event.payload, "phase_id", &event.kind)?),
+        _ => optional_phase_id_field(&event.payload, "phase_id", &event.kind)?,
     };
     let event_index = if event.kind == "EffectNotification" {
         i32::try_from(event.stream_seq)
@@ -94,13 +93,13 @@ pub(super) async fn project_stored_event(
     } else {
         event.stream_seq as i32
     };
-    project_inner_event(tx, game_id, &phase_id, event_index, &inner).await
+    project_inner_event(tx, game_id, envelope_phase_id.as_ref(), event_index, &inner).await
 }
 
 pub(super) async fn project_inner_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
-    envelope_phase_id: &str,
+    envelope_phase_id: Option<&PhaseId>,
     event_index: i32,
     event: &domain::InnerEvent,
 ) -> Result<(), ProjectionError> {
@@ -111,13 +110,10 @@ pub(super) async fn project_inner_event(
             actor,
             source_action,
             phase_id,
-            phase_kind,
-            phase_number,
             duration: domain::EffectDuration::Persistent,
             visibility,
         } => {
             ensure_slot(tx, game_id, target).await?;
-            let phase_kind = phase_kind.map(|kind| format!("{kind:?}"));
             let visibility = format!("{visibility:?}");
             upsert_effect(
                 tx,
@@ -127,9 +123,7 @@ pub(super) async fn project_inner_event(
                     effect,
                     source_slot: actor,
                     source_action: source_action.as_deref(),
-                    phase_id: phase_id.as_deref(),
-                    phase_kind: phase_kind.as_deref(),
-                    phase_number: phase_number.map(|number| number as i32),
+                    phase_id: phase_id.as_ref(),
                     duration: "Persistent",
                     visibility: &visibility,
                 },
@@ -150,6 +144,10 @@ pub(super) async fn project_inner_event(
             audience,
             ..
         } => {
+            let envelope_phase_id = envelope_phase_id.ok_or_else(|| ProjectionError::Payload {
+                kind: "EffectNotification".to_string(),
+                source: serde::de::Error::custom("missing canonical phase_id"),
+            })?;
             for audience_slot in audience {
                 upsert_player_notification(
                     tx,
@@ -179,15 +177,14 @@ where
     E: sqlx::PgExecutor<'e>,
 {
     let rows = sqlx::query(
-        "SELECT game_id, slot_id, effect, source_slot, source_action, phase_id, phase_kind, \
-         phase_number, duration, visibility FROM slot_effect \
+        "SELECT game_id, slot_id, effect, source_slot, source_action, phase_id, duration, visibility FROM slot_effect \
          WHERE game_id = $1 AND slot_id = $2 ORDER BY effect",
     )
     .bind(game_id)
     .bind(slot_id)
     .fetch_all(executor)
     .await?;
-    Ok(rows.into_iter().map(slot_effect_row).collect())
+    rows.into_iter().map(slot_effect_row).collect()
 }
 
 /// Read persistent engine effects, ordered deterministically.
@@ -196,29 +193,29 @@ pub async fn slot_effects(
     game_id: Uuid,
 ) -> Result<Vec<SlotEffectRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, slot_id, effect, source_slot, source_action, phase_id, phase_kind, \
-         phase_number, duration, visibility FROM slot_effect \
+        "SELECT game_id, slot_id, effect, source_slot, source_action, phase_id, duration, visibility FROM slot_effect \
          WHERE game_id = $1 ORDER BY slot_id, effect",
     )
     .bind(game_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows.into_iter().map(slot_effect_row).collect())
+    rows.into_iter().map(slot_effect_row).collect()
 }
 
-fn slot_effect_row(row: PgRow) -> SlotEffectRow {
-    SlotEffectRow {
+fn slot_effect_row(row: PgRow) -> Result<SlotEffectRow, ProjectionError> {
+    let phase = optional_phase_materialization_from_stored_id(row.get("phase_id"), "slot_effect")?;
+    Ok(SlotEffectRow {
         game_id: row.get("game_id"),
         slot_id: row.get("slot_id"),
         effect: row.get("effect"),
         source_slot: row.get("source_slot"),
         source_action: row.get("source_action"),
-        phase_id: row.get("phase_id"),
-        phase_kind: row.get("phase_kind"),
-        phase_number: row.get("phase_number"),
+        phase_id: phase.phase_id,
+        phase_kind: phase.phase_kind.map(str::to_owned),
+        phase_number: phase.phase_number,
         duration: row.get("duration"),
         visibility: row.get("visibility"),
-    }
+    })
 }
 
 async fn upsert_effect(
@@ -226,6 +223,11 @@ async fn upsert_effect(
     game_id: Uuid,
     projection: EffectProjection<'_>,
 ) -> Result<(), ProjectionError> {
+    let (phase_kind, phase_number) = projection
+        .phase_id
+        .map(|phase_id| phase_materialization(phase_id, "slot_effect"))
+        .transpose()?
+        .map_or((None, None), |(kind, number)| (Some(kind), Some(number)));
     sqlx::query(
         "INSERT INTO slot_effect \
          (game_id, slot_id, effect, source_slot, source_action, phase_id, phase_kind, \
@@ -245,9 +247,9 @@ async fn upsert_effect(
     .bind(projection.effect)
     .bind(projection.source_slot)
     .bind(projection.source_action)
-    .bind(projection.phase_id)
-    .bind(projection.phase_kind)
-    .bind(projection.phase_number)
+    .bind(projection.phase_id.map(PhaseId::as_str))
+    .bind(phase_kind)
+    .bind(phase_number)
     .bind(projection.duration)
     .bind(projection.visibility)
     .execute(&mut **tx)
@@ -270,17 +272,42 @@ async fn delete_effect(
     Ok(())
 }
 
-fn required_string(
+fn phase_id_field(
     payload: &serde_json::Value,
     field: &str,
     kind: &str,
-) -> Result<String, ProjectionError> {
-    payload
+) -> Result<PhaseId, ProjectionError> {
+    let value = payload
         .get(field)
         .and_then(serde_json::Value::as_str)
-        .map(str::to_owned)
         .ok_or_else(|| ProjectionError::Payload {
             kind: kind.to_owned(),
             source: serde::de::Error::custom(format!("missing string field `{field}`")),
-        })
+        })?;
+    PhaseId::parse(value).map_err(|source| ProjectionError::Payload {
+        kind: kind.to_owned(),
+        source: serde::de::Error::custom(source.to_string()),
+    })
+}
+
+fn optional_phase_id_field(
+    payload: &serde_json::Value,
+    field: &str,
+    kind: &str,
+) -> Result<Option<PhaseId>, ProjectionError> {
+    match payload.get(field) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(value)) => {
+            PhaseId::parse(value)
+                .map(Some)
+                .map_err(|source| ProjectionError::Payload {
+                    kind: kind.to_owned(),
+                    source: serde::de::Error::custom(source.to_string()),
+                })
+        }
+        Some(_) => Err(ProjectionError::Payload {
+            kind: kind.to_owned(),
+            source: serde::de::Error::custom(format!("field `{field}` must be a string")),
+        }),
+    }
 }

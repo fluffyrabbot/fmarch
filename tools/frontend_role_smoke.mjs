@@ -3105,7 +3105,7 @@ async function drivePlayerPrivateDisclosure(page, { viewport, baseUrl }) {
     throw new Error(`player private disclosure focus moved to ${focusedTestId}`);
   }
   const detailText = await page.getByTestId(detailId).innerText();
-  if (!detailText.includes("Phase N02")) {
+  if (!detailText.includes("Phase Night 2")) {
     throw new Error(`player private disclosure detail was ${detailText}`);
   }
   if (/host|moderator|prompt/i.test(detailText)) {
@@ -3154,7 +3154,7 @@ async function assertUrlAddressedPrivateReview(page, { viewport, detailId, revie
     throw new Error("player private review URL did not expand the matching disclosure");
   }
   const detailText = await page.getByTestId(detailId).innerText();
-  if (!detailText.includes("Phase N02")) {
+  if (!detailText.includes("Phase Night 2")) {
     throw new Error(`player private review URL detail was ${detailText}`);
   }
   if (/host|moderator|prompt/i.test(detailText)) {

@@ -44,7 +44,7 @@ test("board load opts into the root-owned shell with an API-backed public index"
   assert.deepEqual(
     data.board.games.map((game) => [game.id, game.status, game.phaseLabel]),
     [
-      ["midsummer", "active", "D02"],
+      ["midsummer", "active", "Day 2"],
       ["solstice", "completed", "Completed"],
     ],
   );

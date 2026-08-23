@@ -8,7 +8,7 @@ import {
 
 test("public game publication creates a reading-first live record", () => {
   const view = buildPublicGamePublication({
-    game: { pack: "mafia_universe", status: "active", phase_id: "day-2" },
+    game: { pack: "mafia_universe", status: "active", phase_id: "D02" },
     posts: [{ source_seq: 1 }, { source_seq: 2 }],
   });
   assert.equal(view.root.data.mode, "reading-publication");
@@ -58,4 +58,11 @@ test("completed publications and unavailable games remain explicit", () => {
     "prefers-reduced-motion",
     "forced-colors",
   ]);
+});
+
+test("a pre-phase public game remains distinct from a completed record", () => {
+  const view = buildPublicGamePublication({
+    game: { pack: "mafiascum", status: "setup", phase_id: null },
+  });
+  assert.equal(view.metadata.phaseLabel, "Awaiting first phase");
 });

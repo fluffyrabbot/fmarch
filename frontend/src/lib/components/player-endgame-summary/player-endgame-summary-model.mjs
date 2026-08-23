@@ -50,6 +50,7 @@ export function buildPlayerEndgameSummaryViewModel({
           ? "The engine result has not been published to this surface yet; reload after the host completes the reveal."
           : winner.reason,
       phaseId: winner?.phaseId ?? "",
+      phaseLabel: phaseLabelFromId(winner?.phaseId),
     }),
     rows: Object.freeze(
       (summary?.slots ?? []).map((slot) =>
@@ -78,7 +79,7 @@ export function buildPlayerEndgameSummaryViewModel({
           Object.freeze({
             testId: `${PLAYER_ENDGAME_SUMMARY_CONTRACT.voteRowTestIdPrefix}-${outcome.phaseId}-${outcome.sourceSeq}-${outcome.eventIndex}`,
             className: PLAYER_ENDGAME_SUMMARY_CONTRACT.voteRowClassName,
-            phaseLabel: outcome.phaseId,
+            phaseLabel: phaseLabelFromId(outcome.phaseId) ?? outcome.phaseId,
             resultLabel: endgameVoteResultLabel(outcome),
             tallyLabel: endgameVoteTallyLabel(outcome),
             ballotLabel: endgameVoteBallotLabel(outcome),
@@ -140,3 +141,4 @@ function humanizeTag(tag) {
   }
   return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
 }
+import { phaseLabelFromId } from "../../phase-id.mjs";

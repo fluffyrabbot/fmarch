@@ -3,6 +3,7 @@ import {
   canonicalPrincipalId,
   FIXTURE_PRINCIPAL_IDS,
 } from "../../principal-id.mjs";
+import { phaseLabelFromId } from "../../phase-id.mjs";
 
 export const HOST_TASK_WORKSPACE_CONTRACT = Object.freeze({
   rootClassName: "host-task-workspace fm-primary-action-zone",
@@ -198,7 +199,7 @@ function buildHostTaskInstance({
     consequence: blockedReason ?? task.consequence,
     meta:
       dayEvent?.meta ??
-      [task.phaseId, task.subjectSlot].filter(Boolean).join(" · "),
+      [phaseLabelFromId(task.phaseId), task.subjectSlot].filter(Boolean).join(" · "),
     testId: `host-task-${stableTestId(task.id)}`,
     panelTestId: `moderator-control-${stableTestId(task.id)}`,
     actions: buildTaskActions(sourceActions, commandStatuses),
@@ -223,7 +224,7 @@ function buildDayEventContext({ event, selectedSlots, task, gameId }) {
     return Object.freeze({
       eventId: task.sourceId,
       label: "DayEvent decision",
-      meta: task.phaseId,
+      meta: phaseLabelFromId(task.phaseId) ?? "No phase open",
       participantSummary: "Participant projection unavailable",
       participants: Object.freeze([]),
       rewards: Object.freeze([]),
@@ -275,7 +276,7 @@ function buildDayEventContext({ event, selectedSlots, task, gameId }) {
   return Object.freeze({
     eventId: event.eventId,
     label,
-    meta: `${event.phaseId ?? task.phaseId} · ${event.participantSlots.length} participant${
+    meta: `${phaseLabelFromId(event.phaseId ?? task.phaseId) ?? "No phase open"} · ${event.participantSlots.length} participant${
       event.participantSlots.length === 1 ? "" : "s"
     }`,
     participantSummary: `${event.participantSlots.length} joined · minimum ${event.participation.minimum}`,
@@ -346,7 +347,7 @@ function stateLabel(state, fallback) {
 }
 
 function taskMeta({ groupId, phase, replacement, hostPrompts, votecount }) {
-  if (groupId === "deadline") return phase.deadlineLabel ?? "Active phase deadline";
+  if (groupId === "deadline") return phase?.deadlineLabel ?? "No phase deadline";
   if (groupId === "host-prompts") {
     const count = hostPrompts.filter((prompt) => prompt.status === "pending").length;
     return `${count} unresolved prompt${count === 1 ? "" : "s"}`;

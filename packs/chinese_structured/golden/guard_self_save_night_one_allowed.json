@@ -30,8 +30,6 @@
     "seed": 930207,
     "state": {
       "phase_id": "N01",
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

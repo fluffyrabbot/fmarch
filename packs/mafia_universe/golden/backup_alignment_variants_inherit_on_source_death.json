@@ -4,14 +4,19 @@
     "game_id": "game_mu_backup_inherit_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -35,14 +40,18 @@
           "role_key": "town_cop",
           "alignment": "town",
           "status": "alive",
-          "effects": ["backup_target"]
+          "effects": [
+            "backup_target"
+          ]
         },
         {
           "slot_id": "slot_4",
           "role_key": "mafia_goon",
           "alignment": "mafia",
           "status": "alive",
-          "effects": ["backup_target"]
+          "effects": [
+            "backup_target"
+          ]
         },
         {
           "slot_id": "slot_5",
@@ -79,18 +88,14 @@
           "source_target": "slot_3",
           "source_role": "town_cop",
           "source_action": "mu_town_backup_n01",
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         },
         {
           "backup": "slot_2",
           "source_target": "slot_4",
           "source_role": "mafia_goon",
           "source_action": "mu_mafia_backup_n01",
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ]
     },
@@ -99,7 +104,9 @@
         "action_id": "mu_mafia_kills_town_source_n02",
         "actor": "slot_5",
         "template_id": "factional_kill",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N02",
         "submitted_at": 1,
         "withdrawn": false,
@@ -109,7 +116,9 @@
         "action_id": "mu_town_kills_mafia_source_n02",
         "actor": "slot_6",
         "template_id": "vigilante_kill",
-        "targets": ["slot_4"],
+        "targets": [
+          "slot_4"
+        ],
         "phase_id": "N02",
         "submitted_at": 2,
         "withdrawn": false,
@@ -126,7 +135,9 @@
       "payload": {
         "slot_id": "slot_3",
         "cause": "factional_kill",
-        "attackers": ["slot_5"],
+        "attackers": [
+          "slot_5"
+        ],
         "unstoppable": false
       }
     },
@@ -136,7 +147,9 @@
       "payload": {
         "slot_id": "slot_4",
         "cause": "vigilante_kill",
-        "attackers": ["slot_6"],
+        "attackers": [
+          "slot_6"
+        ],
         "unstoppable": false
       }
     },

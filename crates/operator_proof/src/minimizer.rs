@@ -4,6 +4,7 @@ use caps::Principal;
 use commands::{
     audit_resolution_envelopes, inspect_resolution_traces, Command, HostPromptDecision, VoteTarget,
 };
+use domain::phase::{PhaseId, PhaseKind};
 use principal::PrincipalId;
 use projections::{
     audit_rebuild, delayed_death_queues, player_notifications, sheriff_badges, slot_effects,
@@ -59,7 +60,7 @@ struct NightFixture {
     #[serde(default = "default_pack")]
     pack: String,
     #[serde(default = "default_phase")]
-    phase: String,
+    phase: PhaseId,
     roster: Vec<FixtureSlot>,
     #[serde(default)]
     votes: Vec<FixtureVote>,
@@ -76,7 +77,7 @@ struct NightFixture {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct FixturePhase {
-    phase: String,
+    phase: PhaseId,
     seed: u64,
     #[serde(default)]
     votes: Vec<FixtureVote>,
@@ -293,8 +294,8 @@ fn default_pack() -> String {
     "mafiascum".to_string()
 }
 
-fn default_phase() -> String {
-    "N01".to_string()
+fn default_phase() -> PhaseId {
+    PhaseId::compose(PhaseKind::Night, 1).expect("one is a valid canonical phase ordinal")
 }
 
 #[derive(Debug, Clone)]
@@ -1500,7 +1501,7 @@ mod tests {
         )
         .expect("fixture parses");
         assert_eq!(fixture.pack, "mafiascum");
-        assert_eq!(fixture.phase, "N01");
+        assert_eq!(fixture.phase.as_str(), "N01");
         assert_eq!(fixture.seed, 7);
         assert_eq!(fixture.expectations.count(), 0);
         assert_eq!(fixture.actions[0].grant_id, None);

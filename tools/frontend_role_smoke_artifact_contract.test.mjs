@@ -6727,14 +6727,14 @@ function assertBrowserPlayerPrivateDisclosureEvidence(roleEntries) {
     assert.equal(disclosure.routeReview.ariaExpanded, "true");
     assert.equal(disclosure.routeReview.detailRendered, true);
     assert.equal(disclosure.routeReview.hostOnlyCopyExcluded, true);
-    assert.match(disclosure.routeReview.detail, /Phase N02/);
+    assert.match(disclosure.routeReview.detail, /Phase Night 2/);
     assert.equal(disclosure.collapsed.ariaExpanded, "false");
     assert.equal(disclosure.collapsed.detailRendered, false);
     assert.equal(disclosure.expanded.ariaExpanded, "true");
     assert.equal(disclosure.expanded.detailRendered, true);
     assert.equal(disclosure.focusStayedOnButton, true);
     assert.equal(disclosure.hostOnlyCopyExcluded, true);
-    assert.match(disclosure.detail, /Phase N02/);
+    assert.match(disclosure.detail, /Phase Night 2/);
     assertPixelEvidence(
       [disclosure.collapsed],
       "player private disclosure collapsed screenshots",

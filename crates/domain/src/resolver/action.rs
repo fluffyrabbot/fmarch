@@ -67,8 +67,6 @@ pub(super) struct ActionInterference<'a> {
 
 pub(super) struct CounterUseInput {
     pub(super) phase_id: PhaseId,
-    pub(super) phase_kind: PhaseKind,
-    pub(super) phase_number: u32,
     pub(super) counter_id: String,
     pub(super) actor: SlotId,
     pub(super) template_id: String,
@@ -100,8 +98,6 @@ pub(super) fn counter_use_counted(input: CounterUseInput) -> InnerEvent {
         used: input.used,
         remaining: input.limit.saturating_sub(input.used),
         phase_id: input.phase_id,
-        phase_kind: input.phase_kind,
-        phase_number: input.phase_number,
     }
 }
 
@@ -169,8 +165,6 @@ pub(super) fn resolve_one_kill(context: ActionResolutionContext<'_>, action: Kil
     } = action;
     let pack = &input.pack;
     let phase_id = &input.phase_id;
-    let phase_kind = input.state.phase_kind;
-    let phase_number = input.state.phase_number;
     // A slot already killed this resolution is not killed twice.
     if killed.contains(target) {
         if night_resolution_aggregates_kill_attackers(pack) {
@@ -354,8 +348,6 @@ pub(super) fn resolve_one_kill(context: ActionResolutionContext<'_>, action: Kil
         if reason == "bulletproof_vest" {
             events.push(counter_use_counted(CounterUseInput {
                 phase_id: phase_id.clone(),
-                phase_kind,
-                phase_number,
                 counter_id: format!("shield:{reason}"),
                 actor: target.clone(),
                 template_id: reason.to_string(),
@@ -371,8 +363,6 @@ pub(super) fn resolve_one_kill(context: ActionResolutionContext<'_>, action: Kil
                 actor: target.clone(),
                 source_action: None,
                 phase_id: None,
-                phase_kind: None,
-                phase_number: None,
             });
         }
     } else {

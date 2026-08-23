@@ -8,8 +8,6 @@
         "day": 1,
         "label": "Day 1 ITA",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1",
         "status": "open",
         "window": "ita_sessions"
@@ -386,8 +384,6 @@
         },
         "global_shots_fired": 4,
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "queue_delta": -4,
         "queue_length": 0,
         "session_id": "d1",
@@ -400,8 +396,6 @@
       "payload": {
         "last_status": "open",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1"
       }
     },
@@ -461,8 +455,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",
@@ -593,7 +585,7 @@
       "sessions": [
         {
           "day": 1,
-          "hit_chance": 1.0,
+          "hit_chance": 1,
           "label": "Day 1 ITA",
           "session_id": "d1",
           "window": "ita_sessions"

@@ -4,14 +4,19 @@
     "game_id": "game_mu_ignite_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -28,7 +33,9 @@
           "role_key": "town_vanilla",
           "alignment": "town",
           "status": "alive",
-          "effects": ["doused"]
+          "effects": [
+            "doused"
+          ]
         },
         {
           "slot_id": "slot_3",
@@ -68,7 +75,9 @@
       "payload": {
         "slot_id": "slot_2",
         "cause": "ignite",
-        "attackers": ["slot_1"],
+        "attackers": [
+          "slot_1"
+        ],
         "unstoppable": false
       }
     },

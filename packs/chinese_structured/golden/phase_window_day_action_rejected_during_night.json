@@ -6,8 +6,6 @@
     "phase_id": "N01",
     "seed": 930402,
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {

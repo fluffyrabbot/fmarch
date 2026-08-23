@@ -172,7 +172,7 @@ pub struct EndgameSummaryResponse {
 pub struct EndgameWinner {
     pub alignment: String,
     pub reason: String,
-    pub phase_id: String,
+    pub phase_id: domain::phase::PhaseId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -188,7 +188,7 @@ pub struct EndgameSlotReveal {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EndgameDayVote {
-    pub phase_id: String,
+    pub phase_id: domain::phase::PhaseId,
     pub source_seq: i64,
     pub event_index: i32,
     pub status: String,
@@ -275,7 +275,6 @@ async fn completed_game_export(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     authorization: GameAuthorization,
-
 ) -> Result<Json<projections::CompletedGameExport>, ApiError> {
     let capabilities = caps::resolve(
         &state.pool,
@@ -677,7 +676,6 @@ async fn player_notifications(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     authorization: GameAuthorization,
-
 ) -> Result<Json<Vec<PlayerNotification>>, ApiError> {
     Ok(Json(
         player_notifications_for_principal(&state.pool, game, authorization.principal_id()).await?,
@@ -688,7 +686,6 @@ async fn player_investigation_results(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     authorization: GameAuthorization,
-
 ) -> Result<Json<Vec<PlayerInvestigationResult>>, ApiError> {
     Ok(Json(
         player_investigation_results_for_principal(&state.pool, game, authorization.principal_id())
@@ -796,9 +793,7 @@ pub struct PlayerCommandStateResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayerCommandPhaseState {
-    pub phase_id: String,
-    pub phase_kind: String,
-    pub phase_number: u32,
+    pub phase_id: domain::phase::PhaseId,
     pub locked: bool,
     pub deadline: Option<i64>,
 }
@@ -845,7 +840,7 @@ pub struct PlayerVoteTarget {
 pub struct PlayerDayEventAttention {
     pub event_id: String,
     pub template_key: String,
-    pub phase_id: String,
+    pub phase_id: Option<domain::phase::PhaseId>,
     pub participation_status: String,
     pub participant_count: u32,
     pub minimum_participants: u32,
@@ -860,7 +855,6 @@ async fn player_command_state(
     Path(game): Path<Uuid>,
     Query(query): Query<PlayerCommandStateQuery>,
     authorization: GameAuthorization,
-
 ) -> Result<Json<PlayerCommandStateResponse>, ApiError> {
     let caps = caps::resolve(
         &state.pool,
@@ -912,9 +906,7 @@ async fn player_command_state(
     let game_completed = commands::game_completed(&state.pool, game)
         .await
         .map_err(command_reject_api_error)?;
-    let phase_view = phase
-        .as_ref()
-        .and_then(|phase| player_phase_state(phase).ok());
+    let phase_view = phase.as_ref().map(player_phase_state).transpose()?;
     let current_vote = match phase.as_ref() {
         Some(phase) if actor.alive && !game_completed => {
             current_player_vote(&state, game, &phase.phase_id, &actor.slot_id).await?
@@ -924,8 +916,7 @@ async fn player_command_state(
     let vote_targets = if actor.alive && !game_completed {
         match phase.as_ref() {
             Some(phase)
-                if !phase.locked
-                    && phase_kind_for_id(&phase.phase_id)? == domain::pack::PhaseKind::Day =>
+                if !phase.locked && phase.phase_id.kind() == domain::phase::PhaseKind::Day =>
             {
                 available_vote_targets(&pack, &slots, actor)
             }
@@ -1118,7 +1109,7 @@ async fn load_player_day_event_workspace(
         attention.push(PlayerDayEventAttention {
             event_id: event.event_id.clone(),
             template_key: event.definition.template_key.as_str().to_string(),
-            phase_id: event.phase_id.clone().unwrap_or_default(),
+            phase_id: event.phase_id.clone(),
             participation_status: if submitted {
                 "submitted".to_string()
             } else {
@@ -1208,7 +1199,7 @@ fn available_vote_targets(
 async fn current_player_vote(
     state: &GameHttpState,
     game: Uuid,
-    phase_id: &str,
+    phase_id: &domain::phase::PhaseId,
     actor_slot: &str,
 ) -> Result<Option<PlayerVoteTarget>, ApiError> {
     let ballot = projections::current_ballot(&state.pool, game, phase_id, actor_slot).await?;
@@ -1244,7 +1235,7 @@ fn available_role_actions(
         error: RejectCode::Internal,
         message: format!("role `{role_key}` is missing from game pack {}", pack.name),
     })?;
-    let phase_kind = phase_kind_for_id(phase.phase_id.as_str())?;
+    let phase_kind = phase.phase_id.kind();
 
     Ok(role
         .actions
@@ -1370,44 +1361,20 @@ fn action_detail(action: &domain::pack::ActionTemplate, targets: &[String]) -> S
 fn player_phase_state(
     phase: &projections::PhaseStateRow,
 ) -> Result<PlayerCommandPhaseState, ApiError> {
-    let phase_kind = phase_kind_for_id(phase.phase_id.as_str())?;
     Ok(PlayerCommandPhaseState {
         phase_id: phase.phase_id.clone(),
-        phase_kind: format!("{:?}", phase_kind),
-        phase_number: phase_number_for_id(phase.phase_id.as_str())?,
         locked: phase.locked,
         deadline: phase.deadline,
     })
 }
 
-fn phase_kind_for_id(phase_id: &str) -> Result<domain::pack::PhaseKind, ApiError> {
-    match phase_id.chars().next() {
-        Some('D') => Ok(domain::pack::PhaseKind::Day),
-        Some('N') => Ok(domain::pack::PhaseKind::Night),
-        Some('T') => Ok(domain::pack::PhaseKind::Twilight),
-        _ => Err(ApiError::Reject {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            error: RejectCode::Internal,
-            message: format!("invalid phase id `{phase_id}`"),
-        }),
-    }
-}
-
-fn phase_number_for_id(phase_id: &str) -> Result<u32, ApiError> {
-    let digits: String = phase_id
-        .chars()
-        .skip(1)
-        .take_while(|c| c.is_ascii_digit())
-        .collect();
-    digits
-        .parse::<u32>()
-        .ok()
-        .filter(|number| *number > 0)
-        .ok_or_else(|| ApiError::Reject {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            error: RejectCode::Internal,
-            message: format!("invalid phase id `{phase_id}`"),
-        })
+#[cfg(test)]
+fn phase_id_for_api(phase_id: &str) -> Result<domain::phase::PhaseId, ApiError> {
+    domain::phase::PhaseId::parse(phase_id).map_err(|_| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: format!("invalid phase id `{phase_id}`"),
+    })
 }
 
 #[cfg(test)]
@@ -1415,11 +1382,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn phase_number_for_id_accepts_revote_suffixes() {
-        assert_eq!(phase_number_for_id("D03").unwrap(), 3);
-        assert_eq!(phase_number_for_id("D03R1").unwrap(), 3);
-        assert_eq!(phase_number_for_id("N12R2").unwrap(), 12);
-        assert!(phase_number_for_id("DR1").is_err());
+    fn phase_id_for_api_accepts_only_canonical_revote_ids() {
+        assert_eq!(phase_id_for_api("D03").unwrap().number(), 3);
+        assert_eq!(phase_id_for_api("D03R1").unwrap().number(), 3);
+        assert_eq!(phase_id_for_api("N12R2").unwrap().number(), 12);
+        for invalid in ["D00", "D3", "D003", "D01junk", "D01R0", "D01R02"] {
+            assert!(
+                phase_id_for_api(invalid).is_err(),
+                "{invalid} must be rejected"
+            );
+        }
     }
 
     #[test]
@@ -1479,7 +1451,8 @@ mod tests {
         ];
         let host =
             build_host_console_authority(PrincipalId::fixture("host_h"), true, BTreeSet::new());
-        let tasks = select_host_tasks(&prompts, &[], &host);
+        let tasks =
+            select_host_tasks(&prompts, &[], &host).expect("canonical host prompt task phase id");
 
         assert_eq!(tasks.len(), 1, "resolved facts are history, not tasks");
         assert_eq!(tasks[0].id, "engine-host-prompt:prompt:one");
@@ -1500,7 +1473,8 @@ mod tests {
             false,
             BTreeSet::from([commands::CohostPermissionClass::HostPromptResolve]),
         );
-        let tasks = select_host_tasks(&prompts, &[], &denied_cohost);
+        let tasks = select_host_tasks(&prompts, &[], &denied_cohost)
+            .expect("canonical host prompt task phase id");
         assert_eq!(tasks[0].id, "engine-host-prompt:prompt:one");
         assert_eq!(tasks[0].state, HostTaskState::Blocked);
         assert!(tasks[0].allowed_commands.is_empty());
@@ -1515,7 +1489,8 @@ mod tests {
         let event = day_event_row("locked");
         let host =
             build_host_console_authority(PrincipalId::fixture("host_h"), true, BTreeSet::new());
-        let tasks = select_host_tasks(&[], std::slice::from_ref(&event), &host);
+        let tasks = select_host_tasks(&[], std::slice::from_ref(&event), &host)
+            .expect("canonical day event task phase id");
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].id, "day-event-resolve:event-cookie");
         assert_eq!(tasks[0].kind, HostTaskKind::DayEventResolve);
@@ -1533,7 +1508,8 @@ mod tests {
             false,
             BTreeSet::from([commands::CohostPermissionClass::DayEventResolve]),
         );
-        let tasks = select_host_tasks(&[], std::slice::from_ref(&event), &denied);
+        let tasks = select_host_tasks(&[], std::slice::from_ref(&event), &denied)
+            .expect("canonical day event task phase id");
         assert_eq!(tasks[0].state, HostTaskState::Blocked);
         assert!(tasks[0].allowed_commands.is_empty());
         assert_eq!(
@@ -1542,13 +1518,15 @@ mod tests {
         );
 
         let resolved = day_event_row("resolved");
-        assert!(select_host_tasks(&[], &[resolved], &host).is_empty());
+        assert!(select_host_tasks(&[], &[resolved], &host)
+            .expect("canonical resolved day event task phase id")
+            .is_empty());
     }
 
     fn host_prompt_row(prompt_id: &str, status: &str) -> projections::HostPromptRow {
         projections::HostPromptRow {
             game_id: Uuid::nil(),
-            phase_id: "D01".to_string(),
+            phase_id: domain::phase::PhaseId::parse("D01").expect("canonical fixture phase id"),
             event_index: 0,
             prompt_id: prompt_id.to_string(),
             kind: "skip_next_day".to_string(),
@@ -1599,7 +1577,9 @@ mod tests {
             }))
             .unwrap(),
             state: state.to_string(),
-            phase_id: Some("D01".to_string()),
+            phase_id: Some(
+                domain::phase::PhaseId::parse("D01").expect("canonical fixture phase id"),
+            ),
             opened_at: Some(1),
             locked_at: Some(2),
             open_due_at: None,
@@ -1642,14 +1622,12 @@ fn resolve_pack_artifact(
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostPrompt {
     pub game: Uuid,
-    pub phase_id: String,
+    pub phase_id: domain::phase::PhaseId,
     pub event_index: i32,
     pub prompt_id: String,
     pub kind: String,
     pub subject_slot: Option<String>,
     pub reason: String,
-    pub phase_kind: String,
-    pub phase_number: i32,
     pub metadata: HostPromptMetadata,
     pub status: String,
     pub decision: Option<HostPromptRecordedDecision>,
@@ -1670,8 +1648,6 @@ impl TryFrom<projections::HostPromptRow> for HostPrompt {
             kind: delta.kind,
             subject_slot: delta.subject_slot,
             reason: delta.reason,
-            phase_kind: delta.phase_kind,
-            phase_number: delta.phase_number,
             metadata: delta.metadata,
             status: delta.status,
             decision: delta.decision,
@@ -1704,7 +1680,7 @@ pub struct HostConsoleStateResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostConsolePhaseState {
-    pub phase_id: String,
+    pub phase_id: domain::phase::PhaseId,
     pub locked: bool,
     pub deadline: Option<i64>,
 }
@@ -1731,7 +1707,7 @@ pub struct HostConsoleSlotOccupancy {
 pub struct HostConsoleThreadPost {
     pub stream_seq: i64,
     pub author: GameThreadAuthor,
-    pub phase_id: String,
+    pub phase_id: Option<domain::phase::PhaseId>,
     pub body: String,
     #[serde(default)]
     pub quotations: Vec<Quotation>,
@@ -1782,7 +1758,7 @@ pub struct HostSetupProgramSchedulePreview {
     pub channel_policy: game_platform::EventChannelPolicy,
     pub reward_keys: Vec<String>,
     pub mode: String,
-    pub phase_id: Option<String>,
+    pub phase_id: Option<domain::phase::PhaseId>,
     pub open_at: Option<i64>,
     pub open_offset: Option<i64>,
     pub lock_at: Option<i64>,
@@ -1904,7 +1880,6 @@ async fn host_phase_controls(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     authorization: GameAuthorization,
-
 ) -> Result<Json<Vec<HostPhaseControl>>, ApiError> {
     require_host_audit_access(
         &state.pool,
@@ -1927,7 +1902,6 @@ async fn host_prompts(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     authorization: GameAuthorization,
-
 ) -> Result<Json<Vec<HostPrompt>>, ApiError> {
     require_host_audit_access(
         &state.pool,
@@ -1951,7 +1925,6 @@ async fn host_console_state(
     Path(game): Path<Uuid>,
     Query(query): Query<HostConsoleStateQuery>,
     authorization: GameAuthorization,
-
 ) -> Result<Json<HostConsoleStateResponse>, ApiError> {
     let authority = resolve_host_console_authority(&state.pool, game, &authorization)
         .await?
@@ -1997,7 +1970,6 @@ async fn host_setup_state(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
     authorization: GameAuthorization,
-
 ) -> Result<Json<HostSetupStateResponse>, ApiError> {
     require_host_audit_access(
         &state.pool,
@@ -2127,7 +2099,7 @@ pub(super) async fn load_host_console_state(
     let day_event_participation = projections::day_event_participation_for_game(pool, game).await?;
     let day_event_narratives = projections::day_event_narratives(pool, game).await?;
     let private_channel_members = projections::private_channel_members(pool, game).await?;
-    let tasks = select_host_tasks(&host_prompts, &day_event_rows, &authority);
+    let tasks = select_host_tasks(&host_prompts, &day_event_rows, &authority)?;
     let day_events = day_event_rows
         .iter()
         .map(|event| HostDayEventDelta {
@@ -2186,14 +2158,14 @@ fn select_host_tasks(
     prompts: &[projections::HostPromptRow],
     day_events: &[projections::DayEventRow],
     authority: &HostConsoleAuthorityDelta,
-) -> Vec<HostTaskDelta> {
+) -> Result<Vec<HostTaskDelta>, ApiError> {
     let can_resolve_prompt = authority
         .allowed_classes
         .contains(&wire::CohostPermissionClass::HostPromptResolve);
     let mut tasks: Vec<_> = prompts
         .iter()
         .filter(|prompt| prompt.status == "pending")
-        .map(|prompt| {
+        .map(|prompt| -> Result<_, ApiError> {
             let (state, allowed_commands, blocked_reason) = if can_resolve_prompt {
                 (
                     HostTaskState::Ready,
@@ -2220,83 +2192,77 @@ fn select_host_tasks(
                     }),
                 )
             };
-            HostTaskDelta {
+            Ok(HostTaskDelta {
                 id: format!("engine-host-prompt:{}", prompt.prompt_id),
                 kind: HostTaskKind::EngineHostPrompt,
                 state,
                 urgency: HostTaskUrgency::Attention,
                 intent: prompt.reason.clone(),
                 consequence: format!("resolve pack-defined {} policy", prompt.kind),
-                phase_id: prompt.phase_id.clone(),
+                phase_id: Some(prompt.phase_id.clone()),
                 subject_slot: prompt.subject_slot.clone(),
                 source_id: prompt.prompt_id.clone(),
                 allowed_commands,
                 blocked_reason,
-            }
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
     let can_resolve_day_event = authority
         .allowed_classes
         .contains(&wire::CohostPermissionClass::DayEventResolve);
-    tasks.extend(
-        day_events
-            .iter()
-            .filter(|event| {
-                event.state == "locked"
-                    && event.definition.resolution
-                        == game_platform::DayEventResolutionMode::HostDecision
-            })
-            .map(|event| {
-                let (state, allowed_commands, blocked_reason) = if can_resolve_day_event {
-                    (
-                        HostTaskState::Ready,
-                        vec![HostTaskAllowedCommand {
-                            kind: HostTaskCommandKind::ResolveDayEvent,
-                            permission_class: wire::CohostPermissionClass::DayEventResolve,
-                        }],
-                        None,
-                    )
+    for event in day_events.iter().filter(|event| {
+        event.state == "locked"
+            && event.definition.resolution == game_platform::DayEventResolutionMode::HostDecision
+    }) {
+        let (state, allowed_commands, blocked_reason) = if can_resolve_day_event {
+            (
+                HostTaskState::Ready,
+                vec![HostTaskAllowedCommand {
+                    kind: HostTaskCommandKind::ResolveDayEvent,
+                    permission_class: wire::CohostPermissionClass::DayEventResolve,
+                }],
+                None,
+            )
+        } else {
+            (
+                HostTaskState::Blocked,
+                Vec::new(),
+                Some(match authority.capability {
+                    HostConsoleAuthorityKind::CohostOf => {
+                        "cohost policy denies day_event_resolve".to_string()
+                    }
+                    HostConsoleAuthorityKind::GlobalOperator => {
+                        "global operators have read-only host console access".to_string()
+                    }
+                    HostConsoleAuthorityKind::HostOf => {
+                        "DayEvent resolution is unavailable".to_string()
+                    }
+                }),
+            )
+        };
+        tasks.push(HostTaskDelta {
+            id: format!("day-event-resolve:{}", event.event_id),
+            kind: HostTaskKind::DayEventResolve,
+            state,
+            urgency: HostTaskUrgency::Attention,
+            intent: format!("Resolve {}", event.definition.template_key.as_str()),
+            consequence: format!(
+                "apply {} reward binding{} atomically",
+                event.definition.rewards.len(),
+                if event.definition.rewards.len() == 1 {
+                    ""
                 } else {
-                    (
-                        HostTaskState::Blocked,
-                        Vec::new(),
-                        Some(match authority.capability {
-                            HostConsoleAuthorityKind::CohostOf => {
-                                "cohost policy denies day_event_resolve".to_string()
-                            }
-                            HostConsoleAuthorityKind::GlobalOperator => {
-                                "global operators have read-only host console access".to_string()
-                            }
-                            HostConsoleAuthorityKind::HostOf => {
-                                "DayEvent resolution is unavailable".to_string()
-                            }
-                        }),
-                    )
-                };
-                HostTaskDelta {
-                    id: format!("day-event-resolve:{}", event.event_id),
-                    kind: HostTaskKind::DayEventResolve,
-                    state,
-                    urgency: HostTaskUrgency::Attention,
-                    intent: format!("Resolve {}", event.definition.template_key.as_str()),
-                    consequence: format!(
-                        "apply {} reward binding{} atomically",
-                        event.definition.rewards.len(),
-                        if event.definition.rewards.len() == 1 {
-                            ""
-                        } else {
-                            "s"
-                        }
-                    ),
-                    phase_id: event.phase_id.clone().unwrap_or_default(),
-                    subject_slot: None,
-                    source_id: event.event_id.clone(),
-                    allowed_commands,
-                    blocked_reason,
+                    "s"
                 }
-            }),
-    );
-    tasks
+            ),
+            phase_id: event.phase_id.clone(),
+            subject_slot: None,
+            source_id: event.event_id.clone(),
+            allowed_commands,
+            blocked_reason,
+        });
+    }
+    Ok(tasks)
 }
 
 pub(super) async fn resolve_host_console_authority(
@@ -2724,15 +2690,18 @@ fn humanize_identifier(value: &str) -> String {
 fn start_phase_options(phases: &domain::pack::PhasePolicy) -> Vec<String> {
     let mut options = BTreeSet::new();
     for kind in &phases.cadence {
-        let prefix = match kind {
-            domain::pack::PhaseKind::Day => "D",
-            domain::pack::PhaseKind::Night => "N",
-            domain::pack::PhaseKind::Twilight => "T",
-        };
-        options.insert(format!("{prefix}01"));
+        options.insert(
+            domain::phase::PhaseId::compose(*kind, 1)
+                .expect("one is a valid canonical phase ordinal")
+                .to_string(),
+        );
     }
     if options.is_empty() {
-        options.insert("D01".to_string());
+        options.insert(
+            domain::phase::PhaseId::compose(domain::phase::PhaseKind::Day, 1)
+                .expect("one is a valid canonical phase ordinal")
+                .to_string(),
+        );
     }
     options.into_iter().collect()
 }

@@ -49,7 +49,7 @@ async fn setup_game(pool: &PgPool) -> Uuid {
         },
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     ] {
         handle(pool, &host, command)

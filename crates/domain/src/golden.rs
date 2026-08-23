@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::pack::Window;
+use crate::phase::PhaseId;
 use crate::resolver::{resolve, resolve_instant, DayPhaseInputs, ResolutionInput};
 use crate::state::{StateSnapshot, Submission};
 use crate::Pack;
@@ -33,7 +34,7 @@ impl std::error::Error for GoldenFixtureError {}
 
 #[derive(Deserialize)]
 struct GoldenInput {
-    phase_id: String,
+    phase_id: PhaseId,
     state: StateSnapshot,
     submissions: Vec<Submission>,
     #[serde(default)]
@@ -62,19 +63,14 @@ pub fn golden_events_from_input_value(
         seed: input.seed,
         logical_time: 0,
     };
-    if use_instant {
-        return resolve_instant(resolution_input)
-            .applied
-            .events
-            .into_iter()
-            .map(|event| {
-                serde_json::to_value(event)
-                    .map_err(|err| GoldenFixtureError::Serialize(err.to_string()))
-            })
-            .collect();
+    let output = if use_instant {
+        resolve_instant(resolution_input)
+    } else {
+        resolve(resolution_input)
     }
+    .map_err(|error| GoldenFixtureError::Input(format!("invalid resolution input: {error}")))?;
 
-    resolve(resolution_input)
+    output
         .applied
         .events
         .into_iter()

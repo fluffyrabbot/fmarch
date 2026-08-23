@@ -4,14 +4,19 @@
     "game_id": "game_mu_commute_mafia_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -51,7 +56,9 @@
         "action_id": "mu_mafia_commute_001",
         "actor": "slot_1",
         "template_id": "commute",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -61,7 +68,9 @@
         "action_id": "mu_cop_check_mafia_commuter_001",
         "actor": "slot_2",
         "template_id": "cop_investigate",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,

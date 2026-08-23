@@ -2198,6 +2198,7 @@ dependencies = [
  "axum",
  "caps",
  "commands",
+ "domain",
  "eventstore",
  "identity",
  "operator_proof",

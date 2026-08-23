@@ -4,14 +4,19 @@
     "game_id": "game_demo_conversion_pending_death_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["sod", "main", "eod"]
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -28,7 +33,9 @@
           "role_key": "cop",
           "alignment": "town",
           "status": "alive",
-          "effects": ["poisoned"]
+          "effects": [
+            "poisoned"
+          ]
         },
         {
           "slot_id": "slot_3",
@@ -53,9 +60,7 @@
           "effect": "poisoned",
           "source": "slot_3",
           "source_action": "poison_prev",
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ]
     },
@@ -64,7 +69,9 @@
         "action_id": "convert_001",
         "actor": "slot_1",
         "template_id": "vanillaize",
-        "targets": ["slot_2"],
+        "targets": [
+          "slot_2"
+        ],
         "phase_id": "N02",
         "submitted_at": 1,
         "withdrawn": false,
@@ -93,9 +100,7 @@
         "cause": "poison",
         "effect": "poisoned",
         "outcome": "applied",
-        "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2
+        "phase_id": "N02"
       }
     },
     {

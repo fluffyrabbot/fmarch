@@ -4,14 +4,19 @@
     "game_id": "game_mafiascum_roleblocker_aliases_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["sod", "main", "eod"]
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -86,7 +91,9 @@
         "action_id": "hooker_block_doctor_001",
         "actor": "slot_1",
         "template_id": "roleblocker_block",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -96,7 +103,9 @@
         "action_id": "mafia_roleblocker_block_cop_001",
         "actor": "slot_2",
         "template_id": "roleblocker_block",
-        "targets": ["slot_6"],
+        "targets": [
+          "slot_6"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -106,7 +115,9 @@
         "action_id": "jailer_block_tracker_001",
         "actor": "slot_4",
         "template_id": "roleblocker_block",
-        "targets": ["slot_7"],
+        "targets": [
+          "slot_7"
+        ],
         "phase_id": "N01",
         "submitted_at": 3,
         "withdrawn": false,
@@ -116,7 +127,9 @@
         "action_id": "mafia_kill_001",
         "actor": "slot_3",
         "template_id": "factional_kill",
-        "targets": ["slot_8"],
+        "targets": [
+          "slot_8"
+        ],
         "phase_id": "N01",
         "submitted_at": 4,
         "withdrawn": false,
@@ -126,7 +139,9 @@
         "action_id": "doctor_protect_001",
         "actor": "slot_5",
         "template_id": "doctor_protect",
-        "targets": ["slot_8"],
+        "targets": [
+          "slot_8"
+        ],
         "phase_id": "N01",
         "submitted_at": 5,
         "withdrawn": false,
@@ -136,7 +151,9 @@
         "action_id": "cop_investigate_001",
         "actor": "slot_6",
         "template_id": "cop_investigate",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 6,
         "withdrawn": false,
@@ -146,7 +163,9 @@
         "action_id": "tracker_track_001",
         "actor": "slot_7",
         "template_id": "track",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 7,
         "withdrawn": false,
@@ -187,7 +206,9 @@
       "payload": {
         "slot_id": "slot_8",
         "cause": "factional_kill",
-        "attackers": ["slot_3"],
+        "attackers": [
+          "slot_3"
+        ],
         "unstoppable": false
       }
     },

@@ -11,8 +11,6 @@
         ],
         "kind": "mailman",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "result": {
           "kind": "mailman",
           "message": "anonymous",
@@ -34,8 +32,6 @@
         ],
         "kind": "observe",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "result": {
           "kind": "observe",
           "source_action": "sub_002",
@@ -56,8 +52,6 @@
         ],
         "kind": "report",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "result": {
           "kind": "report",
           "source_action": "sub_003",
@@ -85,8 +79,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "N01",
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

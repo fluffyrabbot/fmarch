@@ -329,7 +329,7 @@ async fn setup_audit_resolution_inputs(pool: &PgPool, user_prefix: &str) -> Uuid
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -374,10 +374,15 @@ async fn setup_mutated_audit_resolution(
 ) -> AuditResolutionFixture {
     let game = setup_audit_resolution_inputs(pool, user_prefix).await;
     let stream = stored_events(pool, game).await;
-    let phase_input = EngineInputBuilder::new(game, &stream, "D01")
-        .build()
-        .expect("build audit fixture resolver input");
-    let output = domain::resolve(phase_input.resolve_input(EngineRunKind::ResolvePhase { seed }));
+    let phase_input = EngineInputBuilder::new(
+        game,
+        &stream,
+        domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
+    )
+    .build()
+    .expect("build audit fixture resolver input");
+    let output = domain::resolve(phase_input.resolve_input(EngineRunKind::ResolvePhase { seed }))
+        .expect("generated audit fixture resolver input is phase-consistent");
     let mut applied_payload = serde_json::to_value(&output.applied).unwrap();
     let mut trace_payload = serde_json::to_value(&output.trace).unwrap();
 
@@ -3100,9 +3105,7 @@ fn generated_mafiascum_backup_inheritance_fixture_json(seed: u64) -> String {
                         "policy_detail": {
                             "source_action": format!("generated_seed_{seed}_target_backup_source"),
                             "declared_source_role": "cop",
-                            "target_phase_id": "N01",
-                            "target_phase_kind": "Night",
-                            "target_phase_number": 1
+                            "target_phase_id": "N01"
                         },
                         "new_role": "cop",
                         "new_alignment": "town",
@@ -3390,8 +3393,6 @@ fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -
                             "actor": "slot_1",
                             "source_action": format!("generated_seed_{seed}_fresh_visible_douse"),
                             "phase_id": "N02",
-                            "phase_kind": "Night",
-                            "phase_number": 2,
                             "duration": "Persistent",
                             "visibility": "ActorAndTarget"
                         }
@@ -3485,9 +3486,7 @@ fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -
                             "cause": "poison",
                             "effect": "poisoned",
                             "outcome": "preempted_by_clear",
-                            "phase_id": "N02",
-                            "phase_kind": "Night",
-                            "phase_number": 2
+                            "phase_id": "N02"
                         }
                     },
                     {
@@ -3531,9 +3530,7 @@ fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -
                             "effect": "poisoned",
                             "source_slot": "slot_1",
                             "source_action": format!("generated_seed_{seed}_fresh_poison_noise"),
-                            "phase_id": "N02",
-                            "phase_kind": "Night",
-                            "phase_number": 2
+                            "phase_id": "N02"
                         }
                     }
                 ],
@@ -3554,8 +3551,6 @@ fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -
                             "source_slot": "slot_1",
                             "source_action": format!("generated_seed_{seed}_fresh_poison_noise"),
                             "phase_id": "N02",
-                            "phase_kind": "Night",
-                            "phase_number": 2,
                             "duration": "Persistent",
                             "visibility": "Target"
                         }
@@ -3715,8 +3710,6 @@ fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) ->
                             "action_id": format!("generated_seed_{seed}_cop_extra"),
                             "source_action": format!("generated_seed_{seed}_motivate_extra_action"),
                             "phase_id": "N02",
-                            "phase_kind": "Night",
-                            "phase_number": 2,
                             "remaining_uses": 0
                         }
                     },
@@ -3749,9 +3742,7 @@ fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) ->
                             "kind": "ExtraAction",
                             "source_action": format!("generated_seed_{seed}_motivate_extra_action"),
                             "uses": 1,
-                            "phase_id": "N01",
-                            "phase_kind": "Night",
-                            "phase_number": 1
+                            "phase_id": "N01"
                         }
                     },
                     {
@@ -3818,8 +3809,6 @@ fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) ->
                             "action_id": format!("generated_seed_{seed}_use_vest_item"),
                             "source_action": format!("generated_seed_{seed}_grant_vest_item"),
                             "phase_id": "N02",
-                            "phase_kind": "Night",
-                            "phase_number": 2,
                             "remaining_uses": 0
                         }
                     },
@@ -3842,9 +3831,7 @@ fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) ->
                             "target": "slot_2",
                             "actor": "slot_2",
                             "source_action": format!("generated_seed_{seed}_use_vest_item"),
-                            "phase_id": "N02",
-                            "phase_kind": "Night",
-                            "phase_number": 2
+                            "phase_id": "N02"
                         }
                     }
                 ],
@@ -3858,9 +3845,7 @@ fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) ->
                             "kind": "Item",
                             "source_action": format!("generated_seed_{seed}_grant_vest_item"),
                             "uses": 1,
-                            "phase_id": "N01",
-                            "phase_kind": "Night",
-                            "phase_number": 1
+                            "phase_id": "N01"
                         }
                     },
                     {
@@ -3927,8 +3912,6 @@ fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) ->
                             "action_id": format!("generated_seed_{seed}_private_use_vest_item"),
                             "source_action": format!("generated_seed_{seed}_private_grant_vest_item"),
                             "phase_id": "N02",
-                            "phase_kind": "Night",
-                            "phase_number": 2,
                             "remaining_uses": 0
                         }
                     },
@@ -3951,9 +3934,7 @@ fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) ->
                             "target": "slot_2",
                             "actor": "slot_2",
                             "source_action": format!("generated_seed_{seed}_private_use_vest_item"),
-                            "phase_id": "N02",
-                            "phase_kind": "Night",
-                            "phase_number": 2
+                            "phase_id": "N02"
                         }
                     }
                 ],
@@ -3967,9 +3948,7 @@ fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) ->
                             "kind": "Item",
                             "source_action": format!("generated_seed_{seed}_private_grant_vest_item"),
                             "uses": 1,
-                            "phase_id": "N01",
-                            "phase_kind": "Night",
-                            "phase_number": 1
+                            "phase_id": "N01"
                         }
                     },
                     {
@@ -4579,8 +4558,6 @@ fn generated_chinese_night_expectations_json(
                         "actor": action.actor_slot,
                         "source_action": action.action_id,
                         "phase_id": "N01",
-                        "phase_kind": "Night",
-                        "phase_number": 1,
                         "duration": "Persistent",
                         "visibility": "Hidden",
                     }
@@ -4593,8 +4570,6 @@ fn generated_chinese_night_expectations_json(
                         "effect": "wolf_beauty_mark",
                         "source_action": action.action_id,
                         "phase_id": "N01",
-                        "phase_kind": "Night",
-                        "phase_number": 1,
                     }
                 }));
             }
@@ -4701,8 +4676,6 @@ fn generated_chinese_day_expectations_json(case: &GeneratedNightCase) -> Option<
                     "reason": "elected",
                     "destroyed": false,
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1,
                 }
             },
             {
@@ -4718,8 +4691,6 @@ fn generated_chinese_day_expectations_json(case: &GeneratedNightCase) -> Option<
                     "used": 1,
                     "remaining": 0,
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1,
                 }
             },
             {
@@ -4731,8 +4702,6 @@ fn generated_chinese_day_expectations_json(case: &GeneratedNightCase) -> Option<
                     "killed": duel_killed,
                     "source_action": duel.action_id,
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1,
                 }
             },
             {
@@ -4753,8 +4722,6 @@ fn generated_chinese_day_expectations_json(case: &GeneratedNightCase) -> Option<
                     "unstoppable": true,
                     "source_action": self_destruct.action_id,
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1,
                 }
             },
             {
@@ -4790,8 +4757,6 @@ fn generated_chinese_day_expectations_json(case: &GeneratedNightCase) -> Option<
                     "result": duel_result,
                     "killed": duel_killed,
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1,
                 }
             },
             {
@@ -4803,8 +4768,6 @@ fn generated_chinese_day_expectations_json(case: &GeneratedNightCase) -> Option<
                     "cause": "self_destruct",
                     "unstoppable": true,
                     "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1,
                 }
             }
         ]
@@ -4823,8 +4786,6 @@ fn generated_mafia_universe_ita_expectations_json(
             "window": "ita_sessions",
             "status": "open",
             "phase_id": "D01",
-            "phase_kind": "Day",
-            "phase_number": 1,
         }
     })];
     let mut generated_actions = Vec::new();
@@ -4847,8 +4808,6 @@ fn generated_mafia_universe_ita_expectations_json(
                 "used": 1,
                 "remaining": 0,
                 "phase_id": "D01",
-                "phase_kind": "Day",
-                "phase_number": 1,
             }
         }));
         inner_events.push(serde_json::json!({
@@ -4907,8 +4866,6 @@ fn generated_mafia_universe_ita_expectations_json(
             "shots_resolved": case.actions.len() as u64,
             "global_shots_fired": case.actions.len() as u64,
             "phase_id": "D01",
-            "phase_kind": "Day",
-            "phase_number": 1,
         }
     }));
     inner_events.push(serde_json::json!({
@@ -4917,8 +4874,6 @@ fn generated_mafia_universe_ita_expectations_json(
             "session_id": "d1",
             "last_status": "open",
             "phase_id": "D01",
-            "phase_kind": "Day",
-            "phase_number": 1,
         }
     }));
 
@@ -4963,9 +4918,7 @@ fn chinese_sheriff_badge_election_fixture_json() -> String {
                         "source_action": "badge_el_001",
                         "reason": "elected",
                         "destroyed": false,
-                        "phase_id": "D01",
-                        "phase_kind": "Day",
-                        "phase_number": 1
+                        "phase_id": "D01"
                     }
                 },
                 {
@@ -5010,9 +4963,7 @@ fn chinese_sheriff_badge_election_fixture_json() -> String {
                     "source_action": "badge_el_001",
                     "reason": "elected",
                     "destroyed": false,
-                    "phase_id": "D01",
-                    "phase_kind": "Day",
-                    "phase_number": 1
+                    "phase_id": "D01"
                 }
             }]
         }
@@ -5065,9 +5016,7 @@ fn chinese_sheriff_badge_pass_fixture_json() -> String {
                         "source_action": "badge_pass_001",
                         "reason": "voluntary",
                         "destroyed": false,
-                        "phase_id": "D02",
-                        "phase_kind": "Day",
-                        "phase_number": 2
+                        "phase_id": "D02"
                     }
                 },
                 {
@@ -5112,9 +5061,7 @@ fn chinese_sheriff_badge_pass_fixture_json() -> String {
                     "source_action": "badge_pass_001",
                     "reason": "voluntary",
                     "destroyed": false,
-                    "phase_id": "D02",
-                    "phase_kind": "Day",
-                    "phase_number": 2
+                    "phase_id": "D02"
                 }
             }]
         }
@@ -5179,9 +5126,7 @@ fn chinese_sheriff_badge_destroy_fixture_json() -> String {
                         "source_action": "badge_destroy_001",
                         "reason": "destroyed",
                         "destroyed": true,
-                        "phase_id": "D03",
-                        "phase_kind": "Day",
-                        "phase_number": 3
+                        "phase_id": "D03"
                     }
                 },
                 {
@@ -5226,9 +5171,7 @@ fn chinese_sheriff_badge_destroy_fixture_json() -> String {
                     "source_action": "badge_destroy_001",
                     "reason": "destroyed",
                     "destroyed": true,
-                    "phase_id": "D03",
-                    "phase_kind": "Day",
-                    "phase_number": 3
+                    "phase_id": "D03"
                 }
             }]
         }
@@ -5264,9 +5207,7 @@ fn ita_buffered_release_fixture_json() -> String {
                     "kind": "ItaSessionOpened",
                     "payload": {
                         "session_id": "d1",
-                        "phase_id": "D01R1",
-                        "phase_kind": "Day",
-                        "phase_number": 1
+                        "phase_id": "D01R1"
                     }
                 },
                 {
@@ -5404,9 +5345,7 @@ fn ita_buffered_release_invalidated_fixture_json() -> String {
                     "kind": "ItaSessionOpened",
                     "payload": {
                         "session_id": "d1",
-                        "phase_id": "D01R1",
-                        "phase_kind": "Day",
-                        "phase_number": 1
+                        "phase_id": "D01R1"
                     }
                 },
                 {
@@ -6111,8 +6050,6 @@ fn mafiascum_no_majority_revote_prompt_fixture_json() -> String {
                         "subject": null,
                         "reason": "no_majority",
                         "phase_id": "D01",
-                        "phase_kind": "Day",
-                        "phase_number": 1,
                         "metadata": {
                             "policy": "no_majority_revote",
                             "status": "NoMajority",
@@ -6239,8 +6176,6 @@ fn mafiascum_beloved_princess_skip_next_day_fixture_json() -> String {
                         "subject": "slot_1",
                         "reason": "beloved_princess_death",
                         "phase_id": "D01",
-                        "phase_kind": "Day",
-                        "phase_number": 1,
                         "metadata": {
                             "policy": "beloved_princess",
                             "role": "beloved_princess",
@@ -6362,8 +6297,6 @@ fn mafiascum_virgin_night_skip_next_day_fixture_json() -> String {
                         "subject": "slot_2",
                         "reason": "beloved_princess_death",
                         "phase_id": "N01",
-                        "phase_kind": "Night",
-                        "phase_number": 1,
                         "metadata": {
                             "policy": "beloved_princess",
                             "role": "virgin",
@@ -6488,8 +6421,6 @@ fn dynamic_vote_no_majority_revote_prompt_fixture_json() -> String {
                         "subject": null,
                         "reason": "no_majority",
                         "phase_id": "D02",
-                        "phase_kind": "Day",
-                        "phase_number": 2,
                         "metadata": {
                             "policy": "no_majority_revote",
                             "status": "NoMajority",
@@ -6620,8 +6551,6 @@ fn dynamic_vote_pk_prompt_fixture_json() -> String {
                         "subject": null,
                         "reason": "host_decides_tie",
                         "phase_id": "D02",
-                        "phase_kind": "Day",
-                        "phase_number": 2,
                         "metadata": {
                             "policy": "pk_host_decides_tie",
                             "status": "Tie",
@@ -6746,8 +6675,6 @@ fn generated_chinese_x_shot_expectation(action: &GeneratedNightAction) -> serde_
             "used": 1,
             "remaining": 0,
             "phase_id": "N01",
-            "phase_kind": "Night",
-            "phase_number": 1,
         }
     })
 }
@@ -7256,7 +7183,7 @@ async fn setup_chinese_wolf_faction_vote_game(
         host,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -7350,7 +7277,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
         &h,
         Command::StartGame {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -7401,7 +7328,7 @@ async fn host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill_for_role
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -7577,7 +7504,7 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -7639,7 +7566,7 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
         &h,
         Command::OpenDayPhase {
             game,
-            phase: "D01".into(),
+            phase: domain::phase::PhaseId::parse("D01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -7717,8 +7644,6 @@ async fn assert_target_lynch_win_pipeline(pool: PgPool, case: TargetLynchWinPipe
                 ("winner", serde_json::json!(case.policy)),
                 ("source_action", serde_json::json!(case.action_id)),
                 ("target_phase_id", serde_json::json!("N01")),
-                ("target_phase_kind", serde_json::json!("Night")),
-                ("target_phase_number", serde_json::json!(1)),
             ],
         },
     );
@@ -7823,7 +7748,7 @@ async fn assert_mafia_universe_bomber_case(
         &h,
         Command::StartGame {
             game,
-            phase: "N01".into(),
+            phase: domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical"),
         },
     )
     .await
@@ -8248,7 +8173,9 @@ async fn wait_for_cancelled_command_cleanup(
             .fetch_one(pool)
             .await
             .unwrap();
-            let event_count: i64 = stored_event_count_where(pool, game, "PostSubmitted", &[("body", body)]).await as i64;
+            let event_count: i64 =
+                stored_event_count_where(pool, game, "PostSubmitted", &[("body", body)]).await
+                    as i64;
             let projection_count: i64 = sqlx::query_scalar(
                 "SELECT count(*) FROM thread_view WHERE game_id = $1 AND body = $2",
             )

@@ -15,7 +15,8 @@ use crate::events::{
     DuelResult, HostPromptIssued, HostPromptMetadata, IndexedEvent, InnerEvent,
     InvestigationResultBody, InvestigationResultFields, ItaCounters, ItaShotOutcome,
     LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement, ResolutionApplied,
-    ResolutionCounts, ResolutionTrace, TraceEdge, TriggerPayload, VoteStatus,
+    ResolutionCounts, ResolutionTrace, ResultValidationError, TraceEdge, TriggerPayload,
+    VoteStatus,
 };
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
@@ -24,14 +25,15 @@ use crate::pack::{
     ConversionPendingDeathPolicy, DayNoteRolePayload, DeathRetaliationTiming, DeathRevealMode,
     EffectDuration, EffectSourceDeathRevealKind, EffectVisibility, GrantKind, GrantSpec,
     GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy,
-    ItaVoteConflictPolicy, KillStackingPolicy, NightResolutionConflictFamily, Pack, PhaseKind,
+    ItaVoteConflictPolicy, KillStackingPolicy, NightResolutionConflictFamily, Pack,
     ResultMemoryOutput, ResultMemoryScope, RoleModifier, SuppressionScope, TargetRef, TargetSpec,
     TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule, VisibilityFamily,
     VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
 };
+use crate::phase::{PhaseId, PhaseKind};
 use crate::state::{
-    apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, PhaseId,
-    RevealState, Seed, SlotId, SlotState, StateSnapshot, Submission, WolfBeautyMarkRecord,
+    apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, RevealState,
+    Seed, SlotId, SlotState, StateSnapshot, Submission, WolfBeautyMarkRecord,
 };
 
 use serde::{Deserialize, Serialize};
@@ -122,6 +124,55 @@ pub struct ResolutionInput {
     pub pack: Pack,
     pub seed: Seed,
     pub logical_time: LogicalTime,
+}
+
+/// A resolver invocation is only meaningful when its explicit phase coordinate
+/// and snapshot describe the same exact window. This error is returned at the
+/// pure-engine boundary instead of allowing a malformed snapshot to produce a
+/// contradictory envelope (or an internal validation panic).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolutionInputError {
+    PhaseMismatch {
+        input_phase_id: PhaseId,
+        state_phase_id: PhaseId,
+    },
+    GeneratedResolution(ResultValidationError),
+    GeneratedTrace(ResultValidationError),
+}
+
+impl std::fmt::Display for ResolutionInputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PhaseMismatch {
+                input_phase_id,
+                state_phase_id,
+            } => write!(
+                f,
+                "resolution input phase `{input_phase_id}` does not match snapshot phase `{state_phase_id}`"
+            ),
+            Self::GeneratedResolution(error) => {
+                write!(f, "resolver generated an invalid resolution envelope: {error}")
+            }
+            Self::GeneratedTrace(error) => {
+                write!(f, "resolver generated an invalid resolution trace: {error}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ResolutionInputError {}
+
+impl ResolutionInput {
+    /// Validate untrusted or deserialized state before any resolver work.
+    pub fn validate(&self) -> Result<(), ResolutionInputError> {
+        if self.phase_id != self.state.phase_id {
+            return Err(ResolutionInputError::PhaseMismatch {
+                input_phase_id: self.phase_id.clone(),
+                state_phase_id: self.state.phase_id.clone(),
+            });
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -372,8 +423,6 @@ fn apply_wolf_beauty_drag_triggers(
                 "mark_effect": mark.effect.clone(),
                 "mark_source_action": mark.source_action.clone(),
                 "mark_phase_id": mark.phase_id.clone(),
-                "mark_phase_kind": mark.phase_kind,
-                "mark_phase_number": mark.phase_number,
                 "trigger_cause": record.cause.clone(),
                 "cause": policy.drag_cause.clone(),
             }),
@@ -383,8 +432,6 @@ fn apply_wolf_beauty_drag_triggers(
             dragged_ids: vec![mark.target_id.clone()],
             cause: policy.drag_cause.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
         if killed.contains(&mark.target_id) {
             let _ = merge_stacked_kill_attribution(
@@ -2577,8 +2624,6 @@ fn action_use_counted(
         .min(limit);
     counter_use_counted(CounterUseInput {
         phase_id: input.phase_id.clone(),
-        phase_kind: input.state.phase_kind,
-        phase_number: input.state.phase_number,
         counter_id: action_counter_id(&template_id),
         actor,
         template_id,
@@ -2610,8 +2655,6 @@ fn day_session_use_counted(
         used,
         remaining: limit.saturating_sub(used),
         phase_id: input.phase_id.clone(),
-        phase_kind: input.state.phase_kind,
-        phase_number: input.state.phase_number,
     }
 }
 
@@ -2635,8 +2678,6 @@ fn inventory_use_counted(
         used: limit.saturating_sub(remaining),
         remaining,
         phase_id: input.phase_id.clone(),
-        phase_kind: input.state.phase_kind,
-        phase_number: input.state.phase_number,
     }
 }
 
@@ -2701,8 +2742,6 @@ fn effects_marked(
         actor,
         source_action: Some(source_action),
         phase_id: Some(input.phase_id.clone()),
-        phase_kind: Some(input.state.phase_kind),
-        phase_number: Some(input.state.phase_number),
         duration,
         visibility,
     }
@@ -2772,7 +2811,12 @@ fn phase_window_mismatch_reason(window: Window, phase_kind: PhaseKind) -> Option
 }
 
 /// Resolve a window's submissions into the full deterministic resolver output.
-pub fn resolve(input: ResolutionInput) -> ResolutionOutput {
+///
+/// The resolver is intentionally fallible at its public boundary: a snapshot
+/// assembled from storage or fixture JSON must not be allowed to mix a phase
+/// id with contradictory denormalized coordinates.
+pub fn resolve(input: ResolutionInput) -> Result<ResolutionOutput, ResolutionInputError> {
+    input.validate()?;
     let inner = resolve_inner(&input);
     finalize_resolution(input, inner)
 }
@@ -2780,7 +2824,8 @@ pub fn resolve(input: ResolutionInput) -> ResolutionOutput {
 /// Resolve command-time Instant submissions into the same validated envelope shape
 /// as ordinary phase resolution. Instant actions are not replayed by
 /// `resolve_inner`; callers must pass only the instant submissions being committed.
-pub fn resolve_instant(input: ResolutionInput) -> ResolutionOutput {
+pub fn resolve_instant(input: ResolutionInput) -> Result<ResolutionOutput, ResolutionInputError> {
+    input.validate()?;
     let mut events = Vec::new();
     let mut trace_decisions = Vec::new();
     resolve_instant_self_destruct_actions(&input, &mut events);
@@ -2798,7 +2843,10 @@ pub fn resolve_instant(input: ResolutionInput) -> ResolutionOutput {
     finalize_resolution(input, inner)
 }
 
-fn finalize_resolution(input: ResolutionInput, mut inner: InnerResolution) -> ResolutionOutput {
+fn finalize_resolution(
+    input: ResolutionInput,
+    mut inner: InnerResolution,
+) -> Result<ResolutionOutput, ResolutionInputError> {
     let mut events = inner.events;
     apply_treestump_policy(&input, &mut events, &mut inner.trace_decisions);
     let mut post_state = apply_events(&input.state, &events);
@@ -2826,15 +2874,15 @@ fn finalize_resolution(input: ResolutionInput, mut inner: InnerResolution) -> Re
         trace_notes: inner.trace_notes,
     });
     crate::events::validate_resolution_applied(&applied, RESULT_VERSION)
-        .expect("resolver must produce a valid ResolutionApplied envelope");
+        .map_err(ResolutionInputError::GeneratedResolution)?;
     crate::events::validate_resolution_trace(&trace, crate::events::TRACE_VERSION)
-        .expect("resolver must produce a valid ResolutionTrace envelope");
+        .map_err(ResolutionInputError::GeneratedTrace)?;
 
-    ResolutionOutput {
+    Ok(ResolutionOutput {
         applied,
         trace,
         post_state,
-    }
+    })
 }
 
 fn has_win_reached(events: &[InnerEvent]) -> bool {
@@ -2940,7 +2988,7 @@ fn resolve_inner(input: &ResolutionInput) -> InnerResolution {
     let (mut window_events, mut window_decisions) = phase_window_mismatch_halts(input);
     events.append(&mut window_events);
     ingest_decisions.append(&mut window_decisions);
-    let mut inner = match input.state.phase_kind {
+    let mut inner = match input.state.phase_id.kind() {
         PhaseKind::Day => resolve_day(input),
         PhaseKind::Twilight => resolve_twilight(input),
         PhaseKind::Night => resolve_night(input),
@@ -2963,8 +3011,10 @@ fn invalid_submission_ingest_halts(
         .iter()
         .filter(|sub| !sub.withdrawn)
         .filter(|sub| {
-            !(matches!(input.state.phase_kind, PhaseKind::Day | PhaseKind::Twilight)
-                && sub.template_id == "day_vote")
+            !(matches!(
+                input.state.phase_id.kind(),
+                PhaseKind::Day | PhaseKind::Twilight
+            ) && sub.template_id == "day_vote")
         })
         .filter(|sub| !submission_has_exhausted_item_grant(input, sub))
         .filter(|sub| lookup_submission_template(input, sub).is_none())
@@ -2989,8 +3039,6 @@ fn invalid_submission_ingest_halts(
             template_id: sub.template_id.clone(),
             targets: sub.targets.clone(),
             phase_id: sub.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
             reason: reason.clone(),
             grant_id: grant_id.clone(),
         });
@@ -3021,7 +3069,8 @@ fn phase_window_mismatch_halts(input: &ResolutionInput) -> (Vec<InnerEvent>, Vec
         let Some(template) = lookup_submission_template(input, sub) else {
             continue;
         };
-        let Some(reason) = phase_window_mismatch_reason(template.window, input.state.phase_kind)
+        let Some(reason) =
+            phase_window_mismatch_reason(template.window, input.state.phase_id.kind())
         else {
             continue;
         };
@@ -3039,8 +3088,6 @@ fn phase_window_mismatch_halts(input: &ResolutionInput) -> (Vec<InnerEvent>, Vec
                 "actor": sub.actor,
                 "template_id": sub.template_id,
                 "phase_id": sub.phase_id,
-                "phase_kind": input.state.phase_kind,
-                "phase_number": input.state.phase_number,
                 "window": template.window,
                 "reason": reason,
             }),
@@ -3053,8 +3100,9 @@ fn phase_window_mismatch_halts(input: &ResolutionInput) -> (Vec<InnerEvent>, Vec
 fn grant_consumption_events(input: &ResolutionInput) -> Vec<InnerEvent> {
     let mut grants = input.state.action_grants.clone();
     grants.sort_by(|a, b| {
-        a.phase_number
-            .cmp(&b.phase_number)
+        a.phase_id
+            .number()
+            .cmp(&b.phase_id.number())
             .then(a.phase_id.cmp(&b.phase_id))
             .then(a.actor.cmp(&b.actor))
             .then(a.grant_id.cmp(&b.grant_id))
@@ -3096,8 +3144,6 @@ fn grant_consumption_events(input: &ResolutionInput) -> Vec<InnerEvent> {
             action_id: sub.action_id.clone(),
             source_action: grant.source_action.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
             remaining_uses,
         });
         if grant.kind == GrantKind::Item {
@@ -3142,8 +3188,6 @@ fn wrap_resolution(input: &ResolutionInput, inner: Vec<InnerEvent>) -> Resolutio
 
     ResolutionApplied {
         phase_id: input.phase_id.clone(),
-        phase_kind: input.state.phase_kind,
-        phase_number: input.state.phase_number,
         run_id: input.run_id.clone(),
         result_version: RESULT_VERSION,
         seed: input.seed,
@@ -3384,8 +3428,6 @@ fn apply_pending_poison(
                 effect: queued.effect.clone(),
                 outcome: "target_already_dead".to_string(),
                 phase_id: input.phase_id.clone(),
-                phase_kind: input.state.phase_kind,
-                phase_number: input.state.phase_number,
             });
             continue;
         }
@@ -3411,8 +3453,6 @@ fn apply_pending_poison(
                 effect: queued.effect.clone(),
                 outcome: "preempted_by_clear".to_string(),
                 phase_id: input.phase_id.clone(),
-                phase_kind: input.state.phase_kind,
-                phase_number: input.state.phase_number,
             });
             continue;
         }
@@ -3435,8 +3475,6 @@ fn apply_pending_poison(
             effect: queued.effect.clone(),
             outcome: "applied".to_string(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
         killed.push(slot.slot_id.clone());
         events.push(InnerEvent::PlayerKilled {
@@ -3477,8 +3515,6 @@ fn apply_backup_inheritance(
             source_role,
             source_action,
             phase_id,
-            phase_kind,
-            phase_number,
         } = event
         {
             backup_targets.retain(|record| record.backup != *backup);
@@ -3488,8 +3524,6 @@ fn apply_backup_inheritance(
                 source_role: source_role.clone(),
                 source_action: source_action.clone(),
                 phase_id: phase_id.clone(),
-                phase_kind: *phase_kind,
-                phase_number: *phase_number,
             });
         }
     }
@@ -3516,8 +3550,6 @@ fn apply_backup_inheritance(
                                 "source_action": record.source_action,
                                 "declared_source_role": record.source_role,
                                 "target_phase_id": record.phase_id,
-                                "target_phase_kind": record.phase_kind,
-                                "target_phase_number": record.phase_number,
                             }),
                         )
                     })
@@ -3779,8 +3811,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         actor: actor.clone(),
                                         source_action: None,
                                         phase_id: None,
-                                        phase_kind: None,
-                                        phase_number: None,
                                     });
                                     cleared_effects
                                         .insert((previous.target_id.clone(), effect.clone()));
@@ -3819,8 +3849,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     source: actor.clone(),
                                     source_action: actions[idx].sub.action_id.clone(),
                                     phase_id: input.phase_id.clone(),
-                                    phase_kind: input.state.phase_kind,
-                                    phase_number: input.state.phase_number,
                                 });
                             }
                             if is_wolf_beauty_mark {
@@ -3830,8 +3858,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     effect: effect.clone(),
                                     source_action: actions[idx].sub.action_id.clone(),
                                     phase_id: input.phase_id.clone(),
-                                    phase_kind: input.state.phase_kind,
-                                    phase_number: input.state.phase_number,
                                 });
                                 wolf_beauty_marks.retain(|record| record.beauty_id != actor);
                                 wolf_beauty_marks.push(WolfBeautyMarkRecord {
@@ -3840,8 +3866,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     effect: effect.clone(),
                                     source_action: actions[idx].sub.action_id.clone(),
                                     phase_id: input.phase_id.clone(),
-                                    phase_kind: input.state.phase_kind,
-                                    phase_number: input.state.phase_number,
                                 });
                             }
                             if input.pack.backup_policy.enabled
@@ -3856,8 +3880,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         source_role: source_slot.role_key.clone(),
                                         source_action: actions[idx].sub.action_id.clone(),
                                         phase_id: input.phase_id.clone(),
-                                        phase_kind: input.state.phase_kind,
-                                        phase_number: input.state.phase_number,
                                     });
                                 }
                             }
@@ -3877,8 +3899,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         effect: effect.clone(),
                                         source_action: actions[idx].sub.action_id.clone(),
                                         phase_id: input.phase_id.clone(),
-                                        phase_kind: input.state.phase_kind,
-                                        phase_number: input.state.phase_number,
                                     });
                                 }
                             }
@@ -3914,8 +3934,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             actor,
                             source_action: None,
                             phase_id: None,
-                            phase_kind: None,
-                            phase_number: None,
                         });
                         for target in targets {
                             cleared_effects.insert((target.clone(), effect.clone()));
@@ -3948,8 +3966,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             uses: grant.uses,
                             vote_weight: grant.vote_weight,
                             phase_id: input.phase_id.clone(),
-                            phase_kind: input.state.phase_kind,
-                            phase_number: input.state.phase_number,
                         });
                         emit_grant_notification(
                             input,
@@ -4021,8 +4037,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             template_id: actions[idx].template.id.clone(),
                             source_action: actions[idx].sub.action_id.clone(),
                             phase_id: input.phase_id.clone(),
-                            phase_kind: input.state.phase_kind,
-                            phase_number: input.state.phase_number,
                             visible,
                         });
                     }
@@ -4064,8 +4078,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             source_action: actions[idx].sub.action_id.clone(),
                             template_id: actions[idx].template.id.clone(),
                             phase_id: input.phase_id.clone(),
-                            phase_kind: input.state.phase_kind,
-                            phase_number: input.state.phase_number,
                         });
                     }
                 }
@@ -4326,8 +4338,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             effect_id,
                             role_key: token.role_key.clone(),
                             phase_id: input.phase_id.clone(),
-                            phase_kind: input.state.phase_kind,
-                            phase_number: input.state.phase_number,
                         });
                         let target_tags = target_tags(input, &transient_effects, &target);
                         if let Some(reason) =
@@ -4687,8 +4697,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                         source_action: actions[idx].sub.action_id.clone(),
                                         template_id: actions[idx].template.id.clone(),
                                         phase_id: input.phase_id.clone(),
-                                        phase_kind: input.state.phase_kind,
-                                        phase_number: input.state.phase_number,
                                     });
                                 }
                                 if actions[idx].template.has_modifier(Modifier::Weak)
@@ -5867,7 +5875,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
 }
 
 fn resolve_reveal_town_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
-    if input.state.phase_kind != PhaseKind::Day {
+    if input.state.phase_id.kind() != PhaseKind::Day {
         return;
     }
 
@@ -5907,8 +5915,6 @@ fn resolve_reveal_town_actions(input: &ResolutionInput, events: &mut Vec<InnerEv
             alignment,
             source_action: submission.action_id.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
     }
 }
@@ -6007,8 +6013,6 @@ fn apply_effect_source_death_reveals(
                     alignment,
                     source_action,
                     phase_id: input.phase_id.clone(),
-                    phase_kind: input.state.phase_kind,
-                    phase_number: input.state.phase_number,
                 });
             }
             EffectSourceDeathRevealKind::Role => {
@@ -6048,8 +6052,6 @@ fn apply_effect_source_death_reveals(
                     role_key: target.role_key.clone(),
                     source_action,
                     phase_id: input.phase_id.clone(),
-                    phase_kind: input.state.phase_kind,
-                    phase_number: input.state.phase_number,
                 });
             }
         }
@@ -6061,7 +6063,7 @@ fn resolve_day_kill_actions(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    if input.state.phase_kind != PhaseKind::Day {
+    if input.state.phase_id.kind() != PhaseKind::Day {
         return;
     }
 
@@ -6071,7 +6073,7 @@ fn resolve_day_kill_actions(
         .filter(|sub| !sub.withdrawn)
         .filter_map(|sub| {
             let template = lookup_submission_template(input, sub)?;
-            if !phase_window_matches(template.window, input.state.phase_kind) {
+            if !phase_window_matches(template.window, input.state.phase_id.kind()) {
                 return None;
             }
             (template.has_ability(IrAbility::Kill) && template.window == Window::Day)
@@ -6244,8 +6246,6 @@ fn resolve_beloved_princess_prompt(
         subject: Some(slot_id.clone()),
         reason: policy.prompt_reason.clone(),
         phase_id: input.phase_id.clone(),
-        phase_kind: input.state.phase_kind,
-        phase_number: input.state.phase_number,
         metadata: HostPromptMetadata {
             policy: Some("beloved_princess".to_string()),
             death_cause: Some(cause.to_string()),
@@ -6283,7 +6283,7 @@ fn resolve_beloved_princess_prompts(
 }
 
 fn beloved_princess_death_cause(input: &ResolutionInput, cause: &str) -> String {
-    if input.state.phase_kind == PhaseKind::Day && cause == "day_vote" {
+    if input.state.phase_id.kind() == PhaseKind::Day && cause == "day_vote" {
         "lynch".to_string()
     } else {
         cause.to_string()
@@ -6303,11 +6303,11 @@ fn beloved_princess_policy_matches_cause(
 
 fn resolve_day_announcements(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
     let policy = &input.pack.day_notes.announcements;
-    if !policy.enabled || input.state.phase_kind != PhaseKind::Day {
+    if !policy.enabled || input.state.phase_id.kind() != PhaseKind::Day {
         return;
     }
 
-    let day = input.state.phase_number;
+    let day = input.state.phase_id.number();
     let night = day.saturating_sub(1);
     let victims = &input.day_phase_inputs.night_victims;
     if victims.is_empty() {
@@ -6379,7 +6379,7 @@ fn resolve_badge_actions(
         .filter(|sub| !sub.withdrawn)
         .filter_map(|sub| {
             let template = lookup_submission_template(input, sub)?;
-            if !phase_window_matches(template.window, input.state.phase_kind) {
+            if !phase_window_matches(template.window, input.state.phase_id.kind()) {
                 return None;
             }
             template
@@ -6437,8 +6437,6 @@ fn resolve_badge_actions(
             reason: reason.clone(),
             destroyed,
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
 
         badges.insert(
@@ -6452,8 +6450,6 @@ fn resolve_badge_actions(
                 reason,
                 destroyed,
                 phase_id: input.phase_id.clone(),
-                phase_kind: input.state.phase_kind,
-                phase_number: input.state.phase_number,
             },
         );
     }
@@ -6531,7 +6527,7 @@ fn resolve_ita_actions(
         .filter(|sub| !sub.withdrawn)
         .filter_map(|sub| {
             let template = lookup_submission_template(input, sub)?;
-            if !phase_window_matches(template.window, input.state.phase_kind) {
+            if !phase_window_matches(template.window, input.state.phase_id.kind()) {
                 return None;
             }
             template
@@ -6586,8 +6582,6 @@ fn resolve_ita_actions(
                 window: session.window.clone(),
                 status: "open".to_string(),
                 phase_id: input.phase_id.clone(),
-                phase_kind: input.state.phase_kind,
-                phase_number: input.state.phase_number,
             });
         }
 
@@ -6905,16 +6899,12 @@ fn resolve_ita_actions(
             global_shots_fired: counters.global_shots_fired,
             counters: counters.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
         if input.pack.ita.auto_close && buffered == 0 {
             events.push(InnerEvent::ItaSessionClosed {
                 session_id: session.session_id.clone(),
                 last_status: "open".to_string(),
                 phase_id: input.phase_id.clone(),
-                phase_kind: input.state.phase_kind,
-                phase_number: input.state.phase_number,
             });
         }
     }
@@ -6998,8 +6988,6 @@ fn resolve_ita_lifecycle_controls(
                 window: session.window.clone(),
                 status: to_status.clone(),
                 phase_id: input.phase_id.clone(),
-                phase_kind: input.state.phase_kind,
-                phase_number: input.state.phase_number,
             });
         }
 
@@ -7011,8 +6999,6 @@ fn resolve_ita_lifecycle_controls(
             message: control.message.clone(),
             recorded_at: control.recorded_at,
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
         events.push(InnerEvent::ItaSessionAnnouncement {
             session_id: control.session_id.clone(),
@@ -7020,16 +7006,12 @@ fn resolve_ita_lifecycle_controls(
             message: control.message.clone(),
             recorded_at: control.recorded_at,
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         });
         if matches!(control.control, ItaSessionControlKind::Close) {
             events.push(InnerEvent::ItaSessionClosed {
                 session_id: control.session_id.clone(),
                 last_status: from_status.clone(),
                 phase_id: input.phase_id.clone(),
-                phase_kind: input.state.phase_kind,
-                phase_number: input.state.phase_number,
             });
         }
 
@@ -7074,7 +7056,7 @@ fn decrement_ita_counter(counters: &mut BTreeMap<SlotId, u32>, key: &SlotId) {
 
 fn resolve_self_destruct_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
     resolve_self_destruct_actions_matching(input, events, |template| {
-        phase_window_matches(template.window, input.state.phase_kind)
+        phase_window_matches(template.window, input.state.phase_id.kind())
     });
 }
 
@@ -7168,8 +7150,6 @@ fn resolve_self_destruct_actions_matching(
             unstoppable: spec.unstoppable,
             source_action: sub.action_id.clone(),
             phase_id: input.phase_id.clone(),
-            phase_kind: input.state.phase_kind,
-            phase_number: input.state.phase_number,
         }];
         if spec.kill_target {
             self_events.push(InnerEvent::PlayerKilled {
@@ -7202,8 +7182,6 @@ fn resolve_self_destruct_actions_matching(
                     cause: input.pack.wolf_carry.cause.clone(),
                     role_key: actor_role.clone(),
                     phase_id: input.phase_id.clone(),
-                    phase_kind: input.state.phase_kind,
-                    phase_number: input.state.phase_number,
                 });
             }
         }
@@ -7237,7 +7215,7 @@ fn ita_session_for_submission<'a>(
 
 fn ita_session_active(input: &ResolutionInput, session: &ItaSessionSpec) -> bool {
     match session.day {
-        Some(day) => day == input.state.phase_number,
+        Some(day) => day == input.state.phase_id.number(),
         None => true,
     }
 }
@@ -7317,7 +7295,7 @@ fn deaths_from_events(events: &[InnerEvent]) -> Vec<Death> {
 
 fn phase_announcement(input: &ResolutionInput, deaths: Vec<Death>) -> PhaseAnnouncement {
     let (template_id, audience, deaths) =
-        day_death_announcement_metadata(&input.pack, input.state.phase_kind, deaths);
+        day_death_announcement_metadata(&input.pack, input.state.phase_id.kind(), deaths);
     PhaseAnnouncement {
         phase_id: input.phase_id.clone(),
         template_id,

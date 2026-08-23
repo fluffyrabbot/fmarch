@@ -9,8 +9,6 @@
         "duration": "Persistent",
         "effect": "wolf_beauty_mark",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "source_action": "beauty_001",
         "target": "slot_2",
         "visibility": "Hidden"
@@ -23,8 +21,6 @@
         "beauty_id": "slot_1",
         "effect": "wolf_beauty_mark",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "source_action": "beauty_001",
         "target_id": "slot_2"
       }
@@ -51,8 +47,6 @@
       "linked_slots": [],
       "phase_deadline": null,
       "phase_id": "N01",
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

@@ -8,8 +8,6 @@
         "day": 1,
         "label": "Day 1 Buffered ITA",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1",
         "status": "open",
         "window": "ita_sessions"
@@ -23,8 +21,6 @@
         "from_status": "scheduled",
         "message": "ITA session opened by host",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 10,
         "session_id": "d1",
         "to_status": "open"
@@ -36,8 +32,6 @@
       "payload": {
         "message": "ITA session opened by host",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 10,
         "session_id": "d1",
         "status": "open"
@@ -51,8 +45,6 @@
         "from_status": "open",
         "message": "Five minutes remain",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 11,
         "session_id": "d1",
         "to_status": "open"
@@ -64,8 +56,6 @@
       "payload": {
         "message": "Five minutes remain",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 11,
         "session_id": "d1",
         "status": "open"
@@ -79,8 +69,6 @@
         "from_status": "open",
         "message": "Pause for votecount correction",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 12,
         "session_id": "d1",
         "to_status": "paused"
@@ -92,8 +80,6 @@
       "payload": {
         "message": "Pause for votecount correction",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 12,
         "session_id": "d1",
         "status": "paused"
@@ -106,8 +92,6 @@
         "day": 1,
         "label": "Day 1 Buffered ITA",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1",
         "status": "open",
         "window": "ita_sessions"
@@ -121,8 +105,6 @@
         "from_status": "paused",
         "message": "ITA session resumed",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 13,
         "session_id": "d1",
         "to_status": "open"
@@ -134,8 +116,6 @@
       "payload": {
         "message": "ITA session resumed",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 13,
         "session_id": "d1",
         "status": "open"
@@ -149,8 +129,6 @@
         "from_status": "open",
         "message": "ITA session cancelled",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 14,
         "session_id": "d1",
         "to_status": "cancelled"
@@ -162,8 +140,6 @@
       "payload": {
         "message": "ITA session cancelled",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 14,
         "session_id": "d1",
         "status": "cancelled"
@@ -177,8 +153,6 @@
         "from_status": "cancelled",
         "message": "ITA session closed by host",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 15,
         "session_id": "d1",
         "to_status": "closed"
@@ -190,8 +164,6 @@
       "payload": {
         "message": "ITA session closed by host",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "recorded_at": 15,
         "session_id": "d1",
         "status": "closed"
@@ -203,8 +175,6 @@
       "payload": {
         "last_status": "cancelled",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1"
       }
     },
@@ -303,8 +273,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

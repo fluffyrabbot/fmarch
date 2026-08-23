@@ -7,8 +7,6 @@
       "payload": {
         "cause": "self_destruct",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "source_action": "self_001",
         "target_id": "slot_2",
         "unstoppable": true,
@@ -94,8 +92,6 @@
           "status": "NoMajority"
         },
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "prompt_id": "D01:revote:NoMajority",
         "reason": "no_majority",
         "subject": null
@@ -133,8 +129,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

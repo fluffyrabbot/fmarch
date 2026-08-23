@@ -117,9 +117,7 @@
           "policy": "condemner",
           "source_action": "condemner_target_n01",
           "target": "slot_2",
-          "target_phase_id": "N01",
-          "target_phase_kind": "Night",
-          "target_phase_number": 1
+          "target_phase_id": "N01"
         },
         "winner": "condemner"
       }
@@ -133,8 +131,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",
@@ -200,8 +196,6 @@
           "effect": "condemner_target",
           "owner": "slot_1",
           "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1,
           "policy": "condemner",
           "source_action": "condemner_target_n01",
           "target": "slot_2"

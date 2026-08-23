@@ -8,8 +8,9 @@
 use std::path::PathBuf;
 
 use domain::events::{DayVoteOutcome, InnerEvent, VoteStatus};
-use domain::pack::{DeathRevealMode, GrantKind, Pack, PhaseKind, VoteMethod, VoteTieBreaker};
-use domain::resolver::{check_win, resolve, ResolutionInput};
+use domain::pack::{DeathRevealMode, GrantKind, Pack, VoteMethod, VoteTieBreaker};
+use domain::phase::{PhaseId, PhaseKind};
+use domain::resolver::{check_win, resolve as try_resolve, ResolutionInput};
 use domain::state::{
     apply_events, RevealState, SlotLifecycle, SlotState, StateSnapshot, Submission,
 };
@@ -40,6 +41,10 @@ fn resolved_events(input: ResolutionInput) -> Vec<InnerEvent> {
         .into_iter()
         .map(|indexed| indexed.event)
         .collect()
+}
+
+fn resolve(input: ResolutionInput) -> domain::ResolutionOutput {
+    try_resolve(input).expect("test resolution input is coherent")
 }
 
 fn slot(id: &str, role: &str, alignment: &str, status: &str) -> SlotState {
@@ -73,9 +78,7 @@ fn find<'a>(state: &'a StateSnapshot, id: &str) -> &'a SlotState {
 #[test]
 fn apply_player_killed_marks_dead() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
@@ -97,6 +100,27 @@ fn apply_player_killed_marks_dead() {
         badges: Vec::new(),
         buffered_ita_shots: Vec::new(),
     };
+    let mut legacy_coordinate = serde_json::to_value(&state).expect("snapshot serializes");
+    legacy_coordinate["phase_kind"] = serde_json::json!("Day");
+    assert!(
+        serde_json::from_value::<StateSnapshot>(legacy_coordinate).is_err(),
+        "snapshot ingress rejects an independently supplied phase coordinate"
+    );
+    let mismatched_input = ResolutionInput {
+        game_id: "phase-input-regression".into(),
+        phase_id: PhaseId::parse("D01").expect("static test phase id is canonical"),
+        run_id: "resolution:test:mismatched-phase".into(),
+        state: state.clone(),
+        submissions: Vec::new(),
+        day_phase_inputs: Default::default(),
+        pack: load_pack(),
+        seed: 0,
+        logical_time: 0,
+    };
+    assert!(matches!(
+        try_resolve(mismatched_input),
+        Err(domain::ResolutionInputError::PhaseMismatch { .. })
+    ));
     let next = apply_events(
         &state,
         &[InnerEvent::PlayerKilled {
@@ -143,16 +167,14 @@ fn apply_player_killed_marks_dead() {
     );
 
     // Phase cursor is carried through unchanged by the fold.
-    assert_eq!(next.phase_number, 1);
-    assert!(matches!(next.phase_kind, PhaseKind::Night));
+    assert_eq!(next.phase_id.number(), 1);
+    assert_eq!(next.phase_id.kind(), PhaseKind::Night);
 }
 
 #[test]
 fn apply_wolf_carry_queue_and_use_updates_pending_tokens() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 1,
-        phase_id: "D01".to_string(),
+        phase_id: PhaseId::parse("D01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("slot_1", "white_wolf_king", "wolf", "dead")],
@@ -182,9 +204,7 @@ fn apply_wolf_carry_queue_and_use_updates_pending_tokens() {
             token_id: "white_wolf_carry_token".to_string(),
             cause: "wolf_carry".to_string(),
             role_key: "white_wolf_king".to_string(),
-            phase_id: "D01".to_string(),
-            phase_kind: PhaseKind::Day,
-            phase_number: 1,
+            phase_id: PhaseId::parse("D01").expect("static test phase id is canonical"),
         }],
     );
     assert_eq!(queued.wolf_carry_tokens.len(), 1);
@@ -198,9 +218,7 @@ fn apply_wolf_carry_queue_and_use_updates_pending_tokens() {
             source_action_id: "wolfkill_001:wolf_carry:1".to_string(),
             effect_id: "white_wolf_carry_token:wolfkill_001:wolf_carry:1".to_string(),
             role_key: "white_wolf_king".to_string(),
-            phase_id: "N01".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 1,
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         }],
     );
     assert!(consumed.wolf_carry_tokens.is_empty());
@@ -209,9 +227,7 @@ fn apply_wolf_carry_queue_and_use_updates_pending_tokens() {
 #[test]
 fn apply_wolf_beauty_mark_upserts_owner_target_relation() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -245,9 +261,7 @@ fn apply_wolf_beauty_mark_upserts_owner_target_relation() {
             target_id: "slot_2".to_string(),
             effect: "wolf_beauty_mark".to_string(),
             source_action: "beauty_001".to_string(),
-            phase_id: "N01".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 1,
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         }],
     );
     assert_eq!(marked.wolf_beauty_marks.len(), 1);
@@ -260,9 +274,7 @@ fn apply_wolf_beauty_mark_upserts_owner_target_relation() {
             target_id: "slot_3".to_string(),
             effect: "wolf_beauty_mark".to_string(),
             source_action: "beauty_002".to_string(),
-            phase_id: "N02".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 2,
+            phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
         }],
     );
     assert_eq!(replaced.wolf_beauty_marks.len(), 1);
@@ -272,9 +284,7 @@ fn apply_wolf_beauty_mark_upserts_owner_target_relation() {
 #[test]
 fn apply_player_saved_is_a_noop() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
@@ -310,9 +320,7 @@ fn apply_player_saved_is_a_noop() {
 #[test]
 fn apply_effects_mark_then_clear() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
@@ -342,9 +350,7 @@ fn apply_effects_mark_then_clear() {
                 target: "a".to_string(),
                 actor: "p".to_string(),
                 source_action: Some("poison".to_string()),
-                phase_id: Some("N01".to_string()),
-                phase_kind: Some(PhaseKind::Night),
-                phase_number: Some(1),
+                phase_id: Some(PhaseId::parse("N01").expect("static test phase id is canonical")),
                 duration: domain::EffectDuration::Persistent,
                 visibility: domain::EffectVisibility::Actor,
             },
@@ -354,9 +360,7 @@ fn apply_effects_mark_then_clear() {
                 target: "a".to_string(),
                 actor: "p".to_string(),
                 source_action: Some("poison".to_string()),
-                phase_id: Some("N01".to_string()),
-                phase_kind: Some(PhaseKind::Night),
-                phase_number: Some(1),
+                phase_id: Some(PhaseId::parse("N01").expect("static test phase id is canonical")),
                 duration: domain::EffectDuration::Persistent,
                 visibility: domain::EffectVisibility::Actor,
             },
@@ -369,9 +373,12 @@ fn apply_effects_mark_then_clear() {
     assert_eq!(record.target, "a");
     assert_eq!(record.source, "p");
     assert_eq!(record.source_action.as_deref(), Some("poison"));
-    assert_eq!(record.phase_id.as_deref(), Some("N01"));
-    assert_eq!(record.phase_kind, Some(PhaseKind::Night));
-    assert_eq!(record.phase_number, Some(1));
+    assert_eq!(record.phase_id.as_ref().map(PhaseId::as_str), Some("N01"));
+    assert_eq!(
+        record.phase_id.as_ref().map(PhaseId::kind),
+        Some(PhaseKind::Night)
+    );
+    assert_eq!(record.phase_id.as_ref().map(PhaseId::number), Some(1));
     assert_eq!(record.duration, domain::EffectDuration::Persistent);
     assert_eq!(record.visibility, domain::EffectVisibility::Actor);
 
@@ -383,8 +390,6 @@ fn apply_effects_mark_then_clear() {
             actor: "p".to_string(),
             source_action: None,
             phase_id: None,
-            phase_kind: None,
-            phase_number: None,
         }],
     );
     assert!(find(&cleared, "a").effects.is_empty());
@@ -394,9 +399,7 @@ fn apply_effects_mark_then_clear() {
 #[test]
 fn apply_resolution_duration_effect_expires_without_durable_state() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
@@ -426,9 +429,7 @@ fn apply_resolution_duration_effect_expires_without_durable_state() {
             target: "a".to_string(),
             actor: "p".to_string(),
             source_action: Some("send_fruit".to_string()),
-            phase_id: Some("N01".to_string()),
-            phase_kind: Some(PhaseKind::Night),
-            phase_number: Some(1),
+            phase_id: Some(PhaseId::parse("N01").expect("static test phase id is canonical")),
             duration: domain::EffectDuration::Resolution,
             visibility: domain::EffectVisibility::Target,
         }],
@@ -447,9 +448,7 @@ fn apply_resolution_duration_effect_expires_without_durable_state() {
 #[test]
 fn apply_delayed_death_queue_then_resolve() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
@@ -480,9 +479,7 @@ fn apply_delayed_death_queue_then_resolve() {
             effect: "poisoned".to_string(),
             source: "p".to_string(),
             source_action: "poison_001".to_string(),
-            phase_id: "N01".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 1,
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         }],
     );
     assert_eq!(queued.delayed_deaths.len(), 1);
@@ -497,9 +494,7 @@ fn apply_delayed_death_queue_then_resolve() {
             cause: "poison".to_string(),
             effect: "poisoned".to_string(),
             outcome: "applied".to_string(),
-            phase_id: "N02".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 2,
+            phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
         }],
     );
     assert!(resolved.delayed_deaths.is_empty());
@@ -508,9 +503,7 @@ fn apply_delayed_death_queue_then_resolve() {
 #[test]
 fn apply_visit_recorded_appends_history() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "visitor", "town", "alive")],
@@ -539,9 +532,7 @@ fn apply_visit_recorded_appends_history() {
             target: "b".to_string(),
             template_id: "visit".to_string(),
             source_action: "visit_n01".to_string(),
-            phase_id: "N01".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 1,
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
             visible: true,
         }],
     );
@@ -556,9 +547,7 @@ fn apply_visit_recorded_appends_history() {
 #[test]
 fn apply_player_converted_changes_role() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
@@ -606,9 +595,7 @@ fn apply_player_converted_changes_role() {
 #[test]
 fn apply_player_converted_keeps_first_origin() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 2,
-        phase_id: "N02".to_string(),
+        phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "cultist", "cult", "alive")],
@@ -653,9 +640,7 @@ fn apply_player_converted_keeps_first_origin() {
 #[test]
 fn apply_events_is_a_pure_fold() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -689,7 +674,7 @@ fn apply_events_is_a_pure_fold() {
             death_reveal: DeathRevealMode::Full,
         },
         InnerEvent::PhaseAnnouncement(domain::events::PhaseAnnouncement {
-            phase_id: "N01".to_string(),
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
             template_id: None,
             audience: None,
             deaths: vec![],
@@ -712,9 +697,7 @@ fn apply_events_is_a_pure_fold() {
 #[test]
 fn apply_action_recorded_extends_history() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 2,
-        phase_id: "N02".to_string(),
+        phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "non_consecutive_cop", "town", "alive")],
@@ -743,9 +726,7 @@ fn apply_action_recorded_extends_history() {
             actor: "a".to_string(),
             template_id: "investigate_alignment".to_string(),
             targets: vec!["b".to_string()],
-            phase_id: "N02".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 2,
+            phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
             status: "resolved".to_string(),
         }],
     );
@@ -758,9 +739,7 @@ fn apply_action_recorded_extends_history() {
 #[test]
 fn apply_action_granted_extends_grants() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "motivator", "town", "alive")],
@@ -794,9 +773,7 @@ fn apply_action_granted_extends_grants() {
             source_action: "motivate_n01".to_string(),
             uses: 1,
             vote_weight: None,
-            phase_id: "N01".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 1,
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         }],
     );
 
@@ -810,9 +787,7 @@ fn apply_action_granted_extends_grants() {
 #[test]
 fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 2,
-        phase_id: "N02".to_string(),
+        phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -836,9 +811,7 @@ fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
                 source_action: "motivate_n01".to_string(),
                 uses: 1,
                 vote_weight: None,
-                phase_id: "N01".to_string(),
-                phase_kind: PhaseKind::Night,
-                phase_number: 1,
+                phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
             },
             domain::state::ActionGrantRecord {
                 grant_id: "extra_action".to_string(),
@@ -849,9 +822,7 @@ fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
                 source_action: "motivate_n02".to_string(),
                 uses: 1,
                 vote_weight: None,
-                phase_id: "N02".to_string(),
-                phase_kind: PhaseKind::Night,
-                phase_number: 2,
+                phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
             },
         ],
         conversion_origins: Vec::new(),
@@ -872,9 +843,7 @@ fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
             actor: "b".to_string(),
             action_id: "cop_extra_n02".to_string(),
             source_action: "motivate_n01".to_string(),
-            phase_id: "N02".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 2,
+            phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
             remaining_uses: 0,
         }],
     );
@@ -887,9 +856,7 @@ fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
 #[test]
 fn apply_action_use_counted_upserts_counter_state() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vigilante", "town", "alive")],
@@ -924,9 +891,7 @@ fn apply_action_use_counted_upserts_counter_state() {
             limit: 1,
             used: 1,
             remaining: 0,
-            phase_id: "N01".to_string(),
-            phase_kind: PhaseKind::Night,
-            phase_number: 1,
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         }],
     );
 
@@ -947,9 +912,7 @@ fn apply_action_use_counted_upserts_counter_state() {
 #[test]
 fn apply_players_linked_extends_links() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -999,9 +962,7 @@ fn apply_players_linked_extends_links() {
 #[test]
 fn apply_retaliation_armed_upserts_choice() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -1054,9 +1015,7 @@ fn apply_retaliation_armed_upserts_choice() {
 #[test]
 fn apply_backup_targeted_upserts_choice() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -1091,18 +1050,14 @@ fn apply_backup_targeted_upserts_choice() {
                 source_target: "b".to_string(),
                 source_role: "cop".to_string(),
                 source_action: "target_backup_n01".to_string(),
-                phase_id: "N01".to_string(),
-                phase_kind: PhaseKind::Night,
-                phase_number: 1,
+                phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
             },
             InnerEvent::BackupTargeted {
                 backup: "a".to_string(),
                 source_target: "c".to_string(),
                 source_role: "doctor".to_string(),
                 source_action: "target_backup_n02".to_string(),
-                phase_id: "N02".to_string(),
-                phase_kind: PhaseKind::Night,
-                phase_number: 2,
+                phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
             },
         ],
     );
@@ -1116,9 +1071,7 @@ fn apply_backup_targeted_upserts_choice() {
 #[test]
 fn apply_target_lynch_win_targeted_upserts_by_policy_and_owner() {
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -1154,9 +1107,7 @@ fn apply_target_lynch_win_targeted_upserts_by_policy_and_owner() {
                 target: "b".to_string(),
                 effect: "execution_target".to_string(),
                 source_action: "executioner_target_n01".to_string(),
-                phase_id: "N01".to_string(),
-                phase_kind: PhaseKind::Night,
-                phase_number: 1,
+                phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
             },
             InnerEvent::TargetLynchWinTargeted {
                 policy: "executioner".to_string(),
@@ -1164,9 +1115,7 @@ fn apply_target_lynch_win_targeted_upserts_by_policy_and_owner() {
                 target: "c".to_string(),
                 effect: "execution_target".to_string(),
                 source_action: "executioner_target_n02".to_string(),
-                phase_id: "N02".to_string(),
-                phase_kind: PhaseKind::Night,
-                phase_number: 2,
+                phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
             },
             InnerEvent::TargetLynchWinTargeted {
                 policy: "condemner".to_string(),
@@ -1174,9 +1123,7 @@ fn apply_target_lynch_win_targeted_upserts_by_policy_and_owner() {
                 target: "b".to_string(),
                 effect: "condemner_target".to_string(),
                 source_action: "condemner_target_n02".to_string(),
-                phase_id: "N02".to_string(),
-                phase_kind: PhaseKind::Night,
-                phase_number: 2,
+                phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
             },
         ],
     );
@@ -1199,9 +1146,7 @@ fn apply_target_lynch_win_targeted_upserts_by_policy_and_owner() {
 fn resolve_returns_applied_trace_and_post_state() {
     let pack = load_pack();
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 1,
-        phase_id: "D01".to_string(),
+        phase_id: PhaseId::parse("D01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -1230,7 +1175,7 @@ fn resolve_returns_applied_trace_and_post_state() {
 
     let output = resolve(ResolutionInput {
         game_id: "output".to_string(),
-        phase_id: "D01".to_string(),
+        phase_id: PhaseId::parse("D01").expect("static test phase id is canonical"),
         run_id: "output:D01:1".to_string(),
         state,
         submissions: vec![
@@ -1264,9 +1209,7 @@ fn random_day_vote_tiebreak_is_seeded_and_deterministic() {
     pack.vote.tie_breaker = VoteTieBreaker::Random;
 
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 2,
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -1298,7 +1241,7 @@ fn random_day_vote_tiebreak_is_seeded_and_deterministic() {
     let resolve_winner = |seed| {
         let output = resolve(ResolutionInput {
             game_id: format!("vote-random-{seed}"),
-            phase_id: "D02".to_string(),
+            phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
             run_id: format!("vote-random:D02:{seed}"),
             state: state.clone(),
             submissions: vec![
@@ -1341,9 +1284,7 @@ fn day_vote_ballots_are_last_write_wins_per_actor() {
     pack.vote.method = VoteMethod::Majority;
 
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 2,
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -1374,7 +1315,7 @@ fn day_vote_ballots_are_last_write_wins_per_actor() {
 
     let output = resolve(ResolutionInput {
         game_id: "last-write-votes".to_string(),
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         run_id: "last-write-votes:D02:1".to_string(),
         state,
         submissions: vec![
@@ -1386,7 +1327,7 @@ fn day_vote_ballots_are_last_write_wins_per_actor() {
                 actor: "slot_2".to_string(),
                 template_id: "day_vote".to_string(),
                 targets: Vec::new(),
-                phase_id: "D02".to_string(),
+                phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
                 submitted_at: 4,
                 withdrawn: true,
                 metadata: Default::default(),
@@ -1433,9 +1374,7 @@ fn no_lynch_votes_produce_no_lynch_outcome_without_death() {
     pack.vote.no_lynch_allowed = true;
 
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 2,
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -1464,7 +1403,7 @@ fn no_lynch_votes_produce_no_lynch_outcome_without_death() {
 
     let output = resolve(ResolutionInput {
         game_id: "no-lynch".to_string(),
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         run_id: "no-lynch:D02:1".to_string(),
         state,
         submissions: vec![
@@ -1506,9 +1445,7 @@ fn no_lynch_votes_produce_no_lynch_outcome_without_death() {
 fn day_vote_statuses_distinguish_no_lynch_no_majority_and_tie() {
     let base_pack = load_pack();
     let state_for = |pack: &Pack| StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 2,
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -1537,7 +1474,7 @@ fn day_vote_statuses_distinguish_no_lynch_no_majority_and_tie() {
     let resolve_status = |pack: Pack, submissions: Vec<Submission>, label: &str| {
         let output = resolve(ResolutionInput {
             game_id: format!("vote-status-{label}"),
-            phase_id: "D02".to_string(),
+            phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
             run_id: format!("vote-status:D02:{label}"),
             state: state_for(&pack),
             submissions,
@@ -1604,9 +1541,7 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
     let base_pack = load_pack();
 
     let state_for = |pack: &Pack| StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 2,
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -1637,7 +1572,7 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
         |pack: Pack, submissions: Vec<Submission>, seed: u64, label: &str| -> DayVoteOutcome {
             let output = resolve(ResolutionInput {
                 game_id: format!("vote-policy-{label}"),
-                phase_id: "D02".to_string(),
+                phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
                 run_id: format!("vote-policy:D02:{label}"),
                 state: state_for(&pack),
                 submissions,
@@ -1794,9 +1729,7 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
 fn check_win_town_when_mafia_eliminated() {
     let pack = load_pack();
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 2,
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -1832,9 +1765,7 @@ fn check_win_town_when_mafia_eliminated() {
 fn check_win_mafia_at_parity() {
     let pack = load_pack();
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -1869,9 +1800,7 @@ fn check_win_mafia_at_parity() {
 fn check_win_none_when_game_continues() {
     let pack = load_pack();
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 1,
-        phase_id: "D01".to_string(),
+        phase_id: PhaseId::parse("D01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -1907,9 +1836,7 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
     let pack = load_pack_named("epicmafia");
     // mafia dead but cult still alive -> NOT a town win yet (AllOthers not met).
     let still_cult = StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 3,
-        phase_id: "D03".to_string(),
+        phase_id: PhaseId::parse("D03").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -1942,9 +1869,7 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
 
     // Both mafia AND cult eliminated -> town wins via AllOtherFactionsEliminated.
     let both_dead = StateSnapshot {
-        phase_kind: PhaseKind::Day,
-        phase_number: 4,
-        phase_id: "D04".to_string(),
+        phase_id: PhaseId::parse("D04").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -1982,9 +1907,7 @@ fn epicmafia_cult_wins_at_parity() {
     let pack = load_pack_named("epicmafia");
     // cult(1) vs others(1 town) -> cult parity fires (mafia already gone).
     let state = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 2,
-        phase_id: "N02".to_string(),
+        phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -2026,9 +1949,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
 
     // N01 roster: 2 town + 1 mafia. Mafia kills one townie (no protector).
     let n01 = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -2056,7 +1977,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
     };
     let night_events = resolved_events(ResolutionInput {
         game_id: "mp".to_string(),
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         run_id: "mp:N01:1".to_string(),
         state: n01.clone(),
         submissions: vec![Submission {
@@ -2064,7 +1985,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
             actor: "slot_1".to_string(),
             template_id: "factional_kill".to_string(),
             targets: vec!["slot_2".to_string()],
-            phase_id: "N01".to_string(),
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
             submitted_at: 1,
             withdrawn: false,
             metadata: Default::default(),
@@ -2093,9 +2014,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
     // Now demonstrate the negative case: a roster that does NOT reach a win on
     // the night, then reaches one on the following day lynch.
     let n01_safe = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![
@@ -2124,7 +2043,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
     };
     let night_safe = resolved_events(ResolutionInput {
         game_id: "mp".to_string(),
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         run_id: "mp:N01:safe".to_string(),
         state: n01_safe.clone(),
         submissions: vec![Submission {
@@ -2132,7 +2051,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
             actor: "slot_1".to_string(),
             template_id: "factional_kill".to_string(),
             targets: vec!["slot_2".to_string()],
-            phase_id: "N01".to_string(),
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
             submitted_at: 1,
             withdrawn: false,
             metadata: Default::default(),
@@ -2155,11 +2074,10 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
     // D02 on the carried-forward state (advance the cursor — the engine's job,
     // not apply_events'): town lynches the mafia goon. Mafia eliminated -> town wins.
     let mut d02 = after_safe.clone();
-    d02.phase_kind = PhaseKind::Day;
-    d02.phase_number = 2;
+    d02.phase_id = PhaseId::parse("D02").expect("static test phase id is canonical");
     let day_events = resolved_events(ResolutionInput {
         game_id: "mp".to_string(),
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         run_id: "mp:D02:1".to_string(),
         state: d02.clone(),
         submissions: vec![
@@ -2214,9 +2132,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
     let pack = load_pack_named("epicmafia");
 
     let n01 = StateSnapshot {
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -2247,7 +2163,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
     // N01: douse slot_2.
     let n01_events = resolved_events(ResolutionInput {
         game_id: "arson".to_string(),
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         run_id: "arson:N01:1".to_string(),
         state: n01.clone(),
         submissions: vec![Submission {
@@ -2255,7 +2171,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
             actor: "slot_1".to_string(),
             template_id: "douse".to_string(),
             targets: vec!["slot_2".to_string()],
-            phase_id: "N01".to_string(),
+            phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
             submitted_at: 1,
             withdrawn: false,
             metadata: Default::default(),
@@ -2290,10 +2206,10 @@ fn arsonist_persistent_effect_carries_across_phases() {
 
     // N02: douse slot_3, then ignite. Advance the phase cursor (engine's job).
     let mut n02 = after_n01.clone();
-    n02.phase_number = 2;
+    n02.phase_id = PhaseId::parse("N02").expect("static test phase id is canonical");
     let n02_events = resolved_events(ResolutionInput {
         game_id: "arson".to_string(),
-        phase_id: "N02".to_string(),
+        phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
         run_id: "arson:N02:1".to_string(),
         state: n02.clone(),
         submissions: vec![
@@ -2302,7 +2218,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
                 actor: "slot_1".to_string(),
                 template_id: "douse".to_string(),
                 targets: vec!["slot_3".to_string()],
-                phase_id: "N02".to_string(),
+                phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
                 submitted_at: 1,
                 withdrawn: false,
                 metadata: Default::default(),
@@ -2312,7 +2228,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
                 actor: "slot_1".to_string(),
                 template_id: "ignite".to_string(),
                 targets: vec![],
-                phase_id: "N02".to_string(),
+                phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
                 submitted_at: 2,
                 withdrawn: false,
                 metadata: Default::default(),
@@ -2369,7 +2285,7 @@ fn vote(action_id: &str, actor: &str, target: &str, at: u64) -> Submission {
         actor: actor.to_string(),
         template_id: "day_vote".to_string(),
         targets: vec![target.to_string()],
-        phase_id: "D02".to_string(),
+        phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         submitted_at: at,
         withdrawn: false,
         metadata: Default::default(),

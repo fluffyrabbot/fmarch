@@ -103,7 +103,7 @@ export type HostPromptMetadata = { policy?: string | null, status?: string | nul
 
 export type HostPromptRecordedDecision = { "kind": "select_slot", slot: string, } | { "kind": "select_policy", policy: string, } | { "kind": "acknowledge" };
 
-export type HostPromptPublicResolution = { "kind": "day_vote_elimination", phase_id: string, selected_slot: string, reason: string, } | { "kind": "phase_advance", source_phase_id: string, target_phase_id: string, reason: string, skipped_phase_id?: string | null, } | { "kind": "acknowledged", phase_id: string, reason: string, };
+export type HostPromptPublicResolution = { "kind": "day_vote_elimination", phase_id: PhaseId, selected_slot: string, reason: string, } | { "kind": "phase_advance", source_phase_id: PhaseId, target_phase_id: PhaseId, reason: string, skipped_phase_id?: PhaseId | null, } | { "kind": "acknowledged", phase_id: PhaseId, reason: string, };
 
 export type SlotLifecycle = "alive" | "dead" | "modkilled";
 
@@ -137,7 +137,7 @@ export type PublicPostCitationPage = { quoted_surface_id: string, quoted_source_
 
 export type CohostPermissionClass = "setup" | "phase_resolve" | "host_prompt_resolve" | "lifecycle" | "replacement" | "deadline" | "narrative" | "ita_control" | "effect_spec" | "day_event_ops" | "day_event_resolve" | "program_attach";
 
-export type Command = { "CreateGame": { game: string, pack: string, cohost_denied?: Array<CohostPermissionClass>, } } | { "AddSlot": { game: string, slot: string, } } | { "SeatPersona": { game: string, slot: string, principal_id: PrincipalId, public_name: string, } } | { "RenameGamePersona": { game: string, persona_id: string, public_name: string, } } | { "AssignRole": { game: string, slot: string, role_key: string, } } | { "SetSlotStatus": { game: string, slot: string, status: SlotLifecycle, } } | { "AddSlotStatusTag": { game: string, slot: string, tag: string, } } | { "RemoveSlotStatusTag": { game: string, slot: string, tag: string, } } | { "AddCohost": { game: string, principal_id: PrincipalId, } } | { "GrantSpectator": { game: string, principal_id: PrincipalId, } } | { "RevokeSpectator": { game: string, principal_id: PrincipalId, } } | { "StartGame": { game: string, phase: string, } } | { "OpenDayPhase": { game: string, phase: string, } } | { "AdvancePhase": { game: string, } } | { "AdvancePhaseByDeadline": { game: string, phase: string, observed_at: bigint, } } | { "LockThread": { game: string, } } | { "UnlockThread": { game: string, } } | { "ResolvePhase": { game: string, seed: bigint, } } | { "CompleteGame": { game: string, } } | { "PublishVotecount": { game: string, } } | { "ResolveHostPrompt": { game: string, prompt_id: string, decision: HostPromptDecision, } } | { "SetPostPolicy": { game: string, channel_id: string, allow_media_only: boolean, } } | { "PublishSpectatorPost": { game: string, body: string, media?: Array<SubmitPostMedia>, } } | { "ControlItaSession": { game: string, session_id: string, control: ItaSessionControlKind, message?: string, } } | { "ApplyEffectPlan": { game: string, effects: Array<ConcreteEffect>, reason: string, } } | { "AttachDayProgram": { game: string, program_ref: DayProgramRef, } } | { "ScheduleDayEvent": { game: string, event: DayEvent, } } | { "OpenDayEvent": { game: string, event_id: DayEventId, } } | { "LockDayEvent": { game: string, event_id: DayEventId, } } | { "CancelDayEvent": { game: string, event_id: DayEventId, reason: string, } } | { "SubmitDayEventParticipation": { game: string, event_id: DayEventId, actor_slot: string, payload: ParticipationPayload, } } | { "WithdrawDayEventParticipation": { game: string, event_id: DayEventId, actor_slot: string, } } | { "ResolveDayEvent": { game: string, event_id: DayEventId, decision: DayEventDecision, } } | { "SubmitVote": { game: string, actor_slot: string, target: VoteTarget, } } | { "WithdrawVote": { game: string, actor_slot: string, } } | { "SubmitAction": { game: string, action_id: string, actor_slot: string, template_id: string, targets: Array<string>, grant_id: string | null, } } | { "WithdrawAction": { game: string, action_id: string, actor_slot: string, } } | { "SubmitPost": { game: string, channel_id: string, actor_slot: string, body: string, media?: Array<SubmitPostMedia>, quotations?: Array<Quotation>, embed?: SubmitPostEmbed, } } | { "ExtendDeadline": { game: string, phase: string, at: bigint, } } | { "ProcessReplacement": { game: string, slot: string, outgoing_persona_id: string, incoming_principal_id: PrincipalId, } };
+export type Command = { "CreateGame": { game: string, pack: string, cohost_denied?: Array<CohostPermissionClass>, } } | { "AddSlot": { game: string, slot: string, } } | { "SeatPersona": { game: string, slot: string, principal_id: PrincipalId, public_name: string, } } | { "RenameGamePersona": { game: string, persona_id: string, public_name: string, } } | { "AssignRole": { game: string, slot: string, role_key: string, } } | { "SetSlotStatus": { game: string, slot: string, status: SlotLifecycle, } } | { "AddSlotStatusTag": { game: string, slot: string, tag: string, } } | { "RemoveSlotStatusTag": { game: string, slot: string, tag: string, } } | { "AddCohost": { game: string, principal_id: PrincipalId, } } | { "GrantSpectator": { game: string, principal_id: PrincipalId, } } | { "RevokeSpectator": { game: string, principal_id: PrincipalId, } } | { "StartGame": { game: string, phase: PhaseId, } } | { "OpenDayPhase": { game: string, phase: PhaseId, } } | { "AdvancePhase": { game: string, } } | { "AdvancePhaseByDeadline": { game: string, phase: PhaseId, observed_at: bigint, } } | { "LockThread": { game: string, } } | { "UnlockThread": { game: string, } } | { "ResolvePhase": { game: string, seed: bigint, } } | { "CompleteGame": { game: string, } } | { "PublishVotecount": { game: string, } } | { "ResolveHostPrompt": { game: string, prompt_id: string, decision: HostPromptDecision, } } | { "SetPostPolicy": { game: string, channel_id: string, allow_media_only: boolean, } } | { "PublishSpectatorPost": { game: string, body: string, media?: Array<SubmitPostMedia>, } } | { "ControlItaSession": { game: string, session_id: string, control: ItaSessionControlKind, message?: string, } } | { "ApplyEffectPlan": { game: string, effects: Array<ConcreteEffect>, reason: string, } } | { "AttachDayProgram": { game: string, program_ref: DayProgramRef, } } | { "ScheduleDayEvent": { game: string, event: DayEvent, } } | { "OpenDayEvent": { game: string, event_id: DayEventId, } } | { "LockDayEvent": { game: string, event_id: DayEventId, } } | { "CancelDayEvent": { game: string, event_id: DayEventId, reason: string, } } | { "SubmitDayEventParticipation": { game: string, event_id: DayEventId, actor_slot: string, payload: ParticipationPayload, } } | { "WithdrawDayEventParticipation": { game: string, event_id: DayEventId, actor_slot: string, } } | { "ResolveDayEvent": { game: string, event_id: DayEventId, decision: DayEventDecision, } } | { "SubmitVote": { game: string, actor_slot: string, target: VoteTarget, } } | { "WithdrawVote": { game: string, actor_slot: string, } } | { "SubmitAction": { game: string, action_id: string, actor_slot: string, template_id: string, targets: Array<string>, grant_id: string | null, } } | { "WithdrawAction": { game: string, action_id: string, actor_slot: string, } } | { "SubmitPost": { game: string, channel_id: string, actor_slot: string, body: string, media?: Array<SubmitPostMedia>, quotations?: Array<Quotation>, embed?: SubmitPostEmbed, } } | { "ExtendDeadline": { game: string, phase: PhaseId, at: bigint, } } | { "ProcessReplacement": { game: string, slot: string, outgoing_persona_id: string, incoming_principal_id: PrincipalId, } };
 
 export type CommandMsg = { command_id: string, command: Command, };
 
@@ -151,9 +151,9 @@ export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "CohostPe
 
 export type RejectMsg = { error: RejectCode, retryable: boolean, message: string, };
 
-export type VoteCountDelta = { game: string, phase_id: string, candidate_slot: string, count: bigint, };
+export type VoteCountDelta = { game: string, phase_id: PhaseId, candidate_slot: string, count: bigint, };
 
-export type VoteCountClearedDelta = { game: string, phase_id: string, candidate_slot: string, };
+export type VoteCountClearedDelta = { game: string, phase_id: PhaseId, candidate_slot: string, };
 
 export type GameThreadAuthor = { "kind": "slot", slot_id: string, } | { "kind": "host_narrator" } | { "kind": "system" };
 
@@ -161,19 +161,19 @@ export type ThreadPostsDelta = { game: string, posts: Array<ThreadPost>, };
 
 export type PostCitationsChangedDelta = { quoted: PostRef, citation_count: bigint, };
 
-export type DayVoteOutcomeDelta = { game: string, phase_id: string, source_seq: bigint, event_index: number, status: string, winner_slot: string | null, contenders: Array<string>, tallies: { [key in string]: number }, votes: { [key in string]: string }, weights: { [key in string]: number }, majority: number | null, thresholds: { [key in string]: number }, total_weight: number, tiebreak: string | null, reason: string | null, };
+export type DayVoteOutcomeDelta = { game: string, phase_id: PhaseId, source_seq: bigint, event_index: number, status: string, winner_slot: string | null, contenders: Array<string>, tallies: { [key in string]: number }, votes: { [key in string]: string }, weights: { [key in string]: number }, majority: number | null, thresholds: { [key in string]: number }, total_weight: number, tiebreak: string | null, reason: string | null, };
 
 export type HostConsoleAuthorityKind = "HostOf" | "CohostOf" | "GlobalOperator";
 
 export type HostConsoleAuthorityDelta = { principal_id: PrincipalId, capability: HostConsoleAuthorityKind, allowed_classes: Array<CohostPermissionClass>, denied_classes: Array<CohostPermissionClass>, };
 
-export type HostConsolePhaseStateDelta = { phase_id: string, locked: boolean, deadline: bigint | null, };
+export type HostConsolePhaseStateDelta = { phase_id: PhaseId, locked: boolean, deadline: bigint | null, };
 
 export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupancy_id: string, persona_id: string, public_name: string, assigned_principal_id: PrincipalId, alive: boolean, status: string, status_tags: Array<string>, role_key: string | null, alignment: string | null, role_revealed: boolean, alignment_revealed: boolean, };
 
 export type HostConsoleSlotsDelta = { game: string, slots: Array<HostConsoleSlotOccupancyDelta>, removed_slot_ids: Array<string>, };
 
-export type HostConsoleThreadPostDelta = { stream_seq: bigint, author: GameThreadAuthor, phase_id: string, body: string, quotations: Array<Quotation>, };
+export type HostConsoleThreadPostDelta = { stream_seq: bigint, author: GameThreadAuthor, phase_id: PhaseId | null, body: string, quotations: Array<Quotation>, };
 
 export type HostConsoleThreadPostsDelta = { game: string, posts: Array<HostConsoleThreadPostDelta>, };
 
@@ -193,7 +193,7 @@ export type DayEventRoomDelta = { event_id: string, channel_id: string, template
 
 export type DayEventNarrativeDelta = { lifecycle: NarrativeLifecycle, template_key: string, template_hash: string, channel_id: string, status: string, body: string | null, source_seq: bigint | null, published_seq: bigint | null, };
 
-export type HostDayEventDelta = { event_id: string, state: string, phase_id: string | null, definition: DayEvent,
+export type HostDayEventDelta = { event_id: string, state: string, phase_id: PhaseId | null, definition: DayEvent,
 /**
  * The derived private room and its current membership posture. Public
  * events have no room descriptor because their narratives live in main.
@@ -214,7 +214,7 @@ export type HostTaskDelta = {
 /**
  * Stable instance identity, distinct from [`HostTaskKind`].
  */
-id: string, kind: HostTaskKind, state: HostTaskState, urgency: HostTaskUrgency, intent: string, consequence: string, phase_id: string, subject_slot: string | null,
+id: string, kind: HostTaskKind, state: HostTaskState, urgency: HostTaskUrgency, intent: string, consequence: string, phase_id?: PhaseId, subject_slot: string | null,
 /**
  * Identity of the authoritative fact from which this selector is derived.
  */
@@ -238,11 +238,11 @@ day_events: Array<HostDayEventDelta>,
  */
 tasks: Array<HostTaskDelta>, };
 
-export type HostPromptDelta = { game: string, phase_id: string, event_index: number, prompt_id: string, kind: string, subject_slot: string | null, reason: string, phase_kind: string, phase_number: number, metadata: HostPromptMetadata, status: string, decision: HostPromptRecordedDecision | null, public_resolution: HostPromptPublicResolution | null, resolved_at: bigint | null, };
+export type HostPromptDelta = { game: string, phase_id: PhaseId, event_index: number, prompt_id: string, kind: string, subject_slot: string | null, reason: string, metadata: HostPromptMetadata, status: string, decision: HostPromptRecordedDecision | null, public_resolution: HostPromptPublicResolution | null, resolved_at: bigint | null, };
 
 export type HostPromptsDelta = { game: string, prompts: Array<HostPromptDelta>, };
 
-export type ThreadPost = { game: string, source_seq: bigint, stream_seq: bigint, channel_id: string, author: GameThreadAuthor, phase_id: string, body: string, media: Array<ThreadPostMedia>, quotations: Array<Quotation>, embed?: PostEmbed, citation_count: bigint, occurred_at: bigint, };
+export type ThreadPost = { game: string, source_seq: bigint, stream_seq: bigint, channel_id: string, author: GameThreadAuthor, phase_id: PhaseId | null, body: string, media: Array<ThreadPostMedia>, quotations: Array<Quotation>, embed?: PostEmbed, citation_count: bigint, occurred_at: bigint, };
 
 export type ThreadPostMedia = { content_id: string, alt: string, variants: { [key in string]: ThreadPostMediaVariant }, };
 
@@ -250,7 +250,7 @@ export type ThreadPostMediaVariant = { avif_url: string, webp_url: string, width
 
 export type ThreadPage = { posts: Array<ThreadPost>, next_before_seq: bigint | null, };
 
-export type GameIndexEntry = { game: string, pack: string, status: string, phase_id: string | null, updated_seq: bigint, completed_seq: bigint | null, };
+export type GameIndexEntry = { game: string, pack: string, status: string, phase_id: PhaseId | null, updated_seq: bigint, completed_seq: bigint | null, };
 
 export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string | null, };
 
@@ -300,17 +300,17 @@ export type PublicProfile = { handle: string, display_name: string, bio: string,
 
 export type ProfileEditor = { handle: string, display_name: string, bio: string, visibility: string, revision: bigint, };
 
-export type PlayerNotification = { game: string, phase_id: string, event_index: number, audience_slot: string, effect: string, status: string, };
+export type PlayerNotification = { game: string, phase_id: PhaseId, event_index: number, audience_slot: string, effect: string, status: string, };
 
 export type InvestigationResultFields = { vanilla?: boolean | null, vanilla_town?: boolean | null, has_gun?: boolean | null, killer?: boolean | null, specialist?: boolean | null, pt_access?: Array<string>, role?: string | null, alignment?: string | null, visited?: Array<string>, visitors?: Array<string>, visitor_roles?: Array<string>, actions?: Array<string>, action_types?: Array<string>, motion?: boolean | null, prior_motion?: boolean | null, previous?: string | null, current?: string | null, changed?: boolean | null, };
 
 export type InvestigationResultBody = string | InvestigationResultFields;
 
-export type PlayerInvestigationResult = { game: string, phase_id: string, event_index: number, audience_slot: string, mode: string, target_slot: string, result: InvestigationResultBody, };
+export type PlayerInvestigationResult = { game: string, phase_id: PhaseId, event_index: number, audience_slot: string, mode: string, target_slot: string, result: InvestigationResultBody, };
 
 export type JsonAtom = null | boolean | number | string | Array<JsonAtom> | { [key in string]: JsonAtom };
 
-export type HostPhaseControl = { game: string, source_seq: bigint, stream_seq: bigint, prompt_id: string, prompt_kind: string | null, prompt_reason: string | null, source_phase_id: string, target_phase_id: string, reason: string, skipped_phase_id: string | null, resolved_at: bigint | null, occurred_at: bigint, };
+export type HostPhaseControl = { game: string, source_seq: bigint, stream_seq: bigint, prompt_id: string, prompt_kind: string | null, prompt_reason: string | null, source_phase_id: PhaseId, target_phase_id: PhaseId, reason: string, skipped_phase_id: PhaseId | null, resolved_at: bigint | null, occurred_at: bigint, };
 
 export type ResolutionTraceDecisionRow = { row_index: number, applied_stream_seq: bigint | null, event_index: number | null, stage: string, source: string, outcome: string, detail: { [key in string]: JsonAtom }, };
 
@@ -324,7 +324,7 @@ export type ResolutionTraceVisibilityRow = { row_index: number, applied_stream_s
 
 export type ResolutionTraceNoteRow = { row_index: number, applied_stream_seq: bigint | null, note: string, };
 
-export type ResolutionTraceInspectionRun = { phase_id: string, run_id: string, applied_stream_seq: bigint | null, trace_stream_seq: bigint, trace_version: number, decisions: Array<ResolutionTraceDecisionRow>, edges: Array<ResolutionTraceEdgeRow>, generated: Array<ResolutionTraceGeneratedRow>, effect_changes: Array<ResolutionTraceEffectChangeRow>, visibility: Array<ResolutionTraceVisibilityRow>, notes: Array<ResolutionTraceNoteRow>, };
+export type ResolutionTraceInspectionRun = { phase_id: PhaseId, run_id: string, applied_stream_seq: bigint | null, trace_stream_seq: bigint, trace_version: number, decisions: Array<ResolutionTraceDecisionRow>, edges: Array<ResolutionTraceEdgeRow>, generated: Array<ResolutionTraceGeneratedRow>, effect_changes: Array<ResolutionTraceEffectChangeRow>, visibility: Array<ResolutionTraceVisibilityRow>, notes: Array<ResolutionTraceNoteRow>, };
 
 export type ResolutionTraceInspectionReport = { game: string, traces: Array<ResolutionTraceInspectionRun>, };
 

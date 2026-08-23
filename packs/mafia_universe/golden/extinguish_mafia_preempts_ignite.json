@@ -4,14 +4,19 @@
     "game_id": "game_mu_extinguish_mafia_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -35,7 +40,9 @@
           "role_key": "mafia_goon",
           "alignment": "mafia",
           "status": "alive",
-          "effects": ["doused"]
+          "effects": [
+            "doused"
+          ]
         },
         {
           "slot_id": "slot_4",
@@ -58,7 +65,9 @@
         "action_id": "mu_mafia_extinguish_001",
         "actor": "slot_2",
         "template_id": "extinguish",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N02",
         "submitted_at": 1,
         "withdrawn": false,
@@ -83,7 +92,10 @@
       "index": 0,
       "kind": "EffectNotification",
       "payload": {
-        "audience": ["slot_2", "slot_3"],
+        "audience": [
+          "slot_2",
+          "slot_3"
+        ],
         "effect": "doused",
         "status": "cleared"
       }
@@ -94,7 +106,9 @@
       "payload": {
         "actor": "slot_2",
         "effect": "doused",
-        "targets": ["slot_3"]
+        "targets": [
+          "slot_3"
+        ]
       }
     },
     {

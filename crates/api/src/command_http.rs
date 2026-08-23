@@ -6,8 +6,8 @@
 //! `commands`; live update assembly and publication remain in `live_projection`.
 
 use super::auth_http::{
-    authorization_context, bearer_token, require_global_admin, unauthorized_session,
-    AuthHttpState, AuthenticatedRequest,
+    authorization_context, bearer_token, require_global_admin, unauthorized_session, AuthHttpState,
+    AuthenticatedRequest,
 };
 use super::live_projection::{self, LiveProjectionChangeSet, LiveProjectionPublisher};
 use super::{program_library, ApiError, ApiState};

@@ -3,6 +3,7 @@
 //! Wire types are deliberately separate from domain and storage types. They are
 //! the stable transport contract; server internals may evolve behind them.
 
+use domain::phase::PhaseId;
 use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -358,18 +359,18 @@ pub enum Command {
     },
     StartGame {
         game: Uuid,
-        phase: String,
+        phase: PhaseId,
     },
     OpenDayPhase {
         game: Uuid,
-        phase: String,
+        phase: PhaseId,
     },
     AdvancePhase {
         game: Uuid,
     },
     AdvancePhaseByDeadline {
         game: Uuid,
-        phase: String,
+        phase: PhaseId,
         observed_at: i64,
     },
     LockThread {
@@ -495,7 +496,7 @@ pub enum Command {
     },
     ExtendDeadline {
         game: Uuid,
-        phase: String,
+        phase: PhaseId,
         at: i64,
     },
     ProcessReplacement {
@@ -921,7 +922,7 @@ pub enum ProjectionDelta {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct VoteCountDelta {
     pub game: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub candidate_slot: String,
     pub count: i64,
 }
@@ -940,7 +941,7 @@ impl From<projections::VoteCountRow> for VoteCountDelta {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct VoteCountClearedDelta {
     pub game: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub candidate_slot: String,
 }
 
@@ -975,7 +976,7 @@ pub struct PostCitationsChangedDelta {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct DayVoteOutcomeDelta {
     pub game: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub source_seq: i64,
     pub event_index: i32,
     pub status: String,
@@ -1208,7 +1209,7 @@ pub fn host_console_patches(
 pub struct HostDayEventDelta {
     pub event_id: String,
     pub state: String,
-    pub phase_id: Option<String>,
+    pub phase_id: Option<PhaseId>,
     pub definition: game_platform::DayEvent,
     /// The derived private room and its current membership posture. Public
     /// events have no room descriptor because their narratives live in main.
@@ -1288,7 +1289,7 @@ pub struct HostConsoleAuthorityDelta {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct HostConsolePhaseStateDelta {
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub locked: bool,
     pub deadline: Option<i64>,
 }
@@ -1313,7 +1314,7 @@ pub struct HostConsoleSlotOccupancyDelta {
 pub struct HostConsoleThreadPostDelta {
     pub stream_seq: i64,
     pub author: GameThreadAuthor,
-    pub phase_id: String,
+    pub phase_id: Option<PhaseId>,
     pub body: String,
     #[serde(default)]
     pub quotations: Vec<Quotation>,
@@ -1361,7 +1362,9 @@ pub struct HostTaskDelta {
     pub urgency: HostTaskUrgency,
     pub intent: String,
     pub consequence: String,
-    pub phase_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub phase_id: Option<PhaseId>,
     pub subject_slot: Option<String>,
     /// Identity of the authoritative fact from which this selector is derived.
     pub source_id: String,
@@ -1407,19 +1410,19 @@ pub enum HostPromptRecordedDecision {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum HostPromptPublicResolution {
     DayVoteElimination {
-        phase_id: String,
+        phase_id: PhaseId,
         selected_slot: String,
         reason: String,
     },
     PhaseAdvance {
-        source_phase_id: String,
-        target_phase_id: String,
+        source_phase_id: PhaseId,
+        target_phase_id: PhaseId,
         reason: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        skipped_phase_id: Option<String>,
+        skipped_phase_id: Option<PhaseId>,
     },
     Acknowledged {
-        phase_id: String,
+        phase_id: PhaseId,
         reason: String,
     },
 }
@@ -1427,14 +1430,12 @@ pub enum HostPromptPublicResolution {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct HostPromptDelta {
     pub game: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub event_index: i32,
     pub prompt_id: String,
     pub kind: String,
     pub subject_slot: Option<String>,
     pub reason: String,
-    pub phase_kind: String,
-    pub phase_number: i32,
     pub metadata: HostPromptMetadata,
     pub status: String,
     pub decision: Option<HostPromptRecordedDecision>,
@@ -1498,8 +1499,6 @@ impl TryFrom<projections::HostPromptRow> for HostPromptDelta {
             kind: row.kind,
             subject_slot: row.subject_slot,
             reason: row.reason,
-            phase_kind: row.phase_kind,
-            phase_number: row.phase_number,
             metadata: decode_field(KIND, "metadata", row.metadata)?,
             status: row.status,
             decision: decode_opt_field(KIND, "decision", row.decision)?,
@@ -1559,7 +1558,7 @@ pub struct ThreadPost {
     pub stream_seq: i64,
     pub channel_id: String,
     pub author: GameThreadAuthor,
-    pub phase_id: String,
+    pub phase_id: Option<PhaseId>,
     pub body: String,
     pub media: Vec<ThreadPostMedia>,
     #[serde(default)]
@@ -1966,7 +1965,7 @@ pub struct GameIndexEntry {
     pub game: Uuid,
     pub pack: String,
     pub status: String,
-    pub phase_id: Option<String>,
+    pub phase_id: Option<PhaseId>,
     pub updated_seq: i64,
     pub completed_seq: Option<i64>,
 }
@@ -2385,7 +2384,7 @@ impl From<projections::PublicProfileRow> for PublicProfile {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PlayerNotification {
     pub game: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub event_index: i32,
     pub audience_slot: String,
     pub effect: String,
@@ -2450,7 +2449,7 @@ pub struct InvestigationResultFields {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PlayerInvestigationResult {
     pub game: Uuid,
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub event_index: i32,
     pub audience_slot: String,
     pub mode: String,
@@ -2472,10 +2471,10 @@ pub struct HostPhaseControl {
     pub prompt_id: String,
     pub prompt_kind: Option<String>,
     pub prompt_reason: Option<String>,
-    pub source_phase_id: String,
-    pub target_phase_id: String,
+    pub source_phase_id: PhaseId,
+    pub target_phase_id: PhaseId,
     pub reason: String,
-    pub skipped_phase_id: Option<String>,
+    pub skipped_phase_id: Option<PhaseId>,
     pub resolved_at: Option<i64>,
     pub occurred_at: i64,
 }
@@ -2522,7 +2521,7 @@ pub struct ResolutionTraceInspectionReport {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct ResolutionTraceInspectionRun {
-    pub phase_id: String,
+    pub phase_id: PhaseId,
     pub run_id: String,
     pub applied_stream_seq: Option<i64>,
     pub trace_stream_seq: i64,
@@ -2779,13 +2778,14 @@ pub enum CapabilityGrant {
 }
 
 pub mod typescript {
+    use domain::phase::PhaseId;
     use game_platform::{
         ChannelId, ConcreteEffect, ContentRef, DayEvent, DayEventDecision, DayEventEvent,
         DayEventId, DayEventResolutionMode, DayEventSchedule, DayEventState, DayEventTemplate,
         DayProgram, DurationSeconds, EffectOperationTemplate, EffectOrigin, EffectPlan,
         EffectVisibility, EventChannelMembership, EventChannelPolicy, GrantKind, GrantSpec,
         NarrativeLifecycle, NarrativeTemplate, NarrativeTemplates, OptionId, ParticipantFilter,
-        ParticipationLimits, ParticipationMode, ParticipationPayload, ParticipationSpec, PhaseId,
+        ParticipationLimits, ParticipationMode, ParticipationPayload, ParticipationSpec,
         PhaseScope, PrincipalId, ProgramContentHash, ProgramId, ProgramTrigger, RecipientBindings,
         RecipientSelector, RewardAssignment, RewardBinding, RewardEffectTemplate, RewardKey,
         SlotId, SlotLifecycleEffect, Tag, TemplateKey, UnixSeconds,
@@ -3019,8 +3019,44 @@ impl From<&caps::Capability> for CapabilityGrant {
 }
 
 #[cfg(test)]
+mod phase_id_ingress_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn lifecycle_commands_deserialize_only_canonical_phase_ids_and_preserve_them_to_commands() {
+        let game = Uuid::nil();
+        let command: Command = serde_json::from_value(json!({
+            "StartGame": { "game": game, "phase": "D01" }
+        }))
+        .expect("canonical phase id crosses the wire");
+
+        match command.into_dispatch() {
+            CommandDispatch::Direct(commands::Command::StartGame { phase, .. }) => {
+                assert_eq!(phase.as_str(), "D01");
+            }
+            other => panic!("unexpected dispatch: {other:?}"),
+        }
+
+        for invalid in ["D00", "D3", "D003", "D01junk", "D01R0", "D01R02"] {
+            let raw = json!({
+                "StartGame": { "game": game, "phase": invalid }
+            });
+            assert!(
+                serde_json::from_value::<Command>(raw).is_err(),
+                "wire must reject noncanonical phase id {invalid}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod host_console_patch_tests {
     use super::*;
+
+    fn phase(value: &str) -> PhaseId {
+        PhaseId::parse(value).expect("static test phase id is canonical")
+    }
 
     fn snapshot(game: Uuid) -> HostConsoleStateDelta {
         HostConsoleStateDelta {
@@ -3033,7 +3069,7 @@ mod host_console_patch_tests {
             },
             completed: false,
             phase: Some(HostConsolePhaseStateDelta {
-                phase_id: "D01".into(),
+                phase_id: phase("D01"),
                 locked: false,
                 deadline: None,
             }),
@@ -3068,7 +3104,7 @@ mod host_console_patch_tests {
             author: GameThreadAuthor::Slot {
                 slot_id: "slot-1".into(),
             },
-            phase_id: "D01".into(),
+            phase_id: Some(phase("D01")),
             body: body.into(),
             quotations: Vec::new(),
         }
@@ -3121,7 +3157,7 @@ mod host_console_patch_tests {
         let previous = snapshot(game);
         let mut current = previous.clone();
         current.phase = Some(HostConsolePhaseStateDelta {
-            phase_id: "D01".into(),
+            phase_id: phase("D01"),
             locked: true,
             deadline: None,
         });
@@ -3161,10 +3197,14 @@ mod live_json_map_tests {
     use super::*;
     use serde_json::json;
 
+    fn phase(value: &str) -> PhaseId {
+        PhaseId::parse(value).expect("static test phase id is canonical")
+    }
+
     fn vote_row(tallies: serde_json::Value) -> projections::DayVoteOutcomeRow {
         projections::DayVoteOutcomeRow {
             game_id: Uuid::nil(),
-            phase_id: "D01".into(),
+            phase_id: phase("D01"),
             source_seq: 11,
             event_index: 0,
             status: "Lynch".into(),
@@ -3184,7 +3224,7 @@ mod live_json_map_tests {
     fn host_prompt_row(decision: Option<serde_json::Value>) -> projections::HostPromptRow {
         projections::HostPromptRow {
             game_id: Uuid::nil(),
-            phase_id: "D01".into(),
+            phase_id: phase("D01"),
             event_index: 0,
             prompt_id: "D01:pk:Tie".into(),
             kind: "pk".into(),
@@ -3213,7 +3253,7 @@ mod live_json_map_tests {
     fn investigation_row(result: serde_json::Value) -> projections::PlayerInvestigationResultRow {
         projections::PlayerInvestigationResultRow {
             game_id: Uuid::nil(),
-            phase_id: "N01".into(),
+            phase_id: phase("N01"),
             event_index: 0,
             audience_slot: "slot-1".into(),
             mode: "Track".into(),
@@ -3275,7 +3315,7 @@ mod live_json_map_tests {
         assert_eq!(
             delta.public_resolution,
             Some(HostPromptPublicResolution::DayVoteElimination {
-                phase_id: "D01".into(),
+                phase_id: PhaseId::parse("D01").expect("static phase id is canonical"),
                 selected_slot: "slot-2".into(),
                 reason: "host_decides_tie".into(),
             })
@@ -3283,11 +3323,46 @@ mod live_json_map_tests {
     }
 
     #[test]
+    fn host_prompt_projection_decode_rejects_noncanonical_public_resolution_phase_ids() {
+        let mut row = host_prompt_row(None);
+        row.public_resolution = Some(json!({
+            "kind": "phase_advance",
+            "source_phase_id": "D01",
+            "target_phase_id": "D01R02",
+            "reason": "revote"
+        }));
+
+        let error = HostPromptDelta::try_from(row)
+            .expect_err("projection adapter must reject a malformed phase id");
+        assert_eq!(error.kind, "HostPrompt");
+        assert_eq!(error.field, "public_resolution");
+    }
+
+    #[test]
+    fn host_prompt_wire_decode_rejects_noncanonical_prompt_phase_id() {
+        let raw = json!({
+            "game": Uuid::nil(),
+            "phase_id": "D01R02",
+            "event_index": 0,
+            "prompt_id": "D01:pk:Tie",
+            "kind": "pk",
+            "subject_slot": null,
+            "reason": "host_decides_tie",
+            "metadata": {},
+            "status": "pending",
+            "decision": null,
+            "public_resolution": null,
+            "resolved_at": null
+        });
+        assert!(serde_json::from_value::<HostPromptDelta>(raw).is_err());
+    }
+
+    #[test]
     fn investigation_result_row_becomes_typed_label_or_fields() {
         let label =
             PlayerInvestigationResult::try_from(projections::PlayerInvestigationResultRow {
                 game_id: Uuid::nil(),
-                phase_id: "N01".into(),
+                phase_id: phase("N01"),
                 event_index: 0,
                 audience_slot: "slot-1".into(),
                 mode: "Parity".into(),

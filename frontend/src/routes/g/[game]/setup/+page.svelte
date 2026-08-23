@@ -23,6 +23,7 @@
     occupiedSetupInviteTargets,
   } from "./setup-route-model.mjs";
   import { buildHostSetupWorkflow } from "./setup-workflow-model.mjs";
+  import { phaseLabelFromId } from "$lib/phase-id.mjs";
 
   export let data;
   export let form;
@@ -94,11 +95,13 @@
     if (preview.mode === "relative_to_phase") {
       const lock =
         preview.lockOffset === null ? "" : `; locks +${preview.lockOffset}s`;
-      return `Opens ${preview.phaseId} +${preview.openOffset}s${lock}`;
+      const phase = phaseLabelFromId(preview.phaseId) ?? "a phase";
+      return `Opens ${phase} +${preview.openOffset}s${lock}`;
     }
     if (preview.mode === "on_trigger") {
       const kind = String(preview.trigger?.kind ?? "trigger").replaceAll("_", " ");
-      const phase = preview.trigger?.phase_id ? `${preview.trigger.phase_id} ` : "";
+      const phaseLabel = phaseLabelFromId(preview.trigger?.phase_id);
+      const phase = phaseLabel ? `${phaseLabel} ` : "";
       return `Opens when ${phase}${kind} fires`;
     }
     return preview.mode;

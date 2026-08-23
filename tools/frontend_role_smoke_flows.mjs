@@ -156,12 +156,20 @@ export const mockStateProjections = Object.freeze({
   },
   hostPrompts(state) {
     return state.hostPromptPending
-      ? [
+        ? [
           {
-            id: "D01:skip_next_day:slot_1",
-            label: "skip_next_day",
+            game: "midsummer",
+            phase_id: "D01",
+            event_index: 0,
+            prompt_id: "D01:skip_next_day:slot_1",
+            kind: "skip_next_day",
+            subject_slot: "slot_1",
+            reason: "beloved_princess_death",
+            metadata: {},
             status: "pending",
-            decisionKind: "acknowledge",
+            decision: null,
+            public_resolution: null,
+            resolved_at: null,
           },
         ]
       : [];
@@ -249,8 +257,6 @@ export const fixtureApiRoutes = Object.freeze([
       actor_status: "alive",
       phase: {
         phase_id: "D01",
-        phase_kind: "Day",
-        phase_number: 1,
         locked: false,
       },
       actions: [],
@@ -344,8 +350,6 @@ export const privateChannelFixtureApiRoutes = Object.freeze([
       actor_status: "alive",
       phase: {
         phase_id: "D01",
-        phase_kind: "Day",
-        phase_number: 1,
         locked: false,
       },
       actions: [],

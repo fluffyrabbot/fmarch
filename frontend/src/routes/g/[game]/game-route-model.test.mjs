@@ -12,6 +12,7 @@ import {
   buildGameRouteData,
   buildPlayerComposerView,
   buildPlayerDayEventCommands,
+  buildPlayerPhaseView,
   buildPlayerVoteCommands,
   playerChannelForbiddenMessage,
   playerChannelNotFoundMessage,
@@ -79,7 +80,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
     statusStackClassName: "fm-status-stack",
     eyebrow: "Midsummer Invitational",
     title: "Day 2",
-    summary: "Seven votes to hammer. Thread is open.",
+    summary: "Day 2 is open.",
     capability: {
       visible: true,
       label: "Playing midsummer",
@@ -100,6 +101,12 @@ test("player route data exposes thread, channel, votecount, and touch command la
     requiredText: "Full votecount",
   });
   assert.equal(data.player.slotId, "slot-7");
+  assert.deepEqual(data.phase, {
+    label: "Day 2",
+    state: "open",
+    deadlineLabel: "Jun 19, 2026, 9:00 PM",
+    summary: "Day 2 is open.",
+  });
   assert.deepEqual(
     data.channels.map((channel) => channel.id),
     ["main"],
@@ -213,7 +220,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
         id: "notification-1",
         label: "Commuted",
         value: "Delivered",
-        detail: "Phase N02",
+        detail: "Phase Night 2",
         reviewHref: "/g/midsummer?private=notification-1",
       },
       {
@@ -248,6 +255,15 @@ test("player route data exposes thread, channel, votecount, and touch command la
     "context",
     "dock",
   ]);
+});
+
+test("player phase view keeps an explicit null phase pre-game", () => {
+  assert.deepEqual(buildPlayerPhaseView({ phase: null }), {
+    label: "Awaiting first phase",
+    state: "pre-phase",
+    deadlineLabel: "",
+    summary: "The game has not opened a phase.",
+  });
 });
 
 test("player route data exposes action-open state for seeded UUID role URLs", async () => {
@@ -587,8 +603,6 @@ test("player route data uses REST projection cold-loads when available", async (
           role_key: "mafia_goon",
           phase: {
             phase_id: "N01",
-            phase_kind: "Night",
-            phase_number: 1,
             locked: false,
           },
           actions: [
@@ -752,7 +766,7 @@ test("player private queue helpers derive visible queue from scoped projections"
       kind: "notification",
       label: "Commuted",
       value: "Delivered",
-      detail: "Phase N02",
+      detail: "Phase Night 2",
       buttonLabel: "Review",
     },
     {

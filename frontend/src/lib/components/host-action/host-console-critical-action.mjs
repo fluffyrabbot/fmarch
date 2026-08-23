@@ -1,3 +1,5 @@
+import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
+
 export const EXTEND_DEADLINE_PRESETS = Object.freeze([
   Object.freeze({ id: "extend_deadline_24h", label: "Extend +24h", hours: 24 }),
   Object.freeze({ id: "extend_deadline_48h", label: "Extend +48h", hours: 48 }),
@@ -104,6 +106,9 @@ export function buildHostConsoleCriticalActions(
 
 function buildExtendDeadlineActions(gameId, phase) {
   const target = activeDeadlineTarget(phase);
+  if (target === null) {
+    return Object.freeze([]);
+  }
   const defaultExtendsToSeconds = target.baseDeadlineSeconds + 24 * 3600;
   return Object.freeze([
     freezeHostAction({
@@ -148,14 +153,11 @@ function buildExtendDeadlinePresetAction(gameId, target, preset) {
 }
 
 function activeDeadlineTarget(phase) {
-  const phaseId =
-    typeof phase?.id === "string" && phase.id.trim() !== ""
-      ? phase.id.trim()
-      : "D01";
-  const phaseLabel =
-    typeof phase?.label === "string" && phase.label.trim() !== ""
-      ? phase.label.trim()
-      : phaseId;
+  const phaseId = canonicalPhaseId(phase?.id);
+  if (phaseId === null) {
+    return null;
+  }
+  const phaseLabel = phaseLabelFromId(phaseId) ?? phaseId;
   const baseDeadlineSeconds =
     typeof phase?.deadline === "number" && Number.isFinite(phase.deadline)
       ? Math.floor(phase.deadline)
@@ -320,6 +322,9 @@ function replacementAllowsTerminalLifecycleActions(replacement) {
 }
 
 function buildPhaseActions(gameId, phase) {
+  if (canonicalPhaseId(phase?.id) === null) {
+    return Object.freeze([]);
+  }
   const locked = phaseLocked(phase);
   if (locked === true) {
     const actions = [
@@ -394,7 +399,7 @@ function buildDeadlineAdvanceAction(gameId, phase) {
   if (typeof phase?.deadline !== "number" || !Number.isFinite(phase.deadline)) {
     return null;
   }
-  const phaseId = typeof phase?.id === "string" && phase.id.trim() !== "" ? phase.id : null;
+  const phaseId = canonicalPhaseId(phase?.id);
   if (phaseId === null) {
     return null;
   }
@@ -539,7 +544,13 @@ export function buildHostConsoleActionGroups({
 }
 
 export const HOST_CONSOLE_CRITICAL_ACTIONS =
-  buildHostConsoleCriticalActions("game-tablet-smoke");
+  buildHostConsoleCriticalActions("game-tablet-smoke", {
+    phase: Object.freeze({
+      id: "D01",
+      locked: false,
+      deadline: FIXTURE_DEADLINE_SECONDS,
+    }),
+  });
 
 export function hostActionAllowedForCapability(
   action,

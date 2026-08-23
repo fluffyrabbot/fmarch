@@ -4,8 +4,6 @@
     "game_id": "game_demo_cooldown_003",
     "phase_id": "N03",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 3,
       "phase_id": "N03",
       "phase_deadline": null,
       "phase_policy": {
@@ -56,9 +54,7 @@
           "limit": 2,
           "used": 1,
           "remaining": 2,
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ]
     },

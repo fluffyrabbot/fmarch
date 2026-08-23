@@ -348,8 +348,6 @@ test("host console proof actions cover the roadmap-critical irreversible actions
       "process_replacement",
       "resolve_phase",
       "lock_thread",
-      "unlock_thread",
-      "advance_phase",
       "publish_votecount",
       "mark_dead",
       "modkill_slot",
@@ -423,12 +421,30 @@ test("host console exposes deadline advance only for locked phases with deadline
   });
 });
 
+test("host console does not invent phase controls before the first phase exists", () => {
+  const actions = buildHostConsoleCriticalActions("midsummer", { phase: null });
+  assert.deepEqual(
+    actions
+      .filter((action) => [
+        "extend_deadline",
+        "extend_deadline_24h",
+        "extend_deadline_48h",
+        "resolve_phase",
+        "lock_thread",
+        "unlock_thread",
+        "advance_phase",
+        "advance_phase_by_deadline",
+      ].includes(action.id))
+      .map((action) => action.id),
+    [],
+  );
+});
+
 test("host console deadline extension actions follow the projected phase", () => {
   const baseDeadlineSeconds = 1782014400;
   const actions = buildHostConsoleCriticalActions("midsummer", {
     phase: {
       id: "D03R2",
-      label: "Day 3 revote",
       locked: false,
       deadline: baseDeadlineSeconds,
     },
@@ -445,28 +461,28 @@ test("host console deadline extension actions follow the projected phase", () =>
     [
       [
         "extend_deadline",
-        "Day 3 revote deadline",
+        "Day 3 revote 2 deadline",
         "D03R2",
         undefined,
         new Date((baseDeadlineSeconds + 24 * 3600) * 1000).toISOString(),
       ],
       [
         "extend_deadline_24h",
-        "Day 3 revote deadline",
+        "Day 3 revote 2 deadline",
         "D03R2",
         undefined,
         new Date((baseDeadlineSeconds + 24 * 3600) * 1000).toISOString(),
       ],
       [
         "extend_deadline_48h",
-        "Day 3 revote deadline",
+        "Day 3 revote 2 deadline",
         "D03R2",
         undefined,
         new Date((baseDeadlineSeconds + 48 * 3600) * 1000).toISOString(),
       ],
     ],
   );
-  assert.match(actions[0].confirmationText, /Day 3 revote deadline/);
+  assert.match(actions[0].confirmationText, /Day 3 revote 2 deadline/);
 });
 
 test("host console hides terminal slot lifecycle commands", () => {
@@ -524,6 +540,7 @@ test("host console hides mutating controls after game completion", () => {
 
 test("host console action groups turn typed commands into moderator control bays", () => {
   const actions = buildHostConsoleCriticalActions("midsummer", {
+    phase: { id: "D01", locked: false, deadline: 1781928000 },
     hostPrompts: [
       {
         id: "D01:tie:slot_2",
@@ -564,7 +581,7 @@ test("host console action groups turn typed commands into moderator control bays
     groups
       .find((group) => group.id === "phase")
       .actions.map((action) => action.id),
-    ["resolve_phase", "lock_thread", "unlock_thread", "advance_phase"],
+    ["resolve_phase", "lock_thread"],
   );
   assert.deepEqual(
     groups
@@ -596,6 +613,7 @@ test("host console action groups turn typed commands into moderator control bays
   const cohostActions = buildHostConsoleCriticalActions("midsummer", {
     capabilityKind: "CohostOf",
     allowedPermissionClasses: ["deadline", "host_prompt_resolve"],
+    phase: { id: "D01", locked: false, deadline: 1781928000 },
     hostPrompts: [
       {
         id: "D01:tie:slot_2",

@@ -231,7 +231,8 @@ async fn replay_pack_golden(
         &host,
         Command::StartGame {
             game,
-            phase: phase_id.into(),
+            phase: domain::phase::PhaseId::parse(phase_id)
+                .expect("golden witness phase id is canonical"),
         },
     )
     .await

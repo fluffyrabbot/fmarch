@@ -512,7 +512,7 @@ async function proveRenderedPlayerPrivateDisclosure(bundle) {
     'data-testid="player-private-detail-notification-1"',
     "expanded player private detail test id",
   );
-  assertIncludes(expandedHtml, "Phase N02", "expanded player private detail");
+  assertIncludes(expandedHtml, "Phase Night 2", "expanded player private detail");
   assertPrivateDisclosureDoesNotLeakHostOnlyCopy(expandedHtml, "expanded private queue");
 
   return {
@@ -576,7 +576,7 @@ async function proveRenderedPlayerPrivateReviewRoute(bundle) {
     'data-testid="player-private-detail-notification-1"',
     "player private review URL detail",
   );
-  assertIncludes(html, "Phase N02", "player private review URL detail text");
+  assertIncludes(html, "Phase Night 2", "player private review URL detail text");
   assertPlayerRoutePrivateDetailDoesNotLeakHostOnlyCopy(
     html,
     "player private review route",

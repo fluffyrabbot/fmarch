@@ -1,3 +1,5 @@
+import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
+
 export const HOST_LIFECYCLE_CONTROL_CHECKPOINT_CONTRACT = Object.freeze({
   proofCheckId: "host-lifecycle-control",
   rootClassName: "host-console-critical-path__lifecycle-checkpoint fm-section",
@@ -38,7 +40,7 @@ export function buildHostLifecycleControlCheckpoint({
       data: Object.freeze({
         component: HOST_LIFECYCLE_CONTROL_CHECKPOINT_CONTRACT.componentName,
         proofCheckId: HOST_LIFECYCLE_CONTROL_CHECKPOINT_CONTRACT.proofCheckId,
-        phaseId: String(phase.id ?? ""),
+        phaseId: canonicalPhaseId(phase?.id) ?? "",
         phaseState,
         slotId,
         actionState,
@@ -50,7 +52,7 @@ export function buildHostLifecycleControlCheckpoint({
     phase: Object.freeze({
       testId: HOST_LIFECYCLE_CONTROL_CHECKPOINT_CONTRACT.phaseTestId,
       label: "Current phase",
-      value: `${String(phase.label ?? phase.id ?? "Unknown phase")} / ${phaseState}`,
+      value: `${phaseLabelFromId(phase?.id) ?? "No phase open"} / ${phaseState}`,
     }),
     slot: Object.freeze({
       testId: HOST_LIFECYCLE_CONTROL_CHECKPOINT_CONTRACT.slotTestId,

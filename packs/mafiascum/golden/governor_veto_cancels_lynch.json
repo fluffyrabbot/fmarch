@@ -38,32 +38,32 @@
         "contenders": [
           "slot_2"
         ],
-        "majority": 3.0,
+        "majority": 3,
         "reason": null,
         "status": "Lynch",
         "tallies": {
-          "slot_2": 3.0
+          "slot_2": 3
         },
         "thresholds": {
-          "slot_1": 3.0,
-          "slot_2": 3.0,
-          "slot_3": 3.0,
-          "slot_4": 3.0,
-          "slot_5": 3.0
+          "slot_1": 3,
+          "slot_2": 3,
+          "slot_3": 3,
+          "slot_4": 3,
+          "slot_5": 3
         },
         "tiebreak": null,
-        "total_weight": 5.0,
+        "total_weight": 5,
         "votes": {
           "slot_3": "slot_2",
           "slot_4": "slot_2",
           "slot_5": "slot_2"
         },
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0,
-          "slot_4": 1.0,
-          "slot_5": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1,
+          "slot_4": 1,
+          "slot_5": 1
         },
         "winner": "slot_2"
       }
@@ -78,8 +78,6 @@
         "counter_id": "x_shot:veto",
         "limit": 1,
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "phase_scope": "game",
         "remaining": 0,
         "template_id": "veto",
@@ -92,8 +90,6 @@
       "payload": {
         "governor": "slot_1",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "source_action": "veto_001",
         "target": "slot_2"
       }
@@ -115,8 +111,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

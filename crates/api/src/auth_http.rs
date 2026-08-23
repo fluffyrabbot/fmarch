@@ -182,8 +182,9 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let auth = AuthHttpState::from_ref(state);
-        let bearer =
-            bearer_token(&parts.headers).ok_or_else(unauthorized_session)?.to_string();
+        let bearer = bearer_token(&parts.headers)
+            .ok_or_else(unauthorized_session)?
+            .to_string();
         let context = authorization_context(&auth, &bearer).await?;
         Ok(Self { bearer, context })
     }
@@ -227,8 +228,9 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let auth = AuthHttpState::from_ref(state);
-        let bearer =
-            bearer_token(&parts.headers).ok_or_else(unauthorized_account)?.to_string();
+        let bearer = bearer_token(&parts.headers)
+            .ok_or_else(unauthorized_account)?
+            .to_string();
         let context = authorization_context(&auth, &bearer).await?;
         Ok(Self { context })
     }
@@ -1916,9 +1918,12 @@ async fn add_classic_method(
     let password_hash = hash_account_password(request.password.as_str()).await?;
 
     let mut tx = state.pool.begin().await?;
-    let locked_identity =
-        identity::session::validate_session_for_update(&mut tx, &auth.bearer, &state.session_policy)
-            .await?;
+    let locked_identity = identity::session::validate_session_for_update(
+        &mut tx,
+        &auth.bearer,
+        &state.session_policy,
+    )
+    .await?;
     require_recent_authentication(&locked_identity, now)?;
     if locked_identity.principal_id != identity.principal_id {
         return Err(unauthorized_session());
@@ -2083,9 +2088,12 @@ async fn add_workos_method(
     enforce_workos_link_tombstone_precheck(&state.pool, &verified).await?;
     let mut tx = state.pool.begin().await?;
     identity::workos::lock_subject_advisory(&mut tx, verified.subject.as_str()).await?;
-    let locked_identity =
-        identity::session::validate_session_for_update(&mut tx, &auth.bearer, &state.session_policy)
-            .await?;
+    let locked_identity = identity::session::validate_session_for_update(
+        &mut tx,
+        &auth.bearer,
+        &state.session_policy,
+    )
+    .await?;
     let now = unix_now_seconds();
     require_recent_authentication(&locked_identity, now)?;
     if locked_identity.principal_id != identity.principal_id {
@@ -3338,7 +3346,8 @@ async fn revoke_auth_session(
     auth: AuthenticatedRequest,
     Json(request): Json<RevokeAuthSession>,
 ) -> Result<Json<AuthLifecycleResponse>, ApiError> {
-    let actor_principal_id = require_global_admin(&state, &auth.bearer, "session revocation").await?;
+    let actor_principal_id =
+        require_global_admin(&state, &auth.bearer, "session revocation").await?;
 
     let token = request.token.trim();
     if token.is_empty() {
@@ -3751,7 +3760,8 @@ async fn revoke_auth_invite(
     Json(request): Json<RevokeAuthInvite>,
 ) -> Result<Json<AuthLifecycleResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let actor_principal_id = require_global_admin(&state, &auth.bearer, "invite revocation").await?;
+    let actor_principal_id =
+        require_global_admin(&state, &auth.bearer, "invite revocation").await?;
 
     let invite_token = request.invite_token.trim();
     if invite_token.is_empty() {
@@ -3891,7 +3901,8 @@ async fn retry_auth_delivery_intent(
     Path(delivery_id): Path<Uuid>,
 ) -> Result<Json<AuthDeliveryRetryResponse>, ApiError> {
     require_classic_enabled(&state)?;
-    let actor_principal_id = require_global_admin(&state, &request.bearer, "delivery retry").await?;
+    let actor_principal_id =
+        require_global_admin(&state, &request.bearer, "delivery retry").await?;
     let now = unix_now_seconds();
     let receipt = process_identity_delivery_intent(
         &state.pool,

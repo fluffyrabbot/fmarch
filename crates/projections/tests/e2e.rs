@@ -12,7 +12,8 @@ use std::str::FromStr;
 use attention::WatchTarget;
 use content_reference::PublicContentRef;
 use domain::events::{IndexedEvent, ResolutionCounts};
-use domain::pack::{GrantKind, Pack, PhaseKind};
+use domain::pack::{GrantKind, Pack};
+use domain::phase::PhaseId;
 use domain::state::{RevealState, SlotLifecycle, SlotState, StateSnapshot, Submission};
 use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
 use eventstore::{ActorId, EventInput, StoreError};
@@ -292,11 +293,15 @@ fn slot(id: &str, role: &str, align: &str) -> SlotState {
     }
 }
 
-fn empty_phase_announcement(index: usize, phase_id: &str) -> IndexedEvent {
+fn phase_id(value: &str) -> PhaseId {
+    PhaseId::parse(value).expect("projection test phase id must be canonical")
+}
+
+fn empty_phase_announcement(index: usize, phase: &str) -> IndexedEvent {
     IndexedEvent {
         index,
         event: InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
-            phase_id: phase_id.into(),
+            phase_id: phase_id(phase),
             template_id: None,
             audience: None,
             deaths: Vec::new(),
@@ -310,7 +315,7 @@ fn submission(action_id: &str, actor: &str, template: &str, target: &str, at: u6
         actor: actor.into(),
         template_id: template.into(),
         targets: vec![target.into()],
-        phase_id: "N01".into(),
+        phase_id: phase_id("N01"),
         submitted_at: at,
         withdrawn: false,
         metadata: BTreeMap::new(),
@@ -387,9 +392,7 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
 
     // Night-1 resolution: Mafia kills slot_3, no protection → PlayerKilled.
     let state = StateSnapshot {
-        phase_id: "N01".into(),
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
+        phase_id: phase_id("N01"),
         phase_deadline: None,
         phase_policy: pack.phases.clone(),
         slots: vec![
@@ -426,7 +429,7 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
     )];
     let output = resolve(ResolutionInput {
         game_id: "game_e2e".into(),
-        phase_id: "N01".into(),
+        phase_id: phase_id("N01"),
         run_id: "run_e2e_001".into(),
         state,
         submissions: subs,
@@ -434,7 +437,8 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
         pack: pack.clone(),
         seed: 424242,
         logical_time: 100,
-    });
+    })
+    .expect("scenario resolution succeeds");
     // Sanity: the engine actually killed slot_3.
     assert!(
         output.applied.events.iter().any(
@@ -505,16 +509,16 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
     // ballot targeting slot_3 is cleared when the night resolution kills that
     // slot, so dead targets cannot remain in the current tally.
     let vc = votecount(&pool, game).await.unwrap();
-    let tally: BTreeMap<(String, String), i64> = vc
+    let tally: BTreeMap<(PhaseId, String), i64> = vc
         .iter()
         .map(|r| ((r.phase_id.clone(), r.candidate_slot.clone()), r.count))
         .collect();
     assert_eq!(
-        tally[&("D01".into(), "slot_1".into())],
+        tally[&(phase_id("D01"), "slot_1".into())],
         1,
         "2 ballots - 1 withdrawn = 1"
     );
-    assert!(!tally.contains_key(&("D01".into(), "slot_3".into())));
+    assert!(!tally.contains_key(&(phase_id("D01"), "slot_3".into())));
 
     let thread = projections::thread_view(&pool, game, None, 50)
         .await
@@ -530,7 +534,10 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
             )
         })
         .expect("slot_2 player post");
-    assert_eq!(player_post.phase_id, "D01");
+    assert_eq!(
+        player_post.phase_id.as_ref().map(PhaseId::as_str),
+        Some("D01")
+    );
     assert_eq!(player_post.body, "I think slot 1 is caught.");
 }
 
@@ -554,9 +561,7 @@ async fn official_day_vote_outcome_projection_records_and_rebuilds(pool: sqlx::P
         reason: Some("no_lynch reached the vote threshold".into()),
     };
     let applied = ResolutionApplied {
-        phase_id: "D01".into(),
-        phase_kind: PhaseKind::Day,
-        phase_number: 1,
+        phase_id: phase_id("D01"),
         run_id: "run_day_vote_outcome_projection".into(),
         result_version: domain::RESULT_VERSION,
         seed: 22,
@@ -592,7 +597,7 @@ async fn official_day_vote_outcome_projection_records_and_rebuilds(pool: sqlx::P
 
     let rows = day_vote_outcomes(&pool, game).await.unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].phase_id, "D01");
+    assert_eq!(rows[0].phase_id, phase_id("D01"));
     assert_eq!(rows[0].source_seq, 1);
     assert_eq!(rows[0].status, "NoLynch");
     assert_eq!(rows[0].winner_slot, None);
@@ -625,9 +630,7 @@ async fn host_decides_prompt_finalizes_official_day_vote_outcome(pool: sqlx::PgP
         reason: Some("tied vote requires host decision".into()),
     };
     let applied = ResolutionApplied {
-        phase_id: "D01".into(),
-        phase_kind: PhaseKind::Day,
-        phase_number: 1,
+        phase_id: phase_id("D01"),
         run_id: "run_host_decides_outcome_projection".into(),
         result_version: domain::RESULT_VERSION,
         seed: 23,
@@ -704,9 +707,7 @@ async fn host_decides_prompt_finalizes_official_day_vote_outcome(pool: sqlx::PgP
 async fn effect_notifications_project_per_audience_slot_and_rebuild(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
-        phase_id: "N00".into(),
-        phase_kind: PhaseKind::Night,
-        phase_number: 0,
+        phase_id: phase_id("N01"),
         run_id: "run_notifications_001".into(),
         result_version: domain::RESULT_VERSION,
         seed: 10,
@@ -727,7 +728,7 @@ async fn effect_notifications_project_per_audience_slot_and_rebuild(pool: sqlx::
                     phase_id: None,
                 },
             },
-            empty_phase_announcement(1, "N00"),
+            empty_phase_announcement(1, "N01"),
         ],
     };
 
@@ -763,7 +764,7 @@ async fn effect_notifications_project_per_audience_slot_and_rebuild(pool: sqlx::
 
     let notices = player_notifications(&pool, game).await.unwrap();
     assert_eq!(notices.len(), 2);
-    assert_eq!(notices[0].phase_id, "N00");
+    assert_eq!(notices[0].phase_id, phase_id("N01"));
     assert_eq!(notices[0].event_index, 0);
     assert_eq!(notices[0].audience_slot, "slot_2");
     assert_eq!(notices[0].effect, "lovers_link");
@@ -783,9 +784,7 @@ async fn effect_notifications_project_per_audience_slot_and_rebuild(pool: sqlx::
 async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
-        phase_id: "D01".into(),
-        phase_kind: PhaseKind::Day,
-        phase_number: 1,
+        phase_id: phase_id("D01"),
         run_id: "run_host_prompt_projection".into(),
         result_version: domain::RESULT_VERSION,
         seed: 101,
@@ -802,9 +801,7 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                     kind: "skip_next_day".into(),
                     subject: Some("slot_1".into()),
                     reason: "beloved_princess_lynched".into(),
-                    phase_id: "D01".into(),
-                    phase_kind: PhaseKind::Day,
-                    phase_number: 1,
+                    phase_id: phase_id("D01"),
                     metadata: domain::HostPromptMetadata {
                         policy: Some("beloved_princess".into()),
                         death_cause: Some("lynch".into()),
@@ -844,7 +841,7 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
 
     let before = host_prompts(&pool, game).await.unwrap();
     assert_eq!(before.len(), 1);
-    assert_eq!(before[0].phase_id, "D01");
+    assert_eq!(before[0].phase_id, phase_id("D01"));
     assert_eq!(before[0].event_index, 0);
     assert_eq!(before[0].prompt_id, "D01:skip_next_day:slot_1");
     assert_eq!(before[0].kind, "skip_next_day");
@@ -927,9 +924,12 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
         controls[0].prompt_reason.as_deref(),
         Some("beloved_princess_lynched")
     );
-    assert_eq!(controls[0].source_phase_id, "D01");
-    assert_eq!(controls[0].target_phase_id, "N02");
-    assert_eq!(controls[0].skipped_phase_id.as_deref(), Some("D02"));
+    assert_eq!(controls[0].source_phase_id, phase_id("D01"));
+    assert_eq!(controls[0].target_phase_id, phase_id("N02"));
+    assert_eq!(
+        controls[0].skipped_phase_id.as_ref().map(PhaseId::as_str),
+        Some("D02")
+    );
     assert_eq!(controls[0].reason, "skip_next_day");
     assert_eq!(controls[0].resolved_at, Some(3));
     assert_eq!(controls[0].occurred_at, 4);
@@ -1012,7 +1012,7 @@ async fn phase_advanced_validates_host_prompt_phase_control_and_rolls_back(pool:
                 "skipped_phase_id": "",
                 "reason": "skip_next_day"
             }),
-            "skipped_phase_id must not be empty",
+            "unknown phase id kind",
         ),
     ] {
         let err = append_and_project(
@@ -1034,7 +1034,7 @@ async fn phase_advanced_validates_host_prompt_phase_control_and_rolls_back(pool:
         );
         assert_eq!(
             phase_state(&pool, game).await.unwrap().unwrap().phase_id,
-            "D01",
+            phase_id("D01"),
             "malformed PhaseAdvanced must roll back before moving phase_state"
         );
     }
@@ -1060,8 +1060,346 @@ async fn phase_advanced_validates_host_prompt_phase_control_and_rolls_back(pool:
     .expect("valid host-prompt phase-control payload should project");
     assert_eq!(
         phase_state(&pool, game).await.unwrap().unwrap().phase_id,
-        "N02"
+        phase_id("N02")
     );
+}
+
+/// Replaying a stored event is an ingress boundary: malformed phase strings
+/// must fail before any projection row moves. This deliberately covers the
+/// top-level folds that do not deserialize through a domain envelope first.
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn persisted_phase_ids_reject_noncanonical_payloads_atomically(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "GameStarted",
+            1,
+            serde_json::json!({ "phase_id": "D01" }),
+            ActorId::Host,
+            1,
+        )],
+    )
+    .await
+    .expect("canonical phase starts the game projection");
+
+    let malformed_events = vec![
+        EventInput::new(
+            "GameStarted",
+            1,
+            serde_json::json!({ "phase_id": "D003" }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "PhaseAdvanced",
+            1,
+            serde_json::json!({ "phase_id": "N01R02" }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "DeadlineSet",
+            1,
+            serde_json::json!({ "phase_id": "D00", "at": 20 }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "VoteSubmitted",
+            1,
+            serde_json::json!({
+                "phase_id": "D3",
+                "actor": "slot_1",
+                "target": "slot_2"
+            }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "ActionSubmitted",
+            1,
+            serde_json::json!({
+                "phase_id": "N01junk",
+                "actor": "slot_1",
+                "action_id": "action_1",
+                "template_id": "template_1",
+                "targets": []
+            }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "ActionWithdrawn",
+            1,
+            serde_json::json!({
+                "phase_id": "D01R0",
+                "actor": "slot_1",
+                "action_id": "action_1"
+            }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "PostSubmitted",
+            1,
+            serde_json::json!({
+                "phase_id": "D01R02",
+                "channel_id": "main",
+                "author": { "kind": "host_narrator" },
+                "body": "invalid phase must not write a post"
+            }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "DayEventOpened",
+            1,
+            serde_json::json!({
+                "event_id": "event_1",
+                "phase_id": "D003",
+                "opened_at": 20
+            }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "DayEventParticipationSubmitted",
+            1,
+            serde_json::json!({
+                "event_id": "event_1",
+                "actor_slot": "slot_1",
+                "phase_id": "D01junk",
+                "payload": { "kind": "default" }
+            }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "HostPromptResolved",
+            1,
+            serde_json::json!({
+                "prompt_id": "prompt_1",
+                "decision": { "choice": "slot_1" },
+                "public_resolution": {
+                    "kind": "day_vote_elimination",
+                    "phase_id": "D01R02",
+                    "selected_slot": "slot_1",
+                    "reason": "host choice"
+                }
+            }),
+            ActorId::Host,
+            2,
+        ),
+        EventInput::new(
+            "EffectNotification",
+            1,
+            serde_json::json!({
+                "effect": "notified",
+                "status": "pending",
+                "audience": ["slot_1"],
+                "phase_id": "D003"
+            }),
+            ActorId::Host,
+            2,
+        ),
+    ];
+
+    for event in malformed_events {
+        let err = append_and_project(&pool, game, &[event])
+            .await
+            .expect_err("stored noncanonical phase id must be rejected");
+        assert!(
+            matches!(err, ProjectionError::Payload { .. }),
+            "phase validation must fail at the payload boundary, got {err:?}"
+        );
+        assert!(
+            err.to_string().contains("phase id"),
+            "expected the phase parser error, got {err}"
+        );
+        assert_eq!(
+            phase_state(&pool, game).await.unwrap().unwrap().phase_id,
+            phase_id("D01"),
+            "failed replay must leave the existing phase_state untouched"
+        );
+        assert!(
+            votecount(&pool, game).await.unwrap().is_empty(),
+            "failed replay must not write a ballot"
+        );
+        assert!(
+            projections::thread_view(&pool, game, None, 10)
+                .await
+                .unwrap()
+                .posts
+                .is_empty(),
+            "failed replay must not write a post"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn canonical_persisted_phase_ids_round_trip_through_projection_folds(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    append_and_project(
+        &pool,
+        game,
+        &[
+            EventInput::new(
+                "GameStarted",
+                1,
+                serde_json::json!({ "phase_id": "D01", "phase_opened_at": 10 }),
+                ActorId::Host,
+                10,
+            ),
+            EventInput::new(
+                "VoteSubmitted",
+                1,
+                serde_json::json!({
+                    "phase_id": "D01",
+                    "actor": "slot_1",
+                    "target": "slot_2"
+                }),
+                ActorId::Host,
+                11,
+            ),
+            EventInput::new(
+                "ActionSubmitted",
+                1,
+                serde_json::json!({
+                    "phase_id": "N02",
+                    "actor": "slot_1",
+                    "action_id": "action_1",
+                    "template_id": "template_1",
+                    "targets": ["slot_2"]
+                }),
+                ActorId::Host,
+                12,
+            ),
+            EventInput::new(
+                "PostSubmitted",
+                1,
+                serde_json::json!({
+                    "phase_id": "D01",
+                    "channel_id": "main",
+                    "author": { "kind": "host_narrator" },
+                    "body": "canonical phase id"
+                }),
+                ActorId::Host,
+                13,
+            ),
+            EventInput::new(
+                "PhaseAdvanced",
+                1,
+                serde_json::json!({ "phase_id": "N02", "phase_opened_at": 14 }),
+                ActorId::Host,
+                14,
+            ),
+            EventInput::new(
+                "DeadlineSet",
+                1,
+                serde_json::json!({ "phase_id": "N02", "at": 20 }),
+                ActorId::Host,
+                15,
+            ),
+        ],
+    )
+    .await
+    .expect("canonical persisted phase ids project");
+
+    assert_eq!(
+        phase_state(&pool, game).await.unwrap().unwrap().phase_id,
+        phase_id("N02")
+    );
+    assert_eq!(
+        votecount(&pool, game).await.unwrap()[0].phase_id,
+        phase_id("D01")
+    );
+    assert_eq!(
+        projections::active_action_submissions(&pool, game, &phase_id("N02"), "slot_1")
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        projections::thread_view(&pool, game, None, 10)
+            .await
+            .unwrap()
+            .posts[0]
+            .phase_id
+            .as_ref()
+            .map(PhaseId::as_str),
+        Some("D01")
+    );
+
+    rebuild(&pool, game)
+        .await
+        .expect("canonical phase ids must replay identically");
+    assert_eq!(
+        phase_state(&pool, game).await.unwrap().unwrap().phase_id,
+        phase_id("N02")
+    );
+    assert_eq!(
+        votecount(&pool, game).await.unwrap()[0].phase_id,
+        phase_id("D01")
+    );
+    assert_eq!(
+        projections::thread_view(&pool, game, None, 10)
+            .await
+            .unwrap()
+            .posts[0]
+            .phase_id
+            .as_ref()
+            .map(PhaseId::as_str),
+        Some("D01")
+    );
+}
+
+/// Setup discussion is deliberately outside a phase. The nullable SQL column
+/// must round-trip as typed absence rather than an empty-string sentinel.
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn prephase_thread_posts_round_trip_as_typed_absence(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "PostSubmitted",
+            1,
+            serde_json::json!({
+                "channel_id": "main",
+                "author": { "kind": "host_narrator" },
+                "phase_id": null,
+                "body": "The lobby is open."
+            }),
+            ActorId::Host,
+            1,
+        )],
+    )
+    .await
+    .expect("pre-phase post is valid");
+
+    let posts = projections::thread_view(&pool, game, None, 10)
+        .await
+        .expect("read pre-phase post");
+    assert_eq!(posts.posts.len(), 1);
+    assert_eq!(posts.posts[0].phase_id, None);
+    assert_eq!(posts.posts[0].body, "The lobby is open.");
+    let stored_phase_id: Option<String> =
+        sqlx::query_scalar("SELECT phase_id FROM thread_view WHERE game_id = $1")
+            .bind(game)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(stored_phase_id, None);
+
+    rebuild(&pool, game).await.expect("rebuild pre-phase post");
+    let rebuilt = projections::thread_view(&pool, game, None, 10)
+        .await
+        .expect("read rebuilt pre-phase post");
+    assert_eq!(rebuilt.posts.len(), 1);
+    assert_eq!(rebuilt.posts[0].phase_id, None);
 }
 
 /// Rebuild determinism (REQUIRED, doc 02): after building projections
@@ -1281,9 +1619,7 @@ async fn application_database_url_for_pool(pool: &PgPool) -> String {
 async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
-        phase_id: "N01".into(),
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
+        phase_id: phase_id("N01"),
         run_id: "run_effect_projection".into(),
         result_version: domain::RESULT_VERSION,
         seed: 99,
@@ -1300,9 +1636,7 @@ async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPo
                     target: "slot_1".into(),
                     actor: "slot_a".into(),
                     source_action: Some("douse_n01".into()),
-                    phase_id: Some("N01".into()),
-                    phase_kind: Some(PhaseKind::Night),
-                    phase_number: Some(1),
+                    phase_id: Some(phase_id("N01")),
                     duration: domain::EffectDuration::Persistent,
                     visibility: domain::EffectVisibility::Target,
                 },
@@ -1314,9 +1648,7 @@ async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPo
                     target: "slot_2".into(),
                     actor: "slot_a".into(),
                     source_action: Some("douse_n01".into()),
-                    phase_id: Some("N01".into()),
-                    phase_kind: Some(PhaseKind::Night),
-                    phase_number: Some(1),
+                    phase_id: Some(phase_id("N01")),
                     duration: domain::EffectDuration::Persistent,
                     visibility: domain::EffectVisibility::Target,
                 },
@@ -1329,8 +1661,6 @@ async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPo
                     actor: "slot_a".into(),
                     source_action: None,
                     phase_id: None,
-                    phase_kind: None,
-                    phase_number: None,
                 },
             },
             empty_phase_announcement(3, "N01"),
@@ -1362,7 +1692,7 @@ async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPo
                 effect.effect.as_str(),
                 effect.source_slot.as_str(),
                 effect.source_action.as_deref(),
-                effect.phase_id.as_deref(),
+                effect.phase_id.as_ref().map(PhaseId::as_str),
                 effect.phase_kind.as_deref(),
                 effect.phase_number,
                 effect.duration.as_str(),
@@ -1396,9 +1726,7 @@ async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPo
 async fn resolution_scoped_effect_projection_expires_without_slot_effect(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
-        phase_id: "N01".into(),
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
+        phase_id: phase_id("N01"),
         run_id: "run_resolution_effect_projection".into(),
         result_version: domain::RESULT_VERSION,
         seed: 100,
@@ -1415,9 +1743,7 @@ async fn resolution_scoped_effect_projection_expires_without_slot_effect(pool: s
                     target: "slot_1".into(),
                     actor: "slot_a".into(),
                     source_action: Some("send_fruit_n01".into()),
-                    phase_id: Some("N01".into()),
-                    phase_kind: Some(PhaseKind::Night),
-                    phase_number: Some(1),
+                    phase_id: Some(phase_id("N01")),
                     duration: domain::EffectDuration::Resolution,
                     visibility: domain::EffectVisibility::Target,
                 },
@@ -1458,9 +1784,7 @@ async fn resolution_scoped_effect_projection_expires_without_slot_effect(pool: s
 async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
-        phase_id: "N01".into(),
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
+        phase_id: phase_id("N01"),
         run_id: "run_grant_projection".into(),
         result_version: domain::RESULT_VERSION,
         seed: 100,
@@ -1481,9 +1805,7 @@ async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                     source_action: "motivate_n01".into(),
                     uses: 1,
                     vote_weight: None,
-                    phase_id: "N01".into(),
-                    phase_kind: PhaseKind::Night,
-                    phase_number: 1,
+                    phase_id: phase_id("N01"),
                 },
             },
             IndexedEvent {
@@ -1493,9 +1815,7 @@ async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                     actor: "slot_2".into(),
                     action_id: "cop_extra_n02".into(),
                     source_action: "motivate_n01".into(),
-                    phase_id: "N02".into(),
-                    phase_kind: PhaseKind::Night,
-                    phase_number: 2,
+                    phase_id: phase_id("N02"),
                     remaining_uses: 0,
                 },
             },
@@ -1510,9 +1830,7 @@ async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                     source_action: "grant_item_n01".into(),
                     uses: 1,
                     vote_weight: None,
-                    phase_id: "N01".into(),
-                    phase_kind: PhaseKind::Night,
-                    phase_number: 1,
+                    phase_id: phase_id("N01"),
                 },
             },
             empty_phase_announcement(3, "N01"),
@@ -1568,9 +1886,7 @@ async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
 async fn action_counter_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
-        phase_id: "N01".into(),
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
+        phase_id: phase_id("N01"),
         run_id: "run_action_counter_projection".into(),
         result_version: domain::RESULT_VERSION,
         seed: 101,
@@ -1592,9 +1908,7 @@ async fn action_counter_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                     limit: 1,
                     used: 1,
                     remaining: 0,
-                    phase_id: "N01".into(),
-                    phase_kind: PhaseKind::Night,
-                    phase_number: 1,
+                    phase_id: phase_id("N01"),
                 },
             },
             empty_phase_announcement(1, "N01"),
@@ -1629,17 +1943,43 @@ async fn action_counter_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     assert_eq!(counter.limit, 1);
     assert_eq!(counter.used, 1);
     assert_eq!(counter.remaining, 0);
-    assert_eq!(counter.phase_id, "N01");
+    assert_eq!(counter.phase_id, phase_id("N01"));
     assert_eq!(counter.phase_kind, "Night");
     assert_eq!(counter.phase_number, 1);
 
     let before_json = serde_json::to_string(&before).unwrap();
+    sqlx::query(
+        "UPDATE action_counter SET phase_kind = 'Day', phase_number = 999 \
+         WHERE game_id = $1 AND slot_id = 'slot_1' AND counter_id = 'x_shot:night_kill'",
+    )
+    .bind(game)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let derived = action_counters(&pool, game).await.unwrap();
+    assert_eq!(derived[0].phase_id, phase_id("N01"));
+    assert_eq!(derived[0].phase_kind, "Night");
+    assert_eq!(derived[0].phase_number, 1);
+
     rebuild(&pool, game).await.unwrap();
     assert_eq!(
         before_json,
         serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
         "action_counter: rebuild != incremental"
     );
+
+    sqlx::query(
+        "UPDATE action_counter SET phase_id = 'N00' \
+         WHERE game_id = $1 AND slot_id = 'slot_1' AND counter_id = 'x_shot:night_kill'",
+    )
+    .bind(game)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        action_counters(&pool, game).await,
+        Err(ProjectionError::Payload { ref kind, .. }) if kind == "action_counter"
+    ));
 }
 
 /// PostSubmitted folds into `thread_view` with stable event cursors. The public
@@ -1842,7 +2182,10 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
             .as_str()
     );
     assert_eq!(latest.games[0].status, "completed");
-    assert_eq!(latest.games[0].phase_id.as_deref(), Some("D01"));
+    assert_eq!(
+        latest.games[0].phase_id.as_ref().map(PhaseId::as_str),
+        Some("D01")
+    );
     assert_eq!(latest.games[0].completed_seq, Some(6));
     let cursor = latest.next_cursor.expect("older public row cursor");
 
@@ -1851,7 +2194,10 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
     assert_eq!(older.games[0].game_id, active_game);
     assert_eq!(older.games[0].pack_ref.key, "mafiascum");
     assert_eq!(older.games[0].status, "active");
-    assert_eq!(older.games[0].phase_id.as_deref(), Some("N01"));
+    assert_eq!(
+        older.games[0].phase_id.as_ref().map(PhaseId::as_str),
+        Some("N01")
+    );
     assert_eq!(older.next_cursor, None);
 
     rebuild(&pool, active_game).await.unwrap();
@@ -1862,7 +2208,13 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
         rebuilt
             .games
             .iter()
-            .map(|row| (row.game_id, row.status.as_str(), row.phase_id.as_deref()))
+            .map(|row| {
+                (
+                    row.game_id,
+                    row.status.as_str(),
+                    row.phase_id.as_ref().map(PhaseId::as_str),
+                )
+            })
             .collect::<Vec<_>>(),
         vec![
             (completed_game, "completed", Some("D01")),

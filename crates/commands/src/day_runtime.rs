@@ -180,7 +180,7 @@ async fn publish_day_event_narratives_in_tx(
             source_seq,
             &narrative.template_hash,
         );
-        let phase = current_phase(tx, game).await?.unwrap_or_default();
+        let phase = current_phase(tx, game).await?;
         let stream = eventstore::load_stream_in_tx(tx, game)
             .await
             .map_err(|error| Reject::Internal(error.to_string()))?;
@@ -352,10 +352,11 @@ pub(crate) async fn open_day_event(
     let phase = projections::phase_state(&mut **tx, game)
         .await?
         .ok_or_else(|| day_event_reject("DayEvent open requires an active phase"))?;
+    let phase_id = phase.phase_id.clone();
     match event.definition.phase_scope {
         game_platform::PhaseScope::DuringDay { number } => {
-            if phase_kind(&phase.phase_id)? != domain::pack::PhaseKind::Day
-                || phase_number(&phase.phase_id)? != number
+            if phase_kind(&phase_id) != domain::phase::PhaseKind::Day
+                || phase_number(&phase_id) != number
             {
                 return Err(day_event_reject(format!(
                     "DayEvent is scoped to Day {number}, current phase is {}",
@@ -376,7 +377,7 @@ pub(crate) async fn open_day_event(
         1,
         serde_json::json!({
             "event_id": event_id.as_str(),
-            "phase_id": phase.phase_id,
+            "phase_id": phase_id,
             "opened_at": opened_at,
         }),
         ActorId::Host,
@@ -556,17 +557,18 @@ pub(crate) async fn observe_day_event_schedules_in_tx(
     let phase = projections::phase_state(&mut **tx, game)
         .await?
         .ok_or_else(|| day_event_reject("schedule observation requires an active phase"))?;
+    let phase_id = phase.phase_id.clone();
     let stream = eventstore::load_stream_in_tx(tx, game)
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
-    let timeline = day_schedule_timeline(&stream);
-    let current_day_number = match phase_kind(&phase.phase_id)? {
-        domain::pack::PhaseKind::Day => Some(phase_number(&phase.phase_id)?),
+    let timeline = day_schedule_timeline(&stream)?;
+    let current_day_number = match phase_kind(&phase_id) {
+        domain::phase::PhaseKind::Day => Some(phase_number(&phase_id)),
         _ => None,
     };
     let context = day_schedule::ScheduleContext {
         observed_at,
-        current_phase_id: phase.phase_id.clone(),
+        current_phase_id: phase_id.clone(),
         current_day_number,
         timeline,
     };
@@ -596,7 +598,7 @@ pub(crate) async fn observe_day_event_schedules_in_tx(
                         1,
                         serde_json::json!({
                             "event_id": row.event_id,
-                            "phase_id": phase.phase_id,
+                            "phase_id": phase_id,
                             "opened_at": observed_at,
                             "source": "scheduler",
                         }),
@@ -658,30 +660,42 @@ pub(crate) async fn observe_day_event_schedules_in_tx(
     }
 }
 
-fn day_schedule_timeline(stream: &[eventstore::StoredEvent]) -> day_schedule::ScheduleTimeline {
+fn day_schedule_timeline(
+    stream: &[eventstore::StoredEvent],
+) -> Result<day_schedule::ScheduleTimeline, Reject> {
     let mut timeline = day_schedule::ScheduleTimeline::default();
-    let mut current_phase_id: Option<String> = None;
+    let mut current_phase_id: Option<domain::phase::PhaseId> = None;
     for event in stream {
         match event.kind.as_str() {
             "GameStarted" | "PhaseAdvanced" => {
                 let Some(phase_id) = event.payload["phase_id"].as_str() else {
                     continue;
                 };
-                current_phase_id = Some(phase_id.to_string());
+                let phase_id = domain::phase::PhaseId::parse(phase_id).map_err(|error| {
+                    Reject::Internal(format!(
+                        "invalid persisted phase id in {}: {error}",
+                        event.kind
+                    ))
+                })?;
+                current_phase_id = Some(phase_id.clone());
                 timeline.phase_signals.insert(day_schedule::PhaseSignal {
                     kind: day_schedule::PhaseSignalKind::Opened,
-                    phase_id: phase_id.to_string(),
+                    phase_id: phase_id.clone(),
                 });
                 if let Some(opened_at) = event.payload["phase_opened_at"].as_i64() {
-                    timeline
-                        .phase_opened_at
-                        .insert(phase_id.to_string(), opened_at);
+                    timeline.phase_opened_at.insert(phase_id, opened_at);
                 }
             }
             "ThreadLocked" => {
                 let phase_id = event.payload["phase_id"]
                     .as_str()
-                    .map(str::to_string)
+                    .map(domain::phase::PhaseId::parse)
+                    .transpose()
+                    .map_err(|error| {
+                        Reject::Internal(format!(
+                            "invalid persisted phase id in ThreadLocked: {error}"
+                        ))
+                    })?
                     .or_else(|| current_phase_id.clone());
                 if let Some(phase_id) = phase_id {
                     timeline.phase_signals.insert(day_schedule::PhaseSignal {
@@ -696,16 +710,21 @@ fn day_schedule_timeline(stream: &[eventstore::StoredEvent]) -> day_schedule::Sc
                     .is_some_and(|run_id| run_id.starts_with("resolution:")) =>
             {
                 if let Some(phase_id) = event.payload["phase_id"].as_str() {
+                    let phase_id = domain::phase::PhaseId::parse(phase_id).map_err(|error| {
+                        Reject::Internal(format!(
+                            "invalid persisted phase id in ResolutionApplied: {error}"
+                        ))
+                    })?;
                     timeline.phase_signals.insert(day_schedule::PhaseSignal {
                         kind: day_schedule::PhaseSignalKind::Resolved,
-                        phase_id: phase_id.to_string(),
+                        phase_id,
                     });
                 }
             }
             _ => {}
         }
     }
-    timeline
+    Ok(timeline)
 }
 
 fn day_event_state(state: &str) -> Result<game_platform::DayEventState, Reject> {

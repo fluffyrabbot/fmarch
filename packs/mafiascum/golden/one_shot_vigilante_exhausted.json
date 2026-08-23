@@ -4,8 +4,6 @@
     "game_id": "game_demo_xshot_002",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
@@ -56,9 +54,7 @@
           "limit": 1,
           "used": 1,
           "remaining": 0,
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ]
     },

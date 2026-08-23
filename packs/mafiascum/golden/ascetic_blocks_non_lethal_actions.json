@@ -4,12 +4,13 @@
     "game_id": "game_ascetic_blocks_non_lethal_actions_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {},
         "twilight": false
       },
@@ -63,7 +64,9 @@
         "action_id": "poison_ascetic_001",
         "actor": "slot_3",
         "template_id": "poison",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -73,7 +76,9 @@
         "action_id": "kill_ascetic_001",
         "actor": "slot_4",
         "template_id": "factional_kill",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -83,7 +88,9 @@
         "action_id": "cop_check_ascetic_001",
         "actor": "slot_2",
         "template_id": "cop_investigate",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 3,
         "withdrawn": false,
@@ -108,7 +115,9 @@
       "payload": {
         "slot_id": "slot_1",
         "cause": "factional_kill",
-        "attackers": ["slot_4"],
+        "attackers": [
+          "slot_4"
+        ],
         "unstoppable": false
       }
     },

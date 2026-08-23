@@ -1,5 +1,6 @@
 use std::{fs, path::Path};
 
+use domain::phase::PhaseId;
 use domain::{resolve, DayPhaseInputs, Pack, ResolutionInput, StateSnapshot, Submission};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -106,7 +107,7 @@ fn domain_source_rejects_ambient_rng_and_wall_clock() {
 struct FixtureInput {
     #[serde(default)]
     game_id: String,
-    phase_id: String,
+    phase_id: PhaseId,
     state: StateSnapshot,
     submissions: Vec<Submission>,
     #[serde(default)]
@@ -223,7 +224,8 @@ fn canonical_output(
         pack,
         seed,
         logical_time: 0,
-    });
+    })
+    .expect("property resolution input is coherent");
     let mut value = json!({
         "applied": output.applied,
         "trace": output.trace,
@@ -258,8 +260,6 @@ fn same_ability_ordering_input(seed: u64) -> FixtureInput {
         "game_id": "property_same_ability_ordering",
         "phase_id": "N01",
         "state": {
-            "phase_kind": "Night",
-            "phase_number": 1,
             "phase_id": "N01",
             "phase_deadline": null,
             "phase_policy": {

@@ -8,8 +8,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",
@@ -69,8 +67,6 @@
           "counter_id": "day_session:d1:ita_shot",
           "limit": 1,
           "phase_id": "D01",
-          "phase_kind": "Day",
-          "phase_number": 1,
           "phase_scope": "session",
           "remaining": 0,
           "template_id": "ita_shot",
@@ -103,8 +99,6 @@
         "day": 1,
         "label": "Day 1 ITA",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1",
         "status": "open",
         "window": "ita_sessions"
@@ -132,8 +126,6 @@
         },
         "global_shots_fired": 0,
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "queue_delta": 0,
         "queue_length": 0,
         "session_id": "d1",
@@ -146,8 +138,6 @@
       "payload": {
         "last_status": "open",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1"
       }
     },
@@ -156,26 +146,26 @@
       "kind": "DayVoteOutcome",
       "payload": {
         "contenders": [],
-        "majority": 3.0,
+        "majority": 3,
         "reason": null,
         "status": "NoLynch",
         "tallies": {},
         "thresholds": {
-          "slot_1": 3.0,
-          "slot_2": 3.0,
-          "slot_3": 3.0,
-          "slot_4": 3.0,
-          "slot_5": 3.0
+          "slot_1": 3,
+          "slot_2": 3,
+          "slot_3": 3,
+          "slot_4": 3,
+          "slot_5": 3
         },
         "tiebreak": null,
-        "total_weight": 5.0,
+        "total_weight": 5,
         "votes": {},
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0,
-          "slot_4": 1.0,
-          "slot_5": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1,
+          "slot_4": 1,
+          "slot_5": 1
         },
         "winner": null
       }

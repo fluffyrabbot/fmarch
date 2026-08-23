@@ -4,14 +4,19 @@
     "game_id": "game_mu_ninja_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -100,7 +105,9 @@
         "action_id": "mu_town_ninja_001",
         "actor": "slot_1",
         "template_id": "ninja_kill",
-        "targets": ["slot_8"],
+        "targets": [
+          "slot_8"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -110,7 +117,9 @@
         "action_id": "mu_mafia_ninja_001",
         "actor": "slot_2",
         "template_id": "ninja_kill",
-        "targets": ["slot_7"],
+        "targets": [
+          "slot_7"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -120,7 +129,9 @@
         "action_id": "mu_town_watcher_001",
         "actor": "slot_3",
         "template_id": "watch",
-        "targets": ["slot_7"],
+        "targets": [
+          "slot_7"
+        ],
         "phase_id": "N01",
         "submitted_at": 3,
         "withdrawn": false,
@@ -130,7 +141,9 @@
         "action_id": "mu_mafia_watcher_001",
         "actor": "slot_4",
         "template_id": "watch",
-        "targets": ["slot_8"],
+        "targets": [
+          "slot_8"
+        ],
         "phase_id": "N01",
         "submitted_at": 4,
         "withdrawn": false,
@@ -140,7 +153,9 @@
         "action_id": "mu_town_motion_001",
         "actor": "slot_5",
         "template_id": "motion_detector",
-        "targets": ["slot_2"],
+        "targets": [
+          "slot_2"
+        ],
         "phase_id": "N01",
         "submitted_at": 5,
         "withdrawn": false,
@@ -150,7 +165,9 @@
         "action_id": "mu_mafia_motion_001",
         "actor": "slot_6",
         "template_id": "motion_detector",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 6,
         "withdrawn": false,
@@ -167,7 +184,9 @@
       "payload": {
         "slot_id": "slot_8",
         "cause": "ninja_kill",
-        "attackers": ["slot_1"],
+        "attackers": [
+          "slot_1"
+        ],
         "unstoppable": false
       }
     },
@@ -177,7 +196,9 @@
       "payload": {
         "slot_id": "slot_7",
         "cause": "ninja_kill",
-        "attackers": ["slot_2"],
+        "attackers": [
+          "slot_2"
+        ],
         "unstoppable": false
       }
     },

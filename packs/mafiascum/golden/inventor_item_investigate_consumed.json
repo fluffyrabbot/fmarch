@@ -4,8 +4,6 @@
     "game_id": "game_demo_inventor_item_001",
     "phase_id": "N02",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 2,
       "phase_id": "N02",
       "phase_deadline": null,
       "phase_policy": {
@@ -53,9 +51,7 @@
           "target": "slot_2",
           "source_action": "fixture:preloaded_single_use_item",
           "uses": 1,
-          "phase_id": "N01",
-          "phase_kind": "Night",
-          "phase_number": 1
+          "phase_id": "N01"
         }
       ]
     },
@@ -88,8 +84,6 @@
         "action_id": "sub_item_001",
         "source_action": "fixture:preloaded_single_use_item",
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "remaining_uses": 0
       }
     },
@@ -103,8 +97,6 @@
         "counter_id": "inventory:single_use_item",
         "limit": 1,
         "phase_id": "N02",
-        "phase_kind": "Night",
-        "phase_number": 2,
         "phase_scope": "grant",
         "remaining": 0,
         "template_id": "single_use_item",

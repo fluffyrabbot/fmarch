@@ -68,3 +68,20 @@ test("player action checkpoint fails closed without legal actions", () => {
   assert.equal(checkpoint.status.state, "pending");
   assert.match(checkpoint.status.message, /phase locked/);
 });
+
+test("player action checkpoint keeps pre-phase state explicit", () => {
+  const checkpoint = buildPlayerActionSubmissionCheckpoint({
+    commandState: {
+      actorSlot: "slot-7",
+      actorAlive: true,
+      actorStatus: "alive",
+      phase: null,
+    },
+    composer: { actionCommands: [] },
+    player: { slotId: "slot-7", alive: true, status: "alive" },
+  });
+
+  assert.equal(checkpoint.root.data.phaseId, "");
+  assert.equal(checkpoint.root.data.phaseState, "pre-phase");
+  assert.equal(checkpoint.phase.value, "No phase open / pre-phase");
+});

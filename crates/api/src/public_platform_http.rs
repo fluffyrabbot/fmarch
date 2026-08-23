@@ -336,8 +336,9 @@ where
             return Ok(Self(None));
         }
         let auth = AuthHttpState::from_ref(state);
-        let token =
-            bearer_token(&parts.headers).ok_or_else(unauthorized_account)?.to_string();
+        let token = bearer_token(&parts.headers)
+            .ok_or_else(unauthorized_account)?
+            .to_string();
         let context = authorization_context(&auth, &token).await?;
         Ok(Self(Some(context.principal_id)))
     }
@@ -358,7 +359,9 @@ impl FromRequestParts<PublicPlatformHttpState> for DiscussionProfileAuthenticati
         let principal_id = request.context.principal_id;
         let profile_id = projections::public_profile_id_by_principal(&state.pool, principal_id)
             .await?
-            .ok_or_else(|| discussion_conflict("create a public profile before posting publicly"))?;
+            .ok_or_else(|| {
+                discussion_conflict("create a public profile before posting publicly")
+            })?;
         Ok(Self(AuthenticatedDiscussionProfile {
             profile_id,
             principal_id,

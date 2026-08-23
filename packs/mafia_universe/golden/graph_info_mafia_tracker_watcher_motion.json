@@ -4,14 +4,19 @@
     "game_id": "game_mu_graph_info_mafia_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -86,7 +91,9 @@
         "action_id": "mu_doctor_protect_002",
         "actor": "slot_1",
         "template_id": "doctor_protect",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -96,7 +103,9 @@
         "action_id": "mu_goon_kill_002",
         "actor": "slot_6",
         "template_id": "factional_kill",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -106,7 +115,9 @@
         "action_id": "mu_mafia_tracker_track_001",
         "actor": "slot_2",
         "template_id": "track",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 3,
         "withdrawn": false,
@@ -116,7 +127,9 @@
         "action_id": "mu_mafia_watcher_watch_001",
         "actor": "slot_3",
         "template_id": "watch",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 4,
         "withdrawn": false,
@@ -126,7 +139,9 @@
         "action_id": "mu_mafia_motion_detect_001",
         "actor": "slot_4",
         "template_id": "motion_detector",
-        "targets": ["slot_6"],
+        "targets": [
+          "slot_6"
+        ],
         "phase_id": "N01",
         "submitted_at": 5,
         "withdrawn": false,
@@ -142,8 +157,12 @@
       "kind": "PlayerSaved",
       "payload": {
         "slot_id": "slot_5",
-        "reasons": ["protected"],
-        "sources": ["slot_1"]
+        "reasons": [
+          "protected"
+        ],
+        "sources": [
+          "slot_1"
+        ]
       }
     },
     {
@@ -154,7 +173,9 @@
         "investigator": "slot_2",
         "target": "slot_1",
         "result": {
-          "visited": ["slot_5"]
+          "visited": [
+            "slot_5"
+          ]
         }
       }
     },
@@ -166,7 +187,10 @@
         "investigator": "slot_3",
         "target": "slot_5",
         "result": {
-          "visitors": ["slot_1", "slot_6"]
+          "visitors": [
+            "slot_1",
+            "slot_6"
+          ]
         }
       }
     },

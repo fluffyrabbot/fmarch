@@ -4,14 +4,19 @@
     "game_id": "game_mafiascum_role_set_info_negative_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["sod", "main", "eod"]
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -72,7 +77,9 @@
         "action_id": "vanilla_check_001",
         "actor": "slot_1",
         "template_id": "investigate_vanilla",
-        "targets": ["slot_4"],
+        "targets": [
+          "slot_4"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -82,7 +89,9 @@
         "action_id": "neapolitan_001",
         "actor": "slot_2",
         "template_id": "neapolitan",
-        "targets": ["slot_5"],
+        "targets": [
+          "slot_5"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -92,7 +101,9 @@
         "action_id": "gunsmith_001",
         "actor": "slot_3",
         "template_id": "gunsmith",
-        "targets": ["slot_6"],
+        "targets": [
+          "slot_6"
+        ],
         "phase_id": "N01",
         "submitted_at": 3,
         "withdrawn": false,

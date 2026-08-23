@@ -4,14 +4,19 @@
     "game_id": "game_demo_cpr_save_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["sod", "main", "eod"]
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -51,7 +56,9 @@
         "action_id": "sub_001",
         "actor": "slot_1",
         "template_id": "factional_kill",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -61,7 +68,9 @@
         "action_id": "sub_002",
         "actor": "slot_2",
         "template_id": "cpr_protect",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -77,8 +86,12 @@
       "kind": "PlayerSaved",
       "payload": {
         "slot_id": "slot_3",
-        "reasons": ["protected"],
-        "sources": ["slot_2"]
+        "reasons": [
+          "protected"
+        ],
+        "sources": [
+          "slot_2"
+        ]
       }
     },
     {

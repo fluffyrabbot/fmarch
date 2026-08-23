@@ -46,17 +46,17 @@ test("host prompt history renders every typed public resolution family", () => {
     view.rows.map((row) => [row.label, row.detail, row.testId]),
     [
       [
-        "D01 official elimination",
+        "Day 1 official elimination",
         "Slot 2 selected after host decision",
         "host-prompt-resolution-D01:pk:Tie",
       ],
       [
-        "D03R2 -> N03",
+        "Day 3 revote 2 -> Night 3",
         "No majority no lynch recorded",
         "host-prompt-resolution-D03R2:revote:NoMajority",
       ],
       [
-        "N02 acknowledgement",
+        "Night 2 acknowledgement",
         "Role notice recorded",
         "host-prompt-resolution-N02:notice:test",
       ],

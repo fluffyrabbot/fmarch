@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fmarch.dev/schemas/ops/profile-handle-index-rotation-receipt-v1.json",
+  "title": "Profile handle-index rotation receipt",
+  "description": "Immutable, secret-free evidence for one completed profile-handle blind-index rotation or its later escrow-destruction record. All objects reject unknown fields so credentials, URLs, principal data, handles, and raw command output cannot enter this receipt format. tools/profile_handle_index_rotation_receipt.mjs additionally verifies cross-record KID, hash, and retention-time invariants.",
+  "oneOf": [
+    { "$ref": "#/$defs/rotation_receipt" },
+    { "$ref": "#/$defs/escrow_destruction_receipt" }
+  ],
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "kid": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,128}$"
+    },
+    "git_commit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}(?:[a-f0-9]{24})?$"
+    },
+    "opaque_deployment_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "plan_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "read_only",
+        "current_kid",
+        "replacement_kid",
+        "active_profile_count",
+        "requires_writer_drain"
+      ],
+      "properties": {
+        "status": { "const": "planned" },
+        "read_only": { "const": true },
+        "current_kid": { "$ref": "#/$defs/kid" },
+        "replacement_kid": { "$ref": "#/$defs/kid" },
+        "active_profile_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requires_writer_drain": { "const": true }
+      }
+    },
+    "reindex_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "read_only",
+        "current_kid",
+        "replacement_kid",
+        "active_profile_count",
+        "writers_drained",
+        "executed"
+      ],
+      "properties": {
+        "status": { "const": "reindexed" },
+        "read_only": { "const": false },
+        "current_kid": { "$ref": "#/$defs/kid" },
+        "replacement_kid": { "$ref": "#/$defs/kid" },
+        "active_profile_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "writers_drained": { "const": true },
+        "executed": { "const": true }
+      }
+    },
+    "writer_state": {
+      "type": "string",
+      "enum": ["stopped", "absent"]
+    },
+    "rotation_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "record_type",
+        "rotation_id",
+        "recorded_at",
+        "environment",
+        "status",
+        "release",
+        "transition",
+        "operator_shell",
+        "writer_drain",
+        "pre_drain_plan",
+        "post_drain_plan",
+        "reindex",
+        "redeploy",
+        "recovery_escrow"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "record_type": { "const": "profile_handle_index_rotation" },
+        "rotation_id": { "$ref": "#/$defs/uuid" },
+        "recorded_at": { "$ref": "#/$defs/timestamp" },
+        "environment": {
+          "enum": ["staging", "production"]
+        },
+        "status": { "const": "redeployed" },
+        "release": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["api_commit", "api_deployment_id"],
+          "properties": {
+            "api_commit": { "$ref": "#/$defs/git_commit" },
+            "api_deployment_id": { "$ref": "#/$defs/opaque_deployment_id" }
+          }
+        },
+        "transition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from_kid", "to_kid"],
+          "properties": {
+            "from_kid": { "$ref": "#/$defs/kid" },
+            "to_kid": { "$ref": "#/$defs/kid" }
+          }
+        },
+        "operator_shell": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "transport",
+            "database_transport",
+            "source_service_role",
+            "env_allowlist",
+            "child_environment",
+            "outer_environment_persisted",
+            "replacement_service_variable_created"
+          ],
+          "properties": {
+            "transport": { "const": "railway_ssh_database_tunnel" },
+            "database_transport": { "const": "sslmode_require" },
+            "source_service_role": { "const": "api" },
+            "env_allowlist": {
+              "const": "deploy/railway/profile-index-admin.env.example"
+            },
+            "child_environment": {
+              "const": "node_spawn_exact_allowlist"
+            },
+            "outer_environment_persisted": { "const": false },
+            "replacement_service_variable_created": { "const": false }
+          }
+        },
+        "writer_drain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "expected_api_replicas",
+            "api_scaled_to_zero",
+            "zero_live_api_replicas_confirmed",
+            "out_of_band_inventory_complete",
+            "out_of_band_writers"
+          ],
+          "properties": {
+            "expected_api_replicas": { "const": 2 },
+            "api_scaled_to_zero": { "const": true },
+            "zero_live_api_replicas_confirmed": { "const": true },
+            "out_of_band_inventory_complete": { "const": true },
+            "out_of_band_writers": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "subject_erasure_worker",
+                "profile_projection_rebuild",
+                "operator_maintenance_job",
+                "legacy_profile_writer_sweep"
+              ],
+              "properties": {
+                "subject_erasure_worker": {
+                  "$ref": "#/$defs/writer_state"
+                },
+                "profile_projection_rebuild": {
+                  "$ref": "#/$defs/writer_state"
+                },
+                "operator_maintenance_job": {
+                  "$ref": "#/$defs/writer_state"
+                },
+                "legacy_profile_writer_sweep": {
+                  "$ref": "#/$defs/writer_state"
+                }
+              }
+            }
+          }
+        },
+        "pre_drain_plan": { "$ref": "#/$defs/plan_report" },
+        "post_drain_plan": { "$ref": "#/$defs/plan_report" },
+        "reindex": { "$ref": "#/$defs/reindex_report" },
+        "redeploy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "api_replica_target",
+            "api_deployment_status",
+            "two_live_api_replicas_confirmed",
+            "readyz_passed",
+            "owner_profile_read_passed",
+            "duplicate_handle_rejected",
+            "replacement_key_absent_from_api"
+          ],
+          "properties": {
+            "api_replica_target": { "const": 2 },
+            "api_deployment_status": { "const": "SUCCESS" },
+            "two_live_api_replicas_confirmed": { "const": true },
+            "readyz_passed": { "const": true },
+            "owner_profile_read_passed": { "const": true },
+            "duplicate_handle_rejected": { "const": true },
+            "replacement_key_absent_from_api": { "const": true }
+          }
+        },
+        "recovery_escrow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "old_kid",
+            "state",
+            "recovery_window_days",
+            "not_before"
+          ],
+          "properties": {
+            "old_kid": { "$ref": "#/$defs/kid" },
+            "state": { "const": "held" },
+            "recovery_window_days": { "const": 30 },
+            "not_before": { "$ref": "#/$defs/timestamp" }
+          }
+        }
+      }
+    },
+    "escrow_destruction_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "record_type",
+        "rotation_id",
+        "recorded_at",
+        "environment",
+        "retired_kid",
+        "rotation_receipt_sha256",
+        "recovery_window_days",
+        "retention_years",
+        "retain_until",
+        "escrow_destroyed"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "record_type": { "const": "profile_handle_index_escrow_destruction" },
+        "rotation_id": { "$ref": "#/$defs/uuid" },
+        "recorded_at": { "$ref": "#/$defs/timestamp" },
+        "environment": {
+          "enum": ["staging", "production"]
+        },
+        "retired_kid": { "$ref": "#/$defs/kid" },
+        "rotation_receipt_sha256": { "$ref": "#/$defs/sha256" },
+        "recovery_window_days": { "const": 30 },
+        "retention_years": { "const": 7 },
+        "retain_until": { "$ref": "#/$defs/timestamp" },
+        "escrow_destroyed": { "const": true }
+      }
+    }
+  }
+}

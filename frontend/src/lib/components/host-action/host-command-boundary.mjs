@@ -1,4 +1,5 @@
 import { normalizeDayEventRoom } from "../../app/day-event-room.mjs";
+import { canonicalPhaseId, phaseLabelFromId } from "../../phase-id.mjs";
 
 export const HOST_COMMAND_ENDPOINT = "/commands";
 export const WIRE_PROTOCOL_VERSION = 2;
@@ -90,7 +91,7 @@ export function mapHostActionToWireCommand(actionEvent) {
       return Object.freeze({
         ExtendDeadline: Object.freeze({
           game: requiredString(payload.gameId, "payload.gameId"),
-          phase: requiredString(payload.phaseId, "payload.phaseId"),
+          phase: requiredPhaseId(payload.phaseId, "payload.phaseId"),
           at: secondsSinceEpoch(
             requiredString(payload.extendsTo, "payload.extendsTo"),
           ),
@@ -140,7 +141,7 @@ export function mapHostActionToWireCommand(actionEvent) {
       return Object.freeze({
         AdvancePhaseByDeadline: Object.freeze({
           game: requiredString(payload.gameId, "payload.gameId"),
-          phase: requiredString(payload.phaseId, "payload.phaseId"),
+          phase: requiredPhaseId(payload.phaseId, "payload.phaseId"),
           observed_at: requiredInteger(payload.observedAt, "payload.observedAt"),
         }),
       });
@@ -304,9 +305,9 @@ export function projectHostConsoleState(state, fallback) {
     return fallback;
   }
 
-  const phase = state.phase ?? null;
-  const phaseCarriesDeadline =
-    phase !== null && Object.prototype.hasOwnProperty.call(phase, "deadline");
+  const phase = Object.prototype.hasOwnProperty.call(state, "phase")
+    ? state.phase
+    : projectedPhaseToWire(fallback?.phase);
   const slots = Array.isArray(state.slots)
     ? state.slots.map((slot) => normalizeHostConsoleSlot(slot))
     : [];
@@ -332,39 +333,7 @@ export function projectHostConsoleState(state, fallback) {
       typeof state.completed === "boolean"
         ? state.completed
         : fallback.completed === true,
-    phase: Object.freeze({
-      ...fallback.phase,
-      id: phase?.phase_id ?? fallback.phase.id,
-      label: hostPhaseLabel(phase, fallback.phase),
-      locked:
-        typeof phase?.locked === "boolean"
-          ? phase.locked
-          : fallback.phase.locked ?? fallback.phase.state === "locked",
-      state:
-        typeof phase?.locked === "boolean"
-          ? phase.locked
-            ? "locked"
-            : "open"
-          : fallback.phase.state,
-      lockedLabel:
-        typeof phase?.locked === "boolean"
-          ? phase.locked
-            ? "Thread locked"
-            : "Thread open"
-          : fallback.phase.lockedLabel,
-      deadlineLabel:
-        typeof phase?.deadline === "number"
-          ? formatDeadline(phase.deadline)
-          : phaseCarriesDeadline
-            ? "No deadline extension committed"
-          : fallback.phase.deadlineLabel,
-      deadline:
-        typeof phase?.deadline === "number"
-          ? phase.deadline
-          : phaseCarriesDeadline
-            ? null
-          : fallback.phase.deadline ?? null,
-    }),
+    phase: projectHostConsolePhase(phase, fallback?.phase ?? null),
     replacement: Object.freeze({
       ...fallback.replacement,
       slotId: slot?.slot_id ?? fallback.replacement.slotId,
@@ -575,10 +544,48 @@ function projectedPhaseToWire(phase) {
     return null;
   }
   return {
-    phase_id: phase.id ?? phase.phase_id ?? null,
+    phase_id: canonicalPhaseId(phase.id),
     locked: phase.locked === true,
     deadline: typeof phase.deadline === "number" ? phase.deadline : null,
   };
+}
+
+function projectHostConsolePhase(phase, fallbackPhase = null) {
+  if (phase === null || typeof phase !== "object") {
+    return null;
+  }
+  const phaseId = canonicalPhaseId(phase.phase_id);
+  if (phaseId === null) {
+    return null;
+  }
+  const phaseCarriesDeadline = Object.prototype.hasOwnProperty.call(phase, "deadline");
+  const fallback = fallbackPhase !== null && typeof fallbackPhase === "object"
+    ? fallbackPhase
+    : {};
+  const locked =
+    typeof phase.locked === "boolean"
+      ? phase.locked
+      : fallback.locked ?? fallback.state === "locked";
+  return Object.freeze({
+    ...fallback,
+    id: phaseId,
+    label: hostPhaseLabel(phaseId),
+    locked,
+    state: locked ? "locked" : "open",
+    lockedLabel: locked ? "Thread locked" : "Thread open",
+    deadlineLabel:
+      typeof phase.deadline === "number"
+        ? formatDeadline(phase.deadline)
+        : phaseCarriesDeadline
+          ? "No deadline extension committed"
+          : fallback.deadlineLabel ?? "No deadline extension committed",
+    deadline:
+      typeof phase.deadline === "number"
+        ? phase.deadline
+        : phaseCarriesDeadline
+          ? null
+          : fallback.deadline ?? null,
+  });
 }
 
 export function normalizeHostDayEvents(dayEvents, fallback = []) {
@@ -627,7 +634,7 @@ function normalizeHostDayEvent(event) {
   return Object.freeze({
     eventId,
     state: String(event.state ?? "scheduled"),
-    phaseId: event.phase_id ?? event.phaseId ?? null,
+    phaseId: canonicalPhaseId(event.phase_id),
     templateKey: String(definition.template_key ?? definition.templateKey ?? ""),
     room: normalizeDayEventRoom(event.room ?? null),
     scheduleEvidence: Object.freeze({
@@ -834,7 +841,7 @@ function normalizeHostTask(task) {
     urgency: task.urgency === "attention" ? "attention" : "routine",
     intent: String(task.intent ?? "Host decision required"),
     consequence: String(task.consequence ?? "Apply the selected decision"),
-    phaseId: String(task.phase_id ?? task.phaseId ?? ""),
+    phaseId: canonicalPhaseId(task.phase_id),
     subjectSlot: task.subject_slot ?? task.subjectSlot ?? null,
     sourceId,
     allowedCommands: Object.freeze(allowedCommands),
@@ -918,67 +925,8 @@ function normalizeHostConsoleSlot(slot) {
   });
 }
 
-function hostPhaseLabel(phase, fallbackPhase = {}) {
-  const explicitLabel = phase?.phase_label ?? phase?.phaseLabel ?? phase?.label;
-  if (typeof explicitLabel === "string" && explicitLabel.trim() !== "") {
-    return explicitLabel.trim();
-  }
-  const phaseKind = phase?.phase_kind ?? phase?.phaseKind;
-  const phaseNumber = phase?.phase_number ?? phase?.phaseNumber;
-  if (
-    typeof phaseKind === "string" &&
-    phaseKind.trim() !== "" &&
-    Number.isFinite(Number(phaseNumber)) &&
-    Number(phaseNumber) > 0
-  ) {
-    return `${phaseKind.trim()} ${Number(phaseNumber)}`;
-  }
-  const phaseId = phase?.phase_id ?? phase?.phaseId ?? fallbackPhase.id;
-  if (
-    typeof fallbackPhase.label === "string" &&
-    fallbackPhase.label.trim() !== "" &&
-    fallbackPhase.id === phaseId
-  ) {
-    return fallbackPhase.label.trim();
-  }
-  const derivedLabel = hostPhaseLabelFromId(phaseId);
-  if (derivedLabel !== null) {
-    return derivedLabel;
-  }
-  return typeof phaseId === "string" && phaseId.trim() !== ""
-    ? phaseId.trim()
-    : "Current phase";
-}
-
-function hostPhaseLabelFromId(phaseId) {
-  if (typeof phaseId !== "string") {
-    return null;
-  }
-  const normalized = phaseId.trim();
-  const compactMatch = /^(D|N|T)(\d+)(?:R(\d+))?$/iu.exec(normalized);
-  if (compactMatch !== null) {
-    const kind = {
-      D: "Day",
-      N: "Night",
-      T: "Twilight",
-    }[compactMatch[1].toUpperCase()];
-    const number = Number(compactMatch[2]);
-    const revote = compactMatch[3] === undefined
-      ? ""
-      : ` revote ${Number(compactMatch[3])}`;
-    return `${kind} ${number}${revote}`;
-  }
-  const slugMatch = /^(day|night|twilight)-(\d+)(?:-?r(?:evote)?-?(\d+))?$/iu.exec(
-    normalized,
-  );
-  if (slugMatch !== null) {
-    const kind = slugMatch[1][0].toUpperCase() + slugMatch[1].slice(1).toLowerCase();
-    const revote = slugMatch[3] === undefined
-      ? ""
-      : ` revote ${Number(slugMatch[3])}`;
-    return `${kind} ${Number(slugMatch[2])}${revote}`;
-  }
-  return null;
+function hostPhaseLabel(phaseId) {
+  return phaseLabelFromId(phaseId) ?? "No phase open";
 }
 
 function requiredString(value, field) {
@@ -986,6 +934,14 @@ function requiredString(value, field) {
     throw new TypeError(`${field} must be a non-empty string`);
   }
   return value;
+}
+
+function requiredPhaseId(value, field) {
+  const phaseId = canonicalPhaseId(value);
+  if (phaseId === null) {
+    throw new TypeError(`${field} must be a canonical PhaseId`);
+  }
+  return phaseId;
 }
 
 function requiredStringArray(value, field) {

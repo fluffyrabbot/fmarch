@@ -11,6 +11,7 @@ use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::{Json, Router};
 use caps::{Capability, Principal};
+use domain::phase::PhaseId;
 use operator_proof::{
     audit_operator_proof_status_values,
     build_operator_proof_run_status as shared_build_operator_proof_run_status,
@@ -1394,7 +1395,7 @@ fn apply_resolution_diff_fixture(
             report.skipped_phase_count = 0;
             report.diff_count = 1;
             report.first_drift_paths = vec![SharedOperatorResolutionDiffPath {
-                phase_id: "D01".to_string(),
+                phase_id: PhaseId::parse("D01").expect("static fixture phase id is canonical"),
                 run_id: "resolution:D01".to_string(),
                 envelope: "applied".to_string(),
                 path: "$.winner".to_string(),
@@ -1428,7 +1429,7 @@ fn apply_resolution_diff_fixture(
 
 fn resolution_diff_phase_fixture(matched: bool) -> SharedOperatorResolutionDiffPhase {
     SharedOperatorResolutionDiffPhase {
-        phase_id: "D01".to_string(),
+        phase_id: PhaseId::parse("D01").expect("static fixture phase id is canonical"),
         run_id: "resolution:D01".to_string(),
         status: if matched { "matched" } else { "drifted" }.to_string(),
         applied_matches: matched,
@@ -1546,7 +1547,7 @@ fn trace_inspection_run_fixture(
     include_rows: bool,
 ) -> SharedOperatorTraceInspectionRun {
     SharedOperatorTraceInspectionRun {
-        phase_id: "N01".to_string(),
+        phase_id: PhaseId::parse("N01").expect("static fixture phase id is canonical"),
         run_id: run_id.to_string(),
         applied_stream_seq: Some(14),
         trace_stream_seq: 15,
@@ -2188,7 +2189,7 @@ fn render_operator_proof_large_action_graph_performance_html(
         None,
     );
     metric(&mut html, "Pack", &response.report.pack, None);
-    metric(&mut html, "Phase", &response.report.phase_id, None);
+    metric(&mut html, "Phase", response.report.phase_id.as_str(), None);
     metric(
         &mut html,
         "Elapsed",
@@ -2354,7 +2355,7 @@ fn render_operator_proof_trace_inspection_html(
         html.push_str("<table><thead><tr><th>Phase</th><th>Run</th><th>Version</th><th>Counts</th><th>Detail</th></tr></thead><tbody>");
         for trace in &response.report.traces {
             html.push_str("<tr><td><code>");
-            html_escape_into(&mut html, &trace.phase_id);
+            html_escape_into(&mut html, trace.phase_id.as_str());
             html.push_str("</code></td><td><code>");
             html_escape_into(&mut html, &trace.run_id);
             html.push_str("</code></td><td>");
@@ -2482,7 +2483,7 @@ fn render_operator_proof_resolution_diff_html(
         html.push_str("<h2>First Drift Paths</h2><table><thead><tr><th>Phase</th><th>Run</th><th>Envelope</th><th>Path</th></tr></thead><tbody>");
         for drift in &response.report.first_drift_paths {
             html.push_str("<tr><td><code>");
-            html_escape_into(&mut html, &drift.phase_id);
+            html_escape_into(&mut html, drift.phase_id.as_str());
             html.push_str("</code></td><td><code>");
             html_escape_into(&mut html, &drift.run_id);
             html.push_str("</code></td><td><code>");
@@ -2500,7 +2501,7 @@ fn render_operator_proof_resolution_diff_html(
         html.push_str("<table><thead><tr><th>Phase</th><th>Run</th><th>Status</th><th>Applied</th><th>Trace</th><th>Diffs</th><th>Detail</th></tr></thead><tbody>");
         for phase in &response.report.phases {
             html.push_str("<tr><td><code>");
-            html_escape_into(&mut html, &phase.phase_id);
+            html_escape_into(&mut html, phase.phase_id.as_str());
             html.push_str("</code></td><td><code>");
             html_escape_into(&mut html, &phase.run_id);
             html.push_str("</code></td><td><code>");
@@ -3287,13 +3288,13 @@ fn render_host_phase_controls_html(game: Uuid, controls: &[HostPhaseControl]) ->
             html.push_str("<br><code>");
             html_escape_into(&mut html, &control.reason);
             html.push_str("</code></td><td><code>");
-            html_escape_into(&mut html, &control.source_phase_id);
+            html_escape_into(&mut html, control.source_phase_id.as_str());
             html.push_str("</code> -> <code>");
-            html_escape_into(&mut html, &control.target_phase_id);
+            html_escape_into(&mut html, control.target_phase_id.as_str());
             html.push_str("</code><br>skipped: <code>");
             html_escape_into(
                 &mut html,
-                &optional_str(control.skipped_phase_id.as_deref()),
+                &optional_str(control.skipped_phase_id.as_ref().map(PhaseId::as_str)),
             );
             html.push_str("</code></td><td>");
             html.push_str("at: <code>");
@@ -3393,7 +3394,7 @@ fn render_resolution_audit_html(report: &commands::ResolutionEnvelopeAuditReport
                 html.push_str("\">");
             }
             html.push_str("<code>");
-            html_escape_into(&mut html, &path.phase_id);
+            html_escape_into(&mut html, path.phase_id.as_str());
             html.push_str(" / ");
             html_escape_into(&mut html, &path.run_id);
             html.push_str(" / ");
@@ -3421,7 +3422,7 @@ fn render_resolution_audit_html(report: &commands::ResolutionEnvelopeAuditReport
         html.push_str("\"><td><a class=\"audit-link\" href=\"#");
         html_escape_into(&mut html, &phase_row_id);
         html.push_str("\"><code>");
-        html_escape_into(&mut html, &phase.phase_id);
+        html_escape_into(&mut html, phase.phase_id.as_str());
         html.push_str("</code></a></td><td><code>");
         html_escape_into(&mut html, &phase.run_id);
         html.push_str("</code></td><td class=\"");
@@ -3632,7 +3633,7 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
         html.push_str("<section id=\"");
         html_escape_into(&mut html, &format!("trace-run-{run_anchor}"));
         html.push_str("\"><h2>");
-        html_escape_into(&mut html, &run.phase_id);
+        html_escape_into(&mut html, run.phase_id.as_str());
         html.push_str(" / ");
         html_escape_into(&mut html, &run.run_id);
         html.push_str("</h2><section class=\"meta\">");

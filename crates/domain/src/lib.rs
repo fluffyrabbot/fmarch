@@ -31,20 +31,21 @@ pub use golden::{
 };
 pub use ir::{InvestigateMode, IrAbility, Modifier};
 pub use pack::{
-    load_pack_from_json, night_ability_order, validate_pack, BackupPolicy, BelovedPrincessPolicy,
-    DayAnnouncementPolicy, DayDeathAnnouncementPolicy, DayDeathCauseTemplate, DayNotePolicy,
-    DayNoteRolePayload, DayVotePromptPolicy, DeathRetaliationPolicy, DeathRevealMode,
-    DeathRevealPolicy, EffectDuration, EffectVisibility, GrantKind, GrantSpec,
-    HostPromptDecisionKind, HostPromptResolutionEffect, HostPromptResolutionEffectPolicy,
-    IdiotPolicy, InvestigationResultPolicy, ItaLifecyclePolicy, ItaSessionControlKind,
-    LastWordsPolicy, Pack, PackLoadError, PackValidationError, PackValidationIssue,
-    ParityResultPolicy, RoleModifier, SelfDestructSpec, WinCondition, WinPolicy, WinRule,
-    WolfBeautyPolicy, WolfCarryPolicy, DEFAULT_SHIPPED_PACK, MIN_SUPPORTED_IR_VERSION,
-    SUPPORTED_IR_VERSION, SUPPORTED_PACK_VERSION,
+    load_pack_from_json, night_ability_order, validate_pack, validate_pack_validated, BackupPolicy,
+    BelovedPrincessPolicy, DayAnnouncementPolicy, DayDeathAnnouncementPolicy,
+    DayDeathCauseTemplate, DayNotePolicy, DayNoteRolePayload, DayVotePromptPolicy,
+    DeathRetaliationPolicy, DeathRevealMode, DeathRevealPolicy, EffectDuration, EffectVisibility,
+    GrantKind, GrantSpec, HostPromptDecisionKind, HostPromptResolutionEffect,
+    HostPromptResolutionEffectPolicy, IdiotPolicy, InvestigationResultPolicy, ItaLifecyclePolicy,
+    ItaSessionControlKind, LastWordsPolicy, Pack, PackLoadError, PackValidationError,
+    PackValidationIssue, ParityResultPolicy, RoleModifier, SelfDestructSpec, ValidatedPack,
+    WinCondition, WinPolicy, WinRule, WolfBeautyPolicy, WolfCarryPolicy, DEFAULT_SHIPPED_PACK,
+    MIN_SUPPORTED_IR_VERSION, SUPPORTED_IR_VERSION, SUPPORTED_PACK_VERSION,
 };
 pub use resolver::{
     check_win, resolve, resolve_instant, DayAnnouncementInput, DayPhaseInputs,
-    ItaSessionControlInput, ResolutionInput, ResolutionOutput, RESULT_VERSION,
+    ItaSessionControlInput, ResolutionInput, ResolutionInputError, ResolutionOutput,
+    RESULT_VERSION,
 };
 
 /// Walk a stored `ResolutionApplied` payload to [`RESULT_VERSION`].

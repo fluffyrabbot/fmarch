@@ -18,7 +18,7 @@ const EXTEND_EVENT = Object.freeze({
   payload: Object.freeze({
     kind: "extend_deadline",
     gameId: "00000000-0000-0000-0000-000000000001",
-    phaseId: "day-2",
+    phaseId: "D02",
     extendsTo: "2026-06-20T04:00:00Z",
   }),
 });
@@ -160,7 +160,7 @@ test("host actions map to generated wire command variants", () => {
   assert.deepEqual(mapHostActionToWireCommand(EXTEND_EVENT), {
     ExtendDeadline: {
       game: "00000000-0000-0000-0000-000000000001",
-      phase: "day-2",
+      phase: "D02",
       at: 1781928000,
     },
   });
@@ -257,6 +257,21 @@ test("host actions map to generated wire command variants", () => {
   });
 });
 
+test("host command boundary rejects non-canonical phase ids before sending a command", () => {
+  assert.throws(
+    () => mapHostActionToWireCommand({
+      actionId: "extend_deadline",
+      payload: {
+        kind: "extend_deadline",
+        gameId: "00000000-0000-0000-0000-000000000001",
+        phaseId: "day-2",
+        extendsTo: "2026-06-20T04:00:00Z",
+      },
+    }),
+    /canonical PhaseId/,
+  );
+});
+
 test("host action map tags appear in generated wire Command union", () => {
   const tags = readGeneratedCommandTags();
   // No AddSlotStatusTag / ControlItaSession UI kinds exist yet; when they land,
@@ -306,7 +321,7 @@ test("host command envelope uses the Rust wire ClientEnvelope shape", () => {
         command: {
           ExtendDeadline: {
             game: "00000000-0000-0000-0000-000000000001",
-            phase: "day-2",
+            phase: "D02",
             at: 1781928000,
           },
         },
@@ -622,7 +637,7 @@ test("host command sender can refresh projected host console state after ack", a
         });
       }
       return jsonResponse({
-        phase: { phase_id: "day-2", locked: false, deadline: 1781928000 },
+        phase: { phase_id: "D02", locked: false, deadline: 1781928000 },
         slots: [
           {
             slot_id: "slot-7",
@@ -692,7 +707,7 @@ test("host console projection maps deadline and stable slot history to labels", 
           posting_allowed: false,
         },
       }],
-      phase: { phase_id: "day-2", locked: true, deadline: 1781928000 },
+      phase: { phase_id: "D02", locked: true, deadline: 1781928000 },
       slots: [
         {
           slot_id: "slot-7",
@@ -732,7 +747,7 @@ test("host console projection maps deadline and stable slot history to labels", 
     },
     {
       phase: {
-        id: "day-2",
+        id: "D02",
         deadlineLabel: "No deadline extension committed",
         lockedLabel: "Thread open",
       },
@@ -818,13 +833,13 @@ test("host console projection clears explicit null deadlines", () => {
   const projection = projectHostConsoleState(
     {
       completed: false,
-      phase: { phase_id: "day-3", locked: false, deadline: null },
+      phase: { phase_id: "D03", locked: false, deadline: null },
       slots: [],
       thread_posts: [],
     },
     {
       phase: {
-        id: "day-2",
+        id: "D02",
         deadline: 1781928000,
         deadlineLabel: "Jun 19, 2026, 9:00 PM",
         lockedLabel: "Thread locked",
@@ -838,10 +853,35 @@ test("host console projection clears explicit null deadlines", () => {
     },
   );
 
-  assert.equal(projection.phase.id, "day-3");
+  assert.equal(projection.phase.id, "D03");
   assert.equal(projection.phase.locked, false);
   assert.equal(projection.phase.deadline, null);
   assert.equal(projection.phase.deadlineLabel, "No deadline extension committed");
+});
+
+test("host console projection preserves an explicit pre-phase null", () => {
+  const projection = projectHostConsoleState(
+    {
+      completed: false,
+      phase: null,
+      slots: [],
+      thread_posts: [],
+    },
+    {
+      phase: {
+        id: "D01",
+        locked: false,
+        deadline: 1781928000,
+      },
+      replacement: {
+        slotId: "slot-7",
+        occupantLabel: "player-mira",
+        lifecycleLabel: "Alive",
+        historyLabel: "Waiting for replacement command proof",
+      },
+    },
+  );
+  assert.equal(projection.phase, null);
 });
 
 test("host console projection derives labels when the current phase changes", () => {
@@ -855,7 +895,7 @@ test("host console projection derives labels when the current phase changes", ()
     {
       phase: {
         id: "D01",
-        label: "Day 2",
+        label: "Day 1",
         deadline: 1781928000,
         deadlineLabel: "Jun 19, 2026, 9:00 PM",
         lockedLabel: "Thread locked",
@@ -886,7 +926,7 @@ test("host console projection preserves fallback labels for unchanged phase ids"
     {
       phase: {
         id: "D01",
-        label: "Day 2",
+        label: "Day 1",
         deadlineLabel: "No deadline extension committed",
         lockedLabel: "Thread open",
       },
@@ -900,7 +940,7 @@ test("host console projection preserves fallback labels for unchanged phase ids"
   );
 
   assert.equal(projection.phase.id, "D01");
-  assert.equal(projection.phase.label, "Day 2");
+  assert.equal(projection.phase.label, "Day 1");
 });
 
 test("host console live cells patch the Hello snapshot instead of replacing it", () => {

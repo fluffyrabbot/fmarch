@@ -3580,7 +3580,8 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -3775,7 +3776,8 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
             "host_h",
             Command::StartGame {
                 game,
-                phase: "N01".into(),
+                phase: domain::phase::PhaseId::parse("N01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -3841,7 +3843,10 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(report.game, game);
     assert_eq!(report.traces.len(), 1);
     let run = &report.traces[0];
-    assert_eq!(run.phase_id, "N01");
+    assert_eq!(
+        run.phase_id,
+        domain::phase::PhaseId::parse("N01").expect("static test phase id is canonical")
+    );
     assert!(run.applied_stream_seq.is_some());
     assert!(run.trace_stream_seq > run.applied_stream_seq.unwrap());
     assert!(run
@@ -4164,7 +4169,8 @@ async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sql
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,
@@ -4356,7 +4362,8 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             "host_h",
             Command::StartGame {
                 game,
-                phase: "D01".into(),
+                phase: domain::phase::PhaseId::parse("D01")
+                    .expect("static test phase id is canonical"),
             },
         )
         .await,

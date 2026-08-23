@@ -11,8 +11,6 @@
         "counter_id": "x_shot:knight_duel",
         "limit": 1,
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "phase_scope": "game",
         "remaining": 0,
         "template_id": "knight_duel",
@@ -26,8 +24,6 @@
         "killed": "slot_4",
         "knight": "slot_1",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "result": "Success",
         "source_action": "duel_001",
         "target": "slot_4"
@@ -97,8 +93,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",

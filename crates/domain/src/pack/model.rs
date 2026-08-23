@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::events::VoteStatus;
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
+use crate::phase::PhaseKind;
 
 pub type RoleKey = String;
 pub type AlignmentKey = String;
@@ -1767,33 +1768,6 @@ pub struct PhasePolicy {
     pub subsegments: BTreeMap<PhaseKind, Vec<String>>,
     #[serde(default)]
     pub twilight: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum PhaseKind {
-    Day,
-    Night,
-    Twilight,
-}
-
-impl PhaseKind {
-    /// The single-character phase-identifier code (`D`, `N`, `T`).
-    pub const fn code(self) -> &'static str {
-        match self {
-            PhaseKind::Day => "D",
-            PhaseKind::Night => "N",
-            PhaseKind::Twilight => "T",
-        }
-    }
-
-    /// The serialized kind name used across packs, events, and wire payloads.
-    pub const fn name(self) -> &'static str {
-        match self {
-            PhaseKind::Day => "Day",
-            PhaseKind::Night => "Night",
-            PhaseKind::Twilight => "Twilight",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -4,14 +4,19 @@
     "game_id": "game_mu_investigation_town_framer_parity_override_001",
     "phase_id": "N01",
     "state": {
-      "phase_kind": "Night",
-      "phase_number": 1,
       "phase_id": "N01",
       "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
@@ -58,7 +63,9 @@
         "action_id": "mu_town_frame_001",
         "actor": "slot_1",
         "template_id": "frame",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -68,7 +75,9 @@
         "action_id": "mu_town_framer_cop_001",
         "actor": "slot_2",
         "template_id": "cop_investigate",
-        "targets": ["slot_3"],
+        "targets": [
+          "slot_3"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -87,8 +96,6 @@
         "duration": "Persistent",
         "effect": "framed",
         "phase_id": "N01",
-        "phase_kind": "Night",
-        "phase_number": 1,
         "source_action": "mu_town_frame_001",
         "target": "slot_3",
         "visibility": "Hidden"

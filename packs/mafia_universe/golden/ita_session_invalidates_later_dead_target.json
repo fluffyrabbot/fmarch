@@ -8,8 +8,6 @@
         "day": 1,
         "label": "Day 1 ITA",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1",
         "status": "open",
         "window": "ita_sessions"
@@ -25,8 +23,6 @@
         "counter_id": "day_session:d1:ita_shot",
         "limit": 1,
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "phase_scope": "session",
         "remaining": 0,
         "template_id": "ita_shot",
@@ -111,8 +107,6 @@
         "counter_id": "day_session:d1:ita_shot",
         "limit": 1,
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "phase_scope": "session",
         "remaining": 0,
         "template_id": "ita_shot",
@@ -181,8 +175,6 @@
         },
         "global_shots_fired": 2,
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "queue_delta": -2,
         "queue_length": 0,
         "session_id": "d1",
@@ -195,8 +187,6 @@
       "payload": {
         "last_status": "open",
         "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1,
         "session_id": "d1"
       }
     },
@@ -252,8 +242,6 @@
     "state": {
       "phase_deadline": null,
       "phase_id": "D01",
-      "phase_kind": "Day",
-      "phase_number": 1,
       "phase_policy": {
         "cadence": [
           "Day",
