@@ -52,59 +52,74 @@ impl std::fmt::Display for PackLoadError {
 
 impl std::error::Error for PackLoadError {}
 
-pub fn load_pack_from_json(raw: &str) -> Result<Pack, PackLoadError> {
-    let pack: Pack = serde_json::from_str(raw).map_err(|err| {
+fn decode_pack(raw: &str) -> Result<Pack, PackLoadError> {
+    serde_json::from_str(raw).map_err(|err| {
         if err.classify() == serde_json::error::Category::Data {
             PackLoadError::Decode(err.to_string())
         } else {
             PackLoadError::Json(err.to_string())
         }
-    })?;
+    })
+}
+
+/// Parses and validates an authoring or inspection document.
+///
+/// This returns the mutable transport DTO, not an engine artifact. Execution
+/// callers must use [`load_validated_pack_from_json`] instead.
+pub fn load_pack_from_json(raw: &str) -> Result<Pack, PackLoadError> {
+    let pack = decode_pack(raw)?;
     validate_pack(&pack).map_err(PackLoadError::Validation)?;
     Ok(pack)
 }
 
-/// Derived indexes shared by validation families for one immutable pack.
-///
-/// Keeping these lookups together makes cross-reference validation explicit,
-/// prevents validators from rebuilding subtly different views of the model,
-/// and gives action-policy validation one stable dependency boundary.
-/// A pack that has passed full semantic validation, carrying the derived
-/// indexes its consumers need. This is the parse-don't-validate artifact:
-/// resolver and command code consume these precomputed sets instead of
-/// re-deriving (and re-encoding) the same policy grammar independently.
-#[derive(Debug, Clone)]
-pub struct ValidatedPack {
-    pub(crate) pack: std::sync::Arc<Pack>,
-    pub role_keys: BTreeSet<String>,
-    pub alignments: BTreeSet<String>,
-    pub effect_tags: BTreeSet<String>,
-    pub team_kill_action_ids: BTreeSet<String>,
-    pub cadence: BTreeSet<PhaseKind>,
-    pub kill_cause_ids: BTreeSet<String>,
-    pub vote_weight_grant_ids: BTreeSet<String>,
-    pub uses_vote_duel: bool,
+/// Parses and validates a pack in one pass, returning the artifact its
+/// consumers should keep instead of a bare [`Pack`]. Engine input construction
+/// must go through this loader (or [`validate_pack_validated`]) so a single,
+/// immutable artifact crosses the execution boundary.
+pub fn load_validated_pack_from_json(
+    raw: &str,
+) -> Result<std::sync::Arc<ValidatedPack>, PackLoadError> {
+    let pack = decode_pack(raw)?;
+    validate_pack_validated(std::sync::Arc::new(pack)).map_err(PackLoadError::Validation)
 }
 
-impl ValidatedPack {
-    pub fn new(pack: std::sync::Arc<Pack>) -> Self {
+/// Derived indexes shared by validation families for one candidate document.
+///
+/// This analysis is deliberately short-lived: it helps validation avoid
+/// rebuilding subtly different model views, but it is not execution state and
+/// must not occupy every cached resolver artifact.
+#[derive(Debug)]
+struct PackAnalysis<'a> {
+    document: &'a Pack,
+    role_keys: BTreeSet<String>,
+    alignments: BTreeSet<String>,
+    effect_tags: BTreeSet<String>,
+    team_kill_action_ids: BTreeSet<String>,
+    cadence: BTreeSet<PhaseKind>,
+    kill_cause_ids: BTreeSet<String>,
+    vote_weight_grant_ids: BTreeSet<String>,
+    uses_vote_duel: bool,
+}
+
+impl<'a> PackAnalysis<'a> {
+    fn compile(document: &'a Pack) -> Self {
         Self {
-            role_keys: pack.roles.keys().cloned().collect(),
-            alignments: pack
+            role_keys: document.roles.keys().cloned().collect(),
+            alignments: document
                 .roles
                 .values()
                 .filter_map(|role| role.alignment.clone())
                 .collect(),
-            effect_tags: declared_effect_tags(&pack),
-            team_kill_action_ids: pack
+            effect_tags: declared_effect_tags(document),
+            team_kill_action_ids: document
                 .night_resolution
                 .team_kill_action_ids
                 .iter()
                 .cloned()
                 .collect(),
-            cadence: pack.phases.cadence.iter().copied().collect(),
-            kill_cause_ids: pack_kill_cause_ids(&pack),
-            vote_weight_grant_ids: pack
+            cadence: document.phases.cadence.iter().copied().collect(),
+            kill_cause_ids: pack_kill_cause_ids(document),
+            vote_weight_grant_ids: document
                 .roles
                 .values()
                 .flat_map(|role| role.actions.iter())
@@ -112,13 +127,30 @@ impl ValidatedPack {
                 .filter(|grant| grant.kind == GrantKind::VoteWeight)
                 .map(|grant| grant.grant_id.clone())
                 .collect(),
-            uses_vote_duel: pack_uses_ability(&pack, IrAbility::VoteDuel),
-            pack,
+            uses_vote_duel: pack_uses_ability(document, IrAbility::VoteDuel),
+            document,
         }
     }
+}
 
-    pub fn pack(&self) -> &Pack {
-        &self.pack
+/// A pack that passed full semantic validation and carries only the immutable
+/// document plus execution data that the resolver actually consumes. Safe code
+/// cannot construct or mutate this artifact without the validation boundary.
+#[derive(Debug)]
+pub struct ValidatedPack {
+    document: std::sync::Arc<Pack>,
+    night_stage_order: Box<[IrAbility]>,
+}
+
+impl ValidatedPack {
+    /// The immutable source document that was accepted at this artifact's
+    /// validation boundary.
+    pub fn document(&self) -> &Pack {
+        &self.document
+    }
+
+    pub(crate) fn night_stage_order(&self) -> &[IrAbility] {
+        &self.night_stage_order
     }
 }
 
@@ -126,14 +158,14 @@ pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
     validate_pack_validated(std::sync::Arc::new(pack.clone())).map(|_| ())
 }
 
-/// Validates a pack and returns the derived-index artifact that resolver and
-/// command consumers should thread through instead of re-deriving the same
-/// policy grammar themselves.
+/// Validates a pack and returns the immutable artifact that resolver and
+/// command consumers thread through. Validation-only analysis is discarded;
+/// the artifact retains only execution data with a demonstrated hot-path use.
 pub fn validate_pack_validated(
     pack: std::sync::Arc<Pack>,
-) -> Result<ValidatedPack, PackValidationError> {
-    let pack_arc = std::sync::Arc::clone(&pack);
-    let pack: &Pack = &pack;
+) -> Result<std::sync::Arc<ValidatedPack>, PackValidationError> {
+    let document = pack;
+    let pack: &Pack = &document;
     let mut issues = Vec::new();
 
     if pack.version != SUPPORTED_PACK_VERSION {
@@ -165,7 +197,7 @@ pub fn validate_pack_validated(
     }
     validate_phase_policy(&mut issues, "phases", &pack.phases);
 
-    let context = ValidatedPack::new(pack_arc);
+    let context = PackAnalysis::compile(pack);
     let role_keys = &context.role_keys;
     validate_ita_policy(&mut issues, "ita", &pack.ita, role_keys);
     let alignments = &context.alignments;
@@ -479,7 +511,13 @@ pub fn validate_pack_validated(
     validate_win_families(&mut issues, pack);
 
     if issues.is_empty() {
-        Ok(context)
+        let night_stage_order = night_ability_order(pack)
+            .expect("validated pack must have a valid night ability order")
+            .into_boxed_slice();
+        Ok(std::sync::Arc::new(ValidatedPack {
+            document,
+            night_stage_order,
+        }))
     } else {
         Err(PackValidationError { issues })
     }
@@ -5684,11 +5722,11 @@ fn validate_treestump_policy(
 
 fn validate_target_lynch_win_policies(
     issues: &mut Vec<PackValidationIssue>,
-    context: &ValidatedPack,
+    context: &PackAnalysis<'_>,
 ) {
     let path = "target_lynch_win_policies";
-    let policies = &context.pack.target_lynch_win_policies;
-    let ir_version = context.pack.ir_version;
+    let policies = &context.document.target_lynch_win_policies;
+    let ir_version = context.document.ir_version;
     let role_keys = &context.role_keys;
     let alignments = &context.alignments;
     let effect_tags = &context.effect_tags;
@@ -6324,15 +6362,19 @@ fn validate_action(
     issues: &mut Vec<PackValidationIssue>,
     path: &str,
     action: &ActionTemplate,
-    context: &ValidatedPack,
+    context: &PackAnalysis<'_>,
 ) {
-    let ir_version = context.pack.ir_version;
+    let ir_version = context.document.ir_version;
     let role_keys = &context.role_keys;
     let alignments = &context.alignments;
     let effect_tags = &context.effect_tags;
-    let effect_policies = &context.pack.effects;
+    let effect_policies = &context.document.effects;
     let team_kill_action_ids = &context.team_kill_action_ids;
-    let vanilla_roles = &context.pack.investigation_results.role_sets.vanilla_roles;
+    let vanilla_roles = &context
+        .document
+        .investigation_results
+        .role_sets
+        .vanilla_roles;
     let cadence = &context.cadence;
 
     if action.id.trim().is_empty() {
@@ -8031,14 +8073,14 @@ fn validate_source_ids(issues: &mut Vec<PackValidationIssue>, path: &str, action
     }
 }
 
-fn validate_vote_policy(issues: &mut Vec<PackValidationIssue>, context: &ValidatedPack) {
-    let policy = &context.pack.vote;
+fn validate_vote_policy(issues: &mut Vec<PackValidationIssue>, context: &PackAnalysis<'_>) {
+    let policy = &context.document.vote;
     let role_keys = &context.role_keys;
     let effect_tags = &context.effect_tags;
     let vote_weight_grant_ids = &context.vote_weight_grant_ids;
     let cadence = &context.cadence;
-    let prompt_policies = &context.pack.day_vote_prompt_policies;
-    let prompt_effects = &context.pack.host_prompt_resolution_effects;
+    let prompt_policies = &context.document.day_vote_prompt_policies;
+    let prompt_effects = &context.document.host_prompt_resolution_effects;
     let uses_vote_duel = context.uses_vote_duel;
 
     if !cadence.contains(&PhaseKind::Day) {
@@ -8476,8 +8518,7 @@ fn issue(
 
 #[cfg(test)]
 mod validated_pack_tests {
-    use super::{load_pack_from_json, validate_pack_validated, Pack};
-    use std::collections::BTreeSet;
+    use super::{load_pack_from_json, night_ability_order, validate_pack_validated, Pack};
     use std::sync::Arc;
 
     fn shipped_default_open() -> Arc<Pack> {
@@ -8488,29 +8529,15 @@ mod validated_pack_tests {
     }
 
     #[test]
-    fn validated_artifact_carries_derived_indexes() {
+    fn validated_artifact_shares_document_and_caches_execution_plan() {
         let pack = shipped_default_open();
         let validated = validate_pack_validated(Arc::clone(&pack)).expect("shipped pack validates");
 
-        assert!(std::sync::Arc::ptr_eq(&validated.pack, &pack));
-        assert!(!validated.role_keys.is_empty());
-        for key in &validated.role_keys {
-            assert!(pack.roles.contains_key(key), "role index drift: {key}");
-        }
-
-        let cadence: BTreeSet<_> = pack.phases.cadence.iter().copied().collect();
-        assert_eq!(validated.cadence, cadence);
-
-        let team_kill: BTreeSet<_> = pack
-            .night_resolution
-            .team_kill_action_ids
-            .iter()
-            .cloned()
-            .collect();
-        assert_eq!(validated.team_kill_action_ids, team_kill);
-
-        let kill_causes: BTreeSet<String> = validated.kill_cause_ids.clone();
-        assert_eq!(validated.kill_cause_ids, kill_causes);
+        assert!(Arc::ptr_eq(&validated.document, &pack));
+        assert_eq!(
+            validated.night_stage_order(),
+            night_ability_order(&pack).expect("validated pack has an executable night stage order")
+        );
     }
 
     #[test]

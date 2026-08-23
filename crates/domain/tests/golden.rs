@@ -5,7 +5,7 @@
 //!
 //! Hermetic: repo files are located relative to `CARGO_MANIFEST_DIR`.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use domain::pack::{
     ActionTemplate, ActorRef, BackupPriorityPolicy, Pack, PrecedenceRule, PrecedenceWhen,
@@ -119,8 +119,26 @@ struct GoldenInput {
 /// Run a golden's input against the pack and return the produced inner events as
 /// indexed `{ index, kind, payload }` JSON values, matching the goldens' shape.
 fn run(input_json: &Value, pack: Pack) -> Vec<Value> {
-    domain::golden_events_from_input_value(input_json, pack, "golden-run")
+    domain::golden_events_from_input_value(input_json, validated_pack(pack), "golden-run")
         .expect("run golden input")
+}
+
+/// Build the same proof-carrying pack artifact that production resolution
+/// receives. Malformed-pack coverage asserts rejection at this boundary.
+fn validated_pack(pack: Pack) -> Arc<domain::ValidatedPack> {
+    domain::validate_pack_validated(Arc::new(pack)).expect("golden pack validates")
+}
+
+fn assert_pack_rejected(pack: Pack, expected_path: &str, expected_message: &str) {
+    let error = domain::validate_pack_validated(Arc::new(pack))
+        .expect_err("malformed pack must be rejected at the validation boundary");
+    assert!(
+        error.issues.iter().any(|issue| {
+            issue.path == expected_path && issue.message.contains(expected_message)
+        }),
+        "expected validation issue at `{expected_path}` containing `{expected_message}`; got {:#?}",
+        error.issues,
+    );
 }
 
 fn run_instant(input_json: &Value, pack: Pack) -> Vec<Value> {
@@ -133,7 +151,7 @@ fn run_instant(input_json: &Value, pack: Pack) -> Vec<Value> {
         state: gi.state,
         submissions: gi.submissions,
         day_phase_inputs: gi.day_phase_inputs,
-        pack,
+        pack: validated_pack(pack),
         seed: gi.seed,
         logical_time: 0,
     })
@@ -156,22 +174,10 @@ fn run_output(input_json: &Value, pack: Pack, run_id: &str) -> domain::resolver:
         state: gi.state,
         submissions: gi.submissions,
         day_phase_inputs: gi.day_phase_inputs,
-        pack,
+        pack: validated_pack(pack),
         seed: gi.seed,
         logical_time: 0,
     })
-}
-
-fn caught_panic_message(panic: Box<dyn std::any::Any + Send>) -> String {
-    panic
-        .downcast_ref::<String>()
-        .cloned()
-        .or_else(|| {
-            panic
-                .downcast_ref::<&str>()
-                .map(|message| message.to_string())
-        })
-        .unwrap_or_else(|| "<non-string panic>".to_string())
 }
 
 fn remove_block_precedence_before(pack: &mut Pack, ability: IrAbility) {
@@ -981,115 +987,75 @@ fn golden_protected_multi_attacker_no_death() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_conflict_family_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_conflict_family() {
     let mut pack = load_pack();
     pack.night_resolution
         .conflict_families
         .retain(|family| format!("{family:?}") != "ProtectBlocksKills");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing explicit night-resolution conflict family must not silently resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution conflict families"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("conflict_families must include `ProtectBlocksKills`"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.conflict_families",
+        "night_resolution conflict_families must include `ProtectBlocksKills`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_visibility_family_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_visibility_family() {
     let mut pack = load_pack();
     pack.visibility_families
         .retain(|family| format!("{family:?}") != "StealthNinjaVisits");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing visibility family must not silently resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid visibility families"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("visibility_families must include `StealthNinjaVisits`"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "visibility_families",
+        "visibility_families must include `StealthNinjaVisits`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_win_family_before_day_resolution() {
-    let golden = load_golden("executioner_wins_on_target_lynch.json");
+fn pack_validation_rejects_missing_win_family() {
     let mut pack = load_pack();
     pack.win_families
         .retain(|family| format!("{family:?}") != "TargetLynchIndependent");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing win family must not silently resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid win families"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("win_families must include `TargetLynchIndependent`"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "win_families",
+        "win_families must include `TargetLynchIndependent`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_block_action_policy_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_block_action_policy() {
     let mut pack = load_pack();
     pack.night_resolution
         .block_action_ids
         .retain(|action_id| action_id != "roleblocker_block");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack)).expect_err(
-        "missing explicit night-resolution Block action policy must not silently skip blocking",
-    );
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution block action policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("Block action `roleblocker_block` must be declared"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.block_action_ids",
+        "night_resolution Block action `roleblocker_block`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_doctor_protect_action_policy_before_night_resolution()
-{
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_doctor_protect_action_policy() {
     let mut pack = load_pack();
     pack.night_resolution
         .protect_action_ids
         .retain(|action_id| action_id != "doctor_protect");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack)).expect_err(
-        "missing explicit night-resolution Doctor protect policy must not silently skip protection",
-    );
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution protect action policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("Protect action `doctor_protect` must be declared"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.protect_action_ids",
+        "night_resolution Protect action `doctor_protect`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_bodyguard_protect_action_policy_before_night_resolution(
-) {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_bodyguard_protect_action_policy() {
     let mut pack = load_pack();
     pack.night_resolution
         .bodyguard_action_ids
@@ -1098,24 +1064,15 @@ fn resolver_rejects_missing_night_resolution_bodyguard_protect_action_policy_bef
         .protect_action_ids
         .push("bodyguard".to_string());
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack)).expect_err(
-        "missing explicit night-resolution Bodyguard protect policy must not silently skip interception",
-    );
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution bodyguard action policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("Bodyguard Protect action `bodyguard` must be declared"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.protect_action_ids",
+        "night_resolution action `bodyguard` must be a night/any Protect without Bodyguard/Martyr/Cpr action",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_jailkeep_explicit_block_policy_before_night_resolution(
-) {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_jailkeep_explicit_block_policy() {
     let mut pack = load_pack();
     pack.night_resolution
         .block_action_ids
@@ -1124,52 +1081,45 @@ fn resolver_rejects_missing_night_resolution_jailkeep_explicit_block_policy_befo
         .protect_action_ids
         .retain(|action_id| action_id != "jail");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("Jailkeeper must remain explicitly declared as Block and Protect");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution jailkeep action policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("Jailkeeper action `jail` must also be declared in block_action_ids"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.jailkeep_action_ids",
+        "night_resolution Jailkeeper action `jail` must also be declared in block_action_ids",
     );
 }
 
 #[test]
-fn resolver_rejects_wrong_night_resolution_action_bucket_entries_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_wrong_night_resolution_action_bucket_entries() {
     let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty block_action_ids",
             |pack| pack.night_resolution.block_action_ids.clear(),
-            "invalid night_resolution block action policy",
+            "night_resolution.block_action_ids",
             "explicit night_resolution policy must declare block_action_ids",
         ),
         (
             "blank protect_action_ids",
             |pack| pack.night_resolution.protect_action_ids.push("".to_string()),
-            "invalid night_resolution protect action policy",
+            "night_resolution.protect_action_ids",
             "protect_action_ids id must not be empty",
         ),
         (
             "block_action_ids",
             |pack| pack.night_resolution.block_action_ids.push("doctor_protect".to_string()),
-            "invalid night_resolution block action policy",
-            "block_action_ids entry `doctor_protect` must be a night/any Block action",
+            "night_resolution.block_action_ids",
+            "night_resolution action `doctor_protect` must be a night/any Block action",
         ),
         (
             "protect_action_ids",
             |pack| pack.night_resolution.protect_action_ids.push("bodyguard".to_string()),
-            "invalid night_resolution protect action policy",
-            "protect_action_ids entry `bodyguard` must be a night/any Protect without Bodyguard/Martyr/Cpr action",
+            "night_resolution.protect_action_ids",
+            "night_resolution action `bodyguard` must be a night/any Protect without Bodyguard/Martyr/Cpr action",
         ),
         (
             "kill_action_ids",
             |pack| pack.night_resolution.kill_action_ids.push("doctor_protect".to_string()),
-            "invalid night_resolution kill action policy",
-            "kill_action_ids entry `doctor_protect` must be a night/any Kill without Strongman/Cpr action",
+            "night_resolution.kill_action_ids",
+            "night_resolution action `doctor_protect` must be a night/any Kill without Strongman/Cpr action",
         ),
         (
             "bodyguard_action_ids",
@@ -1178,8 +1128,8 @@ fn resolver_rejects_wrong_night_resolution_action_bucket_entries_before_night_re
                     .bodyguard_action_ids
                     .push("doctor_protect".to_string());
             },
-            "invalid night_resolution bodyguard action policy",
-            "bodyguard_action_ids entry `doctor_protect` must be a night/any Protect with Bodyguard action",
+            "night_resolution.bodyguard_action_ids",
+            "night_resolution action `doctor_protect` must be a night/any Protect with Bodyguard action",
         ),
         (
             "martyr_action_ids",
@@ -1188,14 +1138,14 @@ fn resolver_rejects_wrong_night_resolution_action_bucket_entries_before_night_re
                     .martyr_action_ids
                     .push("doctor_protect".to_string());
             },
-            "invalid night_resolution martyr action policy",
-            "martyr_action_ids entry `doctor_protect` must be a night/any Protect with Martyr action",
+            "night_resolution.martyr_action_ids",
+            "night_resolution action `doctor_protect` must be a night/any Protect with Martyr action",
         ),
         (
             "cpr_action_ids",
             |pack| pack.night_resolution.cpr_action_ids.push("doctor_protect".to_string()),
-            "invalid night_resolution CPR action policy",
-            "cpr_action_ids entry `doctor_protect` must be a night/any Protect plus Kill with Cpr action",
+            "night_resolution.cpr_action_ids",
+            "night_resolution action `doctor_protect` must be a night/any Protect plus Kill with Cpr action",
         ),
         (
             "jailkeep_action_ids",
@@ -1204,8 +1154,8 @@ fn resolver_rejects_wrong_night_resolution_action_bucket_entries_before_night_re
                     .jailkeep_action_ids
                     .push("doctor_protect".to_string());
             },
-            "invalid night_resolution jailkeep action policy",
-            "jailkeep_action_ids entry `doctor_protect` must be a night/any Block plus Protect action",
+            "night_resolution.jailkeep_action_ids",
+            "night_resolution action `doctor_protect` must be a night/any Block plus Protect action",
         ),
         (
             "strongman_action_ids",
@@ -1214,8 +1164,8 @@ fn resolver_rejects_wrong_night_resolution_action_bucket_entries_before_night_re
                     .strongman_action_ids
                     .push("doctor_protect".to_string());
             },
-            "invalid night_resolution strongman action policy",
-            "strongman_action_ids entry `doctor_protect` must be a night/any Kill with Strongman action",
+            "night_resolution.strongman_action_ids",
+            "night_resolution action `doctor_protect` must be a night/any Kill with Strongman action",
         ),
         (
             "duplicate block_action_ids",
@@ -1224,8 +1174,8 @@ fn resolver_rejects_wrong_night_resolution_action_bucket_entries_before_night_re
                     .block_action_ids
                     .push("roleblocker_block".to_string());
             },
-            "invalid night_resolution block action policy",
-            "block_action_ids contains duplicate value `roleblocker_block`",
+            "night_resolution.block_action_ids",
+            "duplicate value `roleblocker_block`",
         ),
         (
             "unknown protect_action_ids",
@@ -1234,38 +1184,27 @@ fn resolver_rejects_wrong_night_resolution_action_bucket_entries_before_night_re
                     .protect_action_ids
                     .push("missing_protect".to_string());
             },
-            "invalid night_resolution protect action policy",
-            "protect_action_ids entry `missing_protect` references unknown action",
+            "night_resolution.protect_action_ids",
+            "unknown night_resolution action `missing_protect`",
         ),
     ];
 
-    for (case, mutate, policy, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} wrong bucket entry unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains(policy),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_team_kill_policy_before_resolution() {
-    let golden = load_golden("lost_mafia_goon_blocks_team_kill_with_teammate_alive.json");
+fn pack_validation_rejects_malformed_night_resolution_team_kill_policy() {
     let cases: Vec<InvalidPackPolicyCase> =
         vec![
         (
             "blank team_kill_action_ids",
             |pack| pack.night_resolution.team_kill_action_ids.push("".to_string()),
-            "invalid night_resolution team kill action policy",
-            "team_kill_action_ids contains empty value",
+            "night_resolution.team_kill_action_ids",
+            "team_kill_action_ids id must not be empty",
         ),
         (
             "duplicate team_kill_action_ids",
@@ -1274,8 +1213,8 @@ fn resolver_rejects_malformed_night_resolution_team_kill_policy_before_resolutio
                     .team_kill_action_ids
                     .push("factional_kill".to_string());
             },
-            "invalid night_resolution team kill action policy",
-            "team_kill_action_ids contains duplicate value `factional_kill`",
+            "night_resolution.team_kill_action_ids",
+            "duplicate value `factional_kill`",
         ),
         (
             "unknown team_kill_action_ids",
@@ -1284,8 +1223,8 @@ fn resolver_rejects_malformed_night_resolution_team_kill_policy_before_resolutio
                     .team_kill_action_ids
                     .push("missing_team_kill".to_string());
             },
-            "invalid night_resolution team kill action policy",
-            "team_kill_action_ids entry `missing_team_kill` references unknown action",
+            "night_resolution.team_kill_action_ids",
+            "unknown night_resolution team kill action `missing_team_kill`",
         ),
         (
             "wrong-shape team_kill_action_ids",
@@ -1294,8 +1233,8 @@ fn resolver_rejects_malformed_night_resolution_team_kill_policy_before_resolutio
                     .team_kill_action_ids
                     .push("doctor_protect".to_string());
             },
-            "invalid night_resolution team kill action policy",
-            "team_kill_action_ids entry `doctor_protect` must be a night/any Kill action",
+            "night_resolution.team_kill_action_ids",
+            "night_resolution team kill action `doctor_protect` must be a night/any Kill action",
         ),
         (
             "team kill removed from kill_action_ids",
@@ -1304,14 +1243,14 @@ fn resolver_rejects_malformed_night_resolution_team_kill_policy_before_resolutio
                     .kill_action_ids
                     .retain(|action_id| action_id != "factional_kill");
             },
-            "invalid night_resolution team kill action policy",
-            "team_kill_action_ids entry `factional_kill` must also be declared in kill_action_ids",
+            "night_resolution.team_kill_action_ids",
+            "team kill action `factional_kill` must also be declared in kill_action_ids",
         ),
         (
             "empty team_kill_action_ids",
             |pack| pack.night_resolution.team_kill_action_ids.clear(),
-            "invalid night_resolution team kill action policy",
-            "team-kill restricted role `lost_mafia_goon` requires team_kill_action_ids",
+            "night_resolution.team_kill_action_ids",
+            "team-kill restricted role modifiers require night_resolution.team_kill_action_ids",
         ),
         (
             "missing Lost role team-kill action",
@@ -1322,86 +1261,51 @@ fn resolver_rejects_malformed_night_resolution_team_kill_policy_before_resolutio
                     .actions
                     .clear();
             },
-            "invalid night_resolution team kill action policy",
-            "team-kill restricted role `lost_mafia_goon` must expose a team kill action",
+            "roles.lost_mafia_goon",
+            "team-kill restricted role modifiers must expose a night_resolution team kill action",
         ),
     ];
 
-    for (case, mutate, policy, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed team-kill policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains(policy),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_kill_action_policy_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_kill_action_policy() {
     let mut pack = load_pack();
     pack.night_resolution
         .kill_action_ids
         .retain(|action_id| action_id != "night_kill");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack)).expect_err(
-        "missing explicit night-resolution Kill action policy must not silently use action ids",
-    );
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution kill action policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("Kill action `night_kill` must be declared"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.kill_action_ids",
+        "night_resolution Kill action `night_kill`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_kill_cause_catalog_before_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_kill_cause_catalog() {
     let mut pack = load_pack();
     pack.night_resolution.kill_cause_ids.clear();
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack)).expect_err(
-        "missing explicit night-resolution kill cause catalog must not silently resolve",
-    );
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution kill cause catalog"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("must declare kill_cause_ids"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.kill_cause_ids",
+        "explicit night_resolution policy must declare kill_cause_ids",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_kill_cause_catalog_before_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_malformed_night_resolution_kill_cause_catalog() {
     let cases: Vec<InvalidPackCase> = vec![
         (
             "empty kill cause id",
             |pack| pack.night_resolution.kill_cause_ids.push("".to_string()),
-            "kill cause id must not be empty",
+            "night_resolution kill cause id must not be empty",
         ),
         (
             "duplicate kill cause id",
@@ -1410,7 +1314,7 @@ fn resolver_rejects_malformed_night_resolution_kill_cause_catalog_before_resolut
                     .kill_cause_ids
                     .push("night_kill".to_string())
             },
-            "duplicate kill cause `night_kill`",
+            "duplicate value `night_kill`",
         ),
         (
             "unknown kill cause id",
@@ -1419,7 +1323,7 @@ fn resolver_rejects_malformed_night_resolution_kill_cause_catalog_before_resolut
                     .kill_cause_ids
                     .push("missing_cause".to_string());
             },
-            "unknown kill cause `missing_cause`",
+            "unknown night_resolution kill cause `missing_cause`",
         ),
         (
             "omitted generated kill cause",
@@ -1428,30 +1332,19 @@ fn resolver_rejects_malformed_night_resolution_kill_cause_catalog_before_resolut
                     .kill_cause_ids
                     .retain(|cause| cause != "pgo_shoots_visitor");
             },
-            "kill_cause_ids must include `pgo_shoots_visitor`",
+            "night_resolution kill_cause_ids must include `pgo_shoots_visitor`",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed kill cause catalog unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution kill cause catalog"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, "night_resolution.kill_cause_ids", message);
     }
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_protection_classifier_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_protection_classifier() {
     let mut pack = load_pack();
     pack.night_resolution
         .protection_cause_policy
@@ -1460,46 +1353,30 @@ fn resolver_rejects_missing_night_resolution_protection_classifier_before_night_
         .blocks
         .retain(|cause| cause != "factional_kill");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing ordinary kill protection classifier must not silently resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution protection cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "protection source `doctor_protect` does not classify kill cause `factional_kill`"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.protection_cause_policy.doctor_protect",
+        "protection source `doctor_protect` does not classify kill cause `factional_kill`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_protection_source_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_protection_source() {
     let mut pack = load_pack();
     pack.night_resolution
         .protection_cause_policy
         .remove("doctor_protect");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing protection source policy must not silently drop protection");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution protection cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("protection source `doctor_protect` must classify every kill cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.protection_cause_policy",
+        "night_resolution Protect action `doctor_protect` must classify every kill cause",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_protection_cause_policy_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_protection_cause_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty protection source key",
             |pack| {
@@ -1511,6 +1388,7 @@ fn resolver_rejects_malformed_night_resolution_protection_cause_policy_before_ni
                     },
                 );
             },
+            "night_resolution.protection_cause_policy",
             "protection source id must not be empty",
         ),
         (
@@ -1524,7 +1402,8 @@ fn resolver_rejects_malformed_night_resolution_protection_cause_policy_before_ni
                     },
                 );
             },
-            "unknown protection source `phase_protect`",
+            "night_resolution.protection_cause_policy.phase_protect",
+            "unknown night_resolution protection source `phase_protect`",
         ),
         (
             "duplicate blocked kill cause",
@@ -1536,7 +1415,8 @@ fn resolver_rejects_malformed_night_resolution_protection_cause_policy_before_ni
                     .expect("mafiascum declares doctor protection cause policy");
                 doctor.blocks.push("night_kill".to_string());
             },
-            "protection source `doctor_protect` blocks contains duplicate kill cause `night_kill`",
+            "night_resolution.protection_cause_policy.doctor_protect.blocks",
+            "duplicate value `night_kill`",
         ),
         (
             "unknown blocked kill cause",
@@ -1548,7 +1428,8 @@ fn resolver_rejects_malformed_night_resolution_protection_cause_policy_before_ni
                     .blocks
                     .push("missing_kill_cause".to_string());
             },
-            "protection source `doctor_protect` blocks references unknown kill cause `missing_kill_cause`",
+            "night_resolution.protection_cause_policy.doctor_protect.blocks",
+            "unknown night_resolution kill cause `missing_kill_cause`",
         ),
         (
             "blocked and bypassed kill cause",
@@ -1560,31 +1441,21 @@ fn resolver_rejects_malformed_night_resolution_protection_cause_policy_before_ni
                     .bypasses
                     .push("night_kill".to_string());
             },
-            "protection source `doctor_protect` kill cause `night_kill` cannot be both blocked and bypassed",
+            "night_resolution.protection_cause_policy.doctor_protect",
+            "kill cause `night_kill` cannot be both blocked and bypassed",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed protection cause policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution protection cause policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_target_state_classifier_for_chosen_retaliation_before_resolution(
-) {
-    let golden = load_golden("hunter_retaliates_on_death.json");
+fn pack_validation_rejects_missing_night_resolution_target_state_classifier_for_chosen_retaliation()
+{
     let mut pack = load_pack();
     pack.night_resolution
         .target_state_save_policy
@@ -1593,18 +1464,10 @@ fn resolver_rejects_missing_night_resolution_target_state_classifier_for_chosen_
         .blocks
         .retain(|cause| cause != "hunter_retaliate");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing chosen-retaliation target-state classifier must not silently resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution target-state save policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "target-state save `bulletproof` does not classify kill cause `hunter_retaliate`"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.target_state_save_policy.bulletproof",
+        "target-state save `bulletproof` does not classify kill cause `hunter_retaliate`",
     );
 }
 
@@ -1640,72 +1503,33 @@ fn golden_kill_vs_doctor_strongman_variant() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_strongman_action_policy_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
-    let mut input = golden["input"].clone();
-    for slot in input["state"]["slots"].as_array_mut().unwrap() {
-        if slot["slot_id"] == "slot_1" {
-            slot["role_key"] = Value::from("strongman");
-        }
-    }
-    for sub in input["submissions"].as_array_mut().unwrap() {
-        if sub["actor"] == "slot_1" {
-            sub["template_id"] = Value::from("strongman_kill");
-        }
-    }
+fn pack_validation_rejects_missing_night_resolution_strongman_action_policy() {
     let mut pack = load_pack();
     pack.night_resolution
         .strongman_action_ids
         .retain(|action_id| action_id != "strongman_kill");
 
-    let panic = std::panic::catch_unwind(|| run(&input, pack)).expect_err(
-        "missing explicit night-resolution Strongman action policy must not resolve as ordinary Kill",
-    );
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution strongman action policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("explicit night_resolution policy must declare strongman_action_ids"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.strongman_action_ids",
+        "night_resolution Strongman Kill action `strongman_kill`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_strongman_bypass_policy_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
-    let mut input = golden["input"].clone();
-    for slot in input["state"]["slots"].as_array_mut().unwrap() {
-        if slot["slot_id"] == "slot_1" {
-            slot["role_key"] = Value::from("strongman");
-        }
-    }
-    for sub in input["submissions"].as_array_mut().unwrap() {
-        if sub["actor"] == "slot_1" {
-            sub["template_id"] = Value::from("strongman_kill");
-        }
-    }
+fn pack_validation_rejects_missing_night_resolution_strongman_bypass_policy() {
     let mut pack = load_pack();
     pack.night_resolution.strongman_bypasses_protect = false;
 
-    let panic = std::panic::catch_unwind(|| run(&input, pack)).expect_err(
-        "missing explicit night-resolution Strongman bypass policy must not resolve as blocked",
-    );
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution strongman bypass policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("requires strongman_bypasses_protect true"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.strongman_bypasses_protect",
+        "explicit night_resolution policy requires strongman_bypasses_protect true",
     );
 }
 
 #[test]
-fn resolver_rejects_night_resolution_ordinary_kill_as_target_state_bypass_before_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_night_resolution_ordinary_kill_as_target_state_bypass() {
     let mut pack = load_pack();
     let bulletproof = pack
         .night_resolution
@@ -1715,23 +1539,15 @@ fn resolver_rejects_night_resolution_ordinary_kill_as_target_state_bypass_before
     bulletproof.blocks.retain(|cause| cause != "night_kill");
     bulletproof.bypasses.push("night_kill".to_string());
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("ordinary kill classified as target-state bypass must not resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution target-state save policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("bypassed kill cause `night_kill` must be a Strongman bypass cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.target_state_save_policy.bulletproof.bypasses",
+        "bypassed kill cause `night_kill` must be a Strongman bypass cause",
     );
 }
 
 #[test]
-fn resolver_rejects_night_resolution_generated_strongman_cause_as_protection_block_before_resolution(
-) {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_night_resolution_generated_strongman_cause_as_protection_block() {
     let mut pack = load_pack();
     let doctor = pack
         .night_resolution
@@ -1745,18 +1561,10 @@ fn resolver_rejects_night_resolution_generated_strongman_cause_as_protection_blo
         .blocks
         .push("unstoppable_vengeful_retaliates".to_string());
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("generated Strongman cause classified as protection block must not resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution protection cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "strongman bypass cause `unstoppable_vengeful_retaliates` must be classified in bypasses"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.protection_cause_policy.doctor_protect.blocks",
+        "strongman bypass cause `unstoppable_vengeful_retaliates` must be classified in bypasses",
     );
 }
 
@@ -1961,9 +1769,7 @@ fn trace_records_strongman_bypassing_protection() {
 }
 
 #[test]
-fn resolver_rejects_night_resolution_strongman_cause_as_target_state_block_before_night_resolution()
-{
-    let golden = load_golden("strongman_pierces_bulletproof.json");
+fn pack_validation_rejects_night_resolution_strongman_cause_as_target_state_block() {
     let mut pack = load_pack();
     let bulletproof = pack
         .night_resolution
@@ -1975,69 +1781,42 @@ fn resolver_rejects_night_resolution_strongman_cause_as_target_state_block_befor
         .retain(|cause| cause != "strongman_kill");
     bulletproof.blocks.push("strongman_kill".to_string());
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("Strongman cause classified as target-state block must not resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution target-state save policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("strongman bypass cause `strongman_kill` must be classified in bypasses"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.target_state_save_policy.bulletproof.blocks",
+        "strongman bypass cause `strongman_kill` must be classified in bypasses",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_target_state_save_policy_before_night_resolution() {
-    let golden = load_golden("bulletproof_saves_kill.json");
+fn pack_validation_rejects_missing_night_resolution_target_state_save_policy() {
     let mut pack = load_pack();
     pack.night_resolution.target_state_save_policy.clear();
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing target-state save policy must not silently use generic saves");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution target-state save policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("target-state save `bulletproof` must classify every kill cause")
-            || message
-                .contains("target-state save `bulletproof_vest` must classify every kill cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.target_state_save_policy",
+        "explicit night_resolution policy must classify target-state saves",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_target_state_save_source_before_night_resolution() {
-    let golden = load_golden("bulletproof_saves_kill.json");
+fn pack_validation_rejects_missing_night_resolution_target_state_save_source() {
     let mut pack = load_pack();
     pack.night_resolution
         .target_state_save_policy
         .remove("bulletproof");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing target-state save source must not silently use generic saves");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution target-state save policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("target-state save `bulletproof` must classify every kill cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.target_state_save_policy",
+        "night_resolution target-state save `bulletproof` must classify every kill cause",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_target_state_save_policy_before_night_resolution() {
-    let golden = load_golden("bulletproof_saves_kill.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_target_state_save_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty save policy key",
             |pack| {
@@ -2049,6 +1828,7 @@ fn resolver_rejects_malformed_night_resolution_target_state_save_policy_before_n
                     },
                 );
             },
+            "night_resolution.target_state_save_policy",
             "target-state save tag must not be empty",
         ),
         (
@@ -2062,7 +1842,8 @@ fn resolver_rejects_malformed_night_resolution_target_state_save_policy_before_n
                     },
                 );
             },
-            "unknown target-state save `phase_armor`",
+            "night_resolution.target_state_save_policy.phase_armor",
+            "unknown night_resolution target-state save `phase_armor`",
         ),
         (
             "duplicate blocked kill cause",
@@ -2074,7 +1855,8 @@ fn resolver_rejects_malformed_night_resolution_target_state_save_policy_before_n
                     .expect("mafiascum declares bulletproof target-state save policy");
                 bulletproof.blocks.push("night_kill".to_string());
             },
-            "target-state save `bulletproof` blocks contains duplicate kill cause `night_kill`",
+            "night_resolution.target_state_save_policy.bulletproof.blocks",
+            "duplicate value `night_kill`",
         ),
         (
             "unknown blocked kill cause",
@@ -2086,7 +1868,8 @@ fn resolver_rejects_malformed_night_resolution_target_state_save_policy_before_n
                     .blocks
                     .push("missing_kill_cause".to_string());
             },
-            "target-state save `bulletproof` blocks references unknown kill cause `missing_kill_cause`",
+            "night_resolution.target_state_save_policy.bulletproof.blocks",
+            "unknown night_resolution kill cause `missing_kill_cause`",
         ),
         (
             "blocked and bypassed kill cause",
@@ -2098,24 +1881,15 @@ fn resolver_rejects_malformed_night_resolution_target_state_save_policy_before_n
                     .bypasses
                     .push("night_kill".to_string());
             },
-            "target-state save `bulletproof` kill cause `night_kill` cannot be both blocked and bypassed",
+            "night_resolution.target_state_save_policy.bulletproof",
+            "kill cause `night_kill` cannot be both blocked and bypassed",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed target-state save policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution target-state save policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
@@ -2160,7 +1934,7 @@ fn trace_records_redirect_edge_for_busdriver() {
         state: input.state,
         submissions: input.submissions,
         day_phase_inputs: input.day_phase_inputs,
-        pack: load_pack(),
+        pack: validated_pack(load_pack()),
         seed: input.seed,
         logical_time: 0,
     });
@@ -2198,7 +1972,7 @@ fn trace_records_mass_redirect_rotate_edges() {
         state: input.state,
         submissions: input.submissions,
         day_phase_inputs: input.day_phase_inputs,
-        pack: load_pack(),
+        pack: validated_pack(load_pack()),
         seed: input.seed,
         logical_time: 0,
     });
@@ -2244,7 +2018,7 @@ fn trace_records_redirect_loop_cap_truncation() {
         state: input.state,
         submissions: input.submissions,
         day_phase_inputs: input.day_phase_inputs,
-        pack,
+        pack: validated_pack(pack),
         seed: input.seed,
         logical_time: 0,
     });
@@ -2321,9 +2095,7 @@ fn trace_records_non_roleblockable_roleblocker_surviving_block() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_suppression_classifier_for_role_action_before_night_resolution(
-) {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_suppression_classifier_for_role_action() {
     let mut pack = load_pack();
     for trigger_id in ["pgo_shoots_visitor", "visitor_kill_marked_visitor"] {
         remove_night_resolution_generated_kill_trigger(&mut pack, trigger_id);
@@ -2335,24 +2107,15 @@ fn resolver_rejects_missing_night_resolution_suppression_classifier_for_role_act
         .suppresses
         .retain(|action_id| action_id != "redirect");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing role-action suppression classifier must not silently resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution suppression policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message
-            .contains("block source `roleblocker_block` does not classify night action `redirect`"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.suppression_policy.roleblocker_block",
+        "block source `roleblocker_block` does not classify night action `redirect`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_suppression_classifier_for_item_action_before_night_resolution(
-) {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_suppression_classifier_for_item_action() {
     let mut pack = load_pack();
     for trigger_id in ["pgo_shoots_visitor", "visitor_kill_marked_visitor"] {
         remove_night_resolution_generated_kill_trigger(&mut pack, trigger_id);
@@ -2364,46 +2127,30 @@ fn resolver_rejects_missing_night_resolution_suppression_classifier_for_item_act
         .suppresses
         .retain(|action_id| action_id != "single_use_item");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing item-action suppression classifier must not silently resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution suppression policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "block source `roleblocker_block` does not classify night action `single_use_item`"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.suppression_policy.roleblocker_block",
+        "block source `roleblocker_block` does not classify night action `single_use_item`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_suppression_source_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_missing_night_resolution_suppression_source() {
     let mut pack = load_pack();
     pack.night_resolution
         .suppression_policy
         .remove("roleblocker_block");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing suppression source policy must not silently allow roleblocks");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution suppression policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("Block action `roleblocker_block` must classify every night action"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.suppression_policy",
+        "night_resolution Block action `roleblocker_block` must classify every night action",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_suppression_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty block source key",
             |pack| {
@@ -2416,6 +2163,7 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     },
                 );
             },
+            "night_resolution.suppression_policy",
             "block source id must not be empty",
         ),
         (
@@ -2430,7 +2178,8 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     },
                 );
             },
-            "unknown block source `phase_block`",
+            "night_resolution.suppression_policy.phase_block",
+            "unknown night_resolution block source `phase_block`",
         ),
         (
             "missing scope",
@@ -2441,7 +2190,8 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .expect("roleblocker suppression policy")
                     .scope = None;
             },
-            "Block action `roleblocker_block` must declare suppression scope",
+            "night_resolution.suppression_policy.roleblocker_block.scope",
+            "night_resolution suppression policy must declare scope",
         ),
         (
             "empty suppressed action",
@@ -2453,7 +2203,8 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .suppresses
                     .push("".to_string());
             },
-            "block source `roleblocker_block` suppresses contains empty night action",
+            "night_resolution.suppression_policy.roleblocker_block.suppresses",
+            "night action id must not be empty",
         ),
         (
             "duplicate suppressed action",
@@ -2465,7 +2216,8 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .suppresses
                     .push("cop_investigate".to_string());
             },
-            "block source `roleblocker_block` suppresses contains duplicate night action `cop_investigate`",
+            "night_resolution.suppression_policy.roleblocker_block.suppresses",
+            "duplicate value `cop_investigate`",
         ),
         (
             "unknown suppressed action",
@@ -2477,7 +2229,8 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .suppresses
                     .push("missing_action".to_string());
             },
-            "block source `roleblocker_block` suppresses references unknown night action `missing_action`",
+            "night_resolution.suppression_policy.roleblocker_block.suppresses",
+            "unknown night_resolution night action `missing_action`",
         ),
         (
             "empty bypassed action",
@@ -2489,7 +2242,8 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .bypasses
                     .push("".to_string());
             },
-            "block source `roleblocker_block` bypasses contains empty night action",
+            "night_resolution.suppression_policy.roleblocker_block.bypasses",
+            "night action id must not be empty",
         ),
         (
             "duplicate bypassed action",
@@ -2501,7 +2255,8 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .bypasses
                     .push("roleblocker_block".to_string());
             },
-            "block source `roleblocker_block` bypasses contains duplicate night action `roleblocker_block`",
+            "night_resolution.suppression_policy.roleblocker_block.bypasses",
+            "duplicate value `roleblocker_block`",
         ),
         (
             "unknown bypassed action",
@@ -2513,7 +2268,8 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .bypasses
                     .push("missing_action".to_string());
             },
-            "block source `roleblocker_block` bypasses references unknown night action `missing_action`",
+            "night_resolution.suppression_policy.roleblocker_block.bypasses",
+            "unknown night_resolution night action `missing_action`",
         ),
         (
             "suppressed and bypassed action",
@@ -2525,6 +2281,7 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .bypasses
                     .push("cop_investigate".to_string());
             },
+            "night_resolution.suppression_policy.roleblocker_block",
             "night action `cop_investigate` cannot be both suppressed and bypassed",
         ),
         (
@@ -2542,6 +2299,7 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .suppresses
                     .push("strong_willed_investigate".to_string());
             },
+            "night_resolution.suppression_policy.roleblocker_block.suppresses",
             "suppression-immune action `strong_willed_investigate` must be classified in bypasses",
         ),
         (
@@ -2557,70 +2315,39 @@ fn resolver_rejects_malformed_night_resolution_suppression_policy_before_night_r
                     .retain(|action_id| action_id != "doctor_protect");
                 policy.bypasses.push("doctor_protect".to_string());
             },
+            "night_resolution.suppression_policy.roleblocker_block.bypasses",
             "roleblockable action `doctor_protect` must be classified in suppresses",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed suppression policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution suppression policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
 #[test]
-fn resolver_rejects_redirect_suppression_without_block_precedence_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_redirect_suppression_without_block_precedence() {
     let mut pack = load_pack();
     remove_block_precedence_before(&mut pack, IrAbility::Redirect);
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("Redirect suppression without Block precedence must not resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution suppression policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("suppresses action `bus_driver_swap`"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("requires Block precedence before suppressed ability `Redirect`"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.precedence",
+        "night_resolution suppression policy requires Block precedence before suppressed ability `Redirect`",
     );
 }
 
 #[test]
-fn resolver_rejects_protect_suppression_without_block_precedence_before_night_resolution() {
-    let golden = load_golden("kill_vs_doctor.json");
+fn pack_validation_rejects_protect_suppression_without_block_precedence() {
     let mut pack = load_pack();
     remove_all_precedence_before(&mut pack, IrAbility::Protect);
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("Protect suppression without Block precedence must not resolve");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution suppression policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("suppresses action `babysit`"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("requires Block precedence before suppressed ability `Protect`"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.precedence",
+        "night_resolution suppression policy requires Block precedence before suppressed ability `Protect`",
     );
 }
 
@@ -2772,8 +2499,7 @@ fn trace_records_catastrophic_roleblock_suppressing_multiple_actions() {
 }
 
 #[test]
-fn resolver_rejects_invalid_pack_precedence_before_night_resolution() {
-    let golden = load_golden("roleblock_stops_action.json");
+fn pack_validation_rejects_invalid_pack_precedence() {
     let mut pack = load_pack();
     pack.precedence = vec![
         PrecedenceRule {
@@ -2800,20 +2526,10 @@ fn resolver_rejects_invalid_pack_precedence_before_night_resolution() {
         },
     ];
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("invalid precedence must not fall back to a hardcoded night order");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid pack precedence for night resolution"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("precedence cycle prevents deriving night ability order"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "precedence",
+        "precedence cycle prevents deriving night ability order",
     );
 }
 
@@ -2941,8 +2657,7 @@ fn trace_records_martyr_intercept() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_martyr_action_bucket_before_night_resolution() {
-    let golden = load_golden("martyr_intercept.json");
+fn pack_validation_rejects_missing_night_resolution_martyr_action_bucket() {
     let mut pack = load_pack();
     pack.night_resolution
         .martyr_action_ids
@@ -2951,16 +2666,10 @@ fn resolver_rejects_missing_night_resolution_martyr_action_bucket_before_night_r
         .protect_action_ids
         .push("martyr_protect".to_string());
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("Martyr in the generic protect bucket must not skip intercept policy");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution martyr action policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("Martyr Protect action `martyr_protect` must be declared"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.protect_action_ids",
+        "night_resolution action `martyr_protect` must be a night/any Protect without Bodyguard/Martyr/Cpr action",
     );
 }
 
@@ -3013,53 +2722,34 @@ fn night_resolution_cpr_harm_cause_is_pack_owned() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_cpr_harm_cause_policy_before_night_resolution() {
-    let golden = load_golden("cpr_kills_unattacked_target.json");
+fn pack_validation_rejects_missing_night_resolution_cpr_harm_cause_policy() {
     let mut pack = load_pack();
     pack.night_resolution.cpr_harm_cause_policy.clear();
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing CPR harm cause policy must not silently use action ids");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution CPR harm cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("CPR action `cpr_protect` must declare harm cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.cpr_harm_cause_policy",
+        "explicit night_resolution policy must classify CPR harm causes",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_cpr_harm_source_before_night_resolution() {
-    let golden = load_golden("cpr_kills_unattacked_target.json");
+fn pack_validation_rejects_missing_night_resolution_cpr_harm_source() {
     let mut pack = load_pack();
     pack.night_resolution
         .cpr_harm_cause_policy
         .remove("cpr_protect");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing CPR harm source policy must not silently use action ids");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution CPR harm cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("CPR action `cpr_protect` must declare harm cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.cpr_harm_cause_policy",
+        "night_resolution CPR action `cpr_protect` must declare harm cause",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_cpr_harm_cause_policy_before_night_resolution() {
-    let golden = load_golden("cpr_kills_unattacked_target.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_cpr_harm_cause_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty CPR source key",
             |pack| {
@@ -3067,7 +2757,8 @@ fn resolver_rejects_malformed_night_resolution_cpr_harm_cause_policy_before_nigh
                     .cpr_harm_cause_policy
                     .insert("".to_string(), "custom_cpr_harm".to_string());
             },
-            "CPR source id must not be empty",
+            "night_resolution.cpr_harm_cause_policy.",
+            "unknown night_resolution CPR source ``",
         ),
         (
             "unknown CPR source key",
@@ -3076,7 +2767,8 @@ fn resolver_rejects_malformed_night_resolution_cpr_harm_cause_policy_before_nigh
                     .cpr_harm_cause_policy
                     .insert("phase_cpr".to_string(), "custom_cpr_harm".to_string());
             },
-            "unknown CPR source `phase_cpr`",
+            "night_resolution.cpr_harm_cause_policy.phase_cpr",
+            "unknown night_resolution CPR source `phase_cpr`",
         ),
         (
             "empty CPR harm cause",
@@ -3085,7 +2777,8 @@ fn resolver_rejects_malformed_night_resolution_cpr_harm_cause_policy_before_nigh
                     .cpr_harm_cause_policy
                     .insert("cpr_protect".to_string(), "".to_string());
             },
-            "CPR action `cpr_protect` must declare non-empty harm cause",
+            "night_resolution.cpr_harm_cause_policy.cpr_protect",
+            "night_resolution CPR harm cause must not be empty",
         ),
         (
             "direct kill cause reused",
@@ -3094,30 +2787,20 @@ fn resolver_rejects_malformed_night_resolution_cpr_harm_cause_policy_before_nigh
                     .cpr_harm_cause_policy
                     .insert("cpr_protect".to_string(), "factional_kill".to_string());
             },
-            "CPR action `cpr_protect` cause `factional_kill` must not reuse a direct kill cause",
+            "night_resolution.cpr_harm_cause_policy.cpr_protect",
+            "night_resolution CPR harm cause `factional_kill` must not reuse a direct kill cause",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed CPR harm cause policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution CPR harm cause policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_cpr_action_bucket_before_night_resolution() {
-    let golden = load_golden("cpr_kills_unattacked_target.json");
+fn pack_validation_rejects_missing_night_resolution_cpr_action_bucket() {
     let mut pack = load_pack();
     pack.night_resolution
         .cpr_action_ids
@@ -3129,16 +2812,10 @@ fn resolver_rejects_missing_night_resolution_cpr_action_bucket_before_night_reso
         .kill_cause_ids
         .push("cpr_protect".to_string());
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("CPR in the generic protect bucket must not skip CPR harm policy");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution CPR action policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("CPR Protect+Kill action `cpr_protect` must be declared"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.protect_action_ids",
+        "night_resolution action `cpr_protect` must be a night/any Protect without Bodyguard/Martyr/Cpr action",
     );
 }
 
@@ -3291,8 +2968,7 @@ fn night_resolution_babysitter_dependency_cause_is_pack_owned() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_babysitter_protect_bucket_before_night_resolution() {
-    let golden = load_golden("babysitter_protects_then_dooms_ward.json");
+fn pack_validation_rejects_missing_night_resolution_babysitter_protect_bucket() {
     let mut pack = load_pack();
     pack.night_resolution
         .protect_action_ids
@@ -3301,70 +2977,42 @@ fn resolver_rejects_missing_night_resolution_babysitter_protect_bucket_before_ni
         .bodyguard_action_ids
         .push("babysit".to_string());
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack)).expect_err(
-        "Babysitter in a specialized protect bucket must not skip guard dependency ownership",
-    );
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution babysitter action policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("Babysitter Protect action `babysit` must be declared"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.bodyguard_action_ids",
+        "night_resolution action `babysit` must be a night/any Protect with Bodyguard action",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_guard_dependency_cause_policy_before_night_resolution()
-{
-    let golden = load_golden("babysitter_protects_then_dooms_ward.json");
+fn pack_validation_rejects_missing_night_resolution_guard_dependency_cause_policy() {
     let mut pack = load_pack();
     pack.night_resolution.guard_dependency_cause_policy.clear();
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing guard dependency cause policy must not silently use action ids");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution guard dependency cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("guard dependency action `babysit` must declare dependency cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.guard_dependency_cause_policy",
+        "explicit night_resolution policy must classify guard dependency causes",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_guard_dependency_source_before_night_resolution() {
-    let golden = load_golden("babysitter_protects_then_dooms_ward.json");
+fn pack_validation_rejects_missing_night_resolution_guard_dependency_source() {
     let mut pack = load_pack();
     pack.night_resolution
         .guard_dependency_cause_policy
         .remove("babysit");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing guard dependency source policy must not silently use action ids");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution guard dependency cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("guard dependency action `babysit` must declare dependency cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.guard_dependency_cause_policy",
+        "night_resolution guard dependency action `babysit` must declare dependency cause",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_guard_dependency_cause_policy_before_night_resolution(
-) {
-    let golden = load_golden("babysitter_protects_then_dooms_ward.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_guard_dependency_cause_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty guard dependency source key",
             |pack| {
@@ -3372,7 +3020,8 @@ fn resolver_rejects_malformed_night_resolution_guard_dependency_cause_policy_bef
                     .guard_dependency_cause_policy
                     .insert("".to_string(), "custom_guard_dependency".to_string());
             },
-            "guard dependency source id must not be empty",
+            "night_resolution.guard_dependency_cause_policy.",
+            "unknown night_resolution guard dependency source ``",
         ),
         (
             "unknown guard dependency source key",
@@ -3384,7 +3033,8 @@ fn resolver_rejects_malformed_night_resolution_guard_dependency_cause_policy_bef
                         "custom_guard_dependency".to_string(),
                     );
             },
-            "unknown guard dependency source `phase_guard`",
+            "night_resolution.guard_dependency_cause_policy.phase_guard",
+            "unknown night_resolution guard dependency source `phase_guard`",
         ),
         (
             "empty guard dependency cause",
@@ -3393,7 +3043,8 @@ fn resolver_rejects_malformed_night_resolution_guard_dependency_cause_policy_bef
                     .guard_dependency_cause_policy
                     .insert("babysit".to_string(), "".to_string());
             },
-            "guard dependency action `babysit` must declare non-empty dependency cause",
+            "night_resolution.guard_dependency_cause_policy.babysit",
+            "night_resolution guard dependency cause must not be empty",
         ),
         (
             "direct kill cause reused",
@@ -3402,24 +3053,15 @@ fn resolver_rejects_malformed_night_resolution_guard_dependency_cause_policy_bef
                     .guard_dependency_cause_policy
                     .insert("babysit".to_string(), "factional_kill".to_string());
             },
-            "guard dependency action `babysit` cause `factional_kill` must not reuse a direct kill cause",
+            "night_resolution.guard_dependency_cause_policy.babysit",
+            "night_resolution guard dependency cause `factional_kill` must not reuse a direct kill cause",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed guard dependency cause policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution guard dependency cause policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
@@ -3494,45 +3136,26 @@ fn trace_records_babysitter_dependency_stack_with_direct_ward_death() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_kill_stacking_policy_before_night_resolution() {
-    let golden = load_golden("babysitter_dependency_stacks_with_direct_ward_death.json");
+fn pack_validation_rejects_missing_night_resolution_kill_stacking_policy() {
     let mut pack = load_pack();
     pack.night_resolution.kill_stacking = None;
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack)).expect_err(
-        "missing explicit night-resolution kill stacking policy must not silently unstack kills",
-    );
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution kill stacking policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("requires kill_stacking AggregateAttackers"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.kill_stacking",
+        "explicit night_resolution policy requires kill_stacking AggregateAttackers",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_target_state_save_catalog_before_night_resolution() {
-    let golden = load_golden("bulletproof_saves_kill.json");
+fn pack_validation_rejects_missing_night_resolution_target_state_save_catalog() {
     let mut pack = load_pack();
     pack.night_resolution.target_state_save_tags.clear();
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing target-state save catalog must not silently use hardcoded tags");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution target-state save catalog"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("must declare target-state save tags"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.target_state_save_tags",
+        "explicit night_resolution policy must declare target-state save tags",
     );
 }
 
@@ -3675,55 +3298,34 @@ fn night_resolution_commute_gate_uses_target_state_gate_policy() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_target_state_gate_policy_before_night_resolution() {
-    let golden = load_golden("commuter_avoids_targeting.json");
+fn pack_validation_rejects_missing_night_resolution_target_state_gate_policy() {
     let mut pack = load_pack();
     pack.night_resolution.target_state_gate_policy.clear();
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing target-state gate policy must not silently use hardcoded gates");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution target-state gate policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("target-state gate `commuted` must classify blocked abilities")
-            || message.contains("target-state gate `untargetable` must classify blocked abilities")
-            || message.contains("target-state gate `ascetic` must classify blocked abilities"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.target_state_gate_policy",
+        "explicit night_resolution policy must classify target-state gates",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_target_state_gate_source_before_night_resolution() {
-    let golden = load_golden("commuter_avoids_targeting.json");
+fn pack_validation_rejects_missing_night_resolution_target_state_gate_source() {
     let mut pack = load_pack();
     pack.night_resolution
         .target_state_gate_policy
         .remove("commuted");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing target-state gate source must not silently use hardcoded gates");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution target-state gate policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("target-state gate `commuted` must classify blocked abilities"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.target_state_gate_policy",
+        "night_resolution target-state gate `commuted` must classify blocked abilities",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_target_state_gate_policy_before_night_resolution() {
-    let golden = load_golden("commuter_avoids_targeting.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_target_state_gate_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty gate policy key",
             |pack| {
@@ -3734,6 +3336,7 @@ fn resolver_rejects_malformed_night_resolution_target_state_gate_policy_before_n
                     },
                 );
             },
+            "night_resolution.target_state_gate_policy",
             "target-state gate tag must not be empty",
         ),
         (
@@ -3746,7 +3349,8 @@ fn resolver_rejects_malformed_night_resolution_target_state_gate_policy_before_n
                     },
                 );
             },
-            "unknown target-state gate `phase_shifted`",
+            "night_resolution.target_state_gate_policy.phase_shifted",
+            "unknown night_resolution target-state gate `phase_shifted`",
         ),
         (
             "duplicate blocked ability",
@@ -3757,7 +3361,8 @@ fn resolver_rejects_malformed_night_resolution_target_state_gate_policy_before_n
                     .expect("mafiascum declares commuted target-state gate policy")
                     .blocks = vec![IrAbility::Kill, IrAbility::Kill];
             },
-            "target-state gate `commuted` contains duplicate blocked ability `Kill`",
+            "night_resolution.target_state_gate_policy.commuted.blocks",
+            "duplicate blocked ability `Kill`",
         ),
         (
             "unsupported blocked ability",
@@ -3768,47 +3373,27 @@ fn resolver_rejects_malformed_night_resolution_target_state_gate_policy_before_n
                     .expect("mafiascum declares commuted target-state gate policy")
                     .blocks = vec![IrAbility::Block];
             },
-            "target-state gate `commuted` only supports Kill, Protect, Investigate, Convert, or Mark, got `Block`",
+            "night_resolution.target_state_gate_policy.commuted.blocks",
+            "target-state gates only support Kill, Protect, Investigate, Convert, or Mark, got `Block`",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed target-state gate policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution target-state gate policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_target_state_gate_catalog_before_night_resolution() {
-    let golden = load_golden("commuter_avoids_targeting.json");
+fn pack_validation_rejects_missing_night_resolution_target_state_gate_catalog() {
     let mut pack = load_pack();
     pack.night_resolution.target_state_gate_tags.clear();
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing target-state gate catalog must not silently use hardcoded tags");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution target-state gate catalog"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("must declare target-state gate tags"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.target_state_gate_tags",
+        "explicit night_resolution policy must declare target-state gate tags",
     );
 }
 
@@ -4177,27 +3762,16 @@ fn golden_ninja_hidden_from_motion() {
 }
 
 #[test]
-fn resolver_rejects_missing_ninja_visibility_policy_before_night_resolution() {
-    let golden = load_golden("ninja_hidden_from_watch_motion.json");
+fn pack_validation_rejects_missing_ninja_visibility_policy() {
     let mut pack = load_pack();
     pack.visibility.remove(&IrAbility::Investigate);
     pack.visibility_families
         .retain(|family| format!("{family:?}") != "PrivateInvestigationResults");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing Ninja visibility policy must not reveal visits");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid visibility policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("visibility families require Investigate visibility policy"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "visibility.Investigate",
+        "investigation_overrides require Investigate visibility policy",
     );
 }
 
@@ -5130,48 +4704,26 @@ fn trace_records_conversion_pending_death_policy() {
 }
 
 #[test]
-fn resolver_rejects_missing_conversion_policy_before_night_resolution() {
-    let golden = load_golden("conversion_blocked_on_dead_target.json");
+fn pack_validation_rejects_missing_conversion_dead_target_policy() {
     let mut pack = load_pack();
     pack.conversion_policy.on_dead_target = None;
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing conversion policy must not silently use resolver timing");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid conversion policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("on_dead_target Block"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "conversion_policy.on_dead_target",
+        "packs with Convert actions must declare on_dead_target Block",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_conversion_pending_death_policy_before_night_resolution() {
-    let golden = load_golden("conversion_blocked_on_pending_death.json");
+fn pack_validation_rejects_missing_conversion_pending_death_policy() {
     let mut pack = load_pack();
     pack.conversion_policy.on_pending_death = None;
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing conversion pending-death policy must not silently resolve");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid conversion policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("on_pending_death Block"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "conversion_policy.on_pending_death",
+        "packs with Convert actions must declare on_pending_death Block",
     );
 }
 
@@ -6282,28 +5834,16 @@ fn golden_super_saint_retaliates_on_lynch() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_day_generated_kill_cause_policy_before_trigger_fixpoint(
-) {
-    let golden = load_golden("super_saint_retaliates_on_lynch.json");
+fn pack_validation_rejects_missing_night_resolution_day_generated_kill_cause_policy() {
     let mut pack = load_pack();
     pack.night_resolution
         .generated_kill_cause_policy
         .remove("super_saint_retaliates");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing day generated kill cause policy must not use trigger modifiers");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution generated kill cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("generated kill trigger `super_saint_retaliates` must declare generated kill cause policy"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.generated_kill_cause_policy",
+        "night_resolution generated kill trigger `super_saint_retaliates` must declare generated kill cause policy",
     );
 }
 
@@ -6386,7 +5926,7 @@ fn trace_records_trigger_loop_cap_for_cyclic_retaliation_fixture() {
         state: input.state,
         submissions: input.submissions,
         day_phase_inputs: input.day_phase_inputs,
-        pack,
+        pack: validated_pack(pack),
         seed: input.seed,
         logical_time: 0,
     });
@@ -6472,36 +6012,21 @@ fn trace_records_visitor_kill_actor_filter() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_night_generated_kill_cause_policy_before_trigger_fixpoint(
-) {
-    let golden = load_golden("pgo_shoots_visitor.json");
+fn pack_validation_rejects_missing_night_resolution_night_generated_kill_cause_policy() {
     let mut pack = load_pack();
     pack.night_resolution
         .generated_kill_cause_policy
         .remove("pgo_shoots_visitor");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing night generated kill cause policy must not use trigger modifiers");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution generated kill cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "generated kill trigger `pgo_shoots_visitor` must declare generated kill cause policy"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.generated_kill_cause_policy",
+        "night_resolution generated kill trigger `pgo_shoots_visitor` must declare generated kill cause policy",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_generated_kill_shape_before_trigger_fixpoint() {
-    let golden = load_golden("pgo_shoots_visitor.json");
+fn pack_validation_rejects_malformed_night_resolution_generated_kill_shape() {
     let mut pack = load_pack();
     pack.night_resolution
         .generated_kill_cause_policy
@@ -6509,28 +6034,16 @@ fn resolver_rejects_malformed_night_resolution_generated_kill_shape_before_trigg
         .expect("pgo generated kill policy")
         .on = Some(TriggerOn::Ability(IrAbility::Kill));
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("mismatched generated kill shape must not enter trigger fixpoint");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution generated kill cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("generated kill trigger `pgo_shoots_visitor` on must match trigger rule"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.generated_kill_cause_policy.pgo_shoots_visitor.on",
+        "night_resolution generated kill trigger `pgo_shoots_visitor` on must match trigger rule",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_generated_kill_cause_policy_before_trigger_fixpoint()
-{
-    let golden = load_golden("pgo_shoots_visitor.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_generated_kill_cause_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty generated kill trigger key",
             |pack| {
@@ -6544,7 +6057,8 @@ fn resolver_rejects_malformed_night_resolution_generated_kill_cause_policy_befor
                     },
                 );
             },
-            "generated kill trigger id must not be empty",
+            "night_resolution.generated_kill_cause_policy.",
+            "unknown night_resolution generated kill trigger ``",
         ),
         (
             "unknown generated kill trigger key",
@@ -6559,7 +6073,8 @@ fn resolver_rejects_malformed_night_resolution_generated_kill_cause_policy_befor
                     },
                 );
             },
-            "unknown generated kill trigger `phantom_generated_kill`",
+            "night_resolution.generated_kill_cause_policy.phantom_generated_kill",
+            "unknown night_resolution generated kill trigger `phantom_generated_kill`",
         ),
         (
             "Strongman flag mismatch",
@@ -6570,55 +6085,35 @@ fn resolver_rejects_malformed_night_resolution_generated_kill_cause_policy_befor
                     .expect("pgo generated kill policy")
                     .strongman_bypasses_protect = true;
             },
-            "generated kill trigger `pgo_shoots_visitor` strongman_bypasses_protect must match produced Strongman modifier",
+            "night_resolution.generated_kill_cause_policy.pgo_shoots_visitor.strongman_bypasses_protect",
+            "night_resolution generated kill trigger `pgo_shoots_visitor` strongman_bypasses_protect must match produced Strongman modifier",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed generated kill cause policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution generated kill cause policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_trigger_fixpoint_policy_source_before_trigger_fixpoint(
-) {
-    let golden = load_golden("pgo_shoots_visitor.json");
+fn pack_validation_rejects_missing_night_resolution_trigger_fixpoint_policy_source() {
     let mut pack = load_pack();
     pack.night_resolution
         .trigger_fixpoint_policy
         .remove("pgo_shoots_visitor");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing trigger fixpoint source policy must not silently skip trigger policy");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution trigger fixpoint policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "generated kill trigger `pgo_shoots_visitor` must declare trigger fixpoint policy"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.trigger_fixpoint_policy",
+        "night_resolution generated kill trigger `pgo_shoots_visitor` must declare trigger fixpoint policy",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_trigger_fixpoint_policy_before_trigger_fixpoint() {
-    let golden = load_golden("pgo_shoots_visitor.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_trigger_fixpoint_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty trigger fixpoint source key",
             |pack| {
@@ -6632,7 +6127,8 @@ fn resolver_rejects_malformed_night_resolution_trigger_fixpoint_policy_before_tr
                     },
                 );
             },
-            "trigger fixpoint source id must not be empty",
+            "night_resolution.trigger_fixpoint_policy.",
+            "unknown night_resolution trigger fixpoint source ``",
         ),
         (
             "unknown trigger fixpoint source key",
@@ -6647,7 +6143,8 @@ fn resolver_rejects_malformed_night_resolution_trigger_fixpoint_policy_before_tr
                     },
                 );
             },
-            "unknown trigger fixpoint source `phantom_trigger_fixpoint`",
+            "night_resolution.trigger_fixpoint_policy.phantom_trigger_fixpoint",
+            "unknown night_resolution trigger fixpoint source `phantom_trigger_fixpoint`",
         ),
         (
             "produced kill re-entry disabled",
@@ -6658,31 +6155,20 @@ fn resolver_rejects_malformed_night_resolution_trigger_fixpoint_policy_before_tr
                     .expect("pgo trigger fixpoint policy")
                     .produced_kill_reenters = false;
             },
-            "generated kill trigger `pgo_shoots_visitor` must declare produced_kill_reenters true",
+            "night_resolution.trigger_fixpoint_policy.pgo_shoots_visitor.produced_kill_reenters",
+            "night_resolution generated kill trigger `pgo_shoots_visitor` must declare produced_kill_reenters true",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed trigger fixpoint policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution trigger fixpoint policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_generated_kill_protection_ownership_before_trigger_fixpoint(
-) {
-    let golden = load_golden("pgo_shoots_visitor.json");
+fn pack_validation_rejects_missing_night_resolution_generated_kill_protection_ownership() {
     let mut pack = load_pack();
     pack.night_resolution
         .protection_cause_policy
@@ -6691,25 +6177,15 @@ fn resolver_rejects_missing_night_resolution_generated_kill_protection_ownership
         .blocks
         .retain(|cause| cause != "pgo_shoots_visitor");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing generated-kill protection ownership must not enter trigger fixpoint");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution generated kill ownership"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "generated kill trigger `pgo_shoots_visitor` is not owned by protection source `doctor_protect`"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.generated_kill_ownership.pgo_shoots_visitor",
+        "generated kill trigger `pgo_shoots_visitor` is not owned by protection source `doctor_protect`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_generated_kill_target_state_ownership_before_trigger_fixpoint(
-) {
-    let golden = load_golden("pgo_shoots_visitor.json");
+fn pack_validation_rejects_missing_night_resolution_generated_kill_target_state_ownership() {
     let mut pack = load_pack();
     pack.night_resolution
         .target_state_save_policy
@@ -6718,26 +6194,15 @@ fn resolver_rejects_missing_night_resolution_generated_kill_target_state_ownersh
         .blocks
         .retain(|cause| cause != "pgo_shoots_visitor");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack)).expect_err(
-        "missing generated-kill target-state ownership must not enter trigger fixpoint",
-    );
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution generated kill ownership"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "generated kill trigger `pgo_shoots_visitor` is not owned by target-state save `bulletproof`"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.generated_kill_ownership.pgo_shoots_visitor",
+        "generated kill trigger `pgo_shoots_visitor` is not owned by target-state save `bulletproof`",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_generated_kill_suppression_ownership_before_trigger_fixpoint(
-) {
-    let golden = load_golden("pgo_shoots_visitor.json");
+fn pack_validation_rejects_missing_night_resolution_generated_kill_suppression_ownership() {
     let mut pack = load_pack();
     pack.night_resolution
         .suppression_policy
@@ -6746,18 +6211,10 @@ fn resolver_rejects_missing_night_resolution_generated_kill_suppression_ownershi
         .suppresses
         .retain(|action_id| action_id != "visit");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing generated-kill suppression ownership must not enter trigger fixpoint");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution generated kill ownership"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "generated kill trigger `pgo_shoots_visitor` feeder action `visit` is not owned by block source `roleblocker_block`"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.generated_kill_ownership.pgo_shoots_visitor",
+        "generated kill trigger `pgo_shoots_visitor` feeder action `visit` is not owned by block source `roleblocker_block`",
     );
 }
 
@@ -6912,55 +6369,34 @@ fn night_resolution_bodyguard_intercept_cause_is_pack_owned() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_intercept_cause_policy_before_night_resolution() {
-    let golden = load_golden("pgo_bodyguard_intercept.json");
+fn pack_validation_rejects_missing_night_resolution_intercept_cause_policy() {
     let mut pack = load_pack();
     pack.night_resolution.intercept_cause_policy.clear();
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing intercept cause policy must not silently drop intercept deaths");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution intercept cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("intercept action `bodyguard` must declare intercept cause")
-            || message.contains("intercept action `martyr_protect` must declare intercept cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.intercept_cause_policy",
+        "explicit night_resolution policy must classify intercept causes",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_intercept_source_before_night_resolution() {
-    let golden = load_golden("pgo_bodyguard_intercept.json");
+fn pack_validation_rejects_missing_night_resolution_intercept_source() {
     let mut pack = load_pack();
     pack.night_resolution
         .intercept_cause_policy
         .remove("bodyguard");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack)).expect_err(
-        "missing bodyguard intercept cause policy must not silently drop intercept deaths",
-    );
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution intercept cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("intercept action `bodyguard` must declare intercept cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.intercept_cause_policy",
+        "night_resolution intercept action `bodyguard` must declare intercept cause",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_intercept_cause_policy_before_night_resolution() {
-    let golden = load_golden("pgo_bodyguard_intercept.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_intercept_cause_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty intercept source key",
             |pack| {
@@ -6968,16 +6404,19 @@ fn resolver_rejects_malformed_night_resolution_intercept_cause_policy_before_nig
                     .intercept_cause_policy
                     .insert("".to_string(), "custom_intercept".to_string());
             },
-            "intercept source id must not be empty",
+            "night_resolution.intercept_cause_policy.",
+            "unknown night_resolution intercept source ``",
         ),
         (
             "unknown intercept source key",
             |pack| {
-                pack.night_resolution
-                    .intercept_cause_policy
-                    .insert("phase_intercept".to_string(), "custom_intercept".to_string());
+                pack.night_resolution.intercept_cause_policy.insert(
+                    "phase_intercept".to_string(),
+                    "custom_intercept".to_string(),
+                );
             },
-            "unknown intercept source `phase_intercept`",
+            "night_resolution.intercept_cause_policy.phase_intercept",
+            "unknown night_resolution intercept source `phase_intercept`",
         ),
         (
             "empty intercept cause",
@@ -6986,7 +6425,8 @@ fn resolver_rejects_malformed_night_resolution_intercept_cause_policy_before_nig
                     .intercept_cause_policy
                     .insert("bodyguard".to_string(), "".to_string());
             },
-            "intercept action `bodyguard` must declare non-empty intercept cause",
+            "night_resolution.intercept_cause_policy.bodyguard",
+            "night_resolution intercept cause must not be empty",
         ),
         (
             "direct kill cause reused",
@@ -6995,24 +6435,15 @@ fn resolver_rejects_malformed_night_resolution_intercept_cause_policy_before_nig
                     .intercept_cause_policy
                     .insert("bodyguard".to_string(), "factional_kill".to_string());
             },
-            "intercept action `bodyguard` cause `factional_kill` must not reuse a direct kill cause",
+            "night_resolution.intercept_cause_policy.bodyguard",
+            "night_resolution intercept cause `factional_kill` must not reuse a direct kill cause",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed intercept cause policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution intercept cause policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
@@ -7245,37 +6676,22 @@ fn golden_hunter_retaliates_on_death() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_chosen_retaliation_cause_policy_before_retaliation() {
-    let golden = load_golden("hunter_retaliates_on_death.json");
+fn pack_validation_rejects_missing_night_resolution_chosen_retaliation_cause_policy() {
     let mut pack = load_pack();
     pack.night_resolution
         .chosen_retaliation_cause_policy
         .remove("hunter_retaliate");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing chosen retaliation cause policy must not consume folded state");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution chosen retaliation cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains(
-            "Retaliate action `hunter_retaliate` must declare chosen retaliation cause policy"
-        ),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.chosen_retaliation_cause_policy",
+        "night_resolution Retaliate action `hunter_retaliate` must declare chosen retaliation cause policy",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_chosen_retaliation_cause_policy_before_retaliation()
-{
-    let golden = load_golden("hunter_retaliates_on_death.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_chosen_retaliation_cause_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty Retaliate source key",
             |pack| {
@@ -7289,7 +6705,8 @@ fn resolver_rejects_malformed_night_resolution_chosen_retaliation_cause_policy_b
                     },
                 );
             },
-            "Retaliate source id must not be empty",
+            "night_resolution.chosen_retaliation_cause_policy.",
+            "unknown night_resolution Retaliate action ``",
         ),
         (
             "unknown Retaliate source key",
@@ -7304,7 +6721,8 @@ fn resolver_rejects_malformed_night_resolution_chosen_retaliation_cause_policy_b
                     },
                 );
             },
-            "unknown Retaliate action `phase_retaliate`",
+            "night_resolution.chosen_retaliation_cause_policy.phase_retaliate",
+            "unknown night_resolution Retaliate action `phase_retaliate`",
         ),
         (
             "Strongman flag mismatch",
@@ -7315,24 +6733,15 @@ fn resolver_rejects_malformed_night_resolution_chosen_retaliation_cause_policy_b
                     .expect("mafiascum declares hunter retaliation policy")
                     .strongman_bypasses_protect = true;
             },
-            "Retaliate action `hunter_retaliate` strongman_bypasses_protect must match Strongman modifier",
+            "night_resolution.chosen_retaliation_cause_policy.hunter_retaliate.strongman_bypasses_protect",
+            "night_resolution Retaliate action `hunter_retaliate` strongman_bypasses_protect must match Strongman modifier",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed chosen retaliation cause policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution chosen retaliation cause policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
@@ -7395,55 +6804,34 @@ fn night_resolution_hider_dependency_cause_is_pack_owned() {
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_hide_dependency_cause_policy_before_night_resolution()
-{
-    let golden = load_golden("hider_dies_when_host_dies.json");
+fn pack_validation_rejects_missing_night_resolution_hide_dependency_cause_policy() {
     let mut pack = load_pack();
     pack.night_resolution.hide_dependency_cause_policy.clear();
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing hide dependency cause policy must not silently use action ids");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid night_resolution hide dependency cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("hide dependency action `hide` must declare dependency cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.hide_dependency_cause_policy",
+        "explicit night_resolution policy must classify hide dependency causes",
     );
 }
 
 #[test]
-fn resolver_rejects_missing_night_resolution_hide_dependency_source_before_night_resolution() {
-    let golden = load_golden("hider_dies_when_host_dies.json");
+fn pack_validation_rejects_missing_night_resolution_hide_dependency_source() {
     let mut pack = load_pack();
     pack.night_resolution
         .hide_dependency_cause_policy
         .remove("hide");
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("missing hide dependency source policy must not silently use action ids");
-    let message = caught_panic_message(panic);
-    assert!(
-        message.contains("invalid night_resolution hide dependency cause policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("hide dependency action `hide` must declare dependency cause"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "night_resolution.hide_dependency_cause_policy",
+        "night_resolution hide dependency action `hide` must declare dependency cause",
     );
 }
 
 #[test]
-fn resolver_rejects_malformed_night_resolution_hide_dependency_cause_policy_before_night_resolution(
-) {
-    let golden = load_golden("hider_dies_when_host_dies.json");
-    let cases: Vec<InvalidPackCase> = vec![
+fn pack_validation_rejects_malformed_night_resolution_hide_dependency_cause_policy() {
+    let cases: Vec<InvalidPackPolicyCase> = vec![
         (
             "empty hide dependency source key",
             |pack| {
@@ -7451,7 +6839,8 @@ fn resolver_rejects_malformed_night_resolution_hide_dependency_cause_policy_befo
                     .hide_dependency_cause_policy
                     .insert("".to_string(), "custom_hide_dependency".to_string());
             },
-            "hide dependency source id must not be empty",
+            "night_resolution.hide_dependency_cause_policy.",
+            "unknown night_resolution hide dependency source ``",
         ),
         (
             "unknown hide dependency source key",
@@ -7461,7 +6850,8 @@ fn resolver_rejects_malformed_night_resolution_hide_dependency_cause_policy_befo
                     "custom_hide_dependency".to_string(),
                 );
             },
-            "unknown hide dependency source `phase_hide`",
+            "night_resolution.hide_dependency_cause_policy.phase_hide",
+            "unknown night_resolution hide dependency source `phase_hide`",
         ),
         (
             "empty hide dependency cause",
@@ -7470,7 +6860,8 @@ fn resolver_rejects_malformed_night_resolution_hide_dependency_cause_policy_befo
                     .hide_dependency_cause_policy
                     .insert("hide".to_string(), "".to_string());
             },
-            "hide dependency action `hide` must declare non-empty dependency cause",
+            "night_resolution.hide_dependency_cause_policy.hide",
+            "night_resolution hide dependency cause must not be empty",
         ),
         (
             "direct kill cause reused",
@@ -7479,24 +6870,15 @@ fn resolver_rejects_malformed_night_resolution_hide_dependency_cause_policy_befo
                     .hide_dependency_cause_policy
                     .insert("hide".to_string(), "factional_kill".to_string());
             },
-            "hide dependency action `hide` cause `factional_kill` must not reuse a direct kill cause",
+            "night_resolution.hide_dependency_cause_policy.hide",
+            "night_resolution hide dependency cause `factional_kill` must not reuse a direct kill cause",
         ),
     ];
 
-    for (case, mutate, detail) in cases {
+    for (_case, mutate, path, message) in cases {
         let mut pack = load_pack();
         mutate(&mut pack);
-        let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-            .expect_err("{case} malformed hide dependency cause policy unexpectedly resolved");
-        let message = caught_panic_message(panic);
-        assert!(
-            message.contains("invalid night_resolution hide dependency cause policy"),
-            "{case}: unexpected panic message: {message}"
-        );
-        assert!(
-            message.contains(detail),
-            "{case}: unexpected panic message: {message}"
-        );
+        assert_pack_rejected(pack, path, message);
     }
 }
 
@@ -9113,25 +8495,14 @@ fn golden_ita_session_refunds_already_dead_target() {
 }
 
 #[test]
-fn resolver_rejects_missing_ita_vote_conflict_before_day_resolution() {
-    let golden = load_golden_in("mafia_universe", "ita_session_lethal_shot.json");
+fn pack_validation_rejects_missing_ita_vote_conflict() {
     let mut pack = load_pack_named("mafia_universe");
     pack.ita.vote_conflict = None;
 
-    let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
-        .expect_err("invalid ITA vote conflict policy must not silently use Rust day ordering");
-    let message = panic
-        .downcast_ref::<String>()
-        .map(String::as_str)
-        .or_else(|| panic.downcast_ref::<&str>().copied())
-        .unwrap_or("<non-string panic>");
-    assert!(
-        message.contains("invalid ITA vote conflict policy"),
-        "unexpected panic message: {message}"
-    );
-    assert!(
-        message.contains("ResolveShotsBeforeVote"),
-        "unexpected panic message: {message}"
+    assert_pack_rejected(
+        pack,
+        "ita.vote_conflict",
+        "packs with ItaShot actions must declare vote_conflict ResolveShotsBeforeVote",
     );
 }
 

@@ -53,7 +53,7 @@ fn run_with_args(args: Args) -> Result<(), String> {
             .map_err(|err| format!("apply {} pack overrides: {err}", path.display()))?;
         let pack_raw = serde_json::to_string(&pack_json)
             .map_err(|err| format!("encode overridden pack for {}: {err}", path.display()))?;
-        let pack = domain::load_pack_from_json(&pack_raw)
+        let pack = domain::load_validated_pack_from_json(&pack_raw)
             .map_err(|err| format!("load pack for {}: {err}", path.display()))?;
 
         let input = golden

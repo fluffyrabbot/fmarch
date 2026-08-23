@@ -112,7 +112,7 @@ pub(super) async fn submit_action(
     let action_window = validate_action_submission(ActionValidationContext {
         tx,
         game: request.game,
-        pack: &pack,
+        pack: pack.document(),
         phase_id: &phase,
         request: &request,
     })

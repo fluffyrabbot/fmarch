@@ -106,8 +106,8 @@ pub(super) fn death_reveal_mode(
     target: &SlotId,
     cause: &str,
 ) -> DeathRevealMode {
-    let mut mode = input.pack.death_reveal.default;
-    if let Some(by_cause) = input.pack.death_reveal.by_cause.get(cause) {
+    let mut mode = input.pack.document().death_reveal.default;
+    if let Some(by_cause) = input.pack.document().death_reveal.by_cause.get(cause) {
         mode = strictest_death_reveal(mode, *by_cause);
     }
     if let Some(slot) = input
@@ -117,7 +117,7 @@ pub(super) fn death_reveal_mode(
         .find(|slot| &slot.slot_id == target)
     {
         for effect in &slot.effects {
-            if let Some(by_effect) = input.pack.death_reveal.by_effect.get(effect) {
+            if let Some(by_effect) = input.pack.document().death_reveal.by_effect.get(effect) {
                 mode = strictest_death_reveal(mode, *by_effect);
             }
         }
@@ -163,7 +163,7 @@ pub(super) fn resolve_one_kill(context: ActionResolutionContext<'_>, action: Kil
         death_reveal,
         target_tags,
     } = action;
-    let pack = &input.pack;
+    let pack: &Pack = input.pack.document();
     let phase_id = &input.phase_id;
     // A slot already killed this resolution is not killed twice.
     if killed.contains(target) {
@@ -500,7 +500,7 @@ pub(super) fn apply_chosen_retaliations(
             continue;
         }
         let strongman = night_resolution_chosen_retaliation_bypasses_protect(
-            &input.pack,
+            input.pack.document(),
             &retaliation.source_action,
         );
         trace_decisions.push(DecisionTrace {
@@ -587,7 +587,7 @@ pub(super) fn apply_cpr_harms(
                 }),
             });
             if killed.contains(target) {
-                if night_resolution_aggregates_kill_attackers(&input.pack) {
+                if night_resolution_aggregates_kill_attackers(input.pack.document()) {
                     let _ = merge_stacked_kill_attribution(
                         target,
                         &source.protector,
@@ -633,7 +633,7 @@ fn chosen_retaliation_suppression_reason(
     actor: &SlotId,
     death_cause: Option<&str>,
 ) -> Option<&'static str> {
-    let policy = &input.pack.death_retaliation;
+    let policy = &input.pack.document().death_retaliation;
     if !policy.enabled {
         return None;
     }
@@ -709,7 +709,7 @@ pub(super) fn apply_guard_dependency_deaths(
             }),
         });
         if killed.contains(&dependency.ward) {
-            if night_resolution_aggregates_kill_attackers(&input.pack) {
+            if night_resolution_aggregates_kill_attackers(input.pack.document()) {
                 if let Some(record) = merge_stacked_kill_attribution(
                     &dependency.ward,
                     &dependency.guard,
@@ -782,7 +782,7 @@ pub(super) fn apply_hide_dependency_deaths(
             }),
         });
         if killed.contains(&dependency.hider) {
-            if night_resolution_aggregates_kill_attackers(&input.pack) {
+            if night_resolution_aggregates_kill_attackers(input.pack.document()) {
                 if let Some(record) = merge_stacked_kill_attribution(
                     &dependency.hider,
                     &dependency.host,
@@ -905,13 +905,15 @@ pub(super) fn apply_guard_witch_same_target_policy(context: ProtectionResolution
         events,
         trace_decisions,
     } = context;
-    if !input.pack.guard_policy.enabled
-        || input.pack.guard_policy.same_target_witch != GuardWitchSameTargetPolicy::KillTarget
+    if !input.pack.document().guard_policy.enabled
+        || input.pack.document().guard_policy.same_target_witch
+            != GuardWitchSameTargetPolicy::KillTarget
     {
         return;
     }
     let Some(cause) = input
         .pack
+        .document()
         .guard_policy
         .same_target_witch_kill_cause
         .as_deref()
@@ -928,6 +930,7 @@ pub(super) fn apply_guard_witch_same_target_policy(context: ProtectionResolution
             .filter(|source| {
                 input
                     .pack
+                    .document()
                     .guard_policy
                     .guard_action_ids
                     .iter()
@@ -939,6 +942,7 @@ pub(super) fn apply_guard_witch_same_target_policy(context: ProtectionResolution
             .filter(|source| {
                 input
                     .pack
+                    .document()
                     .guard_policy
                     .witch_heal_action_ids
                     .iter()

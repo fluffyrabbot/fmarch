@@ -31,7 +31,7 @@ pub(super) fn resolve_day_vote(context: DayVoteResolutionContext<'_>) {
         trace_decisions,
         trace_notes,
     } = context;
-    let pack = &input.pack;
+    let pack: &Pack = input.pack.document();
     let policy = &pack.vote;
     let badge_weights = active_badge_vote_weights(badges);
     let vote_state = apply_events(&input.state, events);
@@ -610,7 +610,7 @@ fn resolve_target_lynch_wins(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    if input.pack.target_lynch_win_policies.is_empty() {
+    if input.pack.document().target_lynch_win_policies.is_empty() {
         return;
     }
     let mut matches = Vec::new();
@@ -620,6 +620,7 @@ fn resolve_target_lynch_wins(
         }
         let Some(policy) = input
             .pack
+            .document()
             .target_lynch_win_policies
             .iter()
             .find(|policy| policy.id == record.policy && policy.target_effect == record.effect)
@@ -691,11 +692,11 @@ fn resolve_day_vote_prompts(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    if input.pack.day_vote_prompt_policies.is_empty() {
+    if input.pack.document().day_vote_prompt_policies.is_empty() {
         return;
     }
     let status = outcome.status;
-    for policy in &input.pack.day_vote_prompt_policies {
+    for policy in &input.pack.document().day_vote_prompt_policies {
         if !policy.statuses.contains(&status) {
             continue;
         }
@@ -796,7 +797,7 @@ fn max_vote_weight_rule(
 }
 
 fn idiot_survives_lynch(input: &ResolutionInput, slot_id: &SlotId) -> bool {
-    let policy = &input.pack.idiot_policy;
+    let policy = &input.pack.document().idiot_policy;
     if !policy.enabled {
         return false;
     }
@@ -823,7 +824,7 @@ fn saulus_conversion_on_lynch(
     vote_state: &StateSnapshot,
     slot_id: &SlotId,
 ) -> Option<(String, Option<String>, String, String)> {
-    let policy = &input.pack.saulus_policy;
+    let policy = &input.pack.document().saulus_policy;
     if !policy.enabled {
         return None;
     }
@@ -855,7 +856,7 @@ fn resolve_self_lynch_wins(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    if input.pack.self_lynch_win_policies.is_empty() {
+    if input.pack.document().self_lynch_win_policies.is_empty() {
         return;
     }
     let Some(slot) = input
@@ -868,6 +869,7 @@ fn resolve_self_lynch_wins(
     };
     let mut matches: Vec<_> = input
         .pack
+        .document()
         .self_lynch_win_policies
         .iter()
         .filter(|policy| {
@@ -916,7 +918,8 @@ fn resolve_last_words(
     killed: &SlotId,
     events: &mut Vec<InnerEvent>,
 ) {
-    if !input.pack.day_notes.last_words.day_deaths || input.state.phase_id.kind() != PhaseKind::Day
+    if !input.pack.document().day_notes.last_words.day_deaths
+        || input.state.phase_id.kind() != PhaseKind::Day
     {
         return;
     }
@@ -928,9 +931,15 @@ fn resolve_last_words(
     events.push(InnerEvent::LastWordsRecorded(LastWordsRecorded {
         player_id: killed.clone(),
         reason: "lynch".to_string(),
-        template_id: input.pack.day_notes.last_words.template_id.clone(),
-        audience: input.pack.day_notes.last_words.audience.clone(),
-        window: input.pack.day_notes.last_words.window.clone(),
+        template_id: input
+            .pack
+            .document()
+            .day_notes
+            .last_words
+            .template_id
+            .clone(),
+        audience: input.pack.document().day_notes.last_words.audience.clone(),
+        window: input.pack.document().day_notes.last_words.window.clone(),
         sequence,
         day: input.state.phase_id.number(),
         phase_id: input.phase_id.clone(),
@@ -952,7 +961,7 @@ fn resolve_wolf_beauty_drag(
     deaths: &mut Vec<Death>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    let policy = &input.pack.wolf_beauty;
+    let policy = &input.pack.document().wolf_beauty;
     if !policy.enabled
         || !policy
             .death_causes

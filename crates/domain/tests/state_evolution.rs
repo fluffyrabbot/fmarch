@@ -5,7 +5,7 @@
 //!
 //! Hermetic: the pack is loaded from the repo relative to `CARGO_MANIFEST_DIR`.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use domain::events::{DayVoteOutcome, InnerEvent, VoteStatus};
 use domain::pack::{DeathRevealMode, GrantKind, Pack, VoteMethod, VoteTieBreaker};
@@ -22,6 +22,16 @@ fn repo_root() -> PathBuf {
         .parent()
         .unwrap()
         .to_path_buf()
+}
+
+fn artifact(pack: Pack) -> Arc<domain::ValidatedPack> {
+    domain::validate_pack_validated(Arc::new(pack)).expect("state-evolution pack validates")
+}
+
+fn configure_plurality(pack: &mut Pack, tie_breaker: VoteTieBreaker) {
+    pack.vote.method = VoteMethod::Plurality;
+    pack.vote.tie_breaker = tie_breaker;
+    pack.vote.threshold_adjustments.clear();
 }
 
 fn load_pack() -> Pack {
@@ -113,7 +123,7 @@ fn apply_player_killed_marks_dead() {
         state: state.clone(),
         submissions: Vec::new(),
         day_phase_inputs: Default::default(),
-        pack: load_pack(),
+        pack: artifact(load_pack()),
         seed: 0,
         logical_time: 0,
     };
@@ -1183,7 +1193,7 @@ fn resolve_returns_applied_trace_and_post_state() {
             vote("v2", "slot_2", "slot_3", 2),
         ],
         day_phase_inputs: Default::default(),
-        pack,
+        pack: artifact(pack),
         seed: 9,
         logical_time: 42,
     });
@@ -1205,8 +1215,7 @@ fn resolve_returns_applied_trace_and_post_state() {
 #[test]
 fn random_day_vote_tiebreak_is_seeded_and_deterministic() {
     let mut pack = load_pack();
-    pack.vote.method = VoteMethod::Plurality;
-    pack.vote.tie_breaker = VoteTieBreaker::Random;
+    configure_plurality(&mut pack, VoteTieBreaker::Random);
 
     let state = StateSnapshot {
         phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
@@ -1249,7 +1258,7 @@ fn random_day_vote_tiebreak_is_seeded_and_deterministic() {
                 vote("vote_2", "slot_2", "slot_4", 2),
             ],
             day_phase_inputs: Default::default(),
-            pack: pack.clone(),
+            pack: artifact(pack.clone()),
             seed,
             logical_time: 100 + seed,
         });
@@ -1335,7 +1344,7 @@ fn day_vote_ballots_are_last_write_wins_per_actor() {
             vote("vote_3", "slot_3", "slot_5", 5),
         ],
         day_phase_inputs: Default::default(),
-        pack,
+        pack: artifact(pack),
         seed: 12,
         logical_time: 112,
     });
@@ -1411,7 +1420,7 @@ fn no_lynch_votes_produce_no_lynch_outcome_without_death() {
             vote("vote_2", "slot_2", "no_lynch", 2),
         ],
         day_phase_inputs: Default::default(),
-        pack,
+        pack: artifact(pack),
         seed: 11,
         logical_time: 111,
     });
@@ -1479,7 +1488,7 @@ fn day_vote_statuses_distinguish_no_lynch_no_majority_and_tie() {
             state: state_for(&pack),
             submissions,
             day_phase_inputs: Default::default(),
-            pack,
+            pack: artifact(pack),
             seed: 33,
             logical_time: 133,
         });
@@ -1521,8 +1530,7 @@ fn day_vote_statuses_distinguish_no_lynch_no_majority_and_tie() {
     );
 
     let mut tie_pack = base_pack;
-    tie_pack.vote.method = VoteMethod::Plurality;
-    tie_pack.vote.tie_breaker = VoteTieBreaker::NoElimination;
+    configure_plurality(&mut tie_pack, VoteTieBreaker::NoElimination);
     assert_eq!(
         resolve_status(
             tie_pack,
@@ -1577,7 +1585,7 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
                 state: state_for(&pack),
                 submissions,
                 day_phase_inputs: Default::default(),
-                pack,
+                pack: artifact(pack),
                 seed,
                 logical_time: 200 + seed,
             });
@@ -1610,8 +1618,7 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
     assert_eq!(majority.tiebreak, None);
 
     let mut plurality_pack = base_pack.clone();
-    plurality_pack.vote.method = VoteMethod::Plurality;
-    plurality_pack.vote.tie_breaker = VoteTieBreaker::NoElimination;
+    configure_plurality(&mut plurality_pack, VoteTieBreaker::NoElimination);
     let plurality = resolve_outcome(
         plurality_pack,
         vec![vote("plurality_1", "slot_1", "slot_3", 1)],
@@ -1659,8 +1666,7 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
     ];
 
     let mut no_elimination_pack = base_pack.clone();
-    no_elimination_pack.vote.method = VoteMethod::Plurality;
-    no_elimination_pack.vote.tie_breaker = VoteTieBreaker::NoElimination;
+    configure_plurality(&mut no_elimination_pack, VoteTieBreaker::NoElimination);
     let no_elimination = resolve_outcome(
         no_elimination_pack,
         split_votes.clone(),
@@ -1673,8 +1679,7 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
     assert_eq!(no_elimination.tiebreak.as_deref(), Some("NoElimination"));
 
     let mut earliest_reached_pack = base_pack.clone();
-    earliest_reached_pack.vote.method = VoteMethod::Plurality;
-    earliest_reached_pack.vote.tie_breaker = VoteTieBreaker::EarliestReached;
+    configure_plurality(&mut earliest_reached_pack, VoteTieBreaker::EarliestReached);
     // `earliest_a` must win the same-timestamp ordering despite appearing second.
     let mut withdraw_slot_3 = vote("earliest_d", "slot_3", "slot_2", 3);
     withdraw_slot_3.withdrawn = true;
@@ -1701,8 +1706,14 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
     );
 
     let mut host_decides_pack = base_pack.clone();
-    host_decides_pack.vote.method = VoteMethod::Plurality;
-    host_decides_pack.vote.tie_breaker = VoteTieBreaker::HostDecides;
+    configure_plurality(&mut host_decides_pack, VoteTieBreaker::HostDecides);
+    let host_decides_prompt = load_pack_named("epicmafia");
+    host_decides_pack
+        .day_vote_prompt_policies
+        .extend(host_decides_prompt.day_vote_prompt_policies);
+    host_decides_pack
+        .host_prompt_resolution_effects
+        .extend(host_decides_prompt.host_prompt_resolution_effects);
     let host_decides = resolve_outcome(host_decides_pack, split_votes.clone(), 46, "host-decides");
     assert_eq!(host_decides.status, VoteStatus::Tie);
     assert_eq!(host_decides.winner, None);
@@ -1710,8 +1721,7 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
     assert_eq!(host_decides.tiebreak.as_deref(), Some("HostDecides"));
 
     let mut random_pack = base_pack;
-    random_pack.vote.method = VoteMethod::Plurality;
-    random_pack.vote.tie_breaker = VoteTieBreaker::Random;
+    configure_plurality(&mut random_pack, VoteTieBreaker::Random);
     let random_first = resolve_outcome(random_pack.clone(), split_votes.clone(), 47, "random-a");
     let random_again = resolve_outcome(random_pack, split_votes, 47, "random-b");
     assert_eq!(random_first.status, VoteStatus::Lynch);
@@ -1727,11 +1737,11 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
 
 #[test]
 fn check_win_town_when_mafia_eliminated() {
-    let pack = load_pack();
+    let pack = artifact(load_pack());
     let state = StateSnapshot {
         phase_id: PhaseId::parse("D02").expect("static test phase id is canonical"),
         phase_deadline: None,
-        phase_policy: load_pack().phases,
+        phase_policy: pack.document().phases.clone(),
         slots: vec![
             slot("a", "vanilla_townie", "town", "alive"),
             slot("b", "vanilla_townie", "town", "alive"),
@@ -1755,7 +1765,7 @@ fn check_win_town_when_mafia_eliminated() {
         badges: Vec::new(),
         buffered_ita_shots: Vec::new(),
     };
-    match check_win(&state, &pack) {
+    match check_win(&state, pack.as_ref()) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "town"),
         other => panic!("expected town win, got {other:?}"),
     }
@@ -1763,11 +1773,11 @@ fn check_win_town_when_mafia_eliminated() {
 
 #[test]
 fn check_win_mafia_at_parity() {
-    let pack = load_pack();
+    let pack = artifact(load_pack());
     let state = StateSnapshot {
         phase_id: PhaseId::parse("N01").expect("static test phase id is canonical"),
         phase_deadline: None,
-        phase_policy: load_pack().phases,
+        phase_policy: pack.document().phases.clone(),
         slots: vec![
             slot("a", "vanilla_townie", "town", "alive"),
             slot("m", "mafia_goon", "mafia", "alive"),
@@ -1790,7 +1800,7 @@ fn check_win_mafia_at_parity() {
         badges: Vec::new(),
         buffered_ita_shots: Vec::new(),
     };
-    match check_win(&state, &pack) {
+    match check_win(&state, pack.as_ref()) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "mafia"),
         other => panic!("expected mafia win, got {other:?}"),
     }
@@ -1798,11 +1808,11 @@ fn check_win_mafia_at_parity() {
 
 #[test]
 fn check_win_none_when_game_continues() {
-    let pack = load_pack();
+    let pack = artifact(load_pack());
     let state = StateSnapshot {
         phase_id: PhaseId::parse("D01").expect("static test phase id is canonical"),
         phase_deadline: None,
-        phase_policy: load_pack().phases,
+        phase_policy: pack.document().phases.clone(),
         slots: vec![
             slot("a", "vanilla_townie", "town", "alive"),
             slot("b", "vanilla_townie", "town", "alive"),
@@ -1826,19 +1836,19 @@ fn check_win_none_when_game_continues() {
         badges: Vec::new(),
         buffered_ita_shots: Vec::new(),
     };
-    assert!(check_win(&state, &pack).is_none());
+    assert!(check_win(&state, pack.as_ref()).is_none());
 }
 
 // ───────────────── epicmafia 3-faction win semantics (R5) ─────────────────
 
 #[test]
 fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
-    let pack = load_pack_named("epicmafia");
+    let pack = artifact(load_pack_named("epicmafia"));
     // mafia dead but cult still alive -> NOT a town win yet (AllOthers not met).
     let still_cult = StateSnapshot {
         phase_id: PhaseId::parse("D03").expect("static test phase id is canonical"),
         phase_deadline: None,
-        phase_policy: pack.phases.clone(),
+        phase_policy: pack.document().phases.clone(),
         slots: vec![
             slot("a", "villager", "town", "alive"),
             slot("b", "villager", "town", "alive"),
@@ -1865,13 +1875,13 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
     };
     // town(2) vs others(1 cult): town AllOthers? no. mafia parity? 0 -> no.
     // cult parity? 1 >= 2? no. So no win while the cult survives.
-    assert!(check_win(&still_cult, &pack).is_none());
+    assert!(check_win(&still_cult, pack.as_ref()).is_none());
 
     // Both mafia AND cult eliminated -> town wins via AllOtherFactionsEliminated.
     let both_dead = StateSnapshot {
         phase_id: PhaseId::parse("D04").expect("static test phase id is canonical"),
         phase_deadline: None,
-        phase_policy: pack.phases.clone(),
+        phase_policy: pack.document().phases.clone(),
         slots: vec![
             slot("a", "villager", "town", "alive"),
             slot("b", "villager", "town", "alive"),
@@ -1896,7 +1906,7 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
         badges: Vec::new(),
         buffered_ita_shots: Vec::new(),
     };
-    match check_win(&both_dead, &pack) {
+    match check_win(&both_dead, pack.as_ref()) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "town"),
         other => panic!("expected town win, got {other:?}"),
     }
@@ -1904,12 +1914,12 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
 
 #[test]
 fn epicmafia_cult_wins_at_parity() {
-    let pack = load_pack_named("epicmafia");
+    let pack = artifact(load_pack_named("epicmafia"));
     // cult(1) vs others(1 town) -> cult parity fires (mafia already gone).
     let state = StateSnapshot {
         phase_id: PhaseId::parse("N02").expect("static test phase id is canonical"),
         phase_deadline: None,
-        phase_policy: pack.phases.clone(),
+        phase_policy: pack.document().phases.clone(),
         slots: vec![
             slot("t", "villager", "town", "alive"),
             slot("c", "cult_leader", "cult", "alive"),
@@ -1932,7 +1942,7 @@ fn epicmafia_cult_wins_at_parity() {
         badges: Vec::new(),
         buffered_ita_shots: Vec::new(),
     };
-    match check_win(&state, &pack) {
+    match check_win(&state, pack.as_ref()) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "cult"),
         other => panic!("expected cult win, got {other:?}"),
     }
@@ -1991,7 +2001,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
             metadata: Default::default(),
         }],
         day_phase_inputs: Default::default(),
-        pack: pack.clone(),
+        pack: artifact(pack.clone()),
         seed: 1,
         logical_time: 1,
     });
@@ -2057,7 +2067,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
             metadata: Default::default(),
         }],
         day_phase_inputs: Default::default(),
-        pack: pack.clone(),
+        pack: artifact(pack.clone()),
         seed: 1,
         logical_time: 1,
     });
@@ -2084,7 +2094,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
             vote("v1", "slot_3", "slot_1", 1),
             vote("v2", "slot_4", "slot_1", 2),
         ],
-        pack: pack.clone(),
+        pack: artifact(pack.clone()),
         day_phase_inputs: Default::default(),
         seed: 1,
         logical_time: 2,
@@ -2177,7 +2187,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
             metadata: Default::default(),
         }],
         day_phase_inputs: Default::default(),
-        pack: pack.clone(),
+        pack: artifact(pack.clone()),
         seed: 1,
         logical_time: 1,
     });
@@ -2234,7 +2244,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
                 metadata: Default::default(),
             },
         ],
-        pack: pack.clone(),
+        pack: artifact(pack.clone()),
         day_phase_inputs: Default::default(),
         seed: 1,
         logical_time: 2,

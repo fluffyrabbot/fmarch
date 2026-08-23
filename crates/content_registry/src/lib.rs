@@ -382,7 +382,7 @@ pub fn select_pack_artifact(key: &str) -> Result<PackArtifactSnapshot, RegistryE
     Err(RegistryError::UnknownPack(key.to_string()))
 }
 
-type VerifiedPackArtifact = (String, Arc<Pack>);
+type VerifiedPackArtifact = (String, Arc<domain::ValidatedPack>);
 type VerifiedPackArtifactCache = BTreeMap<PackRef, VerifiedPackArtifact>;
 
 static VERIFIED_PACK_ARTIFACTS: OnceLock<Mutex<VerifiedPackArtifactCache>> = OnceLock::new();
@@ -390,8 +390,12 @@ static VERIFIED_PACK_ARTIFACTS: OnceLock<Mutex<VerifiedPackArtifactCache>> = Onc
 /// Authenticate, canonically decode, and semantically validate a game-owned
 /// artifact. The cache is content-addressed and compares the exact canonical
 /// bytes before reuse, so registry replacement cannot affect a running or
-/// archived game and a same-reference byte drift fails closed.
-pub fn verify_pack_artifact(artifact: &PackArtifactSnapshot) -> Result<Arc<Pack>, RegistryError> {
+/// archived game and a same-reference byte drift fails closed. The validated
+/// artifact (not a bare pack) is what callers keep; after insertion, the cache
+/// reuses that one proof-carrying artifact for its content address.
+pub fn verify_pack_artifact(
+    artifact: &PackArtifactSnapshot,
+) -> Result<Arc<domain::ValidatedPack>, RegistryError> {
     if artifact.schema_version != PACK_ARTIFACT_SCHEMA_VERSION {
         return Err(invalid_artifact(
             artifact,
@@ -425,18 +429,23 @@ pub fn verify_pack_artifact(artifact: &PackArtifactSnapshot) -> Result<Arc<Pack>
         }
     }
 
-    let document = domain::load_pack_from_json(&artifact.canonical_json)
+    let document = domain::load_validated_pack_from_json(&artifact.canonical_json)
         .map_err(|error| invalid_artifact(artifact, error.to_string()))?;
-    if document.name != artifact.pack_ref.key || document.version != artifact.pack_ref.version {
+    if document.document().name != artifact.pack_ref.key
+        || document.document().version != artifact.pack_ref.version
+    {
         return Err(invalid_artifact(
             artifact,
             format!(
                 "identity drift: reference={}@{}, document={}@{}",
-                artifact.pack_ref.key, artifact.pack_ref.version, document.name, document.version
+                artifact.pack_ref.key,
+                artifact.pack_ref.version,
+                document.document().name,
+                document.document().version
             ),
         ));
     }
-    let canonical = serde_json::to_string(&document)
+    let canonical = serde_json::to_string(document.document())
         .map_err(|error| invalid_artifact(artifact, error.to_string()))?;
     if canonical != artifact.canonical_json {
         return Err(invalid_artifact(
@@ -445,7 +454,6 @@ pub fn verify_pack_artifact(artifact: &PackArtifactSnapshot) -> Result<Arc<Pack>
         ));
     }
 
-    let document = Arc::new(document);
     let mut cache = cache.lock().map_err(|_| {
         invalid_artifact(artifact, "verified-artifact cache is poisoned".to_string())
     })?;
@@ -867,8 +875,10 @@ mod tests {
     fn canonical_pack_artifact_opens_without_registry_resolution() {
         let artifact = select_pack_artifact("mafiascum").unwrap();
         let opened = verify_pack_artifact(&artifact).unwrap();
-        assert_eq!(opened.name, "mafiascum");
-        assert_eq!(opened.version, artifact.pack_ref.version);
+        let reopened = verify_pack_artifact(&artifact).unwrap();
+        assert_eq!(opened.document().name, "mafiascum");
+        assert_eq!(opened.document().version, artifact.pack_ref.version);
+        assert!(Arc::ptr_eq(&opened, &reopened));
         assert_eq!(
             ContentHash::digest(artifact.canonical_json.as_bytes()),
             artifact.pack_ref.content_hash

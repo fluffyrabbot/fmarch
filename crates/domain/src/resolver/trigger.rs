@@ -277,7 +277,7 @@ pub(super) fn apply_trigger_fixpoint(
         produced_kill_collection,
         mut cascade,
     } = context;
-    let pack = &input.pack;
+    let pack: &Pack = input.pack.document();
     let loop_cap = pack.redirects.loop_cap as usize;
     let mut produced_kills = Vec::new();
     let mut iterations = 0usize;

@@ -900,7 +900,7 @@ async fn player_command_state(
     let pack = load_pack_for_game(&state, game).await?;
     let role_key = actor.role_key.clone();
     let role = match role_key.as_deref() {
-        Some(key) => player_role_view(&pack, key),
+        Some(key) => player_role_view(pack.document(), key),
         None => None,
     };
     let game_completed = commands::game_completed(&state.pool, game)
@@ -918,7 +918,7 @@ async fn player_command_state(
             Some(phase)
                 if !phase.locked && phase.phase_id.kind() == domain::phase::PhaseKind::Day =>
             {
-                available_vote_targets(&pack, &slots, actor)
+                available_vote_targets(pack.document(), &slots, actor)
             }
             _ => Vec::new(),
         }
@@ -944,7 +944,7 @@ async fn player_command_state(
                     .map(|action| action.template_id.clone())
                     .collect();
                 let actions = available_role_actions(
-                    &pack,
+                    pack.document(),
                     phase,
                     &slots,
                     actor,
@@ -1601,14 +1601,14 @@ mod tests {
 async fn load_pack_for_game(
     state: &GameHttpState,
     game: Uuid,
-) -> Result<Arc<domain::Pack>, ApiError> {
+) -> Result<Arc<domain::ValidatedPack>, ApiError> {
     let artifact = pack_artifact_for_game(state, game).await?;
     resolve_pack_artifact(&artifact)
 }
 
 fn resolve_pack_artifact(
     artifact: &content_registry::PackArtifactSnapshot,
-) -> Result<Arc<domain::Pack>, ApiError> {
+) -> Result<Arc<domain::ValidatedPack>, ApiError> {
     content_registry::verify_pack_artifact(artifact).map_err(|err| ApiError::Reject {
         status: StatusCode::INTERNAL_SERVER_ERROR,
         error: RejectCode::Internal,
@@ -2344,7 +2344,7 @@ async fn load_host_setup_state(
     let pack_artifact = pack_artifact_for_game(state, game).await?;
     let pack_ref = pack_artifact.pack_ref.clone();
     let pack = resolve_pack_artifact(&pack_artifact)?;
-    let program_catalog = product_day_program_catalog(&pack)?;
+    let program_catalog = product_day_program_catalog(pack.document())?;
     let attached_programs = projections::day_programs(&state.pool, game)
         .await?
         .into_iter()
@@ -2388,6 +2388,7 @@ async fn load_host_setup_state(
         .collect();
     let main_policy = projections::post_policy(&state.pool, game, "main").await?;
     let roles = pack
+        .document()
         .roles
         .iter()
         .map(|(key, role)| HostSetupRoleOption {
@@ -2402,11 +2403,11 @@ async fn load_host_setup_state(
         created: true,
         pack: HostSetupPackState {
             key: pack_ref.key,
-            name: pack.name.clone(),
+            name: pack.document().name.clone(),
             valid: true,
-            role_keys: pack.roles.keys().cloned().collect(),
+            role_keys: pack.document().roles.keys().cloned().collect(),
             roles,
-            start_phase_options: start_phase_options(&pack.phases),
+            start_phase_options: start_phase_options(&pack.document().phases),
         },
         program_catalog,
         attached_programs,

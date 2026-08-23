@@ -197,7 +197,7 @@ fn night_action_preparation_has_one_typed_owner_and_direct_consumers() {
         .find("let NightActionPreparationOutput {")
         .unwrap();
     let stage_order = coordinator
-        .find("let stage_order = night_ability_order(pack)")
+        .find("let stage_order = input.pack.night_stage_order();")
         .unwrap();
     let history = coordinator
         .find("events.extend(history.events(input, &actions));")
@@ -208,10 +208,26 @@ fn night_action_preparation_has_one_typed_owner_and_direct_consumers() {
     assert!(prepare < stage_order);
     assert!(stage_order < history);
     assert!(history < beloved);
+    assert!(
+        !coordinator.contains("night_ability_order(pack)"),
+        "the resolver must consume the cached validated-pack stage order"
+    );
 
     assert!(!intake.contains("use super::*"));
     assert!(!intake.contains("#[expect"));
     assert!(!intake.contains("#[allow(clippy"));
+}
+
+#[test]
+fn public_win_evaluation_requires_a_validated_pack() {
+    let coordinator = resolver_coordinator_source();
+
+    assert!(coordinator.contains("pub fn check_win(state: &StateSnapshot, pack: &ValidatedPack)"));
+    assert!(coordinator.contains("fn check_win_document(state: &StateSnapshot, pack: &Pack)"));
+    assert!(
+        !coordinator.contains("pub fn check_win(state: &StateSnapshot, pack: &Pack)"),
+        "raw Pack must not be a public execution input"
+    );
 }
 
 #[test]

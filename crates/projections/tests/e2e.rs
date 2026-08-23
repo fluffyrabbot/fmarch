@@ -5,9 +5,9 @@
 //! schema on an ephemeral DB. Requires `DATABASE_URL` (compose PG :5544);
 //! never silently passes without a DB.
 
-use std::collections::BTreeMap;
 use std::process::Command as ProcessCommand;
 use std::str::FromStr;
+use std::{collections::BTreeMap, sync::Arc};
 
 use attention::WatchTarget;
 use content_reference::PublicContentRef;
@@ -434,7 +434,8 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
         state,
         submissions: subs,
         day_phase_inputs: Default::default(),
-        pack: pack.clone(),
+        pack: domain::validate_pack_validated(Arc::new(pack.clone()))
+            .expect("projection E2E pack validates"),
         seed: 424242,
         logical_time: 100,
     })

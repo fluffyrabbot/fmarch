@@ -735,7 +735,9 @@ async fn removed_registry_pack_resolves_and_replays_from_game_owned_artifact(poo
     let host_id = "removed_pack_host";
     let game = Uuid::new_v4();
     let source = content_registry::select_pack_artifact("mafiascum").unwrap();
-    let mut removed_document = (*content_registry::verify_pack_artifact(&source).unwrap()).clone();
+    let mut removed_document = (*content_registry::verify_pack_artifact(&source).unwrap())
+        .document()
+        .clone();
     removed_document.name = "historical_pack_absent_from_registry".to_string();
     let historical_artifact =
         content_registry::PackArtifactSnapshot::from_document(&removed_document).unwrap();

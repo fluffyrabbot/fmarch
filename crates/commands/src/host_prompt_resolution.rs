@@ -102,8 +102,8 @@ pub(super) async fn resolve_host_prompt(
     let decision_json =
         serde_json::to_value(&decision).map_err(|error| Reject::Internal(error.to_string()))?;
     let effect = host_prompt_effect(
-        &pack.host_prompt_resolution_effects,
-        &pack.phases,
+        &pack.document().host_prompt_resolution_effects,
+        &pack.document().phases,
         &prompt,
         &decision,
         &stream,
@@ -133,7 +133,7 @@ pub(super) async fn resolve_host_prompt(
         } => {
             require_slot_alive(tx, game, &selected).await?;
             let rebuilt = build_pk_prompt_resolution(PkResolutionContext {
-                pack: &pack,
+                pack: pack.document(),
                 game,
                 prompt: &prompt,
                 selected,
@@ -203,8 +203,8 @@ pub(super) fn rerun_stored_host_prompt(
         })?;
 
     let effect = host_prompt_effect(
-        &pack.host_prompt_resolution_effects,
-        &pack.phases,
+        &pack.document().host_prompt_resolution_effects,
+        &pack.document().phases,
         &prompt,
         &decision,
         prefix,
@@ -221,7 +221,7 @@ pub(super) fn rerun_stored_host_prompt(
             selected,
             contenders,
         } => Ok(Some(build_pk_prompt_resolution(PkResolutionContext {
-            pack: &pack,
+            pack: pack.document(),
             game,
             prompt: &prompt,
             selected,

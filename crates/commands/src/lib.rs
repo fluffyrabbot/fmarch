@@ -192,7 +192,7 @@ pub struct EngineInputBuilder<'a> {
 pub struct EnginePhaseInput {
     pub game: Uuid,
     pub pack_ref: content_registry::PackRef,
-    pub pack: Arc<domain::Pack>,
+    pub pack: Arc<domain::ValidatedPack>,
     pub phase_id: domain::phase::PhaseId,
     pub state: domain::StateSnapshot,
     pub submissions: Vec<domain::Submission>,
@@ -234,7 +234,7 @@ impl<'a> EngineInputBuilder<'a> {
         let pack_ref = pack_artifact.pack_ref.clone();
         let pack = load_pack(&pack_artifact)?;
         let phase_id = self.phase_id;
-        let state = current_snapshot(None, self.stream, &pack, &phase_id)?;
+        let state = current_snapshot(None, self.stream, pack.document(), &phase_id)?;
         let submissions = current_submissions(self.stream, &phase_id);
         let day_phase_inputs = current_day_phase_inputs(self.stream, &state, &phase_id, None, 0)?;
         let next_stream_seq = self.stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1);
@@ -273,7 +273,7 @@ pub(crate) async fn load_engine_phase_input_in_tx(
     let phase_id = phase_id.clone();
     let last_resolution = usable.as_ref().and_then(|row| row.last_resolution.clone());
     let seed = usable.as_ref().map(|row| &row.snapshot);
-    let state = current_snapshot(seed, &tail, &pack, &phase_id)?;
+    let state = current_snapshot(seed, &tail, pack.document(), &phase_id)?;
     let submissions = current_submissions(&tail, &phase_id);
     let day_phase_inputs = current_day_phase_inputs(
         &tail,
@@ -385,7 +385,7 @@ impl EnginePhaseInput {
             state: self.state.clone(),
             submissions: self.submissions.clone(),
             day_phase_inputs: self.day_phase_inputs.clone(),
-            pack: (*self.pack).clone(),
+            pack: Arc::clone(&self.pack),
             seed,
             logical_time,
         }
@@ -1233,7 +1233,7 @@ async fn host_phase_lifecycle(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
-    validate_phase_id_for_policy(&pack.phases, &phase)?;
+    validate_phase_id_for_policy(&pack.document().phases, &phase)?;
     let phase_opened_at = unix_seconds_now()?;
 
     persist(
@@ -1328,7 +1328,7 @@ async fn start_game(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
-    validate_phase_id_for_policy(&pack.phases, &phase)?;
+    validate_phase_id_for_policy(&pack.document().phases, &phase)?;
     let phase_opened_at = unix_seconds_now()?;
 
     let mut events = vec![EventInput::new(
@@ -1342,7 +1342,7 @@ async fn start_game(
         0,
     )];
     events.extend(role_pm_declarations(&stream)?);
-    events.extend(pack_private_channel_declarations(&pack, &stream)?);
+    events.extend(pack_private_channel_declarations(pack.document(), &stream)?);
     persist(tx, game, &events).await
 }
 
@@ -1358,7 +1358,7 @@ async fn advance_phase(
     let (phase, stream) = resolved_locked_phase_stream(tx, game).await?;
     let source_phase_id = phase.phase_id.clone();
     let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
-    let next_phase_id = next_declared_phase_id(&pack.phases, &source_phase_id)?;
+    let next_phase_id = next_declared_phase_id(&pack.document().phases, &source_phase_id)?;
     let phase_opened_at = unix_seconds_now()?;
     let payload = serde_json::json!({
         "phase_id": next_phase_id,
@@ -1404,7 +1404,7 @@ async fn advance_phase_by_deadline(
 
     let source_phase_id = phase.phase_id.clone();
     let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
-    let next_phase_id = next_declared_phase_id(&pack.phases, &source_phase_id)?;
+    let next_phase_id = next_declared_phase_id(&pack.document().phases, &source_phase_id)?;
     let deadline_ev = EventInput::new(
         "PhaseDeadlineElapsed",
         1,
@@ -1645,7 +1645,7 @@ pub(crate) async fn plan_effect_events(
             }
             game_platform::ConcreteEffect::Mark { target, effect } => {
                 require_effect_target(tx, game, target.as_str()).await?;
-                let policy = persistent_effect_policy(&pack, effect.as_str())?;
+                let policy = persistent_effect_policy(pack.document(), effect.as_str())?;
                 vec![EventInput::new(
                     "EffectsMarked",
                     1,
@@ -1664,7 +1664,7 @@ pub(crate) async fn plan_effect_events(
             }
             game_platform::ConcreteEffect::Clear { target, effect } => {
                 require_effect_target(tx, game, target.as_str()).await?;
-                persistent_effect_policy(&pack, effect.as_str())?;
+                persistent_effect_policy(pack.document(), effect.as_str())?;
                 vec![EventInput::new(
                     "EffectsCleared",
                     1,
@@ -1681,7 +1681,7 @@ pub(crate) async fn plan_effect_events(
             }
             game_platform::ConcreteEffect::Grant { target, grant } => {
                 require_effect_target(tx, game, target.as_str()).await?;
-                validate_platform_grant(&pack, &grant)?;
+                validate_platform_grant(pack.document(), &grant)?;
                 let source_action = application.grant_source(index);
                 let mut grant_events = vec![EventInput::new(
                     "ActionGranted",
@@ -2090,6 +2090,7 @@ async fn assign_role(
         .map_err(|e| Reject::Internal(e.to_string()))?;
     let pack = load_pack(&pack_artifact_from_stream(&stream)?)?;
     let role = pack
+        .document()
         .roles
         .get(&role_key)
         .ok_or_else(|| Reject::InvalidRole(role_key.clone()))?;
@@ -2135,8 +2136,8 @@ async fn submit_vote(
     let phase = require_open_day_phase(tx, game).await?;
     require_slot_alive(tx, game, &actor_slot).await?;
     let pack = current_pack(tx, game).await?;
-    validate_vote_actor_from_projections(tx, game, &pack, &actor_slot).await?;
-    validate_vote_policy_target(&pack.vote, &actor_slot, &target)?;
+    validate_vote_actor_from_projections(tx, game, pack.document(), &actor_slot).await?;
+    validate_vote_policy_target(&pack.document().vote, &actor_slot, &target)?;
     let target_str = validate_target(tx, game, &target).await?;
 
     // 3. produce events.
@@ -2148,9 +2149,9 @@ async fn submit_vote(
         0,
     );
     let mut events = vec![ev];
-    if pack.vote.hammer {
+    if pack.document().vote.hammer {
         let (phase_input, _) = load_engine_phase_input_in_tx(tx, game, &phase).await?;
-        validate_vote_actor_policy(&phase_input.pack, &phase_input.state, &actor_slot)?;
+        validate_vote_actor_policy(phase_input.pack.document(), &phase_input.state, &actor_slot)?;
         if let Some(lock_ev) = hammer_lock_event(&phase_input, &actor_slot, &target_str)? {
             events.push(lock_ev);
         }
@@ -2745,7 +2746,7 @@ async fn resolve_phase(
     );
     let mut events = vec![applied_ev, trace_ev];
     events.extend(private_channel_revocations(
-        &phase_input.pack,
+        phase_input.pack.document(),
         &output.post_state,
     ));
     events.push(lock_ev);
@@ -2778,10 +2779,11 @@ async fn control_ita_session(
     let phase_number = phase_number(&phase);
 
     let pack = current_pack(tx, game).await?;
-    if !pack.ita.lifecycle.allows(control) {
+    if !pack.document().ita.lifecycle.allows(control) {
         return Err(Reject::InvalidTarget);
     }
     let Some(session) = pack
+        .document()
         .ita
         .sessions
         .iter()
@@ -3096,7 +3098,7 @@ fn role_assignments_from_stream(
 
 pub(crate) fn load_pack(
     artifact: &content_registry::PackArtifactSnapshot,
-) -> Result<Arc<domain::Pack>, Reject> {
+) -> Result<Arc<domain::ValidatedPack>, Reject> {
     content_registry::verify_pack_artifact(artifact)
         .map_err(|error| Reject::PackValidation(error.to_string()))
 }
@@ -3123,7 +3125,7 @@ pub(crate) async fn current_pack_artifact(
 pub(crate) async fn current_pack(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
-) -> Result<Arc<domain::Pack>, Reject> {
+) -> Result<Arc<domain::ValidatedPack>, Reject> {
     load_pack(&current_pack_artifact(tx, game).await?)
 }
 
@@ -4220,13 +4222,13 @@ async fn require_slot_can_post(
         Some(true) => Ok(()),
         Some(false) => {
             let pack = current_pack(tx, game).await?;
-            if !pack.treestump_policy.enabled {
+            if !pack.document().treestump_policy.enabled {
                 return Err(Reject::SlotNotAlive);
             }
             let tags = projections::slot_status_tags(&mut **tx, game, slot).await?;
             if tags
                 .iter()
-                .any(|tag| tag == &pack.treestump_policy.status_tag)
+                .any(|tag| tag == &pack.document().treestump_policy.status_tag)
             {
                 Ok(())
             } else {
@@ -4359,7 +4361,7 @@ fn hammer_lock_event(
     actor_slot: &str,
     target: &str,
 ) -> Result<Option<EventInput>, Reject> {
-    if !phase_input.pack.vote.hammer {
+    if !phase_input.pack.document().vote.hammer {
         return Ok(None);
     }
 

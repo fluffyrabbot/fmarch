@@ -1,11 +1,12 @@
 use serde::Deserialize;
 use serde_json::Value;
+use std::sync::Arc;
 
 use crate::pack::Window;
 use crate::phase::PhaseId;
 use crate::resolver::{resolve, resolve_instant, DayPhaseInputs, ResolutionInput};
 use crate::state::{StateSnapshot, Submission};
-use crate::Pack;
+use crate::ValidatedPack;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GoldenFixtureError {
@@ -46,7 +47,7 @@ struct GoldenInput {
 
 pub fn golden_events_from_input_value(
     input_json: &Value,
-    pack: Pack,
+    pack: Arc<ValidatedPack>,
     run_id: &str,
 ) -> Result<Vec<Value>, GoldenFixtureError> {
     let input: GoldenInput = serde_json::from_value(input_json.clone())
@@ -81,9 +82,9 @@ pub fn golden_events_from_input_value(
         .collect()
 }
 
-fn has_instant_submission(pack: &Pack, submissions: &[Submission]) -> bool {
+fn has_instant_submission(pack: &ValidatedPack, submissions: &[Submission]) -> bool {
     submissions.iter().any(|submission| {
-        pack.roles.values().any(|role| {
+        pack.document().roles.values().any(|role| {
             role.actions.iter().any(|action| {
                 action.id == submission.template_id && action.window == Window::Instant
             })

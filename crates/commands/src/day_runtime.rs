@@ -238,7 +238,7 @@ pub(crate) async fn schedule_day_event(
     require_game_run(tx, &caps, game, CohostPermissionClass::DayEventOps).await?;
     event.validate().map_err(day_event_validation)?;
     let pack = current_pack(tx, game).await?;
-    let compatibility_issues = day_program::inspect_event(&pack, &event);
+    let compatibility_issues = day_program::inspect_event(pack.document(), &event);
     if !compatibility_issues.is_empty() {
         return Err(day_event_reject(day_program::summarize_issues(
             &compatibility_issues,
@@ -275,7 +275,7 @@ pub(crate) async fn attach_day_program(
     let caps = resolve_capabilities_in_tx(tx, principal, game).await?;
     require_game_run(tx, &caps, game, CohostPermissionClass::ProgramAttach).await?;
     let pack = current_pack(tx, game).await?;
-    let compatibility = day_program::inspect(&pack, &program);
+    let compatibility = day_program::inspect(pack.document(), &program);
     let compilation = compatibility
         .into_compilation()
         .map_err(|report| Reject::DayProgramValidation(report.summary()))?;

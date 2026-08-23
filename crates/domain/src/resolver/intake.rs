@@ -177,7 +177,12 @@ fn target_role_filter_error(input: &ResolutionInput, action: &Action<'_>) -> boo
     let Some(filter) = action.template.constraints.target_role_filter else {
         return false;
     };
-    let vanilla_roles = &input.pack.investigation_results.role_sets.vanilla_roles;
+    let vanilla_roles = &input
+        .pack
+        .document()
+        .investigation_results
+        .role_sets
+        .vanilla_roles;
     if vanilla_roles.is_empty() {
         return true;
     }
@@ -211,11 +216,11 @@ fn apply_faction_action_coordination(
     actions: &mut [Action<'_>],
     events: &mut Vec<InnerEvent>,
 ) {
-    if !input.pack.faction_actions.enabled {
+    if !input.pack.document().faction_actions.enabled {
         return;
     }
 
-    for spec in &input.pack.faction_actions.actions {
+    for spec in &input.pack.document().faction_actions.actions {
         let mut candidates = Vec::new();
         for (idx, action) in actions.iter().enumerate() {
             if action.blocked || action.template.id != spec.action_id || action.targets.is_empty() {
@@ -336,6 +341,7 @@ fn base_role_submission(action: &Action<'_>) -> bool {
 fn role_modifier_team_kill_error(input: &ResolutionInput, action: &Action<'_>) -> bool {
     if !input
         .pack
+        .document()
         .night_resolution
         .team_kill_action_ids
         .iter()
@@ -351,7 +357,7 @@ fn role_modifier_team_kill_error(input: &ResolutionInput, action: &Action<'_>) -
     else {
         return false;
     };
-    let Some(role) = input.pack.roles.get(&actor_slot.role_key) else {
+    let Some(role) = input.pack.document().roles.get(&actor_slot.role_key) else {
         return false;
     };
     let lost = role.has_modifier(RoleModifier::Lost);
@@ -373,6 +379,7 @@ fn role_modifier_team_kill_error(input: &ResolutionInput, action: &Action<'_>) -
     living_teammates.any(|slot| {
         input
             .pack
+            .document()
             .roles
             .get(&slot.role_key)
             .map(|role| !role.has_modifier(RoleModifier::Recluse))
@@ -386,7 +393,7 @@ fn role_modifier_team_kill_reason<'a>(input: &'a ResolutionInput, action: &Actio
         .slots
         .iter()
         .find(|slot| slot.slot_id == action.sub.actor)
-        .and_then(|slot| input.pack.roles.get(&slot.role_key))
+        .and_then(|slot| input.pack.document().roles.get(&slot.role_key))
         .filter(|role| role.has_modifier(RoleModifier::Recluse))
         .map(|_| "recluse")
         .unwrap_or("lost")
@@ -398,7 +405,7 @@ fn emit_missing_compulsive_actions(
     events: &mut Vec<InnerEvent>,
 ) {
     for slot in input.state.slots.iter().filter(|slot| slot.is_alive()) {
-        let Some(role) = input.pack.roles.get(&slot.role_key) else {
+        let Some(role) = input.pack.document().roles.get(&slot.role_key) else {
             continue;
         };
         for template in &role.actions {

@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fs, path::Path, sync::Arc};
 
 use domain::phase::PhaseId;
 use domain::{resolve, DayPhaseInputs, Pack, ResolutionInput, StateSnapshot, Submission};
@@ -221,7 +221,8 @@ fn canonical_output(
         state: input.state.clone(),
         submissions: input.submissions.clone(),
         day_phase_inputs: input.day_phase_inputs.clone(),
-        pack,
+        pack: domain::validate_pack_validated(Arc::new(pack))
+            .expect("determinism-guard pack validates"),
         seed,
         logical_time: 0,
     })

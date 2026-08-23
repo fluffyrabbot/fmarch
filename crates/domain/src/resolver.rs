@@ -8,7 +8,10 @@
 //! then stable submission ordering. No hash-map iteration order ever reaches
 //! output.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use crate::events::{
     day_death_announcement_metadata, DayAnnouncement, DayVoteOutcome, Death, DecisionTrace,
@@ -20,14 +23,14 @@ use crate::events::{
 };
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
-    night_ability_order, visibility_required_families, win_required_families, ActionTemplate,
-    ActorRef, BackupPriorityPolicy, BadgeOperation, ConversionDeadTargetPolicy, ConversionMode,
+    visibility_required_families, win_required_families, ActionTemplate, ActorRef,
+    BackupPriorityPolicy, BadgeOperation, ConversionDeadTargetPolicy, ConversionMode,
     ConversionPendingDeathPolicy, DayNoteRolePayload, DeathRetaliationTiming, DeathRevealMode,
     EffectDuration, EffectSourceDeathRevealKind, EffectVisibility, GrantKind, GrantSpec,
     GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy,
     ItaVoteConflictPolicy, KillStackingPolicy, NightResolutionConflictFamily, Pack,
     ResultMemoryOutput, ResultMemoryScope, RoleModifier, SuppressionScope, TargetRef, TargetSpec,
-    TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule, VisibilityFamily,
+    TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule, ValidatedPack, VisibilityFamily,
     VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
 };
 use crate::phase::{PhaseId, PhaseKind};
@@ -121,7 +124,11 @@ pub struct ResolutionInput {
     pub state: StateSnapshot,
     pub submissions: Vec<Submission>,
     pub day_phase_inputs: DayPhaseInputs,
-    pub pack: Pack,
+    /// The semantically validated, immutable pack artifact shared by the
+    /// engine. It owns the precomputed execution plan and cannot be forged in
+    /// safe code; remaining `require_*` checks are defense in depth while
+    /// their duplicated resolver grammar is retired family by family.
+    pub pack: Arc<ValidatedPack>,
     pub seed: Seed,
     pub logical_time: LogicalTime,
 }
@@ -218,7 +225,7 @@ impl DetRng {
 /// pack-configured immune tag (`"loyal"`). v1 uses the `"loyal"` effect tag and
 /// the `Loyal` modifier interchangeably as the conversion-immunity signal.
 fn conversion_immune(input: &ResolutionInput, role_key: &str) -> bool {
-    let Some(role) = input.pack.roles.get(role_key) else {
+    let Some(role) = input.pack.document().roles.get(role_key) else {
         return false;
     };
     if role.effects.iter().any(|e| e == "loyal") {
@@ -242,6 +249,7 @@ fn conversion_destination(
                     role.clone(),
                     input
                         .pack
+                        .document()
                         .roles
                         .get(&role)
                         .and_then(|r| r.alignment.clone()),
@@ -269,6 +277,7 @@ fn conversion_destination(
         role.clone(),
         input
             .pack
+            .document()
             .roles
             .get(&role)
             .and_then(|r| r.alignment.clone()),
@@ -286,7 +295,7 @@ fn apply_lover_suicides(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) -> Vec<SlotId> {
-    let policy = &input.pack.lover_policy;
+    let policy = &input.pack.document().lover_policy;
     if !policy.enabled || !policy.suicide_on_lover_death {
         return Vec::new();
     }
@@ -334,7 +343,7 @@ fn apply_lover_suicides(
                 });
                 recorded_suicides.insert(slot_id.clone());
                 if killed_now.contains(slot_id) {
-                    if night_resolution_aggregates_kill_attackers(&input.pack) {
+                    if night_resolution_aggregates_kill_attackers(input.pack.document()) {
                         let _ = merge_stacked_kill_attribution(
                             slot_id,
                             &source_dead,
@@ -370,7 +379,7 @@ fn apply_wolf_beauty_drag_triggers(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    let policy = &input.pack.wolf_beauty;
+    let policy = &input.pack.document().wolf_beauty;
     if !policy.enabled {
         return;
     }
@@ -471,7 +480,7 @@ fn target_tags(
         return tags;
     };
     tags.extend(slot.effects.iter().cloned());
-    if let Some(role) = input.pack.roles.get(&slot.role_key) {
+    if let Some(role) = input.pack.document().roles.get(&slot.role_key) {
         tags.extend(role.effects.iter().cloned());
     }
     if let Some(transient) = transient_effects.get(target) {
@@ -2065,11 +2074,6 @@ fn require_night_resolution_suppression_classifiers(pack: &Pack) {
     }
 }
 
-fn require_valid_night_ability_order(pack: &Pack) {
-    let _ = night_ability_order(pack)
-        .unwrap_or_else(|err| panic!("invalid pack precedence for night resolution: {err}"));
-}
-
 fn require_night_resolution_suppression_precedence(pack: &Pack) {
     if !pack.night_resolution.is_explicit() {
         return;
@@ -2851,7 +2855,7 @@ fn finalize_resolution(
     apply_treestump_policy(&input, &mut events, &mut inner.trace_decisions);
     let mut post_state = apply_events(&input.state, &events);
     if !has_win_reached(&events) {
-        if let Some(win) = check_win(&post_state, &input.pack) {
+        if let Some(win) = check_win(&post_state, input.pack.as_ref()) {
             apply_win_triggers_before_final(
                 &input,
                 &mut events,
@@ -2860,7 +2864,7 @@ fn finalize_resolution(
                 &mut inner.trace_notes,
             );
             post_state = apply_events(&input.state, &events);
-            let final_win = check_win(&post_state, &input.pack).unwrap_or(win);
+            let final_win = check_win(&post_state, input.pack.as_ref()).unwrap_or(win);
             events.push(final_win);
             post_state = apply_events(&input.state, &events);
         }
@@ -2896,7 +2900,7 @@ fn apply_treestump_policy(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    let policy = &input.pack.treestump_policy;
+    let policy = &input.pack.document().treestump_policy;
     if !policy.enabled {
         return;
     }
@@ -2961,27 +2965,27 @@ fn treestump_applies(
 /// at phase end, on the state produced by folding this resolution's events
 /// (`apply_events`); it never runs mid-resolution.
 fn resolve_inner(input: &ResolutionInput) -> InnerResolution {
-    require_night_resolution_kill_cause_catalog(&input.pack);
-    require_night_resolution_specialized_protect_action_policy(&input.pack);
-    require_night_resolution_team_kill_action_policy(&input.pack);
-    require_night_resolution_action_bucket_shapes(&input.pack);
-    require_night_resolution_block_action_policy(&input.pack);
-    require_night_resolution_target_state_save_catalog(&input.pack);
-    require_night_resolution_target_state_save_policy(&input.pack);
-    require_night_resolution_target_state_gate_catalog(&input.pack);
-    require_night_resolution_kill_stacking_policy(&input.pack);
-    require_night_resolution_strongman_bypass_policy(&input.pack);
-    require_night_resolution_protect_action_policy(&input.pack);
-    require_night_resolution_protection_cause_policy(&input.pack);
-    require_conversion_policy(&input.pack);
-    require_night_resolution_strongman_action_policy(&input.pack);
-    require_night_resolution_chosen_retaliation_cause_policy(&input.pack);
-    require_night_resolution_generated_kill_cause_policy(&input.pack);
-    require_night_resolution_suppression_policy_shape(&input.pack);
-    require_night_resolution_generated_kill_ownership(&input.pack);
-    require_night_resolution_strongman_bypass_classifiers(&input.pack);
-    require_night_resolution_kill_cause_classifiers(&input.pack);
-    require_night_resolution_trigger_fixpoint_policy(&input.pack);
+    require_night_resolution_kill_cause_catalog(input.pack.document());
+    require_night_resolution_specialized_protect_action_policy(input.pack.document());
+    require_night_resolution_team_kill_action_policy(input.pack.document());
+    require_night_resolution_action_bucket_shapes(input.pack.document());
+    require_night_resolution_block_action_policy(input.pack.document());
+    require_night_resolution_target_state_save_catalog(input.pack.document());
+    require_night_resolution_target_state_save_policy(input.pack.document());
+    require_night_resolution_target_state_gate_catalog(input.pack.document());
+    require_night_resolution_kill_stacking_policy(input.pack.document());
+    require_night_resolution_strongman_bypass_policy(input.pack.document());
+    require_night_resolution_protect_action_policy(input.pack.document());
+    require_night_resolution_protection_cause_policy(input.pack.document());
+    require_conversion_policy(input.pack.document());
+    require_night_resolution_strongman_action_policy(input.pack.document());
+    require_night_resolution_chosen_retaliation_cause_policy(input.pack.document());
+    require_night_resolution_generated_kill_cause_policy(input.pack.document());
+    require_night_resolution_suppression_policy_shape(input.pack.document());
+    require_night_resolution_generated_kill_ownership(input.pack.document());
+    require_night_resolution_strongman_bypass_classifiers(input.pack.document());
+    require_night_resolution_kill_cause_classifiers(input.pack.document());
+    require_night_resolution_trigger_fixpoint_policy(input.pack.document());
     let mut events = grant_consumption_events(input);
     let (mut ingest_events, mut ingest_decisions) = invalid_submission_ingest_halts(input);
     events.append(&mut ingest_events);
@@ -3153,7 +3157,7 @@ fn grant_consumption_events(input: &ResolutionInput) -> Vec<InnerEvent> {
                 &grant_id,
                 sub.template_id.clone(),
                 sub.action_id.clone(),
-                declared_grant_uses(&input.pack, &grant_id)
+                declared_grant_uses(input.pack.document(), &grant_id)
                     .unwrap_or(remaining_uses.saturating_add(1)),
                 remaining_uses,
             ));
@@ -3202,11 +3206,15 @@ fn wrap_resolution(input: &ResolutionInput, inner: Vec<InnerEvent>) -> Resolutio
     }
 }
 
-/// Evaluate the pack's `WinPolicy` against a (post-resolution) state. Rules are
-/// tried in order; the FIRST match wins and yields a `WinReached`. Returns
-/// `None` if no rule fires. PURE: a fold over alive-counts, no clock/RNG.
-pub fn check_win(state: &StateSnapshot, pack: &Pack) -> Option<InnerEvent> {
-    require_win_families(pack);
+/// Evaluate a validated pack's `WinPolicy` against a (post-resolution) state.
+/// Rules are tried in order; the FIRST match wins and yields a `WinReached`.
+/// Returns `None` if no rule fires. PURE: a fold over alive-counts, no
+/// clock/RNG.
+pub fn check_win(state: &StateSnapshot, pack: &ValidatedPack) -> Option<InnerEvent> {
+    check_win_document(state, pack.document())
+}
+
+fn check_win_document(state: &StateSnapshot, pack: &Pack) -> Option<InnerEvent> {
     for rule in &pack.win.rules {
         let (fires, reason) = match &rule.when {
             WinCondition::FactionEliminated(faction) => {
@@ -3493,7 +3501,7 @@ fn apply_backup_inheritance(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    if !input.pack.backup_policy.enabled {
+    if !input.pack.document().backup_policy.enabled {
         return;
     }
     let killed_roles: Vec<(SlotId, String)> = killed
@@ -3555,7 +3563,7 @@ fn apply_backup_inheritance(
                     })
             });
         let passive = backup.effects.iter().find_map(|effect| {
-            let role = backup_role(&input.pack.backup_policy, effect)?;
+            let role = backup_role(&input.pack.document().backup_policy, effect)?;
             killed_roles
                 .iter()
                 .find(|(_, killed_role)| killed_role == role)
@@ -3572,6 +3580,7 @@ fn apply_backup_inheritance(
         });
         let priority = input
             .pack
+            .document()
             .backup_policy
             .priority
             .expect("validated enabled backup policy must declare priority");
@@ -3587,6 +3596,7 @@ fn apply_backup_inheritance(
         }
         let new_alignment = input
             .pack
+            .document()
             .roles
             .get(&inherited_role)
             .and_then(|role| role.alignment.clone());
@@ -3619,7 +3629,7 @@ fn apply_backup_inheritance(
 // ───────────────────────────── Night ─────────────────────────────
 
 fn resolve_night(input: &ResolutionInput) -> InnerResolution {
-    let pack = &input.pack;
+    let pack: &Pack = input.pack.document();
     require_conversion_policy(pack);
     require_visibility_families(pack);
     require_ninja_visibility_policy(pack);
@@ -3653,7 +3663,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     require_night_resolution_kill_stacking_policy(pack);
     require_night_resolution_strongman_bypass_policy(pack);
     require_night_resolution_suppression_classifiers(pack);
-    require_valid_night_ability_order(pack);
     require_night_resolution_suppression_precedence(pack);
 
     let NightActionPreparationOutput {
@@ -3683,8 +3692,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     let mut empowered_slots: BTreeSet<SlotId> = BTreeSet::new();
     let mut action_chance_rng = DetRng::new(input.seed ^ 0x4e49_4748_545f_4348);
 
-    let stage_order = night_ability_order(pack)
-        .unwrap_or_else(|err| panic!("invalid pack precedence for night resolution: {err}"));
+    let stage_order = input.pack.night_stage_order();
     trace_decisions.push(DecisionTrace {
         stage: "night:stage_order".to_string(),
         source: "pack.precedence".to_string(),
@@ -3696,7 +3704,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                 .collect::<Vec<_>>(),
         }),
     });
-    for stage in stage_order {
+    for &stage in stage_order {
         match stage {
             IrAbility::Block => {
                 empowered_slots = resolve_suppression(SuppressionResolutionContext {
@@ -3788,11 +3796,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             &actor,
                             &target,
                         );
-                        let is_wolf_beauty_mark = input.pack.wolf_beauty.enabled
-                            && effect == input.pack.wolf_beauty.mark_effect
+                        let is_wolf_beauty_mark = input.pack.document().wolf_beauty.enabled
+                            && effect == input.pack.document().wolf_beauty.mark_effect
                             && slot_role(input, &actor).is_some_and(|role| {
                                 input
                                     .pack
+                                    .document()
                                     .wolf_beauty
                                     .eligible_roles
                                     .iter()
@@ -3868,8 +3877,8 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     phase_id: input.phase_id.clone(),
                                 });
                             }
-                            if input.pack.backup_policy.enabled
-                                && effect == input.pack.backup_policy.targeted_effect
+                            if input.pack.document().backup_policy.enabled
+                                && effect == input.pack.document().backup_policy.targeted_effect
                             {
                                 if let Some(source_slot) =
                                     input.state.slots.iter().find(|slot| slot.slot_id == target)
@@ -3885,7 +3894,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             }
                         }
                         if let Some(actor_role) = slot_role(input, &actor) {
-                            for policy in &input.pack.target_lynch_win_policies {
+                            for policy in &input.pack.document().target_lynch_win_policies {
                                 if effect == policy.target_effect
                                     && policy
                                         .eligible_roles
@@ -3994,7 +4003,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                         slots: slots.clone(),
                         source: actions[idx].sub.actor.clone(),
                     });
-                    let policy = &input.pack.lover_policy;
+                    let policy = &input.pack.document().lover_policy;
                     if policy.enabled
                         && policy.lovers_known_to_each_other
                         && actions[idx].template.effect.as_deref() == Some(&policy.link_effect)
@@ -4238,13 +4247,14 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     };
                     let mut carry_targets = Vec::new();
                     if actions[idx].template.reads_effect.is_none()
-                        && input.pack.wolf_carry.enabled
+                        && input.pack.document().wolf_carry.enabled
                         && targets.len() > 1
                     {
                         let attacker_role = slot_role(input, &attacker);
                         let can_carry = attacker_role.is_some_and(|role| {
                             input
                                 .pack
+                                .document()
                                 .wolf_carry
                                 .wolf_kill_roles
                                 .iter()
@@ -4257,6 +4267,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     pending_wolf_carry_tokens.iter().position(|token| {
                                         input
                                             .pack
+                                            .document()
                                             .wolf_carry
                                             .eligible_roles
                                             .iter()
@@ -4345,11 +4356,11 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                         {
                             trace_decisions.push(DecisionTrace {
                                 stage: "kill_resolution".to_string(),
-                                source: format!("cause:{}", input.pack.wolf_carry.cause),
+                                source: format!("cause:{}", input.pack.document().wolf_carry.cause),
                                 outcome: "kill_skipped_by_target_state".to_string(),
                                 detail: crate::json_atom!({
                                     "action_id": source_action_id,
-                                    "template_id": input.pack.wolf_carry.cause,
+                                    "template_id": input.pack.document().wolf_carry.cause,
                                     "actor": token.owner_id,
                                     "target": target,
                                     "reason": reason,
@@ -4371,12 +4382,12 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                             KillAction {
                                 target: &target,
                                 attacker: &token.owner_id,
-                                cause: &input.pack.wolf_carry.cause,
+                                cause: &input.pack.document().wolf_carry.cause,
                                 unstoppable: is_strongman && strongman_bypasses_protect,
                                 death_reveal: death_reveal_mode(
                                     input,
                                     &target,
-                                    &input.pack.wolf_carry.cause,
+                                    &input.pack.document().wolf_carry.cause,
                                 ),
                                 target_tags: &target_tags,
                             },
@@ -4732,6 +4743,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                             vanilla: Some(role_set_contains(
                                                 &input
                                                     .pack
+                                                    .document()
                                                     .investigation_results
                                                     .role_sets
                                                     .vanilla_roles,
@@ -4754,6 +4766,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                                 role_set_contains(
                                                     &input
                                                         .pack
+                                                        .document()
                                                         .investigation_results
                                                         .role_sets
                                                         .vanilla_roles,
@@ -4779,6 +4792,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                             has_gun: Some(role_set_contains(
                                                 &input
                                                     .pack
+                                                    .document()
                                                     .investigation_results
                                                     .role_sets
                                                     .gun_bearing_roles,
@@ -4800,6 +4814,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                             killer: Some(role_set_contains(
                                                 &input
                                                     .pack
+                                                    .document()
                                                     .investigation_results
                                                     .role_sets
                                                     .killer_roles,
@@ -4821,6 +4836,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                             specialist: Some(role_set_contains(
                                                 &input
                                                     .pack
+                                                    .document()
                                                     .investigation_results
                                                     .role_sets
                                                     .specialist_roles,
@@ -5305,6 +5321,7 @@ fn parity_result(
     let base = match slot.and_then(|s| s.alignment.as_deref()) {
         Some(alignment) => input
             .pack
+            .document()
             .investigation_results
             .parity
             .alignment_results
@@ -5312,15 +5329,35 @@ fn parity_result(
             .cloned()
             .unwrap_or_else(|| {
                 if alignment == "town" {
-                    input.pack.investigation_results.parity.town.clone()
+                    input
+                        .pack
+                        .document()
+                        .investigation_results
+                        .parity
+                        .town
+                        .clone()
                 } else {
-                    input.pack.investigation_results.parity.non_town.clone()
+                    input
+                        .pack
+                        .document()
+                        .investigation_results
+                        .parity
+                        .non_town
+                        .clone()
                 }
             }),
-        None => input.pack.investigation_results.parity.non_town.clone(),
+        None => input
+            .pack
+            .document()
+            .investigation_results
+            .parity
+            .non_town
+            .clone(),
     };
 
-    if let (Some(slot), Some(overrides)) = (slot, input.pack.investigation_overrides.as_ref()) {
+    if let (Some(slot), Some(overrides)) =
+        (slot, input.pack.document().investigation_overrides.as_ref())
+    {
         let tags = slot.effects.iter().chain(
             transient_effects
                 .get(target)
@@ -5748,7 +5785,7 @@ fn lookup_template<'a>(
     template_id: &str,
 ) -> Option<&'a ActionTemplate> {
     let slot = input.state.slots.iter().find(|s| &s.slot_id == actor)?;
-    let role = input.pack.roles.get(&slot.role_key)?;
+    let role = input.pack.document().roles.get(&slot.role_key)?;
     role.actions.iter().find(|t| t.id == template_id)
 }
 
@@ -5766,7 +5803,7 @@ fn lookup_item_template<'a>(
             && grant.kind == GrantKind::Item
             && grant.uses > 0
     })?;
-    let template = input.pack.item_actions.get(&grant.grant_id)?;
+    let template = input.pack.document().item_actions.get(&grant.grant_id)?;
     (template.id == sub.template_id).then_some(template)
 }
 
@@ -5788,7 +5825,7 @@ fn selected_grant_for_submission(
 
 fn submission_item_grant_id(input: &ResolutionInput, sub: &Submission) -> Option<String> {
     let grant_id = sub.metadata.get("grant_id")?.as_str()?;
-    let template = input.pack.item_actions.get(grant_id)?;
+    let template = input.pack.document().item_actions.get(grant_id)?;
     (template.id == sub.template_id).then_some(grant_id.to_string())
 }
 
@@ -5845,7 +5882,7 @@ fn resolve_twilight(input: &ResolutionInput) -> InnerResolution {
 }
 
 fn resolve_day(input: &ResolutionInput) -> InnerResolution {
-    let pack = &input.pack;
+    let pack: &Pack = input.pack.document();
     require_visibility_families(pack);
     require_win_families(pack);
     let mut events = Vec::new();
@@ -5925,13 +5962,14 @@ fn apply_effect_source_death_reveals(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    if input.pack.effect_source_death_reveals.is_empty() || killed.is_empty() {
+    if input.pack.document().effect_source_death_reveals.is_empty() || killed.is_empty() {
         return;
     }
 
     let killed: BTreeSet<&SlotId> = killed.iter().collect();
     let policies: BTreeMap<&str, _> = input
         .pack
+        .document()
         .effect_source_death_reveals
         .iter()
         .map(|policy| (policy.effect.as_str(), policy))
@@ -6156,7 +6194,7 @@ fn resolve_day_kill_actions(
         if !failback_self_kill {
             let target_tags = target_tags(input, &BTreeMap::new(), &victim);
             if let Some(reason) =
-                target_state_gate_reason(&input.pack, &target_tags, IrAbility::Kill)
+                target_state_gate_reason(input.pack.document(), &target_tags, IrAbility::Kill)
             {
                 trace_decisions.push(DecisionTrace {
                     stage: "day:kill_resolution".to_string(),
@@ -6205,7 +6243,7 @@ fn resolve_beloved_princess_prompt(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    let policy = &input.pack.beloved_princess_policy;
+    let policy = &input.pack.document().beloved_princess_policy;
     if !policy.enabled || !beloved_princess_policy_matches_cause(policy, cause) {
         return;
     }
@@ -6260,7 +6298,7 @@ fn resolve_beloved_princess_prompts(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    let policy = &input.pack.beloved_princess_policy;
+    let policy = &input.pack.document().beloved_princess_policy;
     if !policy.enabled {
         return;
     }
@@ -6302,7 +6340,7 @@ fn beloved_princess_policy_matches_cause(
 }
 
 fn resolve_day_announcements(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
-    let policy = &input.pack.day_notes.announcements;
+    let policy = &input.pack.document().day_notes.announcements;
     if !policy.enabled || input.state.phase_id.kind() != PhaseKind::Day {
         return;
     }
@@ -6482,7 +6520,7 @@ fn resolve_ita_actions(
     events: &mut Vec<InnerEvent>,
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
-    if input.pack.ita.sessions.is_empty() {
+    if input.pack.document().ita.sessions.is_empty() {
         return;
     }
     let lifecycle = resolve_ita_lifecycle_controls(input, events, trace_decisions);
@@ -6493,7 +6531,7 @@ fn resolve_ita_actions(
         .iter()
         .filter(|record| record.release_at <= input.logical_time)
         .filter(|record| {
-            input.pack.ita.sessions.iter().any(|session| {
+            input.pack.document().ita.sessions.iter().any(|session| {
                 session.session_id == record.session_id && ita_session_active(input, session)
             })
         })
@@ -6625,7 +6663,12 @@ fn resolve_ita_actions(
         let should_refund_dead_target = !target_slot.is_alive()
             && invalidated_by.is_none()
             && matches!(
-                input.pack.ita.resolution_policy.on_target_already_dead,
+                input
+                    .pack
+                    .document()
+                    .ita
+                    .resolution_policy
+                    .on_target_already_dead,
                 ItaTargetAlreadyDeadPolicy::RefundShot
             );
         if !target_slot.is_alive() && invalidated_by.is_none() && !should_refund_dead_target {
@@ -6865,7 +6908,7 @@ fn resolve_ita_actions(
         day_state = apply_events(&day_state, &ita_events);
     }
 
-    for session in &input.pack.ita.sessions {
+    for session in &input.pack.document().ita.sessions {
         if !opened.contains(&session.session_id) {
             continue;
         }
@@ -6900,7 +6943,7 @@ fn resolve_ita_actions(
             counters: counters.clone(),
             phase_id: input.phase_id.clone(),
         });
-        if input.pack.ita.auto_close && buffered == 0 {
+        if input.pack.document().ita.auto_close && buffered == 0 {
             events.push(InnerEvent::ItaSessionClosed {
                 session_id: session.session_id.clone(),
                 last_status: "open".to_string(),
@@ -6922,6 +6965,7 @@ fn resolve_ita_lifecycle_controls(
 
     let sessions = input
         .pack
+        .document()
         .ita
         .sessions
         .iter()
@@ -6953,7 +6997,7 @@ fn resolve_ita_lifecycle_controls(
             });
             continue;
         };
-        if !input.pack.ita.lifecycle.allows(control.control) {
+        if !input.pack.document().ita.lifecycle.allows(control.control) {
             trace_decisions.push(DecisionTrace {
                 stage: "ita_session_lifecycle".to_string(),
                 source: control.session_id.clone(),
@@ -7168,9 +7212,10 @@ fn resolve_self_destruct_actions_matching(
                 unstoppable: spec.unstoppable,
                 death_reveal: death_reveal_mode(input, &sub.actor, &spec.cause),
             });
-            if input.pack.wolf_carry.enabled
+            if input.pack.document().wolf_carry.enabled
                 && input
                     .pack
+                    .document()
                     .wolf_carry
                     .eligible_roles
                     .iter()
@@ -7178,8 +7223,8 @@ fn resolve_self_destruct_actions_matching(
             {
                 self_events.push(InnerEvent::WolfCarryQueued {
                     owner_id: sub.actor.clone(),
-                    token_id: input.pack.wolf_carry.token_id.clone(),
-                    cause: input.pack.wolf_carry.cause.clone(),
+                    token_id: input.pack.document().wolf_carry.token_id.clone(),
+                    cause: input.pack.document().wolf_carry.cause.clone(),
                     role_key: actor_role.clone(),
                     phase_id: input.phase_id.clone(),
                 });
@@ -7200,12 +7245,13 @@ fn ita_session_for_submission<'a>(
         .and_then(|value| value.as_str());
     match requested {
         Some(session_id) => {
-            input.pack.ita.sessions.iter().find(|session| {
+            input.pack.document().ita.sessions.iter().find(|session| {
                 session.session_id == session_id && ita_session_active(input, session)
             })
         }
         None => input
             .pack
+            .document()
             .ita
             .sessions
             .iter()
@@ -7226,11 +7272,19 @@ fn ita_hit_chance(
     actor: &SlotState,
     target: &SlotState,
 ) -> f64 {
-    let actor_override = input.pack.ita.effective_role_override(&actor.role_key);
-    let target_override = input.pack.ita.effective_role_override(&target.role_key);
+    let actor_override = input
+        .pack
+        .document()
+        .ita
+        .effective_role_override(&actor.role_key);
+    let target_override = input
+        .pack
+        .document()
+        .ita
+        .effective_role_override(&target.role_key);
     let base = session
         .hit_chance
-        .unwrap_or(input.pack.ita.default_hit_chance);
+        .unwrap_or(input.pack.document().ita.default_hit_chance);
     let bonus = actor_override.hit_bonus;
     let penalty = actor_override.hit_penalty;
     let evade = target_override.target_evade;
@@ -7248,6 +7302,7 @@ fn ita_shields_before(
     }
     let initial = input
         .pack
+        .document()
         .ita
         .effective_role_override(&target.role_key)
         .shields;
@@ -7266,6 +7321,7 @@ fn ita_hp_before(input: &ResolutionInput, counters: &mut ItaCounters, target: &S
     }
     let initial = input
         .pack
+        .document()
         .ita
         .effective_role_override(&target.role_key)
         .hit_points;
@@ -7295,7 +7351,7 @@ fn deaths_from_events(events: &[InnerEvent]) -> Vec<Death> {
 
 fn phase_announcement(input: &ResolutionInput, deaths: Vec<Death>) -> PhaseAnnouncement {
     let (template_id, audience, deaths) =
-        day_death_announcement_metadata(&input.pack, input.state.phase_id.kind(), deaths);
+        day_death_announcement_metadata(input.pack.document(), input.state.phase_id.kind(), deaths);
     PhaseAnnouncement {
         phase_id: input.phase_id.clone(),
         template_id,

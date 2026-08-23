@@ -8,8 +8,9 @@ mod validation;
 
 pub use model::*;
 pub use validation::{
-    load_pack_from_json, night_ability_order, validate_pack, validate_pack_validated,
-    PackLoadError, PackValidationError, PackValidationIssue, ValidatedPack,
+    load_pack_from_json, load_validated_pack_from_json, night_ability_order, validate_pack,
+    validate_pack_validated, PackLoadError, PackValidationError, PackValidationIssue,
+    ValidatedPack,
 };
 pub(crate) use validation::{visibility_required_families, win_required_families};
 
