@@ -2509,10 +2509,20 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
         .results
         .iter()
         .any(|row| row.kind == projections::PublicSearchGroup::Games));
+    assert_eq!(rebuilt_games.results[0].title, "signal_pack game");
     assert!(rebuilt_games
         .results
         .iter()
         .all(|row| row.href.starts_with(&format!("/games/{game}"))));
+    let drifted_titles: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM public_publication p \
+         JOIN publication_surface s USING (surface_id) \
+         WHERE p.surface_title <> s.title",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(drifted_titles, 0);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

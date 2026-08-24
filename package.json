@@ -111,6 +111,7 @@
     "test:dev-test-game-discussion:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-discussion",
     "test:dev-test-game-search": "DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/public_search_role_proof.mjs",
     "test:dev-test-game-search:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-search",
+    "test:public-search-role-proof": "DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/public_search_role_proof.mjs",
     "test:dev-test-game-community-moderation": "DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/community_moderation_role_proof.mjs",
     "test:dev-test-game-community-moderation:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-community-moderation",
     "test:dev-test-game-community-subscriptions": "DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/public_watch_role_proof.mjs",

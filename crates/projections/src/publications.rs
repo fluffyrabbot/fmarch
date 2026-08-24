@@ -91,6 +91,11 @@ pub(super) async fn record_profile_surface(
     let handle: String = row.get("handle");
     let display_name: String = row.get("display_name");
     let bio: String = row.get("bio");
+    let previous_title: Option<String> =
+        sqlx::query_scalar("SELECT title FROM publication_surface WHERE surface_id = $1")
+            .bind(profile_id)
+            .fetch_optional(&mut **tx)
+            .await?;
     record_surface(
         tx,
         profile_id,
@@ -101,6 +106,12 @@ pub(super) async fn record_profile_surface(
         updated_seq,
     )
     .await?;
+    if previous_title
+        .as_deref()
+        .is_some_and(|title| title != display_name)
+    {
+        propagate_surface_title(tx, profile_id, &display_name).await?;
+    }
     record_publication(
         tx,
         profile_id,
@@ -173,6 +184,14 @@ async fn record_surface(
     .bind(updated_seq)
     .execute(&mut **tx)
     .await?;
+    Ok(())
+}
+
+async fn propagate_surface_title(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    surface_id: Uuid,
+    title: &str,
+) -> Result<(), ProjectionError> {
     sqlx::query(
         "UPDATE public_publication SET surface_title = $2 \
          WHERE surface_id = $1 AND surface_title IS DISTINCT FROM $2",

@@ -420,6 +420,8 @@ test('Postgres-backed npm lanes own a role-appropriate repo-local database defau
   assert.match(packageScripts['test:release-topology'], localRuntimeDatabase);
   assert.match(packageScripts['test:event-key-rotation-rehearsal'], localRuntimeDatabase);
   assert.match(packageScripts['test:auth-invite-role-proof'], localMigrationDatabase);
+  assert.match(packageScripts['test:public-search-role-proof'], localMigrationDatabase);
+  assert.match(packageScripts['test:dev-test-game-search'], localMigrationDatabase);
   assert.match(packageScripts['test:live-stack-backup-restore-drill'], localMigrationDatabase);
   assert.match(
     packageScripts['test:host-console-day-event-room-live-stack'],
@@ -1069,6 +1071,7 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
     ],
     ['tools/auth_invite_role_proof.mjs', 'test:auth-invite-role-proof'],
+    ['tools/public_search_role_proof.mjs', 'test:public-search-role-proof'],
     ['tools/live_stack_backup_restore_drill.mjs', 'test:live-stack-backup-restore-drill'],
     ['tools/dev_test_game_backup_restore_spine.mjs', 'test:live-stack-backup-restore-drill'],
     ['tools/dev_test_game_identity_spine.mjs', 'test:auth-invite-role-proof'],
@@ -1115,6 +1118,26 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       assert.ok(manifest.lanes[lane], `${source} names an undeclared lane ${lane}`);
       assert.ok(selection.laneIds.includes(lane), `${source} must arm ${lane}`);
     }
+  }
+});
+
+test('public search role proof is selected from search, projections, and public-platform HTTP', () => {
+  for (const source of [
+    'crates/projections/src/lib.rs',
+    'crates/projections/migrations/0033_publication_search_title_backfill.sql',
+    'crates/api/src/public_platform_http.rs',
+    'frontend/src/routes/search/+page.svelte',
+    'tools/public_search_role_proof.mjs',
+  ]) {
+    const selection = selectLanes({
+      changed: [source],
+      manifest,
+      crateGraph: FIXTURE_GRAPH,
+    });
+    assert.ok(
+      selection.laneIds.includes('test:public-search-role-proof'),
+      `${source} must arm public search role proof`,
+    );
   }
 });
 

@@ -1,6 +1,7 @@
 //! Exact catalog contract after applying the append-only projection migrations.
 
-use sqlx::PgPool;
+use projections::PUBLIC_SEARCH_SQL;
+use sqlx::{PgPool, Row};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -500,6 +501,12 @@ const EXPECTED_INDEXES: &[&str] = &[
     "workos_subject_tombstone_pkey",
 ];
 
+const EXPECTED_PUBLIC_SEARCH_VECTOR_EXPRESSION: &str = "(setweight(to_tsvector('english'::regconfig, surface_title), 'A'::\"char\") || setweight(to_tsvector('english'::regconfig, body), 'B'::\"char\"))";
+
+const EXPECTED_PUBLIC_SEARCH_INDEX_DEFINITIONS: &[&str] = &[
+    "public_publication_search_idx:CREATE INDEX public_publication_search_idx ON public.public_publication USING gin (search_vector) WHERE visible",
+];
+
 const EXPECTED_ERASURE_INDEX_DEFINITIONS: &[&str] = &[
     "auth_delivery_intent_principal_idx:CREATE INDEX auth_delivery_intent_principal_idx ON public.auth_delivery_intent USING btree (principal_id)",
     "auth_websocket_ticket_principal_idx:CREATE INDEX auth_websocket_ticket_principal_idx ON public.auth_websocket_ticket USING btree (principal_id)",
@@ -774,6 +781,7 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "public_watch_pkey:p",
     "public_watch_read_through_seq_check:c",
     "publication_surface_pkey:p",
+    "publication_surface_search_group_check:c",
     "sheriff_badge_pkey:p",
     "slot_effect_pkey:p",
     "slot_occupancy_epoch_persona_fkey:f",
@@ -896,21 +904,116 @@ async fn public_search_uses_a_stored_weighted_vector_and_visible_gin_index(pool:
     .fetch_one(&pool)
     .await
     .expect("read public search vector generation expression");
-    assert!(expression.contains("setweight"));
-    assert!(expression.contains("surface_title"));
-    assert!(expression.contains("body"));
-    assert!(expression.contains("english"));
+    assert_eq!(expression, EXPECTED_PUBLIC_SEARCH_VECTOR_EXPRESSION);
 
-    let index_definition: String = sqlx::query_scalar(
-        "SELECT indexdef FROM pg_indexes \
-         WHERE schemaname = 'public' AND indexname = 'public_publication_search_idx'",
+    let index_definitions: Vec<String> = sqlx::query_scalar(
+        "SELECT indexname || ':' || indexdef \
+         FROM pg_indexes \
+         WHERE schemaname = 'public' AND indexname = 'public_publication_search_idx' \
+         ORDER BY indexname",
     )
-    .fetch_one(&pool)
+    .fetch_all(&pool)
     .await
     .expect("read public search index definition");
-    assert!(index_definition.contains("USING gin"));
-    assert!(index_definition.contains("search_vector"));
-    assert!(index_definition.contains("WHERE visible"));
+    assert_inventory(
+        "public search index definition",
+        &index_definitions,
+        EXPECTED_PUBLIC_SEARCH_INDEX_DEFINITIONS,
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn public_search_plan_uses_the_visible_gin_index(pool: PgPool) {
+    let surface_id = Uuid::from_u128(1);
+    sqlx::query(
+        "INSERT INTO publication_surface \
+         (surface_id, search_group, title, href, visible, updated_seq) \
+         VALUES ($1, 'discussions', 'Zebra Theory', '/discussions/theory/t/1', TRUE, 1)",
+    )
+    .bind(surface_id)
+    .execute(&pool)
+    .await
+    .expect("insert search plan surface");
+    sqlx::query(
+        "INSERT INTO public_publication \
+         (surface_id, source_seq, surface_title, body, href, occurred_at, visible) \
+         VALUES ($1, 1, 'Zebra Theory', 'quokka body', '/discussions/theory/t/1#post-1', 1, TRUE)",
+    )
+    .bind(surface_id)
+    .execute(&pool)
+    .await
+    .expect("insert search plan publication");
+
+    let mut tx = pool.begin().await.expect("begin search plan explain");
+    sqlx::query("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await
+        .expect("disable sequential scans for the search plan");
+    let explain_sql = format!("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {PUBLIC_SEARCH_SQL}");
+    let row = sqlx::query(sqlx::AssertSqlSafe(explain_sql.as_str()))
+        .bind("zebra")
+        .bind("all")
+        .bind(Option::<Uuid>::None)
+        .bind(Option::<i64>::None)
+        .bind(Option::<i64>::None)
+        .bind(Option::<&str>::None)
+        .bind(Option::<&str>::None)
+        .bind(2_i64)
+        .fetch_one(&mut *tx)
+        .await
+        .expect("explain public search");
+    let plan: serde_json::Value = row.try_get(0).expect("read public search plan json");
+    tx.rollback().await.expect("rollback search plan explain");
+
+    let mut index_names = Vec::new();
+    collect_plan_index_names(&plan, &mut index_names);
+    assert!(
+        index_names
+            .iter()
+            .any(|name| name == "public_publication_search_idx"),
+        "public search must reach public_publication_search_idx, found {index_names:?} in {plan}"
+    );
+    assert!(
+        !plan_has_cte_scan(&plan, "search_query"),
+        "search_query must be inlined with NOT MATERIALIZED so the tsquery can fold into the GIN predicate, plan was {plan}"
+    );
+}
+
+fn plan_has_cte_scan(value: &serde_json::Value, cte_name: &str) -> bool {
+    match value {
+        serde_json::Value::Array(values) => values
+            .iter()
+            .any(|value| plan_has_cte_scan(value, cte_name)),
+        serde_json::Value::Object(values) => {
+            let is_named_cte_scan = values.get("Node Type").and_then(|value| value.as_str())
+                == Some("CTE Scan")
+                && values.get("CTE Name").and_then(|value| value.as_str()) == Some(cte_name);
+            is_named_cte_scan
+                || values
+                    .values()
+                    .any(|value| plan_has_cte_scan(value, cte_name))
+        }
+        _ => false,
+    }
+}
+
+fn collect_plan_index_names(value: &serde_json::Value, index_names: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Array(values) => {
+            for value in values {
+                collect_plan_index_names(value, index_names);
+            }
+        }
+        serde_json::Value::Object(values) => {
+            if let Some(name) = values.get("Index Name").and_then(|value| value.as_str()) {
+                index_names.push(name.to_string());
+            }
+            for value in values.values() {
+                collect_plan_index_names(value, index_names);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

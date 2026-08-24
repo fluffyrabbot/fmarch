@@ -558,6 +558,7 @@ pub struct GameIndexPage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PublicSearchGroup {
     Discussions,
     Profiles,
@@ -4766,156 +4767,101 @@ async fn rebuild_in_tx(
 struct AuditProjection {
     table: &'static str,
     order_by: &'static str,
+    key_predicate: &'static str,
+}
+
+impl AuditProjection {
+    const fn game(table: &'static str, order_by: &'static str) -> Self {
+        Self {
+            table,
+            order_by,
+            key_predicate: "game_id = $1",
+        }
+    }
+
+    const fn surface(table: &'static str, order_by: &'static str) -> Self {
+        Self {
+            table,
+            order_by,
+            key_predicate: "surface_id = $1",
+        }
+    }
 }
 
 const AUDIT_PROJECTIONS: &[AuditProjection] = &[
+    AuditProjection::game("vote_ballot", "phase_id, actor_slot"),
+    AuditProjection::game("day_vote_outcome", "phase_id"),
+    AuditProjection::game("day_program", "program_id, version"),
+    AuditProjection::game("day_event", "event_id"),
+    AuditProjection::game("day_event_schedule_work", "game_id"),
+    AuditProjection::game(
+        "day_event_participation",
+        "event_id, submitted_seq, actor_slot",
+    ),
+    AuditProjection::game("day_event_narrative", "event_id, lifecycle"),
+    AuditProjection::game("game_result", "game_id"),
+    AuditProjection::game("host_phase_control", "stream_seq, prompt_id"),
+    AuditProjection::game("host_prompt", "phase_id, event_index, prompt_id"),
+    AuditProjection::game(
+        "player_notification",
+        "phase_id, event_index, audience_slot",
+    ),
+    AuditProjection::game("player_info_result", "phase_id, event_index, audience_slot"),
+    AuditProjection::game(
+        "player_investigation_result",
+        "phase_id, event_index, audience_slot",
+    ),
+    AuditProjection::game("sheriff_badge", "badge_id"),
+    AuditProjection::game(
+        "action_counter",
+        "phase_number, phase_id, slot_id, counter_id",
+    ),
+    AuditProjection::game(
+        "investigation_memory",
+        "phase_number, phase_id, investigator_slot, target_slot, mode",
+    ),
+    AuditProjection::game(
+        "delayed_death_queue",
+        "phase_number, phase_id, target_slot, effect, queue_id",
+    ),
+    AuditProjection::game(
+        "visit_history",
+        "phase_number, phase_id, actor_slot, target_slot, source_action",
+    ),
+    AuditProjection::game(
+        "action_grant",
+        "phase_number, phase_id, slot_id, grant_id, source_slot",
+    ),
+    AuditProjection::game(
+        "action_history",
+        "phase_number, phase_id, slot_id, template_id",
+    ),
+    AuditProjection::game(effect_projection::TABLE, effect_projection::AUDIT_ORDER_BY),
+    AuditProjection::game("slot_state", "slot_id"),
+    AuditProjection::game("game_authority", "role, principal_id"),
+    AuditProjection::game("game_cohost_policy", "game_id"),
+    AuditProjection::game("spectator_membership", "principal_id"),
+    AuditProjection::game("game_persona", "persona_id"),
+    AuditProjection::game("game_persona_subject_binding", "persona_id"),
+    AuditProjection::game("game_persona_redaction", "persona_id"),
+    AuditProjection::game("game_persona_public", "persona_id"),
+    AuditProjection::game("game_persona_name_history", "persona_id, effective_seq"),
+    AuditProjection::game("game_persona_name_claim", "normalized_name"),
+    AuditProjection::game("slot_occupancy_epoch", "began_seq, occupancy_id"),
+    AuditProjection::game("phase_state", "game_id"),
+    AuditProjection::game(
+        private_channel_projection::TABLE,
+        private_channel_projection::AUDIT_ORDER_BY,
+    ),
+    AuditProjection::game("post_policy", "channel_id"),
+    AuditProjection::game("thread_view", "source_seq"),
+    AuditProjection::game("game_index", "game_id"),
+    AuditProjection::surface("publication_surface", "surface_id"),
+    AuditProjection::surface("public_publication", "source_seq"),
     AuditProjection {
-        table: "vote_ballot",
-        order_by: "phase_id, actor_slot",
-    },
-    AuditProjection {
-        table: "day_vote_outcome",
-        order_by: "phase_id",
-    },
-    AuditProjection {
-        table: "day_program",
-        order_by: "program_id, version",
-    },
-    AuditProjection {
-        table: "day_event",
-        order_by: "event_id",
-    },
-    AuditProjection {
-        table: "day_event_schedule_work",
-        order_by: "game_id",
-    },
-    AuditProjection {
-        table: "day_event_participation",
-        order_by: "event_id, submitted_seq, actor_slot",
-    },
-    AuditProjection {
-        table: "day_event_narrative",
-        order_by: "event_id, lifecycle",
-    },
-    AuditProjection {
-        table: "game_result",
-        order_by: "game_id",
-    },
-    AuditProjection {
-        table: "host_phase_control",
-        order_by: "stream_seq, prompt_id",
-    },
-    AuditProjection {
-        table: "host_prompt",
-        order_by: "phase_id, event_index, prompt_id",
-    },
-    AuditProjection {
-        table: "player_notification",
-        order_by: "phase_id, event_index, audience_slot",
-    },
-    AuditProjection {
-        table: "player_info_result",
-        order_by: "phase_id, event_index, audience_slot",
-    },
-    AuditProjection {
-        table: "player_investigation_result",
-        order_by: "phase_id, event_index, audience_slot",
-    },
-    AuditProjection {
-        table: "sheriff_badge",
-        order_by: "badge_id",
-    },
-    AuditProjection {
-        table: "action_counter",
-        order_by: "phase_number, phase_id, slot_id, counter_id",
-    },
-    AuditProjection {
-        table: "investigation_memory",
-        order_by: "phase_number, phase_id, investigator_slot, target_slot, mode",
-    },
-    AuditProjection {
-        table: "delayed_death_queue",
-        order_by: "phase_number, phase_id, target_slot, effect, queue_id",
-    },
-    AuditProjection {
-        table: "visit_history",
-        order_by: "phase_number, phase_id, actor_slot, target_slot, source_action",
-    },
-    AuditProjection {
-        table: "action_grant",
-        order_by: "phase_number, phase_id, slot_id, grant_id, source_slot",
-    },
-    AuditProjection {
-        table: "action_history",
-        order_by: "phase_number, phase_id, slot_id, template_id",
-    },
-    AuditProjection {
-        table: effect_projection::TABLE,
-        order_by: effect_projection::AUDIT_ORDER_BY,
-    },
-    AuditProjection {
-        table: "slot_state",
-        order_by: "slot_id",
-    },
-    AuditProjection {
-        table: "game_authority",
-        order_by: "role, principal_id",
-    },
-    AuditProjection {
-        table: "game_cohost_policy",
-        order_by: "game_id",
-    },
-    AuditProjection {
-        table: "spectator_membership",
-        order_by: "principal_id",
-    },
-    AuditProjection {
-        table: "game_persona",
-        order_by: "persona_id",
-    },
-    AuditProjection {
-        table: "game_persona_subject_binding",
-        order_by: "persona_id",
-    },
-    AuditProjection {
-        table: "game_persona_redaction",
-        order_by: "persona_id",
-    },
-    AuditProjection {
-        table: "game_persona_public",
-        order_by: "persona_id",
-    },
-    AuditProjection {
-        table: "game_persona_name_history",
-        order_by: "persona_id, effective_seq",
-    },
-    AuditProjection {
-        table: "game_persona_name_claim",
-        order_by: "normalized_name",
-    },
-    AuditProjection {
-        table: "slot_occupancy_epoch",
-        order_by: "began_seq, occupancy_id",
-    },
-    AuditProjection {
-        table: "phase_state",
-        order_by: "game_id",
-    },
-    AuditProjection {
-        table: private_channel_projection::TABLE,
-        order_by: private_channel_projection::AUDIT_ORDER_BY,
-    },
-    AuditProjection {
-        table: "post_policy",
-        order_by: "channel_id",
-    },
-    AuditProjection {
-        table: "thread_view",
-        order_by: "source_seq",
-    },
-    AuditProjection {
-        table: "game_index",
-        order_by: "game_id",
+        table: "public_citation",
+        order_by: "quoting_source_seq, quoted_surface_id, quoted_source_seq",
+        key_predicate: "quoting_surface_id = $1 OR quoted_surface_id = $1",
     },
 ];
 
@@ -4965,13 +4911,12 @@ async fn projection_snapshot(
     projection: &AuditProjection,
     game_id: Uuid,
 ) -> Result<serde_json::Value, ProjectionError> {
-    let predicate = "game_id = $1";
     let sql = format!(
         "SELECT COALESCE(jsonb_agg(to_jsonb(snapshot_rows) ORDER BY {order_by}), '[]'::jsonb) AS rows \
          FROM (SELECT * FROM {table} WHERE {predicate}) snapshot_rows",
         table = projection.table,
         order_by = projection.order_by,
-        predicate = predicate,
+        predicate = projection.key_predicate,
     );
     let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
         .bind(game_id)
@@ -7331,25 +7276,9 @@ pub async fn public_game_by_id(
     .transpose()
 }
 
-/// Search the public-only document projection by weighted PostgreSQL full-text
-/// rank. The cursor repeats the complete deterministic ordering tuple.
-pub async fn public_search(
-    pool: &PgPool,
-    query: &str,
-    filter: PublicSearchFilter,
-    cursor: Option<PublicSearchCursor>,
-    limit: i64,
-    viewer_principal_id: Option<PrincipalId>,
-) -> Result<PublicSearchPage, ProjectionError> {
-    let limit = limit.clamp(1, 50);
-    let fetch_limit = limit + 1;
-    let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
-    let filter = match filter {
-        PublicSearchFilter::All => "all",
-        PublicSearchFilter::Group(group) => group.as_str(),
-    };
-    let rows = sqlx::query(
-        r#"
+/// Production public-search statement. Plan tests EXPLAIN this exact text so a
+/// CTE-inlining regression cannot hide behind a parallel copy.
+pub const PUBLIC_SEARCH_SQL: &str = r#"
         WITH search_query AS NOT MATERIALIZED (
             SELECT websearch_to_tsquery('english'::regconfig, $1) AS value
         ), ranked AS (
@@ -7401,30 +7330,44 @@ pub async fn public_search(
         CROSS JOIN search_query
         ORDER BY limited.rank DESC, limited.updated_seq DESC,
                  limited.document_kind, limited.document_key
-        "#,
-    )
-    .bind(query)
-    .bind(filter)
-    .bind(viewer_principal_id)
-    .bind(cursor.as_ref().map(|value| value.rank))
-    .bind(cursor.as_ref().map(|value| value.updated_seq))
-    .bind(cursor.as_ref().map(|value| value.document_kind.as_str()))
-    .bind(cursor.as_ref().map(|value| value.document_key.as_str()))
-    .bind(fetch_limit)
-    .fetch_all(pool)
-    .await?;
+        "#;
+
+/// Search the public-only document projection by weighted PostgreSQL full-text
+/// rank. The cursor repeats the complete deterministic ordering tuple.
+pub async fn public_search(
+    pool: &PgPool,
+    query: &str,
+    filter: PublicSearchFilter,
+    cursor: Option<PublicSearchCursor>,
+    limit: i64,
+    viewer_principal_id: Option<PrincipalId>,
+) -> Result<PublicSearchPage, ProjectionError> {
+    let limit = limit.clamp(1, 50);
+    let fetch_limit = limit + 1;
+    let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
+    let filter = match filter {
+        PublicSearchFilter::All => "all",
+        PublicSearchFilter::Group(group) => group.as_str(),
+    };
+    let rows = sqlx::query(PUBLIC_SEARCH_SQL)
+        .bind(query)
+        .bind(filter)
+        .bind(viewer_principal_id)
+        .bind(cursor.as_ref().map(|value| value.rank))
+        .bind(cursor.as_ref().map(|value| value.updated_seq))
+        .bind(cursor.as_ref().map(|value| value.document_kind.as_str()))
+        .bind(cursor.as_ref().map(|value| value.document_key.as_str()))
+        .bind(fetch_limit)
+        .fetch_all(pool)
+        .await?;
     let has_more = rows.len() as i64 > limit;
     let results: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
-        .map(|row| {
+        .filter_map(|row| {
             let kind: String = row.get("document_kind");
-            let kind = PublicSearchGroup::parse(&kind).ok_or_else(|| {
-                ProjectionError::Db(sqlx::Error::Protocol(format!(
-                    "public search returned unknown group {kind}"
-                )))
-            })?;
-            Ok(PublicSearchRow {
+            let kind = PublicSearchGroup::parse(&kind)?;
+            Some(PublicSearchRow {
                 kind,
                 title: row.get("title"),
                 excerpt: row.get("excerpt"),
@@ -7435,7 +7378,7 @@ pub async fn public_search(
                 document_key: row.get("document_key"),
             })
         })
-        .collect::<Result<_, ProjectionError>>()?;
+        .collect();
     let next_cursor = has_more.then(|| {
         let last = results.last().expect("full search page has a final result");
         PublicSearchCursor {
@@ -8216,7 +8159,7 @@ pub async fn public_inbox(
         SELECT item.surface_id, item.source_seq, item.occurred_at,
                item.source_seq > subscription.read_through_seq AS unread,
                subscription.active AS subscribed,
-               surface.title, publication.href
+               publication.surface_title AS title, publication.href
         FROM public_inbox_item AS item
         JOIN public_watch AS subscription
           ON subscription.subscription_id = item.subscription_id

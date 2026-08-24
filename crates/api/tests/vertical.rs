@@ -6123,6 +6123,67 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn public_search_cursor_rejects_malformed_values_and_accepts_each_group(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool);
+    for cursor in [
+        "abc:1:discussions:key",
+        "1:abc:discussions:key",
+        "1:1:discussion_topic:key",
+        "1:1:discussions:",
+        "1:1:discussions",
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!("/search?q=ab&cursor={cursor}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "cursor {cursor} must be rejected"
+        );
+        let reject: RejectMsg =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(reject.error, RejectCode::StreamConflict);
+    }
+
+    for (filter, cursor) in [
+        ("discussions", "1:1:discussions:doc-1"),
+        ("profiles", "1:1:profiles:doc-1"),
+        ("games", "1:1:games:doc-1"),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!("/search?q=ab&filter={filter}&cursor={cursor}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "filter {filter} cursor {cursor} must parse"
+        );
+        let page: PublicSearchPage =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(page.filter, filter);
+        assert!(page.results.is_empty());
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn member_mute_api_is_authenticated_private_and_reversible(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool);
     let (reader_token, _) = create_media_upload_account_session(&app, "mute-reader").await;

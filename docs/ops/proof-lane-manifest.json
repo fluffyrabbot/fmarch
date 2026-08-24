@@ -99,6 +99,7 @@
       }
     },
     "test:auth-invite-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:auth-invite-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "test:public-search-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:public-search-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:projection-baseline:static": { "kind": "npm" },
     "test:event-key-rotation-rehearsal": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["npm", "run", "test:event-key-rotation-rehearsal"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:database-tls-boundary": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 300, "argv": ["npm", "run", "test:database-tls-boundary"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "postgres-admin" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
@@ -188,7 +189,8 @@
         "test:projection-baseline:static",
         "test:event-key-rotation-rehearsal",
         "test:railway-staging-target",
-        "test:production-promotion"
+        "test:production-promotion",
+        "test:public-search-role-proof"
       ],
       "capabilities": [
         "foundation.event-store-projections",
@@ -450,7 +452,7 @@
       "tier": "frozen",
       "paths": ["crates/forum/"],
       "crate": "forum",
-      "lanes": ["cargo:public-platform", "cargo:clippy-workspace"],
+      "lanes": ["cargo:public-platform", "cargo:clippy-workspace", "test:public-search-role-proof"],
       "capabilities": [
         "product.community.game-index",
         "product.community.discussions",
@@ -560,6 +562,20 @@
         "product.mash.private-day-event-rooms",
         "product.mash.scale-acceptance"
       ]
+    },
+    {
+      "id": "api:public-search",
+      "tier": "active",
+      "paths": ["crates/api/src/public_platform_http.rs"],
+      "lanes": [
+        "cargo:api",
+        "cargo:clippy-workspace",
+        "test:mash-scale-acceptance",
+        "test:security-release-baseline",
+        "test:event-key-rotation-rehearsal",
+        "test:public-search-role-proof"
+      ],
+      "also_triggers": ["frontend:identity"]
     },
     {
       "id": "api:tests",
@@ -691,7 +707,7 @@
         "frontend/src/routes/u/",
         "frontend/src/routes/moderation/"
       ],
-      "lanes": ["test:frontend-contract"],
+      "lanes": ["test:frontend-contract", "test:public-search-role-proof"],
       "capabilities": [
         "product.community.game-index",
         "product.community.discussions",
@@ -890,6 +906,13 @@
       "tier": "active",
       "paths": ["tools/auth_invite_role_proof.mjs"],
       "lanes": ["test:auth-invite-role-proof"]
+    },
+    {
+      "id": "proof:public-search-role",
+      "tier": "frozen",
+      "paths": ["tools/public_search_role_proof.mjs"],
+      "lanes": ["test:public-search-role-proof"],
+      "capabilities": ["product.community.search"]
     },
     {
       "id": "proof:projection-baseline",
