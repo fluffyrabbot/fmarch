@@ -600,124 +600,6 @@ fn pack_has_convert_action(pack: &Pack) -> bool {
         .any(|action| action.has_ability(IrAbility::Convert))
 }
 
-fn require_night_resolution_suppression_precedence(pack: &Pack) {
-    if !pack.night_resolution.is_explicit() {
-        return;
-    }
-    let abilities = night_resolution_night_ability_set(pack);
-    if !abilities.contains(&IrAbility::Block) {
-        return;
-    }
-    let edges = night_resolution_precedence_edges(pack, &abilities);
-    let action_abilities = night_resolution_night_action_abilities(pack);
-
-    for block_source in night_resolution_block_source_ids(pack) {
-        let Some(policy) = pack.night_resolution.suppression_policy.get(block_source) else {
-            continue;
-        };
-        for action_id in &policy.suppresses {
-            let Some(suppressed_abilities) = action_abilities.get(action_id.as_str()) else {
-                continue;
-            };
-            for ability in suppressed_abilities {
-                if *ability == IrAbility::Block {
-                    continue;
-                }
-                if abilities.contains(ability)
-                    && !night_resolution_has_precedence_path(IrAbility::Block, *ability, &edges)
-                {
-                    panic!(
-                        "invalid night_resolution suppression policy: block source `{block_source}` suppresses action `{action_id}` but night_resolution suppression policy requires Block precedence before suppressed ability `{ability:?}`"
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn night_resolution_night_action_abilities(pack: &Pack) -> BTreeMap<&str, BTreeSet<IrAbility>> {
-    let mut actions = BTreeMap::new();
-    for action in pack
-        .roles
-        .values()
-        .flat_map(|role| role.actions.iter())
-        .chain(pack.item_actions.values())
-    {
-        if !action.window.is_night_resolution_window() {
-            continue;
-        }
-        actions
-            .entry(action.id.as_str())
-            .or_insert_with(BTreeSet::new)
-            .extend(night_resolution_night_order_abilities(action));
-    }
-    actions
-}
-
-fn night_resolution_night_ability_set(pack: &Pack) -> BTreeSet<IrAbility> {
-    night_resolution_night_action_abilities(pack)
-        .into_values()
-        .flatten()
-        .collect()
-}
-
-fn night_resolution_night_order_abilities(action: &ActionTemplate) -> Vec<IrAbility> {
-    action
-        .abilities()
-        .filter(|ability| !(action.has_modifier(Modifier::Cpr) && *ability == IrAbility::Kill))
-        .collect()
-}
-
-fn night_resolution_precedence_edges(
-    pack: &Pack,
-    abilities: &BTreeSet<IrAbility>,
-) -> Vec<(IrAbility, IrAbility)> {
-    let mut edges = BTreeSet::new();
-    for rule in &pack.precedence {
-        for beaten in &rule.beats {
-            if abilities.contains(&rule.when.effect) && abilities.contains(beaten) {
-                edges.insert((rule.when.effect, *beaten));
-            }
-        }
-        for blocker in &rule.blocked_by {
-            if abilities.contains(blocker) && abilities.contains(&rule.when.effect) {
-                edges.insert((*blocker, rule.when.effect));
-            }
-        }
-    }
-    edges.into_iter().collect()
-}
-
-fn night_resolution_has_precedence_path(
-    from: IrAbility,
-    to: IrAbility,
-    edges: &[(IrAbility, IrAbility)],
-) -> bool {
-    let mut stack = vec![from];
-    let mut seen = BTreeSet::new();
-    while let Some(current) = stack.pop() {
-        if current == to {
-            return true;
-        }
-        if !seen.insert(current) {
-            continue;
-        }
-        for (_, next) in edges.iter().filter(|(edge_from, _)| *edge_from == current) {
-            stack.push(*next);
-        }
-    }
-    false
-}
-
-fn night_resolution_block_source_ids(pack: &Pack) -> BTreeSet<&str> {
-    pack.night_resolution
-        .block_action_ids
-        .iter()
-        .chain(pack.night_resolution.jailkeep_action_ids.iter())
-        .map(String::as_str)
-        .collect()
-}
-
 fn require_ninja_visibility_policy(pack: &Pack) {
     if !pack_has_ninja_action(pack) {
         return;
@@ -1866,7 +1748,6 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     require_conversion_policy(pack);
     require_visibility_families(pack);
     require_ninja_visibility_policy(pack);
-    require_night_resolution_suppression_precedence(pack);
 
     let NightActionPreparationOutput {
         mut actions,

@@ -28,6 +28,31 @@ fn pack_from_value(value: Value) -> Pack {
     serde_json::from_value(value).unwrap()
 }
 
+fn replace_json_string(value: &mut Value, from: &str, to: &str) {
+    match value {
+        Value::String(text) if text == from => {
+            *text = to.to_string();
+        }
+        Value::Array(values) => {
+            for value in values {
+                replace_json_string(value, from, to);
+            }
+        }
+        Value::Object(entries) => {
+            if let Some(value) = entries.remove(from) {
+                assert!(
+                    entries.insert(to.to_string(), value).is_none(),
+                    "test fixture must not collide while renaming `{from}` to `{to}`"
+                );
+            }
+            for value in entries.values_mut() {
+                replace_json_string(value, from, to);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn set_effect_policy(value: &mut Value, tag: &str, duration: &str, visibility: &str) {
     if !value["effects"].is_object() {
         value["effects"] = json!({});
@@ -4680,6 +4705,52 @@ fn night_resolution_suppression_policy_requires_block_precedence_before_suppress
 }
 
 #[test]
+fn night_resolution_suppression_precedence_accepts_transitive_block_paths() {
+    let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+
+    for rule in value["precedence"].as_array_mut().unwrap() {
+        if rule["when"]["effect"] == "Block" {
+            rule["beats"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|ability| ability != "Retaliate");
+        }
+    }
+
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn night_resolution_suppression_precedence_uses_every_shared_action_id_ability() {
+    let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+    let shared_action_id = "shared_investigate_retaliate";
+    replace_json_string(&mut value, "hunter_retaliate", shared_action_id);
+    let mut investigate_alias = value["roles"]["cop"]["actions"][0].clone();
+    investigate_alias["id"] = json!(shared_action_id);
+    value["roles"]["vigilante"]["actions"]
+        .as_array_mut()
+        .unwrap()
+        .push(investigate_alias);
+    validate_pack(&pack_from_value(value.clone())).unwrap();
+
+    for rule in value["precedence"].as_array_mut().unwrap() {
+        if rule["when"]["effect"] == "Block" || rule["when"]["effect"] == "Redirect" {
+            rule["beats"]
+                .as_array_mut()
+                .unwrap()
+                .retain(|ability| ability != "Retaliate");
+        }
+    }
+
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "night_resolution.precedence",
+        "requires Block precedence before suppressed ability `Retaliate`",
+    );
+}
+
+#[test]
 fn invalid_precedence_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_invalid_precedence");
     let err = validate_pack(&pack).unwrap_err();
@@ -5192,6 +5263,27 @@ fn night_resolution_chosen_retaliation_cause_policy_classifies_every_retaliate_a
         &err,
         "night_resolution.chosen_retaliation_cause_policy.hunter_retaliate.strongman_bypasses_protect",
         "must match Strongman modifier",
+    );
+}
+
+#[test]
+fn night_resolution_chosen_retaliation_aliases_must_agree_on_strongman() {
+    let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+    let mut strongman_alias = value["roles"]["hunter"]["actions"][0].clone();
+    strongman_alias["modifiers"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("Strongman"));
+    value["roles"]["doctor"]["actions"]
+        .as_array_mut()
+        .unwrap()
+        .push(strongman_alias);
+
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "night_resolution.chosen_retaliation_cause_policy.hunter_retaliate.strongman_bypasses_protect",
+        "at role `doctor` strongman_bypasses_protect must match Strongman modifier",
     );
 }
 

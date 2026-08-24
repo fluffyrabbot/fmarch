@@ -3680,15 +3680,17 @@ fn night_resolution_hide_dependency_source_ids(pack: &Pack) -> BTreeSet<String> 
 
 fn night_resolution_chosen_retaliation_source_ids(
     pack: &Pack,
-) -> BTreeMap<String, &ActionTemplate> {
-    night_resolution_pack_actions(pack)
-        .into_iter()
-        .map(|(_, action)| action)
-        .filter(|action| {
-            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Retaliate)
-        })
-        .map(|action| (action.id.clone(), action))
-        .collect()
+) -> BTreeMap<String, Vec<(String, &ActionTemplate)>> {
+    let mut sources = BTreeMap::new();
+    for (owner, action) in night_resolution_pack_actions(pack) {
+        if action.window.is_night_resolution_window() && action.has_ability(IrAbility::Retaliate) {
+            sources
+                .entry(action.id.clone())
+                .or_insert_with(Vec::new)
+                .push((owner, action));
+        }
+    }
+    sources
 }
 
 fn night_resolution_generated_kill_source_ids(pack: &Pack) -> BTreeMap<String, &TriggerRule> {
@@ -4350,7 +4352,7 @@ fn validate_night_resolution_chosen_retaliation_cause_policy(
 
     for (source_id, cause_policy) in &policy.chosen_retaliation_cause_policy {
         let source_path = format!("{path}.{source_id}");
-        let Some(action) = retaliation_sources.get(source_id) else {
+        let Some(actions) = retaliation_sources.get(source_id) else {
             issue(
                 issues,
                 source_path.clone(),
@@ -4358,14 +4360,22 @@ fn validate_night_resolution_chosen_retaliation_cause_policy(
             );
             continue;
         };
-        let action_is_strongman = action.has_modifier(Modifier::Strongman);
-        if cause_policy.strongman_bypasses_protect != action_is_strongman {
+        if let Some((owner, _)) = actions.iter().find(|(_, action)| {
+            cause_policy.strongman_bypasses_protect != action.has_modifier(Modifier::Strongman)
+        }) {
+            let message = if actions.len() == 1 {
+                format!(
+                    "night_resolution Retaliate action `{source_id}` strongman_bypasses_protect must match Strongman modifier"
+                )
+            } else {
+                format!(
+                    "night_resolution Retaliate action `{source_id}` at {owner} strongman_bypasses_protect must match Strongman modifier"
+                )
+            };
             issue(
                 issues,
                 format!("{source_path}.strongman_bypasses_protect"),
-                format!(
-                    "night_resolution Retaliate action `{source_id}` strongman_bypasses_protect must match Strongman modifier"
-                ),
+                message,
             );
         }
     }

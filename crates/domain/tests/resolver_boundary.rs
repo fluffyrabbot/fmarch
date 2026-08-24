@@ -300,6 +300,21 @@ fn resolver_retires_validation_owned_night_resolution_policy_guards() {
             "validation owns this policy grammar; the coordinator must not reintroduce `{retired_guard}`"
         );
     }
+
+    for retired_precedence_derivation in [
+        "fn require_night_resolution_suppression_precedence(",
+        "fn night_resolution_night_action_abilities(",
+        "fn night_resolution_night_ability_set(",
+        "fn night_resolution_night_order_abilities(",
+        "fn night_resolution_precedence_edges(",
+        "fn night_resolution_has_precedence_path(",
+        "fn night_resolution_block_source_ids(",
+    ] {
+        assert!(
+            !coordinator.contains(retired_precedence_derivation),
+            "validation owns suppression precedence; the coordinator must not reintroduce `{retired_precedence_derivation}`"
+        );
+    }
 }
 
 #[test]
