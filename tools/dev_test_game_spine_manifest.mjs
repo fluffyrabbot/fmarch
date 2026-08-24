@@ -1012,7 +1012,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "admin",
   ]);
   assertPlanScripts(manifest.commands?.backupRestore?.plan ?? [], [
-    "tools/live_stack_backup_restore_drill.mjs",
+    "test:live-stack-backup-restore-drill",
     "tools/dev_test_game_ops_artifacts.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_seed_fixture_summary.mjs",
@@ -1040,7 +1040,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_next_action.mjs",
   ]);
   assertPlanScripts(manifest.commands?.identity?.plan ?? [], [
-    "tools/auth_invite_role_proof.mjs",
+    "test:auth-invite-role-proof",
     "tools/dev_test_game_identity_admin_proof.mjs",
     "tools/dev_test_game_hosted_identity_evidence.mjs",
     "tools/dev_test_game_hosted_identity_progression_summary.mjs",
@@ -1048,7 +1048,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_release_readiness.mjs",
   ]);
   assertPlanScripts(manifest.commands?.identityOperator?.plan ?? [], [
-    "tools/auth_invite_role_proof.mjs",
+    "test:auth-invite-role-proof",
     "tools/dev_test_game_identity_admin_proof.mjs",
     "tools/dev_test_game_hosted_identity_evidence.mjs",
     "tools/dev_test_game_hosted_identity_progression_summary.mjs",

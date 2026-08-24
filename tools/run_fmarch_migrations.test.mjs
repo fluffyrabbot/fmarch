@@ -90,6 +90,7 @@ test("application child environment carries no migration or key-admin authority"
   assert.equal(env.DATABASE_URL, "postgres://fmarch_application:application@localhost/fmarch");
   assert.equal(env.KEEP, "yes");
   assert.equal(env.DATABASE_MIGRATION_URL, undefined);
+  assert.equal(env.DATABASE_RESTORE_MIGRATION_URL, undefined);
   assert.equal(env.DATABASE_KEY_ADMIN_URL, undefined);
   assert.equal(env.FMARCH_DATABASE_APPLICATION_PASSWORD, undefined);
   assert.equal(env.FMARCH_DATABASE_KEY_ADMIN_PASSWORD, undefined);
@@ -120,6 +121,7 @@ test("server child environment owns only active profile handle-index custody", (
   assert.equal(explicit.FMARCH_PROFILE_HANDLE_INDEX_KEY, "proof-profile-index-key-material-00000001");
   assert.equal(explicit.FMARCH_PROFILE_HANDLE_INDEX_KID, "proof-profile-index-v1");
   assert.equal(explicit.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
+  assert.equal(explicit.DATABASE_RESTORE_MIGRATION_URL, undefined);
 });
 
 test("key-admin child environment carries neither runtime nor migration authority", () => {
@@ -132,6 +134,7 @@ test("key-admin child environment carries neither runtime nor migration authorit
   assert.equal(env.KEEP, "yes");
   assert.equal(env.DATABASE_URL, undefined);
   assert.equal(env.DATABASE_MIGRATION_URL, undefined);
+  assert.equal(env.DATABASE_RESTORE_MIGRATION_URL, undefined);
   assert.equal(env.FMARCH_DATABASE_APPLICATION_PASSWORD, undefined);
   assert.equal(env.FMARCH_DATABASE_KEY_ADMIN_PASSWORD, undefined);
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KEY, undefined);
@@ -155,6 +158,7 @@ test("migrator child environment carries no runtime, key-admin, or ambient libpq
   assert.equal(env.KEEP, "yes");
   assert.equal(env.DATABASE_URL, undefined);
   assert.equal(env.DATABASE_KEY_ADMIN_URL, undefined);
+  assert.equal(env.DATABASE_RESTORE_MIGRATION_URL, undefined);
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KEY, undefined);
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KID, undefined);
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
@@ -234,6 +238,7 @@ function contaminatedEnvironment() {
     KEEP: "yes",
     DATABASE_URL: "postgres://owner/legacy-runtime",
     DATABASE_MIGRATION_URL: "postgres://owner/migration",
+    DATABASE_RESTORE_MIGRATION_URL: "postgres://owner/restore-migration",
     DATABASE_KEY_ADMIN_URL: "postgres://key-admin/admin",
     FMARCH_DATABASE_APPLICATION_PASSWORD: "application-password",
     FMARCH_DATABASE_KEY_ADMIN_PASSWORD: "key-admin-password",

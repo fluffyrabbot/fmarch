@@ -126,7 +126,6 @@
     "test:dev-test-game-live": "node tools/dev_test_game_live_spine.mjs",
     "test:dev-test-game-live:local": "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-live",
     "operator:browser-smoke": "DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/operator_browser_smoke.mjs",
-    "test:frontend-live-role-smoke": "DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/host_console_live_stack_smoke.mjs",
     "test:frontend-live-role-proof-artifact": "node --test tools/live_stack_readiness_contract.test.mjs && node tools/host_console_live_stack_proof_contract.mjs",
     "test:live-stack-backup-restore-drill": "DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/live_stack_backup_restore_drill.mjs",
     "test:live-stack-release-readiness": "node tools/live_stack_release_readiness_checklist.mjs",

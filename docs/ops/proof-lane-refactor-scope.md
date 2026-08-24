@@ -5,7 +5,8 @@ command proof cost boundaries and bounded generated-shrink execution delivered
 2026-08-06; physical command-target extraction and exact selector ownership
 delivered 2026-08-08; manifest-v5 resource scheduling, run receipts, disposable
 local proof databases, and the role-smoke/visual artifact handoff delivered
-2026-08-20; runner-scoped mutable npm proof leaves delivered 2026-08-23.
+2026-08-20; runner-scoped mutable npm proof leaves and canonical spine-leaf
+reuse delivered 2026-08-23.
 
 ## Delivered foundation
 
@@ -16,9 +17,8 @@ lanes are represented directly in the manifest. Selection deduplicates by a
 canonical execution key after cost ordering, and the manifest contract rejects
 an npm leaf that invokes another declared leaf.
 
-The remaining work packages below are intentionally narrowed: resume, migration
-or retirement of direct legacy callers outside the manifest, and measured
-expansion beyond the initial conservative resource capacities.
+The remaining work packages below are intentionally narrowed: selective resume
+and measured expansion beyond the initial conservative resource capacities.
 
 ### Mash-scale timing observation — 2026-08-23
 
@@ -74,8 +74,9 @@ The proof selector now has a sound path-to-leaf model, a fast ordinary push
 path, physically separate ordinary and semantic-audit command targets, and
 runner-owned mutable npm leaves. The remaining resource-model work is:
 
-- Manifest-scheduled mutable npm leaves receive an injected disposable database
-  and run-scoped artifact directory. Direct compatibility callers retain their
+- Manifest-scheduled mutable npm leaves receive injected disposable databases
+  and run-scoped artifact directories. The backup/restore drill owns separately
+  named source and restore leases; aggregate compatibility aliases retain their
   self-managed scratch lifecycle only outside the canonical runner.
 - The tracked baseline covers every lane, while checkpoint/resume support and
   evidence-backed expansion of conservative resource capacities remain open.
@@ -86,7 +87,7 @@ leaves beside the work they contain.
 
 ## Target Model
 
-Move the manifest to version 5. Migrated lanes declare:
+Move the manifest to version 6. Migrated lanes declare:
 
 - an argv-based command and explicit environment additions;
 - execution class: `hermetic`, `postgres`, `browser`, or `hosted`;
@@ -174,10 +175,15 @@ only for the same commit and manifest digest.
 - The runner uses the declared local loopback proof endpoint, or initializes the
   repo-local server through `tools/dev_postgres.mjs` when that endpoint is
   absent. It never adopts an arbitrary ambient `DATABASE_URL`.
-- Every migrated Cargo or scoped npm Postgres lane receives a generated
-  `fmarch_proof_<run>_<lane>` database and an injected declared URL environment
-  (`DATABASE_URL` or `DATABASE_MIGRATION_URL`); it is removed on success and
-  named in the receipt if retained after failure.
+- Every migrated Cargo or scoped npm Postgres resource receives a generated
+  `fmarch_proof_<run>_<lane>_<url-env>` database and an injected declared URL
+  environment (`DATABASE_URL`, `DATABASE_MIGRATION_URL`, or a leaf-specific
+  equivalent); it is removed on success and all leased databases are named in
+  the receipt if retained after failure.
+- A lane may own multiple named Postgres resources. They are provisioned
+  sequentially under one `postgres-admin` admission for the entire lane, while
+  distinct URL environments prevent a source/restore pair from aliasing one
+  database.
 - The local-endpoint guard applies to both `DATABASE_URL` and
   `FMARCH_DEV_POSTGRES_*` overrides. Provisioning is bounded by the lane
   deadline; a failed database cleanup is recorded as retained rather than
@@ -200,11 +206,13 @@ only for the same commit and manifest digest.
 - Role smoke and visual regression now use distinct run-scoped artifact roots;
   visual receives the exact producer path through a hard dependency. The TLS
   proof also puts its temporary cluster and evidence under its lane root.
-- Auth-invite, day-event live-stack, mash-scale, exact-image, and the event-key
-  rehearsal now declare typed runner resources and no `legacy` lock. Their
-  direct compatibility aliases preserve self-managed scratch databases only
-  outside runner context, where applicable. Hosted evidence and production
-  promotion remain outside parallel local proof.
+- Auth-invite, day-event live-stack, backup/restore, mash-scale, exact-image,
+  and the event-key rehearsal now declare typed runner resources and no
+  `legacy` lock. The identity and backup/restore spines invoke their canonical
+  npm leaves rather than raw tool files, and the redundant direct frontend
+  live-role alias is retired. Aggregate compatibility aliases preserve
+  self-managed scratch databases only outside runner context, where applicable.
+  Hosted evidence and production promotion remain outside parallel local proof.
 
 ### 7. Keep canonical `--run` on the Darwin checkout
 
@@ -250,6 +258,8 @@ That is extra evidence beside Darwin push/sprint/full.
   manually exporting `DATABASE_URL`.
 - Migrated lanes in two simultaneous proof runs cannot share a writable
   database or declared artifact directory.
+- A multi-database leaf receives distinct source and restore URLs and records
+  both leases in its receipt.
 - Killing and resuming a run never reuses success from a different commit,
   manifest, or dirty-state digest.
 - A lane failure prints one exact rerun command and preserves its diagnostic
@@ -263,14 +273,11 @@ That is extra evidence beside Darwin push/sprint/full.
 
 ## Recommended Implementation Order
 
-1. Migrate or retire direct legacy callers, including the identity-spine and
-   non-manifest live-stack aliases, to the same runner contract without
-   reintroducing a global legacy lock.
-2. Add `--only` and commit-safe `--resume` on top of the existing receipt
+1. Add `--only` and commit-safe `--resume` on top of the existing receipt
    schema.
-3. Run a measured Darwin jobs=2 full sweep, then raise only capacities supported
+2. Run a measured Darwin jobs=2 full sweep, then raise only capacities supported
    by the receipt evidence.
-4. Simplify compatibility npm aliases that are no longer operationally useful.
+3. Simplify compatibility npm aliases that are no longer operationally useful.
 
 ## Non-Goals
 

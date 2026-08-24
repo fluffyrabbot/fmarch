@@ -11,6 +11,7 @@ const defaultProfileHandleIndexKey = "fmarch-local-profile-index-key-material-v1
 const defaultProfileHandleIndexKid = "local-profile-index-v1";
 const authorityOnlyEnvironmentKeys = Object.freeze([
   "DATABASE_MIGRATION_URL",
+  "DATABASE_RESTORE_MIGRATION_URL",
   "DATABASE_KEY_ADMIN_URL",
   "FMARCH_DATABASE_APPLICATION_PASSWORD",
   "FMARCH_DATABASE_KEY_ADMIN_PASSWORD",

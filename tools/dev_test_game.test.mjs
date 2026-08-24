@@ -1629,7 +1629,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.deepEqual(
     devTestGameBackupRestoreSpinePlan.map((step) => step.script),
     [
-      "tools/live_stack_backup_restore_drill.mjs",
+      "test:live-stack-backup-restore-drill",
       "tools/dev_test_game_ops_artifacts.mjs",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_seed_fixture_summary.mjs",
@@ -1681,7 +1681,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.deepEqual(
     devTestGameIdentitySpinePlan.map((step) => step.script),
     [
-      "tools/auth_invite_role_proof.mjs",
+      "test:auth-invite-role-proof",
       "tools/dev_test_game_identity_admin_proof.mjs",
       "tools/dev_test_game_hosted_identity_evidence.mjs",
       "tools/dev_test_game_hosted_identity_progression_summary.mjs",
@@ -1692,7 +1692,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.deepEqual(
     devTestGameIdentityOperatorSpinePlan.map((step) => step.script),
     [
-      "tools/auth_invite_role_proof.mjs",
+      "test:auth-invite-role-proof",
       "tools/dev_test_game_identity_admin_proof.mjs",
       "tools/dev_test_game_hosted_identity_evidence.mjs",
       "tools/dev_test_game_hosted_identity_progression_summary.mjs",
@@ -27565,8 +27565,8 @@ function spineManifestFixture() {
         localScript: "test:dev-test-game-live:local",
         plan: [{ script: "dev:test-game:prebuild" }],
       },
-      backupRestore: { plan: [{ script: "tools/live_stack_backup_restore_drill.mjs" }] },
-      identity: { plan: [{ script: "tools/auth_invite_role_proof.mjs" }] },
+      backupRestore: { plan: [{ script: "test:live-stack-backup-restore-drill" }] },
+      identity: { plan: [{ script: "test:auth-invite-role-proof" }] },
       adminSpine: {
         script: "test:dev-test-game-admin-spine",
         proofArtifact: "target/dev-test-game/admin-spine-proof.json",

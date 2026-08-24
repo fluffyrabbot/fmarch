@@ -44,7 +44,7 @@ export const hostedIdentityOperatorProofGraphDependencyPrecondition =
   });
 
 const devTestGameIdentityBaseSpineSteps = [
-  { kind: "node", script: "tools/auth_invite_role_proof.mjs" },
+  { kind: "npm", script: "test:auth-invite-role-proof" },
   { kind: "node", script: "tools/dev_test_game_identity_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_hosted_identity_evidence.mjs" },
   {

@@ -13,7 +13,10 @@ import {
 } from "./principal_fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const artifactDir = path.join(repoRoot, "target", "live-stack-backup-restore-drill");
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ??
+    path.join(repoRoot, "target", "live-stack-backup-restore-drill"),
+);
 const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
 if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
   throw new Error("FMARCH_MEDIA_ROOT must not be empty");
@@ -21,6 +24,12 @@ if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
 const proofPath = path.join(artifactDir, "local-backup-restore-proof.json");
 const dumpPath = path.join(artifactDir, "local-live-stack.dump");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
+const restoreMigrationUrl = process.env.DATABASE_RESTORE_MIGRATION_URL;
+const runnerOwnsDatabases =
+  process.env.FMARCH_PROOF_LANE_ID === "test:live-stack-backup-restore-drill";
+if (runnerOwnsDatabases && configuredMediaRoot !== undefined) {
+  throw new Error("runner-owned backup/restore drill may not override FMARCH_MEDIA_ROOT");
+}
 const host = "127.0.0.1";
 const game = randomUUID();
 let rootAdminSessionToken;
@@ -36,6 +45,11 @@ if (!migrationUrl) {
     "DATABASE_MIGRATION_URL is required, e.g. postgres://fmarch:fmarch@localhost:5544/fmarch",
   );
 }
+if (runnerOwnsDatabases && !restoreMigrationUrl) {
+  throw new Error(
+    "runner-owned backup/restore drill requires DATABASE_RESTORE_MIGRATION_URL",
+  );
+}
 
 let sourceDatabase;
 let restoredDatabase;
@@ -46,7 +60,9 @@ try {
   await mkdir(artifactDir, { recursive: true });
   await rm(dumpPath, { force: true });
 
-  sourceDatabase = await createScratchDatabase(migrationUrl, "source");
+  sourceDatabase = runnerOwnsDatabases
+    ? runnerOwnedDatabase(migrationUrl)
+    : await createScratchDatabase(migrationUrl, "source");
   const sourceAuthority = await runFmarchMigrations({
     cwd: repoRoot,
     migrationUrl: sourceDatabase.migrationUrl,
@@ -65,7 +81,9 @@ try {
     sourceAuthority.migrationUrl,
   ]);
 
-  restoredDatabase = await createScratchDatabase(migrationUrl, "restored");
+  restoredDatabase = runnerOwnsDatabases
+    ? runnerOwnedDatabase(restoreMigrationUrl)
+    : await createScratchDatabase(migrationUrl, "restored");
   await runProcess("pg_restore", [
     "--dbname",
     restoredDatabase.migrationUrl,
@@ -113,10 +131,10 @@ try {
   if (restoredServer !== undefined) {
     await stopChild(restoredServer);
   }
-  if (sourceDatabase !== undefined) {
+  if (sourceDatabase !== undefined && !sourceDatabase.runnerOwned) {
     await dropScratchDatabase(sourceDatabase);
   }
-  if (restoredDatabase !== undefined) {
+  if (restoredDatabase !== undefined && !restoredDatabase.runnerOwned) {
     await dropScratchDatabase(restoredDatabase);
   }
 }
@@ -344,7 +362,9 @@ function buildProof({
     databases: {
       source: sourceDatabase.name,
       restored: restoredDatabase.name,
-      lifecycle: "created-and-dropped-per-drill-run",
+      lifecycle: sourceDatabase.runnerOwned && restoredDatabase.runnerOwned
+        ? "runner-owned-disposable-per-drill-run"
+        : "created-and-dropped-per-drill-run",
       roles: databaseRoles,
     },
     api: {
@@ -522,6 +542,14 @@ async function createScratchDatabase(sourceDatabaseUrl, label) {
   ]);
 
   return { name, adminUrl: admin.toString(), migrationUrl: scratch.toString() };
+}
+
+function runnerOwnedDatabase(migrationUrl) {
+  const name = decodeURIComponent(new URL(migrationUrl).pathname).replace(/^\/+/, "");
+  if (!name) {
+    throw new Error("runner-owned backup/restore database URL must name a database");
+  }
+  return { name, migrationUrl, runnerOwned: true };
 }
 
 async function dropScratchDatabase({ adminUrl, name }) {

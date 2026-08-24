@@ -420,6 +420,7 @@ test('Postgres-backed npm lanes own a role-appropriate repo-local database defau
   assert.match(packageScripts['test:release-topology'], localRuntimeDatabase);
   assert.match(packageScripts['test:event-key-rotation-rehearsal'], localRuntimeDatabase);
   assert.match(packageScripts['test:auth-invite-role-proof'], localMigrationDatabase);
+  assert.match(packageScripts['test:live-stack-backup-restore-drill'], localMigrationDatabase);
   assert.match(
     packageScripts['test:host-console-day-event-room-live-stack'],
     localMigrationDatabase,
@@ -427,14 +428,22 @@ test('Postgres-backed npm lanes own a role-appropriate repo-local database defau
 });
 
 test('migrated mutable proof leaves consume runner-owned database and artifact resources', () => {
-  for (const laneId of [
-    'test:auth-invite-role-proof',
-    'test:host-console-day-event-room-live-stack',
-    'test:mash-scale-acceptance',
-    'test:event-key-rotation-rehearsal',
+  for (const [laneId, databaseEnvironments] of [
+    ['test:auth-invite-role-proof', ['DATABASE_MIGRATION_URL']],
+    ['test:host-console-day-event-room-live-stack', ['DATABASE_MIGRATION_URL']],
+    ['test:live-stack-backup-restore-drill', ['DATABASE_MIGRATION_URL', 'DATABASE_RESTORE_MIGRATION_URL']],
+    ['test:mash-scale-acceptance', ['DATABASE_MIGRATION_URL']],
+    ['test:event-key-rotation-rehearsal', ['DATABASE_URL']],
   ]) {
     const lane = manifest.lanes[laneId];
     assert.equal(usesRunnerOwnedPostgres(lane), true, `${laneId} must lease a disposable database`);
+    assert.deepEqual(
+      lane.execution.resources
+        .filter((resource) => resource.kind === 'postgres')
+        .map((resource) => resource.url_env),
+      databaseEnvironments,
+      `${laneId} must declare every database resource by its injected URL environment`,
+    );
     assert.ok(
       lane.execution.resources.some(
         (resource) => resource.kind === 'artifact-dir' && resource.env === 'FMARCH_PROOF_ARTIFACT_DIR',
@@ -454,6 +463,7 @@ test('migrated mutable proof leaves consume runner-owned database and artifact r
   for (const sourcePath of [
     join(REPO_ROOT, 'tools', 'auth_invite_role_proof.mjs'),
     join(REPO_ROOT, 'tools', 'host_console_live_stack_smoke.mjs'),
+    join(REPO_ROOT, 'tools', 'live_stack_backup_restore_drill.mjs'),
     join(REPO_ROOT, 'tools', 'mash_scale_acceptance.mjs'),
   ]) {
     const source = readFileSync(sourcePath, 'utf8');
@@ -1059,6 +1069,13 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
     ],
     ['tools/auth_invite_role_proof.mjs', 'test:auth-invite-role-proof'],
+    ['tools/live_stack_backup_restore_drill.mjs', 'test:live-stack-backup-restore-drill'],
+    ['tools/dev_test_game_backup_restore_spine.mjs', 'test:live-stack-backup-restore-drill'],
+    ['tools/dev_test_game_identity_spine.mjs', 'test:auth-invite-role-proof'],
+    [
+      'tools/dev_test_game_spine_artifact_dependencies.mjs',
+      ['test:auth-invite-role-proof', 'test:live-stack-backup-restore-drill'],
+    ],
     ['tools/projection_baseline_contract.mjs', 'test:projection-baseline:static'],
     ['tools/projection_baseline_contract.test.mjs', 'test:projection-baseline:static'],
     ['tools/completeness_scorecard.mjs', 'test:completeness-scorecard'],

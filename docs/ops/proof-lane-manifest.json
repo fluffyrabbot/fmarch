@@ -106,6 +106,7 @@
     "test:dev-postgres-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["npm", "run", "test:dev-postgres-contract"], "resources": [] } },
     "test:host-console-live-stack-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:host-console-live-stack-contract"], "resources": [] } },
     "test:host-console-day-event-room-live-stack": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:host-console-day-event-room-live-stack"], "env": { "FMARCH_DEV_AUTH": "1", "FMARCH_AUTH_SOURCE_SIGNING_KEY": "local-proof-signing-key-at-least-32-bytes", "FMARCH_LIVE_STACK_SCOPE": "day-event-room" }, "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "test:live-stack-backup-restore-drill": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 1800, "argv": ["npm", "run", "test:live-stack-backup-restore-drill"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_RESTORE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:mash-scale-acceptance": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["npm", "run", "test:mash-scale-acceptance"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:completeness-scorecard": {
       "kind": "npm",
@@ -933,6 +934,30 @@
         "test:host-console-day-event-room-live-stack"
       ],
       "capabilities": ["product.mash.private-day-event-rooms"]
+    },
+    {
+      "id": "proof:live-stack-backup-restore",
+      "tier": "active",
+      "paths": [
+        "tools/live_stack_backup_restore_drill.mjs",
+        "tools/dev_test_game_backup_restore_spine.mjs"
+      ],
+      "lanes": ["test:live-stack-backup-restore-drill"]
+    },
+    {
+      "id": "proof:dev-test-game-identity-leaf",
+      "tier": "active",
+      "paths": ["tools/dev_test_game_identity_spine.mjs"],
+      "lanes": ["test:auth-invite-role-proof"]
+    },
+    {
+      "id": "proof:dev-test-game-spine-artifact-contracts",
+      "tier": "active",
+      "paths": ["tools/dev_test_game_spine_artifact_dependencies.mjs"],
+      "lanes": [
+        "test:auth-invite-role-proof",
+        "test:live-stack-backup-restore-drill"
+      ]
     },
     {
       "id": "proof:security-release",

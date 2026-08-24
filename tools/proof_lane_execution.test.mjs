@@ -9,6 +9,7 @@ import { loadManifest } from './proof_lane_select.mjs';
 import {
   createRepoLocalPostgresProvider,
   createRunContext,
+  disposableDatabaseName,
   expandHardDependencies,
   prepareLaneInvocation,
   runExecutionPlan,
@@ -600,6 +601,21 @@ test('runner-owned Postgres overrides ambient URLs and releases successful dispo
   assert.deepEqual(released, [{ database: 'fmarch_proof_run_pg', success: true }]);
 });
 
+test('disposable database names retain distinct full Postgres resource identities', () => {
+  const run = { id: 'same-run' };
+  const first = disposableDatabaseName(run, 'backup:restore', {
+    kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_RESTORE_ONE_URL',
+  });
+  const second = disposableDatabaseName(run, 'backup:restore', {
+    kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_RESTORE_TWO_URL',
+  });
+
+  // Both names alias under the old readable-prefix-only scheme.
+  assert.notEqual(first, second);
+  assert.match(first, /^fmarch_proof_[a-z0-9_]{1,48}$/);
+  assert.match(second, /^fmarch_proof_[a-z0-9_]{1,48}$/);
+});
+
 test('mutable proof leaves bind real runner-owned databases and artifact roots without legacy serialization', async (t) => {
   const root = await temporaryRoot();
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -608,9 +624,9 @@ test('mutable proof leaves bind real runner-owned databases and artifact roots w
   const acquired = [];
   const released = [];
   const provider = {
-    async acquire({ laneId }) {
-      const database = `fmarch_proof_real_${laneId.replaceAll(':', '_')}`;
-      acquired.push(database);
+    async acquire({ laneId, resource }) {
+      const database = `fmarch_proof_real_${laneId.replaceAll(':', '_')}_${resource.url_env.toLowerCase()}`;
+      acquired.push({ laneId, urlEnv: resource.url_env, database });
       return {
         database,
         url: `postgres://local/${database}`,
@@ -620,11 +636,12 @@ test('mutable proof leaves bind real runner-owned databases and artifact roots w
     },
   };
   const run = createRunContext({ root, runId: 'real-mutable-leaves' });
-  for (const [laneId, databaseEnvironment] of [
-    ['test:auth-invite-role-proof', 'DATABASE_MIGRATION_URL'],
-    ['test:host-console-day-event-room-live-stack', 'DATABASE_MIGRATION_URL'],
-    ['test:mash-scale-acceptance', 'DATABASE_MIGRATION_URL'],
-    ['test:event-key-rotation-rehearsal', 'DATABASE_URL'],
+  for (const [laneId, databaseEnvironments] of [
+    ['test:auth-invite-role-proof', ['DATABASE_MIGRATION_URL']],
+    ['test:host-console-day-event-room-live-stack', ['DATABASE_MIGRATION_URL']],
+    ['test:live-stack-backup-restore-drill', ['DATABASE_MIGRATION_URL', 'DATABASE_RESTORE_MIGRATION_URL']],
+    ['test:mash-scale-acceptance', ['DATABASE_MIGRATION_URL']],
+    ['test:event-key-rotation-rehearsal', ['DATABASE_URL']],
   ]) {
     const lane = manifest.lanes[laneId];
     assert.ok(
@@ -639,10 +656,25 @@ test('mutable proof leaves bind real runner-owned databases and artifact roots w
       laneId,
       manifest,
       run,
-      env: { [databaseEnvironment]: 'postgres://ambient/wrong' },
+      env: Object.fromEntries(
+        databaseEnvironments.map((databaseEnvironment) => [databaseEnvironment, 'postgres://ambient/wrong']),
+      ),
       databaseProvider: provider,
     });
-    assert.equal(invocation.env[databaseEnvironment], `postgres://local/${invocation.database.database}`);
+    assert.equal(invocation.database, invocation.databases[0].lease);
+    assert.deepEqual(
+      invocation.databases.map(({ urlEnv }) => urlEnv),
+      databaseEnvironments,
+      `${laneId} must preserve every declared database lease`,
+    );
+    for (const { urlEnv, lease } of invocation.databases) {
+      assert.equal(invocation.env[urlEnv], `postgres://local/${lease.database}`);
+    }
+    assert.equal(
+      new Set(invocation.databases.map(({ lease }) => lease.database)).size,
+      databaseEnvironments.length,
+      `${laneId} must not alias distinct database resources`,
+    );
     assert.equal(invocation.env.FMARCH_PROOF_ARTIFACT_DIR, invocation.artifactDir);
     await invocation.releaseResources({ success: true });
   }
@@ -659,8 +691,58 @@ test('mutable proof leaves bind real runner-owned databases and artifact roots w
     env: { FMARCH_PROOF_ARTIFACT_DIR: '/ambient/incorrect' },
   });
   assert.equal(exactInvocation.env.FMARCH_PROOF_ARTIFACT_DIR, exactInvocation.artifactDir);
-  assert.equal(acquired.length, 4);
-  assert.equal(released.length, 4);
+  assert.equal(acquired.length, 6);
+  assert.equal(released.length, 6);
+});
+
+test('a multi-database lane holds one postgres-admin admission and records every lease', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const acquired = [];
+  const provider = {
+    async acquire({ resource }) {
+      const database = `fmarch_proof_pair_${resource.url_env.toLowerCase()}`;
+      acquired.push(database);
+      return {
+        database,
+        url: `postgres://local/${database}`,
+        retained: false,
+        async release() {},
+      };
+    },
+  };
+  const manifest = fixture({
+    backup: lane(['backup'], [
+      { kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_MIGRATION_URL' },
+      { kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_RESTORE_MIGRATION_URL' },
+    ]),
+  }, { legacy: 1, 'postgres-admin': 1 });
+  let claims;
+  const result = await runExecutionPlan(['backup'], manifest, {
+    root,
+    databaseProvider: provider,
+    spawn: () => childThatCloses(0),
+    onStart(_laneId, details) { claims = details.claims; },
+    log: () => {},
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(claims, { 'postgres-admin': 1 });
+  assert.deepEqual(acquired, [
+    'fmarch_proof_pair_database_migration_url',
+    'fmarch_proof_pair_database_restore_migration_url',
+  ]);
+  assert.deepEqual(result.receipt.lanes.backup.databases, [
+    {
+      url_env: 'DATABASE_MIGRATION_URL',
+      database: 'fmarch_proof_pair_database_migration_url',
+      retained: false,
+    },
+    {
+      url_env: 'DATABASE_RESTORE_MIGRATION_URL',
+      database: 'fmarch_proof_pair_database_restore_migration_url',
+      retained: false,
+    },
+  ]);
 });
 
 test('runner-owned Postgres rejects a non-loopback dev-postgres override before provisioning', async (t) => {

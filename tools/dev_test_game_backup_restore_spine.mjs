@@ -39,7 +39,7 @@ export const backupRestoreFinalReadinessEnv = readinessEvidenceEnv(
 );
 
 export const devTestGameBackupRestoreSpinePlan = [
-  { kind: "node", script: "tools/live_stack_backup_restore_drill.mjs" },
+  { kind: "npm", script: "test:live-stack-backup-restore-drill" },
   {
     kind: "node",
     script: "tools/dev_test_game_ops_artifacts.mjs",

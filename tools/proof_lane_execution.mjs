@@ -5,7 +5,7 @@
 // run receipt so measuring/recording can retain their serial semantics.
 
 import { spawn as spawnChild } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -78,6 +78,7 @@ function laneLabel(laneId, lane) {
 function lockClaims(laneId, lane, capacities) {
   const execution = laneExecution(laneId, lane);
   const claims = new Map();
+  let needsPostgresAdmin = false;
   for (const resource of execution.resources) {
     if (resource.kind === 'lock') {
       claims.set(resource.name, (claims.get(resource.name) ?? 0) + 1);
@@ -87,8 +88,11 @@ function lockClaims(laneId, lane, capacities) {
     // serialized until profiling proves that provisioning and test bodies can
     // be safely decoupled.
     if (resource.kind === 'postgres' && capacities['postgres-admin']) {
-      claims.set('postgres-admin', (claims.get('postgres-admin') ?? 0) + 1);
+      needsPostgresAdmin = true;
     }
+  }
+  if (needsPostgresAdmin) {
+    claims.set('postgres-admin', (claims.get('postgres-admin') ?? 0) + 1);
   }
   return claims;
 }
@@ -263,10 +267,25 @@ function assertInsideRun(run, candidate, label) {
   return candidate;
 }
 
-function disposableDatabaseName(run, laneId) {
-  const runPart = run.id.replaceAll(/[^a-z0-9]/gi, '').toLowerCase().slice(-18) || 'run';
-  const lanePart = laneId.replaceAll(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 28) || 'lane';
-  return `fmarch_proof_${runPart}_${lanePart}`.slice(0, 63);
+export function disposableDatabaseName(run, laneId, resource) {
+  // `dev_postgres` intentionally limits the generated portion to 48 bytes.
+  // Keep the resource identity inside that budget rather than truncating it
+  // after construction and accidentally reintroducing an alias.
+  const runPart = run.id.replaceAll(/[^a-z0-9]/gi, '').toLowerCase().slice(-12) || 'run';
+  const lanePart = laneId.replaceAll(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 12) || 'lane';
+  // A leaf may explicitly own more than one database (for example, a
+  // backup/restore source and destination). Keep a compact readable stem, but
+  // bind its suffix to the complete resource identity: distinct legal
+  // environment names may share an arbitrarily long prefix.
+  const resourcePart = resource.url_env
+    .replaceAll(/[^a-z0-9]/gi, '_')
+    .toLowerCase()
+    .slice(0, 6) || 'db';
+  const resourceFingerprint = createHash('sha256')
+    .update(`${laneId}\0${resource.url_env}`)
+    .digest('hex')
+    .slice(0, 15);
+  return `fmarch_proof_${runPart}_${lanePart}_${resourcePart}_${resourceFingerprint}`;
 }
 
 export function createRepoLocalPostgresProvider({ env = process.env } = {}) {
@@ -293,7 +312,7 @@ export function createRepoLocalPostgresProvider({ env = process.env } = {}) {
           async release() {},
         };
       }
-      const database = disposableDatabaseName(run, laneId);
+      const database = disposableDatabaseName(run, laneId, resource);
       let disposable;
       try {
         // This is the declared local proof endpoint (never DATABASE_URL).  It
@@ -397,15 +416,24 @@ async function releaseLeases(resources, { success, signal }) {
   if (failure) throw failure.reason;
 }
 
-function resourceCleanupError(error, cleanupError, resources, cleanupScope) {
+function databaseReceiptEntries(databases = []) {
+  return databases.map(({ urlEnv, lease }) => ({
+    url_env: urlEnv,
+    database: lease.database ?? null,
+    retained: lease.retained ?? false,
+  }));
+}
+
+function resourceCleanupError(error, cleanupError, databases, cleanupScope) {
   const detail = cleanupScope.timedOut()
     ? `resource cleanup timed out: ${cleanupError?.message ?? cleanupError}`
     : `resource cleanup failed: ${cleanupError?.message ?? cleanupError}`;
   const wrapped = new Error(`${error?.message ?? error}; ${detail}`, { cause: error });
-  const database = resources.find((resource) => resource?.database);
+  const database = databases[0]?.lease;
   wrapped.cleanupError = detail;
   wrapped.database = database?.database ?? null;
-  wrapped.databaseRetained = Boolean(database);
+  wrapped.databases = databaseReceiptEntries(databases);
+  wrapped.databaseRetained = databases.length > 0;
   return wrapped;
 }
 
@@ -442,7 +470,7 @@ export async function prepareLaneInvocation({
     FMARCH_PROOF_ARTIFACT_DIR: artifactDir,
   };
   const resources = [];
-  let database = null;
+  const databases = [];
   try {
     for (const resource of execution.resources) {
       if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('proof lane preparation aborted');
@@ -456,9 +484,10 @@ export async function prepareLaneInvocation({
         assertInsideRun(run, source, `artifact input ${resource.from}`);
         childEnv[resource.env] = source;
       } else if (resource.kind === 'postgres') {
-        database = await databaseProvider.acquire({ run, laneId, resource, signal });
-        resources.push(database);
-        childEnv[resource.url_env] = database.url;
+        const lease = await databaseProvider.acquire({ run, laneId, resource, signal });
+        resources.push(lease);
+        databases.push({ urlEnv: resource.url_env, lease });
+        childEnv[resource.url_env] = lease.url;
       }
     }
   } catch (error) {
@@ -476,15 +505,16 @@ export async function prepareLaneInvocation({
         cleanupScope.signal,
       );
     } catch (cleanupError) {
-      throw resourceCleanupError(error, cleanupError, resources, cleanupScope);
+      throw resourceCleanupError(error, cleanupError, databases, cleanupScope);
     } finally {
       cleanupScope.dispose();
     }
-    const databaseResource = resources.find((resource) => resource?.database);
+    const databaseResource = databases[0]?.lease;
     if (databaseResource) {
       const wrapped = error instanceof Error ? error : new Error(String(error));
       wrapped.database = databaseResource.database;
-      wrapped.databaseRetained = databaseResource.retained ?? false;
+      wrapped.databases = databaseReceiptEntries(databases);
+      wrapped.databaseRetained = databases.some(({ lease }) => lease.retained ?? false);
       throw wrapped;
     }
     throw error;
@@ -501,7 +531,11 @@ export async function prepareLaneInvocation({
     env: childEnv,
     laneDir,
     artifactDir,
-    database,
+    // `database` is preserved for existing single-database receipt consumers;
+    // new callers must use `databases` so every leased mutable resource stays
+    // diagnosable after a failure.
+    database: databases[0]?.lease ?? null,
+    databases,
     async releaseResources({ success, signal }) {
       await releaseLeases(resources, { success, signal });
     },
@@ -748,6 +782,7 @@ function serializableLane(record) {
     artifact_dir: record.artifactDir ?? null,
     lane_dir: record.laneDir ?? null,
     database: record.database ?? null,
+    databases: record.databases ?? [],
     database_retained: record.databaseRetained ?? false,
     cleanup_error: record.cleanupError ?? null,
     interrupted_by: record.interruptedBy ?? null,
@@ -902,11 +937,13 @@ export async function runExecutionPlan(
         record.cleanupError = detail;
         // A failed provider release leaves database lifetime unknown. Treat it
         // as retained so operators never assume the disposable evidence is gone.
-        if (invocation.database) record.databaseRetained = true;
+        if (invocation.databases.length > 0) record.databaseRetained = true;
         fail(new Error(detail));
       } finally {
         cleanupScope.dispose();
-        record.databaseRetained ||= invocation.database?.retained ?? false;
+        record.databases = databaseReceiptEntries(invocation.databases);
+        record.databaseRetained ||=
+          invocation.databases.some(({ lease }) => lease.retained ?? false);
         if (interruptedSignal) record.interruptedBy ??= interruptedSignal;
       }
     };
@@ -939,6 +976,7 @@ export async function runExecutionPlan(
       record.artifactDir = invocation.artifactDir;
       record.laneDir = invocation.laneDir;
       record.database = invocation.database?.database ?? null;
+      record.databases = databaseReceiptEntries(invocation.databases);
       // A crash during the child process must still leave an exact diagnostic
       // directory/database identity in the receipt.
       await refreshReceipt();
@@ -996,6 +1034,7 @@ export async function runExecutionPlan(
       if (interruptedSignal) record.interruptedBy ??= interruptedSignal;
       if (error?.cleanupError) record.cleanupError ??= error.cleanupError;
       if (error?.database) record.database ??= error.database;
+      if (error?.databases) record.databases ??= error.databases;
       if (error?.databaseRetained) record.databaseRetained = true;
       fail(error);
       record.finishedAt = new Date(now()).toISOString();
@@ -1021,6 +1060,7 @@ export async function runExecutionPlan(
         status: record.status ?? 1,
         artifact_dir: record.artifactDir ?? null,
         database: record.database ?? null,
+        databases: record.databases ?? [],
       });
     }
   };

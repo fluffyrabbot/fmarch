@@ -67,7 +67,7 @@ const artifactContracts = Object.freeze([
   }),
   artifactContract({
     id: "backup-restore",
-    script: "tools/live_stack_backup_restore_drill.mjs",
+    script: "test:live-stack-backup-restore-drill",
     outputs: [devTestGameBackupRestoreProofPath, devTestGameBackupRestoreDumpPath],
   }),
   artifactContract({
@@ -106,7 +106,7 @@ const artifactContracts = Object.freeze([
   }),
   artifactContract({
     id: "identity-adapter-proof",
-    script: "tools/auth_invite_role_proof.mjs",
+    script: "test:auth-invite-role-proof",
     outputs: [devTestGameIdentityAdapterProofPath],
   }),
   artifactContract({
