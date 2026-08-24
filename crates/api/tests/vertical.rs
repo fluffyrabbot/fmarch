@@ -6060,7 +6060,31 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     .unwrap();
     assert_eq!(search.results.len(), 1);
     assert!(search.results[0].href.contains("/discussions/general/t/"));
-    assert!(search.next_cursor.is_some());
+    assert_eq!(search.results[0].kind, "discussions");
+    let first_search_href = search.results[0].href.clone();
+    let search_cursor = search.next_cursor.expect("public search cursor");
+    let search_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/search?q=second&filter=discussions&limit=1&cursor={search_cursor}"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(search_response.status(), StatusCode::OK);
+    let older_search: PublicSearchPage = serde_json::from_slice(
+        &to_bytes(search_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(older_search.results.len(), 1);
+    assert_ne!(older_search.results[0].href, first_search_href);
 
     let hidden = app
         .clone()

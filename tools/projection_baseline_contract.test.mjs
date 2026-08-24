@@ -87,8 +87,9 @@ test("checked-in projection schema preserves its baseline and append-only sequen
     "0029_post_embed.sql",
     "0030_public_publication_index.sql",
     "0031_thread_view_prephase_posts.sql",
+    "0032_publication_search_vector.sql",
   ]);
-  assert.equal(report.migration_file_count, 31);
+  assert.equal(report.migration_file_count, 32);
   assert.ok(report.statement_count > 100);
 });
 

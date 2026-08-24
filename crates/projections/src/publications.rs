@@ -25,23 +25,16 @@ pub(super) async fn record_forum_surface(
     let slug: String = row.get("slug");
     let title: String = row.get("title");
     let visible: bool = row.get::<String, _>("visibility") == "visible";
-    sqlx::query(
-        r#"
-        INSERT INTO publication_surface (surface_id, search_group, title, href, visible, updated_seq)
-        VALUES ($1, 'discussions', $2, $3, $4, $5)
-        ON CONFLICT (surface_id) DO UPDATE
-        SET title = EXCLUDED.title, href = EXCLUDED.href, visible = EXCLUDED.visible,
-            updated_seq = EXCLUDED.updated_seq
-        "#,
+    record_surface(
+        tx,
+        topic_id,
+        "discussions",
+        &title,
+        &format!("/discussions/{slug}/t/{topic_id}"),
+        visible,
+        updated_seq,
     )
-    .bind(topic_id)
-    .bind(title)
-    .bind(format!("/discussions/{slug}/t/{topic_id}"))
-    .bind(visible)
-    .bind(updated_seq)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
+    .await
 }
 
 pub(super) async fn record_game_surface(
@@ -62,23 +55,16 @@ pub(super) async fn record_game_surface(
     let pack_key: String = row.get("pack_key");
     let status: String = row.get("status");
     let visible = matches!(status.as_str(), "active" | "completed");
-    sqlx::query(
-        r#"
-        INSERT INTO publication_surface (surface_id, search_group, title, href, visible, updated_seq)
-        VALUES ($1, 'games', $2, $3, $4, $5)
-        ON CONFLICT (surface_id) DO UPDATE
-        SET title = EXCLUDED.title, href = EXCLUDED.href, visible = EXCLUDED.visible,
-            updated_seq = EXCLUDED.updated_seq
-        "#,
+    record_surface(
+        tx,
+        game_id,
+        "games",
+        &format!("{pack_key} game"),
+        &format!("/games/{game_id}"),
+        visible,
+        updated_seq,
     )
-    .bind(game_id)
-    .bind(format!("{pack_key} game"))
-    .bind(format!("/games/{game_id}"))
-    .bind(visible)
-    .bind(updated_seq)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
+    .await
 }
 
 pub(super) async fn record_profile_surface(
@@ -105,21 +91,15 @@ pub(super) async fn record_profile_surface(
     let handle: String = row.get("handle");
     let display_name: String = row.get("display_name");
     let bio: String = row.get("bio");
-    sqlx::query(
-        r#"
-        INSERT INTO publication_surface (surface_id, search_group, title, href, visible, updated_seq)
-        VALUES ($1, 'profiles', $2, $3, $4, $5)
-        ON CONFLICT (surface_id) DO UPDATE
-        SET title = EXCLUDED.title, href = EXCLUDED.href, visible = EXCLUDED.visible,
-            updated_seq = EXCLUDED.updated_seq
-        "#,
+    record_surface(
+        tx,
+        profile_id,
+        "profiles",
+        &display_name,
+        &format!("/u/{handle}"),
+        true,
+        updated_seq,
     )
-    .bind(profile_id)
-    .bind(display_name)
-    .bind(format!("/u/{handle}"))
-    .bind(true)
-    .bind(updated_seq)
-    .execute(&mut **tx)
     .await?;
     record_publication(
         tx,
@@ -145,13 +125,13 @@ pub(super) async fn record_publication(
     sqlx::query(
         r#"
         INSERT INTO public_publication
-            (surface_id, source_seq, body, href, author_profile_id, occurred_at, visible)
-        SELECT $1, $2, $3,
+            (surface_id, source_seq, surface_title, body, href, author_profile_id, occurred_at, visible)
+        SELECT $1, $2, surface.title, $3,
                CASE WHEN $4 = '' THEN surface.href ELSE surface.href || $4 || $2::text END,
                $5, $6, TRUE
         FROM publication_surface AS surface WHERE surface.surface_id = $1
         ON CONFLICT (surface_id, source_seq) DO UPDATE
-        SET body = EXCLUDED.body, href = EXCLUDED.href,
+        SET surface_title = EXCLUDED.surface_title, body = EXCLUDED.body, href = EXCLUDED.href,
             author_profile_id = EXCLUDED.author_profile_id,
             occurred_at = EXCLUDED.occurred_at, visible = TRUE
         "#,
@@ -162,6 +142,43 @@ pub(super) async fn record_publication(
     .bind(fragment_prefix)
     .bind(author_profile_id)
     .bind(occurred_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn record_surface(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    surface_id: Uuid,
+    search_group: &str,
+    title: &str,
+    href: &str,
+    visible: bool,
+    updated_seq: i64,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO publication_surface (surface_id, search_group, title, href, visible, updated_seq)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (surface_id) DO UPDATE
+        SET search_group = EXCLUDED.search_group, title = EXCLUDED.title, href = EXCLUDED.href,
+            visible = EXCLUDED.visible, updated_seq = EXCLUDED.updated_seq
+        "#,
+    )
+    .bind(surface_id)
+    .bind(search_group)
+    .bind(title)
+    .bind(href)
+    .bind(visible)
+    .bind(updated_seq)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        "UPDATE public_publication SET surface_title = $2 \
+         WHERE surface_id = $1 AND surface_title IS DISTINCT FROM $2",
+    )
+    .bind(surface_id)
+    .bind(title)
     .execute(&mut **tx)
     .await?;
     Ok(())

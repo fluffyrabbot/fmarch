@@ -444,6 +444,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "public_profile_pkey",
     "public_publication_author_idx",
     "public_publication_pkey",
+    "public_publication_search_idx",
     "public_publication_surface_page_idx",
     "public_watch_member_idx",
     "public_watch_member_target_key",
@@ -881,6 +882,35 @@ async fn erasure_support_indexes_have_exact_catalog_definitions(pool: PgPool) {
         &definitions,
         EXPECTED_ERASURE_INDEX_DEFINITIONS,
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn public_search_uses_a_stored_weighted_vector_and_visible_gin_index(pool: PgPool) {
+    let expression: String = sqlx::query_scalar(
+        "SELECT generation_expression \
+         FROM information_schema.columns \
+         WHERE table_schema = 'public' \
+           AND table_name = 'public_publication' \
+           AND column_name = 'search_vector'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("read public search vector generation expression");
+    assert!(expression.contains("setweight"));
+    assert!(expression.contains("surface_title"));
+    assert!(expression.contains("body"));
+    assert!(expression.contains("english"));
+
+    let index_definition: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes \
+         WHERE schemaname = 'public' AND indexname = 'public_publication_search_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("read public search index definition");
+    assert!(index_definition.contains("USING gin"));
+    assert!(index_definition.contains("search_vector"));
+    assert!(index_definition.contains("WHERE visible"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

@@ -2247,8 +2247,8 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
         &pool,
         "signal_member",
         "signal_member",
-        "Signal Member",
-        "Studies public signals",
+        "Legacy Beacon",
+        "Studies public signals rankingtoken",
         ProfileVisibility::Public,
         1,
     )
@@ -2273,7 +2273,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
             EventInput::new(
                 "DiscussionTopicCreated",
                 1,
-                serde_json::json!({ "area_id": area, "title": "Signal theory", "author_profile_id": profile }),
+                serde_json::json!({ "area_id": area, "title": "Rankingtoken theory", "author_profile_id": profile }),
                 ActorId::Principal(fixture_principal_id("signal_member")),
                 3,
             ),
@@ -2353,7 +2353,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     let discussions = public_search(
         &pool,
         "signal",
-        PublicSearchFilter::Discussions,
+        PublicSearchFilter::Group(projections::PublicSearchGroup::Discussions),
         None,
         10,
         None,
@@ -2363,7 +2363,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     assert!(discussions
         .results
         .iter()
-        .all(|row| row.kind == "discussions"));
+        .all(|row| row.kind == projections::PublicSearchGroup::Discussions));
     assert!(discussions
         .results
         .iter()
@@ -2372,6 +2372,28 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
         .await
         .unwrap();
     assert!(private.results.is_empty());
+
+    let ranking = public_search(
+        &pool,
+        "rankingtoken",
+        PublicSearchFilter::All,
+        None,
+        10,
+        None,
+    )
+    .await
+    .unwrap();
+    let title_match = ranking
+        .results
+        .iter()
+        .find(|row| row.title == "Rankingtoken theory")
+        .expect("topic title match");
+    let body_match = ranking
+        .results
+        .iter()
+        .find(|row| row.title == "Legacy Beacon")
+        .expect("profile body match");
+    assert!(title_match.rank > body_match.rank);
 
     append_discussion_and_project_expected(
         &pool,
@@ -2390,7 +2412,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     assert!(public_search(
         &pool,
         "alpha",
-        PublicSearchFilter::Discussions,
+        PublicSearchFilter::Group(projections::PublicSearchGroup::Discussions),
         None,
         10,
         None,
@@ -2407,9 +2429,9 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
             principal: "signal_member",
             expected_revision: 1,
             edit: test_profile_edit(
-                "Signal Member",
+                "Current Beacon",
                 "Studies public signals",
-                ProfileVisibility::Private,
+                ProfileVisibility::Public,
             ),
             occurred_at: 10,
         },
@@ -2417,8 +2439,51 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     .await;
     assert!(public_search(
         &pool,
+        "legacy beacon",
+        PublicSearchFilter::Group(projections::PublicSearchGroup::Profiles),
+        None,
+        10,
+        None,
+    )
+    .await
+    .unwrap()
+    .results
+    .is_empty());
+    let renamed_profile = public_search(
+        &pool,
+        "current beacon",
+        PublicSearchFilter::Group(projections::PublicSearchGroup::Profiles),
+        None,
+        10,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(!renamed_profile.results.is_empty());
+    assert!(renamed_profile
+        .results
+        .iter()
+        .all(|row| row.title == "Current Beacon"));
+
+    update_test_profile(
+        &pool,
+        TestProfileUpdate {
+            profile_id: profile,
+            principal: "signal_member",
+            expected_revision: 2,
+            edit: test_profile_edit(
+                "Current Beacon",
+                "Studies public signals",
+                ProfileVisibility::Private,
+            ),
+            occurred_at: 11,
+        },
+    )
+    .await;
+    assert!(public_search(
+        &pool,
         "signal",
-        PublicSearchFilter::Profiles,
+        PublicSearchFilter::Group(projections::PublicSearchGroup::Profiles),
         None,
         10,
         None,
@@ -2430,10 +2495,20 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     rebuild_profile_stream(&pool, profile).await.unwrap();
 
     rebuild(&pool, game).await.unwrap();
-    let rebuilt_games = public_search(&pool, "signal", PublicSearchFilter::Games, None, 10, None)
-        .await
-        .unwrap();
-    assert!(rebuilt_games.results.iter().any(|row| row.kind == "games"));
+    let rebuilt_games = public_search(
+        &pool,
+        "signal",
+        PublicSearchFilter::Group(projections::PublicSearchGroup::Games),
+        None,
+        10,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(rebuilt_games
+        .results
+        .iter()
+        .any(|row| row.kind == projections::PublicSearchGroup::Games));
     assert!(rebuilt_games
         .results
         .iter()
@@ -2553,13 +2628,18 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         .unwrap()
         .posts
         .is_empty());
-    assert!(
-        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10, None)
-            .await
-            .unwrap()
-            .results
-            .is_empty()
-    );
+    assert!(public_search(
+        &pool,
+        "zebra",
+        PublicSearchFilter::Group(projections::PublicSearchGroup::Games),
+        None,
+        10,
+        None,
+    )
+    .await
+    .unwrap()
+    .results
+    .is_empty());
     assert_eq!(
         projections::moderation_report_receipt(&pool, report_id, reporter)
             .await
@@ -2599,11 +2679,18 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
         1
     );
     assert_eq!(
-        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10, None)
-            .await
-            .unwrap()
-            .results
-            .len(),
+        public_search(
+            &pool,
+            "zebra",
+            PublicSearchFilter::Group(projections::PublicSearchGroup::Games),
+            None,
+            10,
+            None,
+        )
+        .await
+        .unwrap()
+        .results
+        .len(),
         1
     );
 
@@ -2655,11 +2742,18 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
     assert_eq!(rebuilt.case.status, "dismissed");
     assert_eq!(rebuilt.history, detail.history);
     assert_eq!(
-        public_search(&pool, "zebra", PublicSearchFilter::Games, None, 10, None)
-            .await
-            .unwrap()
-            .results
-            .len(),
+        public_search(
+            &pool,
+            "zebra",
+            PublicSearchFilter::Group(projections::PublicSearchGroup::Games),
+            None,
+            10,
+            None,
+        )
+        .await
+        .unwrap()
+        .results
+        .len(),
         1
     );
 }

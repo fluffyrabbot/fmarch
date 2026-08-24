@@ -481,15 +481,19 @@ async fn public_search(
     }
     let (filter, filter_label) = match query.filter.as_deref().unwrap_or("all") {
         "all" => (projections::PublicSearchFilter::All, "all"),
-        "discussions" => (projections::PublicSearchFilter::Discussions, "discussions"),
-        "profiles" => (projections::PublicSearchFilter::Profiles, "profiles"),
-        "games" => (projections::PublicSearchFilter::Games, "games"),
-        _ => {
-            return Err(ApiError::Reject {
-                status: StatusCode::BAD_REQUEST,
-                error: RejectCode::Internal,
-                message: "search filter must be all, discussions, profiles, or games".to_string(),
-            })
+        value => {
+            let Some(group) = projections::PublicSearchGroup::parse(value) else {
+                return Err(ApiError::Reject {
+                    status: StatusCode::BAD_REQUEST,
+                    error: RejectCode::Internal,
+                    message: "search filter must be all, discussions, profiles, or games"
+                        .to_string(),
+                });
+            };
+            (
+                projections::PublicSearchFilter::Group(group),
+                group.as_str(),
+            )
         }
     };
     let cursor = query
@@ -517,7 +521,10 @@ async fn public_search(
         next_cursor: page.next_cursor.map(|cursor| {
             format!(
                 "{}:{}:{}:{}",
-                cursor.rank, cursor.updated_seq, cursor.document_kind, cursor.document_key
+                cursor.rank,
+                cursor.updated_seq,
+                cursor.document_kind.as_str(),
+                cursor.document_key
             )
         }),
     }))
@@ -537,18 +544,12 @@ fn parse_public_search_cursor(value: &str) -> Result<projections::PublicSearchCu
         .map_err(|_| invalid_public_search_cursor())?;
     let document_kind = parts
         .next()
-        .ok_or_else(invalid_public_search_cursor)?
-        .to_string();
+        .and_then(projections::PublicSearchGroup::parse)
+        .ok_or_else(invalid_public_search_cursor)?;
     let document_key = parts
         .next()
         .filter(|part| !part.is_empty())
         .ok_or_else(invalid_public_search_cursor)?;
-    if !matches!(
-        document_kind.as_str(),
-        "discussion_topic" | "discussion_post" | "profile" | "game" | "game_post"
-    ) {
-        return Err(invalid_public_search_cursor());
-    }
     Ok(projections::PublicSearchCursor {
         rank,
         updated_seq,

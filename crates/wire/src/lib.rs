@@ -2027,7 +2027,7 @@ pub struct PublicSearchPage {
 impl From<projections::PublicSearchRow> for PublicSearchResult {
     fn from(row: projections::PublicSearchRow) -> Self {
         PublicSearchResult {
-            kind: row.kind,
+            kind: row.kind.as_str().to_string(),
             title: row.title,
             excerpt: row.excerpt,
             href: row.href,

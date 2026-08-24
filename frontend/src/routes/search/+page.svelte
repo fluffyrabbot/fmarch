@@ -3,11 +3,9 @@
   export let data;
 
   const KIND_LABELS = {
-    discussion_topic: "Discussion topic",
-    discussion_post: "Discussion post",
-    profile: "Profile",
-    game: "Game",
-    game_post: "Game post",
+    discussions: "Discussion",
+    profiles: "Profile",
+    games: "Game or public post",
   };
 
   function kindLabel(kind) {

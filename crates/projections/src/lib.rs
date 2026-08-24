@@ -558,16 +558,40 @@ pub struct GameIndexPage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PublicSearchFilter {
-    All,
+pub enum PublicSearchGroup {
     Discussions,
     Profiles,
     Games,
 }
 
+impl PublicSearchGroup {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Discussions => "discussions",
+            Self::Profiles => "profiles",
+            Self::Games => "games",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "discussions" => Some(Self::Discussions),
+            "profiles" => Some(Self::Profiles),
+            "games" => Some(Self::Games),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PublicSearchFilter {
+    All,
+    Group(PublicSearchGroup),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublicSearchRow {
-    pub kind: String,
+    pub kind: PublicSearchGroup,
     pub title: String,
     pub excerpt: String,
     pub href: String,
@@ -581,7 +605,7 @@ pub struct PublicSearchRow {
 pub struct PublicSearchCursor {
     pub rank: i64,
     pub updated_seq: i64,
-    pub document_kind: String,
+    pub document_kind: PublicSearchGroup,
     pub document_key: String,
 }
 
@@ -7322,34 +7346,26 @@ pub async fn public_search(
     let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
     let filter = match filter {
         PublicSearchFilter::All => "all",
-        PublicSearchFilter::Discussions => "discussions",
-        PublicSearchFilter::Profiles => "profiles",
-        PublicSearchFilter::Games => "games",
+        PublicSearchFilter::Group(group) => group.as_str(),
     };
     let rows = sqlx::query(
         r#"
-        WITH search_query AS (
-            SELECT websearch_to_tsquery('english', $1) AS value
+        WITH search_query AS NOT MATERIALIZED (
+            SELECT websearch_to_tsquery('english'::regconfig, $1) AS value
         ), ranked AS (
             SELECT surface.search_group AS document_kind,
                    publication.surface_id::text || '-' || publication.source_seq::text AS document_key,
-                   surface.title, publication.href, publication.source_seq AS updated_seq,
+                   publication.surface_title AS title, publication.href, publication.source_seq AS updated_seq,
                    publication.occurred_at AS published_at,
                    ROUND(ts_rank_cd(
-                       to_tsvector('english', concat_ws(' ', surface.title, publication.body)),
+                       publication.search_vector,
                        search_query.value
                    )::numeric * 1000000)::BIGINT AS rank,
-                   regexp_replace(
-                       ts_headline(
-                           'english', concat_ws(' ', surface.title, publication.body), search_query.value,
-                           'MaxWords=24, MinWords=8'
-                       ), '</?b>', '', 'g'
-                   ) AS excerpt
+                   publication.surface_title, publication.body
             FROM public_publication AS publication
             JOIN publication_surface AS surface ON surface.surface_id = publication.surface_id
             CROSS JOIN search_query
-            WHERE to_tsvector('english', concat_ws(' ', surface.title, publication.body))
-                      @@ search_query.value
+            WHERE publication.search_vector @@ search_query.value
               AND publication.visible AND surface.visible
               AND ($2 = 'all' OR surface.search_group = $2)
               AND NOT EXISTS (
@@ -7359,16 +7375,32 @@ pub async fn public_search(
                     AND mute.active
                     AND mute.target_profile_id = publication.author_profile_id
               )
+        ), limited AS MATERIALIZED (
+            SELECT document_kind, document_key, title, href, updated_seq, published_at, rank,
+                   surface_title, body
+            FROM ranked
+            WHERE $4::bigint IS NULL
+               OR rank < $4
+               OR (rank = $4 AND updated_seq < $5)
+               OR (rank = $4 AND updated_seq = $5 AND document_kind > $6)
+               OR (rank = $4 AND updated_seq = $5 AND document_kind = $6 AND document_key > $7)
+            ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
+            LIMIT $8
         )
-        SELECT document_kind, document_key, title, href, updated_seq, published_at, rank, excerpt
-        FROM ranked
-        WHERE $4::bigint IS NULL
-           OR rank < $4
-           OR (rank = $4 AND updated_seq < $5)
-           OR (rank = $4 AND updated_seq = $5 AND document_kind > $6)
-           OR (rank = $4 AND updated_seq = $5 AND document_kind = $6 AND document_key > $7)
-        ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
-        LIMIT $8
+        SELECT limited.document_kind, limited.document_key, limited.title, limited.href,
+               limited.updated_seq, limited.published_at, limited.rank,
+               regexp_replace(
+                   ts_headline(
+                       'english'::regconfig,
+                       concat_ws(' ', limited.surface_title, limited.body),
+                       search_query.value,
+                       'MaxWords=24, MinWords=8'
+                   ), '</?b>', '', 'g'
+               ) AS excerpt
+        FROM limited
+        CROSS JOIN search_query
+        ORDER BY limited.rank DESC, limited.updated_seq DESC,
+                 limited.document_kind, limited.document_key
         "#,
     )
     .bind(query)
@@ -7385,23 +7417,31 @@ pub async fn public_search(
     let results: Vec<_> = rows
         .into_iter()
         .take(limit as usize)
-        .map(|row| PublicSearchRow {
-            kind: row.get("document_kind"),
-            title: row.get("title"),
-            excerpt: row.get("excerpt"),
-            href: row.get("href"),
-            updated_seq: row.get("updated_seq"),
-            published_at: row.get("published_at"),
-            rank: row.get("rank"),
-            document_key: row.get("document_key"),
+        .map(|row| {
+            let kind: String = row.get("document_kind");
+            let kind = PublicSearchGroup::parse(&kind).ok_or_else(|| {
+                ProjectionError::Db(sqlx::Error::Protocol(format!(
+                    "public search returned unknown group {kind}"
+                )))
+            })?;
+            Ok(PublicSearchRow {
+                kind,
+                title: row.get("title"),
+                excerpt: row.get("excerpt"),
+                href: row.get("href"),
+                updated_seq: row.get("updated_seq"),
+                published_at: row.get("published_at"),
+                rank: row.get("rank"),
+                document_key: row.get("document_key"),
+            })
         })
-        .collect();
+        .collect::<Result<_, ProjectionError>>()?;
     let next_cursor = has_more.then(|| {
         let last = results.last().expect("full search page has a final result");
         PublicSearchCursor {
             rank: last.rank,
             updated_seq: last.updated_seq,
-            document_kind: last.kind.clone(),
+            document_kind: last.kind,
             document_key: last.document_key.clone(),
         }
     });
