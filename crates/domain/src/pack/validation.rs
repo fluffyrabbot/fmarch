@@ -2118,6 +2118,7 @@ fn validate_night_resolution_policy(
         "Kill with Strongman",
     );
     validate_night_resolution_declares_block_protect_actions(issues, path, policy, pack);
+    validate_night_resolution_specialized_protect_action_routing(issues, path, policy, pack);
     validate_night_resolution_declares_kill_actions(issues, path, policy, pack);
     validate_night_resolution_declares_strongman_actions(issues, path, policy, pack);
     validate_night_resolution_jailkeep_is_explicit_block_and_protect(issues, path, policy);
@@ -2431,7 +2432,7 @@ fn validate_night_resolution_team_kill_actions(
             );
             continue;
         }
-        if !matches.iter().any(|action| {
+        if !matches.iter().all(|action| {
             action.window.is_night_resolution_window() && action.has_ability(IrAbility::Kill)
         }) {
             issue(
@@ -3901,6 +3902,65 @@ fn validate_night_resolution_declares_block_protect_actions(
     }
 }
 
+fn validate_night_resolution_specialized_protect_action_routing(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &NightResolutionPolicy,
+    pack: &Pack,
+) {
+    for (source, action) in night_resolution_pack_actions(pack) {
+        if !action.window.is_night_resolution_window() || !action.has_ability(IrAbility::Protect) {
+            continue;
+        }
+
+        let declared_in =
+            |action_ids: &[String]| action_ids.iter().any(|action_id| action_id == &action.id);
+        if action.has_modifier(Modifier::Bodyguard) && !declared_in(&policy.bodyguard_action_ids) {
+            issue(
+                issues,
+                format!("{policy_path}.bodyguard_action_ids"),
+                format!(
+                    "night_resolution Bodyguard Protect action `{}` on {source} must be declared in bodyguard_action_ids",
+                    action.id
+                ),
+            );
+        }
+        if action.has_modifier(Modifier::Martyr) && !declared_in(&policy.martyr_action_ids) {
+            issue(
+                issues,
+                format!("{policy_path}.martyr_action_ids"),
+                format!(
+                    "night_resolution Martyr Protect action `{}` on {source} must be declared in martyr_action_ids",
+                    action.id
+                ),
+            );
+        }
+        if action.has_modifier(Modifier::Cpr)
+            && action.has_ability(IrAbility::Kill)
+            && !declared_in(&policy.cpr_action_ids)
+        {
+            issue(
+                issues,
+                format!("{policy_path}.cpr_action_ids"),
+                format!(
+                    "night_resolution CPR Protect+Kill action `{}` on {source} must be declared in cpr_action_ids",
+                    action.id
+                ),
+            );
+        }
+        if action.has_modifier(Modifier::Babysitter) && !declared_in(&policy.protect_action_ids) {
+            issue(
+                issues,
+                format!("{policy_path}.protect_action_ids"),
+                format!(
+                    "night_resolution Babysitter Protect action `{}` on {source} must be declared in protect_action_ids",
+                    action.id
+                ),
+            );
+        }
+    }
+}
+
 fn validate_night_resolution_declares_kill_actions(
     issues: &mut Vec<PackValidationIssue>,
     policy_path: &str,
@@ -3999,10 +4059,7 @@ fn validate_night_resolution_intercept_cause_policy(
 ) {
     let path = format!("{policy_path}.intercept_cause_policy");
     let intercept_sources = night_resolution_intercept_source_ids(policy);
-    if intercept_sources.is_empty() {
-        return;
-    }
-    if policy.intercept_cause_policy.is_empty() {
+    if !intercept_sources.is_empty() && policy.intercept_cause_policy.is_empty() {
         issue(
             issues,
             path.clone(),
@@ -4108,10 +4165,7 @@ fn validate_night_resolution_cpr_harm_cause_policy(
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
-    if cpr_sources.is_empty() {
-        return;
-    }
-    if policy.cpr_harm_cause_policy.is_empty() {
+    if !cpr_sources.is_empty() && policy.cpr_harm_cause_policy.is_empty() {
         issue(
             issues,
             path.clone(),
@@ -4165,10 +4219,7 @@ fn validate_night_resolution_guard_dependency_cause_policy(
 ) {
     let path = format!("{policy_path}.guard_dependency_cause_policy");
     let guard_sources = night_resolution_guard_dependency_source_ids(pack);
-    if guard_sources.is_empty() {
-        return;
-    }
-    if policy.guard_dependency_cause_policy.is_empty() {
+    if !guard_sources.is_empty() && policy.guard_dependency_cause_policy.is_empty() {
         issue(
             issues,
             path.clone(),
@@ -4222,10 +4273,7 @@ fn validate_night_resolution_hide_dependency_cause_policy(
 ) {
     let path = format!("{policy_path}.hide_dependency_cause_policy");
     let hide_sources = night_resolution_hide_dependency_source_ids(pack);
-    if hide_sources.is_empty() {
-        return;
-    }
-    if policy.hide_dependency_cause_policy.is_empty() {
+    if !hide_sources.is_empty() && policy.hide_dependency_cause_policy.is_empty() {
         issue(
             issues,
             path.clone(),
@@ -4279,11 +4327,7 @@ fn validate_night_resolution_chosen_retaliation_cause_policy(
 ) {
     let path = format!("{policy_path}.chosen_retaliation_cause_policy");
     let retaliation_sources = night_resolution_chosen_retaliation_source_ids(pack);
-    if retaliation_sources.is_empty() {
-        return;
-    }
-
-    if policy.chosen_retaliation_cause_policy.is_empty() {
+    if !retaliation_sources.is_empty() && policy.chosen_retaliation_cause_policy.is_empty() {
         issue(
             issues,
             path.clone(),
@@ -4665,10 +4709,7 @@ fn validate_night_resolution_generated_kill_cause_policy(
 ) {
     let path = format!("{policy_path}.generated_kill_cause_policy");
     let generated_sources = night_resolution_generated_kill_source_ids(pack);
-    if generated_sources.is_empty() {
-        return;
-    }
-    if policy.generated_kill_cause_policy.is_empty() {
+    if !generated_sources.is_empty() && policy.generated_kill_cause_policy.is_empty() {
         issue(
             issues,
             path.clone(),
@@ -4768,10 +4809,7 @@ fn validate_night_resolution_trigger_fixpoint_policy(
 ) {
     let path = format!("{policy_path}.trigger_fixpoint_policy");
     let generated_sources = night_resolution_generated_kill_source_ids(pack);
-    if generated_sources.is_empty() {
-        return;
-    }
-    if policy.trigger_fixpoint_policy.is_empty() {
+    if !generated_sources.is_empty() && policy.trigger_fixpoint_policy.is_empty() {
         issue(
             issues,
             path.clone(),
@@ -4919,7 +4957,7 @@ fn validate_night_resolution_bucket(
         }
         if !matches
             .iter()
-            .any(|action| action.window.is_night_resolution_window() && predicate(action))
+            .all(|action| action.window.is_night_resolution_window() && predicate(action))
         {
             issue(
                 issues,

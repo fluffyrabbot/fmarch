@@ -4342,6 +4342,54 @@ fn night_resolution_intercept_cause_policy_classifies_every_interceptor() {
 }
 
 #[test]
+fn night_resolution_cause_policies_reject_surplus_entries_without_sources() {
+    let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+    value["roles"] = json!({});
+    value["item_actions"] = json!({});
+    value["triggers"] = json!([]);
+    value["night_resolution"]["bodyguard_action_ids"] = json!([]);
+    value["night_resolution"]["martyr_action_ids"] = json!([]);
+    value["night_resolution"]["cpr_action_ids"] = json!([]);
+
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "night_resolution.intercept_cause_policy.bodyguard",
+        "unknown night_resolution intercept source",
+    );
+    assert_issue(
+        &err,
+        "night_resolution.cpr_harm_cause_policy.cpr_protect",
+        "unknown night_resolution CPR source",
+    );
+    assert_issue(
+        &err,
+        "night_resolution.guard_dependency_cause_policy.babysit",
+        "unknown night_resolution guard dependency source",
+    );
+    assert_issue(
+        &err,
+        "night_resolution.hide_dependency_cause_policy.hide",
+        "unknown night_resolution hide dependency source",
+    );
+    assert_issue(
+        &err,
+        "night_resolution.chosen_retaliation_cause_policy.hunter_retaliate",
+        "unknown night_resolution Retaliate action",
+    );
+    assert_issue(
+        &err,
+        "night_resolution.generated_kill_cause_policy.pgo_shoots_visitor",
+        "unknown night_resolution generated kill trigger",
+    );
+    assert_issue(
+        &err,
+        "night_resolution.trigger_fixpoint_policy.pgo_shoots_visitor",
+        "unknown night_resolution trigger fixpoint source",
+    );
+}
+
+#[test]
 fn night_resolution_guard_retaliation_policy_requires_intercept_source_and_kill_cause() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
@@ -4965,6 +5013,44 @@ fn night_resolution_kill_actions_must_be_explicit_conflict_policy() {
     }
 
     validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn night_resolution_shared_action_ids_must_share_bucket_and_team_kill_shapes() {
+    let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+    value["roles"]["doctor"]["actions"][0]["id"] = json!("factional_kill");
+    value["night_resolution"]["protect_action_ids"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("factional_kill"));
+
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "night_resolution.kill_action_ids",
+        "night_resolution action `factional_kill` must be a night/any Kill without Strongman/Cpr action",
+    );
+    assert_issue(
+        &err,
+        "night_resolution.team_kill_action_ids",
+        "night_resolution team kill action `factional_kill` must be a night/any Kill action",
+    );
+}
+
+#[test]
+fn night_resolution_specialized_protect_actions_require_each_modifier_route() {
+    let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+    value["roles"]["bodyguard"]["actions"][0]["modifiers"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("Babysitter"));
+
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "night_resolution.protect_action_ids",
+        "night_resolution Babysitter Protect action `bodyguard` on role `bodyguard` must be declared in protect_action_ids",
+    );
 }
 
 #[test]

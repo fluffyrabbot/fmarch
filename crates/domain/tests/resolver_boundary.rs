@@ -280,6 +280,26 @@ fn resolver_retires_validation_owned_night_resolution_policy_guards() {
         !coordinator.contains("fn night_resolution_derived_kill_cause_ids("),
         "the kill-cause catalog derivation belongs exclusively to validation"
     );
+
+    for retired_guard in [
+        "fn require_night_resolution_intercept_cause_policy(",
+        "fn require_night_resolution_cpr_harm_cause_policy(",
+        "fn require_night_resolution_guard_dependency_cause_policy(",
+        "fn require_night_resolution_specialized_protect_action_policy(",
+        "fn require_night_resolution_action_bucket_shapes(",
+        "fn require_night_resolution_team_kill_action_policy(",
+        "fn require_night_resolution_action_bucket_shape(",
+        "fn require_night_resolution_chosen_retaliation_cause_policy(",
+        "fn require_night_resolution_generated_kill_cause_policy(",
+        "fn require_night_resolution_trigger_fixpoint_policy(",
+        "fn require_night_resolution_hide_dependency_cause_policy(",
+        "fn night_resolution_pack_action(",
+    ] {
+        assert!(
+            !coordinator.contains(retired_guard),
+            "validation owns this policy grammar; the coordinator must not reintroduce `{retired_guard}`"
+        );
+    }
 }
 
 #[test]
