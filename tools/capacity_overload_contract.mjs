@@ -105,6 +105,14 @@ export function assertCapacityOverloadReport(report) {
     "game-index crawler workload drifted or exceeded its local proof budget",
   );
   assert(
+    scenarios.anonymousCrawler.searchPlan.returnedRows <= 21 &&
+      scenarios.anonymousCrawler.searchPlan.matchedRows <=
+      report.budgets.crawlerDocuments &&
+      scenarios.anonymousCrawler.searchPlan.examinedRows <=
+        report.budgets.crawlerDocuments + 10,
+    `search crawler plan exceeded its bounded result/document path: ${JSON.stringify(scenarios.anonymousCrawler.searchPlan)}`,
+  );
+  assert(
     Object.keys(scenarios.anonymousCrawler.statuses).every(
       (status) => Number(status) === 200,
     ),

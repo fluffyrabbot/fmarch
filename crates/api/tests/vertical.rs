@@ -9,10 +9,12 @@ use api::{
 };
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use futures_util::StreamExt;
 use identity::{StaticAccessTokenVerifier, VerifiedIdentity, WorkosSessionId};
 use media::{MediaLimits, MediaStore, VariantLimits};
 use principal::PrincipalId;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -24,9 +26,10 @@ use wire::{
     DiscussionTopicPage, GameIndexPage, GameThreadAuthor, InvestigationResultBody, MemberMutePage,
     MemberMuteState, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
     PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta,
-    PublicGameThreadPage, PublicInboxPage, PublicProfile, PublicSearchPage, RejectCode, RejectMsg,
-    ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage,
-    VoteTarget, PROTOCOL_VERSION,
+    PublicGameThreadPage, PublicInboxPage, PublicProfile, PublicSearchFilterValue,
+    PublicSearchPage, PublicSearchResultKind, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
+    SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget,
+    PROTOCOL_VERSION,
 };
 
 fn fixture_principal_json(label: impl AsRef<str>) -> serde_json::Value {
@@ -6060,7 +6063,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     .unwrap();
     assert_eq!(search.results.len(), 1);
     assert!(search.results[0].href.contains("/discussions/general/t/"));
-    assert_eq!(search.results[0].kind, "discussions");
+    assert_eq!(search.results[0].kind, PublicSearchResultKind::Discussion);
     let first_search_href = search.results[0].href.clone();
     let search_cursor = search.next_cursor.expect("public search cursor");
     let search_response = app
@@ -6123,7 +6126,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn public_search_cursor_rejects_malformed_values_and_accepts_each_group(pool: sqlx::PgPool) {
+async fn public_search_cursor_is_opaque_context_bound_and_accepts_each_group(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool);
     for cursor in [
         "abc:1:discussions:key",
@@ -6151,14 +6154,19 @@ async fn public_search_cursor_rejects_malformed_values_and_accepts_each_group(po
         let reject: RejectMsg =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
-        assert_eq!(reject.error, RejectCode::StreamConflict);
+        assert_eq!(reject.error, RejectCode::InvalidArgument);
     }
 
-    for (filter, cursor) in [
-        ("discussions", "1:1:discussions:doc-1"),
-        ("profiles", "1:1:profiles:doc-1"),
-        ("games", "1:1:games:doc-1"),
+    for (filter, filter_value, document_type) in [
+        (
+            "discussions",
+            PublicSearchFilterValue::Discussions,
+            "discussion_post",
+        ),
+        ("profiles", PublicSearchFilterValue::Profiles, "profile"),
+        ("games", PublicSearchFilterValue::Games, "game_post"),
     ] {
+        let cursor = public_search_test_cursor("ab", filter, document_type);
         let response = app
             .clone()
             .oneshot(
@@ -6178,9 +6186,47 @@ async fn public_search_cursor_rejects_malformed_values_and_accepts_each_group(po
         let page: PublicSearchPage =
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
-        assert_eq!(page.filter, filter);
+        assert_eq!(page.filter, filter_value);
         assert!(page.results.is_empty());
     }
+
+    let discussion_cursor = public_search_test_cursor("ab", "discussions", "discussion_post");
+    for uri in [
+        format!("/search?q=changed&filter=discussions&cursor={discussion_cursor}"),
+        format!("/search?q=ab&filter=games&cursor={discussion_cursor}"),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(uri)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let reject: RejectMsg =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(reject.error, RejectCode::InvalidArgument);
+    }
+}
+
+fn public_search_test_cursor(query: &str, filter: &str, document_type: &str) -> String {
+    URL_SAFE_NO_PAD.encode(
+        serde_json::to_vec(&serde_json::json!({
+            "version": 1,
+            "query_hash": format!("{:x}", Sha256::digest(query.as_bytes())),
+            "filter": filter,
+            "rank": 1,
+            "updated_seq": 1,
+            "document_type": document_type,
+            "document_key": "doc-1"
+        }))
+        .unwrap(),
+    )
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

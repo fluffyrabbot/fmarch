@@ -4,16 +4,39 @@
 use sqlx::Row;
 use uuid::Uuid;
 
-use crate::ProjectionError;
+use crate::{ProjectionError, PublicSearchDocumentType};
+
+pub(super) struct PublicPostDocument<'a> {
+    pub document_type: PublicSearchDocumentType,
+    pub surface_id: Uuid,
+    pub source_seq: i64,
+    pub body: &'a str,
+    pub fragment_prefix: &'a str,
+    pub author_profile_id: Option<Uuid>,
+    pub occurred_at: i64,
+}
+
+struct SurfaceSearchDocument<'a> {
+    surface_id: Uuid,
+    document_type: PublicSearchDocumentType,
+    title: &'a str,
+    body: &'a str,
+    href: &'a str,
+    author_profile_id: Option<Uuid>,
+    published_at: i64,
+    updated_seq: i64,
+    visible: bool,
+}
 
 pub(super) async fn record_forum_surface(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     topic_id: Uuid,
     updated_seq: i64,
+    occurred_at: i64,
 ) -> Result<(), ProjectionError> {
     let row = sqlx::query(
         r#"
-        SELECT topic.title, area.slug, topic.visibility
+        SELECT topic.title, topic.author_profile_id, area.slug, topic.visibility
         FROM discussion_topic AS topic
         JOIN discussion_area AS area ON area.area_id = topic.area_id
         WHERE topic.topic_id = $1
@@ -24,6 +47,7 @@ pub(super) async fn record_forum_surface(
     .await?;
     let slug: String = row.get("slug");
     let title: String = row.get("title");
+    let author_profile_id: Option<Uuid> = row.get("author_profile_id");
     let visible: bool = row.get::<String, _>("visibility") == "visible";
     record_surface(
         tx,
@@ -34,6 +58,21 @@ pub(super) async fn record_forum_surface(
         visible,
         updated_seq,
     )
+    .await?;
+    record_surface_search_document(
+        tx,
+        SurfaceSearchDocument {
+            surface_id: topic_id,
+            document_type: PublicSearchDocumentType::Discussion,
+            title: &title,
+            body: "",
+            href: &format!("/discussions/{slug}/t/{topic_id}"),
+            author_profile_id,
+            published_at: occurred_at,
+            updated_seq,
+            visible,
+        },
+    )
     .await
 }
 
@@ -41,6 +80,7 @@ pub(super) async fn record_game_surface(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
     updated_seq: i64,
+    occurred_at: i64,
 ) -> Result<(), ProjectionError> {
     let Some(row) = sqlx::query("SELECT pack_key, status FROM game_index WHERE game_id = $1")
         .bind(game_id)
@@ -55,14 +95,22 @@ pub(super) async fn record_game_surface(
     let pack_key: String = row.get("pack_key");
     let status: String = row.get("status");
     let visible = matches!(status.as_str(), "active" | "completed");
-    record_surface(
+    let title = format!("{pack_key} game");
+    let href = format!("/games/{game_id}");
+    record_surface(tx, game_id, "games", &title, &href, visible, updated_seq).await?;
+    record_surface_search_document(
         tx,
-        game_id,
-        "games",
-        &format!("{pack_key} game"),
-        &format!("/games/{game_id}"),
-        visible,
-        updated_seq,
+        SurfaceSearchDocument {
+            surface_id: game_id,
+            document_type: PublicSearchDocumentType::Game,
+            title: &title,
+            body: "",
+            href: &href,
+            author_profile_id: None,
+            published_at: occurred_at,
+            updated_seq,
+            visible,
+        },
     )
     .await
 }
@@ -91,11 +139,6 @@ pub(super) async fn record_profile_surface(
     let handle: String = row.get("handle");
     let display_name: String = row.get("display_name");
     let bio: String = row.get("bio");
-    let previous_title: Option<String> =
-        sqlx::query_scalar("SELECT title FROM publication_surface WHERE surface_id = $1")
-            .bind(profile_id)
-            .fetch_optional(&mut **tx)
-            .await?;
     record_surface(
         tx,
         profile_id,
@@ -106,53 +149,72 @@ pub(super) async fn record_profile_surface(
         updated_seq,
     )
     .await?;
-    if previous_title
-        .as_deref()
-        .is_some_and(|title| title != display_name)
-    {
-        propagate_surface_title(tx, profile_id, &display_name).await?;
-    }
-    record_publication(
+    record_surface_search_document(
         tx,
-        profile_id,
-        updated_seq,
-        &format!("{handle} {bio}"),
-        "",
-        Some(profile_id),
-        occurred_at,
+        SurfaceSearchDocument {
+            surface_id: profile_id,
+            document_type: PublicSearchDocumentType::Profile,
+            title: &display_name,
+            body: &format!("{handle} {bio}"),
+            href: &format!("/u/{handle}"),
+            author_profile_id: Some(profile_id),
+            published_at: occurred_at,
+            updated_seq,
+            visible: true,
+        },
     )
     .await
 }
 
 pub(super) async fn record_publication(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    surface_id: Uuid,
-    source_seq: i64,
-    body: &str,
-    fragment_prefix: &str,
-    author_profile_id: Option<Uuid>,
-    occurred_at: i64,
+    document: PublicPostDocument<'_>,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
         INSERT INTO public_publication
-            (surface_id, source_seq, surface_title, body, href, author_profile_id, occurred_at, visible)
-        SELECT $1, $2, surface.title, $3,
+            (surface_id, source_seq, body, href, author_profile_id, occurred_at, visible)
+        SELECT $1, $2, $3,
                CASE WHEN $4 = '' THEN surface.href ELSE surface.href || $4 || $2::text END,
                $5, $6, TRUE
         FROM publication_surface AS surface WHERE surface.surface_id = $1
         ON CONFLICT (surface_id, source_seq) DO UPDATE
-        SET surface_title = EXCLUDED.surface_title, body = EXCLUDED.body, href = EXCLUDED.href,
+        SET body = EXCLUDED.body, href = EXCLUDED.href,
             author_profile_id = EXCLUDED.author_profile_id,
             occurred_at = EXCLUDED.occurred_at, visible = TRUE
         "#,
     )
-    .bind(surface_id)
-    .bind(source_seq)
-    .bind(body)
-    .bind(fragment_prefix)
-    .bind(author_profile_id)
-    .bind(occurred_at)
+    .bind(document.surface_id)
+    .bind(document.source_seq)
+    .bind(document.body)
+    .bind(document.fragment_prefix)
+    .bind(document.author_profile_id)
+    .bind(document.occurred_at)
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO public_search_document (
+            surface_id, document_type, source_seq, title_text, body, href,
+            author_profile_id, published_at, updated_seq, visible
+        )
+        SELECT publication.surface_id, $2, publication.source_seq, '', publication.body,
+               publication.href, publication.author_profile_id, publication.occurred_at,
+               publication.source_seq, publication.visible
+        FROM public_publication AS publication
+        WHERE publication.surface_id = $1 AND publication.source_seq = $3
+        ON CONFLICT (surface_id, document_type, source_seq) DO UPDATE SET
+            body = EXCLUDED.body,
+            href = EXCLUDED.href,
+            author_profile_id = EXCLUDED.author_profile_id,
+            published_at = EXCLUDED.published_at,
+            updated_seq = EXCLUDED.updated_seq,
+            visible = EXCLUDED.visible
+        "#,
+    )
+    .bind(document.surface_id)
+    .bind(document.document_type.as_str())
+    .bind(document.source_seq)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -187,17 +249,34 @@ async fn record_surface(
     Ok(())
 }
 
-async fn propagate_surface_title(
+async fn record_surface_search_document(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    surface_id: Uuid,
-    title: &str,
+    document: SurfaceSearchDocument<'_>,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
-        "UPDATE public_publication SET surface_title = $2 \
-         WHERE surface_id = $1 AND surface_title IS DISTINCT FROM $2",
+        r#"
+        INSERT INTO public_search_document (
+            surface_id, document_type, source_seq, title_text, body, href,
+            author_profile_id, published_at, updated_seq, visible
+        ) VALUES ($1, $2, 0, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (surface_id, document_type, source_seq) DO UPDATE SET
+            title_text = EXCLUDED.title_text,
+            body = EXCLUDED.body,
+            href = EXCLUDED.href,
+            author_profile_id = EXCLUDED.author_profile_id,
+            updated_seq = EXCLUDED.updated_seq,
+            visible = EXCLUDED.visible
+        "#,
     )
-    .bind(surface_id)
-    .bind(title)
+    .bind(document.surface_id)
+    .bind(document.document_type.as_str())
+    .bind(document.title)
+    .bind(document.body)
+    .bind(document.href)
+    .bind(document.author_profile_id)
+    .bind(document.published_at)
+    .bind(document.updated_seq)
+    .bind(document.visible)
     .execute(&mut **tx)
     .await?;
     Ok(())

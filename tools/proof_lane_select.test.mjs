@@ -1124,7 +1124,7 @@ test('direct proof-tool sources select their owning proof lanes', () => {
 test('public search role proof is selected from search, projections, and public-platform HTTP', () => {
   for (const source of [
     'crates/projections/src/lib.rs',
-    'crates/projections/migrations/0033_publication_search_title_backfill.sql',
+    'crates/projections/migrations/0032_publication_search_vector.sql',
     'crates/api/src/public_platform_http.rs',
     'frontend/src/routes/search/+page.svelte',
     'tools/public_search_role_proof.mjs',

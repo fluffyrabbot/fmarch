@@ -2363,7 +2363,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     assert!(discussions
         .results
         .iter()
-        .all(|row| row.kind == projections::PublicSearchGroup::Discussions));
+        .all(|row| row.kind.group() == projections::PublicSearchGroup::Discussions));
     assert!(discussions
         .results
         .iter()
@@ -2394,6 +2394,10 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
         .find(|row| row.title == "Legacy Beacon")
         .expect("profile body match");
     assert!(title_match.rank > body_match.rank);
+    assert!(title_match
+        .excerpt
+        .iter()
+        .any(|segment| segment.highlighted && segment.text.contains("Rankingtoken")));
 
     append_discussion_and_project_expected(
         &pool,
@@ -2508,21 +2512,90 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     assert!(rebuilt_games
         .results
         .iter()
-        .any(|row| row.kind == projections::PublicSearchGroup::Games));
+        .any(|row| row.kind.group() == projections::PublicSearchGroup::Games));
     assert_eq!(rebuilt_games.results[0].title, "signal_pack game");
     assert!(rebuilt_games
         .results
         .iter()
         .all(|row| row.href.starts_with(&format!("/games/{game}"))));
-    let drifted_titles: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM public_publication p \
-         JOIN publication_surface s USING (surface_id) \
-         WHERE p.surface_title <> s.title",
+    let post_documents_with_indexed_titles: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM public_search_document \
+         WHERE document_type IN ('discussion_post', 'game_post') AND title_text <> ''",
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(drifted_titles, 0);
+    assert_eq!(post_documents_with_indexed_titles, 0);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn public_search_indexes_one_surface_title_without_flooding_post_results(pool: sqlx::PgPool) {
+    let surface_id = Uuid::from_u128(0x5355_5246_4143_455f_5345_4152_4348);
+    sqlx::query(
+        "INSERT INTO publication_surface \
+         (surface_id, search_group, title, href, visible, updated_seq) \
+         VALUES ($1, 'discussions', 'Singular Zebra Topic', '/discussions/proof/t/1', TRUE, 100)",
+    )
+    .bind(surface_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO public_search_document \
+         (surface_id, document_type, source_seq, title_text, body, href, published_at, updated_seq, visible) \
+         VALUES ($1, 'discussion', 0, 'Singular Zebra Topic', '', '/discussions/proof/t/1', 1, 100, TRUE)",
+    )
+    .bind(surface_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO public_search_document \
+         (surface_id, document_type, source_seq, title_text, body, href, published_at, updated_seq, visible) \
+         SELECT $1, 'discussion_post', value, '', 'needle body ' || value, \
+                '/discussions/proof/t/1#post-' || value, value, value, TRUE \
+         FROM generate_series(1, 100) AS value",
+    )
+    .bind(surface_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let title_results = public_search(
+        &pool,
+        "singular zebra",
+        PublicSearchFilter::All,
+        None,
+        50,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(title_results.results.len(), 1);
+    assert_eq!(
+        title_results.results[0].kind,
+        projections::PublicSearchDocumentType::Discussion
+    );
+
+    let body_results = public_search(&pool, "needle", PublicSearchFilter::All, None, 50, None)
+        .await
+        .unwrap();
+    assert_eq!(body_results.results.len(), 50);
+    assert!(body_results
+        .results
+        .iter()
+        .all(|row| row.kind == projections::PublicSearchDocumentType::DiscussionPost));
+    assert!(body_results.next_cursor.is_some());
+
+    let indexed_title_rows: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM public_search_document \
+         WHERE surface_id = $1 AND title_text <> ''",
+    )
+    .bind(surface_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(indexed_title_rows, 1);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

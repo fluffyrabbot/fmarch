@@ -565,6 +565,47 @@ pub enum PublicSearchGroup {
     Games,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PublicSearchDocumentType {
+    Discussion,
+    DiscussionPost,
+    Profile,
+    Game,
+    GamePost,
+}
+
+impl PublicSearchDocumentType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Discussion => "discussion",
+            Self::DiscussionPost => "discussion_post",
+            Self::Profile => "profile",
+            Self::Game => "game",
+            Self::GamePost => "game_post",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "discussion" => Some(Self::Discussion),
+            "discussion_post" => Some(Self::DiscussionPost),
+            "profile" => Some(Self::Profile),
+            "game" => Some(Self::Game),
+            "game_post" => Some(Self::GamePost),
+            _ => None,
+        }
+    }
+
+    pub const fn group(self) -> PublicSearchGroup {
+        match self {
+            Self::Discussion | Self::DiscussionPost => PublicSearchGroup::Discussions,
+            Self::Profile => PublicSearchGroup::Profiles,
+            Self::Game | Self::GamePost => PublicSearchGroup::Games,
+        }
+    }
+}
+
 impl PublicSearchGroup {
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -592,9 +633,9 @@ pub enum PublicSearchFilter {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublicSearchRow {
-    pub kind: PublicSearchGroup,
+    pub kind: PublicSearchDocumentType,
     pub title: String,
-    pub excerpt: String,
+    pub excerpt: Vec<PublicSearchExcerptSegment>,
     pub href: String,
     pub updated_seq: i64,
     pub published_at: i64,
@@ -603,10 +644,16 @@ pub struct PublicSearchRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PublicSearchExcerptSegment {
+    pub text: String,
+    pub highlighted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublicSearchCursor {
     pub rank: i64,
     pub updated_seq: i64,
-    pub document_kind: PublicSearchGroup,
+    pub document_type: PublicSearchDocumentType,
     pub document_key: String,
 }
 
@@ -1206,17 +1253,7 @@ async fn fold_event(
             let phase_opened_at = ev.payload["phase_opened_at"].as_i64();
             set_phase(tx, game_id, &phase_id, phase_opened_at).await?;
             activate_game_index(tx, game_id, &phase_id, ev.seq).await?;
-            publications::record_game_surface(tx, game_id, ev.seq).await?;
-            publications::record_publication(
-                tx,
-                game_id,
-                ev.seq,
-                "public game",
-                "",
-                None,
-                ev.occurred_at,
-            )
-            .await?;
+            publications::record_game_surface(tx, game_id, ev.seq, ev.occurred_at).await?;
         }
         "PhaseAdvanced" => {
             // Set the current phase; a new phase starts unlocked with no deadline.
@@ -1316,17 +1353,20 @@ async fn fold_event(
             )
             .await?;
             if public_main {
-                publications::record_game_surface(tx, game_id, ev.seq).await?;
+                publications::record_game_surface(tx, game_id, ev.seq, ev.occurred_at).await?;
                 publications::record_publication(
                     tx,
-                    game_id,
-                    ev.seq,
-                    publication_body
-                        .as_deref()
-                        .expect("public main retains a publication body"),
-                    "#thread-post-",
-                    None,
-                    ev.occurred_at,
+                    publications::PublicPostDocument {
+                        document_type: PublicSearchDocumentType::GamePost,
+                        surface_id: game_id,
+                        source_seq: ev.seq,
+                        body: publication_body
+                            .as_deref()
+                            .expect("public main retains a publication body"),
+                        fragment_prefix: "#thread-post-",
+                        author_profile_id: None,
+                        occurred_at: ev.occurred_at,
+                    },
                 )
                 .await?;
                 publications::record_public_citations(
@@ -1382,15 +1422,18 @@ async fn fold_event(
                     },
                 )
                 .await?;
-                publications::record_game_surface(tx, game_id, ev.seq).await?;
+                publications::record_game_surface(tx, game_id, ev.seq, ev.occurred_at).await?;
                 publications::record_publication(
                     tx,
-                    game_id,
-                    ev.seq,
-                    &body,
-                    "#thread-post-",
-                    None,
-                    ev.occurred_at,
+                    publications::PublicPostDocument {
+                        document_type: PublicSearchDocumentType::GamePost,
+                        surface_id: game_id,
+                        source_seq: ev.seq,
+                        body: &body,
+                        fragment_prefix: "#thread-post-",
+                        author_profile_id: None,
+                        occurred_at: ev.occurred_at,
+                    },
                 )
                 .await?;
             }
@@ -1862,7 +1905,7 @@ async fn fold_event(
             .execute(&mut **tx)
             .await?;
             complete_game_index(tx, game_id, ev.seq).await?;
-            publications::record_game_surface(tx, game_id, ev.seq).await?;
+            publications::record_game_surface(tx, game_id, ev.seq, ev.occurred_at).await?;
         }
 
         // Everything else (posts, channels) is not folded by THESE projections.
@@ -3682,6 +3725,14 @@ async fn set_moderation_target_visibility(
     .bind(visibility == "visible")
     .execute(&mut **tx)
     .await?;
+    sqlx::query(
+        "UPDATE public_search_document SET visible = $3 WHERE surface_id = $1 AND source_seq = $2",
+    )
+    .bind(surface_id)
+    .bind(source_seq)
+    .bind(visibility == "visible")
+    .execute(&mut **tx)
+    .await?;
     // Game live-stream invalidation is a source adapter side effect. The
     // generic moderation model never classifies the target; a non-game
     // surface simply produces no row here.
@@ -3921,17 +3972,6 @@ async fn fold_discussion_event(
             .bind(event.occurred_at)
             .execute(&mut **tx)
             .await?;
-            publications::record_forum_surface(tx, stream_id, event.seq).await?;
-            publications::record_publication(
-                tx,
-                stream_id,
-                event.seq,
-                "public discussion",
-                "",
-                author_profile_id,
-                event.occurred_at,
-            )
-            .await?;
         }
         forum::POST_SUBMITTED => {
             let body = str_field(&event.payload, "body", &event.kind)?;
@@ -3979,12 +4019,15 @@ async fn fold_discussion_event(
             };
             publications::record_publication(
                 tx,
-                stream_id,
-                event.seq,
-                &body,
-                "#post-",
-                author_profile_id,
-                event.occurred_at,
+                publications::PublicPostDocument {
+                    document_type: PublicSearchDocumentType::DiscussionPost,
+                    surface_id: stream_id,
+                    source_seq: event.seq,
+                    body: &body,
+                    fragment_prefix: "#post-",
+                    author_profile_id,
+                    occurred_at: event.occurred_at,
+                },
             )
             .await?;
             publications::record_public_citations(
@@ -4037,7 +4080,7 @@ async fn fold_discussion_event(
         _ => {}
     }
     if is_topic_event {
-        publications::record_forum_surface(tx, stream_id, event.seq).await?;
+        publications::record_forum_surface(tx, stream_id, event.seq, event.occurred_at).await?;
     }
     Ok(())
 }
@@ -7278,59 +7321,7 @@ pub async fn public_game_by_id(
 
 /// Production public-search statement. Plan tests EXPLAIN this exact text so a
 /// CTE-inlining regression cannot hide behind a parallel copy.
-pub const PUBLIC_SEARCH_SQL: &str = r#"
-        WITH search_query AS NOT MATERIALIZED (
-            SELECT websearch_to_tsquery('english'::regconfig, $1) AS value
-        ), ranked AS (
-            SELECT surface.search_group AS document_kind,
-                   publication.surface_id::text || '-' || publication.source_seq::text AS document_key,
-                   publication.surface_title AS title, publication.href, publication.source_seq AS updated_seq,
-                   publication.occurred_at AS published_at,
-                   ROUND(ts_rank_cd(
-                       publication.search_vector,
-                       search_query.value
-                   )::numeric * 1000000)::BIGINT AS rank,
-                   publication.surface_title, publication.body
-            FROM public_publication AS publication
-            JOIN publication_surface AS surface ON surface.surface_id = publication.surface_id
-            CROSS JOIN search_query
-            WHERE publication.search_vector @@ search_query.value
-              AND publication.visible AND surface.visible
-              AND ($2 = 'all' OR surface.search_group = $2)
-              AND NOT EXISTS (
-                  SELECT 1 FROM profile_mute AS mute
-                  WHERE $3::uuid IS NOT NULL
-                    AND mute.principal_id = $3
-                    AND mute.active
-                    AND mute.target_profile_id = publication.author_profile_id
-              )
-        ), limited AS MATERIALIZED (
-            SELECT document_kind, document_key, title, href, updated_seq, published_at, rank,
-                   surface_title, body
-            FROM ranked
-            WHERE $4::bigint IS NULL
-               OR rank < $4
-               OR (rank = $4 AND updated_seq < $5)
-               OR (rank = $4 AND updated_seq = $5 AND document_kind > $6)
-               OR (rank = $4 AND updated_seq = $5 AND document_kind = $6 AND document_key > $7)
-            ORDER BY rank DESC, updated_seq DESC, document_kind, document_key
-            LIMIT $8
-        )
-        SELECT limited.document_kind, limited.document_key, limited.title, limited.href,
-               limited.updated_seq, limited.published_at, limited.rank,
-               regexp_replace(
-                   ts_headline(
-                       'english'::regconfig,
-                       concat_ws(' ', limited.surface_title, limited.body),
-                       search_query.value,
-                       'MaxWords=24, MinWords=8'
-                   ), '</?b>', '', 'g'
-               ) AS excerpt
-        FROM limited
-        CROSS JOIN search_query
-        ORDER BY limited.rank DESC, limited.updated_seq DESC,
-                 limited.document_kind, limited.document_key
-        "#;
+pub const PUBLIC_SEARCH_SQL: &str = include_str!("../sql/public_search.sql");
 
 /// Search the public-only document projection by weighted PostgreSQL full-text
 /// rank. The cursor repeats the complete deterministic ordering tuple.
@@ -7355,7 +7346,7 @@ pub async fn public_search(
         .bind(viewer_principal_id)
         .bind(cursor.as_ref().map(|value| value.rank))
         .bind(cursor.as_ref().map(|value| value.updated_seq))
-        .bind(cursor.as_ref().map(|value| value.document_kind.as_str()))
+        .bind(cursor.as_ref().map(|value| value.document_type.as_str()))
         .bind(cursor.as_ref().map(|value| value.document_key.as_str()))
         .bind(fetch_limit)
         .fetch_all(pool)
@@ -7365,12 +7356,12 @@ pub async fn public_search(
         .into_iter()
         .take(limit as usize)
         .filter_map(|row| {
-            let kind: String = row.get("document_kind");
-            let kind = PublicSearchGroup::parse(&kind)?;
+            let kind: String = row.get("document_type");
+            let kind = PublicSearchDocumentType::parse(&kind)?;
             Some(PublicSearchRow {
                 kind,
                 title: row.get("title"),
-                excerpt: row.get("excerpt"),
+                excerpt: public_search_excerpt_segments(row.get("excerpt_marked")),
                 href: row.get("href"),
                 updated_seq: row.get("updated_seq"),
                 published_at: row.get("published_at"),
@@ -7384,7 +7375,7 @@ pub async fn public_search(
         PublicSearchCursor {
             rank: last.rank,
             updated_seq: last.updated_seq,
-            document_kind: last.kind,
+            document_type: last.kind,
             document_key: last.document_key.clone(),
         }
     });
@@ -7392,6 +7383,44 @@ pub async fn public_search(
         results,
         next_cursor,
     })
+}
+
+fn public_search_excerpt_segments(marked: String) -> Vec<PublicSearchExcerptSegment> {
+    const START: char = '\u{e000}';
+    const END: char = '\u{e001}';
+    let mut segments = Vec::new();
+    let mut remaining = marked.as_str();
+    while let Some(start) = remaining.find(START) {
+        if start > 0 {
+            segments.push(PublicSearchExcerptSegment {
+                text: remaining[..start].to_string(),
+                highlighted: false,
+            });
+        }
+        remaining = &remaining[start + START.len_utf8()..];
+        let Some(end) = remaining.find(END) else {
+            segments.push(PublicSearchExcerptSegment {
+                text: format!("{START}{remaining}"),
+                highlighted: false,
+            });
+            remaining = "";
+            break;
+        };
+        if end > 0 {
+            segments.push(PublicSearchExcerptSegment {
+                text: remaining[..end].to_string(),
+                highlighted: true,
+            });
+        }
+        remaining = &remaining[end + END.len_utf8()..];
+    }
+    if !remaining.is_empty() {
+        segments.push(PublicSearchExcerptSegment {
+            text: remaining.to_string(),
+            highlighted: false,
+        });
+    }
+    segments
 }
 
 /// Resolve one public discussion area by its stable URL slug.
@@ -8159,7 +8188,7 @@ pub async fn public_inbox(
         SELECT item.surface_id, item.source_seq, item.occurred_at,
                item.source_seq > subscription.read_through_seq AS unread,
                subscription.active AS subscribed,
-               publication.surface_title AS title, publication.href
+               surface.title, publication.href
         FROM public_inbox_item AS item
         JOIN public_watch AS subscription
           ON subscription.subscription_id = item.subscription_id

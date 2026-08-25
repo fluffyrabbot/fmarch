@@ -10,16 +10,19 @@ export async function load({ locals, cookies, fetch, url }) {
   const requestedFilter = optionalText(url.searchParams.get("filter")) ?? "all";
   const filter = FILTERS.has(requestedFilter) ? requestedFilter : "all";
   const cursor = optionalText(url.searchParams.get("cursor"));
-  const page = query !== null && query.length >= 2
+  const outcome = query !== null && query.length >= 2
     ? await loadSearchPage({ fetch, query, filter, cursor, token })
     : null;
   const status = query === null
     ? "idle"
     : query.length < 2
       ? "invalid"
-      : page === null
+      : outcome?.kind === "invalid-cursor"
+        ? "invalid-cursor"
+        : outcome?.kind !== "page"
         ? "unavailable"
         : "ready";
+  const page = outcome?.kind === "page" ? outcome.page : null;
   return {
     shellOwner: "layout",
     shell: buildAppShell({
@@ -52,9 +55,13 @@ async function loadSearchPage({ fetch, query, filter, cursor, token }) {
       ? { authorization: `Bearer ${token}`, accept: "application/json" }
       : { accept: "application/json" },
   });
-  if (!response.ok) return null;
+  if (!response.ok) {
+    return { kind: response.status === 400 && cursor !== null ? "invalid-cursor" : "unavailable" };
+  }
   const page = await response.json().catch(() => null);
-  return page !== null && typeof page === "object" ? page : null;
+  return page !== null && typeof page === "object"
+    ? { kind: "page", page }
+    : { kind: "unavailable" };
 }
 
 function searchHref({ query, filter, cursor }) {

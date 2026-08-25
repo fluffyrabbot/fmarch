@@ -12,13 +12,15 @@ use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use content_reference::{self, Quotation, DEFAULT_POST_CITATION_LIMIT};
 use eventstore::{ActorId, EventInput};
 use forum::{
     self, ForumReject, PostingState, TopicCommand, TopicEvent, TopicState, TopicVisibility,
 };
 use principal::PrincipalId;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use social::{
     ProfileBio, ProfileDisplayName, ProfileEdit, ProfileHandle, ProfilePresentation,
     ProfileRevision, ProfileVisibility,
@@ -33,8 +35,8 @@ use wire::{
     AdvanceSubscriptionReadRequest, DiscussionArea, DiscussionPost, DiscussionThreadPage,
     DiscussionTopic, DiscussionTopicPage, MemberMutePage, MemberMuteState, ModerationCase,
     ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt, ProfileEditor,
-    PublicInboxPage, PublicPostCitationPage, PublicProfile, PublicSearchPage, PublicSearchResult,
-    RejectCode, SubscriptionTargetState,
+    PublicInboxPage, PublicPostCitationPage, PublicProfile, PublicSearchFilterValue,
+    PublicSearchPage, PublicSearchResult, RejectCode, SubscriptionTargetState,
 };
 
 #[derive(Clone)]
@@ -125,6 +127,17 @@ struct PublicSearchQuery {
     filter: Option<String>,
     cursor: Option<String>,
     limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PublicSearchHttpCursor {
+    version: u8,
+    query_hash: String,
+    filter: String,
+    rank: i64,
+    updated_seq: i64,
+    document_type: projections::PublicSearchDocumentType,
+    document_key: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -475,31 +488,37 @@ async fn public_search(
     if normalized_query.chars().count() < 2 || normalized_query.chars().count() > 200 {
         return Err(ApiError::Reject {
             status: StatusCode::BAD_REQUEST,
-            error: RejectCode::Internal,
+            error: RejectCode::InvalidArgument,
             message: "search query must contain between 2 and 200 characters".to_string(),
         });
     }
-    let (filter, filter_label) = match query.filter.as_deref().unwrap_or("all") {
-        "all" => (projections::PublicSearchFilter::All, "all"),
+    let (filter, filter_value) = match query.filter.as_deref().unwrap_or("all") {
+        "all" => (
+            projections::PublicSearchFilter::All,
+            PublicSearchFilterValue::All,
+        ),
         value => {
             let Some(group) = projections::PublicSearchGroup::parse(value) else {
                 return Err(ApiError::Reject {
                     status: StatusCode::BAD_REQUEST,
-                    error: RejectCode::Internal,
+                    error: RejectCode::InvalidArgument,
                     message: "search filter must be all, discussions, profiles, or games"
                         .to_string(),
                 });
             };
-            (
-                projections::PublicSearchFilter::Group(group),
-                group.as_str(),
-            )
+            let filter_value = match group {
+                projections::PublicSearchGroup::Discussions => PublicSearchFilterValue::Discussions,
+                projections::PublicSearchGroup::Profiles => PublicSearchFilterValue::Profiles,
+                projections::PublicSearchGroup::Games => PublicSearchFilterValue::Games,
+            };
+            (projections::PublicSearchFilter::Group(group), filter_value)
         }
     };
+    let filter_label = filter_value.as_str();
     let cursor = query
         .cursor
         .as_deref()
-        .map(parse_public_search_cursor)
+        .map(|value| parse_public_search_cursor(value, normalized_query, filter_label))
         .transpose()?;
     let page = projections::public_search(
         &state.pool,
@@ -510,58 +529,80 @@ async fn public_search(
         viewer_principal_id,
     )
     .await?;
+    let next_cursor = page
+        .next_cursor
+        .map(|cursor| encode_public_search_cursor(cursor, normalized_query, filter_label))
+        .transpose()?;
     Ok(Json(PublicSearchPage {
         query: normalized_query.to_string(),
-        filter: filter_label.to_string(),
+        filter: filter_value,
         results: page
             .results
             .into_iter()
             .map(PublicSearchResult::from)
             .collect(),
-        next_cursor: page.next_cursor.map(|cursor| {
-            format!(
-                "{}:{}:{}:{}",
-                cursor.rank,
-                cursor.updated_seq,
-                cursor.document_kind.as_str(),
-                cursor.document_key
-            )
-        }),
+        next_cursor,
     }))
 }
 
-fn parse_public_search_cursor(value: &str) -> Result<projections::PublicSearchCursor, ApiError> {
-    let mut parts = value.splitn(4, ':');
-    let rank = parts
-        .next()
-        .ok_or_else(invalid_public_search_cursor)?
-        .parse::<i64>()
+fn encode_public_search_cursor(
+    cursor: projections::PublicSearchCursor,
+    query: &str,
+    filter: &str,
+) -> Result<String, ApiError> {
+    let payload = PublicSearchHttpCursor {
+        version: 1,
+        query_hash: public_search_query_hash(query),
+        filter: filter.to_string(),
+        rank: cursor.rank,
+        updated_seq: cursor.updated_seq,
+        document_type: cursor.document_type,
+        document_key: cursor.document_key,
+    };
+    let bytes = serde_json::to_vec(&payload).map_err(|_| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: "failed to encode search cursor".to_string(),
+    })?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
+fn parse_public_search_cursor(
+    value: &str,
+    query: &str,
+    filter: &str,
+) -> Result<projections::PublicSearchCursor, ApiError> {
+    if value.len() > 1024 {
+        return Err(invalid_public_search_cursor());
+    }
+    let bytes = URL_SAFE_NO_PAD
+        .decode(value)
         .map_err(|_| invalid_public_search_cursor())?;
-    let updated_seq = parts
-        .next()
-        .ok_or_else(invalid_public_search_cursor)?
-        .parse::<i64>()
-        .map_err(|_| invalid_public_search_cursor())?;
-    let document_kind = parts
-        .next()
-        .and_then(projections::PublicSearchGroup::parse)
-        .ok_or_else(invalid_public_search_cursor)?;
-    let document_key = parts
-        .next()
-        .filter(|part| !part.is_empty())
-        .ok_or_else(invalid_public_search_cursor)?;
+    let payload: PublicSearchHttpCursor =
+        serde_json::from_slice(&bytes).map_err(|_| invalid_public_search_cursor())?;
+    if payload.version != 1
+        || payload.query_hash != public_search_query_hash(query)
+        || payload.filter != filter
+        || payload.document_key.is_empty()
+    {
+        return Err(invalid_public_search_cursor());
+    }
     Ok(projections::PublicSearchCursor {
-        rank,
-        updated_seq,
-        document_kind,
-        document_key: document_key.to_string(),
+        rank: payload.rank,
+        updated_seq: payload.updated_seq,
+        document_type: payload.document_type,
+        document_key: payload.document_key,
     })
+}
+
+fn public_search_query_hash(query: &str) -> String {
+    format!("{:x}", Sha256::digest(query.as_bytes()))
 }
 
 fn invalid_public_search_cursor() -> ApiError {
     ApiError::Reject {
         status: StatusCode::BAD_REQUEST,
-        error: RejectCode::StreamConflict,
+        error: RejectCode::InvalidArgument,
         message: "invalid search cursor; restart the search and try again".to_string(),
     }
 }

@@ -3,9 +3,11 @@
   export let data;
 
   const KIND_LABELS = {
-    discussions: "Discussion",
-    profiles: "Profile",
-    games: "Game or public post",
+    discussion: "Discussion",
+    discussion_post: "Discussion post",
+    profile: "Profile",
+    game: "Game",
+    game_post: "Game post",
   };
 
   function kindLabel(kind) {
@@ -46,6 +48,10 @@
     <p class="fm-panel" data-testid="public-search-idle">Enter at least two characters to search public content.</p>
   {:else if data.search.status === "invalid"}
     <p class="fm-panel" role="alert" data-testid="public-search-invalid">Search queries need at least two characters.</p>
+  {:else if data.search.status === "invalid-cursor"}
+    <p class="fm-panel" role="alert" data-testid="public-search-invalid-cursor">
+      This search page is stale or belongs to a different query. <a href={`/search?q=${encodeURIComponent(data.search.query)}&filter=${encodeURIComponent(data.search.filter)}`}>Restart from the first page.</a>
+    </p>
   {:else if data.search.status === "unavailable"}
     <p class="fm-panel" role="alert" data-testid="public-search-unavailable">Public search is unavailable. Refresh to try again.</p>
   {:else if data.search.results.length === 0}
@@ -59,7 +65,7 @@
             <time>{occurredAt(result.published_at)}</time>
           </header>
           <h2><a href={result.href} data-testid={`public-search-result-link-${index}`}>{result.title}</a></h2>
-          <p>{result.excerpt}</p>
+          <p>{#each result.excerpt as segment}{#if segment.highlighted}<mark>{segment.text}</mark>{:else}{segment.text}{/if}{/each}</p>
         </article>
       {/each}
     </section>
@@ -78,5 +84,6 @@
   .search-result header { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
   .search-result h2 { margin-block: 6px; }
   .search-result time { color: var(--fm-ink-muted); font-size: 13px; }
+  .search-result mark { background: color-mix(in srgb, var(--fm-accent) 24%, transparent); color: inherit; }
   @media (max-width: 720px) { .search-form { grid-template-columns: 1fr; } }
 </style>

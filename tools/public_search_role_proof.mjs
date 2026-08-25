@@ -58,6 +58,7 @@ try {
   try {
     const search = await proveSearch(context, frontendBaseUrl, seeded);
     const pagination = await provePagination(context, frontendBaseUrl);
+    const cursorBinding = await proveCursorBinding(context, frontendBaseUrl);
     const canonicalGame = await proveCanonicalGameResult(context, frontendBaseUrl, seeded.game);
     const removal = await proveModerationRemoval({
       context,
@@ -80,6 +81,7 @@ try {
       seeded: { game: seeded.game, topicCount: seeded.topicCount },
       search,
       pagination,
+      cursorBinding,
       canonicalGame,
       removal,
     };
@@ -175,10 +177,12 @@ async function proveSearch(context, frontendBaseUrl, seeded) {
     await page.getByTestId("role-nav-search").waitFor({ state: "visible" });
     const resultCount = await page.locator('article[data-testid^="public-search-result-"]').count();
     const body = await page.locator("body").innerText();
+    const highlightedSegments = await page.locator("mark").count();
     if (resultCount !== 20) throw new Error(`expected full first search page, got ${resultCount}`);
     if (body.includes("search_member") || body.includes("role_pm")) {
       throw new Error("public search rendered a credential principal or private channel identifier");
     }
+    if (highlightedSegments < 1) throw new Error("public search rendered no highlighted matches");
     await page.getByTestId("public-search-filter").selectOption("profiles");
     await Promise.all([
       page.waitForURL(/filter=profiles/, { timeout: 15000 }),
@@ -191,8 +195,34 @@ async function proveSearch(context, frontendBaseUrl, seeded) {
       navigationTestId: "role-nav-search",
       profileFilterVisible: true,
       rawPrivateDataVisible: false,
+      highlightedSegments,
       seededGame: seeded.game,
     };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveCursorBinding(context, frontendBaseUrl) {
+  const page = await context.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    await page.goto(`${frontendBaseUrl}/search?q=quasar&filter=discussions`, { waitUntil: "networkidle" });
+    await Promise.all([
+      page.waitForURL(/cursor=/, { timeout: 15000 }),
+      page.getByTestId("public-search-older").click(),
+    ]);
+    const mismatched = new URL(page.url());
+    mismatched.searchParams.set("filter", "games");
+    await page.goto(mismatched.toString(), { waitUntil: "networkidle" });
+    await page.getByTestId("public-search-invalid-cursor").waitFor({ state: "visible" });
+    const restartHref = await page
+      .getByTestId("public-search-invalid-cursor")
+      .getByRole("link")
+      .getAttribute("href");
+    if (restartHref !== "/search?q=quasar&filter=games") {
+      throw new Error(`search cursor restart link drifted: ${restartHref}`);
+    }
+    return { status: "passed", mismatchedFilterRejected: true, restartHref };
   } finally {
     await page.close();
   }
@@ -268,8 +298,10 @@ function assertEvidence(evidence) {
     evidence.productionReady !== false ||
     evidence.search?.firstPageCount !== 20 ||
     evidence.search?.rawPrivateDataVisible !== false ||
+    !(evidence.search?.highlightedSegments >= 1) ||
     evidence.pagination?.olderCount !== 2 ||
     evidence.pagination?.reloadCount !== 2 ||
+    evidence.cursorBinding?.mismatchedFilterRejected !== true ||
     evidence.canonicalGame?.status !== "passed" ||
     evidence.removal?.after !== 0
   ) {

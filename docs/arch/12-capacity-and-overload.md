@@ -51,8 +51,9 @@ connection permit for its entire lifetime. The HTTP permit covers only its upgra
   collections.
 - The public thread hot path must use `thread_view_page_idx`; a 100-row page may examine at most
   202 `thread_view` rows in the repo-local proof fixture.
-- Search uses the stored weighted `tsvector` and its GIN index. Search results are capped at 50;
-  the capacity proof requests 20.
+- Search uses the dedicated document projection's stored weighted `tsvector` and partial GIN
+  index. Search results are capped at 50; the capacity proof requests 20 and records search-only
+  first/continuation-page latency plus the exact production statement's analyzed access path.
 - A command transaction appends its events and synchronous projections atomically. It is bounded
   by the Postgres statement/lock limits and the encompassing HTTP deadline.
 - Concurrent commands on one game stream use optimistic concurrency and bounded server retry.
@@ -102,7 +103,10 @@ The lane writes `target/capacity-overload/report.json` and proves six related ca
    response size, local p95 budget, and an `EXPLAIN ANALYZE` assertion on the paging index and
    rows examined.
 2. **Anonymous crawler pressure:** 1,000 board rows, 10,000 search documents, and 80 concurrent
-   board/search requests with bounded response sizes and no non-200 responses.
+   board/search requests with bounded response sizes and no non-200 responses. Search and game
+   latency distributions are recorded separately, and `EXPLAIN ANALYZE` records the planner's
+   chosen search access path, matched/examined rows, and bounded returned page. The structural plan
+   contract separately proves that the exact production statement can reach the partial GIN index.
 3. **One-game post burst:** 24 posts concurrently target one real game aggregate; every command
    eventually ACKs, and exactly 24 distinct posts appear in its projection.
 4. **Slow live consumers:** four live clients are delayed behind a two-message broadcast buffer;

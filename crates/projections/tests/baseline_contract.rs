@@ -77,6 +77,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "public_inbox_item",
     "public_profile",
     "public_publication",
+    "public_search_document",
     "public_watch",
     "public_watch_period",
     "publication_surface",
@@ -445,8 +446,10 @@ const EXPECTED_INDEXES: &[&str] = &[
     "public_profile_pkey",
     "public_publication_author_idx",
     "public_publication_pkey",
-    "public_publication_search_idx",
     "public_publication_surface_page_idx",
+    "public_search_document_author_idx",
+    "public_search_document_pkey",
+    "public_search_document_vector_idx",
     "public_watch_member_idx",
     "public_watch_member_target_key",
     "public_watch_period_lookup_idx",
@@ -501,10 +504,10 @@ const EXPECTED_INDEXES: &[&str] = &[
     "workos_subject_tombstone_pkey",
 ];
 
-const EXPECTED_PUBLIC_SEARCH_VECTOR_EXPRESSION: &str = "(setweight(to_tsvector('english'::regconfig, surface_title), 'A'::\"char\") || setweight(to_tsvector('english'::regconfig, body), 'B'::\"char\"))";
+const EXPECTED_PUBLIC_SEARCH_VECTOR_EXPRESSION: &str = "(setweight(to_tsvector('english'::regconfig, title_text), 'A'::\"char\") || setweight(to_tsvector('english'::regconfig, body), 'B'::\"char\"))";
 
 const EXPECTED_PUBLIC_SEARCH_INDEX_DEFINITIONS: &[&str] = &[
-    "public_publication_search_idx:CREATE INDEX public_publication_search_idx ON public.public_publication USING gin (search_vector) WHERE visible",
+    "public_search_document_vector_idx:CREATE INDEX public_search_document_vector_idx ON public.public_search_document USING gin (search_vector) WHERE visible",
 ];
 
 const EXPECTED_ERASURE_INDEX_DEFINITIONS: &[&str] = &[
@@ -774,6 +777,10 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "public_profile_profile_id_fkey:f",
     "public_publication_pkey:p",
     "public_publication_surface_id_fkey:f",
+    "public_search_document_pkey:p",
+    "public_search_document_shape_check:c",
+    "public_search_document_surface_id_fkey:f",
+    "public_search_document_type_check:c",
     "public_watch_member_target_key:u",
     "public_watch_period_bounds_check:c",
     "public_watch_period_pkey:p",
@@ -898,7 +905,7 @@ async fn public_search_uses_a_stored_weighted_vector_and_visible_gin_index(pool:
         "SELECT generation_expression \
          FROM information_schema.columns \
          WHERE table_schema = 'public' \
-           AND table_name = 'public_publication' \
+           AND table_name = 'public_search_document' \
            AND column_name = 'search_vector'",
     )
     .fetch_one(&pool)
@@ -909,7 +916,7 @@ async fn public_search_uses_a_stored_weighted_vector_and_visible_gin_index(pool:
     let index_definitions: Vec<String> = sqlx::query_scalar(
         "SELECT indexname || ':' || indexdef \
          FROM pg_indexes \
-         WHERE schemaname = 'public' AND indexname = 'public_publication_search_idx' \
+         WHERE schemaname = 'public' AND indexname = 'public_search_document_vector_idx' \
          ORDER BY indexname",
     )
     .fetch_all(&pool)
@@ -935,9 +942,9 @@ async fn public_search_plan_uses_the_visible_gin_index(pool: PgPool) {
     .await
     .expect("insert search plan surface");
     sqlx::query(
-        "INSERT INTO public_publication \
-         (surface_id, source_seq, surface_title, body, href, occurred_at, visible) \
-         VALUES ($1, 1, 'Zebra Theory', 'quokka body', '/discussions/theory/t/1#post-1', 1, TRUE)",
+        "INSERT INTO public_search_document \
+         (surface_id, document_type, source_seq, title_text, body, href, published_at, updated_seq, visible) \
+         VALUES ($1, 'discussion', 0, 'Zebra Theory', 'quokka body', '/discussions/theory/t/1', 1, 1, TRUE)",
     )
     .bind(surface_id)
     .execute(&pool)
@@ -970,8 +977,8 @@ async fn public_search_plan_uses_the_visible_gin_index(pool: PgPool) {
     assert!(
         index_names
             .iter()
-            .any(|name| name == "public_publication_search_idx"),
-        "public search must reach public_publication_search_idx, found {index_names:?} in {plan}"
+            .any(|name| name == "public_search_document_vector_idx"),
+        "public search must reach public_search_document_vector_idx, found {index_names:?} in {plan}"
     );
     assert!(
         !plan_has_cte_scan(&plan, "search_query"),

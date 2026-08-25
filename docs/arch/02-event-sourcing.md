@@ -201,15 +201,19 @@ leave stale searchable data, public attribution, or mute relationships behind. P
 carry the stream `revision` they read and append against that expected version.
 
 Public search is a synchronous, rebuildable projection rather than an independent source of
-truth. Visible discussion topics/posts, public profiles, active/completed game metadata, and
-`main` game-thread posts fold into weighted PostgreSQL `tsvector` documents. Topic hiding and
-profile visibility changes remove the entire affected scope in the same transaction; game and
-profile rebuilds recreate identical documents. Queries use `websearch_to_tsquery`, weighted rank,
-and the full `(rank, updated_seq, document_kind, document_key)` ordering tuple as an opaque stable
-cursor. Search documents store only presentation-safe text and canonical public URLs. Private
-channels, credential principals, authorization state, and engagement signals never enter this
-projection. Public game-post results resolve through the read-only `/games/{game}` surface rather
-than a capability-scoped player route.
+truth. `public_search_document` is deliberately separate from `public_publication`: the latter is
+the generic engagement identity used by moderation, citations, watches, and inboxes, while the
+former owns only search ranking and presentation. Each visible discussion, public profile, and
+active/completed game contributes one title-bearing surface document. Discussion and `main`
+game-thread posts contribute body-only post documents, so a parent title is indexed once rather
+than copied into every post vector. Topic hiding and profile visibility changes remove the entire
+affected scope in the same transaction; game and profile rebuilds recreate identical documents.
+Queries use `websearch_to_tsquery`, weighted rank, structured safe highlight segments, and the full
+`(rank, updated_seq, document_type, document_key)` ordering tuple. The versioned opaque cursor is
+bound to the normalized query and filter. Search documents store only presentation-safe text and
+canonical public URLs. Private channels, credential principals, authorization state, and
+engagement signals never enter this projection. Public game-post results resolve through the
+read-only `/games/{game}` surface rather than a capability-scoped player route.
 
 Public-publication moderation is event-sourced rather than implemented as destructive post edits. An
 authenticated report opens or appends to one target-keyed moderation case stream; one active

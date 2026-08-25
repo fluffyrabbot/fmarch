@@ -147,7 +147,7 @@ export type ClientEnvelope = { v: number, id: bigint, body: ClientMsg, };
 
 export type AckMsg = { stream_seqs: Array<bigint>, };
 
-export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "CohostPermissionDenied" | "PhaseLocked" | "SlotNotAlive" | "VoteNotAllowed" | "InvalidTarget" | "ActionAlreadySubmitted" | "InvalidRole" | "StreamConflict" | "CommandIdConflict" | "UnknownGame" | "UnknownSlot" | "UnknownPrompt" | "PromptAlreadyResolved" | "GameAlreadyCompleted" | "InvalidPromptDecision" | "UnknownDayEvent" | "DayEventAlreadyExists" | "DayEventStateConflict" | "DuplicateParticipation" | "ParticipationNotFound" | "ParticipationNotAllowed" | "DayEventValidation" | "DayProgramValidation" | "PackValidation" | "DayProgramAlreadyAttached" | "EffectSpecValidation" | "Internal";
+export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "CohostPermissionDenied" | "PhaseLocked" | "SlotNotAlive" | "VoteNotAllowed" | "InvalidTarget" | "InvalidArgument" | "ActionAlreadySubmitted" | "InvalidRole" | "StreamConflict" | "CommandIdConflict" | "UnknownGame" | "UnknownSlot" | "UnknownPrompt" | "PromptAlreadyResolved" | "GameAlreadyCompleted" | "InvalidPromptDecision" | "UnknownDayEvent" | "DayEventAlreadyExists" | "DayEventStateConflict" | "DuplicateParticipation" | "ParticipationNotFound" | "ParticipationNotAllowed" | "DayEventValidation" | "DayProgramValidation" | "PackValidation" | "DayProgramAlreadyAttached" | "EffectSpecValidation" | "Internal";
 
 export type RejectMsg = { error: RejectCode, retryable: boolean, message: string, };
 
@@ -256,9 +256,15 @@ export type GameIndexPage = { games: Array<GameIndexEntry>, next_cursor: string 
 
 export type PublicGameThreadPage = { game: GameIndexEntry, posts: Array<ThreadPost>, next_before_seq: bigint | null, };
 
-export type PublicSearchResult = { kind: string, title: string, excerpt: string, href: string, published_at: bigint, };
+export type PublicSearchExcerptSegment = { text: string, highlighted: boolean, };
 
-export type PublicSearchPage = { query: string, filter: string, results: Array<PublicSearchResult>, next_cursor: string | null, };
+export type PublicSearchResultKind = "discussion" | "discussion_post" | "profile" | "game" | "game_post";
+
+export type PublicSearchFilterValue = "all" | "discussions" | "profiles" | "games";
+
+export type PublicSearchResult = { kind: PublicSearchResultKind, title: string, excerpt: Array<PublicSearchExcerptSegment>, href: string, published_at: bigint, };
+
+export type PublicSearchPage = { query: string, filter: PublicSearchFilterValue, results: Array<PublicSearchResult>, next_cursor: string | null, };
 
 export type DiscussionArea = { slug: string, title: string, description: string, };
 

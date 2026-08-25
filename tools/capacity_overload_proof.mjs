@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -77,7 +77,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       psql,
       databaseUrl,
     });
-    scenarios.anonymousCrawler = await proveAnonymousCrawler({ baseUrl });
+    scenarios.anonymousCrawler = await proveAnonymousCrawler({ baseUrl, psql, databaseUrl });
     scenarios.singleGamePostBurst = await proveSingleGamePostBurst({ baseUrl });
     scenarios.slowWebsocketConsumers = await proveSlowWebsocketConsumers({
       baseUrl,
@@ -221,16 +221,18 @@ async function seedReadFixtures({ psql, databaseUrl }) {
         '${crawlerScope}', 'discussions', 'Capacity fixture', '/capacity', TRUE,
         ${budgets.crawlerDocuments}
       );
-      INSERT INTO public_publication (
-        surface_id, source_seq, surface_title, body, href, author_profile_id, occurred_at, visible
+      INSERT INTO public_search_document (
+        surface_id, document_type, source_seq, title_text, body, href,
+        author_profile_id, published_at, updated_seq, visible
       )
-      SELECT '${crawlerScope}', value, 'Capacity fixture',
-             'capacityword bounded crawler fixture ' || value,
-             '/capacity/' || value, NULL, value, TRUE
+      SELECT '${crawlerScope}', 'discussion_post', value, '',
+             'capacityword bounded crawler fixture ' || value ||
+               CASE WHEN value % 100 = 0 THEN ' selectiveword' ELSE '' END,
+             '/capacity/' || value, NULL, value, value, TRUE
       FROM generate_series(1, ${budgets.crawlerDocuments}) AS value;
       ANALYZE thread_view;
       ANALYZE game_index;
-      ANALYZE public_publication;
+      ANALYZE public_search_document;
     `,
   );
 }
@@ -295,7 +297,7 @@ async function explainThreadPage({ psql, databaseUrl }) {
   };
 }
 
-async function proveAnonymousCrawler({ baseUrl }) {
+async function proveAnonymousCrawler({ baseUrl, psql, databaseUrl }) {
   const firstPage = await fetchJson(`${baseUrl}/games?limit=50`);
   const cursor = firstPage.next_cursor;
   assert(cursor, "crawler game fixture did not produce a next cursor");
@@ -328,6 +330,7 @@ async function proveAnonymousCrawler({ baseUrl }) {
       kind: target.kind,
     }),
   );
+  const searchPlan = await explainPublicSearch({ psql, databaseUrl });
   for (const record of records) {
     assert(record.status === 200, `crawler request returned ${record.status}`);
     assert(
@@ -347,7 +350,60 @@ async function proveAnonymousCrawler({ baseUrl }) {
     ),
     search: requestSummary(records.filter((record) => record.kind === "search")),
     gameIndex: requestSummary(records.filter((record) => record.kind === "gameIndex")),
+    searchPlan,
     ...requestSummary(records),
+  };
+}
+
+async function explainPublicSearch({ psql, databaseUrl }) {
+  const source = await readFile(
+    path.join(repoRoot, "crates", "projections", "sql", "public_search.sql"),
+    "utf8",
+  );
+  const bindings = new Map([
+    [8, "21"],
+    [7, "NULL"],
+    [6, "NULL"],
+    [5, "NULL"],
+    [4, "NULL"],
+    [3, "NULL"],
+    [2, "'all'"],
+    [1, "'selectiveword'"],
+  ]);
+  let statement = source;
+  for (const [parameter, value] of bindings) {
+    statement = statement.replaceAll(`$${parameter}`, value);
+  }
+  const result = await runPsql(
+    psql,
+    databaseUrl,
+    `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${statement}`,
+    { tuplesOnly: true },
+  );
+  const document = JSON.parse(result.stdout.trim());
+  const plan = document[0].Plan;
+  const nodes = flattenPlan(plan);
+  const searchNodes = nodes.filter(
+    (node) => node["Relation Name"] === "public_search_document",
+  );
+  return {
+    returnedRows: Number(plan["Actual Rows"] ?? 0),
+    matchedRows: Math.max(
+      0,
+      ...searchNodes.map((node) => Number(node["Actual Rows"] ?? 0)),
+    ),
+    examinedRows: Math.max(
+      0,
+      ...searchNodes.map(
+        (node) =>
+          Number(node["Actual Rows"] ?? 0) +
+          Number(node["Rows Removed by Filter"] ?? 0),
+      ),
+    ),
+    nodeTypes: [...new Set(searchNodes.map((node) => node["Node Type"]).filter(Boolean))],
+    indexNames: [
+      ...new Set(nodes.map((node) => node["Index Name"]).filter(Boolean)),
+    ],
   };
 }
 

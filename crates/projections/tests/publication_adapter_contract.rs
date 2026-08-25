@@ -1,6 +1,6 @@
 //! Architectural contract for the source-agnostic public-publication bridge.
 
-use projections::PublicSearchGroup;
+use projections::{PublicSearchDocumentType, PublicSearchGroup};
 use std::path::PathBuf;
 
 #[test]
@@ -29,6 +29,34 @@ fn public_consumers_depend_on_publication_identity_not_post_kind() {
                 && !consumer.contains("GamePost"),
             "public engagement consumers must not classify source posts"
         );
+    }
+}
+
+#[test]
+fn public_search_document_type_serde_matches_as_str_and_group() {
+    for (document_type, group) in [
+        (
+            PublicSearchDocumentType::Discussion,
+            PublicSearchGroup::Discussions,
+        ),
+        (
+            PublicSearchDocumentType::DiscussionPost,
+            PublicSearchGroup::Discussions,
+        ),
+        (
+            PublicSearchDocumentType::Profile,
+            PublicSearchGroup::Profiles,
+        ),
+        (PublicSearchDocumentType::Game, PublicSearchGroup::Games),
+        (PublicSearchDocumentType::GamePost, PublicSearchGroup::Games),
+    ] {
+        let encoded = serde_json::to_string(&document_type).unwrap();
+        assert_eq!(encoded, format!("\"{}\"", document_type.as_str()));
+        assert_eq!(
+            serde_json::from_str::<PublicSearchDocumentType>(&encoded).unwrap(),
+            document_type
+        );
+        assert_eq!(document_type.group(), group);
     }
 }
 

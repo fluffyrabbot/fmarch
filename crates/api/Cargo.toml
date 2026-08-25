@@ -23,6 +23,7 @@ profile_application = { path = "../profile_application", version = "0.1.0" }
 principal = { path = "../principal", version = "0.1.0" }
 wire = { path = "../wire", version = "0.1.0" }
 axum = { version = "0.8", features = ["ws"] }
+base64 = "0.22"
 ciborium = "0.2"
 hmac = "0.12"
 serde = { version = "1", features = ["derive"] }

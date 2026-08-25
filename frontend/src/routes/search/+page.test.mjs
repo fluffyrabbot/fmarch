@@ -14,8 +14,8 @@ test("public search preserves filter, ranked result links, and stable cursor", a
       return {
         ok: true,
         json: async () => ({
-          results: [{ kind: "discussions", title: "Reply in Signals", excerpt: "signal body", href: "/discussions/general/t/topic#post-4", published_at: 7 }],
-          next_cursor: "9:7:discussions:key",
+          results: [{ kind: "discussion_post", title: "Reply in Signals", excerpt: [{ text: "signal", highlighted: true }, { text: " body", highlighted: false }], href: "/discussions/general/t/topic#post-4", published_at: 7 }],
+          next_cursor: "opaque-cursor",
         }),
       };
     },
@@ -24,7 +24,17 @@ test("public search preserves filter, ranked result links, and stable cursor", a
   assert.equal(data.shell.activeSurface, "search");
   assert.equal(data.search.status, "ready");
   assert.equal(data.search.results[0].href, "/discussions/general/t/topic#post-4");
-  assert.match(data.search.nextHref, /cursor=9%3A7%3Adiscussions%3Akey/);
+  assert.match(data.search.nextHref, /cursor=opaque-cursor/);
+});
+
+test("public search distinguishes a stale cursor from service unavailability", async () => {
+  const data = await load({
+    locals,
+    url: new URL("http://localhost/search?q=signal&filter=games&cursor=stale"),
+    fetch: async () => ({ ok: false, status: 400 }),
+  });
+  assert.equal(data.search.status, "invalid-cursor");
+  assert.deepEqual(data.search.results, []);
 });
 
 test("public search does not call the API before a valid query", async () => {
