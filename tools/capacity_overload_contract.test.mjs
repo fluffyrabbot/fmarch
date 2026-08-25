@@ -46,6 +46,16 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
         requests: capacityOverloadBudgets.crawlerRequests,
         statuses: { 200: capacityOverloadBudgets.crawlerRequests },
         p95Ms: 20,
+        search: {
+          requests: capacityOverloadBudgets.crawlerSearchRequests,
+          statuses: { 200: capacityOverloadBudgets.crawlerSearchRequests },
+          p95Ms: 20,
+        },
+        gameIndex: {
+          requests: capacityOverloadBudgets.crawlerGameRequests,
+          statuses: { 200: capacityOverloadBudgets.crawlerGameRequests },
+          p95Ms: 20,
+        },
       },
       singleGamePostBurst: {
         status: "passed",

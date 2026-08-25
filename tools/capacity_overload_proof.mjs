@@ -12,7 +12,10 @@ import {
   capacityOverloadBudgets as budgets,
   requestSummary,
 } from "./capacity_overload_contract.mjs";
-import { seedSetupCommandPlanForGame } from "./dev_test_game_setup_bootstrap_scenario.mjs";
+import {
+  seededSetupRoster,
+  seedSetupCommandPlanForGame,
+} from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { decodeServerEnvelopeFrame } from "../frontend/src/lib/app/live-transport.mjs";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import {
@@ -191,17 +194,11 @@ async function seedReadFixtures({ psql, databaseUrl }) {
         phase_id, body, body_private, occurred_at, media
       )
       SELECT '${largeThreadGame}', value, value,
-             CASE WHEN value % 5 = 0 THEN 'main' ELSE 'private:capacity-' || (value % 4) END,
+             'main',
              'host_narrator', NULL,
              'D01',
-             CASE WHEN value % 5 = 0 THEN 'large thread fixture post ' || value ELSE NULL END,
-             CASE WHEN value % 5 = 0 THEN NULL ELSE jsonb_build_object(
-               'scheme', 'fmarch-event-aead-v1',
-               'alg', 'XChaCha20Poly1305',
-               'kid', 'capacity-fixture',
-               'nonce', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-               'ciphertext', 'AAAAAAAAAAAAAAAAAAAAAA=='
-             ) END,
+             'large thread fixture post ' || value,
+             NULL,
              value, '[]'::JSONB
       FROM generate_series(1, ${budgets.largeThreadRows}) AS value;
       INSERT INTO game_index (
@@ -221,13 +218,13 @@ async function seedReadFixtures({ psql, databaseUrl }) {
       INSERT INTO publication_surface (
         surface_id, search_group, title, href, visible, updated_seq
       ) VALUES (
-        '${crawlerScope}', 'capacity', 'Capacity fixture', '/capacity', TRUE,
+        '${crawlerScope}', 'discussions', 'Capacity fixture', '/capacity', TRUE,
         ${budgets.crawlerDocuments}
       );
       INSERT INTO public_publication (
-        surface_id, source_seq, body, href, author_profile_id, occurred_at, visible
+        surface_id, source_seq, surface_title, body, href, author_profile_id, occurred_at, visible
       )
-      SELECT '${crawlerScope}', value,
+      SELECT '${crawlerScope}', value, 'Capacity fixture',
              'capacityword bounded crawler fixture ' || value,
              '/capacity/' || value, NULL, value, TRUE
       FROM generate_series(1, ${budgets.crawlerDocuments}) AS value;
@@ -302,17 +299,34 @@ async function proveAnonymousCrawler({ baseUrl }) {
   const firstPage = await fetchJson(`${baseUrl}/games?limit=50`);
   const cursor = firstPage.next_cursor;
   assert(cursor, "crawler game fixture did not produce a next cursor");
-  const urls = Array.from({ length: budgets.crawlerRequests }, (_, index) =>
-    index % 3 === 0
-      ? `${baseUrl}/search?q=capacityword&limit=20`
-      : index % 3 === 1
-        ? `${baseUrl}/games?limit=50`
-        : `${baseUrl}/games?limit=50&cursor=${encodeURIComponent(cursor)}`,
-  );
+  const firstSearchPage = await fetchJson(`${baseUrl}/search?q=capacityword&limit=20`);
+  const searchCursor = firstSearchPage.next_cursor;
+  assert(searchCursor, "crawler search fixture did not produce a next cursor");
+  const targets = Array.from({ length: budgets.crawlerRequests }, (_, index) => {
+    switch (index % 4) {
+      case 0:
+        return { kind: "search", url: `${baseUrl}/search?q=capacityword&limit=20` };
+      case 1:
+        return {
+          kind: "search",
+          url: `${baseUrl}/search?q=capacityword&limit=20&cursor=${encodeURIComponent(searchCursor)}`,
+        };
+      case 2:
+        return { kind: "gameIndex", url: `${baseUrl}/games?limit=50` };
+      default:
+        return {
+          kind: "gameIndex",
+          url: `${baseUrl}/games?limit=50&cursor=${encodeURIComponent(cursor)}`,
+        };
+    }
+  });
   const records = await mapConcurrent(
-    urls,
+    targets,
     budgets.crawlerConcurrency,
-    async (url) => await timedFetchWithRetryableAdmission(url),
+    async (target) => ({
+      ...(await timedFetchWithRetryableAdmission(target.url)),
+      kind: target.kind,
+    }),
   );
   for (const record of records) {
     assert(record.status === 200, `crawler request returned ${record.status}`);
@@ -331,6 +345,8 @@ async function proveAnonymousCrawler({ baseUrl }) {
       (total, record) => total + record.retryable503s,
       0,
     ),
+    search: requestSummary(records.filter((record) => record.kind === "search")),
+    gameIndex: requestSummary(records.filter((record) => record.kind === "gameIndex")),
     ...requestSummary(records),
   };
 }
@@ -370,6 +386,9 @@ async function proveSingleGamePostBurst({ baseUrl }) {
 }
 
 async function seedPostBurstGame(baseUrl) {
+  for (const principalId of ["host_h", ...seededSetupRoster.map((row) => row.user)]) {
+    await seedSessionToken(baseUrl, principalId);
+  }
   for (const [principalId, command] of seedSetupCommandPlanForGame(postBurstGame)) {
     const seeded = await sendCommand(baseUrl, principalId, command);
     assert(seeded.kind === "Ack", `game seed rejected: ${JSON.stringify(seeded)}`);
@@ -385,6 +404,12 @@ async function proveSlowWebsocketConsumers({ baseUrl }) {
     states.map(async () =>
       await issueWebsocketTicket(baseUrl, "player-mira", postBurstGame, "main"),
     ),
+  );
+  const excessTicket = await issueWebsocketTicket(
+    baseUrl,
+    "player-mira",
+    postBurstGame,
+    "main",
   );
   websocketClients = await Promise.all(
     states.map(
@@ -415,7 +440,7 @@ async function proveSlowWebsocketConsumers({ baseUrl }) {
     ),
   );
 
-  const rejectedHandshake = await rawWebsocketHandshake(new URL(baseUrl));
+  const rejectedHandshake = await rawWebsocketHandshake(new URL(baseUrl), excessTicket);
   assert(
     rejectedHandshake.status === 503,
     `excess websocket handshake returned ${rejectedHandshake.status}`,
@@ -557,6 +582,23 @@ async function seedSessionToken(baseUrl, principalId) {
     response.status === 200 && typeof body.session_token === "string",
     `dev session mint for ${principalId} returned ${response.status}`,
   );
+  const accountResponse = await fetch(`${baseUrl}/auth/accounts`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${body.session_token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: `${principalId}@capacity.fmarch.test`,
+      password: `capacity-proof-account-${principalId}`,
+      principal_id: fixturePrincipalAuthorityId(principalId),
+      global_capabilities: ["GlobalAdmin"],
+    }),
+  });
+  assert(
+    accountResponse.ok || accountResponse.status === 409,
+    `account seed for ${principalId} returned ${accountResponse.status}`,
+  );
   seedSessionTokens.set(principalId, body.session_token);
   return body.session_token;
 }
@@ -673,7 +715,7 @@ async function mapConcurrent(items, concurrency, mapper) {
   return results;
 }
 
-async function rawWebsocketHandshake(baseUrl) {
+async function rawWebsocketHandshake(baseUrl, ticket) {
   return await new Promise((resolve, reject) => {
     const socket = net.createConnection({ host: baseUrl.hostname, port: Number(baseUrl.port) });
     let response = "";
@@ -681,7 +723,7 @@ async function rawWebsocketHandshake(baseUrl) {
     socket.once("connect", () => {
       socket.write(
         [
-          "GET /ws?ticket=capacity-admission-sentinel&audience=fmarch-live HTTP/1.1",
+          `GET /ws?ticket=${encodeURIComponent(ticket)}&audience=fmarch-live HTTP/1.1`,
           `Host: ${baseUrl.host}`,
           "Connection: Upgrade",
           "Upgrade: websocket",
