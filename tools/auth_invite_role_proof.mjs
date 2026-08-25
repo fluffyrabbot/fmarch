@@ -55,6 +55,10 @@ const eventArchiveKid =
 const authSourceSigningKey =
   process.env.FMARCH_AUTH_SOURCE_SIGNING_KEY ??
   "fmarch-auth-invite-role-proof-auth-source-signing-key-v1";
+// Full proof sweeps deliberately contend for local Cargo and Postgres
+// resources. Login remains bounded, but its budget must cover that lane's
+// observed acquisition tail rather than only unloaded inner-loop latency.
+const LOGIN_NAVIGATION_TIMEOUT_MS = 45_000;
 // This disposable browser stack deliberately runs several independent request
 // paths alongside its live listener and lifecycle workers. Keep its capacity
 // budget owned by the proof rather than inheriting the application's
@@ -555,7 +559,9 @@ async function driveInviteLogin({
     }
     await page.getByTestId("auth-invite-password").fill(accountCredential.password);
     await Promise.all([
-      page.waitForURL(`${frontendBaseUrl}${returnTo}`, { timeout: 15000 }),
+      page.waitForURL(`${frontendBaseUrl}${returnTo}`, {
+        timeout: LOGIN_NAVIGATION_TIMEOUT_MS,
+      }),
       page.getByTestId("auth-invite-submit").click(),
     ]);
     await page.waitForLoadState("networkidle");
@@ -623,7 +629,9 @@ async function driveAccountLogin({
     }
     await page.getByTestId("auth-login-password").fill(password);
     await Promise.all([
-      page.waitForURL(`${frontendBaseUrl}${returnTo}`, { timeout: 15000 }),
+      page.waitForURL(`${frontendBaseUrl}${returnTo}`, {
+        timeout: LOGIN_NAVIGATION_TIMEOUT_MS,
+      }),
       page.getByTestId("auth-login-submit").click(),
     ]);
     await page.waitForLoadState("networkidle");
