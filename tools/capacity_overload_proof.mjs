@@ -36,7 +36,8 @@ const serverBinary = path.join(repoRoot, "target", "debug", "server");
 const mediaRoot = path.join(repoRoot, "target", "capacity-overload", "media");
 const runId = randomUUID().replaceAll("-", "");
 const largeThreadGame = randomUUID();
-const crawlerScope = randomUUID();
+const crawlerDiscussionScope = randomUUID();
+const crawlerGameScope = randomUUID();
 const postBurstGame = randomUUID();
 const postPrefix = `capacity-post-${runId}`;
 const wsPostPrefix = `capacity-ws-${runId}`;
@@ -54,7 +55,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   }
   const migrationUrl =
     args.migrationUrl ?? env.DATABASE_MIGRATION_URL ?? defaultMigrationUrl;
-  const outputPath = path.resolve(args.output ?? defaultOutput);
+  const outputPath = path.resolve(
+    args.output ??
+      (env.FMARCH_PROOF_ARTIFACT_DIR
+        ? path.join(env.FMARCH_PROOF_ARTIFACT_DIR, "report.json")
+        : defaultOutput),
+  );
   const psql = findPsql(env);
   if (!existsSync(serverBinary)) {
     throw new Error("target/debug/server is missing; run cargo build -p server first");
@@ -176,6 +182,10 @@ async function startServer({ baseUrl, port, databaseUrl, env }) {
 
 async function seedReadFixtures({ psql, databaseUrl }) {
   const uuidExpression = sqlUuidFromMd5(`'${runId}' || value::TEXT`);
+  const profileUuidExpression = sqlUuidFromMd5(`'${runId}-profile-' || value::TEXT`);
+  const discussionDocuments = Math.floor(budgets.crawlerDocuments / 3);
+  const gameDocuments = Math.floor(budgets.crawlerDocuments / 3);
+  const profileDocuments = budgets.crawlerDocuments - discussionDocuments - gameDocuments;
   await runPsql(
     psql,
     databaseUrl,
@@ -217,19 +227,63 @@ async function seedReadFixtures({ psql, databaseUrl }) {
       ) AS artifact;
       INSERT INTO publication_surface (
         surface_id, search_group, title, href, visible, updated_seq
-      ) VALUES (
-        '${crawlerScope}', 'discussions', 'Capacity fixture', '/capacity', TRUE,
-        ${budgets.crawlerDocuments}
-      );
+      ) VALUES
+        ('${crawlerDiscussionScope}', 'discussions', 'Capacityword discussion fixture',
+         '/capacity/${runId}/discussions', TRUE, ${discussionDocuments}),
+        ('${crawlerGameScope}', 'games', 'Capacityword game fixture',
+         '/capacity/${runId}/games', TRUE, ${gameDocuments});
       INSERT INTO public_search_document (
         surface_id, document_type, source_seq, title_text, body, href,
         author_profile_id, published_at, updated_seq, visible
       )
-      SELECT '${crawlerScope}', 'discussion_post', value, '',
-             'capacityword bounded crawler fixture ' || value ||
+      VALUES
+        ('${crawlerDiscussionScope}', 'discussion', 0,
+         'capacityword discussion fixture', '',
+         '/capacity/${runId}/discussions', NULL, 0, ${discussionDocuments}, TRUE),
+        ('${crawlerGameScope}', 'game', 0,
+         'capacityword game fixture', '',
+         '/capacity/${runId}/games', NULL, 0, ${gameDocuments}, TRUE);
+      INSERT INTO public_search_document (
+        surface_id, document_type, source_seq, title_text, body, href,
+        author_profile_id, published_at, updated_seq, visible
+      )
+      SELECT '${crawlerDiscussionScope}', 'discussion_post', value, '',
+             'capacityword bounded discussion fixture ' || value ||
+               CASE WHEN value % 10 = 0 THEN ' mediumword' ELSE '' END ||
                CASE WHEN value % 100 = 0 THEN ' selectiveword' ELSE '' END,
-             '/capacity/' || value, NULL, value, value, TRUE
-      FROM generate_series(1, ${budgets.crawlerDocuments}) AS value;
+             '/capacity/${runId}/discussions/' || value,
+             NULL, value, value, TRUE
+      FROM generate_series(1, ${discussionDocuments - 1}) AS value;
+      INSERT INTO public_search_document (
+        surface_id, document_type, source_seq, title_text, body, href,
+        author_profile_id, published_at, updated_seq, visible
+      )
+      SELECT '${crawlerGameScope}', 'game_post', value, '',
+             'capacityword bounded game fixture ' || value ||
+               CASE WHEN value % 10 = 0 THEN ' mediumword' ELSE '' END ||
+               CASE WHEN value % 100 = 0 THEN ' selectiveword' ELSE '' END,
+             '/capacity/${runId}/games/' || value,
+             NULL, value, value, TRUE
+      FROM generate_series(1, ${gameDocuments - 1}) AS value;
+      INSERT INTO publication_surface (
+        surface_id, search_group, title, href, visible, updated_seq
+      )
+      SELECT ${profileUuidExpression}, 'profiles',
+             'Capacityword profile fixture ' || value,
+             '/capacity/${runId}/profiles/' || value,
+             TRUE, value
+      FROM generate_series(1, ${profileDocuments}) AS value;
+      INSERT INTO public_search_document (
+        surface_id, document_type, source_seq, title_text, body, href,
+        author_profile_id, published_at, updated_seq, visible
+      )
+      SELECT ${profileUuidExpression}, 'profile', 0,
+             'capacityword profile fixture ' || value ||
+               CASE WHEN value % 10 = 0 THEN ' mediumword' ELSE '' END ||
+               CASE WHEN value % 100 = 0 THEN ' selectiveword' ELSE '' END,
+             '', '/capacity/${runId}/profiles/' || value,
+             NULL, value, value, TRUE
+      FROM generate_series(1, ${profileDocuments}) AS value;
       ANALYZE thread_view;
       ANALYZE game_index;
       ANALYZE public_search_document;
@@ -301,36 +355,72 @@ async function proveAnonymousCrawler({ baseUrl, psql, databaseUrl }) {
   const firstPage = await fetchJson(`${baseUrl}/games?limit=50`);
   const cursor = firstPage.next_cursor;
   assert(cursor, "crawler game fixture did not produce a next cursor");
-  const firstSearchPage = await fetchJson(`${baseUrl}/search?q=capacityword&limit=20`);
-  const searchCursor = firstSearchPage.next_cursor;
-  assert(searchCursor, "crawler search fixture did not produce a next cursor");
-  const targets = Array.from({ length: budgets.crawlerRequests }, (_, index) => {
-    switch (index % 4) {
-      case 0:
-        return { kind: "search", url: `${baseUrl}/search?q=capacityword&limit=20` };
-      case 1:
-        return {
-          kind: "search",
-          url: `${baseUrl}/search?q=capacityword&limit=20&cursor=${encodeURIComponent(searchCursor)}`,
-        };
-      case 2:
-        return { kind: "gameIndex", url: `${baseUrl}/games?limit=50` };
-      default:
-        return {
-          kind: "gameIndex",
-          url: `${baseUrl}/games?limit=50&cursor=${encodeURIComponent(cursor)}`,
-        };
-    }
-  });
+  const filters = ["all", "discussions", "profiles", "games"];
+  const searchCursors = Object.fromEntries(
+    await Promise.all(
+      filters.map(async (filter) => {
+        const page = await fetchJson(
+          `${baseUrl}/search?q=capacityword&filter=${filter}&limit=20`,
+        );
+        assert(page.next_cursor, `${filter} search fixture did not produce a next cursor`);
+        return [filter, page.next_cursor];
+      }),
+    ),
+  );
+  const searchTargets = Array.from(
+    { length: budgets.crawlerSearchRequests },
+    (_, index) => {
+      const filter = filters[index % filters.length];
+      const useCursor = Math.floor(index / filters.length) % 2 === 1;
+      const cursorQuery = useCursor
+        ? `&cursor=${encodeURIComponent(searchCursors[filter])}`
+        : "";
+      return {
+        kind: "search",
+        filter,
+        url: `${baseUrl}/search?q=capacityword&filter=${filter}&limit=20${cursorQuery}`,
+      };
+    },
+  );
+  const gameTargets = Array.from(
+    { length: budgets.crawlerGameRequests },
+    (_, index) => ({
+      kind: "gameIndex",
+      url:
+        index % 2 === 0
+          ? `${baseUrl}/games?limit=50`
+          : `${baseUrl}/games?limit=50&cursor=${encodeURIComponent(cursor)}`,
+    }),
+  );
+  const targets = Array.from({ length: budgets.crawlerRequests }, (_, index) =>
+    index % 2 === 0
+      ? searchTargets[index / 2]
+      : gameTargets[Math.floor(index / 2)],
+  );
   const records = await mapConcurrent(
     targets,
     budgets.crawlerConcurrency,
     async (target) => ({
       ...(await timedFetchWithRetryableAdmission(target.url)),
       kind: target.kind,
+      filter: target.filter,
     }),
   );
-  const searchPlan = await explainPublicSearch({ psql, databaseUrl });
+  const searchPlans = Object.fromEntries(
+    await Promise.all(
+      [
+        ["commonAll", "capacityword", "all"],
+        ["mediumAll", "mediumword", "all"],
+        ["selectiveAll", "selectiveword", "all"],
+        ["selectiveDiscussions", "selectiveword", "discussions"],
+        ["selectiveProfiles", "selectiveword", "profiles"],
+        ["selectiveGames", "selectiveword", "games"],
+      ].map(async ([name, query, filter]) => [
+        name,
+        await explainPublicSearch({ psql, databaseUrl, query, filter }),
+      ]),
+    ),
+  );
   for (const record of records) {
     assert(record.status === 200, `crawler request returned ${record.status}`);
     assert(
@@ -349,13 +439,23 @@ async function proveAnonymousCrawler({ baseUrl, psql, databaseUrl }) {
       0,
     ),
     search: requestSummary(records.filter((record) => record.kind === "search")),
+    searchByFilter: Object.fromEntries(
+      filters.map((filter) => [
+        filter,
+        requestSummary(
+          records.filter(
+            (record) => record.kind === "search" && record.filter === filter,
+          ),
+        ),
+      ]),
+    ),
     gameIndex: requestSummary(records.filter((record) => record.kind === "gameIndex")),
-    searchPlan,
+    searchPlans,
     ...requestSummary(records),
   };
 }
 
-async function explainPublicSearch({ psql, databaseUrl }) {
+async function explainPublicSearch({ psql, databaseUrl, query, filter }) {
   const source = await readFile(
     path.join(repoRoot, "crates", "projections", "sql", "public_search.sql"),
     "utf8",
@@ -367,8 +467,8 @@ async function explainPublicSearch({ psql, databaseUrl }) {
     [5, "NULL"],
     [4, "NULL"],
     [3, "NULL"],
-    [2, "'all'"],
-    [1, "'selectiveword'"],
+    [2, sqlLiteral(filter)],
+    [1, sqlLiteral(query)],
   ]);
   let statement = source;
   for (const [parameter, value] of bindings) {
@@ -862,7 +962,9 @@ async function cleanupReadFixtures({ psql, databaseUrl }) {
   await runPsql(
     psql,
     databaseUrl,
-    `DELETE FROM publication_surface WHERE surface_id = '${crawlerScope}';
+    `DELETE FROM publication_surface
+     WHERE surface_id IN ('${crawlerDiscussionScope}', '${crawlerGameScope}')
+        OR href LIKE ${sqlLiteral(`/capacity/${runId}/profiles/%`)};
      DELETE FROM thread_view WHERE game_id = '${largeThreadGame}';
      DELETE FROM game_index
      WHERE game_id = '${largeThreadGame}'

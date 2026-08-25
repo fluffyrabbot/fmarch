@@ -3,7 +3,7 @@ export const capacityOverloadBudgets = Object.freeze({
   largeThreadPageLimit: 100,
   largeThreadP95Ms: 500,
   largeThreadMaxScannedRows: 202,
-  crawlerDocuments: 10_000,
+  crawlerDocuments: 100_000,
   crawlerGames: 1_000,
   crawlerRequests: 80,
   crawlerSearchRequests: 40,
@@ -98,19 +98,33 @@ export function assertCapacityOverloadReport(report) {
       scenarios.anonymousCrawler.search.p95Ms <= report.budgets.crawlerP95Ms,
     "search crawler workload drifted or exceeded its local proof budget",
   );
+  for (const filter of ["all", "discussions", "profiles", "games"]) {
+    const summary = scenarios.anonymousCrawler.searchByFilter?.[filter];
+    assert(
+      summary?.requests === report.budgets.crawlerSearchRequests / 4 &&
+        summary.p95Ms <= report.budgets.crawlerP95Ms,
+      `${filter} search workload drifted or exceeded its local proof budget`,
+    );
+  }
   assert(
     scenarios.anonymousCrawler.gameIndex.requests ===
       report.budgets.crawlerGameRequests &&
       scenarios.anonymousCrawler.gameIndex.p95Ms <= report.budgets.crawlerP95Ms,
     "game-index crawler workload drifted or exceeded its local proof budget",
   );
+  for (const [name, plan] of Object.entries(
+    scenarios.anonymousCrawler.searchPlans ?? {},
+  )) {
+    assert(
+      plan.returnedRows <= 21 &&
+        plan.matchedRows <= scenarios.anonymousCrawler.fixtureDocuments &&
+        plan.examinedRows <= scenarios.anonymousCrawler.fixtureDocuments + 10,
+      `${name} search plan exceeded its bounded result/document path: ${JSON.stringify(plan)}`,
+    );
+  }
   assert(
-    scenarios.anonymousCrawler.searchPlan.returnedRows <= 21 &&
-      scenarios.anonymousCrawler.searchPlan.matchedRows <=
-      report.budgets.crawlerDocuments &&
-      scenarios.anonymousCrawler.searchPlan.examinedRows <=
-        report.budgets.crawlerDocuments + 10,
-    `search crawler plan exceeded its bounded result/document path: ${JSON.stringify(scenarios.anonymousCrawler.searchPlan)}`,
+    Object.keys(scenarios.anonymousCrawler.searchPlans ?? {}).length === 6,
+    "search selectivity/group plan matrix drifted",
   );
   assert(
     Object.keys(scenarios.anonymousCrawler.statuses).every(

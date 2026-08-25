@@ -1072,6 +1072,14 @@ test('direct proof-tool sources select their owning proof lanes', () => {
     ],
     ['tools/auth_invite_role_proof.mjs', 'test:auth-invite-role-proof'],
     ['tools/public_search_role_proof.mjs', 'test:public-search-role-proof'],
+    [
+      'tools/capacity_overload_proof.mjs',
+      ['test:capacity-overload-contract', 'test:capacity-overload'],
+    ],
+    [
+      'tools/capacity_overload_contract.mjs',
+      ['test:capacity-overload-contract', 'test:capacity-overload'],
+    ],
     ['tools/live_stack_backup_restore_drill.mjs', 'test:live-stack-backup-restore-drill'],
     ['tools/dev_test_game_backup_restore_spine.mjs', 'test:live-stack-backup-restore-drill'],
     ['tools/dev_test_game_identity_spine.mjs', 'test:auth-invite-role-proof'],

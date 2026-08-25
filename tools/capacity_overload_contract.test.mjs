@@ -43,6 +43,7 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
       },
       anonymousCrawler: {
         status: "passed",
+        fixtureDocuments: capacityOverloadBudgets.crawlerDocuments,
         requests: capacityOverloadBudgets.crawlerRequests,
         statuses: { 200: capacityOverloadBudgets.crawlerRequests },
         p95Ms: 20,
@@ -51,18 +52,42 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
           statuses: { 200: capacityOverloadBudgets.crawlerSearchRequests },
           p95Ms: 20,
         },
+        searchByFilter: Object.fromEntries(
+          ["all", "discussions", "profiles", "games"].map((filter) => [
+            filter,
+            {
+              requests: capacityOverloadBudgets.crawlerSearchRequests / 4,
+              statuses: {
+                200: capacityOverloadBudgets.crawlerSearchRequests / 4,
+              },
+              p95Ms: 20,
+            },
+          ]),
+        ),
         gameIndex: {
           requests: capacityOverloadBudgets.crawlerGameRequests,
           statuses: { 200: capacityOverloadBudgets.crawlerGameRequests },
           p95Ms: 20,
         },
-        searchPlan: {
-          returnedRows: 21,
-          matchedRows: 100,
-          examinedRows: capacityOverloadBudgets.crawlerDocuments + 1,
-          nodeTypes: ["Bitmap Heap Scan"],
-          indexNames: ["public_search_document_vector_idx"],
-        },
+        searchPlans: Object.fromEntries(
+          [
+            "commonAll",
+            "mediumAll",
+            "selectiveAll",
+            "selectiveDiscussions",
+            "selectiveProfiles",
+            "selectiveGames",
+          ].map((name) => [
+            name,
+            {
+              returnedRows: 21,
+              matchedRows: 100,
+              examinedRows: capacityOverloadBudgets.crawlerDocuments,
+              nodeTypes: ["Bitmap Heap Scan"],
+              indexNames: ["public_search_document_vector_idx"],
+            },
+          ]),
+        ),
       },
       singleGamePostBurst: {
         status: "passed",

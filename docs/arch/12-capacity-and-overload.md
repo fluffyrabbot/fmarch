@@ -102,11 +102,13 @@ The lane writes `target/capacity-overload/report.json` and proves six related ca
 1. **Large-thread cold load:** 10,000 projected posts, latest and older keyset pages, bounded
    response size, local p95 budget, and an `EXPLAIN ANALYZE` assertion on the paging index and
    rows examined.
-2. **Anonymous crawler pressure:** 1,000 board rows, 10,000 search documents, and 80 concurrent
-   board/search requests with bounded response sizes and no non-200 responses. Search and game
-   latency distributions are recorded separately, and `EXPLAIN ANALYZE` records the planner's
-   chosen search access path, matched/examined rows, and bounded returned page. The structural plan
-   contract separately proves that the exact production statement can reach the partial GIN index.
+2. **Anonymous crawler pressure:** 1,000 board rows, 100,000 typed search documents split across
+   discussions, profiles, and games, and 80 concurrent board/search requests with bounded response
+   sizes and no non-200 responses. Search latency is recorded both in aggregate and per filter.
+   `EXPLAIN ANALYZE` captures the planner's chosen access path, matched/examined rows, and bounded
+   returned page for 100%, 10%, and 1% term selectivity plus every typed filter at 1%. This makes
+   the sequential-scan/GIN crossover explicit; the structural plan contract separately proves that
+   the exact production statement can reach the partial GIN index.
 3. **One-game post burst:** 24 posts concurrently target one real game aggregate; every command
    eventually ACKs, and exactly 24 distinct posts appear in its projection.
 4. **Slow live consumers:** four live clients are delayed behind a two-message broadcast buffer;
