@@ -190,7 +190,7 @@ async fn wait_for_no_runtime_resources(pool: &PgPool) {
     .expect("command runtime released every transaction and advisory lock");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn cancellation_matrix_rolls_back_every_pre_commit_checkpoint(pool: PgPool) {
     let game = setup_game(&pool).await;
     let checkpoints = [
@@ -223,7 +223,7 @@ async fn cancellation_matrix_rolls_back_every_pre_commit_checkpoint(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn cancellation_after_commit_replays_the_committed_outcome(pool: PgPool) {
     let game = setup_game(&pool).await;
     let command_id = Uuid::new_v4();

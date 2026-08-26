@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::common::*;
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_post_records_same_thread_quotations_without_writing_the_quoted_stream(
     pool: PgPool,
 ) {
@@ -115,7 +115,7 @@ async fn submit_post_records_same_thread_quotations_without_writing_the_quoted_s
     assert!(matches!(missing, Err(commands::Reject::InvalidTarget)));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_post_rejects_quoting_a_private_channel_seq_from_main(pool: PgPool) {
     let host = "host_q_priv";
     let mason = "mason_q";
@@ -229,7 +229,7 @@ async fn submit_post_rejects_quoting_a_private_channel_seq_from_main(pool: PgPoo
     assert!(matches!(rejected, Err(commands::Reject::InvalidTarget)));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_post_allows_empty_body_when_same_thread_quotations_are_present(pool: PgPool) {
     let host = "host_q_empty";
     let slot = "slot_1";

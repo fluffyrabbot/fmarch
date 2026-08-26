@@ -1,6 +1,6 @@
 //! Integration tests for the command pipeline against REAL Postgres.
 //!
-//! `#[sqlx::test(migrations = "../projections/migrations")]` provisions an
+//! `#[sqlx::test(migrations = "../database_schema/migrations")]` provisions an
 //! ephemeral DB and applies the full schema (event store + projections, incl.
 //! the Phase-3 ballot/authority/occupancy/phase tables). Requires `DATABASE_URL`
 //! (compose PG :5544); it never silently passes without a DB.

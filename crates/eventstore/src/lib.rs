@@ -1028,17 +1028,6 @@ fn stream_export_checksum(export: &StreamExport) -> Result<String, StoreError> {
     Ok(format!("{:x}", Sha256::digest(bytes)))
 }
 
-/// Apply the schema migrations bundled in this crate to `pool`.
-///
-/// Convenience for binaries/tests that don't use `#[sqlx::test]`'s automatic
-/// migration. (`#[sqlx::test(migrations = "...")]` applies them itself.)
-pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::Error> {
-    sqlx::migrate!("./migrations")
-        .run(pool)
-        .await
-        .map_err(|e| sqlx::Error::Migrate(Box::new(e)))
-}
-
 /// Install and authenticate the process-active runtime KEK sentinel before
 /// readiness, audits, or administrative rotation work begins.
 pub async fn attest_active_runtime_kek(pool: &PgPool) -> Result<RuntimeKekStatus, StoreError> {

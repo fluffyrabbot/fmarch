@@ -94,7 +94,7 @@ fn private_post(channel: &str, slot: &str, body: &str) -> EventInput {
     )
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn mixed_kid_private_payloads_survive_projection_replay_audit_and_rebuild(
     pool: sqlx::PgPool,
 ) {

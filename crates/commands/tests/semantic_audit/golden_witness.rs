@@ -330,7 +330,7 @@ async fn replay_pack_golden(
     Ok(game)
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn fresh_pack_goldens_replay_through_command_resolve(pool: PgPool) {
     let packs = golden_command_witness_packs();
     assert!(
@@ -545,7 +545,7 @@ fn folded_minimizer_witness_cases() -> Vec<FoldedMinimizerCase> {
     ]
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn folded_semantic_fixtures_shrink_on_isolated_workers(
     pool_options: sqlx::postgres::PgPoolOptions,
     connect_options: sqlx::postgres::PgConnectOptions,
@@ -592,7 +592,7 @@ macro_rules! run_leftover_host_resolve {
     }};
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn leftover_host_resolve_phase_cases_share_one_migrated_database(pool: PgPool) {
     // Unique leftover host_resolve claims share one migrated database. Games
     // use fresh UUIDs; cases stay sequential so a failure keeps its assertion.

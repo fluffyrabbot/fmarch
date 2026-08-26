@@ -102,7 +102,7 @@ async fn name_transaction(tx: &mut Transaction<'_, Postgres>, application_name: 
         .unwrap();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn first_sight_workos_provisions_privacy_subject_before_provider_binding(pool: PgPool) {
     let assertion = verified(format!("first-sight-{}", Uuid::new_v4().simple()));
     let mut tx = pool.begin().await.unwrap();
@@ -135,7 +135,7 @@ async fn first_sight_workos_provisions_privacy_subject_before_provider_binding(p
     tx.commit().await.unwrap();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_sign_in_locks_method_before_external_identity_erasure_tail(pool: PgPool) {
     let (principal_id, subject, method_id, assertion) = seed_workos_identity(&pool, false).await;
     let mut erasure_tail = lock_method_for_erasure_tail(&pool, method_id).await;
@@ -178,7 +178,7 @@ async fn workos_sign_in_locks_method_before_external_identity_erasure_tail(pool:
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_attach_locks_method_before_external_identity_erasure_tail(pool: PgPool) {
     let (principal_id, subject, method_id, assertion) = seed_workos_identity(&pool, true).await;
     let mut erasure_tail = lock_method_for_erasure_tail(&pool, method_id).await;

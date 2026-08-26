@@ -33,10 +33,10 @@
       "method": "isolated",
       "warmup_seconds": 1.3
     },
-    "test:projection-baseline:static": {
+    "test:database-schema:static": {
       "seconds": 0.4,
       "measured_at": "2026-08-19T06:57:10.407Z",
-      "command": "npm run test:projection-baseline:static",
+      "command": "npm run test:database-schema:static",
       "status": 0,
       "method": "isolated",
       "warmup_seconds": 0.4

@@ -161,7 +161,7 @@ fn expect_reject(envelope: ServerEnvelope, expected: RejectCode) {
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     pool: sqlx::PgPool,
 ) {

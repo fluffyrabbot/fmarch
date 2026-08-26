@@ -310,7 +310,7 @@ async fn healthz() -> Json<Health> {
 
 async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) {
     let (database_schema, event_encryption, object_storage, subject_authority) = tokio::join!(
-        projections::ensure_schema_ready(&state.pool),
+        database_schema::ensure_schema_ready(&state.pool),
         eventstore::ensure_event_encryption_key_readiness(&state.pool),
         state.media_store.check_readiness(),
         async {

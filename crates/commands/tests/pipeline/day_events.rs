@@ -148,7 +148,7 @@ fn assert_principal_audit_initiator(metadata: &serde_json::Value, principal_labe
     assert!(metadata.get("principal_id").is_none());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn day_program_attachment_compiles_atomically_and_preserves_generations(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let first = minimal_day_program("program-bakery", 1, &["event-cookie", "event-cake"]);
@@ -278,7 +278,7 @@ async fn day_program_attachment_compiles_atomically_and_preserves_generations(po
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn incompatible_day_program_rejects_before_any_program_fact(pool: PgPool) {
     let game = Uuid::new_v4();
     handle(
@@ -317,7 +317,7 @@ async fn incompatible_day_program_rejects_before_any_program_fact(pool: PgPool) 
     assert!(day_events(&pool, game).await.unwrap().is_empty());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-absolute").unwrap();
@@ -382,7 +382,7 @@ async fn absolute_day_event_schedule_records_due_evidence_once_at_boundaries(poo
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn relative_day_event_schedule_uses_explicit_phase_open_clock(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let phase = phase_state(&pool, game).await.unwrap().unwrap();
@@ -425,7 +425,7 @@ async fn relative_day_event_schedule_uses_explicit_phase_open_clock(pool: PgPool
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn phase_trigger_observation_and_manual_cancellation_have_stable_precedence(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let triggered_id = game_platform::DayEventId::new("event-triggered").unwrap();
@@ -485,7 +485,7 @@ async fn phase_trigger_observation_and_manual_cancellation_have_stable_precedenc
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn scheduler_worker_catches_up_missed_boundaries_and_records_service_authority(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let mut event = minimal_day_event("event-worker", "bomb");
@@ -537,7 +537,7 @@ async fn scheduler_worker_catches_up_missed_boundaries_and_records_service_autho
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_scheduler_replicas_claim_one_game_without_duplicate_evidence(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let mut event = minimal_day_event("event-replica-race", "bomb");
@@ -581,7 +581,7 @@ async fn concurrent_scheduler_replicas_claim_one_game_without_duplicate_evidence
     assert_eq!(evidence, 1);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn scheduler_failure_releases_lease_and_applies_bounded_retry_backoff(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let mut event = minimal_day_event("event-retry", "bomb");
@@ -626,7 +626,7 @@ async fn scheduler_failure_releases_lease_and_applies_bounded_retry_backoff(pool
     assert_eq!(suppressed.claimed_games, 0);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn day_event_narratives_compile_publish_and_rebuild_as_host_notices(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let resolved_id = game_platform::DayEventId::new("event-narrative-resolved").unwrap();
@@ -794,7 +794,7 @@ async fn day_event_narratives_compile_publish_and_rebuild_as_host_notices(pool: 
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn private_day_event_channel_is_sealed_participation_scoped_and_replacement_safe(
     pool: PgPool,
 ) {
@@ -1044,7 +1044,7 @@ async fn private_day_event_channel_is_sealed_participation_scoped_and_replacemen
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn narrative_publish_failure_never_rolls_back_scheduled_mechanics(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let mut program = narrative_day_program("program-narrative-failure", &["event-narrative-fail"]);
@@ -1118,7 +1118,7 @@ async fn narrative_publish_failure_never_rolls_back_scheduled_mechanics(pool: Pg
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn automatic_day_event_records_lock_seed_and_resolves_atomically_as_system(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-auto-raffle").unwrap();
@@ -1232,7 +1232,7 @@ async fn automatic_day_event_records_lock_seed_and_resolves_atomically_as_system
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn scheduled_auto_resolution_catches_up_in_seeded_durable_steps(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-auto-scheduled").unwrap();
@@ -1306,7 +1306,7 @@ async fn scheduled_auto_resolution_catches_up_in_seeded_durable_steps(pool: PgPo
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn auto_resolution_claim_is_replica_safe_and_manual_cancel_wins_before_claim(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-auto-race").unwrap();
@@ -1449,7 +1449,7 @@ async fn auto_resolution_claim_is_replica_safe_and_manual_cancel_wins_before_cla
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-cookie").unwrap();
@@ -1690,7 +1690,7 @@ async fn day_event_vertical_is_typed_atomic_rebuildable_and_engine_visible(pool:
     assert!(audit_rebuild(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn day_event_reward_adapters_fail_before_scheduling(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let event_id = game_platform::DayEventId::new("event-invalid-reward").unwrap();
@@ -1715,7 +1715,7 @@ async fn day_event_reward_adapters_fail_before_scheduling(pool: PgPool) {
     assert!(slot_effects(&pool, game).await.unwrap().is_empty());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn day_event_ops_and_resolution_honor_independent_cohost_denials(pool: PgPool) {
     let game = setup_game_with_pack_and_denied(
         &pool,

@@ -48,7 +48,7 @@ async function contract() {
         "crates/server/src/bin/fmarch-event-key-admin.rs",
         "crates/api/src/lib.rs",
         "crates/media/src/repository.rs",
-        "crates/projections/src/schema.rs",
+        "crates/database_schema/src/schema.rs",
       ].map(async (relativePath) => [relativePath, await read(relativePath)]),
     ),
   );
@@ -581,7 +581,7 @@ async function contract() {
   assert.match(source["crates/api/src/lib.rs"], /route\("\/readyz", get\(readyz\)\)/);
   assert.match(
     source["crates/api/src/lib.rs"],
-    /projections::ensure_schema_ready\(&state\.pool\)/,
+    /database_schema::ensure_schema_ready\(&state\.pool\)/,
   );
   assert.match(
     source["crates/api/src/lib.rs"],
@@ -595,7 +595,7 @@ async function contract() {
     source["crates/media/src/repository.rs"],
     /list_with_delimiter\(Some\(&prefix\)\)/,
   );
-  assert.match(source["crates/projections/src/schema.rs"], /pub static MIGRATOR/);
+  assert.match(source["crates/database_schema/src/schema.rs"], /pub static MIGRATOR/);
   assert.match(source["tools/production_promotion.mjs"], /\$\{urls\.apiUrl\}\/readyz/);
   assert.match(
     source["tools/production_promotion.mjs"],

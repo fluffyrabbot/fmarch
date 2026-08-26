@@ -265,7 +265,7 @@ async fn session_row(pool: &sqlx::PgPool, token: &str) -> (Option<Uuid>, Option<
     .unwrap()
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
@@ -305,7 +305,7 @@ async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
     assert!(body.get("session_token").is_none());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn orphan_accounts_fail_closed_without_creating_identity_rows(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
@@ -365,7 +365,7 @@ async fn orphan_accounts_fail_closed_without_creating_identity_rows(pool: sqlx::
     assert_eq!((principals, subjects, methods, sessions), (0, 0, 0, 0));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn dev_session_grant_and_rotation_issue_backend_tokens(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root).with_dev_auth(true));
@@ -520,7 +520,7 @@ async fn hold_workos_subject(
     gate
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_link_closes_the_provider_session_before_a_queued_login(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
@@ -591,7 +591,7 @@ async fn workos_link_closes_the_provider_session_before_a_queued_login(pool: sql
     assert_eq!(linked_principal, principal.as_uuid());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_exact_workos_link_retries_share_one_committed_ceremony(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
@@ -669,7 +669,7 @@ async fn concurrent_exact_workos_link_retries_share_one_committed_ceremony(pool:
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_link_revalidates_the_local_session_after_queued_logout(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
@@ -736,7 +736,7 @@ async fn workos_link_revalidates_the_local_session_after_queued_logout(pool: sql
     assert_eq!(consumed_assertions, 0);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_exchange_queued_before_logout_is_revoked_by_the_following_tombstone(
     pool: sqlx::PgPool,
 ) {
@@ -798,7 +798,7 @@ async fn workos_exchange_queued_before_logout_is_revoked_by_the_following_tombst
     assert_eq!(provider_status, "logged_out");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(
@@ -849,7 +849,7 @@ async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(po
     assert_eq!(local_sessions, 1, "the unused assertion created no session");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let state = test_state(pool.clone(), &root)
@@ -1126,7 +1126,7 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
     assert!(!audit_kinds.iter().any(|kind| kind == "method_reactivated"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn rotation_cannot_refresh_recent_authentication(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let state = test_state(pool.clone(), &root)
@@ -1188,7 +1188,7 @@ async fn rotation_cannot_refresh_recent_authentication(pool: sqlx::PgPool) {
     assert!(created_at > authenticated_at);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn idle_expired_sessions_cannot_rotate_or_choose_legacy_bearers(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
@@ -1323,7 +1323,7 @@ async fn idle_expired_sessions_cannot_rotate_or_choose_legacy_bearers(pool: sqlx
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn idle_session_cannot_resurrect_after_expiring_while_rotation_waits_for_its_lock(
     pool: sqlx::PgPool,
 ) {
@@ -1438,7 +1438,7 @@ async fn idle_session_cannot_resurrect_after_expiring_while_rotation_waits_for_i
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn orphan_principal_sessions_fail_closed_for_read_and_rotation(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
@@ -1522,7 +1522,7 @@ async fn orphan_principal_sessions_fail_closed_for_read_and_rotation(pool: sqlx:
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn ordinary_sessions_do_not_preserve_revoked_principal_capabilities(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
@@ -1580,7 +1580,7 @@ async fn ordinary_sessions_do_not_preserve_revoked_principal_capabilities(pool: 
     assert!(stored_grants.is_empty());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn classic_to_workos_link_recovers_verified_stale_provider_sessions_without_mutation(
     pool: sqlx::PgPool,
 ) {
@@ -1712,7 +1712,7 @@ async fn classic_to_workos_link_recovers_verified_stale_provider_sessions_withou
     assert_eq!(workos_mutations, (0, 0, 0, 0));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let first_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
@@ -1865,7 +1865,7 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let first_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
@@ -1981,7 +1981,7 @@ async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sq
     assert_eq!(tombstones, 2);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_identity(
     pool: sqlx::PgPool,
 ) {
@@ -2138,7 +2138,7 @@ async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_i
     assert_eq!(counts_after, counts_before);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn provider_jwts_and_random_bearers_are_never_general_credentials(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let state = test_state(pool.clone(), &root)
@@ -2167,7 +2167,7 @@ async fn provider_jwts_and_random_bearers_are_never_general_credentials(pool: sq
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained_authorship(
     pool: sqlx::PgPool,
 ) {
@@ -2449,7 +2449,7 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     assert_eq!(rebuilt_persona_name, pseudonym);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
@@ -2525,7 +2525,7 @@ async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     assert_erased_without_eligible_sessions(&pool, principal).await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root).with_dev_auth(true));
@@ -2601,7 +2601,7 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
     assert_erased_without_eligible_sessions(&pool, principal).await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root).with_dev_auth(true));
@@ -2657,7 +2657,7 @@ async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPo
     assert_erased_without_eligible_sessions(&pool, principal).await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
@@ -2715,7 +2715,7 @@ async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     assert_erased_without_eligible_sessions(&pool, principal).await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));

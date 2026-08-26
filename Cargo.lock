@@ -90,6 +90,7 @@ dependencies = [
  "commands",
  "content_reference",
  "content_registry",
+ "database_schema",
  "domain",
  "eventstore",
  "forum",
@@ -837,6 +838,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
+name = "database_schema"
+version = "0.1.0"
+dependencies = [
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "dav1d"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -989,6 +1001,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "chacha20poly1305",
+ "database_schema",
  "domain",
  "principal",
  "rand 0.8.6",
@@ -2222,6 +2235,7 @@ version = "0.1.0"
 dependencies = [
  "caps",
  "commands",
+ "database_schema",
  "domain",
  "eventstore",
  "game_platform",
@@ -2443,6 +2457,7 @@ dependencies = [
  "attention",
  "content_reference",
  "content_registry",
+ "database_schema",
  "domain",
  "eventstore",
  "forum",
@@ -3094,6 +3109,7 @@ dependencies = [
  "axum",
  "commands",
  "content_registry",
+ "database_schema",
  "eventstore",
  "identity",
  "media",

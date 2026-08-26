@@ -13,6 +13,7 @@ members = [
     "crates/trust_safety",
     "crates/forum",
     "crates/domain",
+    "crates/database_schema",
     "crates/eventstore",
     "crates/projections",
     "crates/caps",

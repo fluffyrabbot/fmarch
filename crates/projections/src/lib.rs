@@ -90,24 +90,17 @@ use trust_safety::{
 use uuid::Uuid;
 
 mod attention_writes;
-mod database_authority;
 mod effect_projection;
 mod moderation_writes;
 mod private_channel_projection;
 mod publications;
-mod schema;
 mod social_writes;
 pub use attention_writes::{
     advance_subscription_read_cursor, subscribe_to_public_target, unsubscribe_from_public_target,
 };
-pub use database_authority::{
-    reconcile_database_authority, verify_database_principal, verify_migration_authority,
-    DatabaseAuthorityError, DatabasePrincipal, APPLICATION_DATABASE_ROLE, KEY_ADMIN_DATABASE_ROLE,
-};
 pub use effect_projection::{slot_effects, slot_effects_for_slot, SlotEffectRow};
 pub use moderation_writes::{append_moderation_and_project_expected, submit_moderation_report};
 pub use private_channel_projection::{private_channel_members, PrivateChannelMemberRow};
-pub use schema::{ensure_schema_ready, inspect_schema_readiness, SchemaReadiness, MIGRATOR};
 pub use social_writes::{mute_public_profile, unmute_public_profile};
 
 /// A row of the `votecount` running tally: the COUNT of current ballots cast at

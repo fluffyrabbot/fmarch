@@ -1,6 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
-use projections::{
+use database_schema::{
     reconcile_database_authority, verify_database_principal, DatabasePrincipal,
     APPLICATION_DATABASE_ROLE, KEY_ADMIN_DATABASE_ROLE,
 };
@@ -15,7 +15,7 @@ const KEY_ADMIN_PASSWORD: &str = "key-admin:'\\/?#[]@ different % proof";
 const LOCAL_APPLICATION_PASSWORD: &str = "fmarch-local-application-password";
 const LOCAL_KEY_ADMIN_PASSWORD: &str = "fmarch-local-key-admin-password";
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "./migrations")]
 async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
     reconcile_database_authority(&owner, APPLICATION_PASSWORD, KEY_ADMIN_PASSWORD)
         .await
@@ -159,7 +159,7 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
     .execute(&owner)
     .await
     .unwrap();
-    projections::ensure_schema_ready(&owner)
+    database_schema::ensure_schema_ready(&owner)
         .await
         .expect("SQLx history alone still looks current after --no-acl restore");
     verify_database_principal(&application, DatabasePrincipal::Application)

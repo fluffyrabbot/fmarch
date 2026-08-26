@@ -30,6 +30,7 @@
     "cargo:clippy-workspace": { "kind": "shell", "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings", "measurement": "diff-sensitive" },
     "cargo:content-registry": { "kind": "shell", "command": "cargo test -p content_registry" },
     "cargo:domain": { "kind": "shell", "command": "cargo test -p domain" },
+    "cargo:database-schema": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p database_schema -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "database_schema", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p eventstore -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "eventstore", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p projections -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "projections", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:principal": { "kind": "shell", "command": "cargo test -p principal" },
@@ -100,7 +101,7 @@
     },
     "test:auth-invite-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:auth-invite-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:public-search-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:public-search-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
-    "test:projection-baseline:static": { "kind": "npm" },
+    "test:database-schema:static": { "kind": "npm" },
     "test:event-key-rotation-rehearsal": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["npm", "run", "test:event-key-rotation-rehearsal"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:database-tls-boundary": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 300, "argv": ["npm", "run", "test:database-tls-boundary"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "postgres-admin" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:dev-test-game-contract": { "kind": "npm" },
@@ -166,6 +167,22 @@
       "capabilities": ["foundation.resolution-engine-parity"]
     },
     {
+      "id": "crate:database-schema",
+      "tier": "frozen",
+      "paths": ["crates/database_schema/"],
+      "crate": "database_schema",
+      "lanes": [
+        "cargo:database-schema",
+        "cargo:clippy-workspace",
+        "test:database-schema:static",
+        "test:event-key-rotation-rehearsal",
+        "test:railway-staging-target",
+        "test:production-promotion",
+        "test:public-search-role-proof"
+      ],
+      "capabilities": ["foundation.event-store-projections"]
+    },
+    {
       "id": "crate:eventstore",
       "tier": "frozen",
       "paths": ["crates/eventstore/"],
@@ -188,7 +205,6 @@
       "lanes": [
         "cargo:projections",
         "cargo:clippy-workspace",
-        "test:projection-baseline:static",
         "test:event-key-rotation-rehearsal",
         "test:railway-staging-target",
         "test:production-promotion",
@@ -917,13 +933,13 @@
       "capabilities": ["product.community.search"]
     },
     {
-      "id": "proof:projection-baseline",
+      "id": "proof:database-schema",
       "tier": "active",
       "paths": [
-        "tools/projection_baseline_contract.mjs",
-        "tools/projection_baseline_contract.test.mjs"
+        "tools/database_schema_contract.mjs",
+        "tools/database_schema_contract.test.mjs"
       ],
-      "lanes": ["test:projection-baseline:static"]
+      "lanes": ["test:database-schema:static"]
     },
     {
       "id": "proof:completeness-scorecard",
@@ -1088,7 +1104,8 @@
       "paths": ["scripts/", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "package.json", "package-lock.json"],
       "lanes": [
         "check:build-posture",
-        "test:projection-baseline:static",
+        "test:database-schema:static",
+        "cargo:database-schema",
         "cargo:clippy-workspace",
         "cargo:content-registry",
         "cargo:public-platform",

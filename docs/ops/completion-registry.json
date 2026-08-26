@@ -797,11 +797,7 @@
         },
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0008_day_events.sql"
-        },
-        {
-          "kind": "source",
-          "value": "crates/projections/migrations/0013_day_event_narrative.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "command",
@@ -828,7 +824,7 @@
       "evidence": [
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0014_private_day_event_channels.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "source",
@@ -1236,7 +1232,7 @@
         },
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0001_baseline.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "source",
@@ -1499,7 +1495,7 @@
         },
         {
           "kind": "command",
-          "value": "npm run test:projection-baseline:static"
+          "value": "npm run test:database-schema:static"
         }
       ],
       "remaining": []
@@ -1530,7 +1526,7 @@
         },
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0001_baseline.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "command",
@@ -1565,7 +1561,7 @@
         },
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0001_baseline.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "source",
@@ -1610,7 +1606,7 @@
         },
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0016_member_lifecycle.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "source",
@@ -1653,7 +1649,7 @@
         },
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0001_baseline.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "source",
@@ -1699,7 +1695,7 @@
       "evidence": [
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0001_baseline.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "source",
@@ -1739,7 +1735,7 @@
       "evidence": [
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0001_baseline.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "source",
@@ -1783,7 +1779,7 @@
       "evidence": [
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0001_baseline.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "source",
@@ -1824,7 +1820,7 @@
       "evidence": [
         {
           "kind": "source",
-          "value": "crates/projections/migrations/0001_baseline.sql"
+          "value": "crates/database_schema/migrations/0001_current_schema.sql"
         },
         {
           "kind": "source",

@@ -136,7 +136,7 @@ fn run_admin(
     command.output().expect("run profile-index admin binary")
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn deployed_admin_reindexes_claim_derived_tokens_without_event_payload_compatibility(
     pool: PgPool,
 ) {

@@ -3,7 +3,7 @@ use sqlx::PgPool;
 
 use crate::common::*;
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_post_records_a_main_thread_youtube_embed(pool: PgPool) {
     let host = "host_embed";
     let slot = "slot_1";
@@ -57,7 +57,7 @@ async fn submit_post_records_a_main_thread_youtube_embed(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_post_rejects_embeds_off_the_main_thread(pool: PgPool) {
     let host = "host_embed_priv";
     let slot = "slot_1";
@@ -82,7 +82,7 @@ async fn submit_post_rejects_embeds_off_the_main_thread(pool: PgPool) {
     assert!(matches!(rejected, Err(commands::Reject::InvalidTarget)));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_post_rejects_unknown_embed_hosts(pool: PgPool) {
     let host = "host_embed_bad";
     let slot = "slot_1";
@@ -107,7 +107,7 @@ async fn submit_post_rejects_unknown_embed_hosts(pool: PgPool) {
     assert!(matches!(rejected, Err(commands::Reject::InvalidTarget)));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_post_rejects_embeds_without_a_snapshot(pool: PgPool) {
     let host = "host_embed_nosnap";
     let slot = "slot_1";

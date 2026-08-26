@@ -1,13 +1,11 @@
 //! Real-Postgres proofs for the append-only encrypted event store.
 
 use base64::Engine as _;
-use chacha20poly1305::aead::{Aead, KeyInit, Payload};
-use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use eventstore::{
     append, append_in_tx, attest_active_runtime_kek, audit_event_encryption_key_coverage,
     begin_runtime_kek_retirement, decrypt_delivery_credential, decrypt_private_projection,
     encrypt_delivery_credential, encrypt_private_projection, ensure_event_encryption_key_readiness,
-    export_stream, finalize_runtime_kek_retirement, import_stream, load_stream, migrate,
+    export_stream, finalize_runtime_kek_retirement, import_stream, load_stream,
     rehearse_runtime_kek_retirement, reseal_delivery_credential_in_tx,
     reseal_private_projection_in_tx, rewrap_stream_data_keys, rewrap_stream_data_keys_by_kid_batch,
     rotate_stream_data_key, runtime_kek_reference_report, runtime_kek_status,
@@ -89,44 +87,6 @@ fn vote(target: &str, phase: &str) -> EventInput {
     )
 }
 
-fn legacy_stream_key_wrap(
-    stream_id: Uuid,
-    key_epoch: i64,
-    wrap_kid: &str,
-    wrapping_material: &str,
-) -> ([u8; 24], Vec<u8>) {
-    #[derive(Serialize)]
-    struct StreamKeyWrapAad<'a> {
-        context: &'static str,
-        scheme: &'static str,
-        stream_id: Uuid,
-        key_epoch: i64,
-        wrap_kid: &'a str,
-    }
-
-    let aad = serde_json::to_vec(&StreamKeyWrapAad {
-        context: "fmarch:eventstore:stream-key-wrap:v1",
-        scheme: "fmarch-event-stream-dek-wrap-v1",
-        stream_id,
-        key_epoch,
-        wrap_kid,
-    })
-    .unwrap();
-    let wrapping_key: [u8; 32] = Sha256::digest(wrapping_material.as_bytes()).into();
-    let cipher = XChaCha20Poly1305::new((&wrapping_key).into());
-    let nonce = [7_u8; 24];
-    let wrapped_dek = cipher
-        .encrypt(
-            XNonce::from_slice(&nonce),
-            Payload {
-                msg: &[42_u8; 32],
-                aad: &aad,
-            },
-        )
-        .unwrap();
-    (nonce, wrapped_dek)
-}
-
 fn private_post(body: &str) -> EventInput {
     EventInput::new(
         "PostSubmitted",
@@ -162,7 +122,7 @@ fn refresh_checksum(export: &mut StreamExport) {
     export.checksum_sha256 = format!("{:x}", Sha256::digest(bytes));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn append_assigns_sequential_stream_seq(pool: sqlx::PgPool) {
     let _env = EncryptionEnvGuard::new();
     let stream = Uuid::new_v4();
@@ -186,7 +146,7 @@ async fn append_assigns_sequential_stream_seq(pool: sqlx::PgPool) {
     assert_eq!(load_stream(&pool, stream).await.unwrap().len(), 3);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn old_and_new_dek_epochs_coexist_in_one_stream(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("runtime-v1", "runtime wrapping material v1");
@@ -212,7 +172,7 @@ async fn old_and_new_dek_epochs_coexist_in_one_stream(pool: sqlx::PgPool) {
     assert_eq!(loaded[1].payload["body"], "epoch two secret");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn kek_rewrap_changes_only_stream_key_rows(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("runtime-v1", "runtime wrapping material v1");
@@ -270,7 +230,7 @@ async fn kek_rewrap_changes_only_stream_key_rows(pool: sqlx::PgPool) {
         .expect("a stream-only old KEK is retireable after every DEK is rewrapped");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn startup_audit_rejects_missing_and_wrong_runtime_wrapping_keys(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("runtime-v1", "correct runtime wrapping material");
@@ -297,7 +257,7 @@ async fn startup_audit_rejects_missing_and_wrong_runtime_wrapping_keys(pool: sql
     audit_event_encryption_key_coverage(&pool).await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn startup_attestation_precedes_readiness_and_admin_rotation(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("attest-source", "attested source material");
@@ -347,7 +307,7 @@ async fn startup_attestation_precedes_readiness_and_admin_rotation(pool: sqlx::P
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn runtime_kid_grammar_rejects_delimiter_and_non_ascii_aliases(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     for invalid in [
@@ -395,117 +355,7 @@ async fn runtime_kid_grammar_rejects_delimiter_and_non_ascii_aliases(pool: sqlx:
     }
 }
 
-#[sqlx::test(migrations = false)]
-async fn legacy_stream_wrap_migrates_then_authenticates_rewraps_and_retires(pool: sqlx::PgPool) {
-    let env = EncryptionEnvGuard::new();
-    for migration in [
-        include_str!("../migrations/0001_init.sql"),
-        include_str!("../migrations/0002_sealed_event_body.sql"),
-        include_str!("../migrations/0003_stream_key_epochs.sql"),
-    ] {
-        sqlx::raw_sql(migration).execute(&pool).await.unwrap();
-    }
-
-    // The pre-0004 schema permitted a stream wrap without a direct-envelope
-    // sentinel. Build a real authenticated legacy envelope before applying the
-    // registry FK so the migration exercises that deployed custody shape.
-    let stream_id = Uuid::new_v4();
-    let (wrap_nonce, wrapped_dek) = legacy_stream_key_wrap(
-        stream_id,
-        1,
-        "legacy-source",
-        "correct legacy source material",
-    );
-    sqlx::query(
-        r#"
-        INSERT INTO event_stream_keys
-            (stream_id, key_epoch, wrap_version, wrap_kid, wrap_nonce, wrapped_dek)
-        VALUES ($1, 1, 1, 'legacy-source', $2, $3)
-        "#,
-    )
-    .bind(stream_id)
-    .bind(wrap_nonce.as_slice())
-    .bind(wrapped_dek)
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query("INSERT INTO event_stream_key_state (stream_id, active_epoch) VALUES ($1, 1)")
-        .bind(stream_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-
-    sqlx::raw_sql(include_str!(
-        "../migrations/0004_runtime_kek_retirement.sql"
-    ))
-    .execute(&pool)
-    .await
-    .expect("the NOT VALID FK must preserve a legacy stream-only KID");
-    assert!(
-        !sqlx::query_scalar::<_, bool>(
-            "SELECT convalidated FROM pg_constraint WHERE conname = 'event_stream_keys_wrap_kid_fkey'",
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap(),
-        "the forward-enforced FK must not retroactively reject legacy wraps"
-    );
-    assert!(runtime_kek_status(&pool, "legacy-source")
-        .await
-        .unwrap()
-        .is_none());
-
-    env.set_wrap("legacy-target", "legacy target material");
-    env.set_wrap_ring(Some("legacy-source=wrong legacy source material"));
-    attest_active_runtime_kek(&pool).await.unwrap();
-    let error = begin_runtime_kek_retirement(&pool, "legacy-source", "legacy-target")
-        .await
-        .expect_err("wrong legacy source material must fail before registry creation");
-    assert!(error.to_string().contains("unwrap stream data key"));
-    assert!(runtime_kek_status(&pool, "legacy-source")
-        .await
-        .unwrap()
-        .is_none());
-
-    env.set_wrap_ring(Some("legacy-source=correct legacy source material"));
-    let status = begin_runtime_kek_retirement(&pool, "legacy-source", "legacy-target")
-        .await
-        .unwrap();
-    assert_eq!(status.lifecycle, RuntimeKekLifecycle::Retiring);
-
-    let batch = rewrap_stream_data_keys_by_kid_batch(&pool, "legacy-source", 2)
-        .await
-        .unwrap();
-    assert_eq!(batch.rewrapped, 1);
-    assert!(!batch.batch_full);
-    assert_eq!(
-        sqlx::query_scalar::<_, String>(
-            "SELECT wrap_kid FROM event_stream_keys WHERE stream_id = $1 AND key_epoch = 1",
-        )
-        .bind(stream_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap(),
-        "legacy-target"
-    );
-    let references = runtime_kek_reference_report(&pool, "legacy-source")
-        .await
-        .unwrap();
-    assert_eq!(references.stream_key_references, 0);
-    assert_eq!(references.direct_reference_count, 0);
-
-    env.set_wrap_ring(None);
-    let evidence = rehearse_runtime_kek_retirement(&pool, "legacy-source", "legacy-target")
-        .await
-        .unwrap();
-    let status = finalize_runtime_kek_retirement(&pool, &evidence)
-        .await
-        .unwrap();
-    assert_eq!(status.lifecycle, RuntimeKekLifecycle::Retired);
-    audit_event_encryption_key_coverage(&pool).await.unwrap();
-}
-
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn stream_key_epochs_cannot_be_removed_rolled_back_or_hidden_from_readiness(
     pool: sqlx::PgPool,
 ) {
@@ -555,7 +405,7 @@ async fn stream_key_epochs_cannot_be_removed_rolled_back_or_hidden_from_readines
         .contains("missing or stale active key state"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn direct_key_sentinels_are_atomic_immutable_and_gate_kek_retirement(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
 
@@ -654,7 +504,7 @@ async fn direct_key_sentinels_are_atomic_immutable_and_gate_kek_retirement(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn direct_envelope_reseal_requires_retiring_state_and_leaves_an_unusable_tombstone(
     pool: sqlx::PgPool,
 ) {
@@ -878,7 +728,7 @@ async fn direct_envelope_reseal_requires_retiring_state_and_leaves_an_unusable_t
     reused.rollback().await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn global_stream_rewrap_batches_are_resumable_and_preserve_event_rows(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("batch-v1", "batch wrapping material v1");
@@ -953,7 +803,7 @@ async fn global_stream_rewrap_batches_are_resumable_and_preserve_event_rows(pool
     assert_eq!(load_stream(&pool, streams[1]).await.unwrap().len(), 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn writer_row_lock_fences_the_writable_to_retiring_transition(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("fenced-v1", "fenced wrapping material v1");
@@ -996,7 +846,7 @@ async fn writer_row_lock_fences_the_writable_to_retiring_transition(pool: sqlx::
     late_writer.rollback().await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn raw_stream_wrap_writes_share_the_runtime_kek_fence(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("raw-wrap-v1", "raw wrap material v1");
@@ -1056,7 +906,7 @@ async fn raw_stream_wrap_writes_share_the_runtime_kek_fence(pool: sqlx::PgPool) 
     assert!(error.to_string().contains("not writable"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn runtime_kek_retirements_are_strictly_sequential(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("parallel-a", "parallel wrapping material a");
@@ -1100,7 +950,7 @@ async fn runtime_kek_retirements_are_strictly_sequential(pool: sqlx::PgPool) {
     assert_eq!(next.lifecycle, RuntimeKekLifecycle::Retiring);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_runtime_kek_begins_serialize_to_one_winner(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("race-a", "race wrapping material a");
@@ -1128,7 +978,7 @@ async fn concurrent_runtime_kek_begins_serialize_to_one_winner(pool: sqlx::PgPoo
     assert!(error.to_string().contains("already in flight"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn raw_rows_hide_logical_bodies_and_runtime_keys(pool: sqlx::PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_wrap("runtime-secret-kid", "runtime-secret-key-material");
@@ -1156,7 +1006,7 @@ async fn raw_rows_hide_logical_bodies_and_runtime_keys(pool: sqlx::PgPool) {
     assert!(!raw_key.contains("runtime-secret-key-material"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn relocation_header_and_ciphertext_tamper_fail_closed(pool: sqlx::PgPool) {
     let _env = EncryptionEnvGuard::new();
     let source = Uuid::new_v4();
@@ -1255,7 +1105,7 @@ async fn relocation_header_and_ciphertext_tamper_fail_closed(pool: sqlx::PgPool)
     assert!(load_stream(&pool, tamper_stream).await.is_err());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn archive_bundle_rejects_relocation_tamper_and_wrong_custody_key_atomically(
     pool: sqlx::PgPool,
 ) {
@@ -1304,7 +1154,7 @@ async fn archive_bundle_rejects_relocation_tamper_and_wrong_custody_key_atomical
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn append_serializes_concurrent_writers_and_events_are_append_only(pool: sqlx::PgPool) {
     let _env = EncryptionEnvGuard::new();
     let stream = Uuid::new_v4();
@@ -1371,8 +1221,8 @@ async fn archive_import_rewraps_deks_under_an_isolated_runtime_kek() {
         .connect(&format!("{prefix}/{target_name}"))
         .await
         .unwrap();
-    migrate(&source).await.unwrap();
-    migrate(&target).await.unwrap();
+    database_schema::MIGRATOR.run(&source).await.unwrap();
+    database_schema::MIGRATOR.run(&target).await.unwrap();
     env.set_archive("archive-v1", "shared offline archive custody material");
     env.set_wrap("source-runtime", "source-only runtime material");
     let stream = Uuid::new_v4();

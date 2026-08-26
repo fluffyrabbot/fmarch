@@ -213,7 +213,7 @@ async fn operational_state(pool: &PgPool) -> Vec<Value> {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn reseal_batch_preserves_delivery_states_and_resumes_after_interruption(pool: PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_active("delivery-old", "old delivery envelope key material");
@@ -323,7 +323,7 @@ async fn reseal_batch_preserves_delivery_states_and_resumes_after_interruption(p
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn locked_claim_cancel_and_erasure_are_skipped_without_resurrection(pool: PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_active("delivery-old", "old delivery envelope key material");

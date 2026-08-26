@@ -254,7 +254,7 @@ async fn seed_direct_surfaces(pool: &PgPool, game: Uuid, delivery: Uuid) {
     tx.commit().await.unwrap();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn deployed_admin_rehearses_old_key_removal_before_retirement(pool: PgPool) {
     let env = EncryptionEnvGuard::new();
     env.set_active("rehearsal-old", "old rehearsal runtime key material");

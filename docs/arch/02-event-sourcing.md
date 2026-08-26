@@ -32,7 +32,7 @@ events
   kind         TEXT       NOT NULL         -- variant tag, e.g. "VoteSubmitted"
   version      SMALLINT   NOT NULL         -- schema version of this event type
   occurred_at  BIGINT     NOT NULL         -- LogicalTime (u64); deterministic, not wall-clock (docs 09/10)
-  sealed_body  JSONB      NOT NULL         -- AEAD envelope over payload, actor, causation, and audit metadata
+  sealed_body  BYTEA      NOT NULL         -- AEAD envelope over payload, actor, causation, and audit metadata
 ```
 
 > Shipped in [03-backend](03-backend.md)'s `eventstore` crate. Only the structural header is
@@ -49,6 +49,22 @@ events
   constraint rejects a conflicting concurrent append. Retry on conflict.
 - Append-only. There is no `UPDATE` and no `DELETE` on `events`. Ever. Corrections are new
   events (a `PostEdited`, a `VoteWithdrawn`), not mutations.
+
+## Physical database ownership
+
+`crates/database_schema` is the sole owner of the PostgreSQL catalog. Its one
+greenfield migration creates the current event store, projections, identity,
+media-reference, scheduler, and platform tables directly; persistence crates
+own queries and behavior, not private migration histories. The same crate owns
+schema readiness, database-role reconciliation, and exact privilege audits so
+creation and admission cannot drift into competing definitions.
+
+Because this workspace has no compatibility obligation, catalog changes are
+made by editing and intentionally re-hashing that current-state baseline. A
+second compatibility migration is a contract failure. Disposable local and
+staging databases are recreated when the baseline changes; production
+migration history begins only when a durable-user compatibility promise is
+explicitly adopted.
 
 ## Projection replay audits
 

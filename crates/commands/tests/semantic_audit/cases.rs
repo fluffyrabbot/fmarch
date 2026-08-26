@@ -2383,7 +2383,7 @@ async fn host_resolve_phase_projects_alignment_only_death_reveal(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [101_u64, 202, 303, 404, 505] {
         let mut rng = DeterministicRng::new(seed);
@@ -2582,7 +2582,7 @@ async fn seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically(po
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [6101_u64, 6202, 6303, 6404, 6505] {
         let mut rng = DeterministicRng::new(seed);
@@ -2783,7 +2783,7 @@ async fn seeded_night_action_graphs_replay_audit_and_rebuild_deterministically(p
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [
         (7101_u64, "pgo"),
@@ -3112,7 +3112,7 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(pool: PgPool) {
     let found = generated_trigger_dependency_search_fixtures();
 
@@ -3263,7 +3263,7 @@ async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(poo
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_trigger_dependency_bad_expectations_shrink_to_failing_artifacts(pool: PgPool) {
     let found = generated_trigger_dependency_search_fixtures();
 
@@ -3376,7 +3376,7 @@ async fn generated_trigger_dependency_bad_expectations_shrink_to_failing_artifac
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_persistent_trigger_fixtures_shrink_to_replayable_artifacts(pool: PgPool) {
     for (stem, fixture_json, expected_audited, expected_traces, min_expectations) in [
         (
@@ -3518,7 +3518,7 @@ async fn generated_persistent_trigger_fixtures_shrink_to_replayable_artifacts(po
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_persistent_trigger_bad_expectations_shrink_to_failing_artifacts(pool: PgPool) {
     for (family, stem, seed, min_expectations) in [
         (
@@ -3627,7 +3627,7 @@ async fn generated_persistent_trigger_bad_expectations_shrink_to_failing_artifac
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_shrink_matrix_writes_compact_operator_report(
     pool_options: sqlx::postgres::PgPoolOptions,
     connect_options: sqlx::postgres::PgConnectOptions,
@@ -3782,7 +3782,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(
     assert_eq!(saved_report, report);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [
         (8101_u64, "hunter"),
@@ -4130,7 +4130,7 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [(8501_u64, "super_saint"), (8602, "hero_vote_duel")] {
         let game = Uuid::new_v4();
@@ -4398,7 +4398,7 @@ async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(po
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: PgPool) {
     let seed = 90_001_u64;
     let game = Uuid::new_v4();
@@ -4897,7 +4897,7 @@ async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: 
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [91_001_u64, 91_113, 91_227, 91_331, 91_447, 91_559] {
         let case = generated_night_case(seed);
@@ -5275,7 +5275,7 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_mafiascum_failure_fixture_shrinks_to_saved_artifacts(pool: PgPool) {
     let case = GeneratedNightCase {
         seed: 91_777,
@@ -5329,7 +5329,7 @@ async fn generated_mafiascum_failure_fixture_shrinks_to_saved_artifacts(pool: Pg
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_failure_message_includes_saved_shrink_summary(pool: PgPool) {
     let case = GeneratedNightCase {
         seed: 91_778,
@@ -5372,7 +5372,7 @@ async fn generated_failure_message_includes_saved_shrink_summary(pool: PgPool) {
     assert!(message.contains("promoted_success_fixture=false"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_chinese_failure_fixture_shrinks_to_saved_artifacts(pool: PgPool) {
     let case = GeneratedNightCase {
         seed: 92_777,
@@ -5434,7 +5434,7 @@ async fn generated_chinese_failure_fixture_shrinks_to_saved_artifacts(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: PgPool) {
     let case = generated_epicmafia_pk_case(95_777);
     let fixture_json = generated_epicmafia_pk_case_fixture_json(&case, case.seed + 47_000);
@@ -5468,7 +5468,7 @@ async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: P
     assert_eq!(report["write_reduced"]["promoted_success_fixture"], true);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_epicmafia_night_fixture_replays_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -5495,7 +5495,7 @@ async fn generated_epicmafia_night_fixture_replays_semantic_expectations_through
     assert_eq!(report["reduction"]["replay_success"], true);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_chinese_structured_night_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -5530,7 +5530,7 @@ async fn generated_chinese_structured_night_fixtures_replay_semantic_expectation
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_phase5_day_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -5605,7 +5605,7 @@ async fn generated_phase5_day_fixtures_replay_semantic_expectations_through_mini
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_default_open_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -5656,7 +5656,7 @@ async fn generated_default_open_fixtures_replay_semantic_expectations_through_mi
     assert_eq!(day_report["reduction"]["replay_success"], true);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {
@@ -6036,7 +6036,7 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {
@@ -6562,7 +6562,7 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {
@@ -7099,7 +7099,7 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [95_001_u64, 95_113, 95_227] {
         let case = generated_epicmafia_pk_case(seed);
@@ -8420,7 +8420,7 @@ async fn host_resolve_phase_carries_default_open_guardian_seer(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_default_open_night_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [97_101_u64, 97_211, 97_307] {
         let case = generated_default_open_night_case(seed);
@@ -8996,7 +8996,7 @@ async fn host_resolve_phase_carries_default_open_day_majority(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [97_409_u64, 97_521, 97_633] {
         let case = generated_default_open_day_case(seed);

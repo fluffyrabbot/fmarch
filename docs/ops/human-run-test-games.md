@@ -151,7 +151,7 @@ The no-server contract gate is:
 
 ```sh
 npm run test:dev-postgres-contract
-npm run test:projection-baseline:static
+npm run test:database-schema:static
 npm run test:dev-test-game-contract
 ```
 
@@ -162,7 +162,7 @@ baseline to a SQLx-provisioned scratch database, and checks the exact table,
 index, and constraint inventory:
 
 ```sh
-DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:projection-baseline
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:database-schema
 ```
 
 The broader serial local database lane includes that contract plus every

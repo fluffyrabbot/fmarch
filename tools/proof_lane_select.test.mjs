@@ -643,7 +643,7 @@ test('aggregate coverage expands to atomic Postgres and frontend leaves', () => 
   });
   for (const lane of [
     'check:build-posture',
-    'test:projection-baseline:static',
+    'test:database-schema:static',
     'cargo:commands-unit',
     'cargo:commands-pg',
     'cargo:commands-concurrency',
@@ -1087,8 +1087,8 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       'tools/dev_test_game_spine_artifact_dependencies.mjs',
       ['test:auth-invite-role-proof', 'test:live-stack-backup-restore-drill'],
     ],
-    ['tools/projection_baseline_contract.mjs', 'test:projection-baseline:static'],
-    ['tools/projection_baseline_contract.test.mjs', 'test:projection-baseline:static'],
+    ['tools/database_schema_contract.mjs', 'test:database-schema:static'],
+    ['tools/database_schema_contract.test.mjs', 'test:database-schema:static'],
     ['tools/completeness_scorecard.mjs', 'test:completeness-scorecard'],
     ['tools/completeness_scorecard.test.mjs', 'test:completeness-scorecard'],
     [
@@ -1132,7 +1132,7 @@ test('direct proof-tool sources select their owning proof lanes', () => {
 test('public search role proof is selected from search, projections, and public-platform HTTP', () => {
   for (const source of [
     'crates/projections/src/lib.rs',
-    'crates/projections/migrations/0032_publication_search_vector.sql',
+    'crates/database_schema/migrations/0001_current_schema.sql',
     'crates/api/src/public_platform_http.rs',
     'frontend/src/routes/search/+page.svelte',
     'tools/public_search_role_proof.mjs',

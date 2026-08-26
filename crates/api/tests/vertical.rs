@@ -371,7 +371,7 @@ async fn create_test_auth_account(
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn fresh_database_bootstraps_exactly_one_global_admin(pool: sqlx::PgPool) {
     assert!(
         api::bootstrap_workos_global_admin(&pool, "user_root", Some("root@example.test"),)
@@ -428,7 +428,7 @@ async fn response_json(response: axum::response::Response) -> serde_json::Value 
     serde_json::from_slice(&bytes).unwrap()
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn verified_workos_sid_tombstones_return_the_exact_provider_logout_recovery_contract(
     pool: sqlx::PgPool,
 ) {
@@ -509,7 +509,7 @@ async fn verified_workos_sid_tombstones_return_the_exact_provider_logout_recover
     assert_eq!(mutation_counts, (0, 0, 0, 0));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_subject_erasure_tombstone_never_discloses_provider_logout_recovery(
     pool: sqlx::PgPool,
 ) {
@@ -579,7 +579,7 @@ async fn workos_subject_erasure_tombstone_never_discloses_provider_logout_recove
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn unverified_malformed_and_expired_workos_assertions_never_receive_logout_recovery(
     pool: sqlx::PgPool,
 ) {
@@ -622,7 +622,7 @@ async fn unverified_malformed_and_expired_workos_assertions_never_receive_logout
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classic(
     pool: sqlx::PgPool,
 ) {
@@ -849,7 +849,7 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_logout_revokes_the_local_provider_session_scope_and_returns_a_constrained_url(
     pool: sqlx::PgPool,
 ) {
@@ -1012,7 +1012,7 @@ async fn workos_logout_revokes_the_local_provider_session_scope_and_returns_a_co
     assert_eq!(expired_retry.status(), StatusCode::UNAUTHORIZED);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_logout_fails_closed_if_persisted_provider_session_custody_is_corrupted(
     pool: sqlx::PgPool,
 ) {
@@ -1184,7 +1184,7 @@ async fn post_bearer_json(
         .unwrap()
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn media_upload_authorized_is_idempotent_and_restart_verified(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
@@ -1230,7 +1230,7 @@ async fn media_upload_authorized_is_idempotent_and_restart_verified(pool: sqlx::
         .is_some());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn media_upload_rejects_missing_expired_revoked_and_disabled_sessions_without_retention(
     pool: sqlx::PgPool,
 ) {
@@ -1298,7 +1298,7 @@ async fn media_upload_rejects_missing_expired_revoked_and_disabled_sessions_with
     assert_eq!(media_blob_entry_count(root.path()), 0);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_retention(
     pool: sqlx::PgPool,
 ) {
@@ -1351,7 +1351,7 @@ async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_r
     assert_eq!(media_blob_entry_count(variant_root.path()), 0);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
@@ -1741,7 +1741,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     assert_eq!(denied_reject.error, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
@@ -2170,7 +2170,7 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
@@ -2584,7 +2584,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
@@ -3296,7 +3296,7 @@ async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_command_boundary_updates_votecount(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -3343,7 +3343,7 @@ async fn get_endgame_summary(app: axum::Router, game: Uuid) -> api::EndgameSumma
     serde_json::from_slice(&bytes).unwrap()
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -3519,7 +3519,7 @@ async fn endgame_summary_reveals_winner_only_after_terminal_win(pool: sqlx::PgPo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn endgame_summary_reveals_vote_history_only_after_completion(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -3560,7 +3560,7 @@ async fn endgame_summary_reveals_vote_history_only_after_completion(pool: sqlx::
     assert_eq!(day_one.majority, Some(2.0));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -3610,7 +3610,7 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
     assert!(official.body.contains("- slot_2: 1"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     let app = router(pool);
     let admin_token = issue_dev_session(&app, "host_setup_admin", &["GlobalAdmin"]).await;
@@ -3781,7 +3781,7 @@ async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
     }));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -4099,7 +4099,7 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     assert_eq!(reject.error, RejectCode::NotYourSlot);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -4301,7 +4301,7 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
     assert_eq!(state["current_vote"], serde_json::Value::Null);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_game_connection_sends_initial_votecount_delta(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -4338,7 +4338,7 @@ async fn websocket_game_connection_sends_initial_votecount_delta(pool: sqlx::PgP
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_game_connection_streams_command_following_votecount_delta(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -4422,7 +4422,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     let state = test_api_state(pool)
         .with_dev_auth(true)
@@ -4523,7 +4523,7 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -4602,7 +4602,7 @@ async fn websocket_game_connection_streams_votecount_clear_delta(pool: sqlx::PgP
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_game_connection_streams_thread_delta_after_official_votecount(
     pool: sqlx::PgPool,
 ) {
@@ -4678,7 +4678,7 @@ async fn websocket_game_connection_streams_thread_delta_after_official_votecount
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_host_connection_streams_command_following_host_prompts_delta(
     pool: sqlx::PgPool,
 ) {
@@ -4813,7 +4813,7 @@ async fn websocket_host_connection_streams_command_following_host_prompts_delta(
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_task(
     pool: sqlx::PgPool,
 ) {
@@ -5071,7 +5071,7 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
         .any(|effect| effect.slot_id == "slot_1" && effect.effect == "bomb"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_player_connection_streams_scoped_private_notification_delta(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -5249,7 +5249,7 @@ async fn websocket_player_connection_streams_scoped_private_notification_delta(p
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -5375,7 +5375,7 @@ async fn vertical_day_vote_outcomes_returns_canonical_engine_result(pool: sqlx::
     )));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -5510,7 +5510,7 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
     assert_eq!(older.next_before_seq, None);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let hidden_source_seq = 41_i64;
@@ -5588,7 +5588,7 @@ async fn deprecated_raw_game_thread_cannot_bypass_hidden_post_visibility(pool: s
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: sqlx::PgPool) {
     let active_game = Uuid::from_u128(11);
     let completed_game = Uuid::from_u128(12);
@@ -5757,7 +5757,7 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
     assert_eq!(reject.error, RejectCode::StreamConflict);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -5807,7 +5807,7 @@ async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::Pg
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn discussion_and_public_search_api_enforce_visibility_sessions_and_moderation(
     pool: sqlx::PgPool,
 ) {
@@ -6125,7 +6125,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
     assert!(hidden_search.results.is_empty());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_search_cursor_is_opaque_context_bound_and_accepts_each_group(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool);
     for cursor in [
@@ -6229,7 +6229,7 @@ fn public_search_test_cursor(query: &str, filter: &str, document_type: &str) -> 
     )
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn member_mute_api_is_authenticated_private_and_reversible(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool);
     let (reader_token, _) = create_media_upload_account_session(&app, "mute-reader").await;
@@ -6378,7 +6378,7 @@ async fn member_mute_api_is_authenticated_private_and_reversible(pool: sqlx::PgP
     assert_eq!(duplicate_unmute.status(), StatusCode::CONFLICT);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let (author_token, author_principal) =
@@ -6559,7 +6559,7 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
     assert!(!unsubscribed.subscribed);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchronously(
     pool: sqlx::PgPool,
 ) {
@@ -7083,7 +7083,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn profile_api_uses_enabled_accounts_and_principal_addressed_editing(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool);
     let (owner_token, owner_principal) =
@@ -7261,7 +7261,7 @@ async fn profile_api_uses_enabled_accounts_and_principal_addressed_editing(pool:
     assert_eq!(hidden.status(), StatusCode::NOT_FOUND);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let game_text = game.to_string();
@@ -7429,7 +7429,7 @@ async fn vertical_channel_thread_cold_load_is_channel_scoped_and_authorized(pool
     assert_eq!(denied.status(), StatusCode::FORBIDDEN);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or_revocation(
     pool: sqlx::PgPool,
 ) {
@@ -7773,7 +7773,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
     assert!(String::from_utf8_lossy(&replacement_history).contains(secret));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_private_channel_submit_post_requires_channel_membership(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
@@ -7892,7 +7892,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
     expect_reject(denied, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
@@ -8056,7 +8056,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
     expect_reject(denied_post, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
@@ -8260,7 +8260,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
     assert_eq!(reject.error, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();
@@ -8333,7 +8333,7 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
     assert_eq!(session["capabilities"][0]["body"]["game"], game.to_string());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn dev_global_admin_session_round_trips_global_capability(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool);
 
@@ -8357,7 +8357,7 @@ async fn dev_global_admin_session_round_trips_global_capability(pool: sqlx::PgPo
     assert_eq!(session["capabilities"][0]["kind"], "GlobalAdmin");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_console_authority_is_scoped_to_the_presented_session(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool);
     let game = Uuid::new_v4();
@@ -8469,7 +8469,7 @@ async fn host_console_authority_is_scoped_to_the_presented_session(pool: sqlx::P
     server.abort();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
@@ -8547,7 +8547,7 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
     assert_eq!(reject.error, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) {
     let gateway = Arc::new(LocalDeterministicIdentityDeliveryGateway::new(true));
     let app = api::router_with_state(
@@ -8789,7 +8789,7 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sqlx::PgPool) {
     let gateway = Arc::new(PermanentFailureIdentityDeliveryGateway);
     let app = api::router_with_state(
@@ -8928,7 +8928,7 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPool) {
     let gateway = Arc::new(UnexpectedIdentityDeliveryGateway);
     let app = api::router_with_state(
@@ -9067,7 +9067,7 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_account_registration_creates_unprivileged_opaque_session(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let response = app
@@ -9174,7 +9174,7 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::PgPool) {
     let app = api::router_with_state(
         test_api_state(pool.clone())
@@ -9240,7 +9240,7 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
         .all(|scope| !scope.contains("198.51.100")));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();
@@ -9861,7 +9861,7 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool: sqlx::PgPool) {
     let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
     let app = api::router_with_state(
@@ -9963,7 +9963,7 @@ async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool
     assert_ne!(attempts[0].0, cancelled.0);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(pool: sqlx::PgPool) {
     let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
     let app = api::router_with_state(
@@ -10142,7 +10142,7 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
     assert_eq!(gateway.attempts().len(), 2);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let account_id = "throttled-host@example.test";
@@ -10291,7 +10291,7 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
     assert_eq!(remaining_attempts, 0);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sqlx::PgPool) {
     let app = api::router_with_state(
         test_api_state(pool.clone())
@@ -10386,7 +10386,7 @@ async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sql
     assert_eq!(row_count, 1);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx::PgPool) {
     let app = api::router_with_state(
         test_api_state(pool.clone())
@@ -10463,7 +10463,7 @@ async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx
     assert!(!audit.to_string().contains("source-a"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();
@@ -10613,7 +10613,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
     assert_eq!(reject.error, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();
@@ -10784,7 +10784,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let response = app
@@ -10923,7 +10923,7 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
     assert_eq!(audit.3, serde_json::json!({}));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();
@@ -11276,7 +11276,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
@@ -11361,7 +11361,7 @@ async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: 
     assert_eq!(post_count, 1, "retry must not append a duplicate post");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
@@ -11501,7 +11501,7 @@ async fn vertical_notifications_are_capability_filtered(pool: sqlx::PgPool) {
     assert_eq!(reject.error, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
@@ -11737,7 +11737,7 @@ async fn vertical_investigation_results_are_capability_filtered(pool: sqlx::PgPo
     assert_eq!(reject.error, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_hello_announces_protocol(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let app = router(pool);

@@ -1,4 +1,4 @@
-//! Exact catalog contract after applying the append-only projection migrations.
+//! Exact catalog contract after applying the current database schema.
 
 use projections::PUBLIC_SEARCH_SQL;
 use sqlx::{PgPool, Row};
@@ -872,7 +872,7 @@ fn assert_inventory(kind: &str, actual: &[String], expected: &[&str]) {
     assert_eq!(actual, expected, "{kind} inventory drifted");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn erasure_support_indexes_have_exact_catalog_definitions(pool: PgPool) {
     let definitions: Vec<String> = sqlx::query_scalar(
         "SELECT indexname || ':' || indexdef \
@@ -899,7 +899,7 @@ async fn erasure_support_indexes_have_exact_catalog_definitions(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_search_uses_a_stored_weighted_vector_and_visible_gin_index(pool: PgPool) {
     let expression: String = sqlx::query_scalar(
         "SELECT generation_expression \
@@ -929,7 +929,7 @@ async fn public_search_uses_a_stored_weighted_vector_and_visible_gin_index(pool:
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_search_plan_uses_the_visible_gin_index(pool: PgPool) {
     let surface_id = Uuid::from_u128(1);
     sqlx::query(
@@ -1023,7 +1023,7 @@ fn collect_plan_index_names(value: &serde_json::Value, index_names: &mut Vec<Str
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn canonical_authority_principal_columns_are_uuid(pool: PgPool) {
     let columns: Vec<String> = sqlx::query_scalar(
         "SELECT table_name || '.' || column_name || ':' || data_type \
@@ -1070,7 +1070,7 @@ async fn canonical_authority_principal_columns_are_uuid(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     let tables: Vec<String> = sqlx::query_scalar(
         "SELECT table_name \
@@ -1398,7 +1398,7 @@ async fn insert_runtime_kek_sentinel(pool: &PgPool, kid: &str) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn runtime_kek_catalog_fences_raw_stream_wraps_and_direct_envelopes(pool: PgPool) {
     insert_runtime_kek_sentinel(&pool, "old-v1").await;
     insert_runtime_kek_sentinel(&pool, "new-v2").await;
@@ -1503,7 +1503,7 @@ async fn runtime_kek_catalog_fences_raw_stream_wraps_and_direct_envelopes(pool: 
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn stream_wrap_share_lock_closes_the_retirement_race(pool: PgPool) {
     insert_runtime_kek_sentinel(&pool, "old-v1").await;
     insert_runtime_kek_sentinel(&pool, "new-v2").await;
@@ -1557,7 +1557,7 @@ async fn stream_wrap_share_lock_closes_the_retirement_race(pool: PgPool) {
         .contains("not writable for an event stream-key wrap"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn lifecycle_advisory_lock_serializes_raw_rotation_starts(pool: PgPool) {
     insert_runtime_kek_sentinel(&pool, "source-a").await;
     insert_runtime_kek_sentinel(&pool, "source-b").await;
@@ -1602,7 +1602,7 @@ async fn lifecycle_advisory_lock_serializes_raw_rotation_starts(pool: PgPool) {
         .contains("another runtime KEK rotation is already in flight"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn reseal_claim_indexes_match_each_skip_locked_order(pool: PgPool) {
     let definitions: Vec<(String, String)> = sqlx::query_as(
         "SELECT indexname, indexdef FROM pg_indexes \
@@ -1672,7 +1672,7 @@ async fn reseal_claim_indexes_match_each_skip_locked_order(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
     let orphan_insert = sqlx::query(
         r#"
@@ -1745,7 +1745,7 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
     assert_foreign_key_violation(owner_delete, "auth_session_principal_id_fkey");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn member_profiles_enforce_exact_subject_owner_and_claim_provenance(pool: PgPool) {
     let owner_a = Uuid::new_v4();
     let owner_b = Uuid::new_v4();
@@ -1862,7 +1862,7 @@ async fn member_profiles_enforce_exact_subject_owner_and_claim_provenance(pool: 
     .expect("redacted profiles may intentionally omit active owner and claim references");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn workos_session_catalog_binds_provider_custody_and_replays_exact_assertions(pool: PgPool) {
     sqlx::query(
         "INSERT INTO platform_principal (principal_id, status, global_capabilities, created_at) VALUES ('00000000-0000-4000-8000-000000000004', 'active', '{}', 1)",
@@ -2278,9 +2278,9 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
     assert!(subject_recreated.to_string().contains("tombstoned"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn schema_readiness_rejects_a_database_newer_than_the_binary(pool: PgPool) {
-    projections::ensure_schema_ready(&pool)
+    database_schema::ensure_schema_ready(&pool)
         .await
         .expect("the exact embedded migration head must be ready");
     sqlx::query(
@@ -2290,7 +2290,7 @@ async fn schema_readiness_rejects_a_database_newer_than_the_binary(pool: PgPool)
     .await
     .unwrap();
 
-    let error = projections::ensure_schema_ready(&pool)
+    let error = database_schema::ensure_schema_ready(&pool)
         .await
         .expect_err("an older binary must refuse a database with an unknown migration");
     assert!(

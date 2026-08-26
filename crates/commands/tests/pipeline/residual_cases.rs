@@ -1,6 +1,6 @@
 // Ordinary Postgres command scenarios. Heavy semantic audits live in tests/semantic_audit/.
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn named_persona_seating_and_rename_preserve_epoch_authority_and_name_claims(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_h");
@@ -88,7 +88,7 @@ async fn named_persona_seating_and_rename_preserve_epoch_authority_and_name_clai
     assert_eq!(rebuilt[0].public_name, "Rowan");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_phase_movement_respects_pack_cadence(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_h");
@@ -160,7 +160,7 @@ async fn host_phase_movement_respects_pack_cadence(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn start_game_declares_mason_neighbor_private_channels(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -286,7 +286,7 @@ async fn start_game_declares_mason_neighbor_private_channels(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -496,7 +496,7 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -657,7 +657,7 @@ async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_invalid_pack_precedence_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -684,7 +684,7 @@ async fn game_creation_rejects_invalid_pack_precedence_before_append(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_unsupported_pack_versions_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -703,7 +703,7 @@ async fn game_creation_rejects_unsupported_pack_versions_before_append(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn projection_rejects_same_pack_ref_with_drifted_artifact_bytes(pool: PgPool) {
     let host_id = "pack_ref_drift_host";
     let game = Uuid::new_v4();
@@ -730,7 +730,7 @@ async fn projection_rejects_same_pack_ref_with_drifted_artifact_bytes(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn removed_registry_pack_resolves_and_replays_from_game_owned_artifact(pool: PgPool) {
     let host_id = "removed_pack_host";
     let game = Uuid::new_v4();
@@ -785,7 +785,7 @@ async fn removed_registry_pack_resolves_and_replays_from_game_owned_artifact(poo
     assert!(audit_resolution_envelopes(&pool, game).await.unwrap().ok);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_invalid_action_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -810,7 +810,7 @@ async fn game_creation_rejects_invalid_action_contract_before_append(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_invalid_effect_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -837,7 +837,7 @@ async fn game_creation_rejects_invalid_effect_contract_before_append(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_invalid_target_window_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -864,7 +864,7 @@ async fn game_creation_rejects_invalid_target_window_contract_before_append(pool
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_invalid_target_state_policy_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -899,7 +899,7 @@ async fn game_creation_rejects_invalid_target_state_policy_before_append(pool: P
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_invalid_generated_kill_ownership_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -932,7 +932,7 @@ async fn game_creation_rejects_invalid_generated_kill_ownership_before_append(po
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_invalid_reference_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -961,7 +961,7 @@ async fn game_creation_rejects_invalid_reference_contract_before_append(pool: Pg
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_invalid_trigger_reference_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -999,7 +999,7 @@ async fn game_creation_rejects_invalid_trigger_reference_contract_before_append(
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_creation_rejects_invalid_win_policy_contract_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -1042,7 +1042,7 @@ async fn game_creation_rejects_invalid_win_policy_contract_before_append(pool: P
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn resolve_phase_uses_pack_derived_custom_precedence_order(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -1145,7 +1145,7 @@ async fn resolve_phase_uses_pack_derived_custom_precedence_order(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn resolve_phase_folds_night_kill_into_faction_win_and_rebuild(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
@@ -1305,7 +1305,7 @@ async fn resolve_phase_folds_night_kill_into_faction_win_and_rebuild(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn resolve_phase_folds_three_faction_elimination_win_and_rebuild(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -1539,7 +1539,7 @@ async fn resolve_phase_folds_three_faction_elimination_win_and_rebuild(pool: PgP
 ///   (c) B now resolves SlotOccupant(S) and can vote as S,
 ///   (d) A can no longer act as S → NotYourSlot.
 /// The slot's history is preserved because it attaches to S, not to the user.
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool) {
     let host = "host_h";
     let slot = "slot_7";
@@ -1692,7 +1692,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = "dead_chat_host";
@@ -1986,7 +1986,7 @@ async fn dead_chat_authority_tracks_dead_slot_restore_and_replacement(pool: PgPo
     .expect("restoring alive restores ordinary main-thread posting");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = "spectator_host";
@@ -2226,7 +2226,7 @@ async fn spectator_grant_is_explicit_read_only_and_slot_disjoint(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPool) {
     let host = "host_h";
     let slot = "slot_7";
@@ -2368,7 +2368,7 @@ async fn role_pm_is_engine_declared_slot_stable_and_replacement_safe(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pagination(
     pool: PgPool,
 ) {
@@ -2474,7 +2474,7 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
     assert_eq!(older.posts[0].media[0]["variants"]["tablet"]["width"], 1024);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let canvas_media = vec![thread_media(
@@ -2619,7 +2619,7 @@ async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -2744,7 +2744,7 @@ async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(
     assert_eq!(rebuilt.posts, thread.posts);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) {
     let host_id = "host_h";
     let slot = "slot_7";
@@ -2871,7 +2871,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
     drop_post_insert_blocker(&pool).await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) {
     let host_id = "host_h";
     let slot = "slot_7";
@@ -2992,7 +2992,7 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) 
     drop_vote_insert_blocker(&pool).await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
     let host_id = "host_h";
     let slot = "slot_4";
@@ -3168,7 +3168,7 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn incoming_replacement_can_submit_and_resolve_action(pool: PgPool) {
     let host_id = "host_h";
     let slot = "slot_4";
@@ -3321,7 +3321,7 @@ async fn incoming_replacement_can_submit_and_resolve_action(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
 
@@ -3399,7 +3399,7 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
     assert_eq!(event.meta["source"], "host_command");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn cohost_default_full_game_run_and_structural_stays_host_only(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     handle(
@@ -3470,7 +3470,7 @@ async fn cohost_default_full_game_run_and_structural_stays_host_only(pool: PgPoo
     .expect("primary host still adds cohost");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
@@ -3696,7 +3696,7 @@ async fn apply_effect_plan_is_atomic_audited_and_visible_to_the_engine(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn apply_effect_plan_grants_extra_action_and_item_inventory(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let command_id = Uuid::new_v4();
@@ -3831,7 +3831,7 @@ async fn apply_effect_plan_grants_extra_action_and_item_inventory(pool: PgPool) 
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_fiat_vote_weight_grant_hammers_from_folded_snapshot(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -4018,7 +4018,7 @@ async fn host_fiat_vote_weight_grant_hammers_from_folded_snapshot(pool: PgPool) 
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn cohost_denied_lifecycle_and_effect_spec_while_deadline_still_allowed(pool: PgPool) {
     let game = Uuid::new_v4();
     handle(
@@ -4155,7 +4155,7 @@ async fn cohost_denied_lifecycle_and_effect_spec_while_deadline_still_allowed(po
     .expect("host can still set lifecycle when cohost is denied");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     handle(
@@ -4269,7 +4269,7 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_h");
@@ -4403,7 +4403,7 @@ async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: 
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("user_host_alpha");
@@ -4540,7 +4540,7 @@ async fn engine_snapshot_identity_audit_keeps_users_out_of_state_snapshot(pool: 
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn stored_game_stream_loads_phase_metadata_deadline_and_pack_policy(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_phase_policy");
@@ -4646,7 +4646,7 @@ async fn stored_game_stream_loads_phase_metadata_deadline_and_pack_policy(pool: 
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn stored_game_stream_loads_slot_lifecycle_and_pack_visible_status_tags(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_slot_status");
@@ -4799,7 +4799,7 @@ async fn stored_game_stream_loads_slot_lifecycle_and_pack_visible_status_tags(po
     assert_eq!(projected_slot_4.status_tags, vec!["treestump"]);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_treestump");
@@ -4988,7 +4988,7 @@ async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: P
     assert_eq!(action_err, Reject::SlotNotAlive);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_role_reveal");
@@ -5200,7 +5200,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_complete_game_serializes_to_one_ack(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -5238,7 +5238,7 @@ async fn concurrent_complete_game_serializes_to_one_ack(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_player_post_and_complete_game_serialize_terminal_boundary(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -5300,7 +5300,7 @@ async fn concurrent_player_post_and_complete_game_serialize_terminal_boundary(po
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
     let host = user("host_instant_self_destruct");
     let game = Uuid::new_v4();
@@ -5530,7 +5530,7 @@ async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_resolve_phase_reveals_killed_slot_without_endgame(pool: PgPool) {
     let host = user("host_death_reveal");
     let game = Uuid::new_v4();
@@ -5690,7 +5690,7 @@ async fn host_resolve_phase_reveals_killed_slot_without_endgame(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -6177,7 +6177,7 @@ async fn host_resolve_phase_loads_votes_applies_resolution_and_projects(pool: Pg
     assert_eq!(night_vote_err, Reject::PhaseLocked);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_advance_phase_wraps_night_to_next_day_from_pack_cadence(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
@@ -6285,7 +6285,7 @@ async fn host_advance_phase_wraps_night_to_next_day_from_pack_cadence(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
@@ -6521,7 +6521,7 @@ async fn deadline_elapsed_evidence_is_inert_until_deadline_advance_command(pool:
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ballots(
     pool: PgPool,
 ) {
@@ -6956,7 +6956,7 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_rejects_invalid_target_shape_state_and_window(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -7179,7 +7179,7 @@ async fn action_submission_rejects_invalid_target_shape_state_and_window(pool: P
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_rejects_day_specific_action_in_night_window(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -7275,7 +7275,7 @@ async fn action_submission_rejects_day_specific_action_in_night_window(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_resolution_reports_structural_drift_path_expected_and_actual(pool: PgPool) {
     let fixture = setup_mutated_audit_resolution(
         &pool,
@@ -7321,7 +7321,7 @@ async fn audit_resolution_reports_structural_drift_path_expected_and_actual(pool
     assert_eq!(audit.summary.first_drift_paths[0].path, winner_path);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_resolution_reports_trace_drift_path_expected_and_actual(pool: PgPool) {
     let fixture = setup_mutated_audit_resolution(
         &pool,
@@ -7369,7 +7369,7 @@ async fn audit_resolution_reports_trace_drift_path_expected_and_actual(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_resolution_reports_missing_trace_root_diff(pool: PgPool) {
     let game = setup_mutated_audit_resolution(
         &pool,
@@ -7414,7 +7414,7 @@ async fn audit_resolution_reports_missing_trace_root_diff(pool: PgPool) {
     assert_eq!(audit.summary.first_drift_paths[0].path, "$");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_resolution_in_process_reports_success_for_matched_game(pool: PgPool) {
     let game = setup_resolved_audit_drift_game(&pool, "cli_matched", 781).await;
     let output = run_audit_resolution_in_process(&pool, game).await;
@@ -7447,7 +7447,7 @@ async fn audit_resolution_in_process_reports_success_for_matched_game(pool: PgPo
     assert!(report["phases"][0].get("diffs").is_none());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_resolution_in_process_reports_diffs_for_drift(pool: PgPool) {
     let fixture = setup_mutated_audit_resolution(
         &pool,
@@ -7500,7 +7500,7 @@ async fn audit_resolution_in_process_reports_diffs_for_drift(pool: PgPool) {
     assert_eq!(diff["actual"], "slot_2");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_resolution_diff_artifact_in_process_writes_matched_and_drift_reports(pool: PgPool) {
     let matched_game = setup_resolved_audit_drift_game(&pool, "artifact_matched", 783).await;
     let matched_path = test_operator_proof_artifact_path("resolution-diff-matched", matched_game);
@@ -7587,7 +7587,7 @@ async fn audit_resolution_diff_artifact_in_process_writes_matched_and_drift_repo
     assert_eq!(drift_file["phases"][0]["diffs"][0]["actual"], "slot_2");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_trace_inspection_artifact_in_process_writes_filtered_and_empty_reports(
     pool: PgPool,
 ) {
@@ -7697,7 +7697,7 @@ async fn audit_trace_inspection_artifact_in_process_writes_filtered_and_empty_re
         .is_empty());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_projection_rebuild_artifact_in_process_writes_matched_and_drift_reports(
     pool: PgPool,
 ) {
@@ -7809,7 +7809,7 @@ async fn audit_projection_rebuild_artifact_in_process_writes_matched_and_drift_r
     assert_eq!(live_role, Some("tampered_projection_role"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_large_action_graph_performance_artifact_in_process_writes_pass_and_threshold_failure_reports(
     pool: PgPool,
 ) {
@@ -7942,7 +7942,7 @@ async fn audit_large_action_graph_performance_artifact_in_process_writes_pass_an
     assert_eq!(threshold_file["lovers_linked"], true);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_determinism_fuzz_artifact_in_process_writes_pass_and_missing_family_reports(
     _pool: PgPool,
 ) {
@@ -8263,7 +8263,7 @@ fn pack_declared_pk_prompt_policies_have_semantic_minimizer_coverage() {
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_vote_hammer_uses_folded_vote_weight_grant(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -8443,7 +8443,7 @@ async fn submit_vote_hammer_uses_folded_vote_weight_grant(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_prompt_skip_next_day_rejects_unsupported_pack_cadence(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
@@ -8589,7 +8589,7 @@ async fn host_prompt_skip_next_day_rejects_unsupported_pack_cadence(pool: PgPool
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_resolve_phase_loads_action_submissions_from_stream(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -8805,7 +8805,7 @@ async fn host_resolve_phase_loads_action_submissions_from_stream(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -8989,7 +8989,7 @@ async fn action_submission_rejects_and_traces_invalid_template_ids(pool: PgPool)
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_requires_open_matching_phase(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -9116,7 +9116,7 @@ async fn action_submission_requires_open_matching_phase(pool: PgPool) {
     assert_eq!(err, Reject::PhaseLocked);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -9588,7 +9588,7 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
     let host = "host_long_cooldown";
     let h = user(host);
@@ -9813,7 +9813,7 @@ async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_rejects_disabled_endgame_threshold_before_append(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -9905,7 +9905,7 @@ async fn action_submission_rejects_disabled_endgame_threshold_before_append(pool
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_rejects_lost_team_kill_with_teammate_alive(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -9998,7 +9998,7 @@ async fn action_submission_rejects_lost_team_kill_with_teammate_alive(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_rejects_recluse_team_kill_with_non_recluse_teammate_alive(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -10093,7 +10093,7 @@ async fn action_submission_rejects_recluse_team_kill_with_non_recluse_teammate_a
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_allows_simultaneous_duplicate_base_template(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -10247,7 +10247,7 @@ async fn action_submission_allows_simultaneous_duplicate_base_template(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_rejects_inactive_novice_and_activated_actions(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -10402,7 +10402,7 @@ async fn action_submission_rejects_inactive_novice_and_activated_actions(pool: P
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
@@ -10671,7 +10671,7 @@ async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
     assert_eq!(err, Reject::InvalidTarget);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_submission_spends_inventor_item_grant(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -10929,7 +10929,7 @@ async fn action_submission_spends_inventor_item_grant(pool: PgPool) {
     assert_eq!(err, Reject::InvalidTarget);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -11216,7 +11216,7 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn resolution_scoped_effects_do_not_enter_command_snapshot(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -11323,7 +11323,7 @@ async fn resolution_scoped_effects_do_not_enter_command_snapshot(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn non_occupant_voting_as_slot_is_not_your_slot(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     handle(
@@ -11352,7 +11352,7 @@ async fn non_occupant_voting_as_slot_is_not_your_slot(pool: PgPool) {
     assert_eq!(err, Reject::NotYourSlot);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vote_in_locked_phase_is_phase_locked(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
@@ -11392,7 +11392,7 @@ async fn vote_in_locked_phase_is_phase_locked(pool: PgPool) {
     .expect("vote after unlock");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn stale_host_phase_controls_reject_before_duplicate_lifecycle_events(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -11434,7 +11434,7 @@ async fn stale_host_phase_controls_reject_before_duplicate_lifecycle_events(pool
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_host_resolve_phase_serializes_to_one_ack(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -11474,7 +11474,7 @@ async fn concurrent_host_resolve_phase_serializes_to_one_ack(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_player_vote_and_host_resolve_phase_serializes_vote_before_resolution(
     pool: PgPool,
 ) {
@@ -11574,7 +11574,7 @@ async fn concurrent_player_vote_and_host_resolve_phase_serializes_vote_before_re
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_cohost_deadline_and_host_resolve_phase_serializes_deadline_before_resolution(
     pool: PgPool,
 ) {
@@ -11682,7 +11682,7 @@ async fn concurrent_cohost_deadline_and_host_resolve_phase_serializes_deadline_b
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_host_advance_phase_serializes_to_one_ack(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -11723,7 +11723,7 @@ async fn concurrent_host_advance_phase_serializes_to_one_ack(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_host_deadline_advance_serializes_to_one_ack(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -11818,7 +11818,7 @@ async fn concurrent_host_deadline_advance_serializes_to_one_ack(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_host_mixed_advance_serializes_to_one_ack(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -11900,7 +11900,7 @@ async fn concurrent_host_mixed_advance_serializes_to_one_ack(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_player_action_and_host_advance_phase_rejects_late_action(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -12014,7 +12014,7 @@ async fn concurrent_player_action_and_host_advance_phase_rejects_late_action(poo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn duplicate_add_slot_rejects_without_duplicate_event(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_h");
@@ -12061,7 +12061,7 @@ async fn duplicate_add_slot_rejects_without_duplicate_event(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -12104,7 +12104,7 @@ async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(poo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn duplicate_slot_lifecycle_status_rejects_without_duplicate_event(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -12226,7 +12226,7 @@ async fn duplicate_slot_lifecycle_status_rejects_without_duplicate_event(pool: P
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_host_lifecycle_collision_serializes_to_one_ack(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
@@ -12308,7 +12308,7 @@ async fn concurrent_host_lifecycle_collision_serializes_to_one_ack(pool: PgPool)
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_vote_enforces_pack_no_lynch_and_self_vote_policy(pool: PgPool) {
     let game = setup_game_with_pack(
         &pool,
@@ -12366,7 +12366,7 @@ async fn submit_vote_enforces_pack_no_lynch_and_self_vote_policy(pool: PgPool) {
     assert_eq!(tally_for(&pool, game, "D01", "slot_2").await, 1);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_vote_rejects_dead_target_as_invalid_target(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
@@ -12398,7 +12398,7 @@ async fn submit_vote_rejects_dead_target_as_invalid_target(pool: PgPool) {
     assert_eq!(tally_for(&pool, game, "D01", "slot_2").await, 0);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn slot_lifecycle_death_clears_current_ballots_by_and_for_slot(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
@@ -12465,7 +12465,7 @@ async fn slot_lifecycle_death_clears_current_ballots_by_and_for_slot(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn submit_vote_hammer_locks_phase_when_threshold_is_reached(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
@@ -12588,7 +12588,7 @@ async fn submit_vote_hammer_locks_phase_when_threshold_is_reached(pool: PgPool) 
     assert_eq!(late_vote_err, Reject::PhaseLocked);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
@@ -12663,7 +12663,7 @@ async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
     assert_eq!(err, Reject::SlotNotAlive);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn changing_vote_overwrites_and_withdraw_removes(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     for s in ["slot_2", "slot_3"] {
@@ -12724,7 +12724,7 @@ async fn changing_vote_overwrites_and_withdraw_removes(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn no_lynch_votes_resolve_to_official_engine_outcome(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_1").await;
     for (slot, occupant, role) in [
@@ -12814,7 +12814,7 @@ async fn no_lynch_votes_resolve_to_official_engine_outcome(pool: PgPool) {
 /// The defensive `(stream_id, stream_seq)` uniqueness backstop still surfaces
 /// through the real pipeline as retryable `Reject::StreamConflict` if a bypass
 /// writer collides inside the append transaction.
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn defensive_unique_conflict_surfaces_as_retryable_stream_conflict(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     install_forced_deadline_stream_conflict(&pool, game).await;
@@ -12840,7 +12840,7 @@ async fn defensive_unique_conflict_surfaces_as_retryable_stream_conflict(pool: P
     drop_forced_deadline_stream_conflict(&pool).await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool) {
     let host = user("host_h");
     let game = Uuid::new_v4();
@@ -12986,7 +12986,7 @@ async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool)
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let command_id = Uuid::new_v4();
@@ -13044,7 +13044,7 @@ async fn command_receipt_replays_only_an_identical_payload(pool: PgPool) {
     assert_eq!(posts, 1, "replay and conflict append no additional event");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn cancellation_while_waiting_for_command_lock_rolls_back_receipt_and_transaction(
     pool: PgPool,
 ) {
@@ -13086,7 +13086,7 @@ async fn cancellation_while_waiting_for_command_lock_rolls_back_receipt_and_tran
     wait_for_no_command_runtime_resources(&pool).await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn cancellation_during_projection_rolls_back_event_projection_receipt_and_locks(
     pool: PgPool,
 ) {

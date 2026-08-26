@@ -319,7 +319,7 @@ async fn open_all(pool: &PgPool, game: Uuid) -> Vec<serde_json::Value> {
     values
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn direct_projection_reseal_is_resumable_concurrent_and_identity_preserving(pool: PgPool) {
     let env = EncryptionEnvGuard::new();
     let game = Uuid::new_v4();
@@ -386,7 +386,7 @@ async fn direct_projection_reseal_is_resumable_concurrent_and_identity_preservin
     assert_eq!(open_all(&pool, game).await, before);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn raw_direct_envelope_writer_is_fenced_by_registry_transition(pool: PgPool) {
     let env = EncryptionEnvGuard::new();
     let game = Uuid::new_v4();

@@ -1238,7 +1238,7 @@ fn assert_proof_status_counts(
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
@@ -1569,7 +1569,7 @@ async fn vertical_projection_audit_is_host_audit_only_and_reports_drift(pool: sq
     assert_eq!(reject.error, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -3495,7 +3495,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -3693,7 +3693,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(reject.error, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();
@@ -4085,7 +4085,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(reject.error, RejectCode::NotAuthorized);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
@@ -4288,7 +4288,7 @@ async fn vertical_resolution_audit_fails_closed_on_sealed_event_tamper(pool: sql
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sqlx::PgPool) {
     let seed_app = router(pool.clone());
     let game = Uuid::new_v4();

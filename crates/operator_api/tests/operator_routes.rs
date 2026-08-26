@@ -55,7 +55,7 @@ async fn grant_game_authority(pool: &sqlx::PgPool, game: Uuid, user: &str, role:
         .expect("insert game authority");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
     let app = app(pool.clone());
     let game = Uuid::new_v4();
@@ -127,7 +127,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn active_global_operator_session_can_read_status_without_dev_auth(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     create_session(&pool, ADMIN_TOKEN, "admin_a", &["GlobalAdmin"]).await;

@@ -305,7 +305,7 @@ async fn issue_ticket(
     (status, ticket)
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn command_boundary_derives_identity_and_rejects_every_stale_session_without_rows(
     pool: sqlx::PgPool,
 ) {
@@ -487,7 +487,7 @@ async fn command_boundary_derives_identity_and_rejects_every_stale_session_witho
     assert!(!String::from_utf8_lossy(&bytes).contains("host-console"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
@@ -689,7 +689,7 @@ async fn websocket_ticket_is_short_lived_one_time_and_session_bound(pool: sqlx::
     let _ = server.await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let state = test_state(pool.clone(), &root)
@@ -786,7 +786,7 @@ async fn open_socket_rechecks_revoked_session_before_delayed_private_delivery(po
     let _ = server.await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let verifier = StaticAccessTokenVerifier::new([(
@@ -881,7 +881,7 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
     let _ = server.await;
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state(
     pool: sqlx::PgPool,
 ) {

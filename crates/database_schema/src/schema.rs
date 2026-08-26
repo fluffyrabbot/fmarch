@@ -64,7 +64,7 @@ pub async fn inspect_schema_readiness(pool: &PgPool) -> Result<SchemaReadiness, 
     Ok(SchemaReadiness::Ready)
 }
 
-/// Fail closed unless the dedicated migrator has applied this projection
+/// Fail closed unless the dedicated migrator has applied this database
 /// schema's complete migration set. This probe is read-only.
 pub async fn ensure_schema_ready(pool: &PgPool) -> Result<(), sqlx::Error> {
     match inspect_schema_readiness(pool).await? {

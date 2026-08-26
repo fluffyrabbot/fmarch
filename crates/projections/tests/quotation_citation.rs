@@ -56,7 +56,7 @@ async fn create_test_profile(
         .as_uuid()
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     let area = Uuid::from_u128(81);
     let topic = Uuid::from_u128(82);
@@ -169,7 +169,7 @@ async fn discussion_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) 
     assert_eq!(before_json, after_json);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     let game = Uuid::from_u128(91);
     let host = test_principal(3);
@@ -291,7 +291,7 @@ async fn game_quotations_fold_and_rebuild_identically(pool: sqlx::PgPool) {
     .is_empty());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn discussion_read_contract_counts_visible_citations_and_omits_hidden_quoters(
     pool: sqlx::PgPool,
 ) {

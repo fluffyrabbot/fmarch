@@ -397,7 +397,7 @@ async fn provision_subject(
     (principal, subject_id)
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn concurrent_first_startup_binds_exactly_one_complete_authority_manifest(
     pool: sqlx::PgPool,
 ) {
@@ -469,7 +469,7 @@ async fn concurrent_first_startup_binds_exactly_one_complete_authority_manifest(
     assert_eq!(bound_digest, expected_digest);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn unbound_database_with_pre_subject_identity_data_refuses_new_authority(pool: sqlx::PgPool) {
     let authority = ObjectSubjectKeyStore::new(
         Arc::new(object_store::memory::InMemory::new()),
@@ -503,7 +503,7 @@ async fn unbound_database_with_pre_subject_identity_data_refuses_new_authority(p
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn repeat_startup_authenticates_journal_without_redeleting_reconciled_keys(
     pool: sqlx::PgPool,
 ) {
@@ -631,7 +631,7 @@ async fn repeat_startup_authenticates_journal_without_redeleting_reconciled_keys
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn claim_that_owns_identity_locks_first_commits_then_startup_scrubs_it(pool: sqlx::PgPool) {
     let (authority, _) = object_authority();
     authority.bootstrap().await.unwrap();
@@ -714,7 +714,7 @@ async fn claim_that_owns_identity_locks_first_commits_then_startup_scrubs_it(poo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn startup_commits_identity_cutoff_before_authority_io_and_rejects_overlapping_claim(
     pool: sqlx::PgPool,
 ) {
@@ -832,7 +832,7 @@ async fn startup_commits_identity_cutoff_before_authority_io_and_rejects_overlap
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn startup_accepts_external_history_created_after_the_restored_database_snapshot(
     pool: sqlx::PgPool,
 ) {
@@ -871,7 +871,7 @@ async fn startup_accepts_external_history_created_after_the_restored_database_sn
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn startup_rejects_partial_subject_history_without_a_canonical_owner(pool: sqlx::PgPool) {
     let (inner, _) = object_authority();
     inner.bootstrap().await.unwrap();
@@ -910,7 +910,7 @@ async fn startup_rejects_partial_subject_history_without_a_canonical_owner(pool:
     assert_eq!(counts.destroys.load(Ordering::Relaxed), 0);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn request_fingerprints_before_owner_locks_and_commits_the_cutoff_afterward(
     pool: sqlx::PgPool,
 ) {
@@ -983,7 +983,7 @@ async fn request_fingerprints_before_owner_locks_and_commits_the_cutoff_afterwar
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn durable_erasure_resumes_after_each_external_boundary_and_final_tx_rollback(
     pool: sqlx::PgPool,
 ) {
@@ -1161,7 +1161,7 @@ async fn durable_erasure_resumes_after_each_external_boundary_and_final_tx_rollb
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn two_workers_claim_one_erasure_without_holding_owner_locks_during_destroy(
     pool: sqlx::PgPool,
 ) {
@@ -1223,7 +1223,7 @@ async fn two_workers_claim_one_erasure_without_holding_owner_locks_during_destro
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn expired_claim_reclaim_fences_the_stale_worker_and_canonicalizes_the_receipt(
     pool: sqlx::PgPool,
 ) {
@@ -1293,7 +1293,7 @@ async fn expired_claim_reclaim_fences_the_stale_worker_and_canonicalizes_the_rec
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn final_journal_snapshot_covers_a_concurrent_replica_tombstone(pool: sqlx::PgPool) {
     let (inner, _) = object_authority();
     let manifest = inner.bootstrap().await.unwrap();
@@ -1339,7 +1339,7 @@ async fn final_journal_snapshot_covers_a_concurrent_replica_tombstone(pool: sqlx
     assert_eq!(revocation_calls.load(Ordering::SeqCst), 2);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn active_key_verification_accepts_only_a_monotonic_pending_transition(pool: sqlx::PgPool) {
     let (inner, _) = object_authority();
     let manifest = inner.bootstrap().await.unwrap();
@@ -1385,7 +1385,7 @@ async fn active_key_verification_accepts_only_a_monotonic_pending_transition(poo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn pending_batch_writes_each_receipt_without_relisting_the_complete_journal(
     pool: sqlx::PgPool,
 ) {
@@ -1437,7 +1437,7 @@ async fn pending_batch_writes_each_receipt_without_relisting_the_complete_journa
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn startup_batch_loads_existing_outboxes_in_one_preflight_query(pool: sqlx::PgPool) {
     let (inner, object_counts) = object_authority();
     let manifest = inner.bootstrap().await.unwrap();

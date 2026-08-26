@@ -31,9 +31,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_connections(5)
         .connect(&database_url)
         .await?;
-    projections::ensure_schema_ready(&pool).await?;
-    projections::verify_database_principal(&pool, projections::DatabasePrincipal::Application)
-        .await?;
+    database_schema::ensure_schema_ready(&pool).await?;
+    database_schema::verify_database_principal(
+        &pool,
+        database_schema::DatabasePrincipal::Application,
+    )
+    .await?;
 
     let proof = run_large_action_graph_performance_proof(
         &pool,

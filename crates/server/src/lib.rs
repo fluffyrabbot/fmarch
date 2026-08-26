@@ -1,4 +1,4 @@
-pub use projections::{
+pub use database_schema::{
     ensure_schema_ready, inspect_schema_readiness, reconcile_database_authority,
     verify_database_principal, verify_migration_authority, DatabaseAuthorityError,
     DatabasePrincipal, SchemaReadiness, APPLICATION_DATABASE_ROLE, KEY_ADMIN_DATABASE_ROLE,

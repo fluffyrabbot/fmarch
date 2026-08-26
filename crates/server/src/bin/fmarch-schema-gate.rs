@@ -1,6 +1,6 @@
 use std::{env, process, time::Duration};
 
-use projections::{DatabaseAuthorityError, DatabasePrincipal, SchemaReadiness};
+use database_schema::{DatabaseAuthorityError, DatabasePrincipal, SchemaReadiness};
 use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 
@@ -52,10 +52,13 @@ async fn run() -> Result<(), String> {
     let deadline = started + Duration::from_millis(timeout_ms);
     let mut last_pending;
     loop {
-        match projections::inspect_schema_readiness(&pool).await {
+        match database_schema::inspect_schema_readiness(&pool).await {
             Ok(SchemaReadiness::Ready) => {
-                match projections::verify_database_principal(&pool, DatabasePrincipal::Application)
-                    .await
+                match database_schema::verify_database_principal(
+                    &pool,
+                    DatabasePrincipal::Application,
+                )
+                .await
                 {
                     Ok(()) => return Ok(()),
                     Err(DatabaseAuthorityError::Configuration(message)) => {

@@ -148,7 +148,7 @@ async fn append_game_persona(
     tx.commit().await.unwrap();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn raw_persona_identity_payload_is_rejected_before_event_persistence(pool: sqlx::PgPool) {
     let game_id = Uuid::new_v4();
     let error = append_and_project(
@@ -282,7 +282,7 @@ async fn object_authority(
     (store, configured)
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
     let principal = PrincipalId::random();
@@ -402,7 +402,7 @@ async fn profile_erasure_cannot_resurrect_through_rebuild(pool: sqlx::PgPool) {
     assert_eq!(redacted.revision, 1);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
     let principal = PrincipalId::random();
@@ -504,7 +504,7 @@ async fn pending_erasure_rebuilds_profile_and_persona_as_terminally_redacted(poo
     assert_eq!(rebuilt.pseudonym.as_deref(), Some(alias.as_str()));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
     let game_id = Uuid::new_v4();
@@ -567,7 +567,7 @@ async fn game_persona_erasure_rebuilds_only_random_tombstone_alias(pool: sqlx::P
     assert_eq!(row.get::<String, _>("lifecycle"), "redacted");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
     let principal = PrincipalId::random();
@@ -634,7 +634,7 @@ async fn same_subject_persona_replay_and_claim_use_one_lock_order(pool: sqlx::Pg
     claim.unwrap();
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn profile_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
     let principal = PrincipalId::random();
@@ -708,7 +708,7 @@ async fn profile_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
     let game_id = Uuid::new_v4();
@@ -773,7 +773,7 @@ async fn game_rebuild_and_erasure_cannot_deadlock_or_resurrect_pii(pool: sqlx::P
         .contains("Game Race Real Name"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn active_subject_with_missing_external_key_fails_rebuild_closed(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
     let principal = PrincipalId::random();
@@ -813,7 +813,7 @@ async fn active_subject_with_missing_external_key_fails_rebuild_closed(pool: sql
         .is_some());
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
     let principal = PrincipalId::random();
@@ -899,7 +899,7 @@ async fn external_revocation_reconciles_a_pre_erasure_restore(pool: sqlx::PgPool
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn authentication_only_member_gets_a_subject_and_erases_account_dependencies(
     pool: sqlx::PgPool,
 ) {
@@ -1046,7 +1046,7 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
     assert_eq!(subject_ids, vec![subject_id]);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn already_deactivated_member_can_complete_erasure(pool: sqlx::PgPool) {
     let _environment = SubjectKeyEnvironment::isolated();
     let principal = PrincipalId::random();
@@ -1080,7 +1080,7 @@ async fn already_deactivated_member_can_complete_erasure(pool: sqlx::PgPool) {
     assert!(erased.pseudonym.unwrap().starts_with("former-member-"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn personal_export_is_subject_sealed_owner_only_and_key_destructible(pool: sqlx::PgPool) {
     let environment = SubjectKeyEnvironment::isolated();
     let principal = PrincipalId::random();
@@ -1134,7 +1134,7 @@ async fn personal_export_is_subject_sealed_owner_only_and_key_destructible(pool:
     ));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn shared_authority_binds_database_rejects_wrong_genesis_and_missing_active_key(
     pool: sqlx::PgPool,
 ) {
@@ -1185,7 +1185,7 @@ async fn shared_authority_binds_database_rejects_wrong_genesis_and_missing_activ
     ));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn shared_authority_reapplies_revocation_to_pre_erasure_restore(pool: sqlx::PgPool) {
     let (store, authority) = object_authority(Uuid::new_v4()).await;
     prepare_subject_authority_for_service(&pool, &authority)
@@ -1250,7 +1250,7 @@ async fn shared_authority_reapplies_revocation_to_pre_erasure_restore(pool: sqlx
     ));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn claim_insert_waiting_on_erasure_cannot_commit_after_tombstone(pool: sqlx::PgPool) {
     let principal = PrincipalId::random();
     let subject_id = SubjectId::random();

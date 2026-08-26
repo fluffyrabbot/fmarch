@@ -11,6 +11,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use attention::WatchTarget;
 use content_reference::PublicContentRef;
+use database_schema::{reconcile_database_authority, APPLICATION_DATABASE_ROLE};
 use domain::events::{IndexedEvent, ResolutionCounts};
 use domain::pack::{GrantKind, Pack};
 use domain::phase::PhaseId;
@@ -25,9 +26,8 @@ use projections::{
     discussion_area_by_slug, discussion_posts, discussion_topic_by_id, discussion_topics,
     game_index, host_phase_controls, host_prompts, operator_game_index, phase_state,
     player_notifications, public_profile_by_handle, public_search, rebuild,
-    rebuild_discussion_stream, rebuild_moderation_stream, rebuild_profile_stream,
-    reconcile_database_authority, slot_effects, slot_state, votecount, ProjectionError,
-    PublicSearchFilter, APPLICATION_DATABASE_ROLE, LIVE_EVENT_NOTIFY_CHANNEL,
+    rebuild_discussion_stream, rebuild_moderation_stream, rebuild_profile_stream, slot_effects,
+    slot_state, votecount, ProjectionError, PublicSearchFilter, LIVE_EVENT_NOTIFY_CHANNEL,
 };
 use sha2::{Digest, Sha256};
 use social::{
@@ -462,7 +462,7 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
 
 /// Engine → store → projection: persist the scenario via `append_and_project`
 /// and assert the projections reflect it (read-your-writes, doc 02).
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn engine_store_projection(pool: sqlx::PgPool) {
     let pack = load_pack();
     let game = Uuid::new_v4();
@@ -542,7 +542,7 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
     assert_eq!(player_post.body, "I think slot 1 is caught.");
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn official_day_vote_outcome_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let outcome = domain::DayVoteOutcome {
@@ -614,7 +614,7 @@ async fn official_day_vote_outcome_projection_records_and_rebuilds(pool: sqlx::P
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_decides_prompt_finalizes_official_day_vote_outcome(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let outcome = domain::DayVoteOutcome {
@@ -704,7 +704,7 @@ async fn host_decides_prompt_finalizes_official_day_vote_outcome(pool: sqlx::PgP
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn effect_notifications_project_per_audience_slot_and_rebuild(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
@@ -781,7 +781,7 @@ async fn effect_notifications_project_per_audience_slot_and_rebuild(pool: sqlx::
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
@@ -968,7 +968,7 @@ async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn phase_advanced_validates_host_prompt_phase_control_and_rolls_back(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     append_and_project(
@@ -1068,7 +1068,7 @@ async fn phase_advanced_validates_host_prompt_phase_control_and_rolls_back(pool:
 /// Replaying a stored event is an ingress boundary: malformed phase strings
 /// must fail before any projection row moves. This deliberately covers the
 /// top-level folds that do not deserialize through a domain envelope first.
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn persisted_phase_ids_reject_noncanonical_payloads_atomically(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     append_and_project(
@@ -1239,7 +1239,7 @@ async fn persisted_phase_ids_reject_noncanonical_payloads_atomically(pool: sqlx:
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn canonical_persisted_phase_ids_round_trip_through_projection_folds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     append_and_project(
@@ -1359,7 +1359,7 @@ async fn canonical_persisted_phase_ids_round_trip_through_projection_folds(pool:
 
 /// Setup discussion is deliberately outside a phase. The nullable SQL column
 /// must round-trip as typed absence rather than an empty-string sentinel.
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn prephase_thread_posts_round_trip_as_typed_absence(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     append_and_project(
@@ -1406,7 +1406,7 @@ async fn prephase_thread_posts_round_trip_as_typed_absence(pool: sqlx::PgPool) {
 /// Rebuild determinism (REQUIRED, doc 02): after building projections
 /// incrementally, `rebuild` truncates and re-folds from the log; the rebuilt
 /// tables must be byte-for-byte identical to the incrementally-built ones.
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn rebuild_is_deterministic(pool: sqlx::PgPool) {
     let pack = load_pack();
     let game = Uuid::new_v4();
@@ -1469,7 +1469,7 @@ async fn rebuild_is_deterministic(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn audit_rebuild_cli_exits_zero_for_match_and_nonzero_for_drift(pool: sqlx::PgPool) {
     reconcile_database_authority(
         &pool,
@@ -1616,7 +1616,7 @@ async fn application_database_url_for_pool(pool: &PgPool) -> String {
         .to_string()
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
@@ -1723,7 +1723,7 @@ async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn resolution_scoped_effect_projection_expires_without_slot_effect(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
@@ -1781,7 +1781,7 @@ async fn resolution_scoped_effect_projection_expires_without_slot_effect(pool: s
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
@@ -1883,7 +1883,7 @@ async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn action_counter_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let applied = ResolutionApplied {
@@ -1986,7 +1986,7 @@ async fn action_counter_projection_records_and_rebuilds(pool: sqlx::PgPool) {
 /// PostSubmitted folds into `thread_view` with stable event cursors. The public
 /// main thread ignores private-channel posts and pages newest windows while
 /// returning rows oldest-to-newest for rendering.
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let mut events = Vec::new();
@@ -2092,7 +2092,7 @@ async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
 /// The public index is a durable lifecycle projection. Setup games are retained
 /// for rebuilds but excluded until started; active and completed rows page by a
 /// stable `(updated_seq, game_id)` cursor without carrying private game state.
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx::PgPool) {
     let active_game = Uuid::from_u128(1);
     let completed_game = Uuid::from_u128(2);
@@ -2237,7 +2237,7 @@ async fn game_index_pages_public_active_and_completed_lifecycle_rows(pool: sqlx:
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sqlx::PgPool) {
     let area = Uuid::from_u128(42);
     let topic = Uuid::from_u128(43);
@@ -2528,7 +2528,7 @@ async fn public_search_filters_visibility_private_channels_and_rebuilds(pool: sq
     assert_eq!(post_documents_with_indexed_titles, 0);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_search_indexes_one_surface_title_without_flooding_post_results(pool: sqlx::PgPool) {
     let surface_id = Uuid::from_u128(0x5355_5246_4143_455f_5345_4152_4348);
     sqlx::query(
@@ -2598,7 +2598,7 @@ async fn public_search_indexes_one_surface_title_without_flooding_post_results(p
     assert_eq!(indexed_title_rows, 1);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::PgPool) {
     let host = auxiliary_principal(0x2101);
     let reporter = auxiliary_principal(0x2102);
@@ -2841,7 +2841,7 @@ async fn moderation_reports_dedupe_hide_restore_audit_and_rebuild(pool: sqlx::Pg
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPool) {
     let host = auxiliary_principal(0x2201);
     let reporter = auxiliary_principal(0x2202);
@@ -2915,7 +2915,7 @@ async fn moderation_report_submissions_are_bounded_per_reporter(pool: sqlx::PgPo
     ));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(pool: PgPool) {
     let author = auxiliary_principal(0x2301);
     let member = auxiliary_principal(0x2302);
@@ -3277,7 +3277,7 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn thread_author_must_match_stored_event_actor(pool: sqlx::PgPool) {
     let forged_attributions = [
         (
@@ -3334,7 +3334,7 @@ async fn thread_author_must_match_stored_event_actor(pool: sqlx::PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn encrypted_private_events_still_fold_and_rebuild(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     let events = vec![
@@ -3421,7 +3421,7 @@ async fn encrypted_private_events_still_fold_and_rebuild(pool: sqlx::PgPool) {
 
 /// `append_and_project` is one transaction: a conflicting concurrent append
 /// rolls back the projection updates too (no partial write).
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn projection_rolls_back_on_conflict(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
 
@@ -3443,7 +3443,7 @@ async fn projection_rolls_back_on_conflict(pool: sqlx::PgPool) {
     assert_eq!(slots[0].role_key.as_deref(), Some("doctor"));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn append_and_project_notifies_live_channel_after_commit(pool: sqlx::PgPool) {
     let mut listener = sqlx::postgres::PgListener::connect_with(&pool)
         .await
@@ -3476,7 +3476,7 @@ async fn append_and_project_notifies_live_channel_after_commit(pool: sqlx::PgPoo
 
 /// Non-game discussion streams use the same append-only store but a separate,
 /// public-safe projection boundary from game streams.
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(pool: sqlx::PgPool) {
     let area = Uuid::from_u128(101);
     let visible_topic = Uuid::from_u128(102);
@@ -3660,7 +3660,7 @@ async fn discussion_projection_pages_visible_topics_and_hides_moderated_rows(poo
     );
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool: sqlx::PgPool) {
     let reader = auxiliary_principal(0x2401);
     let author = auxiliary_principal(0x2402);
@@ -3930,7 +3930,7 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
     ));
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn profile_projection_keeps_owner_state_private_and_rebuildable(pool: sqlx::PgPool) {
     ensure_test_principal(&pool, "owner_a").await;
     let profile = create_test_profile(
@@ -4005,7 +4005,7 @@ async fn profile_projection_keeps_owner_state_private_and_rebuildable(pool: sqlx
     assert_eq!(rebuilt.get::<i64, _>("revision"), 2);
 }
 
-#[sqlx::test(migrations = "../projections/migrations")]
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_database(
     pool: sqlx::PgPool,
 ) {
@@ -4093,7 +4093,7 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
         .connect(&format!("{prefix}/{target_name}"))
         .await
         .unwrap();
-    sqlx::migrate!("./migrations").run(&target).await.unwrap();
+    database_schema::MIGRATOR.run(&target).await.unwrap();
     let mut tampered_alias_export = export.clone();
     tampered_alias_export.detached_subject_aliases[0].detached_alias =
         "Archived player 00000000000000000000".to_string();
