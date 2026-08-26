@@ -61,7 +61,7 @@ test("staging search SLO is tied to the regression corpus and privacy boundary",
       "utf8",
     ),
   );
-  assert.equal(slo.version, 2);
+  assert.equal(slo.version, 3);
   assert.equal(slo.environment, "staging");
   assert.equal(slo.route, "/search");
   assert.deepEqual(slo.railway_target, {
@@ -79,6 +79,16 @@ test("staging search SLO is tied to the regression corpus and privacy boundary",
   assert.equal(slo.availability.deployment_history_limit, 500);
   assert.equal(slo.canary.requests_per_run, slo.latency.minimum_samples);
   assert.equal(slo.canary.minimum_non_empty_responses, 1);
+  assert.deepEqual(slo.canary.source_corpus, {
+    version: 1,
+    owner_command: "fmarch-staging-search-corpus reconcile",
+    case_id: "game-corpus-v1",
+    game_id: "7f46d8a2-9f5d-4d3b-8b9e-7c40a74c1001",
+    pack: "mafiascum",
+    lifecycle: "active",
+    expected_result_href: "/games/7f46d8a2-9f5d-4d3b-8b9e-7c40a74c1001",
+    minimum_matching_responses: 1,
+  });
   assert.equal(
     slo.canary.cases.reduce((count, item) => count + item.repetitions, 0),
     slo.canary.requests_per_run,

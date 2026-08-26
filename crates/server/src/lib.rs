@@ -5,6 +5,8 @@ pub use database_schema::{
     MIGRATOR,
 };
 
+pub mod staging_search_corpus;
+
 /// Reject every ambient libpq-style authority input. Matching the `PG` prefix
 /// is deliberate: libpq adds variables over time, and a fixed allow/deny list
 /// would silently inherit new connection, TLS, GSS, or startup-option inputs.

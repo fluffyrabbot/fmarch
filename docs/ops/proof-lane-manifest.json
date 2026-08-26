@@ -1091,6 +1091,7 @@
         "railway.toml",
         "docker-compose.yml",
         "Dockerfile",
+        "Dockerfile.railway",
         "Dockerfile.frontend"
       ],
       "lanes": [

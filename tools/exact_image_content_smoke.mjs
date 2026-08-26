@@ -17,6 +17,7 @@ export const exactImageRuntimeBinaries = Object.freeze([
   "fmarch-server",
   "fmarch-migrate",
   "fmarch-schema-gate",
+  "fmarch-staging-search-corpus",
   "fmarch-event-key-admin",
   "fmarch-profile-index-admin",
 ]);

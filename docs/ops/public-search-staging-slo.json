@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "environment": "staging",
   "route": "/search",
   "railway_target": {
@@ -45,6 +45,16 @@
     "minimum_non_empty_responses": 1,
     "maximum_concurrency": 4,
     "request_timeout_ms": 5000,
+    "source_corpus": {
+      "version": 1,
+      "owner_command": "fmarch-staging-search-corpus reconcile",
+      "case_id": "game-corpus-v1",
+      "game_id": "7f46d8a2-9f5d-4d3b-8b9e-7c40a74c1001",
+      "pack": "mafiascum",
+      "lifecycle": "active",
+      "expected_result_href": "/games/7f46d8a2-9f5d-4d3b-8b9e-7c40a74c1001",
+      "minimum_matching_responses": 1
+    },
     "cases": [
       {
         "id": "all-common",
@@ -65,7 +75,7 @@
         "repetitions": 5
       },
       {
-        "id": "game-common",
+        "id": "game-corpus-v1",
         "filter": "games",
         "synthetic_query": "game",
         "repetitions": 5

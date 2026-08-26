@@ -166,10 +166,18 @@ npm run evaluate:public-search-staging-slo
 ```
 
 The canary issues public unauthenticated GETs for four versioned synthetic query/filter cases with
-at most four requests in flight. Its header produces only the bounded telemetry class
-`staging_canary`; the label is observational and grants no authority. Its receipt retains case ids,
-filters, status counts, result-count bands, and client latency aggregates, never synthetic terms,
-response bodies, results, or cursors. External traffic remains separately visible as `external`.
+at most four requests in flight. One case must resolve the exact source-controlled game corpus
+owned by `fmarch-staging-search-corpus reconcile`; an unrelated non-empty result cannot stand in
+for that aggregate. The reconciler selects an active global admin, then uses idempotent
+`CreateGame` and `StartGame` commands. It performs no projection writes. Its fixed game identity,
+pack, active lifecycle, expected public href, and owner command live in the staging SLO contract.
+Reconciliation fails closed on owner or lifecycle drift and appends nothing on a second run.
+
+The canary header produces only the bounded telemetry class `staging_canary`; the label is
+observational and grants no authority. Its receipt retains case ids, filters, status counts,
+result-count bands, aggregate corpus-match counts, and client latency aggregates, never synthetic
+terms, expected hrefs, response bodies, results, or cursors. External traffic remains separately
+visible as `external`.
 
 The evaluator reads exact-deployment application logs for latency and service-level HTTP logs plus
 bounded deployment history for availability. It writes only deployment attribution and aggregates
@@ -181,9 +189,12 @@ missing daily sample coverage, or incomplete seven-day service history exits 2 w
 parser, receipt, and canary contracts are covered by `npm run test:public-search-staging-slo`; live
 Railway access stays outside the local proof lane.
 
-An all-`200` canary run whose cases all return empty pages is `insufficient`, not representative
-latency evidence. It may be recorded with `-- --allow-insufficient`, but the hosted SLO cannot pass
-until staging contains at least one source-of-truth public document matched by the synthetic cases.
+An all-`200` canary run whose cases all return empty pages, or return only unrelated documents, is
+`insufficient`, not representative latency evidence. It may be recorded with
+`-- --allow-insufficient`, but the hosted SLO cannot pass until the declared source-of-truth corpus
+is matched. Run the canary at one stable time each day across the complete seven-day window; seven
+20-request cohorts satisfy both the 100-sample floor and daily-bucket coverage without fabricating
+history.
 
 Prefix/fuzzy matching and multilingual stemming remain deferred. There is no observed product need
 yet, and both can broaden the candidate set on the same dimension that dominates common-term cost.

@@ -25,7 +25,12 @@ test("canary executes every bounded case without retaining queries or bodies", a
         JSON.stringify({
           query: url.searchParams.get("q"),
           filter: url.searchParams.get("filter"),
-          results: [{ kind: "game" }],
+          results: [
+            {
+              kind: "game",
+              href: slo.canary.source_corpus.expected_result_href,
+            },
+          ],
           next_cursor: null,
         }),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -37,6 +42,7 @@ test("canary executes every bounded case without retaining queries or bodies", a
   assert.equal(requests.length, 20);
   assert.equal(receipt.traffic.requestCount, 20);
   assert.equal(receipt.aggregate.successfulCount, 20);
+  assert.equal(receipt.aggregate.sourceCorpus.matchCount, 5);
   assert.deepEqual(receipt.aggregate.byFilter, {
     all: 5,
     discussions: 5,
@@ -61,6 +67,10 @@ test("canary executes every bounded case without retaining queries or bodies", a
   }
   assert.equal(serialized.includes("next_cursor"), false);
   assert.equal(serialized.includes('"kind":"game"'), false);
+  assert.equal(
+    serialized.includes(slo.canary.source_corpus.expected_result_href),
+    false,
+  );
 });
 
 test("canary fails closed on non-200 or malformed responses", async () => {
@@ -112,4 +122,25 @@ test("empty-only canary traffic is insufficient rather than representative", asy
   assert.equal(receipt.status, "insufficient");
   assert.equal(receipt.aggregate.successfulCount, 20);
   assert.equal(receipt.aggregate.nonEmptyResponseCount, 0);
+});
+
+test("unrelated non-empty results cannot stand in for the declared corpus", async () => {
+  const slo = await stagingSlo();
+  const receipt = await runPublicSearchStagingCanary({
+    slo,
+    fetchImpl: async (url) =>
+      new Response(
+        JSON.stringify({
+          query: url.searchParams.get("q"),
+          filter: url.searchParams.get("filter"),
+          results: [{ kind: "game", href: "/games/unrelated" }],
+          next_cursor: null,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+  });
+
+  assert.equal(receipt.status, "insufficient");
+  assert.equal(receipt.aggregate.nonEmptyResponseCount, 20);
+  assert.equal(receipt.aggregate.sourceCorpus.matchCount, 0);
 });

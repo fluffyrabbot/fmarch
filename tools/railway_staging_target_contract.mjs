@@ -45,6 +45,7 @@ async function contract() {
         "crates/server/src/main.rs",
         "crates/server/src/bin/fmarch-migrate.rs",
         "crates/server/src/bin/fmarch-schema-gate.rs",
+        "crates/server/src/bin/fmarch-staging-search-corpus.rs",
         "crates/server/src/bin/fmarch-event-key-admin.rs",
         "crates/api/src/lib.rs",
         "crates/media/src/repository.rs",
@@ -84,6 +85,7 @@ async function contract() {
   assert.match(source.Dockerfile, /apt-get install --yes --no-install-recommends ca-certificates/);
   assert.match(source.Dockerfile, /COPY --from=builder \/out\/fmarch-migrate \/usr\/local\/bin\/fmarch-migrate/);
   assert.match(source.Dockerfile, /COPY --from=builder \/out\/fmarch-schema-gate \/usr\/local\/bin\/fmarch-schema-gate/);
+  assert.match(source.Dockerfile, /COPY --from=builder \/out\/fmarch-staging-search-corpus \/usr\/local\/bin\/fmarch-staging-search-corpus/);
   assert.match(source.Dockerfile, /COPY --from=builder \/out\/fmarch-event-key-admin \/usr\/local\/bin\/fmarch-event-key-admin/);
   assert.match(source.Dockerfile, /USER fmarch/);
   assert.match(source.Dockerfile, /CMD \["fmarch-server"\]/);
@@ -138,6 +140,7 @@ async function contract() {
     "fmarch-server",
     "fmarch-migrate",
     "fmarch-schema-gate",
+    "fmarch-staging-search-corpus",
     "fmarch-event-key-admin",
     "fmarch-profile-index-admin",
   ]) {
@@ -577,6 +580,14 @@ async function contract() {
   assert.match(
     source["crates/server/src/bin/fmarch-schema-gate.rs"],
     /DATABASE_URL/,
+  );
+  assert.match(
+    source["crates/server/src/bin/fmarch-staging-search-corpus.rs"],
+    /RAILWAY_ENVIRONMENT_NAME/,
+  );
+  assert.match(
+    source["crates/server/src/bin/fmarch-staging-search-corpus.rs"],
+    /staging-only; refusing environment/,
   );
   assert.match(source["crates/api/src/lib.rs"], /route\("\/readyz", get\(readyz\)\)/);
   assert.match(

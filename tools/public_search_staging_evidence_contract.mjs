@@ -1,4 +1,4 @@
-export const PUBLIC_SEARCH_STAGING_SLO_RECEIPT_VERSION = 2;
+export const PUBLIC_SEARCH_STAGING_SLO_RECEIPT_VERSION = 3;
 
 const requiredSearchFields = Object.freeze([
   "filter",
@@ -345,7 +345,7 @@ export function parseRailwayNdjson(output, label) {
 
 export function validatePublicSearchStagingSlo(slo) {
   if (
-    slo?.version !== 2 ||
+    slo?.version !== 3 ||
     slo.environment !== "staging" ||
     slo.route !== "/search" ||
     !slo.railway_target?.project_id ||
@@ -377,6 +377,24 @@ export function validatePublicSearchStagingSlo(slo) {
     !Array.isArray(slo.privacy?.forbidden_fields)
   ) {
     throw new Error("public-search staging availability/privacy SLO drifted");
+  }
+  if (
+    slo.canary?.source_corpus?.version !== 1 ||
+    slo.canary.source_corpus.owner_command !==
+      "fmarch-staging-search-corpus reconcile" ||
+    typeof slo.canary.source_corpus.case_id !== "string" ||
+    typeof slo.canary.source_corpus.game_id !== "string" ||
+    slo.canary.source_corpus.pack !== "mafiascum" ||
+    slo.canary.source_corpus.lifecycle !== "active" ||
+    slo.canary.source_corpus.expected_result_href !==
+      `/games/${slo.canary.source_corpus.game_id}` ||
+    !Number.isInteger(slo.canary.source_corpus.minimum_matching_responses) ||
+    slo.canary.source_corpus.minimum_matching_responses < 1 ||
+    !slo.canary.cases?.some(
+      (canaryCase) => canaryCase.id === slo.canary.source_corpus.case_id,
+    )
+  ) {
+    throw new Error("public-search staging source corpus contract drifted");
   }
 }
 

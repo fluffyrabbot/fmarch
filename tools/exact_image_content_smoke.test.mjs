@@ -16,6 +16,7 @@ test("exact-image runtime contract includes every shipped server binary", () => 
     "fmarch-server",
     "fmarch-migrate",
     "fmarch-schema-gate",
+    "fmarch-staging-search-corpus",
     "fmarch-event-key-admin",
     "fmarch-profile-index-admin",
   ]);

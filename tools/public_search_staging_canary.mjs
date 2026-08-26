@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { validatePublicSearchStagingSlo } from "./public_search_staging_evidence_contract.mjs";
 
-export const PUBLIC_SEARCH_STAGING_CANARY_RECEIPT_VERSION = 1;
+export const PUBLIC_SEARCH_STAGING_CANARY_RECEIPT_VERSION = 2;
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultSloPath = path.join(
@@ -35,10 +35,12 @@ export async function runPublicSearchStagingCanary({
   );
   const failures = observations.filter((item) => item.status !== 200 || !item.validShape);
   const nonEmptyResponses = observations.filter((item) => item.resultCount > 0).length;
+  const corpusMatches = observations.filter((item) => item.corpusMatched).length;
   const status =
     failures.length > 0
       ? "failed"
-      : nonEmptyResponses < slo.canary.minimum_non_empty_responses
+      : nonEmptyResponses < slo.canary.minimum_non_empty_responses ||
+          corpusMatches < slo.canary.source_corpus.minimum_matching_responses
         ? "insufficient"
         : "passed";
   const receipt = {
@@ -47,7 +49,7 @@ export async function runPublicSearchStagingCanary({
     status,
     generatedAt: validDate(now, "canary clock").toISOString(),
     proofBoundary:
-      "Public, unauthenticated staging GET workload using versioned synthetic terms. The traffic-class header is an observational label, not an authenticated identity. The receipt retains case ids, filters, response status counts, result-count bands, and client latency aggregates only; query terms, response bodies, result content, cursors, and request identifiers are never persisted.",
+      "Public, unauthenticated staging GET workload using versioned synthetic terms and one source-controlled corpus expectation. The traffic-class header is an observational label, not an authenticated identity. The receipt retains case ids, filters, response status counts, result-count bands, aggregate corpus-match counts, and client latency aggregates only; query terms, expected hrefs, response bodies, result content, cursors, and request identifiers are never persisted.",
     target: {
       environment: slo.environment,
       route: slo.route,
@@ -67,6 +69,12 @@ export async function runPublicSearchStagingCanary({
       failedCount: failures.length,
       nonEmptyResponseCount: nonEmptyResponses,
       minimumNonEmptyResponses: slo.canary.minimum_non_empty_responses,
+      sourceCorpus: {
+        version: slo.canary.source_corpus.version,
+        caseId: slo.canary.source_corpus.case_id,
+        matchCount: corpusMatches,
+        minimumMatchingResponses: slo.canary.source_corpus.minimum_matching_responses,
+      },
       statusCounts: countBy(observations, (item) => String(item.status)),
       p95ClientMs: percentile(
         observations.map((item) => item.elapsedMs),
@@ -99,6 +107,7 @@ export function assertPublicSearchStagingCanaryReceipt(receipt, slo) {
   if (
     receipt.privacy?.syntheticQueriesPersisted !== false ||
     receipt.privacy?.responseBodiesPersisted !== false ||
+    receipt.privacy?.resultContentPersisted !== false ||
     receipt.traffic?.authenticatedIdentity !== false
   ) {
     throw new Error("public-search staging canary privacy boundary drifted");
@@ -108,6 +117,9 @@ export function assertPublicSearchStagingCanaryReceipt(receipt, slo) {
     if (serialized.includes(JSON.stringify(canaryCase.synthetic_query))) {
       throw new Error("public-search staging canary retained a synthetic query");
     }
+  }
+  if (serialized.includes(JSON.stringify(slo.canary.source_corpus.expected_result_href))) {
+    throw new Error("public-search staging canary retained the expected corpus href");
   }
   return receipt;
 }
@@ -131,6 +143,15 @@ function validateCanary(slo) {
   ) {
     throw new Error("public-search staging canary contract drifted");
   }
+  if (
+    slo.canary.source_corpus?.version !== 1 ||
+    typeof slo.canary.source_corpus?.case_id !== "string" ||
+    typeof slo.canary.source_corpus?.expected_result_href !== "string" ||
+    !Number.isInteger(slo.canary.source_corpus?.minimum_matching_responses) ||
+    slo.canary.source_corpus.minimum_matching_responses < 1
+  ) {
+    throw new Error("public-search staging canary source corpus drifted");
+  }
   const ids = new Set();
   let requestCount = 0;
   for (const canaryCase of slo.canary.cases) {
@@ -151,6 +172,9 @@ function validateCanary(slo) {
   if (requestCount !== slo.canary.requests_per_run) {
     throw new Error("public-search staging canary request inventory drifted");
   }
+  if (!ids.has(slo.canary.source_corpus.case_id)) {
+    throw new Error("public-search staging canary source corpus case is missing");
+  }
 }
 
 function canaryPlan(slo) {
@@ -159,6 +183,10 @@ function canaryPlan(slo) {
       id: canaryCase.id,
       filter: canaryCase.filter,
       syntheticQuery: canaryCase.synthetic_query,
+      expectedHref:
+        canaryCase.id === slo.canary.source_corpus.case_id
+          ? slo.canary.source_corpus.expected_result_href
+          : null,
       repetition,
     })),
   );
@@ -195,6 +223,10 @@ async function executeRequest({ slo, request, fetchImpl }) {
     body?.filter === request.filter &&
     Array.isArray(body?.results) &&
     (body?.next_cursor === null || typeof body?.next_cursor === "string");
+  const corpusMatched =
+    validShape &&
+    request.expectedHref !== null &&
+    body.results.some((result) => result?.href === request.expectedHref);
   return {
     id: request.id,
     filter: request.filter,
@@ -203,6 +235,7 @@ async function executeRequest({ slo, request, fetchImpl }) {
     validShape,
     elapsedMs: Number(elapsedMs.toFixed(3)),
     resultCount: Array.isArray(body?.results) ? body.results.length : null,
+    corpusMatched,
   };
 }
 
@@ -215,6 +248,7 @@ function failedObservation(request, status, elapsedMs) {
     validShape: false,
     elapsedMs: Number(elapsedMs.toFixed(3)),
     resultCount: null,
+    corpusMatched: false,
   };
 }
 
@@ -227,6 +261,7 @@ function caseAggregates(observations) {
       requestCount: 0,
       successfulCount: 0,
       statusCounts: {},
+      corpusMatchCount: 0,
       clientLatencyValues: [],
     };
     current.requestCount += 1;
@@ -234,6 +269,7 @@ function caseAggregates(observations) {
     current.statusCounts[observation.status] =
       (current.statusCounts[observation.status] ?? 0) + 1;
     current.clientLatencyValues.push(observation.elapsedMs);
+    if (observation.corpusMatched) current.corpusMatchCount += 1;
     cases.set(observation.id, current);
   }
   return [...cases.values()]

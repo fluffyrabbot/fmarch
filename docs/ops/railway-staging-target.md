@@ -325,6 +325,39 @@ that provider setting, not a caller-supplied return URL, completes the redirect.
 
 Never set `FMARCH_DEV_AUTH=1` or `FMARCH_FRONTEND_FIXTURE_SESSION=1` on any hosted service. They are local proof modes, not hosted-target configuration.
 
+## Public Search Staging Corpus
+
+The public-search canary owns one deterministic, non-personal staging game declared in
+`docs/ops/public-search-staging-slo.json`. Install or verify it only after the exact API deployment
+is successful and the bootstrap global admin exists:
+
+```sh
+railway ssh \
+  --project 9d285d67-c11b-4508-9efb-fad042787b4c \
+  --environment e109e500-2a4c-48a3-96f2-e92a9edb63e4 \
+  --service 18b6f450-3739-4f21-8e01-f58c63cec834 \
+  -- fmarch-staging-search-corpus reconcile
+```
+
+The command refuses every environment except Railway `staging`, accepts only the application
+`DATABASE_URL`, and verifies schema, database-role, and event-key authority before mutation. It
+selects the canonical active global admin and drives `CreateGame` followed by `StartGame` through
+the production command pipeline with durable command ids. SQL access is read-only: it inspects the
+owner/lifecycle and verifies the resulting public game and search projections. Re-running the
+command appends no facts. Run it again after any staging database recreation; owner, pack,
+lifecycle, or projection drift fails closed instead of creating a second corpus.
+
+After reconciliation, run the declared canary and SLO evaluator. Preserve seven daily cohorts at a
+stable time so the rolling availability receipt earns every daily bucket and at least 100 samples:
+
+```sh
+npm run run:public-search-staging-canary
+npm run evaluate:public-search-staging-slo -- --allow-insufficient
+```
+
+The canary receipt records only aggregate corpus-match counts. It never persists the expected href,
+query terms, result content, response bodies, cursors, or request metadata.
+
 ## Secrets And Evidence
 
 Railway receives deployed runtime secrets such as the resolved application
