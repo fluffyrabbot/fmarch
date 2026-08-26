@@ -7,6 +7,8 @@
 
 #[path = "e2e/public_search_model.rs"]
 mod public_search_model;
+#[path = "e2e/publication_replay_contract.rs"]
+mod publication_replay_contract;
 
 use std::process::Command as ProcessCommand;
 use std::str::FromStr;
