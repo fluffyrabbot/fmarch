@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "environment": "staging",
+  "route": "/search",
+  "latency": {
+    "event": "public_search_completed",
+    "field": "elapsed_ms",
+    "percentile": 95,
+    "objective_ms": 750,
+    "window_minutes": 15,
+    "minimum_samples": 20,
+    "successful_requests_only": true
+  },
+  "availability": {
+    "event": "http_request_completed",
+    "route_field": "route",
+    "status_field": "status",
+    "objective_ratio": 0.99,
+    "window_days": 7,
+    "good_status_upper_bound": 499,
+    "excluded_periods": [
+      "declared_load_tests",
+      "planned_deployment_windows"
+    ]
+  },
+  "capacity_assumption": {
+    "maximum_public_search_documents": 100000,
+    "recharacterize_before_exceeding": true
+  },
+  "privacy": {
+    "forbidden_fields": [
+      "query",
+      "query_hash",
+      "cursor",
+      "principal_id",
+      "viewer_principal_id",
+      "request_path"
+    ],
+    "selectivity_signal": "page fill in basis points; a lower-bound proxy, not total match cardinality"
+  },
+  "feature_decision": {
+    "prefix_or_fuzzy_matching": "deferred",
+    "multilingual_stemming": "deferred",
+    "reason": "No observed product need yet; both can broaden match sets, while the 1M common-term characterization already exceeds the initial latency objective."
+  }
+}

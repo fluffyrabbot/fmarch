@@ -1,12 +1,87 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
   assertCapacityOverloadReport,
+  assertPublicSearchCharacterizationReport,
   capacityOverloadBudgets,
   percentile,
   requestSummary,
 } from "./capacity_overload_contract.mjs";
+
+test("public search characterization requires bounded cold and warm samples", () => {
+  const profile = {
+    filter: "all",
+    cold: { status: 200, elapsedMs: 10, resultCount: 20, hasNextPage: true },
+    warm: { requests: 5, statuses: { 200: 5 }, p50Ms: 5, p95Ms: 8, maxMs: 8 },
+  };
+  const plan = {
+    returnedRows: 21,
+    matchedRows: 1_000,
+    examinedRows: 100_000,
+    nodeTypes: ["Bitmap Heap Scan"],
+    indexNames: ["public_search_document_vector_idx"],
+  };
+  const names = [
+    "commonAll",
+    "mediumAll",
+    "selectiveAll",
+    "selectiveDiscussions",
+    "selectiveProfiles",
+    "selectiveGames",
+  ];
+  const report = {
+    proof: "fmarch-public-search-characterization",
+    version: 1,
+    status: "passed",
+    fixtureDocuments: 100_000,
+    cacheBoundary: "first-application-request",
+    cacheProfiles: Object.fromEntries(names.map((name) => [name, profile])),
+    searchPlans: Object.fromEntries(names.map((name) => [name, plan])),
+  };
+  assert.equal(assertPublicSearchCharacterizationReport(report), report);
+  assert.throws(
+    () =>
+      assertPublicSearchCharacterizationReport({
+        ...report,
+        cacheProfiles: {
+          ...report.cacheProfiles,
+          commonAll: { ...profile, warm: { ...profile.warm, requests: 4 } },
+        },
+      }),
+    /warm sample count drifted/,
+  );
+});
+
+test("staging search SLO is tied to the regression corpus and privacy boundary", async () => {
+  const slo = JSON.parse(
+    await readFile(
+      new URL("../docs/ops/public-search-staging-slo.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  assert.equal(slo.version, 1);
+  assert.equal(slo.environment, "staging");
+  assert.equal(slo.route, "/search");
+  assert.equal(slo.latency.event, "public_search_completed");
+  assert.equal(slo.latency.objective_ms, capacityOverloadBudgets.crawlerP95Ms);
+  assert.equal(
+    slo.capacity_assumption.maximum_public_search_documents,
+    capacityOverloadBudgets.crawlerDocuments,
+  );
+  assert.equal(slo.capacity_assumption.recharacterize_before_exceeding, true);
+  assert.deepEqual(slo.privacy.forbidden_fields, [
+    "query",
+    "query_hash",
+    "cursor",
+    "principal_id",
+    "viewer_principal_id",
+    "request_path",
+  ]);
+  assert.equal(slo.feature_decision.prefix_or_fuzzy_matching, "deferred");
+  assert.equal(slo.feature_decision.multilingual_stemming, "deferred");
+});
 
 test("percentile and request summaries are deterministic", () => {
   assert.equal(percentile([9, 1, 3, 7, 5], 50), 5);

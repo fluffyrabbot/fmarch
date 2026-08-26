@@ -112,6 +112,7 @@ export async function validateSecurityReleaseBaseline() {
         "crates/server/src/admission.rs",
         "crates/api/src/lib.rs",
         "crates/api/src/identity_delivery.rs",
+        "crates/api/src/public_platform_http.rs",
         "deploy/railway/api.env.example",
         "deploy/railway/frontend.env.example",
         "deny.toml",
@@ -180,6 +181,7 @@ export async function validateSecurityReleaseBaseline() {
     "crates/server/src/admission.rs",
     "crates/api/src/lib.rs",
     "crates/api/src/identity_delivery.rs",
+    "crates/api/src/public_platform_http.rs",
   ]) {
     validateTelemetrySource(source[relativePath], relativePath);
   }

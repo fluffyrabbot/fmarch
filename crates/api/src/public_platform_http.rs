@@ -26,6 +26,7 @@ use social::{
     ProfileRevision, ProfileVisibility,
 };
 use sqlx::postgres::PgPool;
+use std::time::Instant;
 use trust_safety::{
     self, ModerationCaseStatus, ModerationCommand, ModerationTarget, ReportReasonFamily,
     TrustSafetyReject,
@@ -484,6 +485,7 @@ async fn public_search(
     Query(query): Query<PublicSearchQuery>,
     OptionalMemberAuthentication(viewer_principal_id): OptionalMemberAuthentication,
 ) -> Result<Json<PublicSearchPage>, ApiError> {
+    let started = Instant::now();
     let normalized_query = query.q.trim();
     if normalized_query.chars().count() < 2 || normalized_query.chars().count() > 200 {
         return Err(ApiError::Reject {
@@ -515,6 +517,12 @@ async fn public_search(
         }
     };
     let filter_label = filter_value.as_str();
+    let page_kind = if query.cursor.is_some() {
+        "continuation"
+    } else {
+        "first"
+    };
+    let limit = query.limit.unwrap_or(20).clamp(1, 50);
     let cursor = query
         .cursor
         .as_deref()
@@ -525,14 +533,27 @@ async fn public_search(
         normalized_query,
         filter,
         cursor,
-        query.limit.unwrap_or(20),
+        limit,
         viewer_principal_id,
     )
     .await?;
+    let result_count = page.results.len();
+    let has_next_page = page.next_cursor.is_some();
     let next_cursor = page
         .next_cursor
         .map(|cursor| encode_public_search_cursor(cursor, normalized_query, filter_label))
         .transpose()?;
+    tracing::info!(
+        event = "public_search_completed",
+        filter = filter_label,
+        page = page_kind,
+        limit,
+        result_count,
+        has_next_page,
+        selectivity_signal_basis_points = page_fill_basis_points(result_count, limit),
+        elapsed_ms = started.elapsed().as_millis(),
+        "Public search completed"
+    );
     Ok(Json(PublicSearchPage {
         query: normalized_query.to_string(),
         filter: filter_value,
@@ -543,6 +564,13 @@ async fn public_search(
             .collect(),
         next_cursor,
     }))
+}
+
+fn page_fill_basis_points(result_count: usize, limit: i64) -> u16 {
+    let limit = usize::try_from(limit.max(1)).expect("positive search limit fits usize");
+    let bounded_count = result_count.min(limit);
+    u16::try_from((bounded_count * 10_000) / limit)
+        .expect("bounded search page fill fits basis points")
 }
 
 fn encode_public_search_cursor(

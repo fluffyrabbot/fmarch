@@ -44,6 +44,48 @@ export function requestSummary(records) {
   };
 }
 
+export function assertPublicSearchCharacterizationReport(report) {
+  assert(
+    report?.proof === "fmarch-public-search-characterization",
+    "search characterization proof id drifted",
+  );
+  assert(report?.version === 1, "search characterization version drifted");
+  assert(report?.status === "passed", "search characterization did not pass");
+  assert(
+    Number.isInteger(report.fixtureDocuments) && report.fixtureDocuments >= 100_000,
+    "search characterization fixture is too small",
+  );
+  assert(
+    report.cacheBoundary === "first-application-request",
+    "search characterization cache boundary drifted",
+  );
+  for (const name of [
+    "commonAll",
+    "mediumAll",
+    "selectiveAll",
+    "selectiveDiscussions",
+    "selectiveProfiles",
+    "selectiveGames",
+  ]) {
+    const profile = report.cacheProfiles?.[name];
+    assert(profile?.cold?.status === 200, `${name} cold request failed`);
+    assert(profile?.cold?.resultCount <= 20, `${name} cold response exceeded page bound`);
+    assert(profile?.warm?.requests === 5, `${name} warm sample count drifted`);
+    assert(
+      profile?.warm?.statuses?.[200] === 5 &&
+        Object.keys(profile.warm.statuses).length === 1,
+      `${name} warm request failed`,
+    );
+    const plan = report.searchPlans?.[name];
+    assert(plan?.returnedRows <= 21, `${name} plan exceeded the fetch bound`);
+    assert(
+      plan?.examinedRows <= report.fixtureDocuments + 10,
+      `${name} plan examined more rows than the fixture contains`,
+    );
+  }
+  return report;
+}
+
 export function assertCapacityOverloadReport(report) {
   assert(report?.proof === "fmarch-capacity-overload", "proof id drifted");
   assert(report?.version === 1, "proof version drifted");

@@ -951,7 +951,9 @@
       "paths": [
         "tools/capacity_overload_contract.mjs",
         "tools/capacity_overload_contract.test.mjs",
-        "tools/capacity_overload_proof.mjs"
+        "tools/capacity_overload_proof.mjs",
+        "docs/arch/12-capacity-and-overload.md",
+        "docs/ops/public-search-staging-slo.json"
       ],
       "lanes": ["test:capacity-overload-contract", "test:capacity-overload"]
     },

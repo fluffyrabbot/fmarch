@@ -57,6 +57,32 @@ fn public_platform_http_has_one_typed_owner_without_transport_or_persistence_dri
     }
     assert!(!public_platform_http.contains("async fn create_auth_session("));
 
+    let search_telemetry = public_platform_http
+        .split("event = \"public_search_completed\"")
+        .nth(1)
+        .and_then(|source| source.split(");").next())
+        .expect("public search must emit its bounded completion event");
+    for field in [
+        "filter = filter_label",
+        "page = page_kind",
+        "limit",
+        "result_count",
+        "has_next_page",
+        "selectivity_signal_basis_points",
+        "elapsed_ms",
+    ] {
+        assert!(
+            search_telemetry.contains(field),
+            "public search telemetry omitted {field}"
+        );
+    }
+    for forbidden in ["normalized_query", "query_hash", "viewer_principal_id"] {
+        assert!(
+            !search_telemetry.contains(forbidden),
+            "public search telemetry exposed {forbidden}"
+        );
+    }
+
     assert!(
         !public_platform_http.contains("sqlx::query")
             && !public_platform_http.contains("use super::*")

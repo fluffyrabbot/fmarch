@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   assertCapacityOverloadReport,
+  assertPublicSearchCharacterizationReport,
   capacityOverloadBudgets as budgets,
   requestSummary,
 } from "./capacity_overload_contract.mjs";
@@ -30,6 +31,12 @@ const defaultOutput = path.join(
   repoRoot,
   "target",
   "capacity-overload",
+  "report.json",
+);
+const defaultSearchCharacterizationOutput = path.join(
+  repoRoot,
+  "target",
+  "public-search-characterization",
   "report.json",
 );
 const serverBinary = path.join(repoRoot, "target", "debug", "server");
@@ -55,11 +62,22 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   }
   const migrationUrl =
     args.migrationUrl ?? env.DATABASE_MIGRATION_URL ?? defaultMigrationUrl;
+  const searchDocuments = parsePositiveInteger(
+    args.searchDocuments ?? env.FMARCH_SEARCH_DOCUMENTS ?? budgets.crawlerDocuments,
+    "search document count",
+  );
+  if (!args.searchCharacterization && searchDocuments !== budgets.crawlerDocuments) {
+    throw new Error(
+      "--search-documents is reserved for --search-characterization; the regression proof fixture is fixed",
+    );
+  }
   const outputPath = path.resolve(
     args.output ??
       (env.FMARCH_PROOF_ARTIFACT_DIR
         ? path.join(env.FMARCH_PROOF_ARTIFACT_DIR, "report.json")
-        : defaultOutput),
+        : args.searchCharacterization
+          ? defaultSearchCharacterizationOutput
+          : defaultOutput),
   );
   const psql = findPsql(env);
   if (!existsSync(serverBinary)) {
@@ -75,7 +93,23 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   try {
     await startServer({ baseUrl, port, databaseUrl, env });
     await seedPostBurstGame(baseUrl);
-    await seedReadFixtures({ psql, databaseUrl });
+    await seedReadFixtures({ psql, databaseUrl, searchDocuments });
+
+    if (args.searchCharacterization) {
+      const report = await characterizePublicSearch({
+        baseUrl,
+        psql,
+        databaseUrl,
+        searchDocuments,
+      });
+      assertPublicSearchCharacterizationReport(report);
+      await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
+      console.log(
+        `public-search characterization passed: ${path.relative(repoRoot, outputPath)}`,
+      );
+      console.log(JSON.stringify(report.cacheProfiles, null, 2));
+      return 0;
+    }
 
     const scenarios = {};
     scenarios.largeThreadColdRead = await proveLargeThreadColdRead({
@@ -141,6 +175,10 @@ function parseArgs(argv) {
       args.migrationUrl = requireValue(argv, ++index, value);
     } else if (value === "--output") {
       args.output = requireValue(argv, ++index, value);
+    } else if (value === "--search-characterization") {
+      args.searchCharacterization = true;
+    } else if (value === "--search-documents") {
+      args.searchDocuments = requireValue(argv, ++index, value);
     } else {
       throw new Error(`unknown argument: ${value}`);
     }
@@ -180,12 +218,12 @@ async function startServer({ baseUrl, port, databaseUrl, env }) {
   await waitForHealth(baseUrl);
 }
 
-async function seedReadFixtures({ psql, databaseUrl }) {
+async function seedReadFixtures({ psql, databaseUrl, searchDocuments }) {
   const uuidExpression = sqlUuidFromMd5(`'${runId}' || value::TEXT`);
   const profileUuidExpression = sqlUuidFromMd5(`'${runId}-profile-' || value::TEXT`);
-  const discussionDocuments = Math.floor(budgets.crawlerDocuments / 3);
-  const gameDocuments = Math.floor(budgets.crawlerDocuments / 3);
-  const profileDocuments = budgets.crawlerDocuments - discussionDocuments - gameDocuments;
+  const discussionDocuments = Math.floor(searchDocuments / 3);
+  const gameDocuments = Math.floor(searchDocuments / 3);
+  const profileDocuments = searchDocuments - discussionDocuments - gameDocuments;
   await runPsql(
     psql,
     databaseUrl,
@@ -455,6 +493,74 @@ async function proveAnonymousCrawler({ baseUrl, psql, databaseUrl }) {
   };
 }
 
+async function characterizePublicSearch({
+  baseUrl,
+  psql,
+  databaseUrl,
+  searchDocuments,
+}) {
+  const cases = [
+    ["commonAll", "capacityword", "all"],
+    ["mediumAll", "mediumword", "all"],
+    ["selectiveAll", "selectiveword", "all"],
+    ["selectiveDiscussions", "selectiveword", "discussions"],
+    ["selectiveProfiles", "selectiveword", "profiles"],
+    ["selectiveGames", "selectiveword", "games"],
+  ];
+  const cacheProfiles = {};
+  for (const [name, query, filter] of cases) {
+    const url = `${baseUrl}/search?q=${query}&filter=${filter}&limit=20`;
+    const cold = await timedFetch(url);
+    assert(cold.status === 200, `${name} cold search returned ${cold.status}`);
+    assert(
+      (cold.body.results?.length ?? 0) <= 20,
+      `${name} cold search exceeded its page bound`,
+    );
+    const warm = [];
+    for (let sample = 0; sample < 5; sample += 1) {
+      const record = await timedFetch(url);
+      assert(record.status === 200, `${name} warm search returned ${record.status}`);
+      assert(
+        (record.body.results?.length ?? 0) <= 20,
+        `${name} warm search exceeded its page bound`,
+      );
+      warm.push(record);
+    }
+    cacheProfiles[name] = {
+      filter,
+      cold: {
+        status: cold.status,
+        elapsedMs: Number(cold.elapsedMs.toFixed(3)),
+        resultCount: cold.body.results?.length ?? 0,
+        hasNextPage: Boolean(cold.body.next_cursor),
+      },
+      warm: requestSummary(warm),
+    };
+  }
+  const searchPlans = Object.fromEntries(
+    await Promise.all(
+      cases.map(async ([name, query, filter]) => [
+        name,
+        await explainPublicSearch({ psql, databaseUrl, query, filter }),
+      ]),
+    ),
+  );
+  return {
+    proof: "fmarch-public-search-characterization",
+    version: 1,
+    status: "passed",
+    generatedAt: new Date().toISOString(),
+    fixtureDocuments: searchDocuments,
+    pageLimit: 20,
+    warmSamplesPerCase: 5,
+    cacheBoundary: "first-application-request",
+    cacheProfiles,
+    searchPlans,
+    proofBoundary:
+      "Repo-local Postgres and one debug server process. Cold means the first application request for each query/filter after fixture installation; PostgreSQL shared buffers and the host page cache are intentionally not flushed. Warm measurements are five immediate sequential repetitions. Query text is fixture-only and is not persisted in the report.",
+  };
+}
+
 async function explainPublicSearch({ psql, databaseUrl, query, filter }) {
   const source = await readFile(
     path.join(repoRoot, "crates", "projections", "sql", "public_search.sql"),
@@ -490,14 +596,15 @@ async function explainPublicSearch({ psql, databaseUrl, query, filter }) {
     returnedRows: Number(plan["Actual Rows"] ?? 0),
     matchedRows: Math.max(
       0,
-      ...searchNodes.map((node) => Number(node["Actual Rows"] ?? 0)),
+      ...searchNodes.map(actualPlanRows),
     ),
     examinedRows: Math.max(
       0,
       ...searchNodes.map(
         (node) =>
-          Number(node["Actual Rows"] ?? 0) +
-          Number(node["Rows Removed by Filter"] ?? 0),
+          (Number(node["Actual Rows"] ?? 0) +
+            Number(node["Rows Removed by Filter"] ?? 0)) *
+          Number(node["Actual Loops"] ?? 1),
       ),
     ),
     nodeTypes: [...new Set(searchNodes.map((node) => node["Node Type"]).filter(Boolean))],
@@ -1030,6 +1137,10 @@ function flattenPlan(plan) {
   return [plan, ...(plan.Plans ?? []).flatMap(flattenPlan)];
 }
 
+function actualPlanRows(plan) {
+  return Number(plan["Actual Rows"] ?? 0) * Number(plan["Actual Loops"] ?? 1);
+}
+
 function sqlUuidFromMd5(expression) {
   return `(SUBSTR(MD5(${expression}), 1, 8) || '-' || SUBSTR(MD5(${expression}), 9, 4) || '-' || SUBSTR(MD5(${expression}), 13, 4) || '-' || SUBSTR(MD5(${expression}), 17, 4) || '-' || SUBSTR(MD5(${expression}), 21, 12))::UUID`;
 }
@@ -1092,6 +1203,14 @@ function requireValue(argv, index, flag) {
   return value;
 }
 
+function parsePositiveInteger(value, label) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 100_000) {
+    throw new Error(`${label} must be a safe integer of at least 100000`);
+  }
+  return parsed;
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -1101,8 +1220,11 @@ function printUsage() {
 
 Options:
   --migration-url URL  Owner Postgres URL (default: DATABASE_MIGRATION_URL)
-  --output PATH       Proof artifact path (default: target/capacity-overload/report.json)
-  --help              Show this help
+  --output PATH        Artifact path (default depends on mode)
+  --search-characterization
+                       Run only public-search first/warm request and plan characterization
+  --search-documents N Search fixture size for characterization (default: 100000)
+  --help               Show this help
 `);
 }
 

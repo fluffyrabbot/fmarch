@@ -72,7 +72,14 @@ The runtime emits structured events at the admission boundary:
 - `live_connection_rejected`: WebSocket connection-capacity rejection;
 - `live_projection_receiver_lagged`: game, ephemeral connection id, and dropped-message count.
 
-The next hosted observability pass must aggregate these with DB pool acquire latency, statement
+Successful public search also emits `public_search_completed` with only bounded dimensions:
+filter, first/continuation page, clamped limit, result count, whether another page exists,
+elapsed milliseconds, and page fill in basis points. Page fill is a lower-bound selectivity
+signal, not total match cardinality. Query text, query hashes, cursors, viewer identity, and raw
+request paths are forbidden. Exact cardinality would require another database operation and is
+not worth adding to the read path.
+
+The next broader hosted observability pass must aggregate these with DB pool acquire latency, statement
 latency, command transaction duration, append conflicts/retries, live connection count, resync
 rate, CPU, memory, and Postgres I/O pressure. Secrets, principals, post bodies, and projection
 payloads do not belong in capacity logs.
@@ -96,6 +103,21 @@ Or use the isolated repo-local database lane:
 ```sh
 npm run test:capacity-overload:local
 ```
+
+Run explicit search characterization separately from the regression lane. This mode has no
+invented latency pass threshold; it records the first application request, five immediate warm
+repetitions, and the analyzed production SQL plan for 100%, 10%, and 1% matching terms:
+
+```sh
+npm run characterize:public-search -- --search-documents 100000 \
+  --output target/public-search-characterization/100000.json
+npm run characterize:public-search -- --search-documents 1000000 \
+  --output target/public-search-characterization/1000000.json
+```
+
+“Cold” here means the first application request for that query/filter after fixture installation.
+The proof deliberately does not flush PostgreSQL shared buffers or the host page cache, so it does
+not claim storage-device cold-start evidence.
 
 The lane writes `target/capacity-overload/report.json` and proves six related cases:
 
@@ -122,6 +144,21 @@ The lane writes `target/capacity-overload/report.json` and proves six related ca
 The latency thresholds are intentionally generous regression tripwires for a developer machine.
 They do not establish production SLOs, maximum users, Railway sizing, or internet-path behavior.
 Hosted SLOs must be set from captured staging traffic and resource telemetry.
+
+The initial staging contract is source-controlled in
+`docs/ops/public-search-staging-slo.json`: successful search p95 must remain at or below 750 ms
+over a 15-minute window with at least 20 samples, and seven-day route availability must be at
+least 99%. That latency objective assumes no more than 100,000 public search documents and requires
+fresh characterization before the corpus crosses the bound. The 2026-08-25 local characterization
+kept the 100,000-document common-term first/warm path near 117/110 ms, while the same path at one
+million documents reached about 1.63/1.60 seconds. Selective 1% queries remained below 41 ms at one
+million. All analyzed cases retained the partial GIN index; the million-document plan introduced
+parallel execution, so plan accounting multiplies `Actual Rows` by `Actual Loops`.
+
+Prefix/fuzzy matching and multilingual stemming remain deferred. There is no observed product need
+yet, and both can broaden the candidate set on the same dimension that dominates common-term cost.
+They should be introduced only with corpus-backed relevance cases and a new characterization matrix,
+not speculatively as search syntax.
 
 `/healthz` is dependency-free process liveness and bypasses admission. `/readyz`
 is admitted work and returns `200` only while the complete migration set and
