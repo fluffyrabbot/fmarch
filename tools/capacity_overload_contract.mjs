@@ -10,6 +10,10 @@ export const capacityOverloadBudgets = Object.freeze({
   crawlerGameRequests: 40,
   crawlerConcurrency: 16,
   crawlerP95Ms: 750,
+  searchWritePosts: 12,
+  searchWriteConcurrency: 6,
+  searchReadRequests: 24,
+  searchReadConcurrency: 8,
   postBurstRequests: 24,
   postBurstConcurrency: 12,
   postBurstP95Ms: 3_000,
@@ -49,14 +53,14 @@ export function assertPublicSearchCharacterizationReport(report) {
     report?.proof === "fmarch-public-search-characterization",
     "search characterization proof id drifted",
   );
-  assert(report?.version === 1, "search characterization version drifted");
+  assert(report?.version === 2, "search characterization version drifted");
   assert(report?.status === "passed", "search characterization did not pass");
   assert(
     Number.isInteger(report.fixtureDocuments) && report.fixtureDocuments >= 100_000,
     "search characterization fixture is too small",
   );
   assert(
-    report.cacheBoundary === "first-application-request",
+    report.cacheBoundary === "first-application-request-after-fixture-install",
     "search characterization cache boundary drifted",
   );
   for (const name of [
@@ -68,8 +72,11 @@ export function assertPublicSearchCharacterizationReport(report) {
     "selectiveGames",
   ]) {
     const profile = report.cacheProfiles?.[name];
-    assert(profile?.cold?.status === 200, `${name} cold request failed`);
-    assert(profile?.cold?.resultCount <= 20, `${name} cold response exceeded page bound`);
+    assert(profile?.firstRequest?.status === 200, `${name} first request failed`);
+    assert(
+      profile?.firstRequest?.resultCount <= 20,
+      `${name} first response exceeded page bound`,
+    );
     assert(profile?.warm?.requests === 5, `${name} warm sample count drifted`);
     assert(
       profile?.warm?.statuses?.[200] === 5 &&
@@ -93,8 +100,9 @@ export function assertCapacityOverloadReport(report) {
 
   const scenarios = report.scenarios ?? {};
   for (const name of [
-    "largeThreadColdRead",
+    "largeThreadFirstRead",
     "anonymousCrawler",
+    "adversarialPublicSearch",
     "singleGamePostBurst",
     "slowWebsocketConsumers",
     "httpAdmission",
@@ -104,25 +112,25 @@ export function assertCapacityOverloadReport(report) {
   }
 
   assert(
-    scenarios.largeThreadColdRead.fixtureRows >= report.budgets.largeThreadRows,
+    scenarios.largeThreadFirstRead.fixtureRows >= report.budgets.largeThreadRows,
     "large-thread fixture is too small",
   );
   assert(
-    scenarios.largeThreadColdRead.responseMaxRows <=
+    scenarios.largeThreadFirstRead.responseMaxRows <=
       report.budgets.largeThreadPageLimit,
     "large-thread response exceeded its page bound",
   );
   assert(
-    scenarios.largeThreadColdRead.p95Ms <= report.budgets.largeThreadP95Ms,
+    scenarios.largeThreadFirstRead.p95Ms <= report.budgets.largeThreadP95Ms,
     "large-thread p95 exceeded its local proof budget",
   );
   assert(
-    scenarios.largeThreadColdRead.threadRowsScanned <=
+    scenarios.largeThreadFirstRead.threadRowsScanned <=
       report.budgets.largeThreadMaxScannedRows,
     "large-thread plan scanned too many thread rows",
   );
   assert(
-    scenarios.largeThreadColdRead.indexNames.includes("thread_view_page_idx"),
+    scenarios.largeThreadFirstRead.indexNames.includes("thread_view_page_idx"),
     "large-thread plan did not use the paging index",
   );
 
@@ -173,6 +181,43 @@ export function assertCapacityOverloadReport(report) {
       (status) => Number(status) === 200,
     ),
     "crawler workload returned a non-200 response",
+  );
+
+  assert(
+    scenarios.adversarialPublicSearch.staticPagination.repeatedFirstPageEqual &&
+      scenarios.adversarialPublicSearch.staticPagination.firstSecondPagesDisjoint &&
+      scenarios.adversarialPublicSearch.staticPagination.cursorSurvivedInsert &&
+      scenarios.adversarialPublicSearch.staticPagination.freshPageObservedInsert &&
+      scenarios.adversarialPublicSearch.staticPagination.boundaryWriteAcked,
+    "search pagination was not stable before and across a projection write",
+  );
+  assert(
+    scenarios.adversarialPublicSearch.projectionWriteRace.acked ===
+      report.budgets.searchWritePosts &&
+      scenarios.adversarialPublicSearch.projectionWriteRace.attemptedWrites ===
+        report.budgets.searchWritePosts &&
+      scenarios.adversarialPublicSearch.projectionWriteRace.readRequests ===
+        report.budgets.searchReadRequests &&
+      scenarios.adversarialPublicSearch.projectionWriteRace.finalResultCount ===
+        report.budgets.searchWritePosts,
+    "concurrent search/projection-write evidence drifted",
+  );
+  assert(
+    Object.keys(
+      scenarios.adversarialPublicSearch.projectionWriteRace.readStatuses,
+    ).every((status) => Number(status) === 200),
+    "concurrent projection writes caused a failed search response",
+  );
+  assert(
+    scenarios.adversarialPublicSearch.selectivePlanIndexCoverage === 4,
+    "the selective search/filter matrix did not retain the GIN path",
+  );
+  assert(
+    scenarios.adversarialPublicSearch.searchAdmission.rejectedStatus === 503 &&
+      scenarios.adversarialPublicSearch.searchAdmission.retryAfter === "1" &&
+      scenarios.adversarialPublicSearch.searchAdmission.healthStatus === 200 &&
+      scenarios.adversarialPublicSearch.searchAdmission.recoveredRequests === 8,
+    "search-specific database saturation did not remain bounded and recoverable",
   );
 
   assert(

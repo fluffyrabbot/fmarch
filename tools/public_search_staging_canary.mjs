@@ -3,16 +3,16 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { validatePublicSearchStagingSlo } from "./public_search_staging_evidence_contract.mjs";
+import { validatePublicSearchStagingSentinel } from "./public_search_staging_sentinel_contract.mjs";
 
 export const PUBLIC_SEARCH_STAGING_CANARY_RECEIPT_VERSION = 2;
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultSloPath = path.join(
+const defaultContractPath = path.join(
   repoRoot,
   "docs",
   "ops",
-  "public-search-staging-slo.json",
+  "public-search-staging-sentinel.json",
 );
 const defaultOutputPath = path.join(
   repoRoot,
@@ -125,7 +125,7 @@ export function assertPublicSearchStagingCanaryReceipt(receipt, slo) {
 }
 
 function validateCanary(slo) {
-  validatePublicSearchStagingSlo(slo);
+  validatePublicSearchStagingSentinel(slo);
   if (
     slo.canary?.traffic_class !== "staging_canary" ||
     slo.canary?.header_name !== "x-fmarch-search-observation" ||
@@ -335,9 +335,9 @@ async function main(argv = process.argv.slice(2)) {
     printUsage();
     return 0;
   }
-  const sloPath = path.resolve(args.slo ?? defaultSloPath);
+  const contractPath = path.resolve(args.contract ?? defaultContractPath);
   const outputPath = path.resolve(args.output ?? defaultOutputPath);
-  const slo = JSON.parse(await readFile(sloPath, "utf8"));
+  const slo = JSON.parse(await readFile(contractPath, "utf8"));
   const receipt = await runPublicSearchStagingCanary({ slo });
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${JSON.stringify(receipt, null, 2)}\n`);
@@ -364,7 +364,7 @@ function parseArguments(argv) {
     const value = argv[index];
     if (value === "--help" || value === "-h") args.help = true;
     else if (value === "--allow-insufficient") args.allowInsufficient = true;
-    else if (value === "--slo") args.slo = requireValue(argv, ++index, value);
+    else if (value === "--contract") args.contract = requireValue(argv, ++index, value);
     else if (value === "--output") args.output = requireValue(argv, ++index, value);
     else throw new Error(`unknown public-search canary argument: ${value}`);
   }
@@ -381,7 +381,7 @@ function printUsage() {
   console.log(`Usage: node tools/public_search_staging_canary.mjs [options]
 
 Options:
-  --slo PATH     SLO and canary contract (default: docs/ops/public-search-staging-slo.json)
+  --contract PATH  Post-deploy sentinel contract (default: docs/ops/public-search-staging-sentinel.json)
   --output PATH  Receipt path (default: target/public-search-staging-canary/receipt.json)
   --allow-insufficient  Exit zero when all requests succeed but all result pages are empty
   --help         Show this help

@@ -4,22 +4,22 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
-  buildPublicSearchStagingSloReceipt,
+  buildPublicSearchStagingSentinelReceipt,
   parseRailwayNdjson,
-  validatePublicSearchStagingSlo,
-} from "./public_search_staging_evidence_contract.mjs";
+  validatePublicSearchStagingSentinel,
+} from "./public_search_staging_sentinel_contract.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultSloPath = path.join(
+const defaultContractPath = path.join(
   repoRoot,
   "docs",
   "ops",
-  "public-search-staging-slo.json",
+  "public-search-staging-sentinel.json",
 );
 const defaultOutputPath = path.join(
   repoRoot,
   "target",
-  "public-search-staging-slo",
+  "public-search-staging-sentinel",
   "receipt.json",
 );
 
@@ -29,16 +29,16 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     printUsage();
     return 0;
   }
-  const sloPath = path.resolve(args.slo ?? defaultSloPath);
+  const contractPath = path.resolve(args.contract ?? defaultContractPath);
   const outputPath = path.resolve(
-    args.output ?? env.FMARCH_PUBLIC_SEARCH_SLO_OUTPUT ?? defaultOutputPath,
+    args.output ?? env.FMARCH_PUBLIC_SEARCH_SENTINEL_OUTPUT ?? defaultOutputPath,
   );
-  const slo = JSON.parse(await readFile(sloPath, "utf8"));
-  validatePublicSearchStagingSlo(slo);
+  const contract = JSON.parse(await readFile(contractPath, "utf8"));
+  validatePublicSearchStagingSentinel(contract);
   const expectedCommit =
     args.expectedCommit ?? commandText("git", ["rev-parse", "HEAD"], env);
-  const target = slo.railway_target;
-  const deploymentHistory = JSON.parse(
+  const target = contract.railway_target;
+  const deployments = JSON.parse(
     railwayText(
       [
         "deployment",
@@ -50,13 +50,13 @@ async function main(argv = process.argv.slice(2), env = process.env) {
         "--service",
         target.service_id,
         "--limit",
-        String(slo.availability.deployment_history_limit),
+        "1",
         "--json",
       ],
       env,
     ),
   );
-  const deployment = deploymentHistory[0];
+  const deployment = deployments[0];
   if (!deployment) throw new Error("Railway returned no staging API deployment");
   const applicationLogRows = parseRailwayNdjson(
     railwayText(
@@ -70,42 +70,19 @@ async function main(argv = process.argv.slice(2), env = process.env) {
         "--service",
         target.service_id,
         "--since",
-        `${slo.latency.window_minutes}m`,
+        `${contract.latency.window_minutes}m`,
         "--filter",
-        slo.latency.event,
+        contract.latency.event,
         "--json",
       ],
       env,
     ),
     "Railway application log",
   );
-  const httpLogRows = parseRailwayNdjson(
-    railwayText(
-      [
-        "logs",
-        "--http",
-        "--project",
-        target.project_id,
-        "--environment",
-        target.environment_id,
-        "--service",
-        target.service_id,
-        "--since",
-        `${slo.availability.window_days}d`,
-        "--path",
-        slo.route,
-        "--json",
-      ],
-      env,
-    ),
-    "Railway HTTP log",
-  );
-  const receipt = buildPublicSearchStagingSloReceipt({
-    slo,
+  const receipt = buildPublicSearchStagingSentinelReceipt({
+    contract,
     deployment,
-    deploymentHistory,
     applicationLogRows,
-    httpLogRows,
     expectedCommit,
   });
   await mkdir(path.dirname(outputPath), { recursive: true });
@@ -116,7 +93,6 @@ async function main(argv = process.argv.slice(2), env = process.env) {
         status: receipt.status,
         deployment: receipt.deployment,
         latency: receipt.latency,
-        availability: receipt.availability,
         receipt: path.relative(repoRoot, outputPath),
       },
       null,
@@ -124,7 +100,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     ),
   );
   if (receipt.status === "failed") return 1;
-  if (receipt.status === "insufficient" && !args.allowInsufficient) return 2;
+  if (receipt.status === "insufficient") return 2;
   return 0;
 }
 
@@ -152,12 +128,11 @@ function parseArguments(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === "--help" || value === "-h") args.help = true;
-    else if (value === "--allow-insufficient") args.allowInsufficient = true;
-    else if (value === "--slo") args.slo = requireValue(argv, ++index, value);
+    else if (value === "--contract") args.contract = requireValue(argv, ++index, value);
     else if (value === "--output") args.output = requireValue(argv, ++index, value);
     else if (value === "--expected-commit") {
       args.expectedCommit = requireValue(argv, ++index, value);
-    } else throw new Error(`unknown public-search SLO argument: ${value}`);
+    } else throw new Error(`unknown public-search sentinel argument: ${value}`);
   }
   return args;
 }
@@ -169,13 +144,12 @@ function requireValue(argv, index, flag) {
 }
 
 function printUsage() {
-  console.log(`Usage: node tools/public_search_staging_slo.mjs [options]
+  console.log(`Usage: node tools/public_search_staging_sentinel.mjs [options]
 
 Options:
-  --slo PATH             SLO contract (default: docs/ops/public-search-staging-slo.json)
-  --output PATH          Receipt path (default: target/public-search-staging-slo/receipt.json)
+  --contract PATH        Sentinel contract (default: docs/ops/public-search-staging-sentinel.json)
+  --output PATH          Receipt path (default: target/public-search-staging-sentinel/receipt.json)
   --expected-commit SHA  Exact Railway deployment commit (default: HEAD)
-  --allow-insufficient   Exit zero while retaining an insufficient receipt
   --help                 Show this help
 `);
 }
@@ -186,7 +160,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
       process.exitCode = code;
     })
     .catch((error) => {
-      console.error(`public-search staging SLO evaluation failed: ${error.message}`);
+      console.error(`public-search staging sentinel failed: ${error.message}`);
       process.exitCode = 1;
     });
 }

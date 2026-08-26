@@ -1,5 +1,6 @@
 {
-  "version": 3,
+  "version": 1,
+  "kind": "post_deploy_sentinel",
   "environment": "staging",
   "route": "/search",
   "railway_target": {
@@ -20,21 +21,6 @@
     "traffic_classes": [
       "external",
       "staging_canary"
-    ]
-  },
-  "availability": {
-    "event": "http_request_completed",
-    "route_field": "route",
-    "status_field": "status",
-    "objective_ratio": 0.99,
-    "window_days": 7,
-    "minimum_samples": 100,
-    "minimum_observed_window_buckets": 7,
-    "deployment_history_limit": 500,
-    "good_status_upper_bound": 499,
-    "excluded_periods": [
-      "declared_load_tests",
-      "planned_deployment_windows"
     ]
   },
   "canary": {

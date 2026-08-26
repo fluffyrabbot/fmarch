@@ -328,7 +328,7 @@ Never set `FMARCH_DEV_AUTH=1` or `FMARCH_FRONTEND_FIXTURE_SESSION=1` on any host
 ## Public Search Staging Corpus
 
 The public-search canary owns one deterministic, non-personal staging game declared in
-`docs/ops/public-search-staging-slo.json`. Install or verify it only after the exact API deployment
+`docs/ops/public-search-staging-sentinel.json`. Install or verify it only after the exact API deployment
 is successful:
 
 ```sh
@@ -349,16 +349,20 @@ resulting public game and search projections. Re-running the command appends no 
 after any staging database recreation; owner, pack, lifecycle, or projection drift fails closed
 instead of creating a second corpus.
 
-After reconciliation, run the declared canary and SLO evaluator. Preserve seven daily cohorts at a
-stable time so the rolling availability receipt earns every daily bucket and at least 100 samples:
+After every exact API deployment, run the declared post-deploy sentinel once. It executes the
+bounded canary and then evaluates only that deployment's application telemetry:
 
 ```sh
-npm run run:public-search-staging-canary
-npm run evaluate:public-search-staging-slo -- --allow-insufficient
+npm run run:public-search-staging-sentinel
 ```
 
 The canary receipt records only aggregate corpus-match counts. It never persists the expected href,
-query terms, result content, response bodies, cursors, or request metadata.
+query terms, result content, response bodies, cursors, or request metadata. The evaluator fails on
+commit-attribution, telemetry-shape/privacy, or latency drift and reports missing/non-empty evidence
+as insufficient. It makes no synthetic weekly-availability claim; introduce that gate only when
+beta traffic is representative enough to support it. `npm run promote:production` consumes this
+same strict sentinel after exact-SHA staging health and before either the full local proof or the
+`production` release-pointer update, so a release decision cannot bypass it.
 
 ## Secrets And Evidence
 

@@ -10,10 +10,10 @@ import {
   requestSummary,
 } from "./capacity_overload_contract.mjs";
 
-test("public search characterization requires bounded cold and warm samples", () => {
+test("public search characterization requires bounded first and warm samples", () => {
   const profile = {
     filter: "all",
-    cold: { status: 200, elapsedMs: 10, resultCount: 20, hasNextPage: true },
+    firstRequest: { status: 200, elapsedMs: 10, resultCount: 20, hasNextPage: true },
     warm: { requests: 5, statuses: { 200: 5 }, p50Ms: 5, p95Ms: 8, maxMs: 8 },
   };
   const plan = {
@@ -33,10 +33,10 @@ test("public search characterization requires bounded cold and warm samples", ()
   ];
   const report = {
     proof: "fmarch-public-search-characterization",
-    version: 1,
+    version: 2,
     status: "passed",
     fixtureDocuments: 100_000,
-    cacheBoundary: "first-application-request",
+    cacheBoundary: "first-application-request-after-fixture-install",
     cacheProfiles: Object.fromEntries(names.map((name) => [name, profile])),
     searchPlans: Object.fromEntries(names.map((name) => [name, plan])),
   };
@@ -54,32 +54,31 @@ test("public search characterization requires bounded cold and warm samples", ()
   );
 });
 
-test("staging search SLO is tied to the regression corpus and privacy boundary", async () => {
-  const slo = JSON.parse(
+test("staging search sentinel is exact-commit bounded and has no rolling availability claim", async () => {
+  const sentinel = JSON.parse(
     await readFile(
-      new URL("../docs/ops/public-search-staging-slo.json", import.meta.url),
+      new URL("../docs/ops/public-search-staging-sentinel.json", import.meta.url),
       "utf8",
     ),
   );
-  assert.equal(slo.version, 3);
-  assert.equal(slo.environment, "staging");
-  assert.equal(slo.route, "/search");
-  assert.deepEqual(slo.railway_target, {
+  assert.equal(sentinel.version, 1);
+  assert.equal(sentinel.kind, "post_deploy_sentinel");
+  assert.equal(sentinel.environment, "staging");
+  assert.equal(sentinel.route, "/search");
+  assert.equal("availability" in sentinel, false);
+  assert.deepEqual(sentinel.railway_target, {
     project_id: "9d285d67-c11b-4508-9efb-fad042787b4c",
     environment_id: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
     service_id: "18b6f450-3739-4f21-8e01-f58c63cec834",
     domain: "fmarch-staging.up.railway.app",
   });
-  assert.equal(slo.latency.event, "public_search_completed");
-  assert.equal(slo.latency.objective_ms, capacityOverloadBudgets.crawlerP95Ms);
-  assert.equal(slo.latency.minimum_non_empty_samples, 1);
-  assert.deepEqual(slo.latency.traffic_classes, ["external", "staging_canary"]);
-  assert.equal(slo.availability.minimum_samples, 100);
-  assert.equal(slo.availability.minimum_observed_window_buckets, 7);
-  assert.equal(slo.availability.deployment_history_limit, 500);
-  assert.equal(slo.canary.requests_per_run, slo.latency.minimum_samples);
-  assert.equal(slo.canary.minimum_non_empty_responses, 1);
-  assert.deepEqual(slo.canary.source_corpus, {
+  assert.equal(sentinel.latency.event, "public_search_completed");
+  assert.equal(sentinel.latency.objective_ms, capacityOverloadBudgets.crawlerP95Ms);
+  assert.equal(sentinel.latency.minimum_non_empty_samples, 1);
+  assert.deepEqual(sentinel.latency.traffic_classes, ["external", "staging_canary"]);
+  assert.equal(sentinel.canary.requests_per_run, sentinel.latency.minimum_samples);
+  assert.equal(sentinel.canary.minimum_non_empty_responses, 1);
+  assert.deepEqual(sentinel.canary.source_corpus, {
     version: 1,
     owner_command: "fmarch-staging-search-corpus reconcile",
     case_id: "game-corpus-v1",
@@ -90,17 +89,17 @@ test("staging search SLO is tied to the regression corpus and privacy boundary",
     minimum_matching_responses: 1,
   });
   assert.equal(
-    slo.canary.cases.reduce((count, item) => count + item.repetitions, 0),
-    slo.canary.requests_per_run,
+    sentinel.canary.cases.reduce((count, item) => count + item.repetitions, 0),
+    sentinel.canary.requests_per_run,
   );
   const publicPlatformHttp = await readFile(
     new URL("../crates/api/src/public_platform_http.rs", import.meta.url),
     "utf8",
   );
   for (const boundedValue of [
-    slo.canary.header_name,
-    slo.canary.header_value,
-    slo.canary.traffic_class,
+    sentinel.canary.header_name,
+    sentinel.canary.header_value,
+    sentinel.canary.traffic_class,
   ]) {
     assert.equal(
       publicPlatformHttp.includes(`"${boundedValue}"`),
@@ -109,11 +108,11 @@ test("staging search SLO is tied to the regression corpus and privacy boundary",
     );
   }
   assert.equal(
-    slo.capacity_assumption.maximum_public_search_documents,
+    sentinel.capacity_assumption.maximum_public_search_documents,
     capacityOverloadBudgets.crawlerDocuments,
   );
-  assert.equal(slo.capacity_assumption.recharacterize_before_exceeding, true);
-  assert.deepEqual(slo.privacy.forbidden_fields, [
+  assert.equal(sentinel.capacity_assumption.recharacterize_before_exceeding, true);
+  assert.deepEqual(sentinel.privacy.forbidden_fields, [
     "query",
     "query_hash",
     "cursor",
@@ -121,8 +120,8 @@ test("staging search SLO is tied to the regression corpus and privacy boundary",
     "viewer_principal_id",
     "request_path",
   ]);
-  assert.equal(slo.feature_decision.prefix_or_fuzzy_matching, "deferred");
-  assert.equal(slo.feature_decision.multilingual_stemming, "deferred");
+  assert.equal(sentinel.feature_decision.prefix_or_fuzzy_matching, "deferred");
+  assert.equal(sentinel.feature_decision.multilingual_stemming, "deferred");
 });
 
 test("percentile and request summaries are deterministic", () => {
@@ -150,7 +149,7 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
     status: "passed",
     budgets: capacityOverloadBudgets,
     scenarios: {
-      largeThreadColdRead: {
+      largeThreadFirstRead: {
         status: "passed",
         fixtureRows: capacityOverloadBudgets.largeThreadRows,
         responseMaxRows: 100,
@@ -205,6 +204,30 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
             },
           ]),
         ),
+      },
+      adversarialPublicSearch: {
+        status: "passed",
+        staticPagination: {
+          repeatedFirstPageEqual: true,
+          firstSecondPagesDisjoint: true,
+          cursorSurvivedInsert: true,
+          freshPageObservedInsert: true,
+          boundaryWriteAcked: true,
+        },
+        projectionWriteRace: {
+          attemptedWrites: capacityOverloadBudgets.searchWritePosts,
+          acked: capacityOverloadBudgets.searchWritePosts,
+          readRequests: capacityOverloadBudgets.searchReadRequests,
+          readStatuses: { 200: capacityOverloadBudgets.searchReadRequests },
+          finalResultCount: capacityOverloadBudgets.searchWritePosts,
+        },
+        selectivePlanIndexCoverage: 4,
+        searchAdmission: {
+          recoveredRequests: 8,
+          rejectedStatus: 503,
+          retryAfter: "1",
+          healthStatus: 200,
+        },
       },
       singleGamePostBurst: {
         status: "passed",

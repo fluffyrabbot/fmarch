@@ -112,12 +112,17 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     }
 
     const scenarios = {};
-    scenarios.largeThreadColdRead = await proveLargeThreadColdRead({
+    scenarios.largeThreadFirstRead = await proveLargeThreadFirstRead({
       baseUrl,
       psql,
       databaseUrl,
     });
     scenarios.anonymousCrawler = await proveAnonymousCrawler({ baseUrl, psql, databaseUrl });
+    scenarios.adversarialPublicSearch = await proveAdversarialPublicSearch({
+      baseUrl,
+      psql,
+      databaseUrl,
+    });
     scenarios.singleGamePostBurst = await proveSingleGamePostBurst({ baseUrl });
     scenarios.slowWebsocketConsumers = await proveSlowWebsocketConsumers({
       baseUrl,
@@ -149,7 +154,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       },
       scenarios,
       proofBoundary:
-        "Repo-local Postgres and one debug server process. Exercises indexed large-thread cold loads, anonymous board/search pressure, concurrent writes to one real game stream, bounded slow-live-consumer recovery, HTTP/WS 503 admission, and caller-scoped auth 429 behavior. Local latency budgets detect gross regressions; they are not hosted production SLO evidence or capacity planning for a specific machine size.",
+        "Repo-local Postgres and one debug server process. Exercises indexed large-thread first reads, 100k-document anonymous search pressure, deterministic cursor pagination across a production projection write, concurrent search plus command-driven writes, selective GIN plans, search-specific database saturation and recovery, concurrent writes to one real game stream, bounded slow-live-consumer recovery, HTTP/WS 503 admission, and caller-scoped auth 429 behavior. Local latency budgets detect gross regressions; they are not hosted production SLO evidence or capacity planning for a specific machine size.",
     };
     assertCapacityOverloadReport(report);
     await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
@@ -288,6 +293,7 @@ async function seedReadFixtures({ psql, databaseUrl, searchDocuments }) {
       SELECT '${crawlerDiscussionScope}', 'discussion_post', value, '',
              'capacityword bounded discussion fixture ' || value ||
                CASE WHEN value % 10 = 0 THEN ' mediumword' ELSE '' END ||
+               CASE WHEN value % 50 = 0 THEN ' cursorboundaryword' ELSE '' END ||
                CASE WHEN value % 100 = 0 THEN ' selectiveword' ELSE '' END,
              '/capacity/${runId}/discussions/' || value,
              NULL, value, value, TRUE
@@ -299,6 +305,7 @@ async function seedReadFixtures({ psql, databaseUrl, searchDocuments }) {
       SELECT '${crawlerGameScope}', 'game_post', value, '',
              'capacityword bounded game fixture ' || value ||
                CASE WHEN value % 10 = 0 THEN ' mediumword' ELSE '' END ||
+               CASE WHEN value % 50 = 0 THEN ' cursorboundaryword' ELSE '' END ||
                CASE WHEN value % 100 = 0 THEN ' selectiveword' ELSE '' END,
              '/capacity/${runId}/games/' || value,
              NULL, value, value, TRUE
@@ -318,6 +325,7 @@ async function seedReadFixtures({ psql, databaseUrl, searchDocuments }) {
       SELECT ${profileUuidExpression}, 'profile', 0,
              'capacityword profile fixture ' || value ||
                CASE WHEN value % 10 = 0 THEN ' mediumword' ELSE '' END ||
+               CASE WHEN value % 50 = 0 THEN ' cursorboundaryword' ELSE '' END ||
                CASE WHEN value % 100 = 0 THEN ' selectiveword' ELSE '' END,
              '', '/capacity/${runId}/profiles/' || value,
              NULL, value, value, TRUE
@@ -329,7 +337,7 @@ async function seedReadFixtures({ psql, databaseUrl, searchDocuments }) {
   );
 }
 
-async function proveLargeThreadColdRead({ baseUrl, psql, databaseUrl }) {
+async function proveLargeThreadFirstRead({ baseUrl, psql, databaseUrl }) {
   const records = [];
   let nextBeforeSeq;
   let responseMaxRows = 0;
@@ -510,11 +518,14 @@ async function characterizePublicSearch({
   const cacheProfiles = {};
   for (const [name, query, filter] of cases) {
     const url = `${baseUrl}/search?q=${query}&filter=${filter}&limit=20`;
-    const cold = await timedFetch(url);
-    assert(cold.status === 200, `${name} cold search returned ${cold.status}`);
+    const firstRequest = await timedFetch(url);
     assert(
-      (cold.body.results?.length ?? 0) <= 20,
-      `${name} cold search exceeded its page bound`,
+      firstRequest.status === 200,
+      `${name} first search returned ${firstRequest.status}`,
+    );
+    assert(
+      (firstRequest.body.results?.length ?? 0) <= 20,
+      `${name} first search exceeded its page bound`,
     );
     const warm = [];
     for (let sample = 0; sample < 5; sample += 1) {
@@ -528,11 +539,11 @@ async function characterizePublicSearch({
     }
     cacheProfiles[name] = {
       filter,
-      cold: {
-        status: cold.status,
-        elapsedMs: Number(cold.elapsedMs.toFixed(3)),
-        resultCount: cold.body.results?.length ?? 0,
-        hasNextPage: Boolean(cold.body.next_cursor),
+      firstRequest: {
+        status: firstRequest.status,
+        elapsedMs: Number(firstRequest.elapsedMs.toFixed(3)),
+        resultCount: firstRequest.body.results?.length ?? 0,
+        hasNextPage: Boolean(firstRequest.body.next_cursor),
       },
       warm: requestSummary(warm),
     };
@@ -547,18 +558,199 @@ async function characterizePublicSearch({
   );
   return {
     proof: "fmarch-public-search-characterization",
-    version: 1,
+    version: 2,
     status: "passed",
     generatedAt: new Date().toISOString(),
     fixtureDocuments: searchDocuments,
     pageLimit: 20,
     warmSamplesPerCase: 5,
-    cacheBoundary: "first-application-request",
+    cacheBoundary: "first-application-request-after-fixture-install",
     cacheProfiles,
     searchPlans,
     proofBoundary:
-      "Repo-local Postgres and one debug server process. Cold means the first application request for each query/filter after fixture installation; PostgreSQL shared buffers and the host page cache are intentionally not flushed. Warm measurements are five immediate sequential repetitions. Query text is fixture-only and is not persisted in the report.",
+      "Repo-local Postgres and one debug server process. firstRequest is the first application request for each query/filter after fixture installation; PostgreSQL shared buffers and the host page cache are intentionally not flushed, so this is not cold-storage evidence. Warm measurements are five immediate sequential repetitions. Query text is fixture-only and is not persisted in the report.",
   };
+}
+
+async function proveAdversarialPublicSearch({ baseUrl, psql, databaseUrl }) {
+  const firstUrl = `${baseUrl}/search?q=cursorboundaryword&filter=all&limit=20`;
+  const firstPage = await fetchJson(firstUrl);
+  const repeatedFirstPage = await fetchJson(firstUrl);
+  assert(firstPage.next_cursor, "adversarial search fixture did not produce a cursor");
+  assert(
+    JSON.stringify(firstPage) === JSON.stringify(repeatedFirstPage),
+    "unchanged search state did not return a deterministic first page",
+  );
+  const firstKeys = new Set(firstPage.results.map(searchResultKey));
+  const secondPage = await fetchJson(
+    `${firstUrl}&cursor=${encodeURIComponent(firstPage.next_cursor)}`,
+  );
+  const secondKeys = new Set(secondPage.results.map(searchResultKey));
+  assert(
+    [...firstKeys].every((key) => !secondKeys.has(key)),
+    "search cursor repeated a first-page result",
+  );
+
+  const boundaryWrite = await submitPostWithRetry({
+    baseUrl,
+    index: 0,
+    prefix: `${"cursorboundaryword ".repeat(12)}${runId}`,
+  });
+  const continuationAfterWrite = await fetchJson(
+    `${firstUrl}&cursor=${encodeURIComponent(firstPage.next_cursor)}`,
+  );
+  const continuationAfterWriteKeys = new Set(
+    continuationAfterWrite.results.map(searchResultKey),
+  );
+  assert(
+    [...firstKeys].every((key) => !continuationAfterWriteKeys.has(key)),
+    "a projection write caused an old cursor to repeat a first-page result",
+  );
+  const freshFirstPage = await fetchJson(firstUrl);
+  const freshFirstKeys = new Set(freshFirstPage.results.map(searchResultKey));
+  assert(
+    [...freshFirstKeys].some((key) => !firstKeys.has(key)),
+    "a committed searchable projection write was absent from a fresh first page",
+  );
+
+  const writeIndexes = Array.from(
+    { length: budgets.searchWritePosts },
+    (_, index) => index,
+  );
+  const readIndexes = Array.from(
+    { length: budgets.searchReadRequests },
+    (_, index) => index,
+  );
+  const [writes, reads] = await Promise.all([
+    mapConcurrent(writeIndexes, budgets.searchWriteConcurrency, (index) =>
+      submitPostWithRetry({
+        baseUrl,
+        index,
+        prefix: `adversarialsearchword ${runId}`,
+      }),
+    ),
+    mapConcurrent(readIndexes, budgets.searchReadConcurrency, () =>
+      timedFetchWithRetryableAdmission(
+        `${baseUrl}/search?q=adversarialsearchword&filter=all&limit=20`,
+      ),
+    ),
+  ]);
+  assert(
+    reads.every((record) => record.status === 200),
+    "search failed while production commands were updating its projection",
+  );
+  const finalPage = await fetchJson(
+    `${baseUrl}/search?q=adversarialsearchword&filter=all&limit=20`,
+  );
+  assert(
+    finalPage.results.length === budgets.searchWritePosts &&
+      finalPage.next_cursor === null,
+    `concurrent projection writes produced ${finalPage.results.length}/${budgets.searchWritePosts} searchable results`,
+  );
+
+  const selectivePlans = await Promise.all(
+    [
+      ["all", "selectiveword"],
+      ["discussions", "selectiveword"],
+      ["profiles", "selectiveword"],
+      ["games", "selectiveword"],
+    ].map(async ([filter, query]) => ({
+      filter,
+      ...(await explainPublicSearch({ psql, databaseUrl, query, filter })),
+    })),
+  );
+  const selectivePlanIndexCoverage = selectivePlans.filter((plan) =>
+    plan.indexNames.includes("public_search_document_vector_idx"),
+  ).length;
+  assert(
+    selectivePlanIndexCoverage === selectivePlans.length,
+    "selective search/filter plan lost the partial GIN index",
+  );
+
+  const searchAdmission = await proveSearchAdmission({
+    baseUrl,
+    psql,
+    databaseUrl,
+  });
+  return {
+    status: "passed",
+    staticPagination: {
+      repeatedFirstPageEqual: true,
+      firstSecondPagesDisjoint: true,
+      cursorSurvivedInsert: true,
+      freshPageObservedInsert: true,
+      boundaryWriteAcked: boundaryWrite.kind === "Ack",
+    },
+    projectionWriteRace: {
+      attemptedWrites: budgets.searchWritePosts,
+      writeConcurrency: budgets.searchWriteConcurrency,
+      acked: writes.filter((record) => record.kind === "Ack").length,
+      streamConflictRetries: writes.reduce(
+        (sum, record) => sum + record.streamConflictRetries,
+        0,
+      ),
+      retryableWrite503s: writes.reduce(
+        (sum, record) => sum + record.retryable503s,
+        0,
+      ),
+      readRequests: reads.length,
+      readConcurrency: budgets.searchReadConcurrency,
+      retryableRead503s: reads.reduce(
+        (sum, record) => sum + record.retryable503s,
+        0,
+      ),
+      readStatuses: requestSummary(reads).statuses,
+      finalResultCount: finalPage.results.length,
+    },
+    selectivePlanIndexCoverage,
+    searchAdmission,
+  };
+}
+
+async function proveSearchAdmission({ baseUrl, psql, databaseUrl }) {
+  const lock = spawnPsql(
+    psql,
+    databaseUrl,
+    "BEGIN; LOCK TABLE public_search_document IN ACCESS EXCLUSIVE MODE; SELECT pg_sleep(1.2); COMMIT;",
+  );
+  await waitForTableLock({
+    psql,
+    databaseUrl,
+    relation: "public_search_document",
+  });
+  const blocked = Array.from({ length: 8 }, () =>
+    timedFetch(`${baseUrl}/search?q=selectiveword&filter=all&limit=1`),
+  );
+  await delay(50);
+  const rejected = await timedFetch(
+    `${baseUrl}/search?q=selectiveword&filter=all&limit=1`,
+  );
+  const health = await timedFetch(`${baseUrl}/healthz`);
+  await processResult(lock);
+  const released = await Promise.all(blocked);
+  assert(
+    released.every((record) => record.status === 200),
+    "blocked search requests did not recover",
+  );
+  assert(rejected.status === 503, `saturated search returned ${rejected.status}`);
+  assert(health.status === 200, `search saturation health check returned ${health.status}`);
+  return {
+    occupiedRequests: blocked.length,
+    recoveredRequests: released.length,
+    rejectedStatus: rejected.status,
+    retryAfter: rejected.headers["retry-after"],
+    healthStatus: health.status,
+  };
+}
+
+function searchResultKey(result) {
+  return JSON.stringify([
+    result?.kind ?? null,
+    result?.href ?? null,
+    result?.title ?? null,
+    result?.published_at ?? null,
+    result?.excerpt ?? null,
+  ]);
 }
 
 async function explainPublicSearch({ psql, databaseUrl, query, filter }) {

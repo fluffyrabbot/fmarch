@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -24,6 +25,22 @@ test("promotion arguments are fail closed", () => {
   assert.deepEqual(parseArguments([]), { checkOnly: false });
   assert.deepEqual(parseArguments(["--check"]), { checkOnly: true });
   assert.throws(() => parseArguments(["--force"]), /unknown production promotion argument/);
+});
+
+test("production promotion consumes the exact-commit search sentinel", async () => {
+  const source = await readFile(new URL("./production_promotion.mjs", import.meta.url), "utf8");
+  const stagingValidation = source.indexOf(
+    "await validateEnvironment(config, config.stagingEnvironment, head",
+  );
+  const sentinel = source.indexOf(
+    'run("npm", ["run", "run:public-search-staging-sentinel"]',
+  );
+  const releasePush = source.indexOf(
+    'run("git", ["push", "origin", `${head}:refs/heads/production`]',
+  );
+  assert.equal(stagingValidation >= 0, true);
+  assert.equal(sentinel > stagingValidation, true);
+  assert.equal(releasePush > sentinel, true);
 });
 
 test("promotion proof preserves an explicit database or provisions the repo-local default", () => {

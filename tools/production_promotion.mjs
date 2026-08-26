@@ -965,6 +965,10 @@ async function main() {
     apiUrl: config.stagingApiUrl,
     frontendUrl: config.stagingFrontendUrl,
   });
+  run("npm", ["run", "run:public-search-staging-sentinel"], {
+    env: scrubPrivilegedDatabaseEnvironment(process.env),
+    stdio: "inherit",
+  });
 
   const proof = localProofRuntime(process.env);
   if (proof.startLocalPostgres) {

@@ -1076,7 +1076,7 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       'tools/capacity_overload_proof.mjs',
       [
         'test:capacity-overload-contract',
-        'test:public-search-staging-slo',
+        'test:public-search-staging-sentinel',
         'test:capacity-overload',
       ],
     ],
@@ -1084,7 +1084,7 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       'tools/capacity_overload_contract.mjs',
       [
         'test:capacity-overload-contract',
-        'test:public-search-staging-slo',
+        'test:public-search-staging-sentinel',
         'test:capacity-overload',
       ],
     ],

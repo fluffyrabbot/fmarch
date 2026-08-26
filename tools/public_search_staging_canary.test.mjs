@@ -4,17 +4,17 @@ import test from "node:test";
 
 import { runPublicSearchStagingCanary } from "./public_search_staging_canary.mjs";
 
-async function stagingSlo() {
+async function stagingSentinel() {
   return JSON.parse(
     await readFile(
-      new URL("../docs/ops/public-search-staging-slo.json", import.meta.url),
+      new URL("../docs/ops/public-search-staging-sentinel.json", import.meta.url),
       "utf8",
     ),
   );
 }
 
 test("canary executes every bounded case without retaining queries or bodies", async () => {
-  const slo = await stagingSlo();
+  const slo = await stagingSentinel();
   const requests = [];
   const receipt = await runPublicSearchStagingCanary({
     slo,
@@ -74,7 +74,7 @@ test("canary executes every bounded case without retaining queries or bodies", a
 });
 
 test("canary fails closed on non-200 or malformed responses", async () => {
-  const slo = await stagingSlo();
+  const slo = await stagingSentinel();
   let requestIndex = 0;
   const receipt = await runPublicSearchStagingCanary({
     slo,
@@ -104,7 +104,7 @@ test("canary fails closed on non-200 or malformed responses", async () => {
 });
 
 test("empty-only canary traffic is insufficient rather than representative", async () => {
-  const slo = await stagingSlo();
+  const slo = await stagingSentinel();
   const receipt = await runPublicSearchStagingCanary({
     slo,
     fetchImpl: async (url) =>
@@ -125,7 +125,7 @@ test("empty-only canary traffic is insufficient rather than representative", asy
 });
 
 test("unrelated non-empty results cannot stand in for the declared corpus", async () => {
-  const slo = await stagingSlo();
+  const slo = await stagingSentinel();
   const receipt = await runPublicSearchStagingCanary({
     slo,
     fetchImpl: async (url) =>

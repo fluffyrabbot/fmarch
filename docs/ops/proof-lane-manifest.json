@@ -111,7 +111,7 @@
     "test:live-stack-backup-restore-drill": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 1800, "argv": ["npm", "run", "test:live-stack-backup-restore-drill"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_RESTORE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:mash-scale-acceptance": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["npm", "run", "test:mash-scale-acceptance"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:capacity-overload-contract": { "kind": "npm" },
-    "test:public-search-staging-slo": { "kind": "npm" },
+    "test:public-search-staging-sentinel": { "kind": "npm" },
     "test:capacity-overload": { "kind": "shell", "command": "cargo build -p server && npm run test:capacity-overload", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["/bin/zsh", "-lc", "cargo build -p server && npm run test:capacity-overload"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:completeness-scorecard": {
       "kind": "npm",
@@ -969,15 +969,15 @@
         "tools/capacity_overload_contract.mjs",
         "tools/capacity_overload_contract.test.mjs",
         "tools/capacity_overload_proof.mjs",
-        "tools/public_search_staging_evidence_contract.mjs",
+        "tools/public_search_staging_sentinel_contract.mjs",
         "tools/public_search_staging_canary.mjs",
         "tools/public_search_staging_canary.test.mjs",
-        "tools/public_search_staging_slo.mjs",
-        "tools/public_search_staging_slo.test.mjs",
+        "tools/public_search_staging_sentinel.mjs",
+        "tools/public_search_staging_sentinel.test.mjs",
         "docs/arch/12-capacity-and-overload.md",
-        "docs/ops/public-search-staging-slo.json"
+        "docs/ops/public-search-staging-sentinel.json"
       ],
-      "lanes": ["test:capacity-overload-contract", "test:public-search-staging-slo", "test:capacity-overload"]
+      "lanes": ["test:capacity-overload-contract", "test:public-search-staging-sentinel", "test:capacity-overload"]
     },
     {
       "id": "proof:host-console-live-stack",

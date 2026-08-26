@@ -115,13 +115,14 @@ npm run characterize:public-search -- --search-documents 1000000 \
   --output target/public-search-characterization/1000000.json
 ```
 
-“Cold” here means the first application request for that query/filter after fixture installation.
-The proof deliberately does not flush PostgreSQL shared buffers or the host page cache, so it does
-not claim storage-device cold-start evidence.
+The first-request sample is deliberately named for what it proves. PostgreSQL shared buffers and
+the host page cache are not flushed, so this is not storage-device cold-start evidence. A real cold
+database characterization requires an isolated PostgreSQL process that can be restarted without
+sharing the proof runner's database authority.
 
-The lane writes `target/capacity-overload/report.json` and proves six related cases:
+The lane writes `target/capacity-overload/report.json` and proves seven related cases:
 
-1. **Large-thread cold load:** 10,000 projected posts, latest and older keyset pages, bounded
+1. **Large-thread first read:** 10,000 projected posts, latest and older keyset pages, bounded
    response size, local p95 budget, and an `EXPLAIN ANALYZE` assertion on the paging index and
    rows examined.
 2. **Anonymous crawler pressure:** 1,000 board rows, 100,000 typed search documents split across
@@ -131,38 +132,43 @@ The lane writes `target/capacity-overload/report.json` and proves six related ca
    returned page for 100%, 10%, and 1% term selectivity plus every typed filter at 1%. This makes
    the sequential-scan/GIN crossover explicit; the structural plan contract separately proves that
    the exact production statement can reach the partial GIN index.
-3. **One-game post burst:** 24 posts concurrently target one real game aggregate; every command
+3. **Adversarial public search:** repeated first pages are byte-stable; adjacent pages are disjoint;
+   an old cursor remains duplicate-free across a command-driven projection write; a fresh first
+   page observes that write; 24 searches run while 12 real `SubmitPost` commands update the search
+   projection; the final page contains all 12 facts; every typed selective plan retains the partial
+   GIN index; and eight searches blocked on the search table recover while the ninth receives a
+   retryable `503` and `/healthz` remains available.
+4. **One-game post burst:** 24 posts concurrently target one real game aggregate; every command
    eventually ACKs, and exactly 24 distinct posts appear in its projection.
-4. **Slow live consumers:** four live clients are delayed behind a two-message broadcast buffer;
+5. **Slow live consumers:** four live clients are delayed behind a two-message broadcast buffer;
    every client receives `ResyncRequired`, while a fifth WebSocket handshake receives retryable
    `503`.
-5. **Global HTTP saturation:** eight admitted requests are held on a database lock; the ninth gets
+6. **Global HTTP saturation:** eight admitted requests are held on a database lock; the ninth gets
    retryable `503`, `/healthz` remains `200`, and admitted requests recover after lock release.
-6. **Caller rate limiting:** two failed credential attempts are followed by `429` with
+7. **Caller rate limiting:** two failed credential attempts are followed by `429` with
    `Retry-After`, demonstrating that caller pressure remains distinct from global saturation.
 
 The latency thresholds are intentionally generous regression tripwires for a developer machine.
 They do not establish production SLOs, maximum users, Railway sizing, or internet-path behavior.
-Hosted SLOs must be set from captured staging traffic and resource telemetry.
+Hosted SLOs must be set from real beta traffic and resource telemetry, not synthesized during the
+greenfield phase.
 
-The initial staging contract is source-controlled in
-`docs/ops/public-search-staging-slo.json`: successful search p95 on the exact deployed commit must
-remain at or below 750 ms over a 15-minute window with at least 20 samples, and service-level
-seven-day route availability across rolling deployments must be at least 99% with at least 100
-samples distributed across all seven daily window buckets. Latency evidence must include at least
-one non-empty result page. That latency objective assumes no more than
-100,000 public search documents and requires
+The staging post-deploy sentinel is source-controlled in
+`docs/ops/public-search-staging-sentinel.json`: after each exact API deployment, one bounded
+20-request canary must succeed, resolve the declared corpus, and produce exact-deployment search
+telemetry with p95 at or below 750 ms. It is an operational deployment sentinel, not a rolling
+availability SLO. The latency evidence must include at least one non-empty result page. Its budget
+assumes no more than 100,000 public search documents and requires
 fresh characterization before the corpus crosses the bound. The 2026-08-25 local characterization
-kept the 100,000-document common-term first/warm path near 117/110 ms, while the same path at one
+kept the 100,000-document common-term first-request/warm path near 117/110 ms, while the same path at one
 million documents reached about 1.63/1.60 seconds. Selective 1% queries remained below 41 ms at one
 million. All analyzed cases retained the partial GIN index; the million-document plan introduced
 parallel execution, so plan accounting multiplies `Actual Rows` by `Actual Loops`.
 
-Generate one declared 20-request staging canary cohort, then evaluate the contract with:
+After the API reports `SUCCESS` on the pushed `main` commit, run the complete sentinel once:
 
 ```sh
-npm run run:public-search-staging-canary
-npm run evaluate:public-search-staging-slo
+npm run run:public-search-staging-sentinel
 ```
 
 The canary issues public unauthenticated GETs for four versioned synthetic query/filter cases with
@@ -172,7 +178,7 @@ for that aggregate. The reconciler uses a fixed non-login machine principal, the
 `CreateGame` and `StartGame` commands. The principal receives only the game-scoped host authority
 created by `CreateGame`; it has no platform identity or global capability. The reconciler performs
 no projection writes. Its fixed game identity, pack, active lifecycle, expected public href, and
-owner command live in the staging SLO contract. Reconciliation fails closed on owner or lifecycle
+owner command live in the staging sentinel contract. Reconciliation fails closed on owner or lifecycle
 drift and appends nothing on a second run.
 
 The canary header produces only the bounded telemetry class `staging_canary`; the label is
@@ -181,22 +187,19 @@ result-count bands, aggregate corpus-match counts, and client latency aggregates
 terms, expected hrefs, response bodies, results, or cursors. External traffic remains separately
 visible as `external`.
 
-The evaluator reads exact-deployment application logs for latency and service-level HTTP logs plus
-bounded deployment history for availability. It writes only deployment attribution and aggregates
-to `target/public-search-staging-slo/receipt.json`; raw log rows, request identifiers, addresses,
-user agents, and query material are never persisted. A failing objective or attribution mismatch
-exits 1. A fresh deployment, less than 20 successful search samples, fewer than 100 route samples,
-missing daily sample coverage, or incomplete seven-day service history exits 2 with status
-`insufficient`; use `-- --allow-insufficient` only when recording that state is intended. Hermetic
-parser, receipt, and canary contracts are covered by `npm run test:public-search-staging-slo`; live
-Railway access stays outside the local proof lane.
+The evaluator reads application events only from the latest exact deployment and writes deployment
+attribution plus bounded aggregates to `target/public-search-staging-sentinel/receipt.json`; raw
+log rows, request identifiers, addresses, user agents, and query material are never persisted. A
+failing objective, privacy/shape regression, or attribution mismatch exits 1. Missing or empty-only
+canary evidence exits 2 as `insufficient`. Hermetic parser, receipt, and canary contracts are
+covered by `npm run test:public-search-staging-sentinel`; live Railway access stays outside the
+local proof lane.
 
 An all-`200` canary run whose cases all return empty pages, or return only unrelated documents, is
-`insufficient`, not representative latency evidence. It may be recorded with
-`-- --allow-insufficient`, but the hosted SLO cannot pass until the declared source-of-truth corpus
-is matched. Run the canary at one stable time each day across the complete seven-day window; seven
-20-request cohorts satisfy both the 100-sample floor and daily-bucket coverage without fabricating
-history.
+`insufficient`, not representative latency evidence. The sentinel cannot pass until the declared
+source-of-truth corpus is matched. Repeating an unchanged synthetic cohort on a calendar cadence is
+explicitly not required; enable a rolling availability SLO only when beta traffic supplies a real
+workload and there is a release decision that consumes the result.
 
 Prefix/fuzzy matching and multilingual stemming remain deferred. There is no observed product need
 yet, and both can broaden the candidate set on the same dimension that dominates common-term cost.
