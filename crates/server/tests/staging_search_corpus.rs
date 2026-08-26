@@ -1,27 +1,8 @@
-use caps::PrincipalId;
 use sqlx::PgPool;
 use std::process::Command;
 
-async fn insert_active_global_admin(pool: &PgPool) -> PrincipalId {
-    let principal_id = PrincipalId::random();
-    sqlx::query(
-        r#"
-        INSERT INTO platform_principal
-            (principal_id, status, global_capabilities, created_at, disabled_at)
-        VALUES ($1, 'active', ARRAY['GlobalAdmin'], 1, NULL)
-        "#,
-    )
-    .bind(principal_id.as_uuid())
-    .execute(pool)
-    .await
-    .expect("insert authentication-boundary fixture admin");
-    principal_id
-}
-
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn reconciler_uses_commands_and_is_idempotent(pool: PgPool) {
-    insert_active_global_admin(&pool).await;
-
     let first = server::staging_search_corpus::reconcile(&pool)
         .await
         .expect("install staging search corpus");
@@ -49,11 +30,34 @@ async fn reconciler_uses_commands_and_is_idempotent(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
-async fn reconciler_requires_an_active_global_admin(pool: PgPool) {
-    let error = server::staging_search_corpus::reconcile(&pool)
+async fn reconciler_uses_a_non_login_machine_principal(pool: PgPool) {
+    server::staging_search_corpus::reconcile(&pool)
         .await
-        .expect_err("missing source-of-truth owner must fail closed");
-    assert!(error.contains("requires one active global admin"));
+        .expect("install staging search corpus");
+
+    let host: uuid::Uuid = sqlx::query_scalar(
+        "SELECT principal_id FROM game_authority WHERE game_id = $1 AND role = 'host'",
+    )
+    .bind(server::staging_search_corpus::CORPUS_GAME_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("read corpus host authority");
+    assert_eq!(
+        host,
+        server::staging_search_corpus::CORPUS_HOST_PRINCIPAL_ID
+    );
+
+    let identity_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM platform_principal WHERE principal_id = $1)",
+    )
+    .bind(host)
+    .fetch_one(&pool)
+    .await
+    .expect("inspect corpus host identity boundary");
+    assert!(
+        !identity_exists,
+        "machine corpus ownership must not mint a login principal or global capability"
+    );
 }
 
 #[test]

@@ -1,8 +1,9 @@
 //! Lifecycle owner for the deterministic public-search staging corpus.
 //!
-//! The corpus is installed through the production command pipeline. SQL in
-//! this module is read-only and exists only to select an active global admin,
-//! inspect reconciliation state, and verify the projected public surface.
+//! The corpus is installed through the production command pipeline under a
+//! fixed machine principal with only game-scoped host authority. SQL in this
+//! module is read-only and exists only to inspect reconciliation state and
+//! verify the projected public surface.
 
 use caps::{Principal, PrincipalId};
 use commands::Command;
@@ -15,6 +16,7 @@ pub const CORPUS_VERSION: u32 = 1;
 pub const CORPUS_PACK: &str = "mafiascum";
 pub const CORPUS_SEARCH_QUERY: &str = "game";
 pub const CORPUS_GAME_ID: Uuid = Uuid::from_u128(0x7f46d8a2_9f5d_4d3b_8b9e_7c40a74c1001);
+pub const CORPUS_HOST_PRINCIPAL_ID: Uuid = Uuid::from_u128(0x7f46d8a2_9f5d_4d3b_8b9e_7c40a74c1002);
 const CREATE_COMMAND_ID: Uuid = Uuid::from_u128(0x7f46d8a2_9f5d_4d3b_8b9e_7c40a74c1101);
 const START_COMMAND_ID: Uuid = Uuid::from_u128(0x7f46d8a2_9f5d_4d3b_8b9e_7c40a74c1102);
 
@@ -37,22 +39,21 @@ struct CorpusState {
     pack: String,
     status: String,
     host: PrincipalId,
-    host_is_active_global_admin: bool,
 }
 
 /// Reconcile the one source-of-truth staging corpus aggregate.
 ///
 /// A missing corpus is created and started through durable, idempotent domain
 /// commands. An existing aggregate must still have the exact declared pack,
-/// active lifecycle, and active global-admin host; drift fails closed rather
-/// than creating a second fixture or mutating projections directly.
+/// active lifecycle, and machine host; drift fails closed rather than creating
+/// a second fixture or mutating projections directly.
 pub async fn reconcile(pool: &PgPool) -> Result<StagingSearchCorpusReceipt, String> {
     let mut created = false;
     let mut started = false;
     let mut state = load_state(pool).await?;
 
     if state.is_none() {
-        let host = canonical_active_global_admin(pool).await?;
+        let host = PrincipalId::from_uuid(CORPUS_HOST_PRINCIPAL_ID);
         commands::handle_idempotent(
             pool,
             &Principal::authenticated(host),
@@ -142,36 +143,13 @@ pub async fn reconcile(pool: &PgPool) -> Result<StagingSearchCorpusReceipt, Stri
     })
 }
 
-async fn canonical_active_global_admin(pool: &PgPool) -> Result<PrincipalId, String> {
-    let principal_id: Option<Uuid> = sqlx::query_scalar(
-        r#"
-        SELECT principal_id
-        FROM platform_principal
-        WHERE status = 'active' AND 'GlobalAdmin' = ANY(global_capabilities)
-        ORDER BY created_at, principal_id
-        LIMIT 1
-        "#,
-    )
-    .fetch_optional(pool)
-    .await
-    .map_err(|error| format!("select staging corpus owner: {error}"))?;
-    principal_id
-        .map(PrincipalId::from_uuid)
-        .ok_or_else(|| "staging search corpus requires one active global admin".to_string())
-}
-
 async fn load_state(pool: &PgPool) -> Result<Option<CorpusState>, String> {
     let rows = sqlx::query(
         r#"
-        SELECT game.pack_key, game.status, authority.principal_id,
-               principal.status = 'active'
-                 AND 'GlobalAdmin' = ANY(principal.global_capabilities)
-                 AS host_is_active_global_admin
+        SELECT game.pack_key, game.status, authority.principal_id
         FROM game_index AS game
         JOIN game_authority AS authority
           ON authority.game_id = game.game_id AND authority.role = 'host'
-        LEFT JOIN platform_principal AS principal
-          ON principal.principal_id = authority.principal_id
         WHERE game.game_id = $1
         ORDER BY authority.principal_id
         "#,
@@ -186,7 +164,6 @@ async fn load_state(pool: &PgPool) -> Result<Option<CorpusState>, String> {
             pack: row.get("pack_key"),
             status: row.get("status"),
             host: PrincipalId::from_uuid(row.get("principal_id")),
-            host_is_active_global_admin: row.get("host_is_active_global_admin"),
         })),
         _ => Err("staging search corpus must have exactly one host".to_string()),
     }
@@ -199,8 +176,8 @@ fn validate_state(state: &CorpusState) -> Result<(), String> {
             state.pack
         ));
     }
-    if !state.host_is_active_global_admin {
-        return Err("staging search corpus host must remain an active global admin".to_string());
+    if state.host.as_uuid() != CORPUS_HOST_PRINCIPAL_ID {
+        return Err("staging search corpus host drifted from its machine principal".to_string());
     }
     if !matches!(state.status.as_str(), "setup" | "active") {
         return Err(format!(

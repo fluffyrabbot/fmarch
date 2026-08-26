@@ -168,10 +168,12 @@ npm run evaluate:public-search-staging-slo
 The canary issues public unauthenticated GETs for four versioned synthetic query/filter cases with
 at most four requests in flight. One case must resolve the exact source-controlled game corpus
 owned by `fmarch-staging-search-corpus reconcile`; an unrelated non-empty result cannot stand in
-for that aggregate. The reconciler selects an active global admin, then uses idempotent
-`CreateGame` and `StartGame` commands. It performs no projection writes. Its fixed game identity,
-pack, active lifecycle, expected public href, and owner command live in the staging SLO contract.
-Reconciliation fails closed on owner or lifecycle drift and appends nothing on a second run.
+for that aggregate. The reconciler uses a fixed non-login machine principal, then uses idempotent
+`CreateGame` and `StartGame` commands. The principal receives only the game-scoped host authority
+created by `CreateGame`; it has no platform identity or global capability. The reconciler performs
+no projection writes. Its fixed game identity, pack, active lifecycle, expected public href, and
+owner command live in the staging SLO contract. Reconciliation fails closed on owner or lifecycle
+drift and appends nothing on a second run.
 
 The canary header produces only the bounded telemetry class `staging_canary`; the label is
 observational and grants no authority. Its receipt retains case ids, filters, status counts,

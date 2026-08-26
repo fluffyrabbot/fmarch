@@ -329,7 +329,7 @@ Never set `FMARCH_DEV_AUTH=1` or `FMARCH_FRONTEND_FIXTURE_SESSION=1` on any host
 
 The public-search canary owns one deterministic, non-personal staging game declared in
 `docs/ops/public-search-staging-slo.json`. Install or verify it only after the exact API deployment
-is successful and the bootstrap global admin exists:
+is successful:
 
 ```sh
 railway ssh \
@@ -341,11 +341,13 @@ railway ssh \
 
 The command refuses every environment except Railway `staging`, accepts only the application
 `DATABASE_URL`, and verifies schema, database-role, and event-key authority before mutation. It
-selects the canonical active global admin and drives `CreateGame` followed by `StartGame` through
-the production command pipeline with durable command ids. SQL access is read-only: it inspects the
-owner/lifecycle and verifies the resulting public game and search projections. Re-running the
-command appends no facts. Run it again after any staging database recreation; owner, pack,
-lifecycle, or projection drift fails closed instead of creating a second corpus.
+uses a fixed non-login machine principal and drives `CreateGame` followed by `StartGame` through
+the production command pipeline with durable command ids. `CreateGame` grants that principal only
+the corpus game's scoped host authority; no platform identity, authentication method, or global
+capability is created. SQL access is read-only: it inspects the owner/lifecycle and verifies the
+resulting public game and search projections. Re-running the command appends no facts. Run it again
+after any staging database recreation; owner, pack, lifecycle, or projection drift fails closed
+instead of creating a second corpus.
 
 After reconciliation, run the declared canary and SLO evaluator. Preserve seven daily cohorts at a
 stable time so the rolling availability receipt earns every daily bucket and at least 100 samples:
