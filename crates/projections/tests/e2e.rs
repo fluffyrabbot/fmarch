@@ -5,6 +5,9 @@
 //! schema on an ephemeral DB. Requires `DATABASE_URL` (compose PG :5544);
 //! never silently passes without a DB.
 
+#[path = "e2e/public_search_model.rs"]
+mod public_search_model;
+
 use std::process::Command as ProcessCommand;
 use std::str::FromStr;
 use std::{collections::BTreeMap, sync::Arc};
