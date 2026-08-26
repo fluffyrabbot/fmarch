@@ -176,12 +176,19 @@ pub(super) async fn record_publication(
             (surface_id, source_seq, body, href, author_profile_id, occurred_at, visible)
         SELECT $1, $2, $3,
                CASE WHEN $4 = '' THEN surface.href ELSE surface.href || $4 || $2::text END,
-               $5, $6, TRUE
+               $5, $6,
+               NOT EXISTS (
+                   SELECT 1
+                   FROM moderation_target_state AS moderation
+                   WHERE moderation.surface_id = $1
+                     AND moderation.source_seq = $2
+                     AND moderation.visibility = 'hidden'
+               )
         FROM publication_surface AS surface WHERE surface.surface_id = $1
         ON CONFLICT (surface_id, source_seq) DO UPDATE
         SET body = EXCLUDED.body, href = EXCLUDED.href,
             author_profile_id = EXCLUDED.author_profile_id,
-            occurred_at = EXCLUDED.occurred_at, visible = TRUE
+            occurred_at = EXCLUDED.occurred_at, visible = EXCLUDED.visible
         "#,
     )
     .bind(document.surface_id)

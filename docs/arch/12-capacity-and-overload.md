@@ -138,9 +138,12 @@ The lane writes `target/capacity-overload/report.json` and proves seven related 
    projection; the final page contains all 12 facts; every typed selective plan retains the partial
    GIN index; and eight searches blocked on the search table recover while the ninth receives a
    retryable `503` and `/healthz` remains available. The Postgres projection lane separately runs a
-   deterministic stateful model: 30 shuffled post, visibility, profile-update, and replay mutations
-   are checked after every step against an event-side ordering oracle across every filter, while
-   stale cursors must remain duplicate-free and final traversals cover page sizes 1, 2, 3, and 5.
+   deterministic stateful model: 42 shuffled post, surface-visibility, profile-privacy, member-mute,
+   post-moderation, and source-replay mutations are checked after every step against an event-side
+   ordering oracle across every filter and anonymous plus two personalized viewers. Mute and
+   moderation streams are rebuilt after both sides of their transitions, source rebuilds must
+   preserve active moderation overlays, stale cursors must remain duplicate-free, and final
+   traversals cover page sizes 1, 2, 3, and 5.
 4. **One-game post burst:** 24 posts concurrently target one real game aggregate; every command
    eventually ACKs, and exactly 24 distinct posts appear in its projection.
 5. **Slow live consumers:** four live clients are delayed behind a two-message broadcast buffer;
