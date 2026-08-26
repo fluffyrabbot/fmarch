@@ -146,29 +146,44 @@ They do not establish production SLOs, maximum users, Railway sizing, or interne
 Hosted SLOs must be set from captured staging traffic and resource telemetry.
 
 The initial staging contract is source-controlled in
-`docs/ops/public-search-staging-slo.json`: successful search p95 must remain at or below 750 ms
-over a 15-minute window with at least 20 samples, and seven-day route availability must be at
-least 99%. That latency objective assumes no more than 100,000 public search documents and requires
+`docs/ops/public-search-staging-slo.json`: successful search p95 on the exact deployed commit must
+remain at or below 750 ms over a 15-minute window with at least 20 samples, and service-level
+seven-day route availability across rolling deployments must be at least 99% with at least 100
+samples distributed across all seven daily window buckets. Latency evidence must include at least
+one non-empty result page. That latency objective assumes no more than
+100,000 public search documents and requires
 fresh characterization before the corpus crosses the bound. The 2026-08-25 local characterization
 kept the 100,000-document common-term first/warm path near 117/110 ms, while the same path at one
 million documents reached about 1.63/1.60 seconds. Selective 1% queries remained below 41 ms at one
 million. All analyzed cases retained the partial GIN index; the million-document plan introduced
 parallel execution, so plan accounting multiplies `Actual Rows` by `Actual Loops`.
 
-Evaluate that contract against the currently deployed, exact-commit Railway staging API with:
+Generate one declared 20-request staging canary cohort, then evaluate the contract with:
 
 ```sh
+npm run run:public-search-staging-canary
 npm run evaluate:public-search-staging-slo
 ```
 
-The evaluator reads Railway application and HTTP logs but writes only deployment attribution and
-bounded aggregates to `target/public-search-staging-slo/receipt.json`. It never persists raw log
-rows, request identifiers, addresses, user agents, or query material. A failing objective or
-attribution mismatch exits 1. A fresh deployment, less than 20 successful search samples, no route
-traffic, or less than a complete seven-day availability window exits 2 with status `insufficient`;
-use `-- --allow-insufficient` only when recording that state is the intended result. The hermetic
-parser and receipt contract are covered by `npm run test:public-search-staging-slo`; live Railway
-access is deliberately outside the local proof lane.
+The canary issues public unauthenticated GETs for four versioned synthetic query/filter cases with
+at most four requests in flight. Its header produces only the bounded telemetry class
+`staging_canary`; the label is observational and grants no authority. Its receipt retains case ids,
+filters, status counts, result-count bands, and client latency aggregates, never synthetic terms,
+response bodies, results, or cursors. External traffic remains separately visible as `external`.
+
+The evaluator reads exact-deployment application logs for latency and service-level HTTP logs plus
+bounded deployment history for availability. It writes only deployment attribution and aggregates
+to `target/public-search-staging-slo/receipt.json`; raw log rows, request identifiers, addresses,
+user agents, and query material are never persisted. A failing objective or attribution mismatch
+exits 1. A fresh deployment, less than 20 successful search samples, fewer than 100 route samples,
+missing daily sample coverage, or incomplete seven-day service history exits 2 with status
+`insufficient`; use `-- --allow-insufficient` only when recording that state is intended. Hermetic
+parser, receipt, and canary contracts are covered by `npm run test:public-search-staging-slo`; live
+Railway access stays outside the local proof lane.
+
+An all-`200` canary run whose cases all return empty pages is `insufficient`, not representative
+latency evidence. It may be recorded with `-- --allow-insufficient`, but the hosted SLO cannot pass
+until staging contains at least one source-of-truth public document matched by the synthetic cases.
 
 Prefix/fuzzy matching and multilingual stemming remain deferred. There is no observed product need
 yet, and both can broaden the candidate set on the same dimension that dominates common-term cost.

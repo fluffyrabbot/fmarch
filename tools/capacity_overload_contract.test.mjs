@@ -61,7 +61,7 @@ test("staging search SLO is tied to the regression corpus and privacy boundary",
       "utf8",
     ),
   );
-  assert.equal(slo.version, 1);
+  assert.equal(slo.version, 2);
   assert.equal(slo.environment, "staging");
   assert.equal(slo.route, "/search");
   assert.deepEqual(slo.railway_target, {
@@ -72,6 +72,32 @@ test("staging search SLO is tied to the regression corpus and privacy boundary",
   });
   assert.equal(slo.latency.event, "public_search_completed");
   assert.equal(slo.latency.objective_ms, capacityOverloadBudgets.crawlerP95Ms);
+  assert.equal(slo.latency.minimum_non_empty_samples, 1);
+  assert.deepEqual(slo.latency.traffic_classes, ["external", "staging_canary"]);
+  assert.equal(slo.availability.minimum_samples, 100);
+  assert.equal(slo.availability.minimum_observed_window_buckets, 7);
+  assert.equal(slo.availability.deployment_history_limit, 500);
+  assert.equal(slo.canary.requests_per_run, slo.latency.minimum_samples);
+  assert.equal(slo.canary.minimum_non_empty_responses, 1);
+  assert.equal(
+    slo.canary.cases.reduce((count, item) => count + item.repetitions, 0),
+    slo.canary.requests_per_run,
+  );
+  const publicPlatformHttp = await readFile(
+    new URL("../crates/api/src/public_platform_http.rs", import.meta.url),
+    "utf8",
+  );
+  for (const boundedValue of [
+    slo.canary.header_name,
+    slo.canary.header_value,
+    slo.canary.traffic_class,
+  ]) {
+    assert.equal(
+      publicPlatformHttp.includes(`"${boundedValue}"`),
+      true,
+      `API canary classification drifted from ${boundedValue}`,
+    );
+  }
   assert.equal(
     slo.capacity_assumption.maximum_public_search_documents,
     capacityOverloadBudgets.crawlerDocuments,

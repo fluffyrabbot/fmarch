@@ -68,6 +68,7 @@ fn public_platform_http_has_one_typed_owner_without_transport_or_persistence_dri
         "limit",
         "result_count",
         "has_next_page",
+        "traffic_class",
         "selectivity_signal_basis_points",
         "elapsed_ms",
     ] {
@@ -76,7 +77,12 @@ fn public_platform_http_has_one_typed_owner_without_transport_or_persistence_dri
             "public search telemetry omitted {field}"
         );
     }
-    for forbidden in ["normalized_query", "query_hash", "viewer_principal_id"] {
+    for forbidden in [
+        "normalized_query",
+        "query_hash",
+        "viewer_principal_id",
+        "headers",
+    ] {
         assert!(
             !search_telemetry.contains(forbidden),
             "public search telemetry exposed {forbidden}"

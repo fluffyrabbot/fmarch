@@ -9,7 +9,7 @@ use attention::WatchTarget;
 use axum::extract::{FromRef, FromRequestParts, Path, Query, State};
 use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -483,6 +483,7 @@ fn subscription_bad_request(message: &str) -> ApiError {
 async fn public_search(
     State(state): State<PublicPlatformHttpState>,
     Query(query): Query<PublicSearchQuery>,
+    headers: HeaderMap,
     OptionalMemberAuthentication(viewer_principal_id): OptionalMemberAuthentication,
 ) -> Result<Json<PublicSearchPage>, ApiError> {
     let started = Instant::now();
@@ -539,6 +540,7 @@ async fn public_search(
     .await?;
     let result_count = page.results.len();
     let has_next_page = page.next_cursor.is_some();
+    let traffic_class = public_search_traffic_class(&headers);
     let next_cursor = page
         .next_cursor
         .map(|cursor| encode_public_search_cursor(cursor, normalized_query, filter_label))
@@ -550,6 +552,7 @@ async fn public_search(
         limit,
         result_count,
         has_next_page,
+        traffic_class,
         selectivity_signal_basis_points = page_fill_basis_points(result_count, limit),
         elapsed_ms = started.elapsed().as_millis(),
         "Public search completed"
@@ -564,6 +567,17 @@ async fn public_search(
             .collect(),
         next_cursor,
     }))
+}
+
+fn public_search_traffic_class(headers: &HeaderMap) -> &'static str {
+    const HEADER: &str = "x-fmarch-search-observation";
+    const STAGING_CANARY: &str = "staging-canary-v1";
+
+    if headers.get(HEADER).and_then(|value| value.to_str().ok()) == Some(STAGING_CANARY) {
+        "staging_canary"
+    } else {
+        "external"
+    }
 }
 
 fn page_fill_basis_points(result_count: usize, limit: i64) -> u16 {
@@ -1546,5 +1560,35 @@ fn profile_conflict(message: &str) -> ApiError {
         status: StatusCode::CONFLICT,
         error: RejectCode::StreamConflict,
         message: message.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::public_search_traffic_class;
+    use axum::http::{HeaderMap, HeaderValue};
+
+    #[test]
+    fn public_search_canary_classification_is_exact_and_authority_free() {
+        let mut headers = HeaderMap::new();
+        assert_eq!(public_search_traffic_class(&headers), "external");
+
+        headers.insert(
+            "x-fmarch-search-observation",
+            HeaderValue::from_static("staging-canary-v1"),
+        );
+        assert_eq!(public_search_traffic_class(&headers), "staging_canary");
+
+        headers.insert(
+            "x-fmarch-search-observation",
+            HeaderValue::from_static("staging-canary-v2"),
+        );
+        assert_eq!(public_search_traffic_class(&headers), "external");
+
+        headers.insert(
+            "x-fmarch-search-observation",
+            HeaderValue::from_bytes(&[0xff]).expect("opaque header value is valid"),
+        );
+        assert_eq!(public_search_traffic_class(&headers), "external");
     }
 }

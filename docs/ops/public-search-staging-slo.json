@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "environment": "staging",
   "route": "/search",
   "railway_target": {
@@ -15,7 +15,12 @@
     "objective_ms": 750,
     "window_minutes": 15,
     "minimum_samples": 20,
-    "successful_requests_only": true
+    "minimum_non_empty_samples": 1,
+    "successful_requests_only": true,
+    "traffic_classes": [
+      "external",
+      "staging_canary"
+    ]
   },
   "availability": {
     "event": "http_request_completed",
@@ -23,10 +28,48 @@
     "status_field": "status",
     "objective_ratio": 0.99,
     "window_days": 7,
+    "minimum_samples": 100,
+    "minimum_observed_window_buckets": 7,
+    "deployment_history_limit": 500,
     "good_status_upper_bound": 499,
     "excluded_periods": [
       "declared_load_tests",
       "planned_deployment_windows"
+    ]
+  },
+  "canary": {
+    "traffic_class": "staging_canary",
+    "header_name": "x-fmarch-search-observation",
+    "header_value": "staging-canary-v1",
+    "requests_per_run": 20,
+    "minimum_non_empty_responses": 1,
+    "maximum_concurrency": 4,
+    "request_timeout_ms": 5000,
+    "cases": [
+      {
+        "id": "all-common",
+        "filter": "all",
+        "synthetic_query": "mafia",
+        "repetitions": 5
+      },
+      {
+        "id": "discussion-common",
+        "filter": "discussions",
+        "synthetic_query": "discussion",
+        "repetitions": 5
+      },
+      {
+        "id": "profile-common",
+        "filter": "profiles",
+        "synthetic_query": "player",
+        "repetitions": 5
+      },
+      {
+        "id": "game-common",
+        "filter": "games",
+        "synthetic_query": "game",
+        "repetitions": 5
+      }
     ]
   },
   "capacity_assumption": {
