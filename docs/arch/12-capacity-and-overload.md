@@ -155,6 +155,21 @@ million documents reached about 1.63/1.60 seconds. Selective 1% queries remained
 million. All analyzed cases retained the partial GIN index; the million-document plan introduced
 parallel execution, so plan accounting multiplies `Actual Rows` by `Actual Loops`.
 
+Evaluate that contract against the currently deployed, exact-commit Railway staging API with:
+
+```sh
+npm run evaluate:public-search-staging-slo
+```
+
+The evaluator reads Railway application and HTTP logs but writes only deployment attribution and
+bounded aggregates to `target/public-search-staging-slo/receipt.json`. It never persists raw log
+rows, request identifiers, addresses, user agents, or query material. A failing objective or
+attribution mismatch exits 1. A fresh deployment, less than 20 successful search samples, no route
+traffic, or less than a complete seven-day availability window exits 2 with status `insufficient`;
+use `-- --allow-insufficient` only when recording that state is the intended result. The hermetic
+parser and receipt contract are covered by `npm run test:public-search-staging-slo`; live Railway
+access is deliberately outside the local proof lane.
+
 Prefix/fuzzy matching and multilingual stemming remain deferred. There is no observed product need
 yet, and both can broaden the candidate set on the same dimension that dominates common-term cost.
 They should be introduced only with corpus-backed relevance cases and a new characterization matrix,

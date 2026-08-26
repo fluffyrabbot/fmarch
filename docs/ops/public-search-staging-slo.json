@@ -2,6 +2,12 @@
   "version": 1,
   "environment": "staging",
   "route": "/search",
+  "railway_target": {
+    "project_id": "9d285d67-c11b-4508-9efb-fad042787b4c",
+    "environment_id": "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    "service_id": "18b6f450-3739-4f21-8e01-f58c63cec834",
+    "domain": "fmarch-staging.up.railway.app"
+  },
   "latency": {
     "event": "public_search_completed",
     "field": "elapsed_ms",

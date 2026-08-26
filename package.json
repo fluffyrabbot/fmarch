@@ -19,6 +19,8 @@
     "dev:postgres:podman": "node tools/podman_compose.mjs",
     "dev:test-game:prebuild": "cargo build -p server",
     "test:capacity-overload-contract": "node --test tools/capacity_overload_contract.test.mjs",
+    "test:public-search-staging-slo": "node --test tools/public_search_staging_slo.test.mjs",
+    "evaluate:public-search-staging-slo": "node tools/public_search_staging_slo.mjs",
     "test:capacity-overload": "DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/capacity_overload_proof.mjs",
     "characterize:public-search": "cargo build -p server && DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} node tools/capacity_overload_proof.mjs --search-characterization",
     "test:capacity-overload:local": "FMARCH_DEV_POSTGRES_DB=fmarch_capacity_overload DATABASE_MIGRATION_URL=postgres://fmarch:fmarch@127.0.0.1:5544/fmarch_capacity_overload node tools/dev_test_game_local_spine.mjs --script test:capacity-overload --prebuild",

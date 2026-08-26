@@ -64,6 +64,12 @@ test("staging search SLO is tied to the regression corpus and privacy boundary",
   assert.equal(slo.version, 1);
   assert.equal(slo.environment, "staging");
   assert.equal(slo.route, "/search");
+  assert.deepEqual(slo.railway_target, {
+    project_id: "9d285d67-c11b-4508-9efb-fad042787b4c",
+    environment_id: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+    service_id: "18b6f450-3739-4f21-8e01-f58c63cec834",
+    domain: "fmarch-staging.up.railway.app",
+  });
   assert.equal(slo.latency.event, "public_search_completed");
   assert.equal(slo.latency.objective_ms, capacityOverloadBudgets.crawlerP95Ms);
   assert.equal(
