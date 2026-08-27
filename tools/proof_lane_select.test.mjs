@@ -42,6 +42,19 @@ const timingBaseline = JSON.parse(
   readFileSync(join(REPO_ROOT, 'docs', 'ops', 'proof-lane-timings.json'), 'utf8'),
 );
 
+test('tracked timing baselines cover every current manifest lane exactly', () => {
+  assert.deepEqual(
+    Object.keys(timingBaseline.lanes).sort(),
+    Object.keys(manifest.lanes).sort(),
+  );
+  for (const [laneId, timing] of Object.entries(timingBaseline.lanes)) {
+    assert.ok(Number.isFinite(timing.seconds) && timing.seconds >= 0, `${laneId} needs a duration`);
+    assert.equal(timing.status, 0, `${laneId} baseline must come from a passing observation`);
+    assert.ok(timing.method, `${laneId} baseline must declare its measurement method`);
+  }
+  assert.equal(timingBaseline.lanes['cargo:clippy-workspace'].method, 'diff-sensitive-worst-case');
+});
+
 // Fixture mirroring the real workspace DAG shape; keeps selection tests
 // hermetic (no cargo invocation).
 const FIXTURE_GRAPH = {
@@ -235,7 +248,7 @@ test('host_resolve_phase tests cite a golden or are adapter-only, and witnessed 
 
   const witnessSource = readFileSync(join(auditDir, 'golden_witness.rs'), 'utf8');
   const leftoverDispatcher = witnessSource.slice(
-    witnessSource.indexOf('leftover_host_resolve_phase_cases_share_one_migrated_database'),
+    witnessSource.indexOf('fn leftover_host_resolve_case_specs()'),
   );
   assert.ok(leftoverDispatcher.length > 0, 'leftover host_resolve dispatcher must exist');
   assert.match(
@@ -551,10 +564,55 @@ test('migrated mutable proof leaves consume runner-owned database and artifact r
   }
 
   const exactImage = manifest.lanes['test:exact-image-content'];
-  assert.ok(
-    !exactImage.execution.resources.some((resource) => resource.kind === 'lock' && resource.name === 'legacy'),
-    'exact-image must retain only typed container resources',
+  assert.equal(exactImage.execution.class, 'hermetic');
+  assert.deepEqual(exactImage.execution.resources, [
+    { kind: 'artifact-dir', env: 'FMARCH_PROOF_ARTIFACT_DIR' },
+  ]);
+});
+
+test('semantic audit shards retain 140 stable cases with deterministic isolated ownership', () => {
+  const baseline = JSON.parse(
+    readFileSync(
+      join(REPO_ROOT, 'crates', 'commands', 'tests', 'semantic_audit', 'serial_case_baseline.json'),
+      'utf8',
+    ),
   );
+  assert.equal(baseline.schema, 1);
+  assert.equal(baseline.cases.length, 140);
+  const ids = baseline.cases.map((entry) => entry.id);
+  assert.equal(new Set(ids).size, 140, 'semantic case IDs must be unique');
+  assert.ok(baseline.cases.every((entry) => Number.isInteger(entry.milliseconds) && entry.milliseconds > 0));
+
+  const ordered = [...baseline.cases].sort(
+    (left, right) => right.milliseconds - left.milliseconds || left.id.localeCompare(right.id),
+  );
+  const loads = [0, 0, 0, 0];
+  const ownership = new Map();
+  for (const entry of ordered) {
+    const shard = loads.reduce(
+      (best, load, candidate) =>
+        load < loads[best] || (load === loads[best] && candidate < best) ? candidate : best,
+      0,
+    );
+    ownership.set(entry.id, shard);
+    loads[shard] += entry.milliseconds;
+  }
+  assert.equal(ownership.size, 140);
+  assert.ok(Math.max(...loads) - Math.min(...loads) <= 1_000, `unbalanced semantic shards: ${loads}`);
+
+  const source = readFileSync(
+    join(REPO_ROOT, 'crates', 'commands', 'tests', 'semantic_audit', 'golden_witness.rs'),
+    'utf8',
+  );
+  for (let shard = 0; shard < 4; shard += 1) {
+    assert.match(
+      source,
+      new RegExp(`semantic_shard_test!\\(leftover_host_resolve_phase_cases_shard_${shard}, ${shard}\\)`),
+      `semantic shard ${shard} must be a distinct sqlx::test database owner`,
+    );
+  }
+  assert.doesNotMatch(source, /share_one_migrated_database/);
+  for (const id of ids) assert.match(source, new RegExp(`\\b${id}\\b`));
 });
 
 test('manifest lanes are executable leaves, while human aggregate aliases stay outside the graph', () => {
@@ -1343,7 +1401,7 @@ test('warm-up runs the lane command itself, never a build-only stand-in', () => 
   );
 });
 
-test('direct timing paths refuse lanes that require runner-owned disposable Postgres', () => {
+test('resource-aware timing accepts lanes that require runner-owned disposable Postgres', async () => {
   const fixtureManifest = {
     lanes: {
       pg: {
@@ -1359,35 +1417,51 @@ test('direct timing paths refuse lanes that require runner-owned disposable Post
     },
   };
   assert.equal(usesRunnerOwnedPostgres(fixtureManifest.lanes.pg), true);
-  assert.throws(() => measureLane('pg', fixtureManifest), /runner-owned disposable Postgres/);
+  let executions = 0;
+  const measurement = await measureLane('pg', fixtureManifest, {
+    log: () => {},
+    execute: async ([laneId], _manifest, options) => {
+      executions += 1;
+      options.onResult(laneId, {
+        seconds: executions === 1 ? 2 : 3,
+        status: 0,
+        finished_at: '2026-08-27T00:00:00.000Z',
+      });
+      return { success: true, receipt: { lanes: {} } };
+    },
+  });
+  assert.equal(executions, 2);
+  assert.equal(measurement.seconds, 3);
+  assert.equal(measurement.method, 'resource-aware-isolated');
 });
 
-test('measurement records the warm run, not the compilation before it', () => {
+test('measurement records the warm run, not the compilation before it', async () => {
   const fixtureManifest = {
     lanes: { 'cargo:x': { kind: 'shell', command: 'cargo test -p x -- --test-threads=1' } },
   };
-  const commands = [];
-  const times = [0, 90_000, 90_000, 100_600];
-  const measurement = measureLane('cargo:x', fixtureManifest, {
+  const executions = [];
+  const seconds = [90, 10.6];
+  const measurement = await measureLane('cargo:x', fixtureManifest, {
     log: () => {},
-    spawn: (command) => {
-      commands.push(command);
-      return { status: 0 };
+    execute: async ([laneId], _manifest, options) => {
+      executions.push(laneId);
+      options.onResult(laneId, {
+        seconds: seconds.shift(),
+        status: 0,
+        finished_at: '2026-08-27T00:00:00.000Z',
+      });
+      return { success: true, receipt: { lanes: {} } };
     },
-    now: () => times.shift(),
   });
 
-  assert.deepEqual(commands, [
-    'cargo test -p x -- --test-threads=1',
-    'cargo test -p x -- --test-threads=1',
-  ]);
+  assert.deepEqual(executions, ['cargo:x', 'cargo:x']);
   assert.equal(measurement.warmup_seconds, 90);
   assert.equal(measurement.seconds, 10.6);
-  assert.equal(measurement.method, 'isolated');
+  assert.equal(measurement.method, 'resource-aware-isolated');
   assert.equal(measurement.failedPhase, null);
 });
 
-test('a failed warm-up leaves the tracked baseline untouched', () => {
+test('a failed warm-up leaves the tracked baseline untouched', async () => {
   const fixtureManifest = {
     lanes: {
       good: { kind: 'shell', command: 'npm run good' },
@@ -1396,27 +1470,34 @@ test('a failed warm-up leaves the tracked baseline untouched', () => {
   };
   const timings = { version: 1, lanes: { good: { seconds: 130 }, bad: { seconds: 42 } } };
   const persisted = [];
-  const results = measureLanes(['good', 'bad'], fixtureManifest, {
+  const calls = new Map();
+  const results = await measureLanes(['good', 'bad'], fixtureManifest, {
     log: () => {},
     logError: () => {},
-    spawn: (command) => ({ status: command === 'npm run bad' ? 3 : 0 }),
-    now: (() => {
-      const times = [0, 1_000, 1_000, 11_600, 11_600, 12_000];
-      return () => times.shift();
-    })(),
+    execute: async ([laneId], _manifest, options) => {
+      const call = (calls.get(laneId) ?? 0) + 1;
+      calls.set(laneId, call);
+      const status = laneId === 'bad' ? 3 : 0;
+      options.onResult(laneId, {
+        seconds: laneId === 'good' && call === 2 ? 10.6 : 0.4,
+        status,
+        finished_at: '2026-08-27T00:00:00.000Z',
+      });
+      return { success: status === 0, receipt: { lanes: {} } };
+    },
     timings,
     persist: (next) => persisted.push(structuredClone(next)),
   });
 
   assert.equal(timings.lanes.good.seconds, 10.6);
-  assert.equal(timings.lanes.good.method, 'isolated');
+  assert.equal(timings.lanes.good.method, 'resource-aware-isolated');
   assert.equal(timings.lanes.bad.seconds, 42, 'failed lane keeps its previous baseline');
   assert.equal(persisted.length, 1, 'only the successful lane is persisted');
   assert.equal(results[0].previousSeconds, 130);
   assert.equal(results[1].failedPhase, 'warm');
 });
 
-test('diff-sensitive lanes are never measured by repetition', () => {
+test('diff-sensitive lanes are never measured by repetition', async () => {
   // Repeating a lint pass with no edit between runs measures an empty run, so
   // the sweep must refuse rather than record a floor as if it were a cost.
   assert.ok(
@@ -1432,22 +1513,23 @@ test('diff-sensitive lanes are never measured by repetition', () => {
   };
   const timings = { version: 1, lanes: { lint: { seconds: 511.6 } } };
   const ran = [];
-  const results = measureLanes(['lint', 'unit'], fixtureManifest, {
+  const results = await measureLanes(['lint', 'unit'], fixtureManifest, {
     log: () => {},
     logError: () => {},
-    spawn: (command) => {
-      ran.push(command);
-      return { status: 0 };
+    execute: async ([laneId], _manifest, options) => {
+      ran.push(laneId);
+      options.onResult(laneId, {
+        seconds: 2.4,
+        status: 0,
+        finished_at: '2026-08-27T00:00:00.000Z',
+      });
+      return { success: true, receipt: { lanes: {} } };
     },
-    now: (() => {
-      const times = [0, 1_000, 1_000, 3_400];
-      return () => times.shift();
-    })(),
     timings,
     persist: () => {},
   });
 
-  assert.deepEqual(ran, ['npm run unit', 'npm run unit'], 'the lint lane is never executed');
+  assert.deepEqual(ran, ['unit', 'unit'], 'the lint lane is never executed');
   assert.equal(timings.lanes.lint.seconds, 511.6, 'its baseline is left alone');
   assert.equal(results[0].skipped, 'diff-sensitive');
   assert.equal(results[1].seconds, 2.4);

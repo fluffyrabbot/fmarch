@@ -23,7 +23,7 @@ import {
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const PROOF_RUNS_DIR = join(REPO_ROOT, 'target', 'proof-lanes', 'runs');
 const RESOURCE_KINDS = new Set(['lock', 'artifact-dir', 'artifact-input', 'postgres']);
-const EXECUTION_CLASSES = new Set(['legacy', 'hermetic', 'cargo', 'postgres', 'browser', 'container', 'hosted']);
+const EXECUTION_CLASSES = new Set(['hermetic', 'cargo', 'postgres', 'browser', 'container', 'hosted']);
 const DEFAULT_CLEANUP_TIMEOUT_MS = 30_000;
 const DEFAULT_TERMINATION_GRACE_MS = 5_000;
 const RESERVED_ENV = new Set([
@@ -41,6 +41,10 @@ function positiveInteger(value, label) {
   return value;
 }
 
+function elapsedSeconds(started, finished) {
+  return Math.round((finished - started) / 100) / 10;
+}
+
 function validEnvironmentName(value) {
   return typeof value === 'string' && /^[A-Z_][A-Z0-9_]*$/.test(value);
 }
@@ -53,20 +57,14 @@ function safePathSegment(value, label) {
 }
 
 function laneExecution(laneId, lane) {
-  const declared = lane.execution ?? {};
-  const legacy = !lane.execution;
-  let argv = declared.argv;
-  if (!argv) {
-    if (lane.kind === 'npm') argv = ['npm', 'run', laneId];
-    else argv = [process.env.SHELL ?? '/bin/sh', '-lc', lane.command];
-  }
+  const declared = lane.execution;
+  if (!declared) throw new Error(`proof lane ${laneId} must declare execution metadata`);
   return {
-    legacy,
-    class: declared.class ?? 'legacy',
-    timeoutSeconds: declared.timeout_seconds ?? 3600,
-    argv,
+    class: declared.class,
+    timeoutSeconds: declared.timeout_seconds,
+    argv: declared.argv,
     env: declared.env ?? {},
-    resources: declared.resources ?? [{ kind: 'lock', name: 'legacy' }],
+    resources: declared.resources,
   };
 }
 
@@ -102,7 +100,7 @@ function dependenciesFor(laneId, manifest) {
 }
 
 // Hard dependencies are a closure edge, unlike `after`, which remains only an
-// optional execution-order hint for the legacy planner.
+// optional execution-order hint for the planner.
 export function expandHardDependencies(selectedIds, manifest) {
   const selected = new Set();
   const visiting = new Set();
@@ -131,7 +129,7 @@ export function validateExecutionManifest(manifest) {
   if (!manifest?.lanes || typeof manifest.lanes !== 'object') {
     throw new Error('proof lane manifest must define a lanes object');
   }
-  const capacities = manifest.runner?.lock_capacities ?? { legacy: 1 };
+  const capacities = manifest.runner?.lock_capacities;
   if (!capacities || typeof capacities !== 'object') {
     throw new Error('proof lane runner must define lock_capacities');
   }
@@ -784,6 +782,11 @@ function serializableLane(record) {
     started_at: record.startedAt ?? null,
     finished_at: record.finishedAt ?? null,
     seconds: record.seconds ?? null,
+    timing: {
+      resource_setup_seconds: record.resourceSetupSeconds ?? null,
+      command_execution_seconds: record.commandExecutionSeconds ?? null,
+      cleanup_seconds: record.cleanupSeconds ?? null,
+    },
     status: record.status ?? null,
     exit_code: record.exitCode ?? null,
     signal: record.signal ?? null,
@@ -836,7 +839,7 @@ export async function runExecutionPlan(
   if (maximumJobs !== undefined && jobs > maximumJobs) {
     throw new Error(`proof lane jobs ${jobs} exceeds runner max_parallel ${maximumJobs}`);
   }
-  const capacities = manifest.runner?.lock_capacities ?? { legacy: 1 };
+  const capacities = manifest.runner?.lock_capacities;
   const planned = expandHardDependencies(laneIds, manifest);
   const run = createRunContext({ root, runId });
   await mkdir(run.runDir, { recursive: true });
@@ -936,6 +939,7 @@ export async function runExecutionPlan(
     activePreparations.set(laneId, preparationAbort);
     let invocation;
     let resourcesReleased = false;
+    const resourceSetupStarted = now();
     const fail = (error) => {
       record.state = 'failed';
       record.status = 1;
@@ -947,6 +951,7 @@ export async function runExecutionPlan(
       if (!invocation || resourcesReleased) return;
       // Cleanup may itself fail; never retry a non-idempotent provider release.
       resourcesReleased = true;
+      const cleanupStarted = now();
       const cleanupScope = createBoundedAbortScope({
         parentSignal: runnerAbort.signal,
         timeoutMilliseconds: cleanupTimeoutMs,
@@ -974,6 +979,7 @@ export async function runExecutionPlan(
         record.databaseRetained ||=
           invocation.databases.some(({ lease }) => lease.retained ?? false);
         if (interruptedSignal) record.interruptedBy ??= interruptedSignal;
+        record.cleanupSeconds = elapsedSeconds(cleanupStarted, now());
       }
     };
     claim(claims, used);
@@ -995,6 +1001,7 @@ export async function runExecutionPlan(
         setTimeoutFn,
         clearTimeoutFn,
       });
+      record.resourceSetupSeconds = elapsedSeconds(resourceSetupStarted, now());
       globalThis.clearTimeout(preparationDeadline);
       if (preparationAbort.signal.aborted) {
         throw preparationAbort.signal.reason instanceof Error
@@ -1036,6 +1043,7 @@ export async function runExecutionPlan(
       const processResult = await childMonitor.result;
       activeProcesses.delete(laneId);
       record.seconds = Math.round((now() - started) / 100) / 10;
+      record.commandExecutionSeconds = record.seconds;
       record.exitCode = processResult.exitCode;
       record.signal = processResult.signal;
       record.timedOut = processResult.timedOut;
@@ -1056,6 +1064,7 @@ export async function runExecutionPlan(
       if (record.status === 0) completedArtifacts.set(laneId, invocation.artifactDir);
       await appendFile(join(invocation.laneDir, 'lane.log'), `${record.state} after ${record.seconds}s\n`);
     } catch (error) {
+      record.resourceSetupSeconds ??= elapsedSeconds(resourceSetupStarted, now());
       if (preparationTimedOut) {
         record.timedOut = true;
         record.seconds ??= Math.round((now() - new Date(record.startedAt).getTime()) / 100) / 10;
@@ -1090,6 +1099,11 @@ export async function runExecutionPlan(
         artifact_dir: record.artifactDir ?? null,
         database: record.database ?? null,
         databases: record.databases ?? [],
+        timing: {
+          resource_setup_seconds: record.resourceSetupSeconds ?? null,
+          command_execution_seconds: record.commandExecutionSeconds ?? null,
+          cleanup_seconds: record.cleanupSeconds ?? null,
+        },
       });
     }
   };

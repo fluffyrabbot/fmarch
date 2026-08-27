@@ -410,20 +410,8 @@ export function laneExecutionKey(laneId, manifest) {
   return lane.execution_key ?? laneCommand(laneId, manifest).trim().replace(/\s+/g, ' ');
 }
 
-// `--run` gives these lanes a generated local database. The old serial
-// record/measure paths execute shell commands directly, so they must not be
-// allowed to inherit an arbitrary DATABASE_URL while this deliberate split
-// remains in place.
 export function usesRunnerOwnedPostgres(lane) {
   return Boolean(lane?.execution?.resources?.some((resource) => resource.kind === 'postgres'));
-}
-
-function assertDirectMeasurementIsSafe(laneId, manifest) {
-  if (usesRunnerOwnedPostgres(manifest.lanes[laneId])) {
-    throw new Error(
-      `${laneId} requires runner-owned disposable Postgres; --record/--measure must use the scoped execution path`,
-    );
-  }
 }
 
 export function deduplicateLaneIds(laneIds, manifest) {
@@ -508,26 +496,44 @@ export function runLanes(
   console.log(`\nproof passed: ${executionLaneIds.length} lane(s)`);
 }
 
-function recordLane(laneId, manifest) {
-  assertDirectMeasurementIsSafe(laneId, manifest);
+async function resourceAwarePhase(laneId, manifest, {
+  execute = runExecutionPlan,
+  log = console.log,
+} = {}) {
+  let observation = null;
+  const execution = await execute([laneId], manifest, {
+    jobs: 1,
+    receiptContext: { mode: 'measurement', selected_lane_ids: [laneId] },
+    onResult(id, entry) {
+      if (id === laneId) observation = entry;
+    },
+    log,
+  });
+  const entry = observation ?? execution.receipt?.lanes?.[laneId] ?? {};
+  return {
+    seconds: entry.seconds ?? 0,
+    status: execution.success ? 0 : entry.status ?? 1,
+    finished: entry.finished_at ? Date.parse(entry.finished_at) : Date.now(),
+  };
+}
+
+async function recordLane(laneId, manifest) {
   const command = laneCommand(laneId, manifest);
   console.log(`recording ${laneId}: ${command}`);
-  const started = Date.now();
-  const result = spawnSync(command, { cwd: REPO_ROOT, shell: true, stdio: 'inherit' });
-  const seconds = Math.round((Date.now() - started) / 100) / 10;
+  const result = await resourceAwarePhase(laneId, manifest);
   if (result.status !== 0) {
-    console.error(`lane ${laneId} failed (exit ${result.status}) after ${seconds}s; timing not recorded`);
-    process.exit(result.status ?? 1);
+    throw new Error(`lane ${laneId} failed (exit ${result.status}) after ${result.seconds}s; timing not recorded`);
   }
   const timings = loadTimings();
   timings.lanes[laneId] = {
-    seconds,
+    seconds: result.seconds,
     measured_at: new Date().toISOString(),
     command,
     status: 0,
+    method: 'resource-aware-record',
   };
   writeTimings(TIMINGS_PATH, timings);
-  console.log(`recorded ${laneId}: ${seconds}s`);
+  console.log(`recorded ${laneId}: ${result.seconds}s`);
 }
 
 // Most lanes do the same work every run, so timing a second run measures that
@@ -556,23 +562,19 @@ export function warmupCommand(command) {
 // Measures one lane in isolation: warm first, then time the real command. The
 // recorded number is the second phase, so a baseline entry means "this lane
 // costs this much on a warm checkout" rather than "this lane ran after that one".
-export function measureLane(
+export async function measureLane(
   laneId,
   manifest,
-  { spawn = spawnSync, now = Date.now, log = console.log } = {},
+  { execute = runExecutionPlan, log = console.log } = {},
 ) {
-  assertDirectMeasurementIsSafe(laneId, manifest);
   const command = laneCommand(laneId, manifest);
   const warmup = warmupCommand(command);
-  const phase = (label, phaseCommand) => {
+  const phase = async (label, phaseCommand) => {
     log(`  ${label}: ${phaseCommand}`);
-    const started = now();
-    const result = spawn(phaseCommand, { cwd: REPO_ROOT, shell: true, stdio: 'inherit' });
-    const finished = now();
-    return { seconds: elapsedSeconds(started, finished), finished, status: result.status ?? 1 };
+    return await resourceAwarePhase(laneId, manifest, { execute, log });
   };
 
-  const warmed = phase('warm', warmup);
+  const warmed = await phase('warm', warmup);
   if (warmed.status !== 0) {
     return {
       laneId,
@@ -583,7 +585,7 @@ export function measureLane(
       warmup_seconds: warmed.seconds,
     };
   }
-  const measured = phase('measure', command);
+  const measured = await phase('measure', command);
   return {
     laneId,
     command,
@@ -592,7 +594,7 @@ export function measureLane(
     warmup_command: warmup,
     warmup_seconds: warmed.seconds,
     seconds: measured.seconds,
-    method: 'isolated',
+    method: 'resource-aware-isolated',
     measured_at: new Date(measured.finished).toISOString(),
   };
 }
@@ -610,12 +612,11 @@ export function timingEntryFromMeasurement(measurement) {
 
 // Sweeps lanes one at a time, promoting each success into the tracked baseline
 // immediately so a long sweep that dies late still keeps what it proved.
-export function measureLanes(
+export async function measureLanes(
   laneIds,
   manifest,
   {
-    spawn = spawnSync,
-    now = Date.now,
+    execute = runExecutionPlan,
     timings = loadTimings(),
     // What the selector currently believes, so the was/now report compares
     // against the estimate actually being served.
@@ -637,7 +638,7 @@ export function measureLanes(
       results.push({ laneId, command: laneCommand(laneId, manifest), skipped: 'diff-sensitive', previousSeconds: previous?.seconds ?? null });
       continue;
     }
-    const measurement = measureLane(laneId, manifest, { spawn, now, log });
+    const measurement = await measureLane(laneId, manifest, { execute, log });
     if (measurement.failedPhase) {
       logError(
         `  ${laneId} failed during ${measurement.failedPhase} (exit ${measurement.status}); baseline left unchanged`,
@@ -764,7 +765,7 @@ async function main(argv) {
       if (!manifest.lanes[laneId]) throw new Error(`unknown lane: ${laneId}`);
     }
     const baseline = loadTimings();
-    const results = measureLanes(laneIds, manifest, {
+    const results = await measureLanes(laneIds, manifest, {
       timings: baseline,
       compareTo: costEstimates(baseline, loadTimings(RUNTIME_TIMINGS_PATH), manifest),
       persist: (timings) => writeTimings(TIMINGS_PATH, timings),
@@ -781,7 +782,7 @@ async function main(argv) {
     }
     return;
   }
-  if (args.record) return recordLane(args.record, manifest);
+  if (args.record) return await recordLane(args.record, manifest);
   if (args.regenerate) return regenerateArtifact(args.regenerate, manifest);
   const baselineTimings = loadTimings();
   // Pruned here, not only inside the estimate, so the --run write-back below

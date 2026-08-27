@@ -55,6 +55,11 @@ test("cargo evidence persists the named passed body", async () => {
     const report = JSON.parse(readFileSync(join(directory, "cargo-test-evidence.json"), "utf8"));
     assert.equal(report.status, "passed");
     assert.deepEqual(report.required_tests, [{ required: "named_case", observed: "module::named_case" }]);
+    assert.deepEqual(report.timing, {
+      compile_and_discovery_seconds: 0.1,
+      test_body_seconds: 0.1,
+      total_seconds: 0.2,
+    });
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

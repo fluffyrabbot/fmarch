@@ -354,12 +354,124 @@
       "warmup_seconds": 0.6
     },
     "test:exact-image-content": {
-      "seconds": 22.5,
-      "measured_at": "2026-08-19T07:25:20.368Z",
+      "seconds": 0.2,
+      "measured_at": "2026-08-27T21:45:00.000Z",
       "command": "npm run test:exact-image-content",
       "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 287
+      "method": "resource-aware-isolated",
+      "warmup_seconds": 0.2
+    },
+    "cargo:database-schema": {
+      "seconds": 67.5,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "cargo test -p database_schema -- --test-threads=1",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "cargo:principal": {
+      "seconds": 20.7,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "cargo test -p principal",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "cargo:game-persona-application": {
+      "seconds": 67.3,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "cargo test -p game_persona_application",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "cargo:public-platform": {
+      "seconds": 105.5,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "cargo test -p attention -p social -p trust_safety -p forum -p content_reference",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "cargo:profile-handle-index": {
+      "seconds": 23.9,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "cargo test -p profile_handle_index",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "cargo:profile-application": {
+      "seconds": 43.7,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "cargo test -p profile_application -- --test-threads=1",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "test:public-search-role-proof": {
+      "seconds": 10.3,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "npm run test:public-search-role-proof",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "test:database-schema-upgrade": {
+      "seconds": 3.7,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "npm run test:database-schema-upgrade",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "check:event-key-rotation-evidence": {
+      "seconds": 0.1,
+      "measured_at": "2026-08-27T21:45:00.000Z",
+      "command": "node tools/proof_test_evidence.mjs --claim FMARCH_SERVER_TEST_ARTIFACT_DIR:admin_rejects_non_deployable_key_configuration_before_database_access --claim FMARCH_SERVER_TEST_ARTIFACT_DIR:deployed_admin_rehearses_old_key_removal_before_retirement",
+      "status": 0,
+      "method": "promoted-contract-observation"
+    },
+    "test:live-stack-backup-restore-drill": {
+      "seconds": 14.4,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "npm run test:live-stack-backup-restore-drill",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "test:capacity-overload-contract": {
+      "seconds": 0.2,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "npm run test:capacity-overload-contract",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "test:public-search-staging-sentinel": {
+      "seconds": 0.2,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "npm run test:public-search-staging-sentinel",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "test:capacity-overload": {
+      "seconds": 14.5,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "cargo build -p server && npm run test:capacity-overload",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "test:release-coordinator": {
+      "seconds": 0.2,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "npm run test:release-coordinator",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "test:schema-epoch-reset": {
+      "seconds": 0.2,
+      "measured_at": "2026-08-27T20:00:35.192Z",
+      "command": "npm run test:schema-epoch-reset",
+      "status": 0,
+      "method": "promoted-full-observation"
+    },
+    "check:release-topology-evidence": {
+      "seconds": 0.1,
+      "measured_at": "2026-08-27T21:45:00.000Z",
+      "command": "node tools/proof_test_evidence.mjs --claim FMARCH_MEDIA_TEST_ARTIFACT_DIR:shared_object_repository_cross_replica_round_trip_is_idempotent --claim FMARCH_API_TEST_ARTIFACT_DIR:command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state",
+      "status": 0,
+      "method": "promoted-contract-observation"
     },
     "cargo:clippy-workspace": {
       "seconds": 193.6,

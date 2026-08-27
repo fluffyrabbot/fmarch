@@ -52,6 +52,7 @@ export async function runCargoTestEvidence({
   const { required, command } = parseCargoEvidenceArguments(argv);
   mkdirSync(outputDir, { recursive: true });
   const started = now();
+  let testBodyStarted = null;
   let output = "";
   const child = spawnCommand(command[0], command.slice(1), {
     env: { ...env, CARGO_TERM_COLOR: "never" },
@@ -59,7 +60,11 @@ export async function runCargoTestEvidence({
   });
   for (const [stream, destination] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
     stream?.on("data", (chunk) => {
-      output += chunk.toString();
+      const text = chunk.toString();
+      output += text;
+      if (testBodyStarted === null && /(?:^|\n)running \d+ tests?(?:\n|$)/u.test(output)) {
+        testBodyStarted = now();
+      }
       destination.write(chunk);
     });
   }
@@ -75,6 +80,9 @@ export async function runCargoTestEvidence({
   } catch (error) {
     claimError = error.message;
   }
+  const finished = now();
+  const totalSeconds = Math.round((finished - started) / 100) / 10;
+  const compileAndDiscoverySeconds = Math.round(((testBodyStarted ?? finished) - started) / 100) / 10;
   const report = {
     schema: 1,
     kind: "fmarch-cargo-test-evidence",
@@ -83,7 +91,12 @@ export async function runCargoTestEvidence({
     command,
     exit_code: result.status,
     signal: result.signal,
-    seconds: Math.round((now() - started) / 100) / 10,
+    seconds: totalSeconds,
+    timing: {
+      compile_and_discovery_seconds: compileAndDiscoverySeconds,
+      test_body_seconds: Math.round((finished - (testBodyStarted ?? finished)) / 100) / 10,
+      total_seconds: totalSeconds,
+    },
     required_tests: claims,
     passed_test_names: passed,
     error: claimError,

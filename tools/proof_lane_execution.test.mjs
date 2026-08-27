@@ -16,7 +16,7 @@ import {
   validateExecutionManifest,
 } from './proof_lane_execution.mjs';
 
-function fixture(lanes, capacities = { legacy: 1, cargo: 1, browser: 1 }) {
+function fixture(lanes, capacities = { cargo: 1, browser: 1 }) {
   return {
     version: 5,
     runner: { lock_capacities: capacities },
@@ -24,7 +24,7 @@ function fixture(lanes, capacities = { legacy: 1, cargo: 1, browser: 1 }) {
   };
 }
 
-function lane(argv, resources = [{ kind: 'lock', name: 'legacy' }], extra = {}) {
+function lane(argv, resources = [], extra = {}) {
   return {
     kind: 'shell',
     command: argv.join(' '),
@@ -104,6 +104,10 @@ test('runner max_parallel is a hard opt-in ceiling', async (t) => {
 
 test('manifest validation reserves resource-owned environment and validates the real v6 metadata', () => {
   assert.equal(validateExecutionManifest(loadManifest()), true);
+  assert.throws(
+    () => validateExecutionManifest(fixture({ implicit: { kind: 'npm' } })),
+    /must declare execution metadata/,
+  );
   assert.throws(() => createRunContext({ runId: '..' }), /proof run id/);
   assert.throws(
     () => validateExecutionManifest(fixture({
@@ -220,7 +224,7 @@ test('Postgres provisioning claims the administrative capacity for the whole con
   const manifest = fixture({
     first: lane(['first'], [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }]),
     second: lane(['second'], [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }]),
-  }, { legacy: 1, 'postgres-admin': 1 });
+  }, { 'postgres-admin': 1 });
   const result = await runExecutionPlan(['first', 'second'], manifest, {
     jobs: 2,
     root,
@@ -247,7 +251,7 @@ test('cross-run locks serialize the same mutable resource across runner processe
   t.after(() => rm(root, { recursive: true, force: true }));
   let active = 0;
   let maximum = 0;
-  const manifest = fixture({ only: lane(['only']) });
+  const manifest = fixture({ only: lane(['only'], [{ kind: 'lock', name: 'cargo' }]) });
   const spawn = () => {
     const child = new EventEmitter();
     child.kill = () => true;
@@ -290,6 +294,14 @@ test('a failed prerequisite blocks its consumer while an already started indepen
   assert.deepEqual(started.sort(), ['independent', 'producer']);
   assert.equal(result.receipt.lanes.consumer.state, 'blocked');
   assert.equal(result.receipt.lanes.independent.state, 'passed');
+  assert.deepEqual(
+    Object.keys(result.receipt.lanes.independent.timing),
+    ['resource_setup_seconds', 'command_execution_seconds', 'cleanup_seconds'],
+  );
+  assert.ok(
+    Object.values(result.receipt.lanes.independent.timing)
+      .every((seconds) => Number.isFinite(seconds) && seconds >= 0),
+  );
   const receipt = JSON.parse(await readFile(result.run.receiptPath, 'utf8'));
   assert.equal(receipt.schema, 3);
   assert.equal(receipt.state, 'failed');
@@ -341,7 +353,7 @@ test('a resource cleanup failure finalizes the receipt and blocks later work', a
   const manifest = fixture({
     producer: lane(['producer'], [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }]),
     consumer: { ...lane(['consumer'], []), depends_on: ['producer'] },
-  }, { legacy: 1, 'postgres-admin': 1 });
+  }, { 'postgres-admin': 1 });
   const result = await runExecutionPlan(['consumer'], manifest, {
     root,
     databaseProvider: provider,
@@ -379,7 +391,7 @@ test('cleanup is abortable, deadline-bounded, and retains an uncertain disposabl
   };
   const manifest = fixture({
     cleanup: lane(['cleanup'], [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }]),
-  }, { legacy: 1, 'postgres-admin': 1 });
+  }, { 'postgres-admin': 1 });
   const result = await runExecutionPlan(['cleanup'], manifest, {
     root,
     databaseProvider: provider,
@@ -409,7 +421,7 @@ test('the lane deadline aborts a stalled resource provision before it can hold l
   };
   const manifest = fixture({
     stalled: lane(['stalled'], [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }], { timeout_seconds: 1 }),
-  }, { legacy: 1, 'postgres-admin': 1 });
+  }, { 'postgres-admin': 1 });
   const result = await runExecutionPlan(['stalled'], manifest, {
     root,
     databaseProvider: provider,
@@ -439,7 +451,7 @@ test('external interruption during preparation is recorded as interruption, not 
   };
   const manifest = fixture({
     preparing: lane(['preparing'], [{ kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_URL' }]),
-  }, { legacy: 1, 'postgres-admin': 1 });
+  }, { 'postgres-admin': 1 });
   const resultPromise = runExecutionPlan(['preparing'], manifest, {
     root,
     databaseProvider: provider,
@@ -711,10 +723,9 @@ test('mutable proof leaves bind real runner-owned databases and artifact roots w
   }
 
   const exactImage = manifest.lanes['test:exact-image-content'];
-  assert.ok(
-    !exactImage.execution.resources.some((resource) => resource.kind === 'lock' && resource.name === 'legacy'),
-    'exact-image must use its typed container resources rather than the legacy lock',
-  );
+  assert.deepEqual(exactImage.execution.resources, [
+    { kind: 'artifact-dir', env: 'FMARCH_PROOF_ARTIFACT_DIR' },
+  ]);
   const exactInvocation = await prepareLaneInvocation({
     laneId: 'test:exact-image-content',
     manifest,
@@ -747,7 +758,7 @@ test('a multi-database lane holds one postgres-admin admission and records every
       { kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_MIGRATION_URL' },
       { kind: 'postgres', mode: 'lane-isolated', url_env: 'DATABASE_RESTORE_MIGRATION_URL' },
     ]),
-  }, { legacy: 1, 'postgres-admin': 1 });
+  }, { 'postgres-admin': 1 });
   let claims;
   const result = await runExecutionPlan(['backup'], manifest, {
     root,
