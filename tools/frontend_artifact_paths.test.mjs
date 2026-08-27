@@ -13,6 +13,10 @@ const routeStateSource = readFileSync(
   path.join(repoRoot, "tools", "frontend_route_state_render_contract.mjs"),
   "utf8",
 );
+const tabletInteractionSource = readFileSync(
+  path.join(repoRoot, "tools", "frontend_tablet_interaction_contract.mjs"),
+  "utf8",
+);
 
 test("visual baselines cover only screenshots declared by the live role-smoke receipt", () => {
   const expected = [
@@ -62,6 +66,8 @@ test("route-state render keeps generated entry modules under its lane artifact r
     /path\.join\(frontendRoot, "\.tmp-route-state-render"\)/,
   );
   assert.match(routeStateSource, /FMARCH_PROOF_ARTIFACT_DIR/);
+  assert.match(tabletInteractionSource, /FMARCH_PROOF_ARTIFACT_DIR/);
+  assert.match(tabletInteractionSource, /FMARCH_ROUTE_STATE_RENDER_ARTIFACT_DIR/);
   assert.match(routeStateSource, /const generatedFrontendAlias = "@fmarch-route-state-frontend"/);
   assert.match(
     routeStateSource,

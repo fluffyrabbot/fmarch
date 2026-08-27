@@ -16,12 +16,17 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend", "src");
-const artifactDir = path.join(repoRoot, "target", "frontend-tablet-interaction");
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ??
+    path.join(repoRoot, "target", "frontend-tablet-interaction"),
+);
 const evidencePath = path.join(artifactDir, "tablet-interaction.json");
+const routeStateArtifactDir = path.resolve(
+  process.env.FMARCH_ROUTE_STATE_RENDER_ARTIFACT_DIR ??
+    path.join(repoRoot, "target", "frontend-route-state-render"),
+);
 const routeStateBundle = path.join(
-  repoRoot,
-  "target",
-  "frontend-route-state-render",
+  routeStateArtifactDir,
   "bundle",
   "entry.js",
 );
@@ -113,7 +118,9 @@ const moderatorControlSurfaceCss = proveModeratorControlSurfaceCss({
   route: sourceText(sources, "frontend/src/routes/g/[game]/host/+page.svelte"),
 });
 const hostTouchCss = proveHostTouchCss(touchControlCss);
-await runRouteStateRenderContract();
+if (!process.env.FMARCH_ROUTE_STATE_RENDER_ARTIFACT_DIR) {
+  await runRouteStateRenderContract();
+}
 const bundle = await import(`${pathToFileURL(routeStateBundle).href}?t=${Date.now()}`);
 const thumbZones = await proveThumbZonePlacement(bundle);
 
