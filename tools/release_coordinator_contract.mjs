@@ -37,7 +37,10 @@ export function validateReleaseRepository({
   environment,
 }) {
   assert.equal(status, "", "release coordination requires a clean worktree");
-  assert.equal(branch, "main", "release coordination must run from main");
+  assert.ok(
+    branch === "main" || branch === "",
+    "release coordination must run from main or a detached exact-commit release checkout",
+  );
   assertFullCommit(commit);
   assert.equal(head, commit, "the requested release commit must equal HEAD");
   assert.equal(originMain, commit, "the requested release commit must equal origin/main");

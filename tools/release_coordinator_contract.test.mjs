@@ -49,6 +49,8 @@ test("repository validation rejects dirty, stale, or unpointed releases", () => 
     environment: "staging",
   };
   assert.equal(validateReleaseRepository(valid), true);
+  assert.equal(validateReleaseRepository({ ...valid, branch: "" }), true);
+  assert.throws(() => validateReleaseRepository({ ...valid, branch: "feature" }), /release checkout/);
   assert.throws(() => validateReleaseRepository({ ...valid, status: " M file" }), /clean/);
   assert.throws(() => validateReleaseRepository({ ...valid, originMain: "e".repeat(40) }), /origin\/main/);
   assert.throws(

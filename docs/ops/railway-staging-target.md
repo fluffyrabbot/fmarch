@@ -59,7 +59,9 @@ migrator/API/frontend deployments, API and frontend health checks, and Railway
 deployment metadata showing that all three services run the same commit.
 
 Do not retain a Git source or enable image auto-updates on these services.
-`tools/release_coordinator.mjs` is the only release sequencer: it deploys and
+`tools/release_coordinator.mjs` is the only release sequencer. It runs from a
+clean `main` checkout or a clean detached checkout of the exact `origin/main`
+commit: it deploys and
 first disconnects the canonical Git source without stopping the last successful
 deployment, then
 waits for the one-shot migrator first, then deploys API and frontend, verifies
