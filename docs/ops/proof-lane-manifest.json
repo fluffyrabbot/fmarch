@@ -84,7 +84,7 @@
     "test:frontend-route-live-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-route-live-contract"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-route-state-render": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-route-state-render"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-tablet-interaction": { "kind": "npm", "depends_on": ["test:frontend-route-state-render"], "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-tablet-interaction"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }, { "kind": "artifact-input", "from": "test:frontend-route-state-render", "env": "FMARCH_ROUTE_STATE_RENDER_ARTIFACT_DIR" }] } },
-    "test:frontend-role-dom-smoke": { "kind": "npm" },
+    "test:frontend-role-dom-smoke": { "kind": "npm", "depends_on": ["test:frontend-route-state-render"], "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-role-dom-smoke"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }, { "kind": "artifact-input", "from": "test:frontend-route-state-render", "env": "FMARCH_ROUTE_STATE_RENDER_ARTIFACT_DIR" }] } },
     "test:frontend-visual-regression": {
       "kind": "npm",
       "depends_on": ["test:frontend-role-smoke"],

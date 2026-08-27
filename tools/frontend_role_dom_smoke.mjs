@@ -24,18 +24,25 @@ import { principalFixtureId } from "./principal_fixture.mjs";
 const FIXTURE_THREAD_MEDIA_TEST_ID = `thread-post-media-${"e".repeat(64)}`;
 const HOST_PRINCIPAL_ID = principalFixtureId("host_h");
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const artifactDir = path.join(repoRoot, "target", "frontend-role-dom-smoke");
+const artifactDir = path.resolve(
+  process.env.FMARCH_PROOF_ARTIFACT_DIR ??
+    path.join(repoRoot, "target", "frontend-role-dom-smoke"),
+);
 const evidencePath = path.join(artifactDir, "dom-smoke.json");
+const routeStateArtifactDir = path.resolve(
+  process.env.FMARCH_ROUTE_STATE_RENDER_ARTIFACT_DIR ??
+    path.join(repoRoot, "target", "frontend-route-state-render"),
+);
 const routeStateBundle = path.join(
-  repoRoot,
-  "target",
-  "frontend-route-state-render",
+  routeStateArtifactDir,
   "bundle",
   "entry.js",
 );
 
 await mkdir(artifactDir, { recursive: true });
-await runRouteStateRenderContract();
+if (!process.env.FMARCH_ROUTE_STATE_RENDER_ARTIFACT_DIR) {
+  await runRouteStateRenderContract();
+}
 
 const bundle = await import(`${pathToFileURL(routeStateBundle).href}?t=${Date.now()}`);
 
