@@ -15,6 +15,7 @@ import {
   validateEpochResetAudit,
   waitForNewDeployment,
   waitForResetLogRows,
+  waitForStagingSentinelReceipt,
 } from "./release_coordinator.mjs";
 
 const commit = "a".repeat(40);
@@ -258,6 +259,33 @@ test("epoch reset evidence waits for Railway log propagation and stays bounded",
       },
     ),
     /audit and complete record/,
+  );
+});
+
+test("staging sentinel waits for telemetry propagation without rerunning its canary", async () => {
+  let clock = 0;
+  let loads = 0;
+  const receipt = await waitForStagingSentinelReceipt({
+    load: async () => {
+      loads += 1;
+      return { status: loads < 3 ? "insufficient" : "passed" };
+    },
+    now: () => clock,
+    sleep: async (milliseconds) => { clock += milliseconds; },
+    timeoutMilliseconds: 10,
+    pollMilliseconds: 1,
+  });
+  assert.equal(receipt.status, "passed");
+  assert.equal(loads, 3);
+  await assert.rejects(
+    waitForStagingSentinelReceipt({
+      load: async () => ({ status: "failed" }),
+      now: () => 0,
+      sleep: async () => {},
+      timeoutMilliseconds: 1,
+      pollMilliseconds: 1,
+    }),
+    /sentinel failed/,
   );
 });
 

@@ -613,17 +613,55 @@ async function runStagingSentinel(config, commit, runtimeDigest) {
   assert.equal(corpus.status, "ready");
   assert.equal(corpus.projected_public_game, true);
   assert.equal(corpus.projected_search_match, true);
-  run("npm", ["run", "run:public-search-staging-sentinel", "--", "--expected-commit", commit, "--expected-image-digest", runtimeDigest], {
-    env: scrubHostedEnvironment(process.env),
+  const hostedEnvironment = scrubHostedEnvironment(process.env);
+  run("node", ["tools/public_search_staging_canary.mjs"], {
+    env: hostedEnvironment,
   });
   const receiptPath = path.join(repoRoot, "target", "public-search-staging-sentinel", "receipt.json");
-  const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
-  assert.equal(receipt.status, "passed", "public-search staging sentinel did not pass");
+  const receipt = await waitForStagingSentinelReceipt({
+    load: async () => {
+      const result = spawnSync("node", [
+        "tools/public_search_staging_sentinel.mjs",
+        "--expected-commit",
+        commit,
+        "--expected-image-digest",
+        runtimeDigest,
+      ], {
+        cwd: repoRoot,
+        env: hostedEnvironment,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        maxBuffer: 32 * 1024 * 1024,
+      });
+      if (![0, 2].includes(result.status)) {
+        const diagnostic = String(result.stderr || result.stdout || "").trim().slice(-4_000);
+        throw new Error(`public-search staging sentinel failed${diagnostic ? `: ${diagnostic}` : ""}`);
+      }
+      return JSON.parse(await readFile(receiptPath, "utf8"));
+    },
+  });
   return {
     status: receipt.status,
     receipt_sha256: receipt.receipt_sha256 ?? null,
     corpus,
   };
+}
+
+export async function waitForStagingSentinelReceipt({
+  load,
+  now = () => Date.now(),
+  sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  timeoutMilliseconds = 60_000,
+  pollMilliseconds = 2_000,
+}) {
+  const deadline = now() + timeoutMilliseconds;
+  while (now() < deadline) {
+    const receipt = await load();
+    if (receipt?.status === "passed") return receipt;
+    assert.equal(receipt?.status, "insufficient", "public-search staging sentinel failed");
+    await sleep(pollMilliseconds);
+  }
+  throw new Error("public-search staging telemetry remained insufficient for 60 seconds");
 }
 
 async function schemaHead() {
