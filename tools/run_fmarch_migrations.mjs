@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { join } from "node:path";
 
 export const localDatabaseRoleNames = Object.freeze({
   application: "fmarch_application",
@@ -93,15 +94,34 @@ export function migrationDatabaseEnvironment({ migrationUrl, env = process.env }
   return migrationDatabaseEnvironmentForAuthority(authority, env);
 }
 
+/** Build the registered host-wide heavyweight-lane invocation for fmarch-migrate. */
+export function fmarchMigrationInvocation({ cwd }) {
+  return Object.freeze({
+    command: "python3",
+    args: Object.freeze([
+      join(cwd, "scripts", "with-heavy-build-lock.py"),
+      "--",
+      "cargo",
+      "run",
+      "--quiet",
+      "-p",
+      "server",
+      "--bin",
+      "fmarch-migrate",
+    ]),
+  });
+}
+
 /** Run the explicit schema owner before starting any local API process. */
 export async function runFmarchMigrations({ cwd, migrationUrl, env = process.env }) {
   const authority = localDatabaseAuthority({ migrationUrl, env });
   const migrationEnv = migrationDatabaseEnvironmentForAuthority(authority, env);
+  const invocation = fmarchMigrationInvocation({ cwd });
 
   await new Promise((resolve, reject) => {
     const child = spawn(
-      "cargo",
-      ["run", "--quiet", "-p", "server", "--bin", "fmarch-migrate"],
+      invocation.command,
+      invocation.args,
       {
         cwd,
         env: migrationEnv,

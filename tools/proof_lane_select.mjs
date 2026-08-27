@@ -58,6 +58,19 @@ export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFEST_PATH = join(REPO_ROOT, 'docs', 'ops', 'proof-lane-manifest.json');
 export const TIMINGS_PATH = join(REPO_ROOT, 'docs', 'ops', 'proof-lane-timings.json');
 export const RUNTIME_TIMINGS_PATH = join(REPO_ROOT, 'target', 'proof-lanes', 'timings.json');
+export const HOST_HEAVY_BUILD_LOCK_SCRIPT = join(REPO_ROOT, 'scripts', 'with-heavy-build-lock.py');
+
+const HOST_LOCKED_OPERATIONS = new Set([
+  '--run',
+  '--record',
+  '--measure',
+  '--measure-all',
+  '--regenerate',
+]);
+
+export function requiresHostHeavyBuildLock(argv) {
+  return argv.some((argument) => HOST_LOCKED_OPERATIONS.has(argument));
+}
 
 export function loadManifest(path = MANIFEST_PATH) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -745,7 +758,19 @@ async function main(argv) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main(process.argv.slice(2)).catch((error) => {
+  const argv = process.argv.slice(2);
+  const lockHeld =
+    process.env.HOST_HEAVY_BUILD_LOCK_HELD === '1' ||
+    process.env.MESH_HEAVY_BUILD_LOCK_HELD === '1';
+  if (requiresHostHeavyBuildLock(argv) && !lockHeld) {
+    const result = spawnSync(
+      'python3',
+      [HOST_HEAVY_BUILD_LOCK_SCRIPT, '--', process.execPath, fileURLToPath(import.meta.url), ...argv],
+      { cwd: REPO_ROOT, env: process.env, stdio: 'inherit' },
+    );
+    if (result.error) throw result.error;
+    process.exitCode = result.status ?? 1;
+  } else main(argv).catch((error) => {
     console.error(error.message);
     process.exitCode = 1;
   });

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   applicationDatabaseEnvironment,
+  fmarchMigrationInvocation,
   keyAdminDatabaseEnvironment,
   localDatabaseAuthority,
   localDatabaseRoleNames,
@@ -163,6 +164,23 @@ test("migrator child environment carries no runtime, key-admin, or ambient libpq
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_KID, undefined);
   assert.equal(env.FMARCH_PROFILE_HANDLE_INDEX_REPLACEMENT_KEY, undefined);
   assertPostgresOwnerEnvironmentRemoved(env);
+});
+
+test("every shared migrator launch registers with the host-wide heavyweight lane", () => {
+  const invocation = fmarchMigrationInvocation({ cwd: "/workspace/fmarch" });
+
+  assert.equal(invocation.command, "python3");
+  assert.deepEqual(invocation.args, [
+    "/workspace/fmarch/scripts/with-heavy-build-lock.py",
+    "--",
+    "cargo",
+    "run",
+    "--quiet",
+    "-p",
+    "server",
+    "--bin",
+    "fmarch-migrate",
+  ]);
 });
 
 test("every local migrator caller gives each child only its required authority", () => {

@@ -24,6 +24,7 @@ import {
   measureLane,
   measureLanes,
   pruneUnknownLanes,
+  requiresHostHeavyBuildLock,
   runLanes,
   selectLanes,
   usesRunnerOwnedPostgres,
@@ -54,6 +55,25 @@ const FIXTURE_GRAPH = {
   operator_api: ['commands', 'operator_proof', 'wire'],
   server: ['api', 'identity', 'operator_api'],
 };
+
+test('execution-bearing proof modes acquire the host-wide heavyweight-build lock', () => {
+  for (const operation of ['--run', '--record', '--measure', '--measure-all', '--regenerate']) {
+    assert.equal(requiresHostHeavyBuildLock([operation]), true, operation);
+  }
+  assert.equal(requiresHostHeavyBuildLock(['--mode', 'full', '--list']), false);
+  assert.equal(requiresHostHeavyBuildLock(['--changed', 'crates/api/src/lib.rs', '--json']), false);
+});
+
+test('direct heavyweight entrypoints acquire the host-wide build lock', () => {
+  assert.equal(
+    packageScripts['check:api'],
+    'python3 scripts/with-heavy-build-lock.py -- cargo check -p api',
+  );
+  assert.equal(
+    packageScripts['test:database-schema-upgrade'],
+    'python3 scripts/with-heavy-build-lock.py -- node tools/database_schema_upgrade_proof.mjs',
+  );
+});
 
 test('command audit is a dedicated exact-size integration target', () => {
   const ordinaryPath = join(

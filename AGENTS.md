@@ -21,6 +21,21 @@ direct `main` work, and atomic history over PR ceremony.
 ## Local proof preference
 
 - Prefer local CI/proof for as long as practical.
+- A 24 GiB host permits one closure-heavy local Rust build at a time across all
+  workspaces. Execution-bearing `npm run proof:lanes` modes acquire the shared
+  host lock through `scripts/with-heavy-build-lock.py`; they default to serial
+  lanes, and must fail closed if unregistered Cargo/rustc work is already
+  running or appears later. Do not bypass the lock merely to reduce queue time.
+  The direct API compile gate is `npm run check:api`; do not invoke
+  `cargo check -p api` directly because its closure is heavyweight enough to
+  preempt another workspace's registered lane. Run schema upgrade proof through
+  `npm run test:database-schema-upgrade` for the same reason; its migrator build
+  is covered by the shared lock. All local migration harnesses must launch
+  through `runFmarchMigrations`; the shared helper acquires the host lock before
+  spawning `fmarch-migrate`, so callers must not spawn that Cargo command
+  directly.
+  Use an isolated overflow checkout only when its host, target, and database
+  resources are independent.
 - Use the narrowest truthful local gate for the touched area, then broaden only
   when the change crosses boundaries.
 - Compute that gate mechanically: `npm run proof:lanes` maps the current diff
