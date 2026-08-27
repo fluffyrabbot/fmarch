@@ -38,6 +38,7 @@ async function contract() {
         "docs/ops/profile-handle-index-rotation-receipt.schema.json",
         "tools/profile_handle_index_rotation_receipt.mjs",
         "docs/ops/railway-staging-target.md",
+        "docs/ops/release-game-day.md",
         "tools/production_promotion.mjs",
         "tools/release_coordinator.mjs",
         "tools/release_coordinator_contract.mjs",
@@ -146,6 +147,13 @@ async function contract() {
   assert.match(source.Dockerfile, /org\.opencontainers\.image\.revision="\$\{FMARCH_RELEASE_COMMIT\}"/);
   assert.match(source["Dockerfile.frontend"], /org\.opencontainers\.image\.revision="\$\{FMARCH_RELEASE_COMMIT\}"/);
   assert.match(source["tools/release_coordinator.mjs"], /source\.image/);
+  assert.match(source["tools/release_coordinator.mjs"], /kind === "api"/);
+  assert.match(source["tools/release_coordinator.mjs"], /waitForMigrationCompletion/);
+  assert.match(
+    source["crates/server/src/bin/fmarch-migrate.rs"],
+    /fmarch-database-migration-complete/,
+  );
+  assert.match(source["docs/ops/release-game-day.md"], /application rollback never runs the\s+migrator/i);
   assert.match(source["tools/release_coordinator.mjs"], /await deployImage\([\s\S]*migratorServiceId/);
   assert.match(source["tools/release_coordinator.mjs"], /Promise\.all\(\[/);
   assert.match(source["tools/release_coordinator_contract.mjs"], /migrator_api_digest_equal/);

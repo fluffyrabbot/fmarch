@@ -352,7 +352,7 @@ async function detachGitSource(config, serviceId, imageReference) {
 
 async function deployConfiguredImage(
   config,
-  { serviceId, image, digest, startCommand, label, variables = null },
+  { serviceId, image, digest, startCommand, label, variables = null, deploymentPolicy = {} },
 ) {
   const imageReference = `${image}@${digest}`;
   await detachGitSource(config, serviceId, imageReference);
@@ -382,6 +382,7 @@ async function deployConfiguredImage(
         source: { image: imageReference },
         startCommand,
         railwayConfigFile: null,
+        ...deploymentPolicy,
       },
     },
   );
@@ -392,6 +393,40 @@ async function deployConfiguredImage(
   );
   assert.equal(deployData.serviceInstanceDeploy, true, `${label} deployment was not started`);
   return await waitForNewDeployment(config, serviceId, previousId, digest, label);
+}
+
+export function canonicalDeploymentPolicy(kind) {
+  if (kind === "migrator") {
+    return {
+      numReplicas: 1,
+      restartPolicyType: "NEVER",
+      restartPolicyMaxRetries: 0,
+      preDeployCommand: null,
+      healthcheckPath: null,
+      healthcheckTimeout: null,
+    };
+  }
+  if (kind === "api") {
+    return {
+      numReplicas: 2,
+      restartPolicyType: "ON_FAILURE",
+      restartPolicyMaxRetries: 3,
+      preDeployCommand: ["fmarch-schema-gate"],
+      healthcheckPath: "/readyz",
+      healthcheckTimeout: 120,
+    };
+  }
+  if (kind === "frontend") {
+    return {
+      numReplicas: 1,
+      restartPolicyType: "ON_FAILURE",
+      restartPolicyMaxRetries: 3,
+      preDeployCommand: null,
+      healthcheckPath: "/healthz",
+      healthcheckTimeout: 120,
+    };
+  }
+  throw new Error(`unknown Railway deployment policy ${kind}`);
 }
 
 export async function waitForNewDeployment(
@@ -426,18 +461,27 @@ export async function waitForNewDeployment(
   throw new Error(`${label} did not reach a terminal deployment state in 15 minutes`);
 }
 
-async function deployImage(config, serviceId, image, digest, startCommand, label) {
+async function deployImage(config, serviceId, image, digest, startCommand, label, kind) {
   return await deployConfiguredImage(config, {
     serviceId,
     image,
     digest,
     startCommand,
     label,
+    deploymentPolicy: canonicalDeploymentPolicy(kind),
   });
 }
 
 export function parseResetLogRows(output) {
-  const messages = String(output)
+  const messages = parseStructuredLogRows(output);
+  return {
+    audit: messages.find((message) => message.kind === "fmarch-schema-epoch-reset-audit"),
+    complete: messages.find((message) => message.kind === "fmarch-schema-epoch-reset-complete"),
+  };
+}
+
+function parseStructuredLogRows(output) {
+  return String(output)
     .trim()
     .split("\n")
     .filter(Boolean)
@@ -452,10 +496,48 @@ export function parseResetLogRows(output) {
         return [];
       }
     });
-  return {
-    audit: messages.find((message) => message.kind === "fmarch-schema-epoch-reset-audit"),
-    complete: messages.find((message) => message.kind === "fmarch-schema-epoch-reset-complete"),
-  };
+}
+
+export function parseMigrationCompletion(output) {
+  return parseStructuredLogRows(output).find(
+    (message) => message.kind === "fmarch-database-migration-complete",
+  ) ?? null;
+}
+
+export async function waitForMigrationCompletion(
+  config,
+  deploymentId,
+  serviceId,
+  expectedCommit,
+  {
+    load = () => railwayText(config, [
+      "logs",
+      deploymentId,
+      "--service",
+      serviceId,
+      "--lines",
+      "200",
+    ]),
+    now = () => Date.now(),
+    sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    timeoutMilliseconds = 60_000,
+    pollMilliseconds = 2_000,
+  } = {},
+) {
+  const deadline = now() + timeoutMilliseconds;
+  while (now() < deadline) {
+    const completion = parseMigrationCompletion(await load());
+    if (completion) {
+      assert.equal(
+        completion.release_commit,
+        expectedCommit,
+        "migration completion record does not match the release commit",
+      );
+      return completion;
+    }
+    await sleep(pollMilliseconds);
+  }
+  throw new Error("migrator emitted no exact-commit completion record within 60 seconds");
 }
 
 export async function waitForResetLogRows(
@@ -513,6 +595,7 @@ async function deployEpochReset(config, digest, commit, epoch) {
     digest,
     startCommand: "fmarch-schema-epoch-reset",
     label: `${config.environment} schema epoch reset audit`,
+    deploymentPolicy: canonicalDeploymentPolicy("migrator"),
     variables: {
       FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT: config.environment,
       FMARCH_SCHEMA_EPOCH_RESET_EPOCH: String(epoch),
@@ -534,6 +617,7 @@ async function deployEpochReset(config, digest, commit, epoch) {
     digest,
     startCommand: "fmarch-schema-epoch-reset --execute",
     label: `${config.environment} schema epoch reset`,
+    deploymentPolicy: canonicalDeploymentPolicy("migrator"),
   });
   const parsed = await waitForResetLogRows(
     config,
@@ -573,6 +657,7 @@ async function deployMigratorAfterReset(config, digest, resetDeploymentId) {
     digest,
     startCommand: "fmarch-migrate",
     label: `${config.environment} migrator`,
+    deploymentPolicy: canonicalDeploymentPolicy("migrator"),
   });
 }
 
@@ -723,11 +808,18 @@ export async function main(argv = process.argv.slice(2)) {
       runtimeDigest,
       "fmarch-migrate",
       `${args.environment} migrator`,
+      "migrator",
     );
   }
+  await waitForMigrationCompletion(
+    config,
+    migrator.id,
+    config.migratorServiceId,
+    commit,
+  );
   const [api, frontend] = await Promise.all([
-    deployImage(config, config.apiServiceId, config.runtimeImage, runtimeDigest, "fmarch-server", `${args.environment} API`),
-    deployImage(config, config.frontendServiceId, config.frontendImage, frontendDigest, "node build", `${args.environment} frontend`),
+    deployImage(config, config.apiServiceId, config.runtimeImage, runtimeDigest, "fmarch-server", `${args.environment} API`, "api"),
+    deployImage(config, config.frontendServiceId, config.frontendImage, frontendDigest, "node build", `${args.environment} frontend`, "frontend"),
   ]);
   const [apiHealth, frontendHealth] = await Promise.all([
     fetchHealth(`${config.apiUrl}/readyz`, commit, "api"),

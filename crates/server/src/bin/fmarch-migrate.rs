@@ -1,5 +1,6 @@
 use std::{env, str::FromStr};
 
+use serde_json::json;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use url::Url;
 
@@ -77,6 +78,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     server::ensure_schema_ready(&key_admin_pool).await?;
     server::verify_database_principal(&key_admin_pool, server::DatabasePrincipal::KeyAdmin).await?;
+    println!(
+        "{}",
+        json!({
+            "kind": "fmarch-database-migration-complete",
+            "release_commit": api::release_commit(),
+        })
+    );
     tracing::info!("fmarch database migrations complete");
     Ok(())
 }

@@ -10,10 +10,13 @@ import {
   validateReleaseRepository,
 } from "./release_coordinator_contract.mjs";
 import {
+  canonicalDeploymentPolicy,
+  parseMigrationCompletion,
   serviceSourceCutoverAction,
   parseResetLogRows,
   validateEpochResetAudit,
   waitForNewDeployment,
+  waitForMigrationCompletion,
   waitForResetLogRows,
   waitForStagingSentinelReceipt,
 } from "./release_coordinator.mjs";
@@ -94,6 +97,34 @@ test("source cutover attaches once and updates image sources without detaching t
   );
 });
 
+test("image deployments restore the complete service safety policy", () => {
+  assert.deepEqual(canonicalDeploymentPolicy("migrator"), {
+    numReplicas: 1,
+    restartPolicyType: "NEVER",
+    restartPolicyMaxRetries: 0,
+    preDeployCommand: null,
+    healthcheckPath: null,
+    healthcheckTimeout: null,
+  });
+  assert.deepEqual(canonicalDeploymentPolicy("api"), {
+    numReplicas: 2,
+    restartPolicyType: "ON_FAILURE",
+    restartPolicyMaxRetries: 3,
+    preDeployCommand: ["fmarch-schema-gate"],
+    healthcheckPath: "/readyz",
+    healthcheckTimeout: 120,
+  });
+  assert.deepEqual(canonicalDeploymentPolicy("frontend"), {
+    numReplicas: 1,
+    restartPolicyType: "ON_FAILURE",
+    restartPolicyMaxRetries: 3,
+    preDeployCommand: null,
+    healthcheckPath: "/healthz",
+    healthcheckTimeout: 120,
+  });
+  assert.throws(() => canonicalDeploymentPolicy("database"), /unknown Railway deployment policy/);
+});
+
 test("deployment sequencing waits through a slow migrator and stops on terminal failure", async () => {
   let clock = 0;
   const slowStates = [
@@ -132,6 +163,48 @@ test("deployment sequencing waits through a slow migrator and stops on terminal 
       },
     ),
     /FAILED/,
+  );
+});
+
+test("migration completion requires exact-commit structured log evidence", async () => {
+  const row = JSON.stringify({
+    message: JSON.stringify({
+      kind: "fmarch-database-migration-complete",
+      release_commit: commit,
+    }),
+  });
+  assert.equal(parseMigrationCompletion(row).release_commit, commit);
+  assert.equal(parseMigrationCompletion(JSON.stringify({ message: "Starting Container" })), null);
+  let clock = 0;
+  const completion = await waitForMigrationCompletion(
+    {},
+    "deployment",
+    "migrator",
+    commit,
+    {
+      load: () => (clock === 0 ? "" : row),
+      now: () => clock,
+      sleep: async (milliseconds) => { clock += milliseconds; },
+      timeoutMilliseconds: 10,
+      pollMilliseconds: 1,
+    },
+  );
+  assert.equal(completion.release_commit, commit);
+  await assert.rejects(
+    waitForMigrationCompletion(
+      {},
+      "deployment",
+      "migrator",
+      commit,
+      {
+        load: () => JSON.stringify({ message: "/bin/false exited" }),
+        now: () => clock,
+        sleep: async (milliseconds) => { clock += milliseconds; },
+        timeoutMilliseconds: 2,
+        pollMilliseconds: 1,
+      },
+    ),
+    /no exact-commit completion record/,
   );
 });
 

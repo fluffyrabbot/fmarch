@@ -64,12 +64,21 @@ clean `main` checkout or a clean detached checkout of the exact `origin/main`
 commit: it deploys and
 first disconnects the canonical Git source without stopping the last successful
 deployment, then
-waits for the one-shot migrator first, then deploys API and frontend, verifies
+restores the complete service policy that source cutover would otherwise clear
+(replica count, restart policy, health checks, and the API schema gate), then
+waits for both Railway's one-shot migrator deployment and the migrator's
+exact-commit completion record before deploying API and frontend, verifies
 their reported digests and embedded `release_commit`, and finally produces the
 environment receipt. A failed migrator starts neither later deployment. A
 failed API or frontend may be retried only with the same receipt-bound digest.
 The bounded API schema gate still tolerates normal migration progress but never
 migrates or weakens checksum/ACL failures.
+
+After coordinator or Railway topology changes, execute the staging-only release
+game day in [release-game-day.md](release-game-day.md). Its receipt proves slow
+and failed migrations, API readiness failure, wrong-digest detection,
+same-digest recovery, schema-compatible application rollback, and exact current
+release restoration without touching production.
 
 Staging and production must have separate Postgres service instances, media
 buckets, subject-authority buckets, public domains, variables, and WorkOS environments. A
