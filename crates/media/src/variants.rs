@@ -4,11 +4,11 @@ use std::fmt;
 use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 
+use cap_std::fs::{Dir, File, OpenOptions};
 use image::codecs::avif::{AvifEncoder, ColorSpace};
 use image::codecs::webp::WebPEncoder;
 use image::imageops::FilterType;
 use image::{ExtendedColorType, GenericImageView, ImageEncoder, ImageFormat, RgbaImage};
-use cap_std::fs::{Dir, File, OpenOptions};
 use serde::{Deserialize, Serialize};
 
 use super::*;
@@ -1983,7 +1983,10 @@ mod tests {
             Ok(())
         });
         assert_eq!(rename_error.unwrap().raw_os_error(), Some(32));
-        assert!(result.is_ok(), "the protected snapshot should remain readable");
+        assert!(
+            result.is_ok(),
+            "the protected snapshot should remain readable"
+        );
         assert!(id_path.exists());
         assert!(!held.exists());
     }

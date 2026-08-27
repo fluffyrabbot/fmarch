@@ -812,7 +812,10 @@ fn open_regular_file(
 }
 
 fn map_open_error(error: io::Error, logical_path: &Path) -> MediaError {
-    if matches!(error.kind(), io::ErrorKind::NotADirectory | io::ErrorKind::InvalidInput) {
+    if matches!(
+        error.kind(),
+        io::ErrorKind::NotADirectory | io::ErrorKind::InvalidInput
+    ) {
         MediaError::UnsafeStoragePath(logical_path.to_owned())
     } else {
         MediaError::Io(error)
@@ -972,9 +975,9 @@ impl Drop for TempCleanup<'_> {
 mod tests {
     use std::sync::{Arc, Barrier};
 
+    use super::*;
     #[cfg(unix)]
     use cap_std::fs::PermissionsExt as _;
-    use super::*;
     use image::codecs::jpeg::JpegEncoder;
     use image::ExtendedColorType;
     use tempfile::tempdir;
