@@ -1146,7 +1146,7 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     .fetch_one(&pool)
     .await
     .expect("read profile mute target relation");
-    assert_eq!(mute_target_table, "public_profile");
+    assert_eq!(mute_target_table, "member_profile");
     let mute_target_delete_action: String = sqlx::query_scalar(
         "SELECT confdeltype::text \
          FROM pg_constraint \

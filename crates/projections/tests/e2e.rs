@@ -3917,8 +3917,23 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         .fetch_one(&pool)
         .await
         .unwrap(),
-        0,
-        "a private profile has no remaining public mute target",
+        1,
+        "a privacy toggle must not erase replayable mute state",
+    );
+    projections::rebuild_member_mute_stream(&pool, relationship_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
+        )
+        .bind(reader.as_uuid())
+        .bind(target_profile)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        1,
+        "mute replay must remain valid while its target has no public presentation",
     );
     assert!(projections::member_mutes(&pool, reader, None, 20)
         .await

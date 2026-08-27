@@ -209,12 +209,16 @@ presentation into a subject-private claim, and appends only subject/claim refere
 binds `active_principal_id`, a current private claim, and a keyed blind handle index; after
 redaction all three are cleared and only `redacted_alias` remains. `public_profile` is a dependent
 plaintext materialization that exists only for active `public` profiles. Public reads, publication/
-search materialization, current discussion attribution, and mute targets use that table. `private`
-is owner-only and decrypts through `profile_application`; it has no plaintext profile projection.
-There is deliberately no `members` string until an explicit audience model exists. A private or
-redacted transition deletes the public row and its surface in the same transaction, so it cannot
-leave stale searchable data, public attribution, or mute relationships behind. Profile updates
-carry the stream `revision` they read and append against that expected version.
+search materialization, and current discussion attribution use that table. New mute commands also
+resolve their target through it, but the replayable relationship itself references durable
+`member_profile`, so a temporary privacy transition cannot silently erase a member's filtering
+decision. `private` is owner-only and decrypts through `profile_application`; it has no plaintext
+profile projection. There is deliberately no `members` string until an explicit audience model
+exists. A private or redacted transition deletes the public row and its surface in the same
+transaction, so it cannot leave stale searchable data or public attribution behind. Existing mute
+overlays continue to suppress previously authored public contributions by opaque profile identity;
+the target disappears from the presentable mute list until it is public again. Profile updates carry
+the stream `revision` they read and append against that expected version.
 
 Public search is a synchronous, rebuildable projection rather than an independent source of
 truth. `public_search_document` is deliberately separate from `public_publication`: the latter is
@@ -263,6 +267,8 @@ Member mutes use one durable relationship stream per authenticated member and ta
 profile. `CommunityMemberMuted` and `CommunityMemberUnmuted` preserve the reversible decision
 history while `profile_mute` exposes only the member's current active relationships.
 Self-mutes and duplicate transitions are rejected under a transaction-scoped relationship lock.
+The relationship targets durable profile identity and therefore survives public/private presentation
+changes and its own replay; only currently public targets appear in the member-facing mute list.
 The relationship is never global moderation: anonymous and other-member reads are unchanged.
 
 Authenticated public-search, discussion-list, discussion-thread, public-game-thread, and watched

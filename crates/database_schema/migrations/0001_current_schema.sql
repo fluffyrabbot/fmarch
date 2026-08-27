@@ -4558,7 +4558,7 @@ ALTER TABLE ONLY public.private_channel_member
 --
 
 ALTER TABLE ONLY public.profile_mute
-    ADD CONSTRAINT profile_mute_target_profile_id_fkey FOREIGN KEY (target_profile_id) REFERENCES public.public_profile(profile_id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;
+    ADD CONSTRAINT profile_mute_target_profile_id_fkey FOREIGN KEY (target_profile_id) REFERENCES public.member_profile(profile_id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;
 
 
 --

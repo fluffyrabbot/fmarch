@@ -10,7 +10,7 @@ export const repoRoot = path.resolve(
 export const migrationDirectory = "crates/database_schema/migrations";
 export const baselineFilename = "0001_current_schema.sql";
 export const baselineSha256 =
-  "afddc1a958bb210024626ce40ec97991c4f2a03e3bc6718d5590edbe8745381e";
+  "dfd6b606d2619c18378b7f41c8782c6c4b8709cfa5029289b9ad21a7433781d3";
 
 const forbiddenTransitionPatterns = Object.freeze([
   ["data insertion", /^INSERT\s+INTO\b/im],

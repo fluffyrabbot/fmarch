@@ -143,10 +143,11 @@ The lane writes `target/capacity-overload/report.json` and proves seven related 
    ordering oracle across every filter and anonymous plus two personalized viewers. Mute and
    moderation streams are rebuilt after both sides of their transitions, source rebuilds must
    preserve active moderation overlays, stale cursors must remain duplicate-free, and final
-   traversals cover page sizes 1, 2, 3, and 5. A separate cross-adapter replay contract applies the
-   same hidden/restored moderation sequence to discussion and game posts in both source/moderation
-   rebuild orders, while an active member mute proves that personalized visibility remains a
-   query-time overlay instead of leaking into globally projected visibility.
+   traversals cover page sizes 1, 2, 3, and 5. A separate five-document visibility-lattice contract
+   covers profile, discussion, discussion-post, game, and game-post materializations. It composes
+   profile privacy, topic visibility, game lifecycle eligibility, hidden/restored post moderation,
+   both source/moderation rebuild orders, and a durable member mute while proving that personalized
+   visibility remains a query-time overlay instead of leaking into globally projected visibility.
 4. **One-game post burst:** 24 posts concurrently target one real game aggregate; every command
    eventually ACKs, and exactly 24 distinct posts appear in its projection.
 5. **Slow live consumers:** four live clients are delayed behind a two-message broadcast buffer;
