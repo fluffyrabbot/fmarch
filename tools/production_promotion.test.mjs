@@ -11,9 +11,10 @@ import {
   validateDeployment,
   validateDomainList,
   validateHostedVariables,
+  validateCoordinatedServiceSources,
+  validateProductionSourceCutover,
   validateRepositoryState,
   validateSecretCustodyPolicy,
-  validateServiceBranches,
 } from "./production_promotion.mjs";
 
 const apiServiceId = "api";
@@ -27,20 +28,18 @@ test("promotion arguments are fail closed", () => {
   assert.throws(() => parseArguments(["--force"]), /unknown production promotion argument/);
 });
 
-test("production promotion consumes the exact-commit search sentinel", async () => {
+test("production promotion consumes the coordinated staging receipt", async () => {
   const source = await readFile(new URL("./production_promotion.mjs", import.meta.url), "utf8");
-  const stagingValidation = source.indexOf(
-    "await validateEnvironment(config, config.stagingEnvironment, head",
-  );
-  const sentinel = source.indexOf(
-    'run("npm", ["run", "run:public-search-staging-sentinel"]',
-  );
+  const stagingReceipt = source.indexOf("const stagingReceipt = assertReleaseReceipt");
+  const stagingValidation = source.indexOf("await validateCoordinatedEnvironment");
   const releasePush = source.indexOf(
     'run("git", ["push", "origin", `${head}:refs/heads/production`]',
   );
-  assert.equal(stagingValidation >= 0, true);
-  assert.equal(sentinel > stagingValidation, true);
-  assert.equal(releasePush > sentinel, true);
+  const coordinator = source.indexOf('"tools/release_coordinator.mjs"');
+  assert.equal(stagingReceipt >= 0, true);
+  assert.equal(stagingValidation > stagingReceipt, true);
+  assert.equal(releasePush > stagingValidation, true);
+  assert.equal(coordinator > releasePush, true);
 });
 
 test("promotion proof preserves an explicit database or provisions the repo-local default", () => {
@@ -110,17 +109,33 @@ test("repository state requires clean synchronized main and an ancestor release 
   );
 });
 
-test("Railway services must watch the environment's canonical branch", () => {
+test("Railway services use digest-pinned images without a racing Git source", () => {
+  const runtime = `ghcr.io/fluffyrabbot/fmarch-runtime@sha256:${"a".repeat(64)}`;
+  const frontend = `ghcr.io/fluffyrabbot/fmarch-frontend@sha256:${"b".repeat(64)}`;
   const config = {
     services: {
-      [apiServiceId]: { source: { branch: "production" } },
-      [migratorServiceId]: { source: { branch: "production" } },
-      [frontendServiceId]: { source: { branch: "production" } },
+      [apiServiceId]: { source: { image: runtime } },
+      [migratorServiceId]: { source: { image: runtime } },
+      [frontendServiceId]: { source: { image: frontend } },
     },
   };
-  assert.doesNotThrow(() => validateServiceBranches(config, "production", serviceIds));
-  config.services[frontendServiceId].source.branch = "main";
-  assert.throws(() => validateServiceBranches(config, "production", serviceIds), /must watch/);
+  assert.doesNotThrow(() => validateCoordinatedServiceSources(config, serviceIds));
+  config.services[frontendServiceId].source.repo = "fluffyrabbot/fmarch";
+  assert.throws(() => validateCoordinatedServiceSources(config, serviceIds), /must not retain/);
+});
+
+test("first coordinated production release permits only the canonical detachable Git source", () => {
+  const config = {
+    services: Object.fromEntries(
+      [apiServiceId, migratorServiceId, frontendServiceId].map((serviceId) => [
+        serviceId,
+        { source: { image: null, repo: "fluffyrabbot/fmarch" } },
+      ]),
+    ),
+  };
+  assert.doesNotThrow(() => validateProductionSourceCutover(config, serviceIds));
+  config.services[apiServiceId].source.repo = "attacker/fmarch";
+  assert.throws(() => validateProductionSourceCutover(config, serviceIds), /safely detachable/);
 });
 
 test("hosted variables require isolated production identity credentials", () => {

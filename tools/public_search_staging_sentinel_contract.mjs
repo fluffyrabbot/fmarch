@@ -1,4 +1,6 @@
-export const PUBLIC_SEARCH_STAGING_SENTINEL_RECEIPT_VERSION = 1;
+import { createHash } from "node:crypto";
+
+export const PUBLIC_SEARCH_STAGING_SENTINEL_RECEIPT_VERSION = 2;
 
 const requiredSearchFields = Object.freeze([
   "filter",
@@ -16,6 +18,7 @@ export function buildPublicSearchStagingSentinelReceipt({
   deployment,
   applicationLogRows,
   expectedCommit,
+  expectedImageDigest = null,
   now = new Date(),
 }) {
   validatePublicSearchStagingSentinel(contract);
@@ -36,12 +39,19 @@ export function buildPublicSearchStagingSentinelReceipt({
     deployment?.status === "SUCCESS" ? "passed" : "failed",
     `expected SUCCESS, observed ${deployment?.status ?? "missing"}`,
   );
+  const observedImageDigest =
+    deployment?.meta?.imageDigest ?? deployment?.meta?.image_digest ?? null;
+  const commitAttributed = deployment?.meta?.commitHash === expectedCommit;
+  const imageAttributed =
+    expectedImageDigest !== null && observedImageDigest === expectedImageDigest;
   const deploymentCommit = check(
     "deployment-commit-attribution",
-    deployment?.meta?.commitHash === expectedCommit ? "passed" : "failed",
-    deployment?.meta?.commitHash === expectedCommit
-      ? "Railway deployment is attributed to the expected commit"
-      : "Railway deployment commit does not match the expected commit",
+    commitAttributed || imageAttributed ? "passed" : "failed",
+    commitAttributed
+      ? "Railway source deployment is attributed to the expected commit"
+      : imageAttributed
+        ? "Railway image deployment is attributed to the coordinator-pinned digest"
+        : "Railway deployment matches neither the expected commit nor image digest",
   );
   const deploymentEnvironment = check(
     "deployment-environment-attribution",
@@ -144,8 +154,11 @@ export function buildPublicSearchStagingSentinelReceipt({
       status: deployment?.status ?? null,
       createdAt: deploymentCreatedAt.toISOString(),
       commitHash: deployment?.meta?.commitHash ?? null,
+      imageDigest: observedImageDigest,
       expectedCommit,
-      exactCommitAttributed: deployment?.meta?.commitHash === expectedCommit,
+      expectedImageDigest,
+      attributionKind: commitAttributed ? "git_commit" : imageAttributed ? "oci_digest" : null,
+      exactCommitAttributed: commitAttributed || imageAttributed,
     },
     latency: {
       scope: "exact-deployment-post-canary",
@@ -178,7 +191,10 @@ export function buildPublicSearchStagingSentinelReceipt({
     },
     checks,
   };
-  return assertPublicSearchStagingSentinelReceipt(receipt);
+  return assertPublicSearchStagingSentinelReceipt({
+    ...receipt,
+    receipt_sha256: createHash("sha256").update(JSON.stringify(receipt)).digest("hex"),
+  });
 }
 
 export function assertPublicSearchStagingSentinelReceipt(receipt) {
@@ -194,6 +210,11 @@ export function assertPublicSearchStagingSentinelReceipt(receipt) {
   }
   if (receipt.status !== derivedStatus(receipt.checks)) {
     throw new Error("public-search staging sentinel status is not derived from checks");
+  }
+  const { receipt_sha256: actualDigest, ...base } = receipt;
+  const expectedDigest = createHash("sha256").update(JSON.stringify(base)).digest("hex");
+  if (actualDigest !== expectedDigest) {
+    throw new Error("public-search staging sentinel receipt digest drifted");
   }
   const serialized = JSON.stringify(receipt);
   if (

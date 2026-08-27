@@ -43,6 +43,7 @@
 // measurement the first time anyone ran --run.
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, matchesGlob } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -724,6 +725,12 @@ async function main(argv) {
     const observations = new Map();
     const execution = await runExecutionPlan(ordered, manifest, {
       jobs: args.jobs,
+      receiptContext: {
+        commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim(),
+        mode: selection.mode,
+        manifest_sha256: createHash('sha256').update(readFileSync(MANIFEST_PATH)).digest('hex'),
+        changed,
+      },
       onResult(laneId, entry) {
         observations.set(laneId, entry);
       },

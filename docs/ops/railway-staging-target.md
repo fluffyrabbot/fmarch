@@ -4,28 +4,24 @@ This is the repeatable bootstrap for fmarch's first externally reachable staging
 
 ## Target Shape
 
-Create one Railway project in one region with three repo-backed services, one
+Create one Railway project in one region with three image-backed services, one
 managed database, and two purpose-separated object stores:
 
-| Service | Repository root | Public | Persistent state |
+| Service | OCI artifact | Public | Persistent state |
 | --- | --- | --- | --- |
-| `api` | repository root | yes | Railway Postgres, shared media Bucket, plus a dedicated shared subject-authority Bucket |
-| `migrator` | repository root | no | none; one-shot schema/ACL authority |
-| `frontend` | repository root | yes | none |
+| `api` | exact runtime digest | yes | Railway Postgres, shared media Bucket, plus a dedicated shared subject-authority Bucket |
+| `migrator` | the same exact runtime digest | no | none; one-shot schema/ACL authority |
+| `frontend` | exact frontend digest from the same commit | yes | none |
 | `Postgres` | Railway managed database | no | Railway managed database storage/backups |
 | `media` | Railway Bucket | no | S3-compatible canonical media and variants |
 | `subject-authority` | Railway Bucket | no | immutable authority genesis, wrapped subject keys, and revocation journal |
 
-All repo-backed services retain the repository root as their Railway root
-directory because frontend server routes import shared root-level `tools/`
-modules. The `api` service builds from `Dockerfile.railway`: the root
-`Dockerfile` stays the exact-image proof recipe, but its per-lane cargo
-cache mounts are rejected by Railway's Metal builder ("missing the
-cacheKey prefix"), so hosted deploys use the mount-free recipe over the
-same pinned base images. Configure `migrator` with
-`/deploy/railway/migrator.railway.toml` and `frontend` with
-`/deploy/railway/frontend.railway.toml`. The former runs the exact image's
-`fmarch-migrate` binary once; the latter selects `Dockerfile.frontend`.
+The local release coordinator builds `Dockerfile` and `Dockerfile.frontend`
+for `linux/amd64`, labels both with the full pushed commit, publishes unique
+SHA tags to public GHCR, resolves their digests, and pins Railway to those
+digests. Railway performs no application build. The runtime image contains
+both `fmarch-server` and `fmarch-migrate`; service-specific commands and
+credentials preserve the authority split without duplicating the artifact.
 
 Run the API at two replicas. Both use the same S3-compatible `media` bucket and
 never receive schema-owner or key-admin authority. The separate one-shot
@@ -44,10 +40,10 @@ database-owner API cannot close 1.0.
 `staging`, or `preprod` branch. Railway environments, not development branches,
 own the release boundary:
 
-| Railway environment | Git source | Deployment rule |
+| Railway environment | Release pointer | Deployment rule |
 | --- | --- | --- |
-| `staging` | `main` | Deploy migrator, API, and frontend after every push so all three attest the exact same `main` SHA. |
-| `production` | `production` | Deploy all three only when the release pointer is explicitly advanced to a verified `main` commit. |
+| `staging` | `main` | Run `npm run release:staging -- --commit <full-sha>` after the full local proof. |
+| `production` | `production` | Advance the pointer, then reuse the exact staging-proven digests through `promote:production`. |
 
 The canonical Railway domains are:
 
@@ -62,18 +58,16 @@ requires a clean worktree, the required local proof, successful staging
 migrator/API/frontend deployments, API and frontend health checks, and Railway
 deployment metadata showing that all three services run the same commit.
 
-Do not configure service watch paths on any repo-backed service. Skipping a
-migrator, API, or frontend build for an apparently unrelated commit breaks the exact-SHA
-release invariant and makes that `main` commit intentionally unpromotable.
-
-Railway GitHub-push deployments are independent: reference-variable ordering
-does not order multiple services triggered by the same push. The bounded API
-schema gate therefore tolerates normal migrator progress but never migrates. If
-the migrator cannot finish within the checked 180-second bound, Railway must leave the prior API
-deployment serving; after the migrator reaches `SUCCESS`, redeploy the API at
-that exact SHA. Do not lengthen the gate into an unbounded availability wait.
-See Railway's
-[deployment dependency boundary](https://docs.railway.com/deployments/deployment-actions#when-ordering-does-not-apply).
+Do not retain a Git source or enable image auto-updates on these services.
+`tools/release_coordinator.mjs` is the only release sequencer: it deploys and
+first disconnects the canonical Git source without stopping the last successful
+deployment, then
+waits for the one-shot migrator first, then deploys API and frontend, verifies
+their reported digests and embedded `release_commit`, and finally produces the
+environment receipt. A failed migrator starts neither later deployment. A
+failed API or frontend may be retried only with the same receipt-bound digest.
+The bounded API schema gate still tolerates normal migration progress but never
+migrates or weakens checksum/ACL failures.
 
 Staging and production must have separate Postgres service instances, media
 buckets, subject-authority buckets, public domains, variables, and WorkOS environments. A
@@ -149,9 +143,9 @@ business integrity or plaintext confidentiality after API compromise.
 ## Provisioning
 
 1. Create a Railway project and add a managed PostgreSQL service named `Postgres`.
-2. Add a private `migrator` service from this repository. Leave its root at the
-   repository root, set its Config-as-Code path to
-   `/deploy/railway/migrator.railway.toml`, and copy
+2. Add a private `migrator` service and configure the deployment shape from
+   `deploy/railway/migrator.railway.toml`. The coordinator owns its digest-pinned
+   image source. Copy
    `deploy/railway/migrator.env.example`. Generate distinct, URI-safe
    application and key-admin passwords in each environment. Only this service
    receives the environment-local `${{Postgres.DATABASE_URL}}` composed as
@@ -159,13 +153,13 @@ business integrity or plaintext confidentiality after API compromise.
    values. It has no public domain, TCP proxy, event keys, bucket
    credentials, or identity credentials. Its `NEVER` restart policy preserves
    one-shot semantics.
-3. Deploy `migrator` once. It must create/reconcile the fixed
+3. Run the coordinator. Its migrator phase must create/reconcile the fixed
    `fmarch_application` and `fmarch_key_admin` login roles, apply migrations
    through the schema-owner connection, reconcile exact privileges/default
    ACLs, and exit successfully. Repeat this reconciliation after every restore;
    migration history alone is not ACL evidence.
-4. Add an `api` service from this repository. Leave its root directory at the
-   repository root and use `/railway.toml`. Construct its only database secret,
+4. Add an `api` service using the deployment shape in `railway.toml`; the
+   coordinator owns its digest-pinned image source. Construct its only database secret,
    `DATABASE_URL`, with username `fmarch_application` and the application
    password held by the migrator; percent-encode the password when composing
    the URL and include exactly one secure `sslmode`. Do not copy the owner URL
@@ -187,10 +181,11 @@ business integrity or plaintext confidentiality after API compromise.
    boundary. If coordinated database-plus-authority rollback is in scope, deploy the same adapter
    against storage with enforced object retention and KMS custody before production promotion.
 7. Do not set `FMARCH_BIND`. When a platform supplies `PORT`, the server binds `[::]:$PORT` for public IPv4 and private-network IPv6 reachability; local development still defaults to `127.0.0.1:4000`, and an explicit `FMARCH_BIND` overrides either behavior.
-8. Deploy `api`; require its bounded `fmarch-schema-gate` pre-deploy command to
+8. Let the coordinator deploy `api` only after migrator success; require its bounded `fmarch-schema-gate` pre-deploy command to
    prove the migrator-completed schema and authority audit through the
    application credential before Railway admits two replicas. Generate a public Railway domain, verify `GET /healthz` returns dependency-free process liveness, and require `GET /readyz` to return `{ "ok": true, "database_schema": true, "object_storage": true, "subject_authority": true }` while both replicas are present. Readiness revalidates the authority manifest, so bucket or credential loss removes the replica from service. Railway admission and release promotion consume `/readyz`, not `/healthz`.
-9. Add a `frontend` service from the same repository. Leave its root directory at the repository root, then set its Config-as-Code path to `/deploy/railway/frontend.railway.toml`.
+9. Add a `frontend` service using `deploy/railway/frontend.railway.toml`; the
+   coordinator owns its independently digest-pinned frontend image source.
 10. Generate the frontend public domain. Copy the canonical environment URLs from `deploy/railway/frontend.env.example`, including the exact environment-scoped private API authority `http://fmarch.railway.internal:8080`; it receives app-session and one-time WorkOS bearers and must never be replaced with a public or third-party URL. Use the same WorkOS client id as the API, add an environment-isolated WorkOS API key, preserve the exact callback URI, and generate an opaque random cookie password of at least 32 characters. Promotion rejects short values and documented, example, variable-reference, or placeholder-shaped values without printing the secret. Add them as Railway Variables for `frontend`.
 11. Record the new migrator service UUID as
     `FMARCH_RAILWAY_MIGRATOR_SERVICE_ID` in the protected release-operator
@@ -209,7 +204,7 @@ npm run promote:production -- --check
 
 The preflight requires a clean synchronized `main`, a fast-forwardable
 `origin/production`, successful staging migrator, API, and frontend deployments
-carrying the exact `main` SHA, active canonical domains, healthy staging
+bound by a passed exact-commit staging receipt, active canonical domains, healthy staging
 endpoints, exact canonical frontend origins/callbacks/public and private API URLs, matching
 API/frontend WorkOS client ids, live discovery-aligned WorkOS issuer/JWKS
 metadata in both environments, and complete production variables. It proves that API uses only
@@ -225,8 +220,8 @@ Promote the verified commit with:
 npm run promote:production
 ```
 
-The command advances the release pointer, observes terminal `SUCCESS` for the
-migrator, API, and frontend at that SHA, and verifies both production health endpoints.
+The command advances the release pointer, reuses the staging-proven digests,
+sequences migrator before API/frontend, and verifies both production health endpoints.
 It does not offer a force flag or a proof bypass.
 
 The underlying sequence is:
@@ -235,14 +230,14 @@ The underlying sequence is:
 2. Run the full proof sweep (`npm run proof:lanes -- --mode full --run`). Production
    promotion is a sprint boundary, so it deliberately pays the full validation
    cost rather than selecting only the current diff's push lanes.
-3. Verify staging API dependency readiness, frontend health, and confirm the
-   latest successful migrator, API, and frontend Railway deployments carry the same
-   `main` commit SHA.
-4. Fast-forward the remote `production` branch to that exact SHA. Railway
-   production services must watch `production`, never `main`.
-5. Observe terminal `SUCCESS` for all three production services and verify their
-   deployment metadata carries the promoted SHA before calling the release
-   complete.
+3. Verify the staging receipt, digest-pinned service sources, API dependency
+   readiness, frontend health, and embedded release commit.
+4. Disconnect any remaining canonical production Git sources while the prior
+   deployments continue serving, then fast-forward the remote `production`
+   branch to that exact SHA.
+5. Invoke the coordinator with the staging runtime/frontend digests, wait for
+   migrator success, deploy API/frontend, and verify digest plus health commit
+   attribution before calling the release complete.
 
 If any service fails, leave the last successful API/frontend deployment running, diagnose
 the failed deployment, and do not move the release pointer again until the trio

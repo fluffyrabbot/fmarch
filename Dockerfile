@@ -19,6 +19,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 
 ARG FMARCH_CARGO_CACHE_NAMESPACE=fmarch-exact-image-rust-1.95
+ARG FMARCH_RELEASE_COMMIT=development
 
 COPY --from=planner /app/recipe.json ./recipe.json
 
@@ -36,18 +37,22 @@ COPY programs ./programs
 RUN --mount=type=cache,id=${FMARCH_CARGO_CACHE_NAMESPACE}-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=${FMARCH_CARGO_CACHE_NAMESPACE}-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=${FMARCH_CARGO_CACHE_NAMESPACE}-target,target=/app/target,sharing=locked \
-    cargo build --release --locked -p server --bins \
+    FMARCH_RELEASE_COMMIT=${FMARCH_RELEASE_COMMIT} cargo build --release --locked -p server --bins \
     && install -D -m 0755 /app/target/release/server /out/fmarch-server \
     && install -D -m 0755 /app/target/release/fmarch-migrate /out/fmarch-migrate \
     && install -D -m 0755 /app/target/release/fmarch-schema-gate /out/fmarch-schema-gate \
+    && install -D -m 0755 /app/target/release/fmarch-schema-epoch-reset /out/fmarch-schema-epoch-reset \
     && install -D -m 0755 /app/target/release/fmarch-staging-search-corpus /out/fmarch-staging-search-corpus \
     && install -D -m 0755 /app/target/release/fmarch-event-key-admin /out/fmarch-event-key-admin \
     && install -D -m 0755 /app/target/release/fmarch-profile-index-admin /out/fmarch-profile-index-admin
 
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS runtime-base
 
+ARG FMARCH_RELEASE_COMMIT=development
+
 LABEL org.opencontainers.image.source="https://github.com/fluffyrabbot/fmarch" \
-      org.opencontainers.image.title="fmarch-api"
+      org.opencontainers.image.title="fmarch-runtime" \
+      org.opencontainers.image.revision="${FMARCH_RELEASE_COMMIT}"
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates \
@@ -59,6 +64,7 @@ FROM runtime-base AS runtime
 COPY --from=builder /out/fmarch-server /usr/local/bin/fmarch-server
 COPY --from=builder /out/fmarch-migrate /usr/local/bin/fmarch-migrate
 COPY --from=builder /out/fmarch-schema-gate /usr/local/bin/fmarch-schema-gate
+COPY --from=builder /out/fmarch-schema-epoch-reset /usr/local/bin/fmarch-schema-epoch-reset
 COPY --from=builder /out/fmarch-staging-search-corpus /usr/local/bin/fmarch-staging-search-corpus
 COPY --from=builder /out/fmarch-event-key-admin /usr/local/bin/fmarch-event-key-admin
 COPY --from=builder /out/fmarch-profile-index-admin /usr/local/bin/fmarch-profile-index-admin

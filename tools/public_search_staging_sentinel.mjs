@@ -84,6 +84,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     deployment,
     applicationLogRows,
     expectedCommit,
+    expectedImageDigest: args.expectedImageDigest,
   });
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${JSON.stringify(receipt, null, 2)}\n`);
@@ -132,6 +133,8 @@ function parseArguments(argv) {
     else if (value === "--output") args.output = requireValue(argv, ++index, value);
     else if (value === "--expected-commit") {
       args.expectedCommit = requireValue(argv, ++index, value);
+    } else if (value === "--expected-image-digest") {
+      args.expectedImageDigest = requireValue(argv, ++index, value);
     } else throw new Error(`unknown public-search sentinel argument: ${value}`);
   }
   return args;
@@ -150,6 +153,7 @@ Options:
   --contract PATH        Sentinel contract (default: docs/ops/public-search-staging-sentinel.json)
   --output PATH          Receipt path (default: target/public-search-staging-sentinel/receipt.json)
   --expected-commit SHA  Exact Railway deployment commit (default: HEAD)
+  --expected-image-digest DIGEST  Coordinator-pinned OCI digest
   --help                 Show this help
 `);
 }

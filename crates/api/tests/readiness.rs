@@ -29,6 +29,7 @@ async fn readyz_proves_schema_and_object_storage(pool: sqlx::PgPool) {
         body,
         Readiness {
             ok: true,
+            release_commit: api::release_commit().to_string(),
             database_schema: true,
             event_encryption: true,
             object_storage: true,
@@ -47,6 +48,7 @@ async fn readyz_rejects_a_database_without_the_required_schema(pool: sqlx::PgPoo
         body,
         Readiness {
             ok: false,
+            release_commit: api::release_commit().to_string(),
             database_schema: false,
             event_encryption: false,
             object_storage: true,

@@ -7,5 +7,8 @@ test("healthz responds ok without any upstream dependency", async () => {
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "application/json");
   assert.equal(response.headers.get("cache-control"), "no-store");
-  assert.deepEqual(await response.json(), { status: "ok" });
+  assert.deepEqual(await response.json(), {
+    status: "ok",
+    release_commit: "development",
+  });
 });

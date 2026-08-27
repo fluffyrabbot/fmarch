@@ -293,11 +293,13 @@ pub fn router_with_state(state: ApiState) -> Router {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Health {
     pub ok: bool,
+    pub release_commit: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Readiness {
     pub ok: bool,
+    pub release_commit: String,
     pub database_schema: bool,
     pub event_encryption: bool,
     pub object_storage: bool,
@@ -305,7 +307,10 @@ pub struct Readiness {
 }
 
 async fn healthz() -> Json<Health> {
-    Json(Health { ok: true })
+    Json(Health {
+        ok: true,
+        release_commit: release_commit().to_string(),
+    })
 }
 
 async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) {
@@ -327,6 +332,7 @@ async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) 
             && event_encryption.is_ok()
             && object_storage.is_ok()
             && subject_authority.is_ok(),
+        release_commit: release_commit().to_string(),
         database_schema: database_schema.is_ok(),
         event_encryption: event_encryption.is_ok(),
         object_storage: object_storage.is_ok(),
@@ -348,6 +354,13 @@ async fn readyz(State(state): State<ApiState>) -> (StatusCode, Json<Readiness>) 
         StatusCode::SERVICE_UNAVAILABLE
     };
     (status, Json(readiness))
+}
+
+pub const fn release_commit() -> &'static str {
+    match option_env!("FMARCH_RELEASE_COMMIT") {
+        Some(commit) => commit,
+        None => "development",
+    }
 }
 
 fn acquire_workload_slot(

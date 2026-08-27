@@ -808,6 +808,7 @@ export async function runExecutionPlan(
     signalSource = process,
     persistReceipt = writeReceiptFile,
     databaseProvider = createRepoLocalPostgresProvider({ env }),
+    receiptContext = null,
     onStart = () => {},
     onResult = () => {},
     log = console.log,
@@ -829,12 +830,13 @@ export async function runExecutionPlan(
     planned.map((laneId) => [laneId, { state: 'pending', command: laneLabel(laneId, manifest.lanes[laneId]) }]),
   );
   const receipt = {
-    schema: 1,
+    schema: 2,
     id: run.id,
     state: 'running',
     started_at: new Date(now()).toISOString(),
     updated_at: new Date(now()).toISOString(),
     run_dir: run.runDir,
+    context: receiptContext,
     lanes: {},
   };
   let receiptWrite = Promise.resolve();

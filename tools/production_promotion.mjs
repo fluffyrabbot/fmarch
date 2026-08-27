@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { preflightWorkosOidc } from "./workos_oidc_preflight.mjs";
+import {
+  assertReleaseReceipt,
+  validateDeploymentArtifact,
+  validateHealth,
+} from "./release_coordinator_contract.mjs";
 
 const DEFAULTS = Object.freeze({
   projectId: "9d285d67-c11b-4508-9efb-fad042787b4c",
@@ -54,7 +60,7 @@ export function validateRepositoryState({
   );
 }
 
-export function validateServiceBranches(config, expectedBranch, serviceIds = DEFAULTS) {
+export function validateCoordinatedServiceSources(config, serviceIds = DEFAULTS, receipt = null) {
   const services = config.services ?? config;
   for (const [label, serviceId] of [
     ["migrator", serviceIds.migratorServiceId],
@@ -62,11 +68,64 @@ export function validateServiceBranches(config, expectedBranch, serviceIds = DEF
     ["frontend", serviceIds.frontendServiceId],
   ]) {
     assert.ok(serviceId, `Railway ${label} service id is required`);
+    const source = services[serviceId]?.source ?? {};
+    assert.equal(source.repo ?? null, null, `Railway ${label} must not retain a racing Git source`);
+    assert.match(source.image ?? "", /@sha256:[0-9a-f]{64}$/u, `Railway ${label} must use a digest-pinned OCI image`);
+  }
+  if (receipt) {
     assert.equal(
-      services[serviceId]?.source?.branch,
-      expectedBranch,
-      `Railway service ${serviceId} must watch ${expectedBranch}`,
+      services[serviceIds.migratorServiceId].source.image,
+      services[serviceIds.apiServiceId].source.image,
+      "migrator and API must use the same runtime image reference",
     );
+    assert.ok(
+      services[serviceIds.apiServiceId].source.image.endsWith(`@${receipt.images.runtime}`),
+      "staging API image does not match the release receipt",
+    );
+    assert.ok(
+      services[serviceIds.frontendServiceId].source.image.endsWith(`@${receipt.images.frontend}`),
+      "staging frontend image does not match the release receipt",
+    );
+  }
+}
+
+export function validateProductionSourceCutover(config, serviceIds = DEFAULTS) {
+  const services = config.services ?? config;
+  for (const [label, serviceId] of [
+    ["migrator", serviceIds.migratorServiceId],
+    ["API", serviceIds.apiServiceId],
+    ["frontend", serviceIds.frontendServiceId],
+  ]) {
+    const source = services[serviceId]?.source ?? {};
+    const coordinated = /^ghcr\.io\/fluffyrabbot\/fmarch-(?:runtime|frontend)@sha256:[0-9a-f]{64}$/u
+      .test(source.image ?? "");
+    const detachable = source.repo === "fluffyrabbot/fmarch" && source.image == null;
+    assert.equal(
+      coordinated || detachable,
+      true,
+      `Railway production ${label} source is neither coordinated nor safely detachable`,
+    );
+  }
+}
+
+function disconnectProductionGitSources(config, productionConfig) {
+  const services = productionConfig.services ?? productionConfig;
+  for (const serviceId of [config.migratorServiceId, config.apiServiceId, config.frontendServiceId]) {
+    if (services[serviceId]?.source?.repo == null) continue;
+    run("railway", [
+      "service",
+      "source",
+      "disconnect",
+      "--project",
+      config.projectId,
+      "--environment",
+      config.productionEnvironment,
+      "--service",
+      serviceId,
+      "--json",
+    ], {
+      env: scrubPrivilegedDatabaseEnvironment(process.env),
+    });
   }
 }
 
@@ -879,6 +938,22 @@ async function main() {
 
   run("git", ["fetch", "--quiet", "origin", "main", "production"]);
   const head = text("git", ["rev-parse", "HEAD"]);
+  const stagingReceiptPath = path.resolve(
+    process.env.FMARCH_STAGING_RELEASE_RECEIPT ??
+      path.join(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "target",
+        "releases",
+        "staging",
+        `${head}.json`,
+      ),
+  );
+  const stagingReceipt = assertReleaseReceipt(
+    JSON.parse(readFileSync(stagingReceiptPath, "utf8")),
+  );
+  assert.equal(stagingReceipt.environment, "staging");
+  assert.equal(stagingReceipt.commit, head, "staging receipt does not match the promoted commit");
   const productionIsAncestor =
     spawnSync("git", ["merge-base", "--is-ancestor", "origin/production", head]).status === 0;
   validateRepositoryState({
@@ -920,8 +995,8 @@ async function main() {
       { linked: true },
     ),
   ]);
-  validateServiceBranches(stagingConfig, "main", config);
-  validateServiceBranches(productionConfig, "production", config);
+  validateCoordinatedServiceSources(stagingConfig, config, stagingReceipt);
+  validateProductionSourceCutover(productionConfig, config);
 
   const [
     stagingApi,
@@ -961,13 +1036,9 @@ async function main() {
     }),
   ]);
 
-  await validateEnvironment(config, config.stagingEnvironment, head, {
+  await validateCoordinatedEnvironment(config, config.stagingEnvironment, stagingReceipt, {
     apiUrl: config.stagingApiUrl,
     frontendUrl: config.stagingFrontendUrl,
-  });
-  run("npm", ["run", "run:public-search-staging-sentinel"], {
-    env: scrubPrivilegedDatabaseEnvironment(process.env),
-    stdio: "inherit",
   });
 
   const proof = localProofRuntime(process.env);
@@ -987,11 +1058,26 @@ async function main() {
     return;
   }
 
+  disconnectProductionGitSources(config, productionConfig);
   run("git", ["push", "origin", `${head}:refs/heads/production`], { stdio: "inherit" });
-  await waitForProduction(config, head);
-  await validateEnvironment(config, config.productionEnvironment, head, {
-    apiUrl: config.productionApiUrl,
-    frontendUrl: config.productionFrontendUrl,
+  const coordinatorArguments = [
+    "tools/release_coordinator.mjs",
+    "--environment",
+    "production",
+    "--commit",
+    head,
+    "--reuse-staging-receipt",
+    stagingReceiptPath,
+  ];
+  if (stagingReceipt.schema_epoch_reset) {
+    coordinatorArguments.push(
+      "--schema-epoch-reset",
+      String(stagingReceipt.schema_epoch_reset.epoch),
+    );
+  }
+  run(process.execPath, coordinatorArguments, {
+    env: scrubPrivilegedDatabaseEnvironment(process.env),
+    stdio: "inherit",
   });
   console.log(`production promotion completed for ${head}`);
 }
@@ -1012,6 +1098,31 @@ export function runtimeConfig(env = process.env) {
     productionEnvironment:
       env.FMARCH_RAILWAY_PRODUCTION_ENVIRONMENT ?? DEFAULTS.productionEnvironment,
   };
+}
+
+async function validateCoordinatedEnvironment(config, environment, receipt, urls) {
+  const [migratorDeployment, apiDeployment, frontendDeployment, apiDomains, frontendDomains] =
+    await Promise.all([
+      latestDeployment(config, environment, config.migratorServiceId),
+      latestDeployment(config, environment, config.apiServiceId),
+      latestDeployment(config, environment, config.frontendServiceId),
+      domains(config, environment, config.apiServiceId),
+      domains(config, environment, config.frontendServiceId),
+    ]);
+  validateDeploymentArtifact(migratorDeployment, receipt.images.runtime, `${environment} migrator`);
+  validateDeploymentArtifact(apiDeployment, receipt.images.runtime, `${environment} API`);
+  validateDeploymentArtifact(frontendDeployment, receipt.images.frontend, `${environment} frontend`);
+  assert.equal(migratorDeployment.id, receipt.deployments.migrator, "staging migrator receipt is stale");
+  assert.equal(apiDeployment.id, receipt.deployments.api, "staging API receipt is stale");
+  assert.equal(frontendDeployment.id, receipt.deployments.frontend, "staging frontend receipt is stale");
+  validateDomainList(apiDomains, new URL(urls.apiUrl).host, `${environment} API`);
+  validateDomainList(frontendDomains, new URL(urls.frontendUrl).host, `${environment} frontend`);
+  const [apiBody, frontendBody] = await Promise.all([
+    health(`${urls.apiUrl}/readyz`, () => true, `${environment} API`),
+    health(`${urls.frontendUrl}/healthz`, () => true, `${environment} frontend`),
+  ]);
+  validateHealth(apiBody, receipt.commit, "api");
+  validateHealth(frontendBody, receipt.commit, "frontend");
 }
 
 async function validateEnvironment(config, environment, commit, urls) {
@@ -1083,6 +1194,7 @@ async function health(url, predicate, label) {
   assert.equal(response.ok, true, `${label} health returned ${response.status}`);
   const body = await response.json();
   assert.equal(predicate(body), true, `${label} health payload was not ready`);
+  return body;
 }
 
 async function variables(config, environment, service) {

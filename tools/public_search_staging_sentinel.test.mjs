@@ -9,6 +9,7 @@ import {
 
 const now = new Date("2026-08-26T03:00:00.000Z");
 const commit = "64acfec8927edc7c9cb4f130fdfe4eff81c80966";
+const imageDigest = `sha256:${"a".repeat(64)}`;
 
 async function stagingSentinel() {
   return JSON.parse(
@@ -23,9 +24,10 @@ function deployment({
   id = "deployment-exact",
   createdAt = "2026-08-26T02:55:00.000Z",
   commitHash = commit,
+  deployedImageDigest = null,
   status = "SUCCESS",
 } = {}) {
-  return { id, status, createdAt, meta: { commitHash } };
+  return { id, status, createdAt, meta: { commitHash, imageDigest: deployedImageDigest } };
 }
 
 function applicationRows({ elapsedMs = 100, count = 20, extra = "" } = {}) {
@@ -120,6 +122,22 @@ test("commit attribution mismatch is a hard failure", async () => {
 
   assert.equal(receipt.status, "failed");
   assert.equal(receipt.deployment.exactCommitAttributed, false);
+});
+
+test("digest-pinned image deployment replaces absent Git metadata attribution", async () => {
+  const receipt = buildPublicSearchStagingSentinelReceipt({
+    contract: await stagingSentinel(),
+    deployment: deployment({ commitHash: null, deployedImageDigest: imageDigest }),
+    applicationLogRows: applicationRows(),
+    expectedCommit: commit,
+    expectedImageDigest: imageDigest,
+    now,
+  });
+
+  assert.equal(receipt.status, "passed");
+  assert.equal(receipt.deployment.attributionKind, "oci_digest");
+  assert.equal(receipt.deployment.exactCommitAttributed, true);
+  assert.match(receipt.receipt_sha256, /^[0-9a-f]{64}$/u);
 });
 
 test("Railway NDJSON parsing rejects partial or non-JSON evidence", () => {

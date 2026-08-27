@@ -20,7 +20,6 @@ async function contract() {
     await Promise.all(
       [
         "Dockerfile",
-        "Dockerfile.railway",
         ".dockerignore",
         ".env.example",
         "railway.toml",
@@ -40,11 +39,14 @@ async function contract() {
         "tools/profile_handle_index_rotation_receipt.mjs",
         "docs/ops/railway-staging-target.md",
         "tools/production_promotion.mjs",
+        "tools/release_coordinator.mjs",
+        "tools/release_coordinator_contract.mjs",
         "tools/workos_oidc_preflight.mjs",
         "package.json",
         "crates/server/src/main.rs",
         "crates/server/src/bin/fmarch-migrate.rs",
         "crates/server/src/bin/fmarch-schema-gate.rs",
+        "crates/server/src/bin/fmarch-schema-epoch-reset.rs",
         "crates/server/src/bin/fmarch-staging-search-corpus.rs",
         "crates/server/src/bin/fmarch-event-key-admin.rs",
         "crates/api/src/lib.rs",
@@ -122,33 +124,29 @@ async function contract() {
   assert.doesNotMatch(source["railway.toml"], /fmarch-migrate/);
   assert.match(source["railway.toml"], /numReplicas = 2/);
   assert.doesNotMatch(source["railway.toml"], /watchPatterns/);
-  // Hosted api and migrator builds use the mount-free deploy recipe: the
-  // root Dockerfile's proof-lane cache mounts are rejected by Railway's
-  // Metal builder ("missing the cacheKey prefix").
-  assert.match(source["railway.toml"], /dockerfilePath = "Dockerfile\.railway"/);
-  assert.match(
-    source["deploy/railway/migrator.railway.toml"],
-    /dockerfilePath = "Dockerfile\.railway"/,
-  );
-  assert.match(
-    source["deploy/railway/frontend.railway.toml"],
-    /dockerfilePath = "Dockerfile\.frontend"/,
-  );
-  assert.doesNotMatch(source["Dockerfile.railway"], /--mount=type=cache/);
-  assert.match(source["Dockerfile.railway"], /^FROM rust:[^\n]+@sha256:[a-f0-9]{64} AS chef$/m);
+  assert.doesNotMatch(source["railway.toml"], /^\[build\]$/m);
+  assert.doesNotMatch(source["deploy/railway/migrator.railway.toml"], /^\[build\]$/m);
+  assert.doesNotMatch(source["deploy/railway/frontend.railway.toml"], /^\[build\]$/m);
   for (const binary of [
     "fmarch-server",
     "fmarch-migrate",
     "fmarch-schema-gate",
+    "fmarch-schema-epoch-reset",
     "fmarch-staging-search-corpus",
     "fmarch-event-key-admin",
     "fmarch-profile-index-admin",
   ]) {
     assert.match(
-      source["Dockerfile.railway"],
+      source.Dockerfile,
       new RegExp(`COPY --from=builder /out/${binary} `),
     );
   }
+  assert.match(source.Dockerfile, /org\.opencontainers\.image\.revision="\$\{FMARCH_RELEASE_COMMIT\}"/);
+  assert.match(source["Dockerfile.frontend"], /org\.opencontainers\.image\.revision="\$\{FMARCH_RELEASE_COMMIT\}"/);
+  assert.match(source["tools/release_coordinator.mjs"], /source\.image/);
+  assert.match(source["tools/release_coordinator.mjs"], /await deployImage\([\s\S]*migratorServiceId/);
+  assert.match(source["tools/release_coordinator.mjs"], /Promise\.all\(\[/);
+  assert.match(source["tools/release_coordinator_contract.mjs"], /migrator_api_digest_equal/);
   assert.match(
     source["deploy/railway/migrator.railway.toml"],
     /startCommand = "fmarch-migrate"/,
@@ -178,7 +176,6 @@ async function contract() {
     /COPY --from=builder \/app\/frontend\/node_modules \.\/node_modules/,
   );
   assert.match(source["Dockerfile.frontend"], /CMD \["node", "build"\]/);
-  assert.match(source["deploy/railway/frontend.railway.toml"], /dockerfilePath = "Dockerfile\.frontend"/);
   assert.match(source["deploy/railway/frontend.railway.toml"], /healthcheckPath = "\/healthz"/);
   assert.doesNotMatch(source["deploy/railway/frontend.railway.toml"], /watchPatterns/);
 
@@ -668,7 +665,7 @@ async function contract() {
     "test:dev-test-game-real-hosted-matrix-raw-capture",
     "`main` is the only development trunk",
     "`production` branch is a release pointer",
-    "production services must watch `production`, never `main`.",
+    "Do not retain a Git source or enable image auto-updates on these services.",
     "separate Postgres service instances",
     "different database name on the same PostgreSQL server is not isolation",
     "reconciler governs the current database only",

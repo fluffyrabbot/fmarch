@@ -291,6 +291,7 @@ test('a failed prerequisite blocks its consumer while an already started indepen
   assert.equal(result.receipt.lanes.consumer.state, 'blocked');
   assert.equal(result.receipt.lanes.independent.state, 'passed');
   const receipt = JSON.parse(await readFile(result.run.receiptPath, 'utf8'));
+  assert.equal(receipt.schema, 2);
   assert.equal(receipt.state, 'failed');
 });
 

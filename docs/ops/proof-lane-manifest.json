@@ -125,6 +125,8 @@
     },
     "test:proof-lane-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:proof-lane-contract"], "resources": [] } },
     "test:production-promotion": { "kind": "npm" },
+    "test:release-coordinator": { "kind": "npm" },
+    "test:schema-epoch-reset": { "kind": "npm" },
     "test:workos-oidc-preflight": { "kind": "npm" },
     "test:railway-staging-target": { "kind": "npm" },
     "test:release-topology": { "kind": "npm" },
@@ -749,8 +751,17 @@
     {
       "id": "ops:production-promotion",
       "tier": "active",
-      "paths": ["tools/production_promotion.mjs", "tools/production_promotion.test.mjs"],
+      "paths": [
+        "tools/production_promotion.mjs",
+        "tools/production_promotion.test.mjs",
+        "tools/release_coordinator.mjs",
+        "tools/release_coordinator_contract.mjs",
+        "tools/release_coordinator_contract.test.mjs",
+        "tools/schema_epoch_reset_contract.test.mjs"
+      ],
       "lanes": [
+        "test:release-coordinator",
+        "test:schema-epoch-reset",
         "test:production-promotion",
         "test:railway-staging-target",
         "test:security-release-baseline"
@@ -1091,7 +1102,6 @@
         "railway.toml",
         "docker-compose.yml",
         "Dockerfile",
-        "Dockerfile.railway",
         "Dockerfile.frontend"
       ],
       "lanes": [
