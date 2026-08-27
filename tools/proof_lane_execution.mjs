@@ -348,6 +348,18 @@ export function createRepoLocalPostgresProvider({ env = process.env } = {}) {
   };
 }
 
+export function proofDatabaseIdentity({ env = process.env } = {}) {
+  const config = buildConfig({}, env);
+  assertLocalProofEndpoint(config);
+  return createHash('sha256').update(JSON.stringify({
+    host: config.host,
+    port: config.port,
+    database: config.database,
+    user: config.user,
+    data_dir: resolve(config.dataDir),
+  })).digest('hex');
+}
+
 function abortReason(signal, fallback) {
   if (signal?.reason instanceof Error) return signal.reason;
   if (signal?.reason) return new Error(String(signal.reason));
@@ -786,6 +798,7 @@ function serializableLane(record) {
     database_retained: record.databaseRetained ?? false,
     cleanup_error: record.cleanupError ?? null,
     interrupted_by: record.interruptedBy ?? null,
+    reused_from_receipt: record.reusedFromReceipt ?? null,
   };
 }
 
@@ -809,6 +822,7 @@ export async function runExecutionPlan(
     persistReceipt = writeReceiptFile,
     databaseProvider = createRepoLocalPostgresProvider({ env }),
     receiptContext = null,
+    reusedLanes = new Map(),
     onStart = () => {},
     onResult = () => {},
     log = console.log,
@@ -827,10 +841,23 @@ export async function runExecutionPlan(
   const run = createRunContext({ root, runId });
   await mkdir(run.runDir, { recursive: true });
   const records = new Map(
-    planned.map((laneId) => [laneId, { state: 'pending', command: laneLabel(laneId, manifest.lanes[laneId]) }]),
+    planned.map((laneId) => {
+      const reused = reusedLanes.get(laneId);
+      return [laneId, reused
+        ? {
+            state: 'passed',
+            command: laneLabel(laneId, manifest.lanes[laneId]),
+            status: 0,
+            seconds: reused.seconds ?? 0,
+            startedAt: reused.started_at ?? null,
+            finishedAt: reused.finished_at ?? null,
+            reusedFromReceipt: reused.receipt_id,
+          }
+        : { state: 'pending', command: laneLabel(laneId, manifest.lanes[laneId]) }];
+    }),
   );
   const receipt = {
-    schema: 2,
+    schema: 3,
     id: run.id,
     state: 'running',
     started_at: new Date(now()).toISOString(),

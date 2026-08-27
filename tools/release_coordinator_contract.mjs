@@ -56,16 +56,54 @@ export function validateReleaseRepository({
   return true;
 }
 
-export function validateProofReceipt(receipt, expectedCommit, requiredMode = "full") {
-  assert.equal(receipt?.schema, 2, "release proof receipt schema must be 2");
+export function validateProofReceipt(
+  receipt,
+  expectedCommit,
+  requiredMode = "full",
+  { expectedManifestSha256 = null, expectedLaneIds = null } = {},
+) {
+  assert.equal(receipt?.schema, 3, "release proof receipt schema must be 3");
   assert.equal(receipt.state, "passed", "release proof receipt must have passed");
   assert.equal(receipt.context?.commit, expectedCommit, "proof receipt commit does not match release");
   assert.equal(receipt.context?.mode, requiredMode, `release proof must use ${requiredMode} mode`);
+  assert.equal(receipt.context?.clean, true, "release proof receipt must come from a clean worktree");
+  assert.match(
+    receipt.context?.worktree_sha256 ?? "",
+    /^[0-9a-f]{64}$/u,
+    "proof receipt must bind the exact worktree",
+  );
   assert.match(
     receipt.context?.manifest_sha256 ?? "",
     /^[0-9a-f]{64}$/u,
     "proof receipt must bind the proof manifest",
   );
+  assert.match(
+    receipt.context?.database_identity_sha256 ?? "",
+    /^[0-9a-f]{64}$/u,
+    "proof receipt must bind the local database identity",
+  );
+  if (expectedManifestSha256) {
+    assert.equal(
+      receipt.context.manifest_sha256,
+      expectedManifestSha256,
+      "proof receipt manifest does not match the release checkout",
+    );
+  }
+  const selected = receipt.context?.selected_lane_ids;
+  assert.ok(Array.isArray(selected) && selected.length > 0, "proof receipt must name its selected lanes");
+  assert.equal(new Set(selected).size, selected.length, "proof receipt selected lanes must be unique");
+  if (expectedLaneIds) {
+    assert.deepEqual(
+      [...selected].sort(),
+      [...expectedLaneIds].sort(),
+      "full proof receipt lane graph does not match the current manifest",
+    );
+  }
+  assert.deepEqual(Object.keys(receipt.lanes ?? {}), selected, "proof receipt lane records do not match selection");
+  for (const laneId of selected) {
+    assert.equal(receipt.lanes[laneId]?.state, "passed", `proof lane ${laneId} did not pass`);
+    assert.equal(receipt.lanes[laneId]?.status, 0, `proof lane ${laneId} has no successful status`);
+  }
   assert.ok(receipt.finished_at, "proof receipt must be terminal");
   return true;
 }

@@ -18,6 +18,7 @@
 //   node tools/proof_lane_select.mjs [--mode inner|push|sprint|full] [--base <ref>]
 //                                    [--changed <path> ...] [--json] [--list] [--run]
 //                                    [--jobs <positive integer>]
+//                                    [--only <lane-id>] [--resume <receipt>]
 //                                    [--record <lane-id>] [--regenerate <lane-id>]
 //                                    [--measure <lane-id> ...] [--measure-all]
 //
@@ -44,12 +45,13 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, matchesGlob } from 'node:path';
+import { lstatSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join, matchesGlob, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
   expandHardDependencies,
+  proofDatabaseIdentity,
   runExecutionPlan,
   validateExecutionManifest,
 } from './proof_lane_execution.mjs';
@@ -66,10 +68,104 @@ const HOST_LOCKED_OPERATIONS = new Set([
   '--measure',
   '--measure-all',
   '--regenerate',
+  '--resume',
 ]);
 
 export function requiresHostHeavyBuildLock(argv) {
   return argv.some((argument) => HOST_LOCKED_OPERATIONS.has(argument));
+}
+
+function gitFile(args, options = {}) {
+  return execFileSync('git', args, { cwd: REPO_ROOT, ...options });
+}
+
+export function currentProofContext({ env = process.env } = {}) {
+  const commit = gitFile(['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const status = gitFile(
+    ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
+  );
+  const patch = gitFile(['diff', '--binary', '--no-ext-diff', 'HEAD', '--']);
+  const digest = createHash('sha256');
+  digest.update(commit);
+  digest.update('\0');
+  digest.update(status);
+  digest.update('\0');
+  digest.update(patch);
+  const entries = status.toString('utf8').split('\0').filter(Boolean);
+  for (const entry of entries.filter((value) => value.startsWith('?? ')).sort()) {
+    const relativePath = entry.slice(3);
+    const absolutePath = resolve(REPO_ROOT, relativePath);
+    const metadata = lstatSync(absolutePath);
+    digest.update('\0untracked\0');
+    digest.update(relativePath);
+    digest.update(`\0${metadata.mode}\0`);
+    digest.update(metadata.isSymbolicLink() ? readlinkSync(absolutePath) : readFileSync(absolutePath));
+  }
+  return {
+    commit,
+    clean: status.length === 0,
+    worktree_sha256: digest.digest('hex'),
+    manifest_sha256: createHash('sha256').update(readFileSync(MANIFEST_PATH)).digest('hex'),
+    database_identity_sha256: proofDatabaseIdentity({ env }),
+  };
+}
+
+function sameStringArray(left, right) {
+  return Array.isArray(left) && Array.isArray(right) &&
+    left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+export function planReceiptResume(receipt, manifest, context) {
+  if (receipt?.schema !== 3) throw new Error('resume requires a schema-3 proof receipt');
+  const expected = receipt.context ?? {};
+  for (const field of [
+    'commit',
+    'worktree_sha256',
+    'manifest_sha256',
+    'database_identity_sha256',
+  ]) {
+    if (expected[field] !== context[field]) {
+      throw new Error(`proof receipt ${field} does not match the current workspace`);
+    }
+  }
+  if (expected.clean !== context.clean) {
+    throw new Error('proof receipt clean state does not match the current workspace');
+  }
+  const selected = expected.selected_lane_ids;
+  if (!Array.isArray(selected) || selected.length === 0 || new Set(selected).size !== selected.length) {
+    throw new Error('proof receipt has no valid selected lane graph');
+  }
+  if (!sameStringArray(Object.keys(receipt.lanes ?? {}), selected)) {
+    throw new Error('proof receipt lane records do not match its selected lane graph');
+  }
+  for (const laneId of selected) {
+    if (!manifest.lanes[laneId]) throw new Error(`proof receipt references removed lane ${laneId}`);
+  }
+  const rerun = new Set(selected.filter((laneId) => receipt.lanes[laneId]?.state !== 'passed'));
+  if (rerun.size === 0) throw new Error('proof receipt already passed; there is nothing to resume');
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const laneId of [...rerun]) {
+      const resources = manifest.lanes[laneId]?.execution?.resources ?? [];
+      for (const resource of resources.filter((candidate) => candidate.kind === 'artifact-input')) {
+        if (!rerun.has(resource.from)) {
+          rerun.add(resource.from);
+          changed = true;
+        }
+      }
+    }
+  }
+  const rerunWithDependencies = new Set(expandHardDependencies([...rerun], manifest));
+  const reusedLanes = new Map();
+  for (const laneId of selected) {
+    if (rerunWithDependencies.has(laneId)) continue;
+    const prior = receipt.lanes[laneId];
+    if (prior?.state !== 'passed') throw new Error(`proof receipt cannot reuse non-passed lane ${laneId}`);
+    reusedLanes.set(laneId, { ...prior, receipt_id: receipt.id });
+  }
+  return { selected, rerun: [...rerunWithDependencies], reusedLanes };
 }
 
 export function loadManifest(path = MANIFEST_PATH) {
@@ -608,10 +704,13 @@ function formatSeconds(entry) {
 }
 
 async function main(argv) {
-  const args = { mode: 'inner', changed: [], json: false, list: false, run: false, jobs: 1, measure: [] };
+  const args = { mode: 'inner', modeSpecified: false, changed: [], json: false, list: false, run: false, jobs: 1, measure: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--mode') args.mode = argv[++i];
+    if (arg === '--mode') {
+      args.mode = argv[++i];
+      args.modeSpecified = true;
+    }
     else if (arg === '--base') args.base = argv[++i];
     else if (arg === '--changed') args.changed.push(argv[++i]);
     else if (arg === '--json') args.json = true;
@@ -622,6 +721,8 @@ async function main(argv) {
     else if (arg === '--measure') args.measure.push(argv[++i]);
     else if (arg === '--measure-all') args.measureAll = true;
     else if (arg === '--regenerate') args.regenerate = argv[++i];
+    else if (arg === '--only') args.only = argv[++i];
+    else if (arg === '--resume') args.resume = argv[++i];
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!['inner', 'push', 'sprint', 'full'].includes(args.mode)) {
@@ -631,6 +732,14 @@ async function main(argv) {
     throw new Error('--jobs must be a positive integer');
   }
   const measuring = args.measureAll || args.measure.length > 0;
+  if (args.resume) args.run = true;
+  if (args.only && args.resume) throw new Error('--only cannot be combined with --resume');
+  if (args.only && (args.modeSpecified || args.changed.length > 0 || args.base || args.list || args.record || args.regenerate || measuring)) {
+    throw new Error('--only cannot be combined with mode, diff, list, record, measure, or regenerate options');
+  }
+  if (args.resume && (args.modeSpecified || args.changed.length > 0 || args.base || args.json || args.list || args.record || args.regenerate || measuring)) {
+    throw new Error('--resume cannot be combined with selection, inspection, recording, measurement, or regeneration options');
+  }
   if (args.run && (args.json || args.list || args.record || args.regenerate || measuring)) {
     throw new Error('--run cannot be combined with --json, --list, --record, --measure, or --regenerate');
   }
@@ -687,7 +796,24 @@ async function main(argv) {
     return;
   }
 
-  const changed = args.changed.length > 0 ? args.changed : gitChangedFiles(args.base ?? manifest.base_ref);
+  let resume = null;
+  let context = null;
+  if (args.resume) {
+    const receiptPath = resolve(args.resume);
+    const raw = readFileSync(receiptPath);
+    const receipt = JSON.parse(raw.toString('utf8'));
+    context = currentProofContext();
+    resume = {
+      receiptPath,
+      receipt,
+      receiptSha256: createHash('sha256').update(raw).digest('hex'),
+      ...planReceiptResume(receipt, manifest, context),
+    };
+  }
+
+  const changed = args.only || args.resume
+    ? []
+    : args.changed.length > 0 ? args.changed : gitChangedFiles(args.base ?? manifest.base_ref);
   const touchesCrates = changed.some((f) => f.startsWith('crates/'));
   let crateGraph = null;
   if (touchesCrates) {
@@ -698,9 +824,27 @@ async function main(argv) {
     }
   }
 
-  const selection = selectLanes({ changed, manifest, crateGraph, mode: args.mode });
+  const selection = args.resume
+    ? {
+        mode: resume.receipt.context.mode,
+        touched: [], artifactTriggers: [], unmapped: [], crateFallback: false,
+        laneIds: resume.selected,
+        frozenSkipped: [],
+      }
+    : args.only
+      ? {
+          mode: 'only',
+          touched: [], artifactTriggers: [], unmapped: [], crateFallback: false,
+          laneIds: [args.only], frozenSkipped: [],
+        }
+      : selectLanes({ changed, manifest, crateGraph, mode: args.mode });
+  for (const laneId of selection.laneIds) {
+    if (!manifest.lanes[laneId]) throw new Error(`unknown lane: ${laneId}`);
+  }
   const dependencyExpandedLaneIds = expandHardDependencies(selection.laneIds, manifest);
-  const ordered = orderedExecutionPlan(dependencyExpandedLaneIds, manifest, timings);
+  const ordered = args.resume
+    ? resume.selected
+    : orderedExecutionPlan(dependencyExpandedLaneIds, manifest, timings);
 
   if (args.json) {
     console.log(JSON.stringify({
@@ -714,6 +858,9 @@ async function main(argv) {
   }
 
   console.log(`mode: ${selection.mode}   changed files: ${changed.length}`);
+  if (resume) {
+    console.log(`  resuming ${resume.receipt.id}: rerun ${resume.rerun.length}, reuse ${resume.reusedLanes.size}`);
+  }
   for (const { id, reasons } of selection.touched) {
     const shown = reasons.slice(0, 3).join(', ') + (reasons.length > 3 ? `, +${reasons.length - 3} more` : '');
     console.log(`  touched ${id}  (${shown})`);
@@ -736,14 +883,21 @@ async function main(argv) {
   }
   if (args.run) {
     const observations = new Map();
+    context ??= currentProofContext();
     const execution = await runExecutionPlan(ordered, manifest, {
       jobs: args.jobs,
       receiptContext: {
-        commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).trim(),
+        ...context,
         mode: selection.mode,
-        manifest_sha256: createHash('sha256').update(readFileSync(MANIFEST_PATH)).digest('hex'),
+        selected_lane_ids: ordered,
         changed,
+        resumed_from: resume ? {
+          id: resume.receipt.id,
+          path: resume.receiptPath,
+          receipt_sha256: resume.receiptSha256,
+        } : null,
       },
+      reusedLanes: resume?.reusedLanes,
       onResult(laneId, entry) {
         observations.set(laneId, entry);
       },
@@ -751,6 +905,10 @@ async function main(argv) {
     for (const [laneId, entry] of observations) runtimeTimings.lanes[laneId] = entry;
     writeTimings(RUNTIME_TIMINGS_PATH, runtimeTimings);
     if (!execution.success) {
+      const failed = Object.entries(execution.receipt.lanes)
+        .find(([, lane]) => lane.state === 'failed')?.[0];
+      console.error(`resume: npm run proof:lanes -- --resume ${JSON.stringify(execution.run.receiptPath)}`);
+      if (failed) console.error(`focused: npm run proof:lanes -- --only ${JSON.stringify(failed)} --run`);
       throw new Error(`proof failed: inspect ${execution.run.receiptPath}`);
     }
     console.log(`\nproof passed: ${ordered.length} lane(s) — receipt ${execution.run.receiptPath}`);

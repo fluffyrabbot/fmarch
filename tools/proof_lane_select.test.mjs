@@ -15,6 +15,7 @@ import {
   loadManifest,
   mergeTimings,
   orderedExecutionPlan,
+  planReceiptResume,
   pathMatches,
   reverseCrateClosure,
   regenerateArtifact,
@@ -57,11 +58,67 @@ const FIXTURE_GRAPH = {
 };
 
 test('execution-bearing proof modes acquire the host-wide heavyweight-build lock', () => {
-  for (const operation of ['--run', '--record', '--measure', '--measure-all', '--regenerate']) {
+  for (const operation of ['--run', '--record', '--measure', '--measure-all', '--regenerate', '--resume']) {
     assert.equal(requiresHostHeavyBuildLock([operation]), true, operation);
   }
   assert.equal(requiresHostHeavyBuildLock(['--mode', 'full', '--list']), false);
   assert.equal(requiresHostHeavyBuildLock(['--changed', 'crates/api/src/lib.rs', '--json']), false);
+});
+
+test('resume retries failures and their artifact producers while reusing unrelated successes', () => {
+  const context = {
+    commit: 'a'.repeat(40),
+    clean: false,
+    worktree_sha256: 'b'.repeat(64),
+    manifest_sha256: 'c'.repeat(64),
+    database_identity_sha256: 'd'.repeat(64),
+  };
+  const fixtureManifest = {
+    lanes: {
+      producer: {
+        kind: 'shell', command: 'producer',
+        execution: { class: 'hermetic', timeout_seconds: 1, argv: ['producer'], resources: [] },
+      },
+      consumer: {
+        kind: 'shell', command: 'consumer', depends_on: ['producer'],
+        execution: {
+          class: 'hermetic', timeout_seconds: 1, argv: ['consumer'],
+          resources: [{ kind: 'artifact-input', from: 'producer', env: 'PRODUCER_ARTIFACTS' }],
+        },
+      },
+      unrelated: {
+        kind: 'shell', command: 'unrelated',
+        execution: { class: 'hermetic', timeout_seconds: 1, argv: ['unrelated'], resources: [] },
+      },
+    },
+  };
+  const receipt = {
+    schema: 3,
+    id: 'prior',
+    state: 'failed',
+    context: { ...context, selected_lane_ids: ['producer', 'consumer', 'unrelated'] },
+    lanes: {
+      producer: { state: 'passed', status: 0 },
+      consumer: { state: 'failed', status: 1 },
+      unrelated: { state: 'passed', status: 0 },
+    },
+  };
+  const plan = planReceiptResume(receipt, fixtureManifest, context);
+  assert.deepEqual(plan.selected, ['producer', 'consumer', 'unrelated']);
+  assert.deepEqual(plan.rerun, ['producer', 'consumer']);
+  assert.deepEqual([...plan.reusedLanes.keys()], ['unrelated']);
+  assert.throws(
+    () => planReceiptResume(receipt, fixtureManifest, { ...context, worktree_sha256: 'e'.repeat(64) }),
+    /worktree_sha256/,
+  );
+  assert.throws(
+    () => planReceiptResume({
+      ...receipt,
+      state: 'passed',
+      lanes: Object.fromEntries(Object.keys(receipt.lanes).map((id) => [id, { state: 'passed', status: 0 }])),
+    }, fixtureManifest, context),
+    /nothing to resume/,
+  );
 });
 
 test('direct heavyweight entrypoints acquire the host-wide build lock', () => {

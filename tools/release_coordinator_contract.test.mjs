@@ -30,10 +30,19 @@ const deployment = (id, digest, status = "SUCCESS") => ({
   meta: { imageDigest: digest },
 });
 const proofReceipt = {
-  schema: 2,
+  schema: 3,
   id: "full-proof",
   state: "passed",
-  context: { commit, mode: "full", manifest_sha256: "d".repeat(64) },
+  context: {
+    commit,
+    mode: "full",
+    clean: true,
+    worktree_sha256: "e".repeat(64),
+    manifest_sha256: "d".repeat(64),
+    database_identity_sha256: "f".repeat(64),
+    selected_lane_ids: ["lane"],
+  },
+  lanes: { lane: { state: "passed", status: 0 } },
   finished_at: "2026-08-26T00:00:00.000Z",
 };
 const attemptReceipt = bindReleaseAttempt({
@@ -69,6 +78,14 @@ test("proof receipt is exact-commit and full-mode bound", () => {
   assert.equal(validateProofReceipt(proofReceipt, commit), true);
   assert.throws(() => validateProofReceipt({ ...proofReceipt, context: { ...proofReceipt.context, mode: "push" } }, commit), /full/);
   assert.throws(() => validateProofReceipt(proofReceipt, "e".repeat(40)), /commit/);
+  assert.throws(
+    () => validateProofReceipt({ ...proofReceipt, context: { ...proofReceipt.context, clean: false } }, commit),
+    /clean worktree/,
+  );
+  assert.throws(
+    () => validateProofReceipt({ ...proofReceipt, schema: 2 }, commit),
+    /schema must be 3/,
+  );
 });
 
 test("deployment validation rejects failures and digest drift", () => {

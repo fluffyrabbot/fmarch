@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -155,9 +156,15 @@ function validateRepository(commit, environment) {
 }
 
 async function discoverProofReceipt(commit, explicitPath) {
+  const manifestBytes = await readFile(path.join(repoRoot, "docs", "ops", "proof-lane-manifest.json"));
+  const manifest = JSON.parse(manifestBytes.toString("utf8"));
+  const expectation = {
+    expectedManifestSha256: createHash("sha256").update(manifestBytes).digest("hex"),
+    expectedLaneIds: Object.keys(manifest.lanes),
+  };
   if (explicitPath) {
     const receipt = JSON.parse(await readFile(path.resolve(explicitPath), "utf8"));
-    validateProofReceipt(receipt, commit);
+    validateProofReceipt(receipt, commit, "full", expectation);
     return receipt;
   }
   const directory = path.join(repoRoot, "target", "proof-lanes", "runs");
@@ -177,7 +184,7 @@ async function discoverProofReceipt(commit, explicitPath) {
   }
   candidates.sort((left, right) => String(right.finished_at).localeCompare(String(left.finished_at)));
   assert.ok(candidates[0], `no passed full proof receipt exists for ${commit}`);
-  validateProofReceipt(candidates[0], commit);
+  validateProofReceipt(candidates[0], commit, "full", expectation);
   return candidates[0];
 }
 

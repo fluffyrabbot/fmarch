@@ -111,10 +111,13 @@ only for the same commit and manifest digest.
   ignored `target/proof-lanes/`; `--record` deliberately promotes a stable
   measurement into the tracked baseline.
 - Add per-lane timeout enforcement, compact live progress, and a final table.
-- Persist ignored receipts under `target/proof-lanes/` and support
-  `--resume <receipt>` plus `--only <lane>` for exact failure reproduction.
-- Include the git SHA, dirty-state digest, manifest digest, and database identity
-  in each receipt so stale success cannot be reused.
+- Persist schema-3 ignored receipts under `target/proof-lanes/`; `--only <lane>`
+  selects one fresh dependency closure and `--resume <receipt>` retries a
+  failed closed graph while re-running any artifact producer needed by the
+  retry.
+- Bind every receipt to the Git SHA, canonical dirty-worktree digest, manifest
+  digest, selected lane graph, and sanitized local database identity. Release
+  coordination accepts only clean, exact-commit full receipts.
 
 ### 2. Remove aggregate duplication — delivered 2026-07-26
 

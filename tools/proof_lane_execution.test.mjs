@@ -291,8 +291,39 @@ test('a failed prerequisite blocks its consumer while an already started indepen
   assert.equal(result.receipt.lanes.consumer.state, 'blocked');
   assert.equal(result.receipt.lanes.independent.state, 'passed');
   const receipt = JSON.parse(await readFile(result.run.receiptPath, 'utf8'));
-  assert.equal(receipt.schema, 2);
+  assert.equal(receipt.schema, 3);
   assert.equal(receipt.state, 'failed');
+});
+
+test('resumed execution records inherited successes without spawning them again', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({
+    inherited: lane(['inherited'], []),
+    retry: lane(['retry'], []),
+  });
+  const started = [];
+  const result = await runExecutionPlan(['inherited', 'retry'], manifest, {
+    root,
+    reusedLanes: new Map([[
+      'inherited',
+      {
+        receipt_id: 'prior-run',
+        seconds: 1.5,
+        started_at: '2026-08-27T00:00:00.000Z',
+        finished_at: '2026-08-27T00:00:01.500Z',
+      },
+    ]]),
+    spawn(file) {
+      started.push(file);
+      return childThatCloses(0);
+    },
+    log: () => {},
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(started, ['retry']);
+  assert.equal(result.receipt.lanes.inherited.state, 'passed');
+  assert.equal(result.receipt.lanes.inherited.reused_from_receipt, 'prior-run');
 });
 
 test('a resource cleanup failure finalizes the receipt and blocks later work', async (t) => {
