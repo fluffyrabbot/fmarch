@@ -1,9 +1,26 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { after, before, test } from "node:test";
 import { load as loadDevArtifact } from "../_dev/ops/artifact/+page.server.js";
 import { load as loadProductionArtifact } from "./artifact/+page.server.js";
 
 process.env.FMARCH_FRONTEND_FIXTURE_SESSION = "1";
+const fixtureArtifactPath = `target/dev-test-game/admin-artifact-route-${process.pid}.json`;
+const fixtureAbsolutePath = path.resolve(process.cwd(), fixtureArtifactPath);
+
+before(async () => {
+  await mkdir(path.dirname(fixtureAbsolutePath), { recursive: true });
+  await writeFile(
+    fixtureAbsolutePath,
+    `${JSON.stringify({ nextAction: "target/dev-test-game/next-action.json" })}\n`,
+    { flag: "wx" },
+  );
+});
+
+after(async () => {
+  await rm(fixtureAbsolutePath, { force: true });
+});
 
 test("dev proof explorer reads local dev-test-game JSON proof artifacts", async () => {
   const data = await loadDevArtifact({
@@ -11,14 +28,11 @@ test("dev proof explorer reads local dev-test-game JSON proof artifacts", async 
       resolvedCapabilities: [{ kind: "GlobalAdmin" }],
     },
     url: new URL(
-      "http://localhost/admin/artifact?game=midsummer&path=target/dev-test-game/next-action-hosted-identity.json",
+      `http://localhost/admin/artifact?game=midsummer&path=${fixtureArtifactPath}`,
     ),
   });
 
-  assert.equal(
-    data.artifact.path,
-    "target/dev-test-game/next-action-hosted-identity.json",
-  );
+  assert.equal(data.artifact.path, fixtureArtifactPath);
   assert.equal(data.artifact.game, "midsummer");
   assert.match(data.artifact.contents, /target\/dev-test-game\/next-action\.json/);
 });
@@ -29,14 +43,11 @@ test("dev proof explorer accepts global moderation authority", async () => {
       resolvedCapabilities: [{ kind: "GlobalMod" }],
     },
     url: new URL(
-      "http://localhost/admin/artifact?game=midsummer&path=target/dev-test-game/next-action-hosted-identity.json",
+      `http://localhost/admin/artifact?game=midsummer&path=${fixtureArtifactPath}`,
     ),
   });
 
-  assert.equal(
-    data.artifact.path,
-    "target/dev-test-game/next-action-hosted-identity.json",
-  );
+  assert.equal(data.artifact.path, fixtureArtifactPath);
 });
 
 test("dev proof explorer rejects game-scoped authority and non-proof paths", async () => {
