@@ -972,6 +972,8 @@ impl Drop for TempCleanup<'_> {
 mod tests {
     use std::sync::{Arc, Barrier};
 
+    #[cfg(unix)]
+    use cap_std::fs::PermissionsExt as _;
     use super::*;
     use image::codecs::jpeg::JpegEncoder;
     use image::ExtendedColorType;
