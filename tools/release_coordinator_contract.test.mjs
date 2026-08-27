@@ -71,15 +71,16 @@ test("deployment validation rejects failures and digest drift", () => {
   assert.throws(() => validateDeploymentArtifact(deployment("api", frontendDigest), runtimeDigest, "API"), /OCI digest/);
 });
 
-test("source cutover detaches only canonical Git and accepts image-backed retries", () => {
+test("source cutover detaches canonical sources before attaching an exact image", () => {
   assert.equal(
     serviceSourceCutoverAction({ repo: "fluffyrabbot/fmarch", image: null }),
     "disconnect",
   );
   assert.equal(
     serviceSourceCutoverAction({ repo: null, image: "ghcr.io/fluffyrabbot/fmarch-runtime@sha256:abc" }),
-    "ready",
+    "disconnect",
   );
+  assert.equal(serviceSourceCutoverAction(null), "connect");
   assert.throws(
     () => serviceSourceCutoverAction({ repo: "attacker/fmarch", image: null }),
     /neither canonical Git/,

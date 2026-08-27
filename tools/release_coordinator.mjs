@@ -305,20 +305,43 @@ function latestDeployment(config, serviceId) {
 }
 
 export function serviceSourceCutoverAction(source) {
+  if (source == null) return "connect";
   if (source?.repo === "fluffyrabbot/fmarch" && source.image == null) return "disconnect";
-  if (source?.repo == null && typeof source?.image === "string") return "ready";
+  if (source?.repo == null && typeof source?.image === "string") return "disconnect";
   throw new Error("Railway service source is neither canonical Git nor an image source");
 }
 
-async function ensureImageSource(config, serviceId) {
+function railwayService(config, serviceId) {
   const services = railwayJson(config, ["service", "list"]);
   const service = services.find((candidate) => candidate.id === serviceId);
   assert.ok(service, `Railway service ${serviceId} does not exist in ${config.environment}`);
-  if (serviceSourceCutoverAction(service.source) === "ready") return;
+  return service;
+}
+
+async function disconnectServiceSource(config, serviceId) {
+  const service = railwayService(config, serviceId);
+  if (serviceSourceCutoverAction(service.source) === "connect") return;
   railwayJson(config, ["service", "source", "disconnect", "--service", serviceId]);
-  const updated = railwayJson(config, ["service", "list"])
-    .find((candidate) => candidate.id === serviceId);
-  assert.equal(updated?.source?.repo ?? null, null, `Railway service ${serviceId} retained its Git source`);
+  const updated = railwayService(config, serviceId);
+  assert.equal(updated.source, null, `Railway service ${serviceId} retained its previous source`);
+}
+
+async function connectImageSource(config, serviceId, imageReference) {
+  railwayJson(config, [
+    "service",
+    "source",
+    "connect",
+    "--service",
+    serviceId,
+    "--image",
+    imageReference,
+  ]);
+  const updated = railwayService(config, serviceId);
+  assert.equal(
+    updated.source?.image,
+    imageReference,
+    `Railway service ${serviceId} did not attach the exact image source`,
+  );
 }
 
 export async function waitForNewDeployment(
@@ -354,18 +377,9 @@ export async function waitForNewDeployment(
 }
 
 async function deployImage(config, serviceId, image, digest, label) {
-  await ensureImageSource(config, serviceId);
+  await disconnectServiceSource(config, serviceId);
   const previousId = latestDeployment(config, serviceId)?.id ?? null;
-  railwayJson(config, [
-    "environment",
-    "edit",
-    "--service-config",
-    serviceId,
-    "source.image",
-    `${image}@${digest}`,
-    "--message",
-    `Release ${label} ${digest}`,
-  ]);
+  await connectImageSource(config, serviceId, `${image}@${digest}`);
   return await waitForNewDeployment(config, serviceId, previousId, digest, label);
 }
 
@@ -408,16 +422,12 @@ export function validateEpochResetAudit(audit, { environment, epoch, commit }) {
 
 async function deployEpochReset(config, digest, commit, epoch) {
   const serviceId = config.migratorServiceId;
-  await ensureImageSource(config, serviceId);
+  await disconnectServiceSource(config, serviceId);
   const confirmation = `${config.environment}:${epoch}:${commit}`;
   const previousId = latestDeployment(config, serviceId)?.id ?? null;
   railwayJson(config, [
     "environment",
     "edit",
-    "--service-config",
-    serviceId,
-    "source.image",
-    `${config.runtimeImage}@${digest}`,
     "--service-config",
     serviceId,
     "deploy.startCommand",
@@ -437,6 +447,7 @@ async function deployEpochReset(config, digest, commit, epoch) {
     "--message",
     `Audit ${config.environment} schema before epoch ${epoch} reset at ${commit}`,
   ]);
+  await connectImageSource(config, serviceId, `${config.runtimeImage}@${digest}`);
   const auditDeployment = await waitForNewDeployment(
     config,
     serviceId,
@@ -456,6 +467,7 @@ async function deployEpochReset(config, digest, commit, epoch) {
   assert.ok(audit, "schema epoch reset audit deployment emitted no audit record");
   validateEpochResetAudit(audit, { environment: config.environment, epoch, commit });
 
+  await disconnectServiceSource(config, serviceId);
   railwayJson(config, [
     "environment",
     "edit",
@@ -466,6 +478,7 @@ async function deployEpochReset(config, digest, commit, epoch) {
     "--message",
     `Reset ${config.environment} schema epoch ${epoch} at ${commit}`,
   ]);
+  await connectImageSource(config, serviceId, `${config.runtimeImage}@${digest}`);
   const deployment = await waitForNewDeployment(
     config,
     serviceId,
@@ -503,13 +516,10 @@ async function deployEpochReset(config, digest, commit, epoch) {
 
 async function deployMigratorAfterReset(config, digest, resetDeploymentId) {
   const serviceId = config.migratorServiceId;
+  await disconnectServiceSource(config, serviceId);
   railwayJson(config, [
     "environment",
     "edit",
-    "--service-config",
-    serviceId,
-    "source.image",
-    `${config.runtimeImage}@${digest}`,
     "--service-config",
     serviceId,
     "deploy.startCommand",
@@ -529,6 +539,7 @@ async function deployMigratorAfterReset(config, digest, resetDeploymentId) {
     "--message",
     `Restore ${config.environment} migrator after schema epoch reset`,
   ]);
+  await connectImageSource(config, serviceId, `${config.runtimeImage}@${digest}`);
   return await waitForNewDeployment(
     config,
     serviceId,
