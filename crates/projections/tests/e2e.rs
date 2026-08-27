@@ -3890,6 +3890,14 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         .await
         .unwrap();
     assert!(remuted.muted);
+    let durable_before_privacy: (Uuid, i64) = sqlx::query_as(
+        "SELECT relationship_id, version FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
+    )
+    .bind(reader.as_uuid())
+    .bind(target_profile)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     profile_application::update_profile(
         &pool,
         ProfileId::from_uuid(target_profile),
@@ -3948,6 +3956,123 @@ async fn member_mutes_are_private_reversible_and_filter_personalized_reads(pool:
         projections::mute_public_profile(&pool, reader, "orchid_author", 13).await,
         Err(ProjectionError::MuteTargetNotPublic)
     ));
+    let durable_while_private: (Uuid, i64) = sqlx::query_as(
+        "SELECT relationship_id, version FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
+    )
+    .bind(reader.as_uuid())
+    .bind(target_profile)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(durable_while_private, durable_before_privacy);
+
+    profile_application::update_profile(
+        &pool,
+        ProfileId::from_uuid(target_profile),
+        author,
+        ProfileRevision::new(2),
+        test_profile_edit(
+            "Orchid Author",
+            "Orchid public profile restored",
+            ProfileVisibility::Public,
+        ),
+        14,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        projections::member_mutes(&pool, reader, None, 20)
+            .await
+            .unwrap()
+            .members
+            .len(),
+        1,
+        "the same durable mute must become presentable when the target is public again",
+    );
+    assert!(public_search(
+        &pool,
+        "orchid",
+        PublicSearchFilter::All,
+        None,
+        20,
+        Some(reader),
+    )
+    .await
+    .unwrap()
+    .results
+    .is_empty());
+    let restored = sqlx::query_as::<_, (Uuid, i64)>(
+        "SELECT relationship_id, version FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
+    )
+    .bind(reader.as_uuid())
+    .bind(target_profile)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(restored, durable_before_privacy);
+
+    assert!(
+        !projections::unmute_public_profile(&pool, reader, "orchid_author", 15)
+            .await
+            .unwrap()
+            .muted
+    );
+    projections::rebuild_member_mute_stream(&pool, relationship_id)
+        .await
+        .unwrap();
+    assert!(projections::member_mutes(&pool, reader, None, 20)
+        .await
+        .unwrap()
+        .members
+        .is_empty());
+
+    projections::mute_public_profile(&pool, reader, "orchid_author", 16)
+        .await
+        .unwrap();
+    let immutable_event_count =
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(relationship_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    sqlx::query("DELETE FROM profile_mute WHERE target_profile_id = $1")
+        .bind(target_profile)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM public_profile WHERE profile_id = $1")
+        .bind(target_profile)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE member_profile SET active_principal_id = NULL, lifecycle = 'redacted', redacted_alias = 'Erased member', current_claim_id = NULL, handle_hmac = NULL WHERE profile_id = $1")
+        .bind(target_profile)
+        .execute(&pool)
+        .await
+        .unwrap();
+    projections::rebuild_member_mute_stream(&pool, relationship_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM profile_mute WHERE relationship_id = $1"
+        )
+        .bind(relationship_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0,
+        "terminal target erasure must suppress relationship replay",
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM events WHERE stream_id = $1")
+            .bind(relationship_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        immutable_event_count,
+        "terminalization must preserve immutable relationship history",
+    );
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]

@@ -3449,7 +3449,14 @@ async fn fold_member_mute_event(
                 INSERT INTO profile_mute (
                     relationship_id, principal_id, target_profile_id,
                     active, updated_seq, version
-                ) VALUES ($1, $2, $3, TRUE, $4, $5)
+                )
+                SELECT $1, $2, $3, TRUE, $4, $5
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM member_profile AS target
+                    WHERE target.profile_id = $3
+                      AND target.lifecycle = 'active'
+                )
                 ON CONFLICT (relationship_id) DO UPDATE SET
                     active = TRUE,
                     updated_seq = EXCLUDED.updated_seq,

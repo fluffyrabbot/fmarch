@@ -980,6 +980,11 @@ async fn apply_retained_authorship_redaction(
     // Public materialization is removed, not pseudonymized in place. Retained
     // attribution lives only on the redacted identity root; it cannot leak a
     // former private profile through a live public profile join.
+    // Incoming relationship streams remain immutable, but their current
+    // overlays terminate when the target identity is irreversibly erased.
+    // Do this explicitly before redaction; no FK cascade owns domain meaning.
+    sqlx::query("DELETE FROM profile_mute WHERE target_profile_id IN (SELECT profile_id FROM member_profile WHERE active_principal_id = $1 AND lifecycle = 'active')")
+        .bind(principal_id.as_uuid()).execute(&mut **tx).await?;
     sqlx::query("DELETE FROM public_profile WHERE profile_id IN (SELECT profile_id FROM member_profile WHERE active_principal_id = $1 AND lifecycle = 'active')")
         .bind(principal_id.as_uuid()).execute(&mut **tx).await?;
     sqlx::query("DELETE FROM publication_surface WHERE surface_id IN (SELECT profile_id FROM member_profile WHERE active_principal_id = $1 AND lifecycle = 'active')")

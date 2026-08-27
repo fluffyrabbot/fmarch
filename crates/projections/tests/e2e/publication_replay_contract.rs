@@ -422,14 +422,15 @@ async fn all_publication_types_preserve_the_visibility_lattice_across_replay(poo
     projections::mute_public_profile(&pool, viewer, "lattice_author", 3)
         .await
         .unwrap();
-    let relationship_id: Uuid = sqlx::query_scalar(
-        "SELECT relationship_id FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
+    let durable_mute: (Uuid, i64) = sqlx::query_as(
+        "SELECT relationship_id, version FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
     )
     .bind(viewer.as_uuid())
     .bind(author_profile_id)
     .fetch_one(&pool)
     .await
     .unwrap();
+    let relationship_id = durable_mute.0;
 
     let area = Uuid::from_u128(0x5055_424c_4943_4154_494f_4e00_0001);
     let topic = Uuid::from_u128(0x5055_424c_4943_4154_494f_4e00_0002);
@@ -600,6 +601,22 @@ async fn all_publication_types_preserve_the_visibility_lattice_across_replay(poo
         ..LatticeState::INITIAL
     };
     assert_lattice(&pool, fixtures, viewer, state, "private profile").await;
+    assert!(projections::member_mutes(&pool, viewer, None, 20)
+        .await
+        .unwrap()
+        .members
+        .is_empty());
+    assert_eq!(
+        sqlx::query_as::<_, (Uuid, i64)>(
+            "SELECT relationship_id, version FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
+        )
+        .bind(viewer.as_uuid())
+        .bind(author_profile_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        durable_mute,
+    );
     fixtures
         .profile
         .adapter
@@ -617,6 +634,25 @@ async fn all_publication_types_preserve_the_visibility_lattice_across_replay(poo
     .await;
     state.profile_present = true;
     assert_lattice(&pool, fixtures, viewer, state, "public profile restored").await;
+    assert_eq!(
+        projections::member_mutes(&pool, viewer, None, 20)
+            .await
+            .unwrap()
+            .members
+            .len(),
+        1,
+    );
+    assert_eq!(
+        sqlx::query_as::<_, (Uuid, i64)>(
+            "SELECT relationship_id, version FROM profile_mute WHERE principal_id = $1 AND target_profile_id = $2",
+        )
+        .bind(viewer.as_uuid())
+        .bind(author_profile_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        durable_mute,
+    );
     fixtures
         .profile
         .adapter
@@ -722,4 +758,41 @@ async fn all_publication_types_preserve_the_visibility_lattice_across_replay(poo
         .await
         .unwrap();
     assert_lattice(&pool, fixtures, viewer, state, "final mute replay").await;
+
+    assert!(
+        !projections::unmute_public_profile(&pool, viewer, "lattice_author", 40)
+            .await
+            .unwrap()
+            .muted
+    );
+    projections::rebuild_member_mute_stream(&pool, relationship_id)
+        .await
+        .unwrap();
+    for fixture in [
+        fixtures.profile,
+        fixtures.discussion,
+        fixtures.discussion_post,
+        fixtures.game,
+        fixtures.game_post,
+    ] {
+        let page = public_search(
+            &pool,
+            fixture.query,
+            PublicSearchFilter::Group(fixture.document_type.group()),
+            None,
+            10,
+            Some(viewer),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            page.results
+                .iter()
+                .filter(|row| row.document_key == fixture.document_key())
+                .count(),
+            1,
+            "{} must become visible after restored-target unmute and replay",
+            fixture.label,
+        );
+    }
 }

@@ -2261,6 +2261,14 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     .unwrap();
     sqlx::query("INSERT INTO game_persona_public (game_id, persona_id, current_public_name, registered_seq, renamed_seq) VALUES ($1, $2, 'Alicia', 1, NULL)")
         .bind(game_id).bind(persona_id).execute(&mut *profile_tx).await.unwrap();
+    let incoming_mute_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO profile_mute (relationship_id, principal_id, target_profile_id, active, updated_seq, version) VALUES ($1, $2, $3, TRUE, 1, 1)")
+        .bind(incoming_mute_id)
+        .bind(Uuid::new_v4())
+        .bind(profile_id)
+        .execute(&mut *profile_tx)
+        .await
+        .unwrap();
     profile_tx.commit().await.unwrap();
 
     let response = post_json(
@@ -2312,6 +2320,17 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
     assert!(
         !public_profile_exists,
         "erasure must remove the public profile materialization"
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM profile_mute WHERE relationship_id = $1",
+        )
+        .bind(incoming_mute_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0,
+        "erasure must explicitly terminalize incoming mute projections",
     );
     let (active_principal_id, lifecycle, redacted_alias, current_claim_id): (
         Option<Uuid>,

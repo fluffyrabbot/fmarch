@@ -2543,6 +2543,11 @@ async fn scrub_subject_projections(
     // A redacted identity retains only its non-authorizing attribution alias.
     // Delete the public materialization rather than carrying an alias through
     // a current-profile table, and clear every active ownership lookup token.
+    // Relationship history is retained in its event stream, while the current
+    // overlay is explicitly terminalized for an irreversibly erased target.
+    // Rebuild applies the same lifecycle predicate and cannot resurrect it.
+    sqlx::query("DELETE FROM profile_mute WHERE target_profile_id IN (SELECT profile_id FROM member_profile WHERE subject_id = $1)")
+        .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;
     sqlx::query("DELETE FROM public_profile WHERE profile_id IN (SELECT profile_id FROM member_profile WHERE subject_id = $1)")
         .bind(subject_id.as_uuid()).execute(&mut **tx).await.map_err(database_error)?;
     sqlx::query("UPDATE member_profile SET active_principal_id = NULL, lifecycle = 'redacted', redacted_alias = $2, current_claim_id = NULL, handle_hmac = NULL WHERE subject_id = $1")
