@@ -1,4 +1,5 @@
 [deploy]
+startCommand = "fmarch-server"
 preDeployCommand = "fmarch-schema-gate"
 healthcheckPath = "/readyz"
 healthcheckTimeout = 120

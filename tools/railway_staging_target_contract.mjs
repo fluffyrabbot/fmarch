@@ -90,7 +90,7 @@ async function contract() {
   assert.match(source.Dockerfile, /COPY --from=builder \/out\/fmarch-staging-search-corpus \/usr\/local\/bin\/fmarch-staging-search-corpus/);
   assert.match(source.Dockerfile, /COPY --from=builder \/out\/fmarch-event-key-admin \/usr\/local\/bin\/fmarch-event-key-admin/);
   assert.match(source.Dockerfile, /USER fmarch/);
-  assert.match(source.Dockerfile, /CMD \["fmarch-server"\]/);
+  assert.match(source.Dockerfile, /CMD \["\/bin\/false"\]/);
   assert.match(source[".dockerignore"], /^target$/m);
   assert.match(source[".dockerignore"], /^\*\*\/target$/m);
   let clock = 0;
@@ -120,6 +120,7 @@ async function contract() {
   assert.deepEqual(parseExactImageArguments(["--cache-profile"]), { cacheProfile: true });
   assert.throws(() => parseExactImageArguments(["--unknown"]), /unknown exact-image-content/);
   assert.match(source["railway.toml"], /healthcheckPath = "\/readyz"/);
+  assert.match(source["railway.toml"], /startCommand = "fmarch-server"/);
   assert.match(source["railway.toml"], /preDeployCommand = "fmarch-schema-gate"/);
   assert.doesNotMatch(source["railway.toml"], /fmarch-migrate/);
   assert.match(source["railway.toml"], /numReplicas = 2/);
@@ -127,6 +128,7 @@ async function contract() {
   assert.doesNotMatch(source["railway.toml"], /^\[build\]$/m);
   assert.doesNotMatch(source["deploy/railway/migrator.railway.toml"], /^\[build\]$/m);
   assert.doesNotMatch(source["deploy/railway/frontend.railway.toml"], /^\[build\]$/m);
+  assert.match(source["deploy/railway/frontend.railway.toml"], /startCommand = "node build"/);
   for (const binary of [
     "fmarch-server",
     "fmarch-migrate",

@@ -1,4 +1,5 @@
 [deploy]
+startCommand = "node build"
 # /healthz never touches the API, so frontend deploys stay possible during an
 # API outage ("/" SSR-blocks on API fetches and fails the healthcheck window).
 healthcheckPath = "/healthz"

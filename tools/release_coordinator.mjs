@@ -24,6 +24,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const callerSession = `fmarch-release-${process.pid}`;
 const defaults = Object.freeze({
   projectId: "9d285d67-c11b-4508-9efb-fad042787b4c",
+  stagingEnvironmentId: "e109e500-2a4c-48a3-96f2-e92a9edb63e4",
+  productionEnvironmentId: "c1378737-84cc-45ba-8474-9c868baf7cfb",
   apiServiceId: "18b6f450-3739-4f21-8e01-f58c63cec834",
   frontendServiceId: "23787c98-db56-4ccc-869a-42dca74d7bc7",
   runtimeImage: "ghcr.io/fluffyrabbot/fmarch-runtime",
@@ -72,6 +74,10 @@ function runtimeConfig(environment, env = process.env) {
   );
   return {
     projectId: env.FMARCH_RAILWAY_PROJECT_ID ?? defaults.projectId,
+    environmentId:
+      environment === "staging"
+        ? env.FMARCH_RAILWAY_STAGING_ENVIRONMENT_ID ?? defaults.stagingEnvironmentId
+        : env.FMARCH_RAILWAY_PRODUCTION_ENVIRONMENT_ID ?? defaults.productionEnvironmentId,
     environment,
     apiServiceId: env.FMARCH_RAILWAY_API_SERVICE_ID ?? defaults.apiServiceId,
     migratorServiceId,
@@ -300,14 +306,28 @@ function railwayText(config, args) {
   ], { env: scrubHostedEnvironment(process.env) });
 }
 
+function railwayApi(query, variables) {
+  const response = JSON.parse(commandText("railway", [
+    "api",
+    query,
+    "--variables",
+    JSON.stringify(variables),
+    "--compact",
+  ], { env: scrubHostedEnvironment(process.env) }));
+  assert.equal(response.errors, undefined, "Railway GraphQL API returned errors");
+  return response.data;
+}
+
 function latestDeployment(config, serviceId) {
   return railwayJson(config, ["deployment", "list", "--service", serviceId, "--limit", "1"])[0] ?? null;
 }
 
-export function serviceSourceCutoverAction(source) {
+export function serviceSourceCutoverAction(source, expectedImage = null) {
   if (source == null) return "connect";
   if (source?.repo === "fluffyrabbot/fmarch" && source.image == null) return "disconnect";
-  if (source?.repo == null && typeof source?.image === "string") return "disconnect";
+  if (source?.repo == null && typeof source?.image === "string") {
+    return expectedImage == null || source.image === expectedImage ? "ready" : "update";
+  }
   throw new Error("Railway service source is neither canonical Git nor an image source");
 }
 
@@ -318,30 +338,60 @@ function railwayService(config, serviceId) {
   return service;
 }
 
-async function disconnectServiceSource(config, serviceId) {
-  const service = railwayService(config, serviceId);
-  if (serviceSourceCutoverAction(service.source) === "connect") return;
-  railwayJson(config, ["service", "source", "disconnect", "--service", serviceId]);
-  const updated = railwayService(config, serviceId);
-  assert.equal(updated.source, null, `Railway service ${serviceId} retained its previous source`);
+async function detachGitSource(config, serviceId, imageReference) {
+  let service = railwayService(config, serviceId);
+  let action = serviceSourceCutoverAction(service.source, imageReference);
+  if (action === "disconnect") {
+    railwayJson(config, ["service", "source", "disconnect", "--service", serviceId]);
+    service = railwayService(config, serviceId);
+    assert.equal(service.source, null, `Railway service ${serviceId} retained its Git source`);
+    action = "connect";
+  }
+  assert.ok(["connect", "ready", "update"].includes(action), `unsupported Railway source action ${action}`);
 }
 
-async function connectImageSource(config, serviceId, imageReference) {
-  railwayJson(config, [
-    "service",
-    "source",
-    "connect",
-    "--service",
-    serviceId,
-    "--image",
-    imageReference,
-  ]);
-  const updated = railwayService(config, serviceId);
-  assert.equal(
-    updated.source?.image,
-    imageReference,
-    `Railway service ${serviceId} did not attach the exact image source`,
+async function deployConfiguredImage(
+  config,
+  { serviceId, image, digest, startCommand, label, variables = null },
+) {
+  const imageReference = `${image}@${digest}`;
+  await detachGitSource(config, serviceId, imageReference);
+  if (variables && Object.keys(variables).length > 0) {
+    const variablesData = railwayApi(
+      "mutation Upsert($input: VariableCollectionUpsertInput!) { variableCollectionUpsert(input: $input) }",
+      {
+        input: {
+          projectId: config.projectId,
+          environmentId: config.environmentId,
+          serviceId,
+          variables,
+          replace: false,
+          skipDeploys: true,
+        },
+      },
+    );
+    assert.equal(variablesData.variableCollectionUpsert, true, `${label} variables were not updated`);
+  }
+  const previousId = latestDeployment(config, serviceId)?.id ?? null;
+  const updateData = railwayApi(
+    "mutation Update($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }",
+    {
+      serviceId,
+      environmentId: config.environmentId,
+      input: {
+        source: { image: imageReference },
+        startCommand,
+        railwayConfigFile: null,
+      },
+    },
   );
+  assert.equal(updateData.serviceInstanceUpdate, true, `${label} service configuration was not updated`);
+  const deployData = railwayApi(
+    "mutation Deploy($serviceId: String!, $environmentId: String!) { serviceInstanceDeploy(serviceId: $serviceId, environmentId: $environmentId) }",
+    { serviceId, environmentId: config.environmentId },
+  );
+  assert.equal(deployData.serviceInstanceDeploy, true, `${label} deployment was not started`);
+  return await waitForNewDeployment(config, serviceId, previousId, digest, label);
 }
 
 export async function waitForNewDeployment(
@@ -376,11 +426,14 @@ export async function waitForNewDeployment(
   throw new Error(`${label} did not reach a terminal deployment state in 15 minutes`);
 }
 
-async function deployImage(config, serviceId, image, digest, label) {
-  await disconnectServiceSource(config, serviceId);
-  const previousId = latestDeployment(config, serviceId)?.id ?? null;
-  await connectImageSource(config, serviceId, `${image}@${digest}`);
-  return await waitForNewDeployment(config, serviceId, previousId, digest, label);
+async function deployImage(config, serviceId, image, digest, startCommand, label) {
+  return await deployConfiguredImage(config, {
+    serviceId,
+    image,
+    digest,
+    startCommand,
+    label,
+  });
 }
 
 export function parseResetLogRows(output) {
@@ -391,6 +444,7 @@ export function parseResetLogRows(output) {
     .flatMap((line) => {
       try {
         const row = JSON.parse(line);
+        if (typeof row?.kind === "string") return [row];
         const message = String(row.message ?? row);
         const start = message.indexOf("{");
         return start < 0 ? [] : [JSON.parse(message.slice(start))];
@@ -422,39 +476,19 @@ export function validateEpochResetAudit(audit, { environment, epoch, commit }) {
 
 async function deployEpochReset(config, digest, commit, epoch) {
   const serviceId = config.migratorServiceId;
-  await disconnectServiceSource(config, serviceId);
   const confirmation = `${config.environment}:${epoch}:${commit}`;
-  const previousId = latestDeployment(config, serviceId)?.id ?? null;
-  railwayJson(config, [
-    "environment",
-    "edit",
-    "--service-config",
+  const auditDeployment = await deployConfiguredImage(config, {
     serviceId,
-    "deploy.startCommand",
-    "fmarch-schema-epoch-reset",
-    "--service-config",
-    serviceId,
-    "variables.FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT.value",
-    config.environment,
-    "--service-config",
-    serviceId,
-    "variables.FMARCH_SCHEMA_EPOCH_RESET_EPOCH.value",
-    String(epoch),
-    "--service-config",
-    serviceId,
-    "variables.FMARCH_SCHEMA_EPOCH_RESET_CONFIRM.value",
-    confirmation,
-    "--message",
-    `Audit ${config.environment} schema before epoch ${epoch} reset at ${commit}`,
-  ]);
-  await connectImageSource(config, serviceId, `${config.runtimeImage}@${digest}`);
-  const auditDeployment = await waitForNewDeployment(
-    config,
-    serviceId,
-    previousId,
+    image: config.runtimeImage,
     digest,
-    `${config.environment} schema epoch reset audit`,
-  );
+    startCommand: "fmarch-schema-epoch-reset",
+    label: `${config.environment} schema epoch reset audit`,
+    variables: {
+      FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT: config.environment,
+      FMARCH_SCHEMA_EPOCH_RESET_EPOCH: String(epoch),
+      FMARCH_SCHEMA_EPOCH_RESET_CONFIRM: confirmation,
+    },
+  });
   const auditLogs = railwayText(config, [
     "logs",
     auditDeployment.id,
@@ -467,25 +501,13 @@ async function deployEpochReset(config, digest, commit, epoch) {
   assert.ok(audit, "schema epoch reset audit deployment emitted no audit record");
   validateEpochResetAudit(audit, { environment: config.environment, epoch, commit });
 
-  await disconnectServiceSource(config, serviceId);
-  railwayJson(config, [
-    "environment",
-    "edit",
-    "--service-config",
+  const deployment = await deployConfiguredImage(config, {
     serviceId,
-    "deploy.startCommand",
-    "fmarch-schema-epoch-reset --execute",
-    "--message",
-    `Reset ${config.environment} schema epoch ${epoch} at ${commit}`,
-  ]);
-  await connectImageSource(config, serviceId, `${config.runtimeImage}@${digest}`);
-  const deployment = await waitForNewDeployment(
-    config,
-    serviceId,
-    auditDeployment.id,
+    image: config.runtimeImage,
     digest,
-    `${config.environment} schema epoch reset`,
-  );
+    startCommand: "fmarch-schema-epoch-reset --execute",
+    label: `${config.environment} schema epoch reset`,
+  });
   const resetLogs = railwayText(config, [
     "logs",
     deployment.id,
@@ -516,37 +538,19 @@ async function deployEpochReset(config, digest, commit, epoch) {
 
 async function deployMigratorAfterReset(config, digest, resetDeploymentId) {
   const serviceId = config.migratorServiceId;
-  await disconnectServiceSource(config, serviceId);
-  railwayJson(config, [
-    "environment",
-    "edit",
-    "--service-config",
-    serviceId,
-    "deploy.startCommand",
-    "fmarch-migrate",
-    "--service-config",
-    serviceId,
-    "variables.FMARCH_SCHEMA_EPOCH_RESET_ENVIRONMENT.value",
-    "null",
-    "--service-config",
-    serviceId,
-    "variables.FMARCH_SCHEMA_EPOCH_RESET_EPOCH.value",
-    "null",
-    "--service-config",
-    serviceId,
-    "variables.FMARCH_SCHEMA_EPOCH_RESET_CONFIRM.value",
-    "null",
-    "--message",
-    `Restore ${config.environment} migrator after schema epoch reset`,
-  ]);
-  await connectImageSource(config, serviceId, `${config.runtimeImage}@${digest}`);
-  return await waitForNewDeployment(
-    config,
-    serviceId,
+  assert.ok(resetDeploymentId, "schema epoch reset deployment id is required");
+  assert.equal(
+    latestDeployment(config, serviceId)?.id,
     resetDeploymentId,
-    digest,
-    `${config.environment} migrator`,
+    "an unexpected migrator deployment intervened after the schema epoch reset",
   );
+  return await deployConfiguredImage(config, {
+    serviceId,
+    image: config.runtimeImage,
+    digest,
+    startCommand: "fmarch-migrate",
+    label: `${config.environment} migrator`,
+  });
 }
 
 async function fetchHealth(url, commit, kind) {
@@ -656,12 +660,13 @@ export async function main(argv = process.argv.slice(2)) {
       config.migratorServiceId,
       config.runtimeImage,
       runtimeDigest,
+      "fmarch-migrate",
       `${args.environment} migrator`,
     );
   }
   const [api, frontend] = await Promise.all([
-    deployImage(config, config.apiServiceId, config.runtimeImage, runtimeDigest, `${args.environment} API`),
-    deployImage(config, config.frontendServiceId, config.frontendImage, frontendDigest, `${args.environment} frontend`),
+    deployImage(config, config.apiServiceId, config.runtimeImage, runtimeDigest, "fmarch-server", `${args.environment} API`),
+    deployImage(config, config.frontendServiceId, config.frontendImage, frontendDigest, "node build", `${args.environment} frontend`),
   ]);
   const [apiHealth, frontendHealth] = await Promise.all([
     fetchHealth(`${config.apiUrl}/readyz`, commit, "api"),

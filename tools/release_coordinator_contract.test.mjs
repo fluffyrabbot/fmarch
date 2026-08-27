@@ -11,6 +11,7 @@ import {
 } from "./release_coordinator_contract.mjs";
 import {
   serviceSourceCutoverAction,
+  parseResetLogRows,
   validateEpochResetAudit,
   waitForNewDeployment,
 } from "./release_coordinator.mjs";
@@ -71,16 +72,20 @@ test("deployment validation rejects failures and digest drift", () => {
   assert.throws(() => validateDeploymentArtifact(deployment("api", frontendDigest), runtimeDigest, "API"), /OCI digest/);
 });
 
-test("source cutover detaches canonical sources before attaching an exact image", () => {
+test("source cutover attaches once and updates image sources without detaching them", () => {
   assert.equal(
-    serviceSourceCutoverAction({ repo: "fluffyrabbot/fmarch", image: null }),
+    serviceSourceCutoverAction({ repo: "fluffyrabbot/fmarch", image: null }, "image@sha256:new"),
     "disconnect",
   );
   assert.equal(
-    serviceSourceCutoverAction({ repo: null, image: "ghcr.io/fluffyrabbot/fmarch-runtime@sha256:abc" }),
-    "disconnect",
+    serviceSourceCutoverAction({ repo: null, image: "image@sha256:old" }, "image@sha256:new"),
+    "update",
   );
-  assert.equal(serviceSourceCutoverAction(null), "connect");
+  assert.equal(
+    serviceSourceCutoverAction({ repo: null, image: "image@sha256:new" }, "image@sha256:new"),
+    "ready",
+  );
+  assert.equal(serviceSourceCutoverAction(null, "image@sha256:new"), "connect");
   assert.throws(
     () => serviceSourceCutoverAction({ repo: "attacker/fmarch", image: null }),
     /neither canonical Git/,
@@ -192,6 +197,29 @@ test("epoch reset audit permits only identity-empty greenfield state", () => {
     () => validateEpochResetAudit({ ...audit, execute: true }, { environment: "staging", epoch: 1, commit }),
     /must not mutate/,
   );
+});
+
+test("epoch reset logs accept Railway structured fields and embedded JSON messages", () => {
+  const structured = JSON.stringify({
+    kind: "fmarch-schema-epoch-reset-audit",
+    environment: "staging",
+    epoch: 1,
+    release_commit: commit,
+    execute: false,
+    counts: {},
+    message: "",
+  });
+  const embedded = JSON.stringify({
+    message: `prefix ${JSON.stringify({
+      kind: "fmarch-schema-epoch-reset-complete",
+      environment: "staging",
+      epoch: 1,
+      release_commit: commit,
+    })}`,
+  });
+  const parsed = parseResetLogRows(`${structured}\n${embedded}`);
+  assert.equal(parsed.audit.kind, "fmarch-schema-epoch-reset-audit");
+  assert.equal(parsed.complete.kind, "fmarch-schema-epoch-reset-complete");
 });
 
 test("release receipt binds exact artifacts, health, proof, and staging sentinel", () => {

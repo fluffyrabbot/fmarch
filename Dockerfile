@@ -73,4 +73,6 @@ USER fmarch
 
 EXPOSE 4000
 
-CMD ["fmarch-server"]
+# Railway commands are authority-specific. The shared runtime must never choose
+# API or migrator authority merely because an image source was attached.
+CMD ["/bin/false"]
