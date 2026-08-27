@@ -10,6 +10,8 @@ export const capacityOverloadBudgets = Object.freeze({
   crawlerGameRequests: 40,
   crawlerConcurrency: 16,
   crawlerP95Ms: 750,
+  crawlerFilterP50Ms: 750,
+  crawlerFilterMaxMs: 1_250,
   searchWritePosts: 12,
   searchWriteConcurrency: 6,
   searchReadRequests: 24,
@@ -152,7 +154,8 @@ export function assertCapacityOverloadReport(report) {
     const summary = scenarios.anonymousCrawler.searchByFilter?.[filter];
     assert(
       summary?.requests === report.budgets.crawlerSearchRequests / 4 &&
-        summary.p95Ms <= report.budgets.crawlerP95Ms,
+        summary.p50Ms <= report.budgets.crawlerFilterP50Ms &&
+        summary.maxMs <= report.budgets.crawlerFilterMaxMs,
       `${filter} search workload drifted or exceeded its local proof budget`,
     );
   }

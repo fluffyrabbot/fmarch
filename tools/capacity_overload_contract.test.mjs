@@ -176,7 +176,9 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
               statuses: {
                 200: capacityOverloadBudgets.crawlerSearchRequests / 4,
               },
+              p50Ms: 10,
               p95Ms: 20,
+              maxMs: 30,
             },
           ]),
         ),
@@ -257,6 +259,17 @@ test("capacity report contract requires bounded reads, recovery, 429, and 503", 
   };
 
   assert.equal(assertCapacityOverloadReport(report), report);
+  for (const metric of ["p50Ms", "maxMs"]) {
+    const drifted = structuredClone(report);
+    drifted.scenarios.anonymousCrawler.searchByFilter.all[metric] =
+      metric === "p50Ms"
+        ? capacityOverloadBudgets.crawlerFilterP50Ms + 1
+        : capacityOverloadBudgets.crawlerFilterMaxMs + 1;
+    assert.throws(
+      () => assertCapacityOverloadReport(drifted),
+      /all search workload drifted or exceeded its local proof budget/,
+    );
+  }
   assert.throws(
     () =>
       assertCapacityOverloadReport({
