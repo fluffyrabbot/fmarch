@@ -289,14 +289,6 @@
       "method": "isolated",
       "warmup_seconds": 2.1
     },
-    "test:event-key-rotation-rehearsal": {
-      "seconds": 3.8,
-      "measured_at": "2026-08-19T07:01:57.143Z",
-      "command": "npm run test:event-key-rotation-rehearsal",
-      "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 2.9
-    },
     "cargo:content-registry": {
       "seconds": 8,
       "measured_at": "2026-08-19T07:02:16.664Z",
@@ -368,14 +360,6 @@
       "status": 0,
       "method": "isolated",
       "warmup_seconds": 287
-    },
-    "test:release-topology": {
-      "seconds": 3.5,
-      "measured_at": "2026-08-19T07:28:30.850Z",
-      "command": "npm run test:release-topology",
-      "status": 0,
-      "method": "isolated",
-      "warmup_seconds": 4.9
     },
     "cargo:clippy-workspace": {
       "seconds": 193.6,

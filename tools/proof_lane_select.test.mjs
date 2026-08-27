@@ -512,7 +512,6 @@ test('migrated mutable proof leaves consume runner-owned database and artifact r
     ['test:host-console-day-event-room-live-stack', ['DATABASE_MIGRATION_URL']],
     ['test:live-stack-backup-restore-drill', ['DATABASE_MIGRATION_URL', 'DATABASE_RESTORE_MIGRATION_URL']],
     ['test:mash-scale-acceptance', ['DATABASE_MIGRATION_URL']],
-    ['test:event-key-rotation-rehearsal', ['DATABASE_URL']],
   ]) {
     const lane = manifest.lanes[laneId];
     assert.equal(usesRunnerOwnedPostgres(lane), true, `${laneId} must lease a disposable database`);
@@ -572,10 +571,38 @@ test('manifest lanes are executable leaves, while human aggregate aliases stay o
     );
   }
 
-  for (const alias of ['test:local-postgres-ci', 'test:frontend-role-proof:quick']) {
+  for (const alias of [
+    'test:local-postgres-ci',
+    'test:frontend-role-proof:quick',
+    'test:event-key-rotation-rehearsal',
+    'test:release-topology',
+  ]) {
     assert.ok(packageScripts[alias], `human aggregate alias ${alias} must remain available`);
     assert.ok(!declared.has(alias), `aggregate alias ${alias} must not be a manifest leaf`);
   }
+});
+
+test('specialized release claims consume broad Cargo evidence without repeating test bodies', () => {
+  const expected = {
+    'check:event-key-rotation-evidence': ['cargo:server'],
+    'check:release-topology-evidence': ['cargo:media', 'cargo:api'],
+  };
+  for (const [laneId, producers] of Object.entries(expected)) {
+    const lane = manifest.lanes[laneId];
+    assert.deepEqual(lane.depends_on, producers);
+    assert.deepEqual(
+      lane.execution.resources
+        .filter((resource) => resource.kind === 'artifact-input')
+        .map((resource) => resource.from),
+      producers,
+    );
+  }
+  assert.equal(manifest.lanes['test:event-key-rotation-rehearsal'], undefined);
+  assert.equal(manifest.lanes['test:release-topology'], undefined);
+  const full = orderedExecutionPlan(Object.keys(manifest.lanes), manifest, { lanes: {} });
+  assert.equal(full.filter((laneId) => laneId === 'cargo:server').length, 1);
+  assert.equal(full.filter((laneId) => laneId === 'cargo:media').length, 1);
+  assert.equal(full.filter((laneId) => laneId === 'cargo:api').length, 1);
 });
 
 test('canonical execution planning runs an equivalent command only once', () => {

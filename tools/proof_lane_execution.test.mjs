@@ -673,7 +673,6 @@ test('mutable proof leaves bind real runner-owned databases and artifact roots w
     ['test:host-console-day-event-room-live-stack', ['DATABASE_MIGRATION_URL']],
     ['test:live-stack-backup-restore-drill', ['DATABASE_MIGRATION_URL', 'DATABASE_RESTORE_MIGRATION_URL']],
     ['test:mash-scale-acceptance', ['DATABASE_MIGRATION_URL']],
-    ['test:event-key-rotation-rehearsal', ['DATABASE_URL']],
   ]) {
     const lane = manifest.lanes[laneId];
     assert.ok(
@@ -723,8 +722,8 @@ test('mutable proof leaves bind real runner-owned databases and artifact roots w
     env: { FMARCH_PROOF_ARTIFACT_DIR: '/ambient/incorrect' },
   });
   assert.equal(exactInvocation.env.FMARCH_PROOF_ARTIFACT_DIR, exactInvocation.artifactDir);
-  assert.equal(acquired.length, 6);
-  assert.equal(released.length, 6);
+  assert.equal(acquired.length, 5);
+  assert.equal(released.length, 5);
 });
 
 test('a multi-database lane holds one postgres-admin admission and records every lease', async (t) => {

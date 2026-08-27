@@ -74,10 +74,10 @@
     "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p identity -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "identity", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
     "cargo:profile-handle-index": { "kind": "shell", "command": "cargo test -p profile_handle_index" },
     "cargo:profile-application": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p profile_application -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "profile_application", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:media": { "kind": "shell", "command": "cargo test -p media" },
-    "cargo:api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p api -- --test-threads=4", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "api", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:media": { "kind": "shell", "command": "cargo test -p media", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "shared_object_repository_cross_replica_round_trip_is_idempotent", "--", "cargo", "test", "-p", "media"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "cargo:api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p api -- --test-threads=4", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state", "--", "cargo", "test", "-p", "api", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "cargo:operator_api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p operator_api -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "operator_api", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:server": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p server -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "server", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:server": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p server -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "admin_rejects_non_deployable_key_configuration_before_database_access", "--required", "deployed_admin_rehearses_old_key_removal_before_retirement", "--", "cargo", "test", "-p", "server", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-contract": { "kind": "npm" },
     "test:frontend-static-role-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-static-role-contract"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-role-smoke": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:frontend-role-smoke"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
@@ -103,7 +103,7 @@
     "test:public-search-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:public-search-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:database-schema:static": { "kind": "npm" },
     "test:database-schema-upgrade": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["npm", "run", "test:database-schema-upgrade"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "FMARCH_SCHEMA_UPGRADE_DATABASE_URL" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "FMARCH_SCHEMA_FRESH_DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
-    "test:event-key-rotation-rehearsal": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["npm", "run", "test:event-key-rotation-rehearsal"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "check:event-key-rotation-evidence": { "kind": "shell", "command": "node tools/proof_test_evidence.mjs --claim FMARCH_SERVER_TEST_ARTIFACT_DIR:admin_rejects_non_deployable_key_configuration_before_database_access --claim FMARCH_SERVER_TEST_ARTIFACT_DIR:deployed_admin_rehearses_old_key_removal_before_retirement", "depends_on": ["cargo:server"], "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["node", "tools/proof_test_evidence.mjs", "--claim", "FMARCH_SERVER_TEST_ARTIFACT_DIR:admin_rejects_non_deployable_key_configuration_before_database_access", "--claim", "FMARCH_SERVER_TEST_ARTIFACT_DIR:deployed_admin_rehearses_old_key_removal_before_retirement"], "resources": [{ "kind": "artifact-input", "from": "cargo:server", "env": "FMARCH_SERVER_TEST_ARTIFACT_DIR" }] } },
     "test:database-tls-boundary": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 300, "argv": ["npm", "run", "test:database-tls-boundary"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "postgres-admin" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:dev-test-game-contract": { "kind": "npm" },
     "test:dev-postgres-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["npm", "run", "test:dev-postgres-contract"], "resources": [] } },
@@ -130,7 +130,7 @@
     "test:schema-epoch-reset": { "kind": "npm" },
     "test:workos-oidc-preflight": { "kind": "npm" },
     "test:railway-staging-target": { "kind": "npm" },
-    "test:release-topology": { "kind": "npm" },
+    "check:release-topology-evidence": { "kind": "shell", "command": "node tools/proof_test_evidence.mjs --claim FMARCH_MEDIA_TEST_ARTIFACT_DIR:shared_object_repository_cross_replica_round_trip_is_idempotent --claim FMARCH_API_TEST_ARTIFACT_DIR:command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state", "depends_on": ["cargo:media", "cargo:api"], "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["node", "tools/proof_test_evidence.mjs", "--claim", "FMARCH_MEDIA_TEST_ARTIFACT_DIR:shared_object_repository_cross_replica_round_trip_is_idempotent", "--claim", "FMARCH_API_TEST_ARTIFACT_DIR:command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state"], "resources": [{ "kind": "artifact-input", "from": "cargo:media", "env": "FMARCH_MEDIA_TEST_ARTIFACT_DIR" }, { "kind": "artifact-input", "from": "cargo:api", "env": "FMARCH_API_TEST_ARTIFACT_DIR" }] } },
     "test:security-release-baseline": { "kind": "npm" },
     "test:dependency-policy": { "kind": "npm" },
     "test:frontend-csp-browser": { "kind": "npm" },
@@ -180,7 +180,7 @@
         "cargo:clippy-workspace",
         "test:database-schema:static",
         "test:database-schema-upgrade",
-        "test:event-key-rotation-rehearsal",
+        "check:event-key-rotation-evidence",
         "test:railway-staging-target",
         "test:production-promotion",
         "test:public-search-role-proof"
@@ -192,7 +192,7 @@
       "tier": "frozen",
       "paths": ["crates/eventstore/"],
       "crate": "eventstore",
-      "lanes": ["cargo:eventstore", "cargo:clippy-workspace", "test:event-key-rotation-rehearsal"],
+      "lanes": ["cargo:eventstore", "cargo:clippy-workspace", "check:event-key-rotation-evidence"],
       "capabilities": ["foundation.event-store-projections"]
     },
     {
@@ -210,7 +210,7 @@
       "lanes": [
         "cargo:projections",
         "cargo:clippy-workspace",
-        "test:event-key-rotation-rehearsal",
+        "check:event-key-rotation-evidence",
         "test:railway-staging-target",
         "test:production-promotion",
         "test:public-search-role-proof"
@@ -550,7 +550,7 @@
       "tier": "frozen",
       "paths": ["crates/media/"],
       "crate": "media",
-      "lanes": ["cargo:media", "cargo:clippy-workspace", "test:release-topology"],
+      "lanes": ["cargo:media", "cargo:clippy-workspace", "check:release-topology-evidence"],
       "capabilities": [
         "product.media.reference-ingest-serving",
         "product.media.canonical-blob-store",
@@ -577,7 +577,7 @@
       "tier": "active",
       "paths": ["crates/api/"],
       "crate": "api",
-      "lanes": ["cargo:api", "cargo:clippy-workspace", "test:mash-scale-acceptance", "test:security-release-baseline", "test:event-key-rotation-rehearsal"],
+      "lanes": ["cargo:api", "cargo:clippy-workspace", "test:mash-scale-acceptance", "test:security-release-baseline", "check:event-key-rotation-evidence"],
       "also_triggers": ["frontend:identity"],
       "capabilities": [
         "product.mash.day-program-library",
@@ -595,7 +595,7 @@
         "cargo:clippy-workspace",
         "test:mash-scale-acceptance",
         "test:security-release-baseline",
-        "test:event-key-rotation-rehearsal",
+        "check:event-key-rotation-evidence",
         "test:public-search-role-proof"
       ],
       "also_triggers": ["frontend:identity"]
@@ -629,10 +629,10 @@
       "lanes": [
         "cargo:server",
         "cargo:clippy-workspace",
-        "test:release-topology",
+        "check:release-topology-evidence",
         "test:security-release-baseline",
         "test:exact-image-content",
-        "test:event-key-rotation-rehearsal",
+        "check:event-key-rotation-evidence",
         "test:database-tls-boundary",
         "test:railway-staging-target",
         "test:production-promotion"
@@ -1116,7 +1116,7 @@
         "test:workos-oidc-preflight",
         "test:security-release-baseline",
         "test:exact-image-content",
-        "test:event-key-rotation-rehearsal",
+        "check:event-key-rotation-evidence",
         "test:database-tls-boundary"
       ]
     },
