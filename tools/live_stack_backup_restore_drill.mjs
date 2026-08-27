@@ -80,6 +80,12 @@ try {
     dumpPath,
     sourceAuthority.migrationUrl,
   ]);
+  // A restore drill is a sequential authority transfer, not a two-stack load test.
+  // Both disposable databases deliberately share the cluster-wide application
+  // role, so keeping the source pool alive can exhaust that role's connection
+  // limit before the restored API starts.
+  await stopChild(sourceServer);
+  sourceServer = undefined;
 
   restoredDatabase = runnerOwnsDatabases
     ? runnerOwnedDatabase(restoreMigrationUrl)
