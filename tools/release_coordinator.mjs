@@ -458,6 +458,36 @@ export function parseResetLogRows(output) {
   };
 }
 
+export async function waitForResetLogRows(
+  config,
+  deploymentId,
+  serviceId,
+  required,
+  label,
+  {
+    load = () => railwayText(config, [
+      "logs",
+      deploymentId,
+      "--service",
+      serviceId,
+      "--lines",
+      "200",
+    ]),
+    now = () => Date.now(),
+    sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+    timeoutMilliseconds = 60_000,
+    pollMilliseconds = 2_000,
+  } = {},
+) {
+  const deadline = now() + timeoutMilliseconds;
+  while (now() < deadline) {
+    const parsed = parseResetLogRows(await load());
+    if (required.every((field) => parsed[field] != null)) return parsed;
+    await sleep(pollMilliseconds);
+  }
+  throw new Error(`${label} emitted no ${required.join(" and ")} record within 60 seconds`);
+}
+
 export function validateEpochResetAudit(audit, { environment, epoch, commit }) {
   assert.equal(audit?.kind, "fmarch-schema-epoch-reset-audit", "schema epoch reset audit kind drifted");
   assert.equal(audit.environment, environment, "schema epoch reset audit environment drifted");
@@ -489,16 +519,13 @@ async function deployEpochReset(config, digest, commit, epoch) {
       FMARCH_SCHEMA_EPOCH_RESET_CONFIRM: confirmation,
     },
   });
-  const auditLogs = railwayText(config, [
-    "logs",
+  const audit = (await waitForResetLogRows(
+    config,
     auditDeployment.id,
-    "--service",
     serviceId,
-    "--lines",
-    "200",
-  ]);
-  const audit = parseResetLogRows(auditLogs).audit;
-  assert.ok(audit, "schema epoch reset audit deployment emitted no audit record");
+    ["audit"],
+    "schema epoch reset audit deployment",
+  )).audit;
   validateEpochResetAudit(audit, { environment: config.environment, epoch, commit });
 
   const deployment = await deployConfiguredImage(config, {
@@ -508,17 +535,13 @@ async function deployEpochReset(config, digest, commit, epoch) {
     startCommand: "fmarch-schema-epoch-reset --execute",
     label: `${config.environment} schema epoch reset`,
   });
-  const resetLogs = railwayText(config, [
-    "logs",
+  const parsed = await waitForResetLogRows(
+    config,
     deployment.id,
-    "--service",
     serviceId,
-    "--lines",
-    "200",
-  ]);
-  const parsed = parseResetLogRows(resetLogs);
-  assert.ok(parsed.audit, "schema epoch reset deployment emitted no audit record");
-  assert.ok(parsed.complete, "schema epoch reset deployment emitted no completion record");
+    ["audit", "complete"],
+    "schema epoch reset deployment",
+  );
   assert.equal(parsed.complete.release_commit, commit);
   assert.equal(parsed.complete.environment, config.environment);
   assert.equal(parsed.complete.epoch, epoch);

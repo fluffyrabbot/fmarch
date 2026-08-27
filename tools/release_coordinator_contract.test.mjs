@@ -14,6 +14,7 @@ import {
   parseResetLogRows,
   validateEpochResetAudit,
   waitForNewDeployment,
+  waitForResetLogRows,
 } from "./release_coordinator.mjs";
 
 const commit = "a".repeat(40);
@@ -220,6 +221,44 @@ test("epoch reset logs accept Railway structured fields and embedded JSON messag
   const parsed = parseResetLogRows(`${structured}\n${embedded}`);
   assert.equal(parsed.audit.kind, "fmarch-schema-epoch-reset-audit");
   assert.equal(parsed.complete.kind, "fmarch-schema-epoch-reset-complete");
+});
+
+test("epoch reset evidence waits for Railway log propagation and stays bounded", async () => {
+  let clock = 0;
+  const outputs = ["", JSON.stringify({ kind: "fmarch-schema-epoch-reset-audit" })];
+  const parsed = await waitForResetLogRows(
+    {},
+    "deployment",
+    "service",
+    ["audit"],
+    "reset audit",
+    {
+      load: () => outputs.shift() ?? "",
+      now: () => clock,
+      sleep: async (milliseconds) => { clock += milliseconds; },
+      timeoutMilliseconds: 10,
+      pollMilliseconds: 1,
+    },
+  );
+  assert.equal(parsed.audit.kind, "fmarch-schema-epoch-reset-audit");
+
+  await assert.rejects(
+    waitForResetLogRows(
+      {},
+      "deployment",
+      "service",
+      ["audit", "complete"],
+      "reset execution",
+      {
+        load: () => "",
+        now: () => clock,
+        sleep: async (milliseconds) => { clock += milliseconds; },
+        timeoutMilliseconds: 2,
+        pollMilliseconds: 1,
+      },
+    ),
+    /audit and complete record/,
+  );
 });
 
 test("release receipt binds exact artifacts, health, proof, and staging sentinel", () => {
