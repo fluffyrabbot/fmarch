@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { performance } from "node:perf_hooks";
 import { join, resolve } from "node:path";
 import process from "node:process";
@@ -10,28 +10,25 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const scriptPath = fileURLToPath(import.meta.url);
-const defaultCacheNamespace = "fmarch-exact-image-rust-1.95";
 export const requiredExactImageEngine = "podman";
 
 export const exactImageRuntimeBinaries = Object.freeze([
   "fmarch-server",
   "fmarch-migrate",
   "fmarch-schema-gate",
+  "fmarch-schema-epoch-reset",
   "fmarch-staging-search-corpus",
   "fmarch-event-key-admin",
   "fmarch-profile-index-admin",
 ]);
 
 export const exactImageTimingPhases = Object.freeze([
-  "engine_probe",
-  "host_content_check",
-  "image_build",
-  "runtime_integrity_check",
-  "runtime_content_check",
-  "evidence_compare",
+  "dockerfile_policy",
+  "runtime_entrypoint_policy",
+  "evidence_write",
 ]);
 
-const checkScript = [
+const runtimeValidationCheck = [
   'test "$(id -u)" = "10001"',
   ...exactImageRuntimeBinaries.map((binary) => `test -x /usr/local/bin/${binary}`),
   "test ! -e /packs",
@@ -48,7 +45,6 @@ export function createExactImageTiming({ now = () => performance.now() } = {}) {
   const startedAt = now();
   const phases = [];
   let failedPhase;
-
   return {
     measure(name, operation) {
       if (!exactImageTimingPhases.includes(name)) {
@@ -97,10 +93,7 @@ export function assertCompleteExactImageTiming(timing) {
   if (timing.failed_phase) {
     throw new Error(`exact-image timing failed during ${timing.failed_phase}`);
   }
-  if (!Array.isArray(timing.phases)) {
-    throw new Error("exact-image timing has no phases array");
-  }
-  if (timing.phases.length !== exactImageTimingPhases.length) {
+  if (!Array.isArray(timing.phases) || timing.phases.length !== exactImageTimingPhases.length) {
     throw new Error("exact-image timing is missing one or more phases");
   }
   for (const [index, expectedName] of exactImageTimingPhases.entries()) {
@@ -115,33 +108,16 @@ export function assertCompleteExactImageTiming(timing) {
   return true;
 }
 
-export function parseExactImageArguments(argv) {
-  const argumentsSet = new Set(argv);
-  for (const argument of argumentsSet) {
-    if (argument !== "--cache-profile" && argument !== "--single") {
-      throw new Error(`unknown exact-image-content argument ${argument}`);
-    }
-  }
-  if (argumentsSet.has("--cache-profile") && argumentsSet.has("--single")) {
-    throw new Error("--cache-profile and --single cannot be combined");
-  }
-  return { cacheProfile: argumentsSet.has("--cache-profile") };
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function artifactDirectory(env) {
   return resolve(env.FMARCH_PROOF_ARTIFACT_DIR ?? join(repoRoot, "target", "exact-image-content"));
 }
 
-function cacheNamespace(env) {
-  const namespace = env.FMARCH_EXACT_IMAGE_CACHE_NAMESPACE ?? defaultCacheNamespace;
-  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$/.test(namespace)) {
-    throw new Error("FMARCH_EXACT_IMAGE_CACHE_NAMESPACE must be a safe cache identifier");
-  }
-  return namespace;
-}
-
-function freshCacheNamespace() {
-  return `fmarch-exact-profile-${process.pid}-${Date.now().toString(36)}`;
+function writeReport(reportPath, evidence) {
+  writeFileSync(reportPath, `${JSON.stringify(evidence, null, 2)}\n`);
 }
 
 function errorMessage(error) {
@@ -154,6 +130,7 @@ function run(command, args, options = {}) {
     encoding: "utf8",
     stdio: options.capture ? "pipe" : "inherit",
     env: options.env,
+    maxBuffer: 32 * 1024 * 1024,
   });
   if (result.error) {
     throw new Error(`${command} ${args.join(" ")} could not start: ${result.error.message}`);
@@ -162,7 +139,7 @@ function run(command, args, options = {}) {
     const details = options.capture ? `\n${result.stdout}\n${result.stderr}` : "";
     throw new Error(`${command} ${args.join(" ")} failed (${result.status})${details}`);
   }
-  return result.stdout ?? "";
+  return String(result.stdout ?? "");
 }
 
 export function resolveExactImageEngine(env = {}) {
@@ -170,7 +147,7 @@ export function resolveExactImageEngine(env = {}) {
   if (requested && requested !== requiredExactImageEngine) {
     throw new Error(
       `FMARCH_CONTAINER_ENGINE=${requested} is not supported; ` +
-        `exact-image proof requires ${requiredExactImageEngine}`,
+        `runtime-image validation requires ${requiredExactImageEngine}`,
     );
   }
   return requiredExactImageEngine;
@@ -180,226 +157,171 @@ function availableEngine(env) {
   const engine = resolveExactImageEngine(env);
   const probe = spawnSync(engine, ["info"], { encoding: "utf8", stdio: "pipe" });
   if (probe.status === 0) return engine;
-  throw new Error(`exact-image proof requires a working ${engine} engine`);
+  throw new Error(`runtime-image validation requires a working ${engine} engine`);
 }
 
-function writeReport(reportPath, evidence) {
-  writeFileSync(reportPath, `${JSON.stringify(evidence, null, 2)}\n`);
-}
-
-function exactContentEvidence({ hostOutput, first, second, imageId, engine }) {
-  if (first !== second) {
-    throw new Error(`content check is not deterministic:\nfirst=${first}\nsecond=${second}`);
+export function assertImmutableRuntimeReference(reference) {
+  if (!/^[^@\s]+@sha256:[0-9a-f]{64}$/u.test(reference ?? "")) {
+    throw new Error("runtime validation requires an immutable repository@sha256 reference");
   }
-  const hostReport = JSON.parse(hostOutput);
-  const report = JSON.parse(first);
-  const packKeys = report.packs?.map((pack) => pack.key).sort();
-  const programIds = report.programs?.map((program) => program.id).sort();
-  const expectedPackKeys = [
-    "chinese_structured",
-    "default_open",
-    "epicmafia",
-    "mafia_universe",
-    "mafiascum",
-  ];
-  const expectedProgramIds = [
-    "host-judged-showcase",
-    "mash-scale-acceptance",
-    "opt-in-quest",
-    "private-opt-in-circle",
-    "raffle",
-  ];
-  const packRefsMatchHost = JSON.stringify(report.packs) === JSON.stringify(hostReport.packs);
-  const programRefsMatchHost =
-    JSON.stringify(report.programs) === JSON.stringify(hostReport.programs);
-  if (
-    report.status !== "ok" ||
-    report.pack_count !== 5 ||
-    report.program_count !== 5 ||
-    !/^[0-9a-f]{64}$/.test(report.registry_hash) ||
-    JSON.stringify(packKeys) !== JSON.stringify(expectedPackKeys) ||
-    JSON.stringify(programIds) !== JSON.stringify(expectedProgramIds) ||
-    report.registry_hash !== hostReport.registry_hash ||
-    report.pack_count !== hostReport.pack_count ||
-    report.program_count !== hostReport.program_count ||
-    !packRefsMatchHost ||
-    !programRefsMatchHost
-  ) {
-    throw new Error(
-      `image content does not exactly match the host registry:\nhost=${hostOutput}\nimage=${first}`,
-    );
+  return reference;
+}
+
+function finalRuntimeStage(dockerfile) {
+  const marker = "FROM runtime-base AS runtime";
+  const markerIndex = dockerfile.indexOf(marker);
+  if (markerIndex < 0) throw new Error(`Dockerfile must declare ${marker}`);
+  return dockerfile.slice(markerIndex);
+}
+
+export function validateStaticRuntimePolicy({ dockerfile, serverSource }) {
+  const runtime = finalRuntimeStage(dockerfile);
+  const copies = [...runtime.matchAll(
+    /^COPY --from=builder \/out\/([^\s]+) \/usr\/local\/bin\/([^\s]+)$/gmu,
+  )];
+  const copied = copies.map((match) => {
+    if (match[1] !== match[2]) throw new Error(`runtime binary was renamed: ${match[1]} -> ${match[2]}`);
+    return match[1];
+  }).sort();
+  const expected = [...exactImageRuntimeBinaries].sort();
+  if (JSON.stringify(copied) !== JSON.stringify(expected)) {
+    throw new Error(`runtime binary inventory drifted: expected ${expected}, found ${copied}`);
+  }
+  const copyLines = runtime.split("\n").filter((line) => /^COPY\s/u.test(line));
+  if (copyLines.length !== copies.length) {
+    throw new Error("runtime final stage may copy only the declared binaries from the builder");
+  }
+  for (const fragment of ["useradd --create-home --uid 10001 fmarch"]) {
+    if (!dockerfile.includes(fragment)) throw new Error(`runtime base policy is missing ${fragment}`);
+  }
+  for (const fragment of ["USER fmarch", 'CMD ["/bin/false"]']) {
+    if (!runtime.includes(fragment)) throw new Error(`runtime final stage is missing ${fragment}`);
+  }
+  for (const forbidden of ["/packs", "/programs", "/app"]) {
+    if (runtime.includes(forbidden)) throw new Error(`runtime final stage includes forbidden ${forbidden}`);
+  }
+  if (!serverSource.includes('"--check-content"')) {
+    throw new Error("fmarch-server must retain the --check-content entrypoint");
   }
   return {
-    status: "ok",
-    engine,
-    image_id: imageId,
+    status: "passed",
+    policy: "static-runtime-final-stage-v1",
     runtime_uid: 10001,
-    event_key_admin_binary: true,
-    profile_handle_index_admin_binary: true,
+    binary_inventory: [...exactImageRuntimeBinaries],
     runtime_content_directories: false,
-    registry_hash: report.registry_hash,
-    host_registry_match: true,
-    exact_pack_refs: report.packs,
-    exact_program_refs: report.programs,
-    pack_count: report.pack_count,
-    program_count: report.program_count,
+    check_content_entrypoint: "/usr/local/bin/fmarch-server --check-content",
+    dockerfile_sha256: sha256(dockerfile),
   };
 }
 
 export function runExactImageContentSmoke({ env = process.env, now } = {}) {
   const outputDir = artifactDirectory(env);
   const reportPath = join(outputDir, "report.json");
-  const cache = cacheNamespace(env);
   const timing = createExactImageTiming({ now });
-  let engine;
-  let image;
-  let scratch;
-
   try {
     mkdirSync(outputDir, { recursive: true });
-    engine = timing.measure("engine_probe", () => availableEngine(env));
-    image = `localhost/fmarch-exact-content:${process.pid}`;
-    scratch = mkdtempSync(join(tmpdir(), "fmarch-exact-image-"));
-    const iidFile = join(scratch, "image-id");
-    const hostOutput = timing.measure("host_content_check", () =>
-      run("cargo", ["run", "--quiet", "-p", "server", "--", "--check-content"], {
-        capture: true,
-      }).trim(),
+    const dockerfile = readFileSync(join(repoRoot, "Dockerfile"), "utf8");
+    const serverSource = readFileSync(join(repoRoot, "crates", "server", "src", "main.rs"), "utf8");
+    const policy = timing.measure("dockerfile_policy", () =>
+      validateStaticRuntimePolicy({ dockerfile, serverSource }),
     );
-    timing.measure("image_build", () =>
-      run(engine, [
-        "build",
-        "--file",
-        "Dockerfile",
-        "--tag",
-        image,
-        "--iidfile",
-        iidFile,
-        "--build-arg",
-        `FMARCH_CARGO_CACHE_NAMESPACE=${cache}`,
-        ".",
-      ]),
-    );
-    const imageId = readFileSync(iidFile, "utf8").trim();
-    if (!imageId) throw new Error("container build did not report an immutable image id");
-    const first = timing.measure("runtime_integrity_check", () =>
-      run(engine, ["run", "--rm", "--entrypoint", "/bin/sh", imageId, "-c", checkScript], {
-        capture: true,
-      }).trim(),
-    );
-    const second = timing.measure("runtime_content_check", () =>
-      run(engine, ["run", "--rm", imageId, "/usr/local/bin/fmarch-server", "--check-content"], {
-        capture: true,
-      }).trim(),
-    );
-    const evidence = timing.measure("evidence_compare", () =>
-      exactContentEvidence({ hostOutput, first, second, imageId, engine }),
-    );
-    evidence.cache_namespace = cache;
+    timing.measure("runtime_entrypoint_policy", () => {
+      if (policy.check_content_entrypoint !== "/usr/local/bin/fmarch-server --check-content") {
+        throw new Error("runtime check-content entrypoint drifted");
+      }
+    });
+    const evidence = { ...policy };
+    timing.measure("evidence_write", () => {
+      evidence.timing = timing.snapshot();
+      writeReport(reportPath, evidence);
+    });
     evidence.timing = timing.snapshot();
     writeReport(reportPath, evidence);
     process.stdout.write(`${JSON.stringify(evidence)}\n`);
     return evidence;
   } catch (error) {
-    const evidence = {
-      status: "failed",
-      error: errorMessage(error),
-      cache_namespace: cache,
-      timing: timing.snapshot(),
-    };
+    const evidence = { status: "failed", error: errorMessage(error), timing: timing.snapshot() };
     mkdirSync(outputDir, { recursive: true });
     writeReport(reportPath, evidence);
     throw error;
-  } finally {
-    if (engine && image) {
-      spawnSync(engine, ["image", "rm", "--force", image], { stdio: "ignore" });
-    }
-    if (scratch) {
-      rmSync(scratch, { recursive: true, force: true });
-    }
   }
 }
 
-function profilePass({ label, outputDir, cache, env }) {
-  const child = spawnSync(process.execPath, [scriptPath, "--single"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    stdio: "inherit",
-    env: {
-      ...env,
-      FMARCH_PROOF_ARTIFACT_DIR: outputDir,
-      FMARCH_EXACT_IMAGE_CACHE_NAMESPACE: cache,
-    },
-  });
-  const reportPath = join(outputDir, "report.json");
-  let report;
+function parseContentReport(output, label) {
   try {
-    report = JSON.parse(readFileSync(reportPath, "utf8"));
+    return JSON.parse(output);
   } catch (error) {
-    throw new Error(`${label} cache-profile pass did not write ${reportPath}: ${errorMessage(error)}`);
+    throw new Error(`${label} did not emit a JSON content report: ${errorMessage(error)}`);
   }
-  if (child.error) {
-    throw new Error(`${label} cache-profile pass could not start: ${child.error.message}`);
-  }
-  if (child.status !== 0) {
-    throw new Error(`${label} cache-profile pass failed (${child.status}): ${report.error ?? "no evidence"}`);
-  }
-  if (report.status !== "ok") {
-    throw new Error(`${label} cache-profile pass did not report success`);
-  }
-  if (report.cache_namespace !== cache) {
-    throw new Error(`${label} cache-profile pass did not use its owned cache namespace`);
-  }
-  assertCompleteExactImageTiming(report.timing);
-  return report;
 }
 
-function cacheProfileEvidence(report, relativePath) {
-  return {
-    report: relativePath,
-    image_build_milliseconds: report.timing.phases.find((phase) => phase.name === "image_build")
-      .milliseconds,
-    total_milliseconds: report.timing.total_milliseconds,
-    timing: report.timing,
+function compareRuntimeContent({ hostOutput, first, second, reference, engine }) {
+  if (first !== second) throw new Error("runtime content check is not deterministic");
+  const hostReport = parseContentReport(hostOutput, "host registry check");
+  const report = parseContentReport(first, "runtime registry check");
+  if (
+    report.status !== "ok" ||
+    report.pack_count !== 5 ||
+    report.program_count !== 5 ||
+    !/^[0-9a-f]{64}$/u.test(report.registry_hash ?? "") ||
+    JSON.stringify(report.packs) !== JSON.stringify(hostReport.packs) ||
+    JSON.stringify(report.programs) !== JSON.stringify(hostReport.programs) ||
+    report.registry_hash !== hostReport.registry_hash
+  ) {
+    throw new Error("runtime content does not exactly match the checkout registry");
+  }
+  const base = {
+    status: "passed",
+    policy: "immutable-linux-amd64-runtime-v1",
+    runtime_reference: reference,
+    runtime_digest: reference.slice(reference.indexOf("@") + 1),
+    platform: "linux/amd64",
+    engine,
+    runtime_uid: 10001,
+    binary_inventory: [...exactImageRuntimeBinaries],
+    runtime_content_directories: false,
+    registry_hash: report.registry_hash,
+    host_registry_hash: hostReport.registry_hash,
+    pack_count: report.pack_count,
+    program_count: report.program_count,
   };
+  return { ...base, validation_report_sha256: sha256(JSON.stringify(base)) };
 }
 
-export function runExactImageCacheProfile({ env = process.env } = {}) {
-  const outputDir = artifactDirectory(env);
-  const reportPath = join(outputDir, "cache-profile.json");
-  const cache = freshCacheNamespace();
-  const coldDir = join(outputDir, "cold");
-  const warmDir = join(outputDir, "warm");
-
-  try {
-    mkdirSync(outputDir, { recursive: true });
-    const cold = profilePass({ label: "cold", outputDir: coldDir, cache, env });
-    const warm = profilePass({ label: "warm", outputDir: warmDir, cache, env });
-    const evidence = {
-      status: "ok",
-      cache_namespace: cache,
-      cache_scope: "fresh-owned-cargo-cache-for-cold-pass-reused-by-warm-pass",
-      cold: cacheProfileEvidence(cold, "cold/report.json"),
-      warm: cacheProfileEvidence(warm, "warm/report.json"),
-    };
-    writeReport(reportPath, evidence);
-    process.stdout.write(`${JSON.stringify(evidence)}\n`);
-    return evidence;
-  } catch (error) {
-    const evidence = {
-      status: "failed",
-      cache_namespace: cache,
-      error: errorMessage(error),
-    };
-    mkdirSync(outputDir, { recursive: true });
-    writeReport(reportPath, evidence);
-    throw error;
-  }
+export function validateRuntimeImage({ reference, env = process.env, hostOutput = null } = {}) {
+  assertImmutableRuntimeReference(reference);
+  const engine = availableEngine(env);
+  run(engine, ["pull", "--platform", "linux/amd64", reference], { capture: true, env });
+  const checkoutReport = hostOutput ?? run(
+    "python3",
+    [
+      "scripts/with-heavy-build-lock.py",
+      "cargo",
+      "run",
+      "--quiet",
+      "-p",
+      "server",
+      "--",
+      "--check-content",
+    ],
+    { capture: true, env },
+  ).trim();
+  const first = run(
+    engine,
+    ["run", "--rm", "--platform", "linux/amd64", "--entrypoint", "/bin/sh", reference, "-c", runtimeValidationCheck],
+    { capture: true, env },
+  ).trim();
+  const second = run(
+    engine,
+    ["run", "--rm", "--platform", "linux/amd64", reference, "/usr/local/bin/fmarch-server", "--check-content"],
+    { capture: true, env },
+  ).trim();
+  return compareRuntimeContent({ hostOutput: checkoutReport, first, second, reference, engine });
 }
 
 export function main(argv = process.argv.slice(2), env = process.env) {
-  const { cacheProfile } = parseExactImageArguments(argv);
-  return cacheProfile ? runExactImageCacheProfile({ env }) : runExactImageContentSmoke({ env });
+  if (argv.length > 0) throw new Error(`unknown exact-image-content argument ${argv[0]}`);
+  return runExactImageContentSmoke({ env });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === scriptPath) {

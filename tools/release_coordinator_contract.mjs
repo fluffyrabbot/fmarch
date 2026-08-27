@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 
-export const RELEASE_RECEIPT_VERSION = 1;
+export const RELEASE_RECEIPT_VERSION = 2;
 export const TERMINAL_DEPLOYMENT_STATES = new Set([
   "SUCCESS",
   "FAILED",
@@ -24,6 +24,40 @@ export function assertFullCommit(commit, label = "release commit") {
 export function assertImageDigest(digest, label) {
   assert.match(digest ?? "", imageDigestPattern, `${label} must be a sha256 OCI digest`);
   return digest;
+}
+
+const runtimeBinaryInventory = Object.freeze([
+  "fmarch-server",
+  "fmarch-migrate",
+  "fmarch-schema-gate",
+  "fmarch-schema-epoch-reset",
+  "fmarch-staging-search-corpus",
+  "fmarch-event-key-admin",
+  "fmarch-profile-index-admin",
+]);
+
+export function assertRuntimeValidationAttestation(attestation, expectedDigest) {
+  assertImageDigest(expectedDigest, "runtime digest");
+  assert.equal(attestation?.status, "passed", "runtime image validation did not pass");
+  assert.equal(
+    attestation?.policy,
+    "immutable-linux-amd64-runtime-v1",
+    "runtime image validation policy drifted",
+  );
+  assert.equal(attestation.runtime_digest, expectedDigest, "runtime attestation digest drifted");
+  assert.match(
+    attestation.runtime_reference ?? "",
+    new RegExp(`@${expectedDigest.replaceAll("/", "\\/")}$`, "u"),
+    "runtime attestation must target the immutable digest",
+  );
+  assert.equal(attestation.platform, "linux/amd64", "runtime image validation platform drifted");
+  assert.equal(attestation.runtime_uid, 10001, "runtime image must run as UID 10001");
+  assert.equal(attestation.runtime_content_directories, false);
+  assert.deepEqual(attestation.binary_inventory, runtimeBinaryInventory);
+  assert.match(attestation.registry_hash ?? "", /^[0-9a-f]{64}$/u);
+  assert.equal(attestation.host_registry_hash, attestation.registry_hash);
+  assert.match(attestation.validation_report_sha256 ?? "", /^[0-9a-f]{64}$/u);
+  return attestation;
 }
 
 export function validateReleaseRepository({
@@ -194,6 +228,7 @@ export function buildReleaseReceipt({
   schemaHead,
   proofReceipt,
   attemptReceipt,
+  runtimeValidation,
   sentinel = null,
   schemaEpochReset = null,
   generatedAt = new Date(),
@@ -201,6 +236,7 @@ export function buildReleaseReceipt({
   assertFullCommit(commit);
   assertImageDigest(runtimeDigest, "runtime digest");
   assertImageDigest(frontendDigest, "frontend digest");
+  assertRuntimeValidationAttestation(runtimeValidation, runtimeDigest);
   assert.ok(["staging", "production"].includes(environment), "unsupported release environment");
   validateDeploymentArtifact(deployments.migrator, runtimeDigest, "migrator");
   validateDeploymentArtifact(deployments.api, runtimeDigest, "API");
@@ -230,6 +266,7 @@ export function buildReleaseReceipt({
       frontend: frontendDigest,
       migrator_api_digest_equal: true,
     },
+    runtime_validation: runtimeValidation,
     deployments: {
       migrator: deployments.migrator.id,
       api: deployments.api.id,
@@ -251,6 +288,7 @@ export function assertReleaseReceipt(receipt) {
   assertFullCommit(receipt.commit);
   assertImageDigest(receipt.images?.runtime, "runtime digest");
   assertImageDigest(receipt.images?.frontend, "frontend digest");
+  assertRuntimeValidationAttestation(receipt.runtime_validation, receipt.images?.runtime);
   assert.equal(receipt.images?.migrator_api_digest_equal, true);
   const { receipt_sha256: actual, ...base } = receipt;
   assert.equal(actual, receiptDigest(base), "release receipt digest does not match its contents");

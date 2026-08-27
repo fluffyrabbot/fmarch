@@ -14,6 +14,7 @@ import {
   parseMigrationCompletion,
   serviceSourceCutoverAction,
   parseResetLogRows,
+  releaseRuntimeValidation,
   validateEpochResetAudit,
   waitForNewDeployment,
   waitForMigrationCompletion,
@@ -24,6 +25,27 @@ import {
 const commit = "a".repeat(40);
 const runtimeDigest = `sha256:${"b".repeat(64)}`;
 const frontendDigest = `sha256:${"c".repeat(64)}`;
+const runtimeValidation = {
+  status: "passed",
+  policy: "immutable-linux-amd64-runtime-v1",
+  runtime_reference: `ghcr.io/fluffyrabbot/fmarch-runtime@${runtimeDigest}`,
+  runtime_digest: runtimeDigest,
+  platform: "linux/amd64",
+  runtime_uid: 10001,
+  binary_inventory: [
+    "fmarch-server",
+    "fmarch-migrate",
+    "fmarch-schema-gate",
+    "fmarch-schema-epoch-reset",
+    "fmarch-staging-search-corpus",
+    "fmarch-event-key-admin",
+    "fmarch-profile-index-admin",
+  ],
+  runtime_content_directories: false,
+  registry_hash: "d".repeat(64),
+  host_registry_hash: "d".repeat(64),
+  validation_report_sha256: "e".repeat(64),
+};
 const deployment = (id, digest, status = "SUCCESS") => ({
   id,
   status,
@@ -258,6 +280,46 @@ test("release retries are bound to the original commit and exact image digests",
   );
 });
 
+test("staging validates the immutable amd64 runtime while production reuses its attestation", () => {
+  let validatedReference = null;
+  assert.equal(
+    releaseRuntimeValidation({
+      environment: "staging",
+      runtimeRepository: "ghcr.io/fluffyrabbot/fmarch-runtime",
+      runtimeDigest,
+      validate({ reference }) {
+        validatedReference = reference;
+        return runtimeValidation;
+      },
+    }),
+    runtimeValidation,
+  );
+  assert.equal(
+    validatedReference,
+    `ghcr.io/fluffyrabbot/fmarch-runtime@${runtimeDigest}`,
+  );
+  assert.equal(
+    releaseRuntimeValidation({
+      environment: "production",
+      runtimeRepository: "ghcr.io/fluffyrabbot/fmarch-runtime",
+      runtimeDigest,
+      reusedRuntimeValidation: runtimeValidation,
+      validate() {
+        throw new Error("production must not rebuild or revalidate");
+      },
+    }),
+    runtimeValidation,
+  );
+  assert.throws(
+    () => releaseRuntimeValidation({
+      environment: "production",
+      runtimeRepository: "ghcr.io/fluffyrabbot/fmarch-runtime",
+      runtimeDigest,
+    }),
+    /staging runtime attestation/,
+  );
+});
+
 test("epoch reset audit permits only identity-empty greenfield state", () => {
   const audit = {
     kind: "fmarch-schema-epoch-reset-audit",
@@ -404,14 +466,23 @@ test("release receipt binds exact artifacts, health, proof, and staging sentinel
     schemaHead: "0002_profile_mute_durable_target.sql",
     proofReceipt,
     attemptReceipt,
+    runtimeValidation,
     sentinel: { status: "passed", receipt_sha256: "sentinel-receipt" },
     generatedAt: new Date("2026-08-26T00:00:00.000Z"),
   });
   assert.equal(assertReleaseReceipt(receipt), receipt);
   assert.equal(receipt.images.runtime, runtimeDigest);
+  assert.equal(receipt.runtime_validation, runtimeValidation);
   assert.equal(receipt.images.migrator_api_digest_equal, true);
   assert.throws(
     () => assertReleaseReceipt({ ...receipt, commit: "e".repeat(40) }),
     /digest does not match/,
+  );
+  assert.throws(
+    () => assertReleaseReceipt({
+      ...receipt,
+      runtime_validation: { ...runtimeValidation, platform: "linux/arm64" },
+    }),
+    /platform drifted/,
   );
 });

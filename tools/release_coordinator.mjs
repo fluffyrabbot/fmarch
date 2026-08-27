@@ -10,6 +10,7 @@ import {
   TERMINAL_DEPLOYMENT_STATES,
   assertFullCommit,
   assertImageDigest,
+  assertRuntimeValidationAttestation,
   assertReleaseReceipt,
   bindReleaseAttempt,
   buildReleaseReceipt,
@@ -20,6 +21,7 @@ import {
   validateProofReceipt,
   validateReleaseRepository,
 } from "./release_coordinator_contract.mjs";
+import { validateRuntimeImage } from "./exact_image_content_smoke.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const callerSession = `fmarch-release-${process.pid}`;
@@ -247,14 +249,27 @@ async function buildOrReuseImage({ repository, dockerfile, commit }) {
 
 async function resolveArtifacts(args, config, commit) {
   if (args.reuseStagingReceipt) {
+    assert.equal(args.environment, "production", "only production may reuse a staging receipt");
     const receipt = assertReleaseReceipt(
       JSON.parse(await readFile(path.resolve(args.reuseStagingReceipt), "utf8")),
     );
     assert.equal(receipt.environment, "staging", "production can reuse only a staging receipt");
     assert.equal(receipt.commit, commit, "staging receipt commit does not match production release");
-    return { runtimeDigest: receipt.images.runtime, frontendDigest: receipt.images.frontend };
+    return {
+      runtimeDigest: receipt.images.runtime,
+      frontendDigest: receipt.images.frontend,
+      runtimeValidation: assertRuntimeValidationAttestation(
+        receipt.runtime_validation,
+        receipt.images.runtime,
+      ),
+    };
   }
   if (args.runtimeDigest || args.frontendDigest) {
+    assert.equal(
+      args.environment,
+      "staging",
+      "production must reuse the staging-proven runtime attestation",
+    );
     assert.ok(args.runtimeDigest && args.frontendDigest, "both image digests must be supplied together");
     return {
       runtimeDigest: assertImageDigest(args.runtimeDigest, "runtime digest"),
@@ -267,6 +282,23 @@ async function resolveArtifacts(args, config, commit) {
     buildOrReuseImage({ repository: config.frontendImage, dockerfile: "Dockerfile.frontend", commit }),
   ]);
   return { runtimeDigest, frontendDigest };
+}
+
+export function releaseRuntimeValidation({
+  environment,
+  runtimeRepository,
+  runtimeDigest,
+  reusedRuntimeValidation = null,
+  validate = validateRuntimeImage,
+}) {
+  if (environment === "production") {
+    assert.ok(reusedRuntimeValidation, "production requires the staging runtime attestation");
+    return assertRuntimeValidationAttestation(reusedRuntimeValidation, runtimeDigest);
+  }
+  assert.equal(environment, "staging", "unsupported release environment");
+  assert.equal(reusedRuntimeValidation, null, "staging must validate its runtime image directly");
+  const attestation = validate({ reference: `${runtimeRepository}@${runtimeDigest}` });
+  return assertRuntimeValidationAttestation(attestation, runtimeDigest);
 }
 
 async function bindAttempt(environment, commit, runtimeDigest, frontendDigest) {
@@ -786,7 +818,14 @@ export async function main(argv = process.argv.slice(2)) {
     console.log(`release coordination check passed for ${args.environment} ${commit}`);
     return;
   }
-  const { runtimeDigest, frontendDigest } = await resolveArtifacts(args, config, commit);
+  const { runtimeDigest, frontendDigest, runtimeValidation: reusedRuntimeValidation } =
+    await resolveArtifacts(args, config, commit);
+  const runtimeValidation = releaseRuntimeValidation({
+    environment: args.environment,
+    runtimeRepository: config.runtimeImage,
+    runtimeDigest,
+    reusedRuntimeValidation,
+  });
   const attemptReceipt = await bindAttempt(
     args.environment,
     commit,
@@ -845,6 +884,7 @@ export async function main(argv = process.argv.slice(2)) {
     schemaHead: await schemaHead(),
     proofReceipt,
     attemptReceipt,
+    runtimeValidation,
     sentinel,
     schemaEpochReset,
   });

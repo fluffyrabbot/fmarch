@@ -7,7 +7,6 @@ import {
   assertCompleteExactImageTiming,
   createExactImageTiming,
   exactImageTimingPhases,
-  parseExactImageArguments,
 } from "./exact_image_content_smoke.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -103,23 +102,20 @@ async function contract() {
   }
   const timingSnapshot = timing.snapshot();
   assert.equal(assertCompleteExactImageTiming(timingSnapshot), true);
-  assert.equal(timingSnapshot.total_milliseconds, 42);
+  assert.equal(timingSnapshot.total_milliseconds, 21);
   assert.deepEqual(
     timingSnapshot.phases.map((phase) => phase.milliseconds),
-    [7, 7, 7, 7, 7, 7],
+    [7, 7, 7],
   );
   const failedTiming = createExactImageTiming({ now: () => clock });
   assert.throws(
-    () => failedTiming.measure("image_build", () => { throw new Error("expected failure"); }),
+    () => failedTiming.measure("dockerfile_policy", () => { throw new Error("expected failure"); }),
     /expected failure/,
   );
   assert.throws(
     () => assertCompleteExactImageTiming(failedTiming.snapshot()),
-    /failed during image_build/,
+    /failed during dockerfile_policy/,
   );
-  assert.deepEqual(parseExactImageArguments([]), { cacheProfile: false });
-  assert.deepEqual(parseExactImageArguments(["--cache-profile"]), { cacheProfile: true });
-  assert.throws(() => parseExactImageArguments(["--unknown"]), /unknown exact-image-content/);
   assert.match(source["railway.toml"], /healthcheckPath = "\/readyz"/);
   assert.match(source["railway.toml"], /startCommand = "fmarch-server"/);
   assert.match(source["railway.toml"], /preDeployCommand = "fmarch-schema-gate"/);

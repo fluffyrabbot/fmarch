@@ -135,7 +135,7 @@
     "test:dependency-policy": { "kind": "npm" },
     "test:frontend-csp-browser": { "kind": "npm" },
     "check:build-posture": { "kind": "npm" },
-    "test:exact-image-content": { "kind": "npm", "execution": { "class": "container", "timeout_seconds": 900, "argv": ["npm", "run", "test:exact-image-content"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "container-engine" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } }
+    "test:exact-image-content": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["npm", "run", "test:exact-image-content"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } }
   },
   "areas": [
     {

@@ -22,11 +22,44 @@ const priorCommit = "2".repeat(40);
 
 function proofReceipt(commit, id) {
   return {
-    schema: 2,
+    schema: 3,
     id,
     state: "passed",
-    context: { commit, mode: "full", manifest_sha256: "e".repeat(64) },
+    context: {
+      commit,
+      mode: "full",
+      clean: true,
+      worktree_sha256: "a".repeat(64),
+      manifest_sha256: "e".repeat(64),
+      database_identity_sha256: "b".repeat(64),
+      selected_lane_ids: ["lane"],
+    },
+    lanes: { lane: { state: "passed", status: 0 } },
     finished_at: "2026-08-27T00:00:00.000Z",
+  };
+}
+
+function runtimeValidation(runtime) {
+  return {
+    status: "passed",
+    policy: "immutable-linux-amd64-runtime-v1",
+    runtime_reference: `ghcr.io/fluffyrabbot/fmarch-runtime@${runtime}`,
+    runtime_digest: runtime,
+    platform: "linux/amd64",
+    runtime_uid: 10001,
+    binary_inventory: [
+      "fmarch-server",
+      "fmarch-migrate",
+      "fmarch-schema-gate",
+      "fmarch-schema-epoch-reset",
+      "fmarch-staging-search-corpus",
+      "fmarch-event-key-admin",
+      "fmarch-profile-index-admin",
+    ],
+    runtime_content_directories: false,
+    registry_hash: "c".repeat(64),
+    host_registry_hash: "c".repeat(64),
+    validation_report_sha256: "d".repeat(64),
   };
 }
 
@@ -54,6 +87,7 @@ function releaseReceipt(commit, runtime, frontend, id) {
     },
     schemaHead: "0002_profile_mute_durable_target.sql",
     proofReceipt: proofReceipt(commit, `${id}-proof`),
+    runtimeValidation: runtimeValidation(runtime),
     attemptReceipt: bindReleaseAttempt({
       environment: "staging",
       commit,
