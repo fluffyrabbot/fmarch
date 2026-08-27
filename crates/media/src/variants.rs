@@ -1,7 +1,6 @@
 //! Deterministic, private media variants committed by a manifest installed last.
 
 use std::fmt;
-use std::fs::File;
 use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -9,7 +8,7 @@ use image::codecs::avif::{AvifEncoder, ColorSpace};
 use image::codecs::webp::WebPEncoder;
 use image::imageops::FilterType;
 use image::{ExtendedColorType, GenericImageView, ImageEncoder, ImageFormat, RgbaImage};
-use rustix::fs::{AtFlags, OFlags};
+use cap_std::fs::{Dir, File, OpenOptions};
 use serde::{Deserialize, Serialize};
 
 use super::*;
@@ -398,8 +397,8 @@ struct DiskVariant {
 }
 
 struct OpenVariantSnapshot {
-    id_directory: File,
-    recipe_directory: File,
+    id_directory: Dir,
+    recipe_directory: Dir,
     manifest_file: File,
     set: VariantSet,
 }
@@ -410,7 +409,7 @@ struct VerifiedVariantSnapshot {
 }
 
 struct AttachedVariantReadRequest<'a> {
-    directory: &'a File,
+    directory: &'a Dir,
     name: &'a str,
     file: File,
     logical_path: &'a Path,
@@ -670,7 +669,7 @@ impl MediaStore {
     fn persist_prepared_variant_set(
         &self,
         id: ContentId,
-        id_directory: &File,
+        id_directory: &Dir,
         prepared: PreparedVariantSet,
         repair: bool,
     ) -> Result<VariantGenerationResult, MediaError> {
@@ -709,7 +708,7 @@ impl MediaStore {
                 Ok(())
             },
         )?;
-        sync_fd(&recipe_directory)?;
+        sync_dir(&recipe_directory)?;
         self.verify_recipe_attached(id, id_directory, &recipe_directory)?;
         self.verify_id_attached(id, id_directory)?;
         self.verify_store_attached()?;
@@ -726,9 +725,9 @@ impl MediaStore {
 
     fn persist_variant_member(
         &self,
-        id_directory: &File,
-        recipe_directory: &File,
-        format_directory: &File,
+        id_directory: &Dir,
+        recipe_directory: &Dir,
+        format_directory: &Dir,
         record: &VariantRecord,
         encoded: &[u8],
         repair: bool,
@@ -763,8 +762,8 @@ impl MediaStore {
     fn read_variant_member_from_snapshot(
         &self,
         id: ContentId,
-        id_directory: &File,
-        recipe_directory: &File,
+        id_directory: &Dir,
+        recipe_directory: &Dir,
         record: &VariantRecord,
         limits: VariantLimits,
     ) -> Result<Vec<u8>, MediaError> {
@@ -810,9 +809,8 @@ impl MediaStore {
         let path = self.recipe_path(id).join(MANIFEST_NAME);
         if let Some(file) = open_regular_file(&recipe_directory, MANIFEST_NAME, &path)? {
             verify_attached_entry(&recipe_directory, MANIFEST_NAME, &file, &path)?;
-            rustix::fs::unlinkat(&recipe_directory, MANIFEST_NAME, AtFlags::empty())
-                .map_err(std::io::Error::from)?;
-            sync_fd(&recipe_directory)?;
+            recipe_directory.remove_file(MANIFEST_NAME)?;
+            sync_dir(&recipe_directory)?;
         }
         self.verify_recipe_attached(id, &id_directory, &recipe_directory)
     }
@@ -830,9 +828,9 @@ impl MediaStore {
     fn open_recipe_directory(
         &self,
         id: ContentId,
-        id_directory: &File,
+        id_directory: &Dir,
         create: bool,
-    ) -> Result<Option<File>, MediaError> {
+    ) -> Result<Option<Dir>, MediaError> {
         let path = self.recipe_path(id);
         let opened = open_child_directory(id_directory, VARIANT_RECIPE_REVISION, &path, create)?;
         if let Some(directory) = &opened {
@@ -844,10 +842,10 @@ impl MediaStore {
     fn open_format_directory(
         &self,
         id: ContentId,
-        recipe_directory: &File,
+        recipe_directory: &Dir,
         format: VariantFormat,
         create: bool,
-    ) -> Result<Option<File>, MediaError> {
+    ) -> Result<Option<Dir>, MediaError> {
         let path = self.recipe_path(id).join(format.component());
         let opened = open_child_directory(recipe_directory, format.component(), &path, create)?;
         if let Some(directory) = &opened {
@@ -859,8 +857,8 @@ impl MediaStore {
     fn verify_recipe_attached(
         &self,
         id: ContentId,
-        id_directory: &File,
-        directory: &File,
+        id_directory: &Dir,
+        directory: &Dir,
     ) -> Result<(), MediaError> {
         verify_attached_entry(
             id_directory,
@@ -873,9 +871,9 @@ impl MediaStore {
     fn verify_format_attached(
         &self,
         id: ContentId,
-        recipe_directory: &File,
+        recipe_directory: &Dir,
         format: VariantFormat,
-        directory: &File,
+        directory: &Dir,
     ) -> Result<(), MediaError> {
         verify_attached_entry(
             recipe_directory,
@@ -1291,7 +1289,7 @@ pub(crate) fn parse_manifest(id: ContentId, bytes: &[u8]) -> Result<VariantSet, 
 }
 
 fn persist_named_bytes<F>(
-    directory: &File,
+    directory: &Dir,
     name: &str,
     logical_path: &Path,
     bytes: &[u8],
@@ -1308,27 +1306,20 @@ where
     verify_attached_entry(directory, &temp_name, &temp_file, Path::new(&temp_name))?;
 
     loop {
-        match rustix::fs::linkat(
-            directory,
-            temp_name.as_str(),
-            directory,
-            name,
-            AtFlags::empty(),
-        ) {
+        match directory.hard_link(temp_name.as_str(), directory, name) {
             Ok(()) => {
                 let installed = open_regular_file(directory, name, logical_path)?
                     .ok_or_else(|| MediaError::UnsafeStoragePath(logical_path.to_owned()))?;
                 if !same_open_file(&temp_file, &installed)? {
                     return Err(MediaError::UnsafeStoragePath(logical_path.to_owned()));
                 }
-                rustix::fs::fchmod(&installed, FILE_MODE).map_err(std::io::Error::from)?;
-                installed.sync_all()?;
+                harden_and_sync_file(&installed)?;
                 cleanup.remove_and_sync()?;
-                sync_fd(directory)?;
+                sync_dir(directory)?;
                 verify_attached_entry(directory, name, &installed, logical_path)?;
                 return Ok(true);
             }
-            Err(error) if error == rustix::io::Errno::EXIST => {
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 let existing = open_regular_file(directory, name, logical_path)?
                     .ok_or_else(|| MediaError::UnsafeStoragePath(logical_path.to_owned()))?;
                 let existing_result = if existing.metadata()?.len() != bytes.len() as u64 {
@@ -1338,42 +1329,39 @@ where
                 };
                 match existing_result {
                     Ok(()) => {
-                        rustix::fs::fchmod(&existing, FILE_MODE).map_err(std::io::Error::from)?;
-                        existing.sync_all()?;
+                        harden_and_sync_file(&existing)?;
                         cleanup.remove_and_sync()?;
-                        sync_fd(directory)?;
+                        sync_dir(directory)?;
                         verify_attached_entry(directory, name, &existing, logical_path)?;
                         return Ok(false);
                     }
                     Err(_error) if repair => {
                         verify_attached_entry(directory, name, &existing, logical_path)?;
-                        rustix::fs::unlinkat(directory, name, AtFlags::empty())
-                            .map_err(std::io::Error::from)?;
-                        sync_fd(directory)?;
+                        directory.remove_file(name)?;
+                        sync_dir(directory)?;
                     }
                     Err(error) => return Err(error),
                 }
             }
-            Err(error) => return Err(MediaError::Io(error.into())),
+            Err(error) => return Err(MediaError::Io(error)),
         }
     }
 }
 
-fn create_variant_temp(directory: &File) -> Result<(String, File), MediaError> {
+fn create_variant_temp(directory: &Dir) -> Result<(String, File), MediaError> {
     for _ in 0..TEMP_CREATE_ATTEMPTS {
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let name = format!(".variant.tmp.{}.{sequence}", std::process::id());
-        let flags =
-            OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC;
-        match rustix::fs::openat(directory, name.as_str(), flags, FILE_MODE) {
-            Ok(owned) => {
-                let file = File::from(owned);
-                rustix::fs::fchmod(&file, FILE_MODE).map_err(std::io::Error::from)?;
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        match directory.open_with(name.as_str(), &options) {
+            Ok(file) => {
+                harden_file(&file)?;
                 verify_attached_entry(directory, &name, &file, Path::new(&name))?;
                 return Ok((name, file));
             }
-            Err(error) if error == rustix::io::Errno::EXIST => continue,
-            Err(error) => return Err(MediaError::Io(error.into())),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(MediaError::Io(error)),
         }
     }
     Err(MediaError::Io(io::Error::new(
@@ -1430,9 +1418,8 @@ fn read_capped_attached(request: AttachedVariantReadRequest<'_>) -> Result<Vec<u
     if bytes.len() as u64 > max_len {
         return Err(corrupt_set(id, &format!("{label} grew beyond its cap")));
     }
-    rustix::fs::fchmod(&file, FILE_MODE).map_err(std::io::Error::from)?;
-    file.sync_all()?;
-    sync_fd(directory)?;
+    harden_and_sync_file(&file)?;
+    sync_dir(directory)?;
     verify_attached_entry(directory, name, &file, logical_path)?;
     Ok(bytes)
 }
@@ -1686,15 +1673,13 @@ mod tests {
                     let parsed = avif_parse::read_avif(&mut avif_bytes).unwrap();
                     assert!(!parsed.primary_item.is_empty());
                     assert!(parsed.alpha_item.is_some());
-                    let decoded = image::load_from_memory_with_format(bytes, ImageFormat::Avif)
-                        .expect("native decoder must accept generated AVIF");
-                    assert_eq!(decoded.dimensions(), (record.width(), record.height()));
-                    if record.key().kind() == VariantKind::Thumb {
-                        assert!(
-                            decoded.into_rgba8().pixels().any(|pixel| pixel.0[3] != 255),
-                            "native AVIF Thumb decode lost its non-opaque alpha"
-                        );
-                    }
+                    let primary = parsed.primary_item_metadata().unwrap();
+                    assert!(primary.still_picture);
+                    assert_eq!(primary.max_frame_width.get(), record.width());
+                    assert_eq!(primary.max_frame_height.get(), record.height());
+                    let alpha = parsed.alpha_item_metadata().unwrap().unwrap();
+                    assert_eq!(alpha.max_frame_width.get(), record.width());
+                    assert_eq!(alpha.max_frame_height.get(), record.height());
                 }
                 VariantFormat::Webp => {
                     assert!(bytes.starts_with(b"RIFF"));
@@ -1958,6 +1943,7 @@ mod tests {
         assert!(store.lookup_variant_set(id, limits).unwrap().is_some());
     }
 
+    #[cfg(unix)]
     #[test]
     fn variant_set_lookup_rejects_id_directory_detachment_after_scan() {
         let directory = tempdir().unwrap();
@@ -1978,6 +1964,28 @@ mod tests {
         assert!(result.is_err(), "detached id directory returned a set");
         assert!(held.exists());
         assert!(!id_path.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn variant_set_lookup_prevents_id_directory_detachment_while_scanned() {
+        let directory = tempdir().unwrap();
+        let limits = VariantLimits::default();
+        let (store, id) = store_with_source(directory.path(), 8, 6, true);
+        store.generate_variants(id, limits).unwrap();
+        let id_path = store.id_path(id);
+        let held = store.root.join("blobs").join("held-snapshot-id");
+        let mut rename_error = None;
+        let result = store.lookup_variant_snapshot_with_hook(id, limits, None, |stage| {
+            if stage == VariantLookupStage::MembersVerified && rename_error.is_none() {
+                rename_error = Some(fs::rename(&id_path, &held).unwrap_err());
+            }
+            Ok(())
+        });
+        assert_eq!(rename_error.unwrap().raw_os_error(), Some(32));
+        assert!(result.is_ok(), "the protected snapshot should remain readable");
+        assert!(id_path.exists());
+        assert!(!held.exists());
     }
 
     #[test]

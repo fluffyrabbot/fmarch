@@ -9,17 +9,21 @@
 //! The on-disk handle is a typed 32-byte digest, never a caller-provided path. A complete blob is
 //! synced to a private temporary file and installed with an atomic no-clobber hard link, so
 //! concurrent or repeated ingestion is idempotent and a reader never observes partial bytes.
+//! Unix also flushes containing directories; Windows relies on NTFS metadata journaling because
+//! its standard directory handles do not support `FlushFileBuffers`.
 
 use std::fmt;
-use std::fs::{self, File};
+use std::fs;
 use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use cap_fs_ext::MetadataExt as _;
+use cap_std::ambient_authority;
+use cap_std::fs::{Dir, File, OpenOptions};
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
-use rustix::fs::{AtFlags, Mode, OFlags};
 
 mod repository;
 mod variants;
@@ -38,8 +42,10 @@ const CONTENT_ID_BYTES: usize = 32;
 const CONTENT_ID_HEX_BYTES: usize = CONTENT_ID_BYTES * 2;
 const DECODER_OVERHEAD_BYTES: u64 = 1024 * 1024;
 const TEMP_CREATE_ATTEMPTS: usize = 64;
-const DIRECTORY_MODE: Mode = Mode::from_raw_mode(0o700);
-const FILE_MODE: Mode = Mode::from_raw_mode(0o600);
+#[cfg(unix)]
+const DIRECTORY_MODE: u32 = 0o700;
+#[cfg(unix)]
+const FILE_MODE: u32 = 0o600;
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -335,8 +341,8 @@ pub enum MediaError {
 #[derive(Debug, Clone)]
 pub struct MediaStore {
     root: PathBuf,
-    root_directory: Arc<File>,
-    blobs_directory: Arc<File>,
+    root_directory: Arc<Dir>,
+    blobs_directory: Arc<Dir>,
     limits: MediaLimits,
 }
 
@@ -345,8 +351,9 @@ impl MediaStore {
     /// filesystem IO.
     ///
     /// Root provisioning is deliberately outside this crate: recursively creating an ambient
-    /// path cannot truthfully promise that every new parent entry was fsynced. Once the root
-    /// exists, this store durably creates and owns everything beneath it.
+    /// path cannot truthfully promise that every new parent entry was persisted. Once the root
+    /// exists, this store owns everything beneath it and uses the strongest directory durability
+    /// primitive exposed by each supported host.
     pub fn open(root: impl AsRef<Path>, limits: MediaLimits) -> Result<Self, MediaError> {
         limits.validate()?;
         let root = fs::canonicalize(root.as_ref())?;
@@ -513,31 +520,24 @@ impl MediaStore {
             &self.id_path(handle.id).join(&temp_name),
         )?;
 
-        match rustix::fs::linkat(
-            &id_directory,
-            temp_name.as_str(),
-            &id_directory,
-            "orig",
-            AtFlags::empty(),
-        ) {
+        match id_directory.hard_link(temp_name.as_str(), &id_directory, "orig") {
             Ok(()) => {
                 let logical_orig = self.id_path(handle.id).join("orig");
                 let final_file = open_regular_file(&id_directory, "orig", &logical_orig)?
                     .ok_or_else(|| MediaError::UnsafeStoragePath(logical_orig.clone()))?;
                 if !same_open_file(&temp_file, &final_file)? {
-                    let _ = rustix::fs::unlinkat(&id_directory, "orig", AtFlags::empty());
+                    let _ = id_directory.remove_file("orig");
                     return Err(MediaError::UnsafeStoragePath(logical_orig));
                 }
-                rustix::fs::fchmod(&final_file, FILE_MODE).map_err(std::io::Error::from)?;
-                final_file.sync_all()?;
+                harden_and_sync_file(&final_file)?;
                 cleanup.remove_and_sync()?;
-                sync_fd(&id_directory)?;
+                sync_dir(&id_directory)?;
                 verify_attached_entry(&id_directory, "orig", &final_file, &logical_orig)?;
                 self.verify_id_attached(handle.id, &id_directory)?;
                 self.verify_store_attached()?;
                 Ok(IngestStatus::Stored)
             }
-            Err(error) if error == rustix::io::Errno::EXIST => {
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 let logical_orig = self.id_path(handle.id).join("orig");
                 let existing = open_regular_file(&id_directory, "orig", &logical_orig)?
                     .ok_or(MediaError::UnsafeStoragePath(logical_orig))?;
@@ -555,7 +555,7 @@ impl MediaStore {
     fn verify_existing(
         &self,
         id: ContentId,
-        id_directory: &File,
+        id_directory: &Dir,
         existing: File,
         canonical_bytes: &[u8],
     ) -> Result<IngestStatus, MediaError> {
@@ -573,7 +573,7 @@ impl MediaStore {
         self.root.join("blobs").join(id_component)
     }
 
-    fn open_id_directory(&self, id: ContentId, create: bool) -> Result<Option<File>, MediaError> {
+    fn open_id_directory(&self, id: ContentId, create: bool) -> Result<Option<Dir>, MediaError> {
         self.verify_store_attached()?;
         let id_component = id.to_string();
         let logical_path = self.id_path(id);
@@ -590,12 +590,12 @@ impl MediaStore {
         verify_attached_entry(
             &self.root_directory,
             "blobs",
-            &self.blobs_directory,
+            self.blobs_directory.as_ref(),
             &self.root.join("blobs"),
         )
     }
 
-    fn verify_id_attached(&self, id: ContentId, directory: &File) -> Result<(), MediaError> {
+    fn verify_id_attached(&self, id: ContentId, directory: &Dir) -> Result<(), MediaError> {
         verify_attached_entry(
             &self.blobs_directory,
             &id.to_string(),
@@ -607,7 +607,7 @@ impl MediaStore {
     fn read_verified(
         &self,
         id: ContentId,
-        id_directory: &File,
+        id_directory: &Dir,
         mut file: File,
     ) -> Result<StoredRaster, MediaError> {
         let logical_orig = self.id_path(id).join("orig");
@@ -673,9 +673,8 @@ impl MediaStore {
         }
         // Existing-file success includes both inode and containing-directory durability, and
         // persists the permission repair performed after content verification.
-        rustix::fs::fchmod(&file, FILE_MODE).map_err(std::io::Error::from)?;
-        file.sync_all()?;
-        sync_fd(id_directory)?;
+        harden_and_sync_file(&file)?;
+        sync_dir(id_directory)?;
         verify_attached_entry(id_directory, "orig", &file, &logical_orig)?;
 
         Ok(StoredRaster {
@@ -749,115 +748,132 @@ fn map_decode_error(error: image::ImageError) -> MediaError {
     }
 }
 
-fn open_root_directory(path: &Path) -> Result<File, MediaError> {
-    let owned = rustix::fs::open(path, directory_open_flags(), Mode::empty())
+fn open_root_directory(path: &Path) -> Result<Dir, MediaError> {
+    let directory = Dir::open_ambient_dir(path, ambient_authority())
         .map_err(|error| map_open_error(error, path))?;
-    let directory = File::from(owned);
-    if !directory.metadata()?.is_dir() {
+    if !directory.dir_metadata()?.is_dir() {
         return Err(MediaError::UnsafeStoragePath(path.to_owned()));
     }
-    rustix::fs::fchmod(&directory, DIRECTORY_MODE).map_err(std::io::Error::from)?;
-    sync_fd(&directory)?;
+    harden_directory(&directory)?;
+    sync_dir(&directory)?;
     Ok(directory)
 }
 
 fn open_child_directory(
-    parent: &File,
+    parent: &Dir,
     name: &str,
     logical_path: &Path,
     create: bool,
-) -> Result<Option<File>, MediaError> {
+) -> Result<Option<Dir>, MediaError> {
     if create {
-        match rustix::fs::mkdirat(parent, name, DIRECTORY_MODE) {
-            Ok(()) => sync_fd(parent)?,
-            Err(error) if error == rustix::io::Errno::EXIST => {}
-            Err(error) => return Err(MediaError::Io(error.into())),
+        match parent.create_dir(name) {
+            Ok(()) => sync_dir(parent)?,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(MediaError::Io(error)),
         }
     }
 
-    let owned = match rustix::fs::openat(parent, name, directory_open_flags(), Mode::empty()) {
-        Ok(owned) => owned,
-        Err(error) if !create && error == rustix::io::Errno::NOENT => return Ok(None),
+    let metadata = match parent.symlink_metadata(name) {
+        Ok(metadata) => metadata,
+        Err(error) if !create && error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(map_open_error(error, logical_path)),
     };
-    let directory = File::from(owned);
-    if !directory.metadata()?.is_dir() {
+    if metadata.is_symlink() || !metadata.is_dir() {
         return Err(MediaError::UnsafeStoragePath(logical_path.to_owned()));
     }
+    let directory = parent
+        .open_dir(name)
+        .map_err(|error| map_open_error(error, logical_path))?;
     verify_attached_entry(parent, name, &directory, logical_path)?;
-    rustix::fs::fchmod(&directory, DIRECTORY_MODE).map_err(std::io::Error::from)?;
-    sync_fd(&directory)?;
+    harden_directory(&directory)?;
+    sync_dir(&directory)?;
     verify_attached_entry(parent, name, &directory, logical_path)?;
     Ok(Some(directory))
 }
 
 fn open_regular_file(
-    parent: &File,
+    parent: &Dir,
     name: &str,
     logical_path: &Path,
 ) -> Result<Option<File>, MediaError> {
-    let flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK;
-    let owned = match rustix::fs::openat(parent, name, flags, Mode::empty()) {
-        Ok(owned) => owned,
-        Err(error) if error == rustix::io::Errno::NOENT => return Ok(None),
+    let metadata = match parent.symlink_metadata(name) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(map_open_error(error, logical_path)),
     };
-    let file = File::from(owned);
-    if !file.metadata()?.is_file() {
+    if metadata.is_symlink() || !metadata.is_file() {
         return Err(MediaError::UnsafeStoragePath(logical_path.to_owned()));
     }
+    let file = parent
+        .open(name)
+        .map_err(|error| map_open_error(error, logical_path))?;
     verify_attached_entry(parent, name, &file, logical_path)?;
     Ok(Some(file))
 }
 
-fn directory_open_flags() -> OFlags {
-    OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC
-}
-
-fn map_open_error(error: rustix::io::Errno, logical_path: &Path) -> MediaError {
-    if matches!(error, rustix::io::Errno::LOOP | rustix::io::Errno::NOTDIR) {
+fn map_open_error(error: io::Error, logical_path: &Path) -> MediaError {
+    if matches!(error.kind(), io::ErrorKind::NotADirectory | io::ErrorKind::InvalidInput) {
         MediaError::UnsafeStoragePath(logical_path.to_owned())
     } else {
-        MediaError::Io(error.into())
+        MediaError::Io(error)
     }
 }
 
-fn verify_attached_entry(
-    parent: &File,
+trait AttachedEntry {
+    fn attached_metadata(&self) -> io::Result<cap_std::fs::Metadata>;
+}
+
+impl AttachedEntry for File {
+    fn attached_metadata(&self) -> io::Result<cap_std::fs::Metadata> {
+        self.metadata()
+    }
+}
+
+impl AttachedEntry for Dir {
+    fn attached_metadata(&self) -> io::Result<cap_std::fs::Metadata> {
+        self.dir_metadata()
+    }
+}
+
+fn verify_attached_entry<T: AttachedEntry>(
+    parent: &Dir,
     name: &str,
-    opened: &File,
+    opened: &T,
     logical_path: &Path,
 ) -> Result<(), MediaError> {
-    let current = rustix::fs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)
+    let current = parent
+        .symlink_metadata(name)
         .map_err(|_| MediaError::UnsafeStoragePath(logical_path.to_owned()))?;
-    let held = rustix::fs::fstat(opened).map_err(std::io::Error::from)?;
-    if current.st_dev != held.st_dev || current.st_ino != held.st_ino {
+    if current.is_symlink() {
+        return Err(MediaError::UnsafeStoragePath(logical_path.to_owned()));
+    }
+    let held = opened.attached_metadata()?;
+    if current.dev() != held.dev() || current.ino() != held.ino() {
         return Err(MediaError::UnsafeStoragePath(logical_path.to_owned()));
     }
     Ok(())
 }
 
 fn same_open_file(left: &File, right: &File) -> Result<bool, MediaError> {
-    let left = rustix::fs::fstat(left).map_err(std::io::Error::from)?;
-    let right = rustix::fs::fstat(right).map_err(std::io::Error::from)?;
-    Ok(left.st_dev == right.st_dev && left.st_ino == right.st_ino)
+    let left = left.metadata()?;
+    let right = right.metadata()?;
+    Ok(left.dev() == right.dev() && left.ino() == right.ino())
 }
 
-fn create_private_temp(directory: &File) -> Result<(String, File), MediaError> {
+fn create_private_temp(directory: &Dir) -> Result<(String, File), MediaError> {
     for _ in 0..TEMP_CREATE_ATTEMPTS {
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let name = format!(".orig.tmp.{}.{sequence}", std::process::id());
-        let flags =
-            OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC;
-        match rustix::fs::openat(directory, name.as_str(), flags, FILE_MODE) {
-            Ok(owned) => {
-                let file = File::from(owned);
-                rustix::fs::fchmod(&file, FILE_MODE).map_err(std::io::Error::from)?;
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        match directory.open_with(name.as_str(), &options) {
+            Ok(file) => {
+                harden_file(&file)?;
                 verify_attached_entry(directory, &name, &file, Path::new(&name))?;
                 return Ok((name, file));
             }
-            Err(error) if error == rustix::io::Errno::EXIST => continue,
-            Err(error) => return Err(MediaError::Io(error.into())),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(MediaError::Io(error)),
         }
     }
     Err(MediaError::Io(io::Error::new(
@@ -866,19 +882,64 @@ fn create_private_temp(directory: &File) -> Result<(String, File), MediaError> {
     )))
 }
 
-fn sync_fd(file: &File) -> Result<(), MediaError> {
-    rustix::fs::fsync(file).map_err(std::io::Error::from)?;
+#[cfg(unix)]
+fn sync_dir(directory: &Dir) -> Result<(), MediaError> {
+    Dir::reopen_dir(directory)?.into_std_file().sync_all()?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_dir(_directory: &Dir) -> Result<(), MediaError> {
+    // Windows rejects FlushFileBuffers for directory handles with ERROR_ACCESS_DENIED. File
+    // contents are flushed before their no-clobber link is installed; NTFS journals the link.
+    Ok(())
+}
+
+#[cfg(unix)]
+fn harden_file(file: &File) -> Result<(), MediaError> {
+    use cap_std::fs::PermissionsExt;
+    let mut permissions = file.metadata()?.permissions();
+    permissions.set_mode(FILE_MODE);
+    file.set_permissions(permissions)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn harden_file(_file: &File) -> Result<(), MediaError> {
+    Ok(())
+}
+
+fn harden_and_sync_file(file: &File) -> Result<(), MediaError> {
+    harden_file(file)?;
+    #[cfg(unix)]
+    file.sync_all()?;
+    // Windows has no mode repair to persist and rejects FlushFileBuffers on the read-only
+    // verification handles used here. Writable temporary handles are flushed before install.
+    Ok(())
+}
+
+#[cfg(unix)]
+fn harden_directory(directory: &Dir) -> Result<(), MediaError> {
+    use cap_std::fs::PermissionsExt;
+    let mut permissions = directory.dir_metadata()?.permissions();
+    permissions.set_mode(DIRECTORY_MODE);
+    directory.set_permissions(".", permissions)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn harden_directory(_directory: &Dir) -> Result<(), MediaError> {
     Ok(())
 }
 
 struct TempCleanup<'a> {
-    directory: &'a File,
+    directory: &'a Dir,
     name: String,
     active: bool,
 }
 
 impl<'a> TempCleanup<'a> {
-    fn new(directory: &'a File, name: String) -> Self {
+    fn new(directory: &'a Dir, name: String) -> Self {
         Self {
             directory,
             name,
@@ -887,12 +948,12 @@ impl<'a> TempCleanup<'a> {
     }
 
     fn remove_and_sync(&mut self) -> Result<(), MediaError> {
-        match rustix::fs::unlinkat(self.directory, self.name.as_str(), AtFlags::empty()) {
+        match self.directory.remove_file(self.name.as_str()) {
             Ok(()) => {}
-            Err(error) if error == rustix::io::Errno::NOENT => {}
-            Err(error) => return Err(MediaError::Io(error.into())),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(MediaError::Io(error)),
         }
-        sync_fd(self.directory)?;
+        sync_dir(self.directory)?;
         self.active = false;
         Ok(())
     }
@@ -901,8 +962,8 @@ impl<'a> TempCleanup<'a> {
 impl Drop for TempCleanup<'_> {
     fn drop(&mut self) {
         if self.active {
-            let _ = rustix::fs::unlinkat(self.directory, self.name.as_str(), AtFlags::empty());
-            let _ = rustix::fs::fsync(self.directory);
+            let _ = self.directory.remove_file(self.name.as_str());
+            let _ = sync_dir(self.directory);
         }
     }
 }

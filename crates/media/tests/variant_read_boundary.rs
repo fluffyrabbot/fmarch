@@ -29,7 +29,7 @@ fn attached_variant_reads_have_one_immutable_descriptor_owning_boundary() {
 
     for request_contract in [
         "struct AttachedVariantReadRequest<'a> {",
-        "directory: &'a File",
+        "directory: &'a Dir",
         "name: &'a str",
         "file: File",
         "logical_path: &'a Path",
@@ -171,9 +171,8 @@ fn attached_variant_reads_have_one_immutable_descriptor_owning_boundary() {
             ".read_to_end(&mut bytes)?",
             "bytes.len() as u64 > max_len",
             "{label} grew beyond its cap",
-            "rustix::fs::fchmod(&file, FILE_MODE)",
-            "file.sync_all()?",
-            "sync_fd(directory)?",
+            "harden_and_sync_file(&file)?",
+            "sync_dir(directory)?",
             "verify_attached_entry(directory, name, &file, logical_path)?",
             "Ok(bytes)",
         ],
