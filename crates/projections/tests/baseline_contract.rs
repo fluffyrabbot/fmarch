@@ -1155,7 +1155,7 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
     .fetch_one(&pool)
     .await
     .expect("read profile mute target delete action");
-    assert_eq!(mute_target_delete_action, "c");
+    assert_eq!(mute_target_delete_action, "r");
 
     let not_valid_constraints: Vec<String> = sqlx::query_scalar(
         "SELECT constraint_row.conname \

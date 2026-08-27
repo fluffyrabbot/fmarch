@@ -1,25 +1,19 @@
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const repoRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-);
+export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const migrationDirectory = "crates/database_schema/migrations";
+export const schemaDirectory = "crates/database_schema/schema";
+export const epochFilename = "epoch.json";
+export const currentSchemaFilename = "current.sql";
+export const authorityFingerprintFilename = "authority.json";
 export const baselineFilename = "0001_current_schema.sql";
-export const baselineSha256 =
-  "dfd6b606d2619c18378b7f41c8782c6c4b8709cfa5029289b9ad21a7433781d3";
+export const baselineSha256 = "afddc1a958bb210024626ce40ec97991c4f2a03e3bc6718d5590edbe8745381e";
 
-const forbiddenTransitionPatterns = Object.freeze([
-  ["data insertion", /^INSERT\s+INTO\b/im],
-  ["data deletion", /^DELETE\s+FROM\b/im],
-  ["data truncation", /^TRUNCATE(?:\s+TABLE)?\b/im],
-  ["destructive table removal", /^DROP\s+TABLE\b/im],
-  ["destructive column removal", /^ALTER\s+TABLE\b[^;]*\bDROP\s+COLUMN\b/im],
-]);
-
+const migrationFilenamePattern = /^(\d{4})_([a-z0-9_]+)\.sql$/u;
 const requiredCatalogMarkers = Object.freeze([
   "CREATE TABLE public.events (",
   "CREATE TABLE public.event_stream_keys (",
@@ -30,64 +24,165 @@ const requiredCatalogMarkers = Object.freeze([
   "CREATE TRIGGER events_no_update",
 ]);
 
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 function countLines(sql, pattern) {
   return sql.split("\n").filter((line) => pattern.test(line)).length;
 }
 
-export async function inspectDatabaseSchema({ root = repoRoot } = {}) {
-  const directory = path.resolve(root, migrationDirectory);
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files = entries
+function readBaseEpoch(root) {
+  if (root !== repoRoot) return null;
+  const relative = `${schemaDirectory}/${epochFilename}`;
+  const result = spawnSync("git", ["show", `origin/main:${relative}`], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (result.status !== 0) return null;
+  return JSON.parse(result.stdout);
+}
+
+export function validateAppendOnlyEpoch(current, base, { allowEpochReset = false } = {}) {
+  if (!base) return true;
+  if (current.epoch !== base.epoch) {
+    if (!allowEpochReset) {
+      throw new Error(
+        `schema epoch changed from ${base.epoch} to ${current.epoch} without an explicit epoch reset`,
+      );
+    }
+    return true;
+  }
+  if (current.migrations.length < base.migrations.length) {
+    throw new Error("append-only migration manifest deleted an existing migration");
+  }
+  for (let index = 0; index < base.migrations.length; index += 1) {
+    if (JSON.stringify(current.migrations[index]) !== JSON.stringify(base.migrations[index])) {
+      throw new Error(
+        `append-only migration manifest changed existing entry ${base.migrations[index].filename}`,
+      );
+    }
+  }
+  return true;
+}
+
+export async function inspectDatabaseSchema({
+  root = repoRoot,
+  baseEpoch = undefined,
+  allowEpochReset = false,
+} = {}) {
+  const migrationPath = path.resolve(root, migrationDirectory);
+  const schemaPath = path.resolve(root, schemaDirectory);
+  const epoch = JSON.parse(await readFile(path.join(schemaPath, epochFilename), "utf8"));
+  if (epoch.version !== 1 || !Number.isSafeInteger(epoch.epoch) || epoch.epoch < 1) {
+    throw new Error("database schema epoch manifest is invalid");
+  }
+  if (!Array.isArray(epoch.migrations) || epoch.migrations.length === 0) {
+    throw new Error("database schema epoch must contain migrations");
+  }
+  validateAppendOnlyEpoch(
+    epoch,
+    baseEpoch === undefined ? readBaseEpoch(root) : baseEpoch,
+    { allowEpochReset },
+  );
+
+  const files = (await readdir(migrationPath, { withFileTypes: true }))
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
     .sort();
-  if (files.length !== 1 || files[0] !== baselineFilename) {
+  const manifestFiles = epoch.migrations.map((migration) => migration.filename);
+  if (JSON.stringify(files) !== JSON.stringify(manifestFiles)) {
     throw new Error(
-      `greenfield database schema must contain only ${baselineFilename}; found ${files.join(", ") || "no files"}`,
+      `migration files must exactly match the epoch manifest; files=${files.join(", ")} manifest=${manifestFiles.join(", ")}`,
     );
   }
 
-  const baselinePath = path.join(directory, baselineFilename);
-  const sql = await readFile(baselinePath, "utf8");
-  if (!sql.startsWith("-- 0001_current_schema.sql — complete greenfield")) {
-    throw new Error("database baseline is missing its greenfield contract header");
+  for (let index = 0; index < epoch.migrations.length; index += 1) {
+    const migration = epoch.migrations[index];
+    const expectedVersion = index + 1;
+    const match = migrationFilenamePattern.exec(migration.filename);
+    if (
+      migration.version !== expectedVersion ||
+      !match ||
+      Number.parseInt(match[1], 10) !== expectedVersion
+    ) {
+      throw new Error(
+        `migration ${migration.filename} must be contiguous version ${String(expectedVersion).padStart(4, "0")}`,
+      );
+    }
+    const sql = await readFile(path.join(migrationPath, migration.filename), "utf8");
+    const actual = sha256(sql);
+    if (actual !== migration.sha256) {
+      throw new Error(
+        `migration ${migration.filename} checksum drifted; expected ${migration.sha256}, found ${actual}`,
+      );
+    }
   }
-  const actualSha256 = createHash("sha256").update(sql).digest("hex");
-  if (actualSha256 !== baselineSha256) {
+
+  const baseline = epoch.migrations[0];
+  if (epoch.epoch === 1 && (baseline.filename !== baselineFilename || baseline.sha256 !== baselineSha256)) {
+    throw new Error("epoch-one 0001 migration is not the frozen immutable baseline");
+  }
+
+  const currentSchema = await readFile(path.join(schemaPath, currentSchemaFilename), "utf8");
+  const currentSchemaSha256 = sha256(currentSchema);
+  if (currentSchemaSha256 !== epoch.current_schema_sha256) {
     throw new Error(
-      `database baseline changed without an intentional rebaseline; expected sha256 ${baselineSha256}, found ${actualSha256}`,
+      `schema/current.sql checksum drifted; expected ${epoch.current_schema_sha256}, found ${currentSchemaSha256}`,
     );
   }
-  if (/\bIF\s+NOT\s+EXISTS\b/i.test(sql)) {
-    throw new Error("database baseline must fail closed instead of accepting catalog drift");
-  }
-  for (const [label, pattern] of forbiddenTransitionPatterns) {
-    if (pattern.test(sql)) {
-      throw new Error(`database baseline contains transitional ${label}`);
-    }
+  if (!currentSchema.startsWith("-- GENERATED FILE: canonical owner-neutral PostgreSQL schema")) {
+    throw new Error("schema/current.sql is not the generated canonical snapshot");
   }
   for (const marker of requiredCatalogMarkers) {
-    if (!sql.includes(marker)) {
-      throw new Error(`database baseline is missing ${marker}`);
+    if (!currentSchema.includes(marker)) {
+      throw new Error(`canonical current schema is missing ${marker}`);
     }
   }
-
-  const tableCount = countLines(sql, /^CREATE TABLE /u);
-  const triggerCount = countLines(sql, /^CREATE TRIGGER /u);
-  const functionCount = countLines(sql, /^CREATE FUNCTION /u);
-  const viewCount = countLines(sql, /^CREATE VIEW /u);
+  const tableCount = countLines(currentSchema, /^CREATE TABLE /u);
+  const triggerCount = countLines(currentSchema, /^CREATE TRIGGER /u);
+  const functionCount = countLines(currentSchema, /^CREATE FUNCTION /u);
+  const viewCount = countLines(currentSchema, /^CREATE VIEW /u);
   if (tableCount !== 94 || triggerCount !== 33 || functionCount !== 13 || viewCount !== 1) {
     throw new Error(
-      `database baseline catalog counts drifted: tables=${tableCount} triggers=${triggerCount} functions=${functionCount} views=${viewCount}`,
+      `canonical catalog counts drifted: tables=${tableCount} triggers=${triggerCount} functions=${functionCount} views=${viewCount}`,
     );
+  }
+
+  const authorityFingerprint = await readFile(
+    path.join(schemaPath, authorityFingerprintFilename),
+    "utf8",
+  );
+  const authorityFingerprintSha256 = sha256(authorityFingerprint);
+  if (authorityFingerprintSha256 !== epoch.authority_fingerprint_sha256) {
+    throw new Error(
+      `schema/authority.json checksum drifted; expected ${epoch.authority_fingerprint_sha256}, found ${authorityFingerprintSha256}`,
+    );
+  }
+  const authority = JSON.parse(authorityFingerprint);
+  if (
+    authority.version !== 1 ||
+    authority.epoch !== epoch.epoch ||
+    authority.roles?.schema_owner !== "$schema_owner" ||
+    !Array.isArray(authority.rows)
+  ) {
+    throw new Error("schema/authority.json is not the normalized epoch authority fingerprint");
+  }
+  for (const role of ["$schema_owner", "fmarch_application", "fmarch_key_admin"]) {
+    if (!authorityFingerprint.includes(role)) {
+      throw new Error(`canonical authority fingerprint is missing ${role}`);
+    }
   }
 
   return {
     ok: true,
+    epoch: epoch.epoch,
     migration_directory: migrationDirectory,
-    baseline: baselineFilename,
-    baseline_sha256: actualSha256,
-    migration_file_count: files.length,
+    migration_head: manifestFiles.at(-1),
+    migration_file_count: manifestFiles.length,
+    current_schema_sha256: currentSchemaSha256,
+    authority_fingerprint_sha256: authorityFingerprintSha256,
     table_count: tableCount,
     trigger_count: triggerCount,
     function_count: functionCount,

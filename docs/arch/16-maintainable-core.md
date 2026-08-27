@@ -273,19 +273,23 @@ rebuild hashes, and public projection APIs remain unchanged.
 
 ## Closed database boundary: physical schema authority
 
-`crates/database_schema` owns the complete PostgreSQL catalog as one fresh
-`0001_current_schema.sql`, plus schema readiness and the application/key-admin
-role and ACL contract. The event store and every projection family consume that
-catalog but cannot carry their own migration directories. Server composition,
-hosted migration, readiness gates, SQLx tests, and catalog audits all point to
-the same owner.
+`crates/database_schema` owns immutable append-only PostgreSQL migrations, an
+epoch manifest binding their checksums, a generated canonical current-catalog
+snapshot, a separately normalized authority fingerprint, schema readiness, and
+the application/key-admin role and ACL
+contract. The event store and every projection family consume that catalog but
+cannot carry their own migration directories. Server composition, hosted
+migration, readiness gates, SQLx tests, and catalog audits all point to the same
+owner.
 
-The checked baseline hash and exact catalog counts make rebaselining an
-intentional operation. Static proof rejects compatibility files, transition
-DML, destructive transition DDL, `IF NOT EXISTS`, or loss of the event/KEK
-guards. This greenfield boundary deliberately trades historical database
-upgrade paths for one reviewable current truth; disposable environments are
-recreated whenever that truth changes.
+Static proof rejects edits, deletions, gaps, or reordering in the existing
+migration prefix and rejects drift in the generated current snapshot or
+authority fingerprint. Forward
+migrations may be direct or destructive while the product is greenfield, but
+the upgrade lane must make their resulting catalog and ACLs identical to a
+fresh database. Rebaselining is reserved for an explicit schema-epoch reset in
+which every persistent environment is recreated and re-bootstrapped; ordinary
+schema work never mutates applied SQLx history.
 
 ## Closed domain boundary: pack model and validation
 

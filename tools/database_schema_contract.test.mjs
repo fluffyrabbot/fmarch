@@ -1,28 +1,59 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+
 import {
   baselineFilename,
   baselineSha256,
+  authorityFingerprintFilename,
+  currentSchemaFilename,
+  epochFilename,
   inspectDatabaseSchema,
   migrationDirectory,
   repoRoot,
+  schemaDirectory,
 } from "./database_schema_contract.mjs";
 
-const checkedBaseline = await readFile(
-  path.join(repoRoot, migrationDirectory, baselineFilename),
+const checkedEpoch = JSON.parse(
+  await readFile(path.join(repoRoot, schemaDirectory, epochFilename), "utf8"),
+);
+const checkedSnapshot = await readFile(
+  path.join(repoRoot, schemaDirectory, currentSchemaFilename),
   "utf8",
 );
+const checkedAuthority = await readFile(
+  path.join(repoRoot, schemaDirectory, authorityFingerprintFilename),
+  "utf8",
+);
+const checkedMigrations = Object.fromEntries(
+  await Promise.all(
+    checkedEpoch.migrations.map(async ({ filename }) => [
+      filename,
+      await readFile(path.join(repoRoot, migrationDirectory, filename), "utf8"),
+    ]),
+  ),
+);
 
-async function withSchemaFiles(files, run) {
+async function withSchema({
+  migrations = checkedMigrations,
+  epoch = checkedEpoch,
+  snapshot = checkedSnapshot,
+  authority = checkedAuthority,
+}, run) {
   const root = await mkdtemp(path.join(os.tmpdir(), "fmarch-database-schema-"));
-  const directory = path.join(root, migrationDirectory);
-  await mkdir(directory, { recursive: true });
-  for (const [name, sql] of Object.entries(files)) {
-    await writeFile(path.join(directory, name), sql, "utf8");
+  const migrationPath = path.join(root, migrationDirectory);
+  const schemaPath = path.join(root, schemaDirectory);
+  await mkdir(migrationPath, { recursive: true });
+  await mkdir(schemaPath, { recursive: true });
+  for (const [name, sql] of Object.entries(migrations)) {
+    await writeFile(path.join(migrationPath, name), sql, "utf8");
   }
+  await writeFile(path.join(schemaPath, epochFilename), `${JSON.stringify(epoch, null, 2)}\n`);
+  await writeFile(path.join(schemaPath, currentSchemaFilename), snapshot);
+  await writeFile(path.join(schemaPath, authorityFingerprintFilename), authority);
   try {
     await run(root);
   } finally {
@@ -30,74 +61,95 @@ async function withSchemaFiles(files, run) {
   }
 }
 
-test("checked-in database schema is one exact current-state baseline", async () => {
-  const report = await inspectDatabaseSchema();
+test("checked-in database schema is append-only with a generated current snapshot", async () => {
+  const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
-  assert.equal(report.baseline, baselineFilename);
-  assert.equal(report.baseline_sha256, baselineSha256);
-  assert.equal(report.migration_file_count, 1);
+  assert.equal(report.epoch, 1);
+  assert.equal(report.migration_head, "0002_profile_mute_durable_target.sql");
+  assert.equal(report.migration_file_count, 2);
+  assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
+  assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
   assert.equal(report.table_count, 94);
-  assert.equal(report.trigger_count, 33);
-  assert.equal(report.function_count, 13);
-  assert.equal(report.view_count, 1);
 });
 
-test("database schema rejects compatibility migrations beside the baseline", async () => {
-  await withSchemaFiles(
+test("database schema permits a contiguous destructive forward migration", async () => {
+  const filename = "0003_remove_obsolete_projection.sql";
+  const sql = "DROP TABLE public.obsolete_projection;\n";
+  const epoch = {
+    ...checkedEpoch,
+    migrations: [
+      ...checkedEpoch.migrations,
+      { version: 3, filename, sha256: createHash("sha256").update(sql).digest("hex") },
+    ],
+  };
+  await withSchema(
+    { migrations: { ...checkedMigrations, [filename]: sql }, epoch },
+    async (root) => assert.equal((await inspectDatabaseSchema({ root, baseEpoch: checkedEpoch })).ok, true),
+  );
+});
+
+test("database schema rejects edits even when the manifest checksum is rewritten", async () => {
+  const mutated = `${checkedMigrations[baselineFilename]}\n-- rewritten history\n`;
+  const epoch = structuredClone(checkedEpoch);
+  epoch.migrations[0].sha256 = createHash("sha256").update(mutated).digest("hex");
+  await withSchema(
+    { migrations: { ...checkedMigrations, [baselineFilename]: mutated }, epoch },
+    async (root) => {
+      await assert.rejects(
+        inspectDatabaseSchema({ root, baseEpoch: checkedEpoch }),
+        /changed existing entry/,
+      );
+    },
+  );
+});
+
+test("database schema rejects checksum drift, gaps, and unmanifested files", async () => {
+  await withSchema(
+    { migrations: { ...checkedMigrations, [baselineFilename]: `${checkedMigrations[baselineFilename]}\n` } },
+    async (root) => await assert.rejects(inspectDatabaseSchema({ root, baseEpoch: checkedEpoch }), /checksum drifted/),
+  );
+  const gapped = structuredClone(checkedEpoch);
+  gapped.migrations[1] = { ...gapped.migrations[1], version: 3, filename: "0003_profile_mute_durable_target.sql" };
+  await withSchema(
     {
-      [baselineFilename]: checkedBaseline,
-      "0002_compatibility.sql": "CREATE TABLE public.legacy_bridge (id bigint);\n",
+      migrations: {
+        [baselineFilename]: checkedMigrations[baselineFilename],
+        [gapped.migrations[1].filename]: checkedMigrations[checkedEpoch.migrations[1].filename],
+      },
+      epoch: gapped,
     },
-    async (root) => {
-      await assert.rejects(
-        inspectDatabaseSchema({ root }),
-        /must contain only 0001_current_schema\.sql/,
-      );
-    },
+    async (root) => await assert.rejects(inspectDatabaseSchema({ root, baseEpoch: null }), /contiguous version 0002/),
+  );
+  await withSchema(
+    { migrations: { ...checkedMigrations, "0003_unmanifested.sql": "SELECT 1;\n" } },
+    async (root) => await assert.rejects(inspectDatabaseSchema({ root, baseEpoch: checkedEpoch }), /exactly match/),
   );
 });
 
-test("database schema rejects unrecorded baseline drift", async () => {
-  await withSchemaFiles(
-    { [baselineFilename]: `${checkedBaseline}\n-- unrecorded drift\n` },
-    async (root) => {
-      await assert.rejects(
-        inspectDatabaseSchema({ root }),
-        /changed without an intentional rebaseline/,
-      );
-    },
+test("database schema rejects generated snapshot drift", async () => {
+  await withSchema(
+    { snapshot: `${checkedSnapshot}\n-- drift\n` },
+    async (root) => await assert.rejects(inspectDatabaseSchema({ root, baseEpoch: checkedEpoch }), /current\.sql checksum drifted/),
   );
 });
 
-test("database schema rejects transitional data and destructive DDL", async () => {
-  const forbidden = [
-    "INSERT INTO public.events DEFAULT VALUES;",
-    "DELETE FROM public.events;",
-    "TRUNCATE TABLE public.events;",
-    "DROP TABLE public.events;",
-    "ALTER TABLE public.events DROP COLUMN kind;",
-  ];
-  for (const statement of forbidden) {
-    const mutated = checkedBaseline.replace(
-      "-- PostgreSQL database dump",
-      `-- PostgreSQL database dump\n${statement}`,
+test("database schema rejects normalized authority fingerprint drift", async () => {
+  const authority = checkedAuthority.replace("fmarch_application", "fmarch_application_drift");
+  await withSchema({ authority }, async (root) => {
+    await assert.rejects(
+      inspectDatabaseSchema({ root, baseEpoch: checkedEpoch }),
+      /authority\.json checksum drifted/,
     );
-    await withSchemaFiles({ [baselineFilename]: mutated }, async (root) => {
-      await assert.rejects(inspectDatabaseSchema({ root }));
-    });
-  }
+  });
 });
 
 test("database schema owns event storage and KEK custody exactly once", () => {
-  const eventsStart = checkedBaseline.indexOf("CREATE TABLE public.events (");
-  const eventsEnd = checkedBaseline.indexOf("\n);", eventsStart);
+  const eventsStart = checkedSnapshot.indexOf("CREATE TABLE public.events (");
+  const eventsEnd = checkedSnapshot.indexOf("\n);", eventsStart);
+  const eventsTable = checkedSnapshot.slice(eventsStart, eventsEnd);
   assert.notEqual(eventsStart, -1);
-  assert.notEqual(eventsEnd, -1);
-  const eventsTable = checkedBaseline.slice(eventsStart, eventsEnd);
   assert.doesNotMatch(eventsTable, /\bpayload jsonb\b/u);
   assert.doesNotMatch(eventsTable, /\bactor jsonb\b/u);
   assert.match(eventsTable, /\bsealed_body bytea NOT NULL\b/u);
-  assert.match(checkedBaseline, /CREATE TABLE public\.event_stream_keys \(/u);
-  assert.match(checkedBaseline, /CREATE VIEW public\.event_direct_key_reference AS/u);
-  assert.match(checkedBaseline, /retired event direct-key registry row is an immutable tombstone/u);
+  assert.match(checkedSnapshot, /CREATE VIEW public\.event_direct_key_reference AS/u);
 });

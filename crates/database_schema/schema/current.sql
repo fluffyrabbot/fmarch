@@ -1,21 +1,17 @@
--- 0001_current_schema.sql — complete greenfield fmarch PostgreSQL schema.
+-- GENERATED FILE: canonical owner-neutral PostgreSQL schema for fmarch epoch 1.
+-- Regenerate with: npm run generate:database-schema
+
 --
--- This is the sole physical database contract for the pre-1.0 workspace. It
--- contains the final current shape directly: no compatibility transitions,
--- data migrations, or obsolete intermediate representations are retained.
--- Rebaseline this file while the workspace has no durable upgrade boundary.
-
 -- PostgreSQL database dump
+--
 
-
--- Dumped from database version 16.15 (Homebrew)
--- Dumped by pg_dump version 16.15 (Homebrew)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
 SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
@@ -4558,7 +4554,7 @@ ALTER TABLE ONLY public.private_channel_member
 --
 
 ALTER TABLE ONLY public.profile_mute
-    ADD CONSTRAINT profile_mute_target_profile_id_fkey FOREIGN KEY (target_profile_id) REFERENCES public.public_profile(profile_id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;
+    ADD CONSTRAINT profile_mute_target_profile_id_fkey FOREIGN KEY (target_profile_id) REFERENCES public.member_profile(profile_id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
 
 
 --

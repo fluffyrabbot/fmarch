@@ -102,6 +102,7 @@
     "test:auth-invite-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:auth-invite-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:public-search-role-proof": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:public-search-role-proof"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_MIGRATION_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:database-schema:static": { "kind": "npm" },
+    "test:database-schema-upgrade": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["npm", "run", "test:database-schema-upgrade"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "FMARCH_SCHEMA_UPGRADE_DATABASE_URL" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "FMARCH_SCHEMA_FRESH_DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:event-key-rotation-rehearsal": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 600, "argv": ["npm", "run", "test:event-key-rotation-rehearsal"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:database-tls-boundary": { "kind": "npm", "execution": { "class": "postgres", "timeout_seconds": 300, "argv": ["npm", "run", "test:database-tls-boundary"], "resources": [{ "kind": "lock", "name": "legacy" }, { "kind": "lock", "name": "postgres-admin" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:dev-test-game-contract": { "kind": "npm" },
@@ -178,6 +179,7 @@
         "cargo:database-schema",
         "cargo:clippy-workspace",
         "test:database-schema:static",
+        "test:database-schema-upgrade",
         "test:event-key-rotation-rehearsal",
         "test:railway-staging-target",
         "test:production-promotion",
@@ -949,9 +951,12 @@
       "tier": "active",
       "paths": [
         "tools/database_schema_contract.mjs",
-        "tools/database_schema_contract.test.mjs"
+        "tools/database_schema_contract.test.mjs",
+        "tools/database_schema_snapshot.mjs",
+        "tools/database_schema_snapshot.test.mjs",
+        "tools/database_schema_upgrade_proof.mjs"
       ],
-      "lanes": ["test:database-schema:static"]
+      "lanes": ["test:database-schema:static", "test:database-schema-upgrade"]
     },
     {
       "id": "proof:completeness-scorecard",

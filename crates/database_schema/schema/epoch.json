@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "epoch": 1,
+  "current_schema_sha256": "9ac962857f8851a2afb85f7d5ea21ef579fdca1f3a8e1f6c62bc5949c088a543",
+  "migrations": [
+    {
+      "version": 1,
+      "filename": "0001_current_schema.sql",
+      "sha256": "afddc1a958bb210024626ce40ec97991c4f2a03e3bc6718d5590edbe8745381e"
+    },
+    {
+      "version": 2,
+      "filename": "0002_profile_mute_durable_target.sql",
+      "sha256": "62c019398093aee48ed46af980b4cb69e7432ec90d3cd9f8d06d694ea453427c"
+    }
+  ],
+  "authority_fingerprint_sha256": "6aaf9d10ead281354ab8b993bf666f422dbb29a68ca23446a4f216bc6ab294e1"
+}
