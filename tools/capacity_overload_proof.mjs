@@ -156,7 +156,17 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       proofBoundary:
         "Repo-local Postgres and one debug server process. Exercises indexed large-thread first reads, 100k-document anonymous search pressure, deterministic cursor pagination across a production projection write, concurrent search plus command-driven writes, selective GIN plans, search-specific database saturation and recovery, concurrent writes to one real game stream, bounded slow-live-consumer recovery, HTTP/WS 503 admission, and caller-scoped auth 429 behavior. Local latency budgets detect gross regressions; they are not hosted production SLO evidence or capacity planning for a specific machine size.",
     };
-    assertCapacityOverloadReport(report);
+    try {
+      assertCapacityOverloadReport(report);
+    } catch (error) {
+      const failedReport = {
+        ...report,
+        status: "failed",
+        failure: error instanceof Error ? error.message : String(error),
+      };
+      await writeFile(outputPath, `${JSON.stringify(failedReport, null, 2)}\n`);
+      throw error;
+    }
     await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`);
     console.log(`capacity/overload proof passed: ${path.relative(repoRoot, outputPath)}`);
     console.log(JSON.stringify(scenarioSummary(report), null, 2));
