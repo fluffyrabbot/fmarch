@@ -580,24 +580,55 @@ async fn folded_semantic_fixtures_shrink_on_isolated_workers(
 }
 
 const LEFTOVER_HOST_RESOLVE_PHASE_CASES: usize = 140;
+const LEFTOVER_HOST_RESOLVE_SHARDS: usize = 4;
+const LEFTOVER_HOST_RESOLVE_SERIAL_BASELINE_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/semantic_audit/serial_case_baseline.json"
+));
 
-macro_rules! run_leftover_host_resolve {
-    ($pool:ident, $($case:ident),+ $(,)?) => {{
-        let mut ran = 0usize;
-        $(
-            $case($pool.clone()).await;
-            ran += 1;
-        )+
-        ran
+type LeftoverCaseFuture = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>;
+type LeftoverCaseRunner = fn(PgPool) -> LeftoverCaseFuture;
+
+struct LeftoverCaseSpec {
+    id: &'static str,
+    baseline_milliseconds: u128,
+    run: LeftoverCaseRunner,
+}
+
+macro_rules! leftover_host_resolve_specs {
+    ($baseline:ident, $($case:ident),+ $(,)?) => {{
+        vec![$(
+            LeftoverCaseSpec {
+                id: stringify!($case),
+                baseline_milliseconds: *$baseline
+                    .get(stringify!($case))
+                    .unwrap_or_else(|| panic!("missing serial baseline for {}", stringify!($case))),
+                run: (|pool| -> LeftoverCaseFuture { Box::pin($case(pool)) })
+                    as LeftoverCaseRunner,
+            },
+        )+]
     }};
 }
 
-#[sqlx::test(migrations = "../database_schema/migrations")]
-async fn leftover_host_resolve_phase_cases_share_one_migrated_database(pool: PgPool) {
-    // Unique leftover host_resolve claims share one migrated database. Games
-    // use fresh UUIDs; cases stay sequential so a failure keeps its assertion.
-    let ran = run_leftover_host_resolve!(
-        pool,
+fn leftover_host_resolve_case_specs() -> Vec<LeftoverCaseSpec> {
+    let baseline_json: serde_json::Value =
+        serde_json::from_str(LEFTOVER_HOST_RESOLVE_SERIAL_BASELINE_JSON)
+            .expect("serial case baseline parses");
+    let baseline = baseline_json["cases"]
+        .as_array()
+        .expect("serial case baseline cases")
+        .iter()
+        .map(|case| {
+            (
+                case["id"].as_str().expect("serial baseline case id"),
+                case["milliseconds"]
+                    .as_u64()
+                    .expect("serial baseline duration") as u128,
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    leftover_host_resolve_specs!(
+        baseline,
         host_resolve_phase_reveals_town_alignment_without_role,
         host_resolve_phase_carries_mafia_universe_reveal_town,
         host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal,
@@ -738,9 +769,122 @@ async fn leftover_host_resolve_phase_cases_share_one_migrated_database(pool: PgP
         host_resolve_phase_carries_chinese_lover_poison_cascade,
         host_resolve_phase_carries_chinese_lover_lynch_cascade,
         host_resolve_phase_emits_hammer_vote_outcome,
-    );
+    )
+}
+
+fn leftover_host_resolve_assignments(specs: &[LeftoverCaseSpec]) -> BTreeMap<&'static str, usize> {
+    let mut ordered = specs.iter().collect::<Vec<_>>();
+    ordered.sort_by(|left, right| {
+        right
+            .baseline_milliseconds
+            .cmp(&left.baseline_milliseconds)
+            .then_with(|| left.id.cmp(right.id))
+    });
+    let mut loads = [0u128; LEFTOVER_HOST_RESOLVE_SHARDS];
+    let mut assignments = BTreeMap::new();
+    for case in ordered {
+        let shard = loads
+            .iter()
+            .enumerate()
+            .min_by_key(|(shard, load)| (**load, *shard))
+            .map(|(shard, _)| shard)
+            .expect("semantic shards are non-empty");
+        loads[shard] += case.baseline_milliseconds;
+        assignments.insert(case.id, shard);
+    }
+    assignments
+}
+
+async fn run_leftover_host_resolve_shard(pool: PgPool, shard: usize) {
+    let specs = leftover_host_resolve_case_specs();
     assert_eq!(
-        ran, LEFTOVER_HOST_RESOLVE_PHASE_CASES,
-        "leftover host_resolve dispatcher must run every remaining handwritten case"
+        specs.len(),
+        LEFTOVER_HOST_RESOLVE_PHASE_CASES,
+        "leftover host_resolve corpus must retain every handwritten case"
+    );
+    let assignments = leftover_host_resolve_assignments(&specs);
+    assert_eq!(assignments.len(), LEFTOVER_HOST_RESOLVE_PHASE_CASES);
+    let mut timings = Vec::new();
+    for case in specs
+        .iter()
+        .filter(|case| assignments.get(case.id) == Some(&shard))
+    {
+        let started = std::time::Instant::now();
+        (case.run)(pool.clone()).await;
+        let milliseconds = started.elapsed().as_millis();
+        eprintln!(
+            "FMARCH_SEMANTIC_CASE\t{}\t{}\t{}",
+            case.id, shard, milliseconds
+        );
+        timings.push((case.id, milliseconds));
+    }
+    assert!(!timings.is_empty(), "semantic shard {shard} must own cases");
+    if let Ok(artifact_dir) = std::env::var("FMARCH_PROOF_ARTIFACT_DIR") {
+        let cases = timings
+            .iter()
+            .map(|(id, milliseconds)| {
+                serde_json::json!({
+                    "id": id,
+                    "milliseconds": milliseconds,
+                })
+            })
+            .collect::<Vec<_>>();
+        std::fs::write(
+            std::path::Path::new(&artifact_dir)
+                .join(format!("semantic-shard-{shard}-case-timings.json")),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": 1,
+                "shard": shard,
+                "cases": cases,
+            }))
+            .expect("serialize semantic shard timings"),
+        )
+        .expect("write semantic shard timings");
+    }
+}
+
+#[test]
+fn leftover_host_resolve_shard_contract_is_complete_deterministic_and_balanced() {
+    let specs = leftover_host_resolve_case_specs();
+    assert_eq!(specs.len(), LEFTOVER_HOST_RESOLVE_PHASE_CASES);
+    let ids = specs.iter().map(|case| case.id).collect::<BTreeSet<_>>();
+    assert_eq!(ids.len(), LEFTOVER_HOST_RESOLVE_PHASE_CASES);
+    let first = leftover_host_resolve_assignments(&specs);
+    let second = leftover_host_resolve_assignments(&specs);
+    assert_eq!(
+        first, second,
+        "semantic shard assignment must be deterministic"
+    );
+    let mut counts = [0usize; LEFTOVER_HOST_RESOLVE_SHARDS];
+    let mut loads = [0u128; LEFTOVER_HOST_RESOLVE_SHARDS];
+    for case in &specs {
+        let shard = first[case.id];
+        counts[shard] += 1;
+        loads[shard] += case.baseline_milliseconds;
+    }
+    assert_eq!(
+        counts.iter().sum::<usize>(),
+        LEFTOVER_HOST_RESOLVE_PHASE_CASES
+    );
+    assert!(counts.iter().all(|count| *count > 0));
+    let lightest = *loads.iter().min().expect("semantic shard loads");
+    let heaviest = *loads.iter().max().expect("semantic shard loads");
+    assert!(
+        heaviest - lightest <= 1_000,
+        "duration-balanced shards drifted: {loads:?}"
     );
 }
+
+macro_rules! semantic_shard_test {
+    ($name:ident, $shard:literal) => {
+        #[sqlx::test(migrations = "../database_schema/migrations")]
+        async fn $name(pool: PgPool) {
+            run_leftover_host_resolve_shard(pool, $shard).await;
+        }
+    };
+}
+
+semantic_shard_test!(leftover_host_resolve_phase_cases_shard_0, 0);
+semantic_shard_test!(leftover_host_resolve_phase_cases_shard_1, 1);
+semantic_shard_test!(leftover_host_resolve_phase_cases_shard_2, 2);
+semantic_shard_test!(leftover_host_resolve_phase_cases_shard_3, 3);

@@ -1,0 +1,565 @@
+{
+  "cases": [
+    {
+      "id": "host_resolve_phase_reveals_town_alignment_without_role",
+      "milliseconds": 1155
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_reveal_town",
+      "milliseconds": 1251
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal",
+      "milliseconds": 1961
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_role_oracle_reveal",
+      "milliseconds": 1832
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_backup_inheritance",
+      "milliseconds": 2390
+    },
+    {
+      "id": "host_resolve_phase_projects_hero_instigator_kill_on_vote_duel",
+      "milliseconds": 1420
+    },
+    {
+      "id": "host_resolve_phase_carries_twilight_self_destruct_window",
+      "milliseconds": 981
+    },
+    {
+      "id": "host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window",
+      "milliseconds": 2368
+    },
+    {
+      "id": "host_resolve_phase_conceals_janitor_and_flipless_death_reveals",
+      "milliseconds": 1496
+    },
+    {
+      "id": "host_resolve_phase_projects_alignment_only_death_reveal",
+      "milliseconds": 1207
+    },
+    {
+      "id": "host_resolve_phase_carries_default_open_guardian_seer",
+      "milliseconds": 1224
+    },
+    {
+      "id": "host_resolve_phase_carries_default_open_day_majority",
+      "milliseconds": 1457
+    },
+    {
+      "id": "host_resolve_phase_carries_super_saint_lynch_trigger",
+      "milliseconds": 2324
+    },
+    {
+      "id": "host_resolve_phase_projects_beloved_princess_host_prompt",
+      "milliseconds": 1798
+    },
+    {
+      "id": "host_resolve_phase_projects_virgin_night_death_skip_prompt",
+      "milliseconds": 1104
+    },
+    {
+      "id": "host_resolve_phase_uses_pack_declared_role_tiebreaker",
+      "milliseconds": 768
+    },
+    {
+      "id": "host_resolve_phase_uses_dynamic_effect_vote_weight",
+      "milliseconds": 1561
+    },
+    {
+      "id": "host_resolve_phase_uses_vote_weight_action_grant",
+      "milliseconds": 1438
+    },
+    {
+      "id": "host_resolve_phase_uses_dynamic_vote_weight_for_no_majority_prompt",
+      "milliseconds": 843
+    },
+    {
+      "id": "host_resolve_phase_uses_loved_hated_threshold_adjustments",
+      "milliseconds": 3705
+    },
+    {
+      "id": "host_resolve_phase_projects_epicmafia_pk_tie_prompt",
+      "milliseconds": 1453
+    },
+    {
+      "id": "host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt",
+      "milliseconds": 1059
+    },
+    {
+      "id": "host_resolve_phase_carries_sheriff_badge_lifecycle",
+      "milliseconds": 1222
+    },
+    {
+      "id": "host_resolve_phase_carries_knight_duel_death",
+      "milliseconds": 1298
+    },
+    {
+      "id": "host_resolve_phase_carries_knight_duel_failure_before_vote",
+      "milliseconds": 1021
+    },
+    {
+      "id": "host_resolve_phase_consumes_white_wolf_carry_on_next_wolf_kill",
+      "milliseconds": 1304
+    },
+    {
+      "id": "host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill",
+      "milliseconds": 1292
+    },
+    {
+      "id": "host_resolve_phase_carries_chinese_wolf_faction_vote_policy",
+      "milliseconds": 2841
+    },
+    {
+      "id": "host_resolve_phase_carries_wolf_beauty_mark_and_drag",
+      "milliseconds": 1306
+    },
+    {
+      "id": "host_resolve_phase_carries_witch_poison_beauty_drag",
+      "milliseconds": 1921
+    },
+    {
+      "id": "host_resolve_phase_stacks_wolf_beauty_drag_with_direct_death",
+      "milliseconds": 1345
+    },
+    {
+      "id": "host_resolve_phase_carries_guard_witch_poison_policy",
+      "milliseconds": 970
+    },
+    {
+      "id": "host_resolve_phase_carries_guard_witch_double_save_policy",
+      "milliseconds": 838
+    },
+    {
+      "id": "host_resolve_phase_carries_guard_witch_killtarget_policy",
+      "milliseconds": 1026
+    },
+    {
+      "id": "host_resolve_phase_carries_ita_session_lethal_shot",
+      "milliseconds": 1082
+    },
+    {
+      "id": "host_resolve_phase_invalidates_later_ita_shot_at_dead_target",
+      "milliseconds": 1127
+    },
+    {
+      "id": "host_resolve_phase_refunds_ita_shot_at_already_dead_target",
+      "milliseconds": 1734
+    },
+    {
+      "id": "host_resolve_phase_buffers_ita_shot_without_same_pass_resolution",
+      "milliseconds": 805
+    },
+    {
+      "id": "host_resolve_phase_releases_buffered_ita_shot_on_later_pass",
+      "milliseconds": 709
+    },
+    {
+      "id": "host_resolve_phase_invalidates_buffered_ita_shot_on_later_release",
+      "milliseconds": 1111
+    },
+    {
+      "id": "host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_release",
+      "milliseconds": 1430
+    },
+    {
+      "id": "host_resolve_phase_applies_ita_lifecycle_pause_control",
+      "milliseconds": 821
+    },
+    {
+      "id": "host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection",
+      "milliseconds": 1433
+    },
+    {
+      "id": "host_resolve_phase_carries_ita_chance_overrides_and_shields",
+      "milliseconds": 2283
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_basic_nar",
+      "milliseconds": 1534
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_joat_block_counter",
+      "milliseconds": 1509
+    },
+    {
+      "id": "host_resolve_phase_carries_mafiascum_joat_block_counter",
+      "milliseconds": 977
+    },
+    {
+      "id": "host_resolve_phase_carries_mafiascum_two_shot_counter",
+      "milliseconds": 1518
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_night_desperado_kills",
+      "milliseconds": 1784
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_day_vigilante_kills",
+      "milliseconds": 2847
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_day_desperado_failback",
+      "milliseconds": 1752
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_cpr_harm",
+      "milliseconds": 1098
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_framer_investigation",
+      "milliseconds": 1971
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_town_framer_investigation",
+      "milliseconds": 1551
+    },
+    {
+      "id": "host_resolve_phase_carries_mafiascum_role_scan",
+      "milliseconds": 1818
+    },
+    {
+      "id": "host_resolve_phase_carries_mafiascum_coroner_corpse_inspection",
+      "milliseconds": 1324
+    },
+    {
+      "id": "host_resolve_phase_carries_mafiascum_pt_cop_access",
+      "milliseconds": 1667
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_role_set_info",
+      "milliseconds": 2875
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_role_and_full_role_info",
+      "milliseconds": 2048
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_culture_aliases",
+      "milliseconds": 2960
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_parity_scan_memory",
+      "milliseconds": 2648
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_graph_info",
+      "milliseconds": 2028
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_voyeur_action_info",
+      "milliseconds": 2950
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_ninja_hidden_visit_results",
+      "milliseconds": 3474
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_redirect_graph",
+      "milliseconds": 2402
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_commute",
+      "milliseconds": 1407
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_poison_cure_and_delayed_death",
+      "milliseconds": 2686
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_healer_alias_cure",
+      "milliseconds": 2097
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_douse_extinguish_and_ignite",
+      "milliseconds": 2702
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_town_firefighter_preempt_alias",
+      "milliseconds": 2512
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_motivator_grants_and_spends",
+      "milliseconds": 2329
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications",
+      "milliseconds": 1833
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spends",
+      "milliseconds": 2094
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_empower_bypass",
+      "milliseconds": 1389
+    },
+    {
+      "id": "host_resolve_phase_carries_day_announcements_and_last_words",
+      "milliseconds": 1311
+    },
+    {
+      "id": "host_resolve_phase_uses_pack_declared_night_parity",
+      "milliseconds": 974
+    },
+    {
+      "id": "host_resolve_phase_uses_pack_declared_cycle_parity",
+      "milliseconds": 1327
+    },
+    {
+      "id": "host_resolve_phase_applies_godfather_investigation_override",
+      "milliseconds": 1000
+    },
+    {
+      "id": "host_resolve_phase_projects_mafiascum_info_results",
+      "milliseconds": 1617
+    },
+    {
+      "id": "host_resolve_phase_carries_mafiascum_fruit_vendor_notification",
+      "milliseconds": 902
+    },
+    {
+      "id": "host_resolve_phase_preserves_prior_investigation_memory",
+      "milliseconds": 1540
+    },
+    {
+      "id": "host_resolve_phase_records_visit_history_for_prior_motion",
+      "milliseconds": 1289
+    },
+    {
+      "id": "host_resolve_phase_carries_action_history_for_non_consecutive",
+      "milliseconds": 526
+    },
+    {
+      "id": "host_resolve_phase_projects_conversion_and_persistent_effects",
+      "milliseconds": 736
+    },
+    {
+      "id": "host_resolve_phase_blocks_conversion_of_pending_death_target",
+      "milliseconds": 788
+    },
+    {
+      "id": "host_resolve_phase_filters_hidden_effect_notifications",
+      "milliseconds": 584
+    },
+    {
+      "id": "host_resolve_phase_persists_loyal_conversion_block_trace",
+      "milliseconds": 532
+    },
+    {
+      "id": "host_resolve_phase_persists_disloyal_modifier_trace_and_projection",
+      "milliseconds": 1301
+    },
+    {
+      "id": "host_resolve_phase_carries_poison_cure_and_delayed_death",
+      "milliseconds": 1297
+    },
+    {
+      "id": "host_resolve_phase_traces_pending_poison_target_already_dead",
+      "milliseconds": 468
+    },
+    {
+      "id": "host_resolve_phase_persists_cleanse_read_effect_trace_decision",
+      "milliseconds": 489
+    },
+    {
+      "id": "host_resolve_phase_deprograms_from_conversion_origin",
+      "milliseconds": 791
+    },
+    {
+      "id": "host_resolve_phase_vanillaize_then_restore_mutation",
+      "milliseconds": 1535
+    },
+    {
+      "id": "host_resolve_phase_backup_cop_inherits_on_death",
+      "milliseconds": 601
+    },
+    {
+      "id": "host_resolve_phase_targeted_backup_inherits_chosen_source",
+      "milliseconds": 926
+    },
+    {
+      "id": "host_resolve_phase_carries_condemner_target_lynch_win",
+      "milliseconds": 2503
+    },
+    {
+      "id": "host_resolve_phase_carries_executioner_target_lynch_win",
+      "milliseconds": 1362
+    },
+    {
+      "id": "host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_wins",
+      "milliseconds": 2007
+    },
+    {
+      "id": "host_resolve_phase_projects_pgo_visit_trigger",
+      "milliseconds": 637
+    },
+    {
+      "id": "host_resolve_phase_projects_target_filtered_visitor_kill",
+      "milliseconds": 794
+    },
+    {
+      "id": "host_resolve_phase_projects_epicmafia_bomb_trigger",
+      "milliseconds": 647
+    },
+    {
+      "id": "host_resolve_phase_protects_generated_pgo_trigger_kill",
+      "milliseconds": 1290
+    },
+    {
+      "id": "host_resolve_phase_generated_pgo_kill_obeys_transient_target_state",
+      "milliseconds": 552
+    },
+    {
+      "id": "host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill",
+      "milliseconds": 529
+    },
+    {
+      "id": "host_resolve_phase_persists_cpr_harm_policy",
+      "milliseconds": 936
+    },
+    {
+      "id": "host_resolve_phase_bypasses_protection_for_strongman_trigger_kill",
+      "milliseconds": 601
+    },
+    {
+      "id": "host_resolve_phase_projects_death_trigger_kill",
+      "milliseconds": 469
+    },
+    {
+      "id": "host_resolve_phase_projects_effect_marked_trigger_kill",
+      "milliseconds": 660
+    },
+    {
+      "id": "host_resolve_phase_projects_phase_end_trigger_kill",
+      "milliseconds": 1044
+    },
+    {
+      "id": "host_resolve_phase_projects_win_trigger_before_final_win",
+      "milliseconds": 446
+    },
+    {
+      "id": "host_resolve_phase_protects_ordinary_vengeful_trigger_kill",
+      "milliseconds": 616
+    },
+    {
+      "id": "host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill",
+      "milliseconds": 587
+    },
+    {
+      "id": "host_resolve_phase_persists_redirect_trace_edge",
+      "milliseconds": 668
+    },
+    {
+      "id": "host_resolve_phase_persists_mass_redirect_rotate_trace_edges",
+      "milliseconds": 689
+    },
+    {
+      "id": "host_resolve_phase_persists_suppression_and_conflict_trace_decisions",
+      "milliseconds": 861
+    },
+    {
+      "id": "host_resolve_phase_strong_willed_bypasses_roleblock",
+      "milliseconds": 1638
+    },
+    {
+      "id": "host_resolve_phase_non_roleblockable_block_survives_roleblock",
+      "milliseconds": 1260
+    },
+    {
+      "id": "host_resolve_phase_persists_catastrophic_roleblock_multi_action_trace",
+      "milliseconds": 742
+    },
+    {
+      "id": "host_resolve_phase_persists_combined_trace_audit_branches",
+      "milliseconds": 1209
+    },
+    {
+      "id": "host_resolve_phase_persists_redirect_loop_cap_trace_note",
+      "milliseconds": 962
+    },
+    {
+      "id": "host_resolve_phase_persists_trigger_loop_cap_trace_note",
+      "milliseconds": 308
+    },
+    {
+      "id": "host_resolve_phase_persists_target_state_trace_decisions",
+      "milliseconds": 1331
+    },
+    {
+      "id": "host_resolve_phase_preserves_ninja_hidden_visit_results",
+      "milliseconds": 1056
+    },
+    {
+      "id": "host_resolve_phase_projects_tracker_private_visit_result",
+      "milliseconds": 910
+    },
+    {
+      "id": "host_resolve_phase_projects_babysitter_dependency_death",
+      "milliseconds": 774
+    },
+    {
+      "id": "host_resolve_phase_projects_hider_host_death",
+      "milliseconds": 1298
+    },
+    {
+      "id": "host_resolve_phase_carries_lover_link_and_suicide",
+      "milliseconds": 731
+    },
+    {
+      "id": "host_resolve_phase_stacks_lover_suicide_with_direct_death",
+      "milliseconds": 1051
+    },
+    {
+      "id": "host_resolve_phase_carries_mafia_universe_lover_setup_cascade",
+      "milliseconds": 1656
+    },
+    {
+      "id": "host_resolve_phase_projects_mafia_universe_bomber_triggers",
+      "milliseconds": 1245
+    },
+    {
+      "id": "host_resolve_phase_projects_mafiascum_bomb_trigger",
+      "milliseconds": 653
+    },
+    {
+      "id": "host_resolve_phase_carries_hunter_retaliation",
+      "milliseconds": 1073
+    },
+    {
+      "id": "host_resolve_phase_carries_chinese_hunter_poison_policy",
+      "milliseconds": 1490
+    },
+    {
+      "id": "host_resolve_phase_carries_chinese_hunter_day_vote_retaliation",
+      "milliseconds": 965
+    },
+    {
+      "id": "host_resolve_phase_carries_chinese_idiot_survival_policy",
+      "milliseconds": 1028
+    },
+    {
+      "id": "host_resolve_phase_carries_chinese_prophet_alignment_result",
+      "milliseconds": 401
+    },
+    {
+      "id": "host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade",
+      "milliseconds": 475
+    },
+    {
+      "id": "host_resolve_phase_carries_chinese_lover_poison_cascade",
+      "milliseconds": 515
+    },
+    {
+      "id": "host_resolve_phase_carries_chinese_lover_lynch_cascade",
+      "milliseconds": 745
+    },
+    {
+      "id": "host_resolve_phase_emits_hammer_vote_outcome",
+      "milliseconds": 534
+    }
+  ],
+  "schema": 1
+}
