@@ -180,7 +180,7 @@ export function buildBoardRouteData({
   gameIndexPage = null,
 } = {}) {
   const board = normalizeBoardGameIndexPage(gameIndexPage);
-  const game = preferredBoardGame({ capabilities, games: board.games });
+  const game = preferredBoardGame({ capabilities });
   const shell = buildAppShell({
     game,
     activeSurface: "board",
@@ -305,11 +305,11 @@ function boardGameCard({ entry, principalId, capabilities }) {
   });
 }
 
-function preferredBoardGame({ capabilities, games }) {
+function preferredBoardGame({ capabilities }) {
   const normalized = normalizeCapabilities(capabilities);
   const capabilityGame = normalized.find((capability) => typeof capability.game === "string")
     ?.game;
-  return capabilityGame ?? games[0]?.id ?? null;
+  return capabilityGame ?? null;
 }
 
 function packLabel(pack) {

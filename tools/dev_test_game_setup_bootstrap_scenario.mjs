@@ -152,7 +152,7 @@ export async function runSeededSetupBootstrapScenario({
   );
   if (
     setupPage.url() !== roleUrl ||
-    readinessSummary !== "Started at D01" ||
+    readinessSummary !== "Started at Day 1" ||
     setupState?.phase?.phaseId !== "D01" ||
     roster.some(
       (row) =>

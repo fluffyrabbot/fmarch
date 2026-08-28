@@ -101,6 +101,7 @@
   });
   $: workQueues = buildHostWorkQueues({
     phase: currentPhase,
+    replacement: projection.replacement,
     votecountCount: votecount.length,
     nowSeconds: data.deadlineClock?.nowSeconds,
   });
@@ -128,6 +129,7 @@
       gameId: data.game.id,
       snapshot,
       capabilityKind: data.access.capability?.kind,
+      nowSeconds: data.deadlineClock?.nowSeconds,
     });
     projection = derived.projection;
     votecount = derived.votecount;
@@ -592,6 +594,7 @@
                   type="text"
                   autocomplete="username"
                   required
+                  disabled={!inviteTarget.available}
                   data-testid={inviteTarget.accountTestId}
                 />
               </label>
@@ -609,11 +612,17 @@
               <button
                 class="touch-control"
                 type="submit"
+                disabled={!inviteTarget.available}
                 data-testid={inviteTarget.submitTestId}
               >
                 {inviteTarget.submitLabel}
               </button>
             </form>
+            {#if !inviteTarget.available}
+              <p class="host-console-critical-path__invite-status" data-state="blocked">
+                Invite unavailable until the live slot projection includes its assigned principal.
+              </p>
+            {/if}
             {#if inviteResult}
               <p
                 class="host-console-critical-path__invite-status"

@@ -699,7 +699,7 @@ assert.equal(
   session.verification.hostSetup.capabilityLabel,
   `Hosting ${session.game}`,
 );
-assert.equal(session.verification.hostSetup.readinessSummary, "Started at D01");
+assert.equal(session.verification.hostSetup.readinessSummary, "Started at Day 1");
 assert.equal(session.verification.hostSetup.phaseId, "D01");
 assert.equal(session.verification.hostSetup.startDisabled, true);
 assert.equal(session.verification.hostSetup.hostHref, `/g/${session.game}/host`);

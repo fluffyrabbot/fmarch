@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { acquireLocalProofDatabase } from "./dev_test_game_local_database.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const localSpineMigrationUrl =
@@ -8,6 +9,7 @@ export const localSpineMigrationUrl =
 const defaultScript = "test:dev-test-game-identity:operator";
 
 let currentChild;
+let localDatabaseLease;
 let stopping = false;
 
 export function parseArgs(argv = []) {
@@ -71,12 +73,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     return 0;
   }
   const localEnv = localSpineProofEnvironment(env);
-  const migrationUrl = localSpineMigrationUrlFor(localEnv);
   installSignalHandler("SIGINT", 130);
   installSignalHandler("SIGTERM", 143);
 
   try {
     await run("npm", ["run", "dev:postgres", "--", "start"], { env: localEnv });
+    localDatabaseLease = await acquireLocalProofDatabase("dev_test_game_spine", localEnv);
     if (args.prebuild) {
       await run("npm", ["run", "dev:test-game:prebuild"], { env: localEnv });
     }
@@ -86,7 +88,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       {
         env: {
           ...localEnv,
-          DATABASE_MIGRATION_URL: migrationUrl,
+          DATABASE_MIGRATION_URL: localDatabaseLease.url,
         },
         allowFailure: true,
       },
@@ -109,10 +111,15 @@ async function stopPostgres(env) {
     return;
   }
   stopping = true;
-  await spawnAndWait("npm", ["run", "dev:postgres", "--", "stop"], {
-    env,
-    allowSpawnError: true,
-  });
+  try {
+    await localDatabaseLease?.release();
+  } finally {
+    localDatabaseLease = undefined;
+    await spawnAndWait("npm", ["run", "dev:postgres", "--", "stop"], {
+      env,
+      allowSpawnError: true,
+    });
+  }
 }
 
 async function spawnAndWait(command, args, { env, allowSpawnError = false } = {}) {

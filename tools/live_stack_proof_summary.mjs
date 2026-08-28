@@ -309,7 +309,7 @@ export function assertLiveStackProofSummary(summary) {
   if (summary.hostSetupWorkflow?.readyReadinessSummary !== "Ready to start") {
     throw new Error("live-stack summary missing host setup ready state");
   }
-  if (summary.hostSetupWorkflow?.startedReadinessSummary !== "Started at D01") {
+  if (summary.hostSetupWorkflow?.startedReadinessSummary !== "Started at Day 1") {
     throw new Error("live-stack summary missing host setup started state");
   }
   if (summary.hostVotecountConvergence?.expectedCount !== 1) {

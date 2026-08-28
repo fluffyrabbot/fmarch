@@ -181,7 +181,7 @@ function liveStackReadinessFixture() {
             },
           },
           readyReadiness: { summary: "Ready to start" },
-          startedReadiness: { summary: "Started at D01" },
+          startedReadiness: { summary: "Started at Day 1" },
           hostConsoleState: {
             phase: { phase_id: "D01" },
             slot: { slot_id: "slot_1" },

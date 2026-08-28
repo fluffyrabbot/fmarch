@@ -64,7 +64,7 @@ test("setup workflow preserves explicit navigation and routes ready setups to re
 test("started setup marks every stage complete", () => {
   const workflow = buildHostSetupWorkflow({
     setupState: { phase: { phaseId: "D01" } },
-    readiness: { checks, startAvailable: false, summary: "Started at D01" },
+    readiness: { checks, startAvailable: false, summary: "Started at Day 1" },
   });
   assert.equal(workflow.stages.every((stage) => stage.state === "complete"), true);
 });

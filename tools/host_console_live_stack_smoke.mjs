@@ -3583,7 +3583,7 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   });
 
   await page.waitForFunction(
-    () => window.__fmarchHostSetupReadiness?.summary === "Started at D01",
+    () => window.__fmarchHostSetupReadiness?.summary === "Started at Day 1",
   );
   const startedReadiness = await setupReadiness(page);
   const openHostConsole = page.getByRole("link", { name: "Open host console" });

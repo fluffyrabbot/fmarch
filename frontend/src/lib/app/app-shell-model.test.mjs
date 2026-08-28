@@ -219,6 +219,16 @@ test("board actions block denied role transitions without links", () => {
   assert.equal(data.board.games[0].actions[2].ariaDisabled, "true");
 });
 
+test("a public board does not present an arbitrary listed game as viewer context", () => {
+  const data = buildBoardRouteData({
+    gameIndexPage: fixtureBoardGameIndexPage("midsummer"),
+  });
+
+  assert.equal(data.shell.session.contextLabel, "Account");
+  assert.equal(data.shell.session.gameLabel, "No game");
+  assert.equal(data.shell.surfaces.find((surface) => surface.id === "player").navigation, "blocked");
+});
+
 test("shared shell keyboard order starts with skip link before allowed role navigation", () => {
   const shell = buildAppShell({
     game: "midsummer",

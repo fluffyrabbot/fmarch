@@ -49,6 +49,7 @@ export async function buildHostConsoleRouteData({
   principalId = FIXTURE_PRINCIPAL_IDS.hostH,
   fetchImpl = null,
   apiBaseUrl = "",
+  nowSeconds = Math.floor(Date.now() / 1000),
 }) {
   const gameId = normalizeGame(game);
   const commandPrincipalId = normalizePrincipal(principalId);
@@ -95,6 +96,7 @@ export async function buildHostConsoleRouteData({
     completed: hostProjection.completed,
     capabilityKind: hostProjection.authority.capabilityKind,
     allowedPermissionClasses: hostProjection.authority.allowedClasses,
+    nowSeconds,
   });
   const moderatorActionGroups = buildHostConsoleActionGroups({
     actions: criticalActions,
@@ -136,7 +138,10 @@ export async function buildHostConsoleRouteData({
       surface: "moderator",
       eyebrow: gameId,
       title: "Host console",
-      summary: "Day 1 deadline is active. Slot 7 / Mira has a pending replacement.",
+      summary: hostConsoleSummary({
+        phase: hostProjection.phase,
+        replacement: hostProjection.replacement,
+      }),
       capabilityLabel: access.capabilityLabel,
       capabilityTestId: HOST_CONSOLE_ROUTE_CONTRACT.capabilityTestId,
       liveStatusTestId: HOST_CONSOLE_ROUTE_CONTRACT.liveStatusTestId,
@@ -194,17 +199,19 @@ export async function buildHostConsoleRouteData({
     moderatorActionGroups,
     hostLifecycleControlCheckpoint,
     moderatorControls,
-    deadlineClock: HOST_FIXTURE_DEADLINE_CLOCK,
+    deadlineClock: Object.freeze({ nowSeconds }),
     workQueues: buildHostWorkQueues({
       phase: hostProjection.phase,
+      replacement: hostProjection.replacement,
       votecountCount: coldLoad.votecount.length,
-      nowSeconds: HOST_FIXTURE_DEADLINE_CLOCK.nowSeconds,
+      nowSeconds,
     }),
   });
 }
 
 export function buildHostWorkQueues({
   phase = {},
+  replacement = null,
   votecountCount = 0,
   nowSeconds = null,
 } = {}) {
@@ -229,9 +236,40 @@ export function buildHostWorkQueues({
     Object.freeze({
       id: "replacement",
       label: "Replacement",
-      value: "Slot 7 / Mira",
+      value: replacementQueueLabel(replacement),
     }),
   ]);
+}
+
+function hostConsoleSummary({ phase, replacement }) {
+  const phaseLabel =
+    typeof phase?.label === "string" && phase.label.trim() !== ""
+      ? phase.label.trim()
+      : typeof phase?.id === "string" && phase.id.trim() !== ""
+        ? phase.id.trim()
+        : "Current phase";
+  const phaseStatus =
+    typeof phase?.deadline === "number" && Number.isFinite(phase.deadline)
+      ? "deadline is active"
+      : phase?.locked === true
+        ? "is locked with no deadline"
+        : "has no deadline";
+  const replacementLabel = replacementQueueLabel(replacement);
+  return replacementLabel === "No replacement pending"
+    ? `${phaseLabel} ${phaseStatus}. No replacement is pending.`
+    : `${phaseLabel} ${phaseStatus}. ${replacementLabel} has a pending replacement.`;
+}
+
+function replacementQueueLabel(replacement) {
+  if (replacement === null || typeof replacement !== "object") {
+    return "No replacement pending";
+  }
+  const slotId = normalizeSlotId(replacement.slotId ?? "slot");
+  const occupant = normalizePublicPersonaName(
+    replacement.occupantLabel,
+    "current persona",
+  );
+  return `${slotDisplayLabel(slotId)} / ${occupant}`;
 }
 
 export function buildHostInviteTargets({
@@ -240,9 +278,10 @@ export function buildHostInviteTargets({
   replacementLabel = "player-rowan",
 } = {}) {
   const slotId = normalizeSlotId(replacement.slotId ?? "slot-7");
-  const occupant = normalizePrincipal(replacement.assignedPrincipalId);
+  const occupant = canonicalPrincipalId(replacement.assignedPrincipalId);
   const publicName = normalizePublicPersonaName(replacement.occupantLabel, "player-mira");
   const replacementPrincipal = normalizePrincipal(replacementPrincipalId);
+  const available = occupant !== null;
   return Object.freeze({
     player: Object.freeze({
       id: "player",
@@ -255,8 +294,9 @@ export function buildHostInviteTargets({
       urlTestId: "host-player-invite-url",
       accountTestId: "host-player-invite-account",
       slotId,
-      principalId: occupant,
-      expectedOccupantPrincipalId: occupant,
+      available,
+      principalId: occupant ?? "",
+      expectedOccupantPrincipalId: occupant ?? "",
       targetLabel: `${slotDisplayLabel(slotId)} / ${publicName}`,
       submitLabel: "Issue player invite",
     }),
@@ -270,9 +310,10 @@ export function buildHostInviteTargets({
       statusTestId: "host-replacement-invite-status",
       urlTestId: "host-replacement-invite-url",
       accountTestId: "host-replacement-invite-account",
+      available,
       slotId,
       principalId: replacementPrincipal,
-      expectedOccupantPrincipalId: occupant,
+      expectedOccupantPrincipalId: occupant ?? "",
       targetLabel: `${slotDisplayLabel(slotId)} / ${replacementLabel}`,
       submitLabel: "Issue invite",
     }),
@@ -460,10 +501,6 @@ const HOST_FIXTURE_PHASE = Object.freeze({
   deadline: 1781841600,
   deadlineLabel: "No deadline extension committed",
   lockedLabel: "Thread open",
-});
-
-const HOST_FIXTURE_DEADLINE_CLOCK = Object.freeze({
-  nowSeconds: 1781806740,
 });
 
 function normalizeGame(game) {

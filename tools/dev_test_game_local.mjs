@@ -1,35 +1,44 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { acquireLocalProofDatabase } from "./dev_test_game_local_database.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const localMigrationUrl = "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch";
 
 let currentChild;
+let localDatabaseLease;
 let stopping = false;
 
 export async function main(args = process.argv.slice(2), env = process.env) {
-  const migrationUrl = env.DATABASE_MIGRATION_URL ?? localMigrationUrl;
+  const localEnv = localDevTestGameEnvironment(env);
   installSignalHandler("SIGINT", 130);
   installSignalHandler("SIGTERM", 143);
 
   try {
-    await run("npm", ["run", "dev:postgres", "--", "start"], { env });
-    await run("npm", ["run", "dev:test-game:prebuild"], { env });
+    await run("npm", ["run", "dev:postgres", "--", "start"], { env: localEnv });
+    localDatabaseLease = await acquireLocalProofDatabase("dev_test_game", localEnv);
+    await run("npm", ["run", "dev:test-game:prebuild"], { env: localEnv });
     return await run(
       "npm",
       ["run", "dev:test-game", "--", ...args],
       {
         env: {
-          ...env,
-          DATABASE_MIGRATION_URL: migrationUrl,
+          ...localEnv,
+          DATABASE_MIGRATION_URL: localDatabaseLease.url,
         },
         allowFailure: true,
       },
     );
   } finally {
-    await stopPostgres(env);
+    await stopPostgres(localEnv);
   }
+}
+
+export function localDevTestGameEnvironment(env = process.env) {
+  return {
+    ...env,
+    FMARCH_DEV_AUTH: "1",
+  };
 }
 
 async function run(command, args, { env, allowFailure = false } = {}) {
@@ -45,10 +54,15 @@ async function stopPostgres(env) {
     return;
   }
   stopping = true;
-  await spawnAndWait("npm", ["run", "dev:postgres", "--", "stop"], {
-    env,
-    allowSpawnError: true,
-  });
+  try {
+    await localDatabaseLease?.release();
+  } finally {
+    localDatabaseLease = undefined;
+    await spawnAndWait("npm", ["run", "dev:postgres", "--", "stop"], {
+      env,
+      allowSpawnError: true,
+    });
+  }
 }
 
 async function spawnAndWait(command, args, { env, allowSpawnError = false } = {}) {

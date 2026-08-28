@@ -7128,7 +7128,7 @@ test("admin local release readiness detail data carries checks and unproven rows
       ["assignSlot", "ack", "SeatPersona", "Setup still needs attention"],
       ["assignRole", "ack", "AssignRole", "Ready to start"],
       ["setPostPolicy", "ack", "SetPostPolicy", "Ready to start"],
-      ["startGame", "ack", "StartGame", "Started at D01"],
+      ["startGame", "ack", "StartGame", "Started at Day 1"],
     ],
   );
   assert.deepEqual(
@@ -7262,7 +7262,7 @@ test("admin local host setup proof detail data carries setup command evidence ro
       ["assignSlot", "ack", "SeatPersona", "Setup still needs attention"],
       ["assignRole", "ack", "AssignRole", "Ready to start"],
       ["setPostPolicy", "ack", "SetPostPolicy", "Ready to start"],
-      ["startGame", "ack", "StartGame", "Started at D01"],
+      ["startGame", "ack", "StartGame", "Started at Day 1"],
     ],
   );
   assert.deepEqual(
@@ -13140,7 +13140,7 @@ function setupCommandEvidenceFixture(game = "game-a") {
     startGame: {
       status: "ack",
       commandKind: "StartGame",
-      readinessSummary: "Started at D01",
+      readinessSummary: "Started at Day 1",
       command: { game, phase: "D01" },
     },
   };

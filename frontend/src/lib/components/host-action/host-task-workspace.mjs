@@ -18,7 +18,7 @@ export const HOST_TASK_WORKSPACE_CONTRACT = Object.freeze({
 });
 
 const TASK_POSTURE = Object.freeze({
-  deadline: Object.freeze({ rank: 1, urgency: "due-soon", label: "Due soon" }),
+  deadline: Object.freeze({ rank: 1, urgency: "attention", label: "Deadline" }),
   "host-prompts": Object.freeze({ rank: 2, urgency: "attention", label: "Needs decision" }),
   replacement: Object.freeze({ rank: 3, urgency: "attention", label: "Player waiting" }),
   phase: Object.freeze({ rank: 10, urgency: "routine", label: "Routine" }),

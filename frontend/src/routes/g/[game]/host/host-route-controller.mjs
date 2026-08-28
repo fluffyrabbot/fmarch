@@ -77,7 +77,12 @@ export function hostProjectionResyncKeys() {
   return HOST_PROJECTION_RESYNC_KEYS;
 }
 
-export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "HostOf" }) {
+export function buildHostDerivedState({
+  gameId,
+  snapshot,
+  capabilityKind = "HostOf",
+  nowSeconds = Math.floor(Date.now() / 1000),
+}) {
   const projection = snapshot.host;
   const effectiveCapabilityKind =
     projection.authority?.capabilityKind ?? capabilityKind;
@@ -93,6 +98,7 @@ export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "Host
     completed: projection.completed,
     capabilityKind: effectiveCapabilityKind,
     allowedPermissionClasses: projection.authority?.allowedClasses ?? [],
+    nowSeconds,
   });
   const moderatorActionGroups = buildHostConsoleActionGroups({
     actions: criticalActions,

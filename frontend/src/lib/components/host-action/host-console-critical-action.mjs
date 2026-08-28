@@ -5,7 +5,7 @@ export const EXTEND_DEADLINE_PRESETS = Object.freeze([
   Object.freeze({ id: "extend_deadline_48h", label: "Extend +48h", hours: 48 }),
 ]);
 
-const FIXTURE_DEADLINE_SECONDS = 1781841600;
+const HOST_ACTION_FIXTURE_DEADLINE_SECONDS = 1781841600;
 
 export const HOST_ACTION_PERMISSION_CLASS = Object.freeze({
   process_replacement: "replacement",
@@ -31,12 +31,13 @@ export function buildHostConsoleCriticalActions(
     completed = false,
     capabilityKind = "HostOf",
     allowedPermissionClasses = [],
+    nowSeconds = Math.floor(Date.now() / 1000),
   } = {},
 ) {
   if (completed === true) {
     return Object.freeze([]);
   }
-  const deadlineActions = buildExtendDeadlineActions(gameId, phase);
+  const deadlineActions = buildExtendDeadlineActions(gameId, phase, nowSeconds);
   const phaseActions = buildPhaseActions(gameId, phase);
   const lifecycleActions = buildSlotLifecycleActions(gameId, replacement);
   const replacementSlotId = replacement?.slotId ?? "slot-7";
@@ -104,20 +105,21 @@ export function buildHostConsoleCriticalActions(
   );
 }
 
-function buildExtendDeadlineActions(gameId, phase) {
-  const target = activeDeadlineTarget(phase);
+function buildExtendDeadlineActions(gameId, phase, nowSeconds) {
+  const target = activeDeadlineTarget(phase, nowSeconds);
   if (target === null) {
     return Object.freeze([]);
   }
   const defaultExtendsToSeconds = target.baseDeadlineSeconds + 24 * 3600;
+  const verb = target.hasDeadline ? "Extend" : "Set";
   return Object.freeze([
     freezeHostAction({
       id: "extend_deadline",
-      label: "Extend deadline",
+      label: `${verb} deadline`,
       objectLabel: target.objectLabel,
-      outcomeLabel: `move the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)}`,
+      outcomeLabel: `${target.hasDeadline ? "move" : "set"} the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)}`,
       confirmationText:
-        `Extend ${target.objectLabel}: move the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)} for ${target.objectLabel}.`,
+        `${verb} ${target.objectLabel}: ${target.hasDeadline ? "move" : "set"} the deadline to ${formatDeadlinePacific(defaultExtendsToSeconds)} for ${target.objectLabel}.`,
       irreversible: true,
       payload: {
         kind: "extend_deadline",
@@ -134,14 +136,17 @@ function buildExtendDeadlineActions(gameId, phase) {
 
 function buildExtendDeadlinePresetAction(gameId, target, preset) {
   const extendsToSeconds = target.baseDeadlineSeconds + preset.hours * 3600;
-  const outcomeLabel = `move the deadline ${preset.hours} hours later to ${formatDeadlinePacific(extendsToSeconds)}`;
+  const verb = target.hasDeadline ? "Extend" : "Set";
+  const outcomeLabel = target.hasDeadline
+    ? `move the deadline ${preset.hours} hours later to ${formatDeadlinePacific(extendsToSeconds)}`
+    : `set the deadline ${preset.hours} hours from now at ${formatDeadlinePacific(extendsToSeconds)}`;
   return freezeHostAction({
     id: preset.id,
-    label: preset.label,
+    label: target.hasDeadline ? preset.label : `Set +${preset.hours}h`,
     objectLabel: target.objectLabel,
     outcomeLabel,
     confirmationText:
-      `Extend ${target.objectLabel} by ${preset.hours} hours: ${outcomeLabel} for ${target.objectLabel}.`,
+      `${verb} ${target.objectLabel} by ${preset.hours} hours: ${outcomeLabel} for ${target.objectLabel}.`,
     requiresConfirmation: true,
     payload: {
       kind: "extend_deadline",
@@ -152,7 +157,7 @@ function buildExtendDeadlinePresetAction(gameId, target, preset) {
   });
 }
 
-function activeDeadlineTarget(phase) {
+function activeDeadlineTarget(phase, nowSeconds) {
   const phaseId = canonicalPhaseId(phase?.id);
   if (phaseId === null) {
     return null;
@@ -161,12 +166,21 @@ function activeDeadlineTarget(phase) {
   const baseDeadlineSeconds =
     typeof phase?.deadline === "number" && Number.isFinite(phase.deadline)
       ? Math.floor(phase.deadline)
-      : FIXTURE_DEADLINE_SECONDS;
+      : normalizeNowSeconds(nowSeconds);
   return Object.freeze({
     phaseId,
     objectLabel: `${phaseLabel} deadline`,
     baseDeadlineSeconds,
+    hasDeadline:
+      typeof phase?.deadline === "number" && Number.isFinite(phase.deadline),
   });
+}
+
+function normalizeNowSeconds(nowSeconds) {
+  if (typeof nowSeconds !== "number" || !Number.isFinite(nowSeconds)) {
+    throw new TypeError("host deadline action clock must be a finite epoch second");
+  }
+  return Math.floor(nowSeconds);
 }
 
 function formatDeadlinePacific(epochSeconds) {
@@ -444,7 +458,7 @@ export function buildHostConsoleActionGroups({
       label: "Deadline",
       authority: hostActionAuthority(capabilityKind, "deadline"),
       permissionClass: "deadline",
-      value: "Extend the active phase deadline",
+      value: "Set or extend the active phase deadline",
       boundary: "Typed command",
       boundaryDetail: "ExtendDeadline /commands Ack or Reject",
       actionIds: [
@@ -548,7 +562,7 @@ export const HOST_CONSOLE_CRITICAL_ACTIONS =
     phase: Object.freeze({
       id: "D01",
       locked: false,
-      deadline: FIXTURE_DEADLINE_SECONDS,
+      deadline: HOST_ACTION_FIXTURE_DEADLINE_SECONDS,
     }),
   });
 

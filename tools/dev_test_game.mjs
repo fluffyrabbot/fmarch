@@ -1465,7 +1465,7 @@ async function verifySeededHostSetupRoute({
     setupPage.url() !== roleUrl ||
     surfaceGame !== game ||
     capabilityLabel !== `Hosting ${game}` ||
-    readinessSummary !== "Started at D01" ||
+    readinessSummary !== "Started at Day 1" ||
     mainPolicyText !== "Media-only posts are disabled." ||
     startDisabled !== true ||
     hostHref !== `/g/${game}/host` ||

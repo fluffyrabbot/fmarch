@@ -330,7 +330,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           true &&
         verification.hostSetup?.capabilityLabel ===
           `Hosting ${session?.game ?? ""}` &&
-        verification.hostSetup?.readinessSummary === "Started at D01" &&
+        verification.hostSetup?.readinessSummary === "Started at Day 1" &&
         verification.hostSetup?.phaseId === "D01" &&
         verification.hostSetup?.startDisabled === true &&
         verification.hostSetup?.hostHref === `/g/${session?.game ?? ""}/host` &&
@@ -348,7 +348,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === true &&
         verification.hostSetup?.setupBootstrap?.phaseId === "D01" &&
         verification.hostSetup?.setupBootstrap?.readinessSummary ===
-          "Started at D01" &&
+          "Started at Day 1" &&
         verification.hostSetup?.setupBootstrap?.commandCount === 18 &&
         verification.hostSetup?.setupBootstrap?.commands?.some(
           (command) =>
@@ -7201,7 +7201,7 @@ export function assertDevTestGameProofRun(proof) {
       true ||
     proof.session?.setupBootstrap?.commandCount !== 18 ||
     proof.session?.setupBootstrap?.phaseId !== "D01" ||
-    proof.session?.setupBootstrap?.readinessSummary !== "Started at D01"
+    proof.session?.setupBootstrap?.readinessSummary !== "Started at Day 1"
   ) {
     throw new Error("dev-test-game proof must carry setup-route bootstrap evidence");
   }

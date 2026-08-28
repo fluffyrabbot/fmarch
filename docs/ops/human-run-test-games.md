@@ -45,8 +45,11 @@ npm run dev:postgres -- stop
 
 ## Start A Game
 
-The one-command local path starts repo-local Postgres, prebuilds the Rust API,
-runs the test-game harness, and stops Postgres when the harness exits:
+The one-command local path starts repo-local Postgres, leases a disposable
+database at that local endpoint, prebuilds the Rust API, enables the
+debug-build deterministic identity delivery gateway, runs the test-game
+harness, drops the disposable database, and stops Postgres when the harness
+exits:
 
 ```sh
 npm run dev:test-game:local

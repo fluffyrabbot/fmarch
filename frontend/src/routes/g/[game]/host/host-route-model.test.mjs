@@ -23,6 +23,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
     capabilities: [{ kind: "HostOf", game: "midsummer" }],
+    nowSeconds: 1781806740,
   });
 
   assert.equal(data.access.allowed, true);
@@ -34,7 +35,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     statusStackClassName: "fm-status-stack",
     eyebrow: "midsummer",
     title: "Host console",
-    summary: "Day 1 deadline is active. Slot 7 / Mira has a pending replacement.",
+    summary: "Day 1 deadline is active. Slot 7 / player-mira has a pending replacement.",
     capability: {
       visible: true,
       label: "Hosting midsummer",
@@ -204,6 +205,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     statusTestId: "host-player-invite-status",
     urlTestId: "host-player-invite-url",
     accountTestId: "host-player-invite-account",
+    available: true,
     slotId: "slot-7",
     principalId: PLAYER_MIRA_PRINCIPAL_ID,
     expectedOccupantPrincipalId: PLAYER_MIRA_PRINCIPAL_ID,
@@ -241,13 +243,30 @@ test("host invite targets derive from projected slot occupancy", () => {
   });
 
   assert.equal(targets.player.slotId, "slot_12");
+  assert.equal(targets.player.available, true);
   assert.equal(targets.player.principalId, PLAYER_ALEX_PRINCIPAL_ID);
   assert.equal(targets.player.expectedOccupantPrincipalId, PLAYER_ALEX_PRINCIPAL_ID);
   assert.equal(targets.player.targetLabel, "Slot 12 / player-alex");
   assert.equal(targets.replacement.slotId, "slot_12");
+  assert.equal(targets.replacement.available, true);
   assert.equal(targets.replacement.principalId, PLAYER_JULES_PRINCIPAL_ID);
   assert.equal(targets.replacement.expectedOccupantPrincipalId, PLAYER_ALEX_PRINCIPAL_ID);
   assert.equal(targets.replacement.targetLabel, "Slot 12 / player-jules");
+});
+
+test("host invite targets fail closed when a live replacement omits principal authority", () => {
+  const targets = buildHostInviteTargets({
+    replacement: {
+      slotId: "slot_12",
+      occupantLabel: "player-alex",
+    },
+  });
+
+  assert.equal(targets.player.available, false);
+  assert.equal(targets.player.principalId, "");
+  assert.equal(targets.player.expectedOccupantPrincipalId, "");
+  assert.equal(targets.replacement.available, false);
+  assert.equal(targets.replacement.expectedOccupantPrincipalId, "");
 });
 
 test("host console route data uses host prompt and votecount cold-loads when available", async () => {
@@ -603,7 +622,7 @@ test("host work queue deadline countdown recomputes from the projected phase", (
   assert.deepEqual(fixtureQueues.map((queue) => [queue.id, queue.value]), [
     ["deadline", "Closes in 9h 41m"],
     ["votecount", "2 projected targets"],
-    ["replacement", "Slot 7 / Mira"],
+      ["replacement", "No replacement pending"],
   ]);
 
   const extendedQueues = buildHostWorkQueues({

@@ -55,7 +55,7 @@ const CHECKS = Object.freeze([
       evidence.browser.admin.hostSetup?.setupCommandEvidence?.startGame?.command
         ?.phase === "D01" &&
       evidence.browser.admin.hostSetup?.readyReadiness?.summary === "Ready to start" &&
-      evidence.browser.admin.hostSetup?.startedReadiness?.summary === "Started at D01" &&
+      evidence.browser.admin.hostSetup?.startedReadiness?.summary === "Started at Day 1" &&
       evidence.browser.admin.hostSetup?.hostConsoleState?.phase?.phase_id === "D01" &&
       evidence.browser.admin.hostSetup?.hostConsoleState?.slot?.slot_id === "slot_1",
   },
