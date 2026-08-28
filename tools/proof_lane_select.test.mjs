@@ -1461,7 +1461,7 @@ test('inner, push, sprint, and full modes escalate coverage deliberately', () =>
   assert.ok(!push.laneIds.includes('test:frontend-visual-regression'), 'untouched frozen lanes stay out of push');
 
   const sprint = selectLanes({ changed, manifest, crateGraph: FIXTURE_GRAPH, mode: 'sprint' });
-  assert.ok(sprint.laneIds.includes('cargo:identity'), 'active-tier lanes join sprint mode');
+  assert.ok(sprint.laneIds.includes('cargo:domain'), 'active-tier lanes join sprint mode');
   assert.ok(sprint.laneIds.includes('test:completeness-scorecard'), 'sprint retains sentinels');
   assert.ok(
     !sprint.laneIds.includes('test:frontend-visual-regression'),

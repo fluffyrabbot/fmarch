@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | Active |
-| **Updated** | 2026-08-06 |
+| **Updated** | 2026-08-28 |
 | **Scope authority** | `docs/ops/completion-registry.json` |
 | **Generated view** | `docs/ops/completeness-scorecard.md` |
 
@@ -72,28 +72,31 @@ the binary boundary remain singular and testable.
 ## Next buildable coding slice
 
 The next dependency-satisfied coding item is
-`foundation.maintainable-core`. Its active slice extracts immutable proof-runner
-configuration and session-artifact assembly from `tools/dev_test_game.mjs`
-behind normalized inputs, while the composition root keeps process lifecycle,
-browser/scenario orchestration, network commands, and proof assertions. CLI and
-environment precedence, verification modes, artifact paths and schemas,
-redaction, exit behavior, and retained proof semantics must remain unchanged.
+`foundation.maintainable-core`. Its active slice extracts night-resolution
+pack-policy admission from `crates/domain/src/resolver.rs` into the private
+`resolver/policy.rs` owner described by the generated completeness scorecard.
+The resolver pipelines should each state one typed admission boundary while
+preserving admission order, panic text and triggers, derived policy catalogs,
+public resolver APIs, deterministic seeds, and golden behavior. The pack façade
+remains the sole pack dependency and policy code imports the intake-owned action
+type directly; no forwarding compatibility façade is retained.
 
-After that extraction, local 1.0 closure proceeds in this order:
+After that extraction, maintainable-core closure proceeds in this order:
 
-1. complete the remaining maintainable-core concentrations recorded in
-   [16-maintainable-core](16-maintainable-core.md);
-2. replace direct user-to-slot assignment history with named game-scoped
-   personas and immutable occupancy epochs across setup, authority,
-   replacement, replay/export, projections, and role surfaces;
-3. implement the typed member data-lifecycle and retention contract;
+1. split the broad remaining resolver phase coordinator along the next typed
+   ownership boundary;
+2. split the next independently changing projection family and the remaining
+   physical command-test family;
+3. split proof-runner scenario/runtime orchestration only when the next change
+   exposes a coherent owner, while retiring redundant proof wrappers instead of
+   preserving compatibility aliases;
 4. re-declare proof tiers at each frontier checkpoint, run sprint proof during
    the active slice, and run full proof before landing the completed sprint.
 
 The public history explorer is accepted product direction but is explicitly
-deferred beyond 1.0. The persona/occupancy model it depends on is required 1.0
-substrate because live authority and historical authorship must share one truth
-model before release. Projection snapshots remain deferred until a
+deferred beyond 1.0. The persona/occupancy and member data-lifecycle substrate
+it depends on is already locally complete; hosted erasure and release evidence
+remain separate gates. Projection snapshots remain deferred until a
 representative replay benchmark exceeds a declared latency or resource SLO.
 
 ## 1.0 substrate after local product closure

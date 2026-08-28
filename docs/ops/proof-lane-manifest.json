@@ -142,10 +142,11 @@
   "areas": [
     {
       "id": "crate:content-registry",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/content_registry/"],
       "crate": "content_registry",
-      "lanes": ["cargo:content-registry", "cargo:clippy-workspace", "test:exact-image-content"]
+      "lanes": ["cargo:content-registry", "cargo:clippy-workspace", "test:exact-image-content"],
+      "capabilities": ["product.mash.day-program-library"]
     },
     {
       "id": "crate:principal",
@@ -157,7 +158,7 @@
     },
     {
       "id": "crate:domain",
-      "tier": "frozen",
+      "tier": "active",
       "paths": ["crates/domain/"],
       "crate": "domain",
       "lanes": ["cargo:domain", "cargo:clippy-workspace"],
@@ -165,7 +166,7 @@
     },
     {
       "id": "domain:tests",
-      "tier": "frozen",
+      "tier": "active",
       "paths": [
         "crates/domain/tests/",
         "crates/domain/src/pack/validation_tests.rs"
@@ -443,20 +444,22 @@
     },
     {
       "id": "crate:operator-proof",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/operator_proof/"],
       "crate": "operator_proof",
-      "lanes": ["cargo:operator-proof", "cargo:clippy-workspace"]
+      "lanes": ["cargo:operator-proof", "cargo:clippy-workspace"],
+      "capabilities": ["foundation.command-capability-runtime", "foundation.resolution-engine-parity"]
     },
     {
       "id": "operator-proof:tests",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/operator_proof/tests/"],
-      "lanes": ["cargo:operator-proof", "cargo:clippy-workspace"]
+      "lanes": ["cargo:operator-proof", "cargo:clippy-workspace"],
+      "capabilities": ["foundation.command-capability-runtime", "foundation.resolution-engine-parity"]
     },
     {
       "id": "crate:game-platform",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/game_platform/"],
       "crate": "game_platform",
       "lanes": ["cargo:game-platform", "cargo:clippy-workspace"],
@@ -535,16 +538,18 @@
     },
     {
       "id": "crate:identity",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/identity/"],
       "crate": "identity",
-      "lanes": ["cargo:identity", "cargo:clippy-workspace", "test:auth-invite-role-proof"]
+      "lanes": ["cargo:identity", "cargo:clippy-workspace", "test:auth-invite-role-proof"],
+      "capabilities": ["product.identity.session-lifecycle", "product.identity.data-lifecycle"]
     },
     {
       "id": "identity:tests",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/identity/tests/"],
-      "lanes": ["cargo:identity", "cargo:clippy-workspace"]
+      "lanes": ["cargo:identity", "cargo:clippy-workspace"],
+      "capabilities": ["product.identity.session-lifecycle", "product.identity.data-lifecycle"]
     },
     {
       "id": "crate:profile-handle-index",
@@ -592,7 +597,7 @@
     },
     {
       "id": "crate:api",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/api/"],
       "crate": "api",
       "lanes": ["cargo:api", "cargo:clippy-workspace", "test:mash-scale-acceptance", "test:security-release-baseline", "check:event-key-rotation-evidence"],
@@ -606,7 +611,7 @@
     },
     {
       "id": "api:public-search",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/api/src/public_platform_http.rs"],
       "lanes": [
         "cargo:api",
@@ -616,13 +621,15 @@
         "check:event-key-rotation-evidence",
         "test:public-search-role-proof"
       ],
-      "also_triggers": ["frontend:identity"]
+      "also_triggers": ["frontend:identity"],
+      "capabilities": ["product.community.search"]
     },
     {
       "id": "api:tests",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/api/tests/"],
-      "lanes": ["cargo:api", "cargo:clippy-workspace"]
+      "lanes": ["cargo:api", "cargo:clippy-workspace"],
+      "capabilities": ["foundation.command-capability-runtime", "foundation.wire-live-delivery"]
     },
     {
       "id": "crate:operator_api",
@@ -641,7 +648,7 @@
     },
     {
       "id": "crate:server",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/server/"],
       "crate": "server",
       "lanes": [
@@ -654,13 +661,15 @@
         "test:database-tls-boundary",
         "test:railway-staging-target",
         "test:production-promotion"
-      ]
+      ],
+      "capabilities": ["foundation.release-topology", "foundation.security-release-baseline"]
     },
     {
       "id": "server:tests",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/server/tests/"],
-      "lanes": ["cargo:server", "cargo:clippy-workspace"]
+      "lanes": ["cargo:server", "cargo:clippy-workspace"],
+      "capabilities": ["foundation.release-topology", "foundation.security-release-baseline"]
     },
     {
       "id": "packs",
@@ -671,7 +680,7 @@
     },
     {
       "id": "programs",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["programs/"],
       "lanes": [
         "cargo:content-registry",
@@ -688,7 +697,7 @@
     },
     {
       "id": "frontend:identity",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["frontend/src/routes/auth/", "frontend/src/lib/server/", "frontend/src/hooks.server."],
       "lanes": [
         "test:frontend-contract",
@@ -698,13 +707,15 @@
         "test:railway-staging-target",
         "test:security-release-baseline",
         "test:frontend-csp-browser"
-      ]
+      ],
+      "capabilities": ["product.identity.method-coexistence", "product.identity.session-lifecycle"]
     },
     {
       "id": "frontend:admin",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["frontend/src/routes/admin/", "frontend/src/lib/components/admin/"],
-      "lanes": ["test:frontend-contract"]
+      "lanes": ["test:frontend-contract"],
+      "capabilities": ["product.game.setup", "product.identity.session-lifecycle"]
     },
     {
       "id": "frontend:game",
@@ -760,17 +771,18 @@
     },
     {
       "id": "frontend:infra",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["frontend/"],
       "lanes": [
         "test:frontend-contract",
         "test:security-release-baseline",
         "test:frontend-csp-browser"
-      ]
+      ],
+      "capabilities": ["foundation.wire-live-delivery", "foundation.security-release-baseline"]
     },
     {
       "id": "ops:production-promotion",
-      "tier": "active",
+      "tier": "frozen",
       "paths": [
         "tools/production_promotion.mjs",
         "tools/production_promotion.test.mjs",
@@ -785,11 +797,12 @@
         "test:production-promotion",
         "test:railway-staging-target",
         "test:security-release-baseline"
-      ]
+      ],
+      "capabilities": ["foundation.release-topology", "foundation.security-release-baseline"]
     },
     {
       "id": "ops:workos-oidc",
-      "tier": "active",
+      "tier": "frozen",
       "paths": [
         "tools/workos_oidc_preflight.mjs",
         "tools/workos_oidc_preflight.test.mjs",
@@ -803,11 +816,12 @@
         "test:completeness-scorecard",
         "test:proof-lane-contract",
         "test:security-release-baseline"
-      ]
+      ],
+      "capabilities": ["product.identity.method-coexistence", "foundation.security-release-baseline"]
     },
     {
       "id": "ops:railway-staging-target",
-      "tier": "active",
+      "tier": "frozen",
       "paths": [
         "tools/railway_staging_target_contract.mjs",
         "tools/profile_handle_index_rotation_receipt.mjs",
@@ -817,13 +831,15 @@
         "docs/ops/profile-handle-index-rotation-receipt.schema.json",
         "docs/ops/release-secret-custody.json"
       ],
-      "lanes": ["test:railway-staging-target"]
+      "lanes": ["test:railway-staging-target"],
+      "capabilities": ["foundation.release-topology"]
     },
     {
       "id": "proof:frontend-contract",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["tools/frontend_role_smoke_scenarios.test.mjs"],
-      "lanes": ["test:frontend-contract"]
+      "lanes": ["test:frontend-contract"],
+      "capabilities": ["foundation.wire-live-delivery", "product.game.core-loop"]
     },
     {
       "id": "proof:frontend-static-role-contract",
@@ -953,9 +969,10 @@
     },
     {
       "id": "proof:auth-invite-role",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["tools/auth_invite_role_proof.mjs"],
-      "lanes": ["test:auth-invite-role-proof"]
+      "lanes": ["test:auth-invite-role-proof"],
+      "capabilities": ["product.identity.account-login-invites"]
     },
     {
       "id": "proof:public-search-role",
@@ -966,7 +983,7 @@
     },
     {
       "id": "proof:database-schema",
-      "tier": "active",
+      "tier": "frozen",
       "paths": [
         "tools/database_schema_contract.mjs",
         "tools/database_schema_contract.test.mjs",
@@ -974,7 +991,8 @@
         "tools/database_schema_snapshot.test.mjs",
         "tools/database_schema_upgrade_proof.mjs"
       ],
-      "lanes": ["test:database-schema:static", "test:database-schema-upgrade"]
+      "lanes": ["test:database-schema:static", "test:database-schema-upgrade"],
+      "capabilities": ["foundation.event-store-projections"]
     },
     {
       "id": "proof:completeness-scorecard",
@@ -987,7 +1005,7 @@
     },
     {
       "id": "proof:mash-scale",
-      "tier": "active",
+      "tier": "frozen",
       "paths": [
         "tools/mash_scale_acceptance.mjs",
         "tools/mash_scale_acceptance_contract.mjs",
@@ -1015,7 +1033,7 @@
     },
     {
       "id": "proof:host-console-live-stack",
-      "tier": "active",
+      "tier": "frozen",
       "paths": [
         "tools/host_console_live_stack_smoke.mjs",
         "tools/live_stack/",
@@ -1030,18 +1048,20 @@
     },
     {
       "id": "proof:live-stack-backup-restore",
-      "tier": "active",
+      "tier": "frozen",
       "paths": [
         "tools/live_stack_backup_restore_drill.mjs",
         "tools/dev_test_game_backup_restore_spine.mjs"
       ],
-      "lanes": ["test:live-stack-backup-restore-drill"]
+      "lanes": ["test:live-stack-backup-restore-drill"],
+      "capabilities": ["foundation.event-store-projections", "foundation.release-topology"]
     },
     {
       "id": "proof:dev-test-game-identity-leaf",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["tools/dev_test_game_identity_spine.mjs"],
-      "lanes": ["test:auth-invite-role-proof"]
+      "lanes": ["test:auth-invite-role-proof"],
+      "capabilities": ["product.identity.account-login-invites"]
     },
     {
       "id": "proof:dev-test-game-spine-artifact-contracts",
@@ -1072,21 +1092,24 @@
     },
     {
       "id": "proof:database-tls-boundary",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["tools/database_tls_boundary.mjs"],
-      "lanes": ["test:database-tls-boundary"]
+      "lanes": ["test:database-tls-boundary"],
+      "capabilities": ["foundation.security-release-baseline"]
     },
     {
       "id": "proof:exact-image-content",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["tools/exact_image_content_smoke.mjs", "tools/exact_image_content_smoke.test.mjs"],
-      "lanes": ["test:exact-image-content"]
+      "lanes": ["test:exact-image-content"],
+      "capabilities": ["product.media.canonical-blob-store"]
     },
     {
       "id": "proof:podman-compose",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["tools/podman_compose.mjs", "tools/podman_compose.test.mjs"],
-      "lanes": ["test:dev-postgres-contract"]
+      "lanes": ["test:dev-postgres-contract"],
+      "capabilities": ["foundation.release-topology"]
     },
     {
       "id": "tools:proof-infra",
@@ -1118,7 +1141,7 @@
     },
     {
       "id": "deploy:infra",
-      "tier": "active",
+      "tier": "frozen",
       "paths": [
         ".env.example",
         "deploy/",
@@ -1136,7 +1159,8 @@
         "test:exact-image-content",
         "check:event-key-rotation-evidence",
         "test:database-tls-boundary"
-      ]
+      ],
+      "capabilities": ["foundation.release-topology", "foundation.security-release-baseline"]
     },
     {
       "id": "workspace:manifests",
