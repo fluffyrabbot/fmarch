@@ -10,6 +10,7 @@
     "also_triggers encodes cross-boundary blast radius the crate DAG cannot see (e.g. strict-wire change 32e8623b broke ~10 proof tools and frontend transport).",
     "Generated-artifact lanes declare source input and checked-in output path patterns plus a canonical write_command. Either side directly arms the freshness lane, independent of area boundaries; every concrete output has one lane owner.",
     "Manifest lanes are executable leaves. Human aggregate npm aliases stay outside this table; selected leaves are deduplicated by canonical execution key.",
+    "Every cargo test leaf declares assertion_targets and selects only those library, binary, or integration-test targets. The proof contract rejects missing targets and targets whose source contains no test declaration; rustdoc remains compilation coverage owned by workspace Clippy because the workspace doctest inventory is empty.",
     "Every leaf declares exact execution metadata. Cargo target access, browsers, frontend worktrees, container engines, network access, Postgres administration, disposable databases, and artifact directories are scheduled as independent resources.",
     "Push mode is the touched closure plus a measured bounded sentinel set. Sprint mode adds every active-tier area; full mode adds every declared lane."
   ],
@@ -28,21 +29,21 @@
   },
   "lanes": {
     "cargo:clippy-workspace": { "kind": "shell", "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings", "measurement": "diff-sensitive", "execution": { "class": "cargo", "timeout_seconds": 1800, "argv": ["cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:content-registry": { "kind": "shell", "command": "cargo test -p content_registry", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "content_registry"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:domain": { "kind": "shell", "command": "cargo test -p domain", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "domain"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:database-schema": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p database_schema -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "database_schema", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p eventstore -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "eventstore", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p projections -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "projections", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:principal": { "kind": "shell", "command": "cargo test -p principal", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "principal"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:caps": { "kind": "shell", "command": "cargo test -p caps", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "caps"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:commands-unit": { "kind": "shell", "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary --test day_runtime_boundary", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "commands", "--lib", "--bin", "check_goldens", "--test", "action_submission_boundary", "--test", "host_prompt_resolution_boundary", "--test", "day_runtime_boundary"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:commands-pg": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test pipeline -- --test-threads=4", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "commands", "--test", "pipeline", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:commands-concurrency": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test runtime_cancellation -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "commands", "--test", "runtime_cancellation", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:commands-audit": { "kind": "shell", "command": "RUST_MIN_STACK=8388608 DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test semantic_audit -- --test-threads=4 --nocapture", "execution": { "class": "postgres", "timeout_seconds": 1800, "argv": ["cargo", "test", "-p", "commands", "--test", "semantic_audit", "--", "--test-threads=4", "--nocapture"], "env": { "RUST_MIN_STACK": "8388608" }, "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:operator-proof": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p operator_proof -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "operator_proof", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:game-platform": { "kind": "shell", "command": "cargo test -p game_platform --all-features", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "game_platform", "--all-features"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:game-persona-application": { "kind": "shell", "command": "cargo test -p game_persona_application", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "game_persona_application"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:wire": { "kind": "shell", "command": "cargo test -p wire", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "wire"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:content-registry": { "kind": "shell", "command": "cargo test -p content_registry --lib", "assertion_targets": ["content_registry/lib"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "content_registry", "--lib"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:domain": { "kind": "shell", "command": "cargo test -p domain --lib --test determinism_guard --test golden --test grant_kind_contract --test pack_boundary --test pack_validation --test resolver_boundary --test result_contract --test state_evolution", "assertion_targets": ["domain/lib", "domain/test/determinism_guard", "domain/test/golden", "domain/test/grant_kind_contract", "domain/test/pack_boundary", "domain/test/pack_validation", "domain/test/resolver_boundary", "domain/test/result_contract", "domain/test/state_evolution"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "domain", "--lib", "--test", "determinism_guard", "--test", "golden", "--test", "grant_kind_contract", "--test", "pack_boundary", "--test", "pack_validation", "--test", "resolver_boundary", "--test", "result_contract", "--test", "state_evolution"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:database-schema": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p database_schema --test database_authority -- --test-threads=1", "assertion_targets": ["database_schema/test/database_authority"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "database_schema", "--test", "database_authority", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:eventstore": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p eventstore --lib --test concurrency -- --test-threads=1", "assertion_targets": ["eventstore/lib", "eventstore/test/concurrency"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "eventstore", "--lib", "--test", "concurrency", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:projections": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p projections --test baseline_contract --test e2e --test encryption_replay --test private_projection_reseal --test projection_family_boundary --test publication_adapter_contract --test quotation_citation --test subject_privacy -- --test-threads=1", "assertion_targets": ["projections/test/baseline_contract", "projections/test/e2e", "projections/test/encryption_replay", "projections/test/private_projection_reseal", "projections/test/projection_family_boundary", "projections/test/publication_adapter_contract", "projections/test/quotation_citation", "projections/test/subject_privacy"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "projections", "--test", "baseline_contract", "--test", "e2e", "--test", "encryption_replay", "--test", "private_projection_reseal", "--test", "projection_family_boundary", "--test", "publication_adapter_contract", "--test", "quotation_citation", "--test", "subject_privacy", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:principal": { "kind": "shell", "command": "cargo test -p principal --lib", "assertion_targets": ["principal/lib"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "principal", "--lib"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:caps": { "kind": "shell", "command": "cargo test -p caps --lib", "assertion_targets": ["caps/lib"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "caps", "--lib"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:commands-unit": { "kind": "shell", "command": "cargo test -p commands --lib --bin check_goldens --test action_submission_boundary --test host_prompt_resolution_boundary --test day_runtime_boundary", "assertion_targets": ["commands/lib", "commands/bin/check_goldens", "commands/test/action_submission_boundary", "commands/test/host_prompt_resolution_boundary", "commands/test/day_runtime_boundary"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "commands", "--lib", "--bin", "check_goldens", "--test", "action_submission_boundary", "--test", "host_prompt_resolution_boundary", "--test", "day_runtime_boundary"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:commands-pg": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test pipeline -- --test-threads=4", "assertion_targets": ["commands/test/pipeline"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "commands", "--test", "pipeline", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:commands-concurrency": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test runtime_cancellation -- --test-threads=1", "assertion_targets": ["commands/test/runtime_cancellation"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "commands", "--test", "runtime_cancellation", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:commands-audit": { "kind": "shell", "command": "RUST_MIN_STACK=8388608 DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p commands --test semantic_audit -- --test-threads=4 --nocapture", "assertion_targets": ["commands/test/semantic_audit"], "execution": { "class": "postgres", "timeout_seconds": 1800, "argv": ["cargo", "test", "-p", "commands", "--test", "semantic_audit", "--", "--test-threads=4", "--nocapture"], "env": { "RUST_MIN_STACK": "8388608" }, "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:operator-proof": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p operator_proof --lib --bin prove_command_projection_resolution --bin prove_game_specific_audits --test boundary -- --test-threads=1", "assertion_targets": ["operator_proof/lib", "operator_proof/bin/prove_command_projection_resolution", "operator_proof/bin/prove_game_specific_audits", "operator_proof/test/boundary"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "operator_proof", "--lib", "--bin", "prove_command_projection_resolution", "--bin", "prove_game_specific_audits", "--test", "boundary", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:game-platform": { "kind": "shell", "command": "cargo test -p game_platform --lib --all-features", "assertion_targets": ["game_platform/lib"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "game_platform", "--lib", "--all-features"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:game-persona-application": { "kind": "shell", "command": "cargo test -p game_persona_application --lib", "assertion_targets": ["game_persona_application/lib"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "game_persona_application", "--lib"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:wire": { "kind": "shell", "command": "cargo test -p wire --lib --bin export_types --test command_parity --test typescript", "assertion_targets": ["wire/lib", "wire/bin/export_types", "wire/test/command_parity", "wire/test/typescript"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "wire", "--lib", "--bin", "export_types", "--test", "command_parity", "--test", "typescript"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
     "check:wire-types": {
       "kind": "shell",
       "command": "cargo run -p wire --bin export_types -- --check",
@@ -72,14 +73,13 @@
       "outputs": ["packs/*/golden/*.json"],
       "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "run", "-p", "commands", "--bin", "check_goldens", "--", "--check"], "resources": [{ "kind": "lock", "name": "cargo-target" }] }
     },
-    "cargo:public-platform": { "kind": "shell", "command": "cargo test -p attention -p social -p trust_safety -p forum -p content_reference", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "attention", "-p", "social", "-p", "trust_safety", "-p", "forum", "-p", "content_reference"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p identity -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "identity", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:profile-handle-index": { "kind": "shell", "command": "cargo test -p profile_handle_index", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "profile_handle_index"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
-    "cargo:profile-application": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p profile_application -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "profile_application", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:media": { "kind": "shell", "command": "cargo test -p media", "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "shared_object_repository_cross_replica_round_trip_is_idempotent", "--", "cargo", "test", "-p", "media"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
-    "cargo:api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p api -- --test-threads=4", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state", "--", "cargo", "test", "-p", "api", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
-    "cargo:operator_api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p operator_api -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "operator_api", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
-    "cargo:server": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p server -- --test-threads=1", "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "admin_rejects_non_deployable_key_configuration_before_database_access", "--required", "deployed_admin_rehearses_old_key_removal_before_retirement", "--", "cargo", "test", "-p", "server", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "cargo:public-platform": { "kind": "shell", "command": "cargo test -p attention -p social -p trust_safety --lib", "assertion_targets": ["attention/lib", "social/lib", "trust_safety/lib"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "attention", "-p", "social", "-p", "trust_safety", "--lib"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:identity": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p identity --lib --test subject_authority_startup --test workos_erasure_lock_order -- --test-threads=1", "assertion_targets": ["identity/lib", "identity/test/subject_authority_startup", "identity/test/workos_erasure_lock_order"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "identity", "--lib", "--test", "subject_authority_startup", "--test", "workos_erasure_lock_order", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:profile-handle-index": { "kind": "shell", "command": "cargo test -p profile_handle_index --lib", "assertion_targets": ["profile_handle_index/lib"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "profile_handle_index", "--lib"], "resources": [{ "kind": "lock", "name": "cargo-target" }] } },
+    "cargo:media": { "kind": "shell", "command": "cargo test -p media --lib --test variant_read_boundary", "assertion_targets": ["media/lib", "media/test/variant_read_boundary"], "execution": { "class": "cargo", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "shared_object_repository_cross_replica_round_trip_is_idempotent", "--", "cargo", "test", "-p", "media", "--lib", "--test", "variant_read_boundary"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "cargo:api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p api --lib --test auth_http_boundary --test auth_methods --test authenticated_transport --test command_http_boundary --test embed_http_boundary --test encryption_thread_read --test game_http_boundary --test identity_delivery_boundary --test identity_delivery_reseal --test live_delivery_boundary --test live_projection_boundary --test public_platform_http_boundary --test readiness --test vertical -- --test-threads=4", "assertion_targets": ["api/lib", "api/test/auth_http_boundary", "api/test/auth_methods", "api/test/authenticated_transport", "api/test/command_http_boundary", "api/test/embed_http_boundary", "api/test/encryption_thread_read", "api/test/game_http_boundary", "api/test/identity_delivery_boundary", "api/test/identity_delivery_reseal", "api/test/live_delivery_boundary", "api/test/live_projection_boundary", "api/test/public_platform_http_boundary", "api/test/readiness", "api/test/vertical"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state", "--", "cargo", "test", "-p", "api", "--lib", "--test", "auth_http_boundary", "--test", "auth_methods", "--test", "authenticated_transport", "--test", "command_http_boundary", "--test", "embed_http_boundary", "--test", "encryption_thread_read", "--test", "game_http_boundary", "--test", "identity_delivery_boundary", "--test", "identity_delivery_reseal", "--test", "live_delivery_boundary", "--test", "live_projection_boundary", "--test", "public_platform_http_boundary", "--test", "readiness", "--test", "vertical", "--", "--test-threads=4"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
+    "cargo:operator_api": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p operator_api --lib --test operator_routes --test vertical -- --test-threads=1", "assertion_targets": ["operator_api/lib", "operator_api/test/operator_routes", "operator_api/test/vertical"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["cargo", "test", "-p", "operator_api", "--lib", "--test", "operator_routes", "--test", "vertical", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }] } },
+    "cargo:server": { "kind": "shell", "command": "DATABASE_URL=${DATABASE_URL:-postgres://fmarch:fmarch@127.0.0.1:5544/fmarch} cargo test -p server --lib --bin fmarch-event-key-admin --bin fmarch-profile-index-admin --bin fmarch-schema-gate --bin server --test event_key_admin_rehearsal --test profile_index_admin_rehearsal --test staging_search_corpus -- --test-threads=1", "assertion_targets": ["server/lib", "server/bin/fmarch-event-key-admin", "server/bin/fmarch-profile-index-admin", "server/bin/fmarch-schema-gate", "server/bin/server", "server/test/event_key_admin_rehearsal", "server/test/profile_index_admin_rehearsal", "server/test/staging_search_corpus"], "execution": { "class": "postgres", "timeout_seconds": 900, "argv": ["node", "tools/cargo_test_evidence.mjs", "--required", "admin_rejects_non_deployable_key_configuration_before_database_access", "--required", "deployed_admin_rehearses_old_key_removal_before_retirement", "--", "cargo", "test", "-p", "server", "--lib", "--bin", "fmarch-event-key-admin", "--bin", "fmarch-profile-index-admin", "--bin", "fmarch-schema-gate", "--bin", "server", "--test", "event_key_admin_rehearsal", "--test", "profile_index_admin_rehearsal", "--test", "staging_search_corpus", "--", "--test-threads=1"], "resources": [{ "kind": "lock", "name": "cargo-target" }, { "kind": "postgres", "mode": "lane-isolated", "url_env": "DATABASE_URL" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 300, "argv": ["npm", "run", "test:frontend-contract"], "resources": [] } },
     "test:frontend-static-role-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:frontend-static-role-contract"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
     "test:frontend-role-smoke": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 900, "argv": ["npm", "run", "test:frontend-role-smoke"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }, { "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } },
@@ -149,10 +149,11 @@
     },
     {
       "id": "crate:principal",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/principal/"],
       "crate": "principal",
-      "lanes": ["cargo:principal", "cargo:clippy-workspace"]
+      "lanes": ["cargo:principal", "cargo:clippy-workspace"],
+      "capabilities": ["foundation.command-capability-runtime"]
     },
     {
       "id": "crate:domain",
@@ -246,9 +247,17 @@
     },
     {
       "id": "commands:semantic-audit",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/commands/tests/semantic_audit/"],
-      "lanes": ["cargo:commands-audit", "cargo:clippy-workspace"]
+      "lanes": ["cargo:commands-audit", "cargo:clippy-workspace"],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity",
+        "product.mash.day-program-library",
+        "product.mash.day-event-runtime",
+        "product.mash.private-day-event-rooms",
+        "product.mash.scale-acceptance"
+      ]
     },
     {
       "id": "commands:semantic-audit-proof-source",
@@ -417,7 +426,7 @@
     },
     {
       "id": "operator-proof:minimizer",
-      "tier": "active",
+      "tier": "frozen",
       "paths": [
         "crates/operator_proof/src/minimizer.rs",
         "crates/operator_proof/src/bin/minimize_night_fixture.rs"
@@ -426,6 +435,10 @@
         "cargo:operator-proof",
         "cargo:commands-audit",
         "cargo:clippy-workspace"
+      ],
+      "capabilities": [
+        "foundation.command-capability-runtime",
+        "foundation.resolution-engine-parity"
       ]
     },
     {
@@ -451,10 +464,11 @@
     },
     {
       "id": "crate:game-persona-application",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/game_persona_application/"],
       "crate": "game_persona_application",
-      "lanes": ["cargo:game-persona-application", "cargo:clippy-workspace"]
+      "lanes": ["cargo:game-persona-application", "cargo:clippy-workspace"],
+      "capabilities": ["product.game.persona-occupancy"]
     },
     {
       "id": "crate:wire",
@@ -534,17 +548,19 @@
     },
     {
       "id": "crate:profile-handle-index",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/profile_handle_index/"],
       "crate": "profile_handle_index",
-      "lanes": ["cargo:profile-handle-index", "cargo:clippy-workspace"]
+      "lanes": ["cargo:profile-handle-index", "cargo:clippy-workspace"],
+      "capabilities": ["product.community.profiles"]
     },
     {
       "id": "crate:profile-application",
-      "tier": "active",
+      "tier": "frozen",
       "paths": ["crates/profile_application/"],
       "crate": "profile_application",
-      "lanes": ["cargo:profile-application", "cargo:clippy-workspace"],
+      "lanes": ["cargo:clippy-workspace"],
+      "capabilities": ["product.community.profiles"],
       "also_triggers": ["crate:projections", "crate:identity"]
     },
     {

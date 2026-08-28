@@ -326,6 +326,30 @@ on fluffycachy may run isolated platform-neutral Cargo/Postgres leaves
 has repo-local Postgres, and shares no writable database with another run.
 That is extra evidence beside Darwin push/sprint/full.
 
+### 8. Select assertion-bearing Cargo targets — delivered 2026-08-28
+
+- A workspace-wide `cargo test --workspace --doc -- --list` inventory found zero
+  doctests in every package. Workspace Clippy remains the compilation authority;
+  proof leaves no longer invoke rustdoc merely to rediscover an empty corpus.
+- All 22 `cargo test` leaves declare `assertion_targets`. Their argv selects the
+  exact library, binary, or integration targets that contain test declarations.
+  The manifest contract resolves the declarations through live Cargo metadata,
+  rejects missing targets, rejects broad package discovery, and rejects a
+  selected target whose source contains no Rust, Tokio, or SQLx test declaration.
+- `cargo:database-schema` selects only `database_authority`. The public-platform
+  bundle selects the assertion-bearing `attention`, `social`, and `trust_safety`
+  libraries; zero-test `forum` and `content_reference` targets are dormant.
+  Equivalent exact selection removes empty library, binary, and rustdoc work
+  from projections, operator proof, API, server, and the other Cargo leaves
+  without removing an assertion.
+- `profile_application` has no tests, so its standalone 43.7-second proof leaf
+  is deleted. A contract proves that profile changes still arm strict workspace
+  Clippy plus the projections and identity closures.
+- The completed semantic audit, minimizer, principal, game-persona, profile
+  handle, and profile application areas are frozen. Direct edits still re-arm
+  their lanes and every full sweep still includes the semantic audit; unrelated
+  sprint sweeps no longer inherit its 7–9 minute cost.
+
 ## Acceptance Criteria
 
 - Full selection contains only leaf work and executes no test body twice.

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -41,6 +42,59 @@ const packageScripts = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 
 const timingBaseline = JSON.parse(
   readFileSync(join(REPO_ROOT, 'docs', 'ops', 'proof-lane-timings.json'), 'utf8'),
 );
+const cargoMetadata = JSON.parse(
+  execFileSync('cargo', ['metadata', '--no-deps', '--format-version', '1'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  }),
+);
+
+function cargoTestArguments(lane) {
+  const argv = lane.execution.argv;
+  const cargoIndex = argv.findIndex(
+    (argument, index) => argument === 'cargo' && argv[index + 1] === 'test',
+  );
+  if (cargoIndex === -1) return null;
+  const cargoArguments = argv.slice(cargoIndex + 2);
+  const harnessSeparator = cargoArguments.indexOf('--');
+  return harnessSeparator === -1 ? cargoArguments : cargoArguments.slice(0, harnessSeparator);
+}
+
+function selectedCargoAssertionTargets(arguments_) {
+  const packages = [];
+  for (let index = 0; index < arguments_.length; index += 1) {
+    if (arguments_[index] === '-p' || arguments_[index] === '--package') {
+      packages.push(arguments_[index + 1]);
+      index += 1;
+    }
+  }
+  const selected = [];
+  for (let index = 0; index < arguments_.length; index += 1) {
+    if (arguments_[index] === '--lib') {
+      selected.push(...packages.map((packageName) => `${packageName}/lib`));
+    } else if (arguments_[index] === '--test' || arguments_[index] === '--bin') {
+      assert.equal(packages.length, 1, `${arguments_[index]} requires one manifest package`);
+      selected.push(`${packages[0]}/${arguments_[index].slice(2)}/${arguments_[index + 1]}`);
+      index += 1;
+    }
+  }
+  return selected;
+}
+
+function assertionSourceFiles(packageMetadata, kind, name) {
+  const target = packageMetadata.targets.find(
+    (candidate) => candidate.kind.includes(kind) && (kind === 'lib' || candidate.name === name),
+  );
+  assert.ok(target, `${packageMetadata.name}/${kind}/${name ?? ''} must exist in Cargo metadata`);
+  if (kind === 'lib') {
+    return globSync(join(dirname(packageMetadata.manifest_path), 'src', '**', '*.rs'))
+      .filter((path) => !path.includes('/src/bin/'));
+  }
+  if (kind === 'test' && basename(target.src_path) === 'main.rs') {
+    return globSync(join(dirname(target.src_path), '**', '*.rs'));
+  }
+  return [target.src_path];
+}
 
 test('tracked timing baselines cover every current manifest lane exactly', () => {
   assert.deepEqual(
@@ -617,6 +671,90 @@ test('manifest lanes are executable leaves, while human aggregate aliases stay o
     assert.ok(packageScripts[alias], `human aggregate alias ${alias} must remain available`);
     assert.ok(!declared.has(alias), `aggregate alias ${alias} must not be a manifest leaf`);
   }
+});
+
+test('Cargo test lanes select only inventoried assertion-bearing targets', () => {
+  const packages = new Map(cargoMetadata.packages.map((packageMetadata) => [
+    packageMetadata.name,
+    packageMetadata,
+  ]));
+  const testDeclaration = /#\[(?:(?:tokio|sqlx)::)?test(?:\([^\]]*\))?\]/;
+  let cargoLaneCount = 0;
+
+  for (const [laneId, lane] of Object.entries(manifest.lanes)) {
+    const arguments_ = cargoTestArguments(lane);
+    if (!arguments_) continue;
+    cargoLaneCount += 1;
+    const selected = selectedCargoAssertionTargets(arguments_);
+    assert.ok(selected.length > 0, `${laneId} must not use broad Cargo target discovery`);
+    assert.deepEqual(
+      lane.assertion_targets,
+      selected,
+      `${laneId} assertion inventory must exactly match its Cargo selectors`,
+    );
+
+    for (const targetId of selected) {
+      const [packageName, kind, name] = targetId.split('/');
+      const packageMetadata = packages.get(packageName);
+      assert.ok(packageMetadata, `${laneId} references unknown package ${packageName}`);
+      const sources = assertionSourceFiles(packageMetadata, kind, name);
+      assert.ok(
+        sources.some((path) => testDeclaration.test(readFileSync(path, 'utf8'))),
+        `${laneId} selects zero-test target ${targetId}`,
+      );
+    }
+  }
+
+  assert.equal(cargoLaneCount, 22, 'every current cargo test lane must be inventoried');
+  assert.equal(manifest.lanes['cargo:profile-application'], undefined);
+});
+
+test('profile compilation is covered downstream without a zero-test proof leaf', () => {
+  const profileArea = manifest.areas.find((area) => area.id === 'crate:profile-application');
+  assert.equal(profileArea.tier, 'frozen');
+  assert.deepEqual(profileArea.lanes, ['cargo:clippy-workspace']);
+  assert.deepEqual(profileArea.also_triggers, ['crate:projections', 'crate:identity']);
+
+  const selection = selectLanes({
+    changed: ['crates/profile_application/src/lib.rs'],
+    manifest,
+    crateGraph: workspaceCrateGraph(),
+  });
+  for (const laneId of ['cargo:clippy-workspace', 'cargo:projections', 'cargo:identity']) {
+    assert.ok(selection.laneIds.includes(laneId), `profile changes must retain ${laneId}`);
+  }
+  assert.ok(!selection.laneIds.includes('cargo:profile-application'));
+});
+
+test('completed semantic, minimizer, principal, persona, and profile surfaces are touched-only', () => {
+  const frozenIds = [
+    'commands:semantic-audit',
+    'operator-proof:minimizer',
+    'crate:principal',
+    'crate:game-persona-application',
+    'crate:profile-handle-index',
+    'crate:profile-application',
+  ];
+  for (const areaId of frozenIds) {
+    const area = manifest.areas.find((candidate) => candidate.id === areaId);
+    assert.equal(area.tier, 'frozen', `${areaId} must stay out of unrelated sprint sweeps`);
+    assert.ok(area.capabilities?.length > 0, `${areaId} must cite completed capabilities`);
+  }
+
+  const sprint = selectLanes({
+    changed: ['frontend/src/routes/auth/login/+page.svelte'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'sprint',
+  });
+  assert.ok(!sprint.laneIds.includes('cargo:commands-audit'));
+  const full = selectLanes({
+    changed: ['frontend/src/routes/auth/login/+page.svelte'],
+    manifest,
+    crateGraph: FIXTURE_GRAPH,
+    mode: 'full',
+  });
+  assert.ok(full.laneIds.includes('cargo:commands-audit'));
 });
 
 test('specialized release claims consume broad Cargo evidence without repeating test bodies', () => {

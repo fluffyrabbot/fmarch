@@ -396,13 +396,6 @@
       "status": 0,
       "method": "promoted-full-observation"
     },
-    "cargo:profile-application": {
-      "seconds": 43.7,
-      "measured_at": "2026-08-27T20:00:35.192Z",
-      "command": "cargo test -p profile_application -- --test-threads=1",
-      "status": 0,
-      "method": "promoted-full-observation"
-    },
     "test:public-search-role-proof": {
       "seconds": 10.3,
       "measured_at": "2026-08-27T20:00:35.192Z",
