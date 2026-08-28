@@ -11,12 +11,6 @@ import {
 export {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
-  devTestGameHostedIdentityCompleteAdminProofCommand,
-  devTestGameHostedIdentityCompleteAdminProofPath,
-  devTestGameHostedIdentityCompleteEvidencePath,
-  devTestGameHostedIdentityPartialAdminProofCommand,
-  devTestGameHostedIdentityPartialAdminProofPath,
-  devTestGameHostedIdentityPartialEvidencePath,
   devTestGameHostedIdentityOperatorAdminProofCommand,
   devTestGameHostedIdentityOperatorAdminProofPath,
   devTestGameHostedIdentityOperatorEvidencePath,

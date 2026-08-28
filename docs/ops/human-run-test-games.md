@@ -318,16 +318,9 @@ npm run test:dev-test-game-hosted-identity-evidence-admin-proof
 npm run test:dev-test-game-hosted-identity-operator-admin-proof
 ```
 
-**Deprecated aliases** (kept for existing callers; do not add more of this
-shape—see [proof-product-freeze](proof-product-freeze.md)):
-
-- `npm run test:dev-test-game-hosted-identity-partial-admin-proof` — deprecated
-  alias of the progression/evidence admin-proof path (thin re-export).
-- `npm run test:dev-test-game-hosted-identity-complete-admin-proof` — deprecated
-  alias of the evidence/operator admin-proof path (all-families redacted packet
-  through the evidence admin proof).
-
-Prefer the evidence and operator commands above.
+The former partial/complete admin-proof aliases were retired. Use the named
+progression, evidence, or operator command above; each now identifies the exact
+predicate it proves.
 
 Those progression admin proofs are local role-surface checks. They prove the
 seeded admin detail can show the specific missing redacted packet and the

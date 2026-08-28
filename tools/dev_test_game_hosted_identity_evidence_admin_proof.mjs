@@ -11,10 +11,6 @@ import {
   buildDevTestGameHostedIdentityProgressionSummary,
 } from "./dev_test_game_hosted_identity_progression_summary.mjs";
 import {
-  devTestGameHostedIdentityCompleteAdminProofPath,
-  devTestGameHostedIdentityCompleteEvidencePath,
-  devTestGameHostedIdentityPartialAdminProofPath,
-  devTestGameHostedIdentityPartialEvidencePath,
   devTestGameHostedIdentityEvidenceAdminProofPath,
   devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidencePlaceholderFixturePath,
@@ -79,14 +75,6 @@ const evidencePath = path.join(
   repoRoot,
   devTestGameHostedIdentityEvidenceAdminProofPath,
 );
-export const hostedIdentityEvidencePartialPath =
-  devTestGameHostedIdentityPartialEvidencePath;
-export const hostedIdentityEvidencePartialAdminProofPath =
-  devTestGameHostedIdentityPartialAdminProofPath;
-export const hostedIdentityEvidenceCompletePath =
-  devTestGameHostedIdentityCompleteEvidencePath;
-export const hostedIdentityEvidenceCompleteAdminProofPath =
-  devTestGameHostedIdentityCompleteAdminProofPath;
 const requiredRelatedLinks = ["local-identity-adapter", "local-next-action"];
 
 function hostedIdentityPacketSectionRows(hostedIdentityEvidence) {
@@ -527,51 +515,6 @@ export function hostedIdentityEvidenceAdminProofCase({
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   await runAdminAuditProof(hostedIdentityEvidenceAdminProofCase());
-}
-
-export async function writeHostedIdentityPartialOperatorAdminProof() {
-  await writeHostedIdentityProgressionAdminProof({
-    progressionId: "account-recovery",
-    evidencePath: hostedIdentityEvidencePartialPath,
-    proofPath: hostedIdentityEvidencePartialAdminProofPath,
-    smokeName: "dev-test-game-hosted-identity-partial-admin-proof",
-    stage: "hosted-identity-partial-admin-proof-listen",
-  });
-}
-
-export async function writeHostedIdentityCompleteAdminProof() {
-  const completeEvidencePath = path.resolve(
-    repoRoot,
-    hostedIdentityEvidenceCompletePath,
-  );
-  const completeAdminProofPath = path.resolve(
-    repoRoot,
-    hostedIdentityEvidenceCompleteAdminProofPath,
-  );
-  const completeEvidence = await buildDevTestGameHostedIdentityEvidence({
-    env: {
-      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
-        hostedIdentityEvidenceRedactedPassFixturePath,
-    },
-  });
-  if (
-    completeEvidence.status !== "passed" ||
-    completeEvidence.target?.redactedIntakePacket?.providedSectionCount !== 6 ||
-    completeEvidence.target?.redactedIntakePacket?.sectionCount !== 6 ||
-    completeEvidence.releaseReady !== false ||
-    completeEvidence.productionReady !== false
-  ) {
-    throw new Error("complete hosted identity evidence packet did not pass locally");
-  }
-  await writeEvidenceArtifact(completeEvidencePath, completeEvidence);
-  await runAdminAuditProof(
-    hostedIdentityEvidenceAdminProofCase({
-      sourcePath: completeEvidencePath,
-      proofPath: completeAdminProofPath,
-      smokeName: "dev-test-game-hosted-identity-complete-admin-proof",
-      stage: "hosted-identity-complete-admin-proof-listen",
-    }),
-  );
 }
 
 export async function writeHostedIdentityProgressionAdminProof({

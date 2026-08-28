@@ -4,8 +4,9 @@ Local proof lanes, artifacts, and diagnostics are **developer harness**, not a
 product surface. Hosted readiness is gated only by real externally captured
 packets and release evidence—not by growing more local admin-proof metadata.
 
-This freeze is the bounded Wave 3 cut for operator/proof-graph sprawl. It does
-not remove existing proof lanes or scripts; it stops productizing them further.
+This freeze is the bounded Wave 3 cut for operator/proof-graph sprawl. It keeps
+truthful proof lanes while removing aliases and local-only product-shaped
+surfaces that do not change a release decision.
 
 ## Ban list
 
@@ -31,15 +32,12 @@ Still allowed and expected:
 - Local diagnostics, spine/graph/next-action tooling, and seeded admin role
   proofs that remain explicitly local predicates.
 
-## Concrete collapse (aliases)
+## Retired aliases
 
-These npm scripts and entry modules remain for existing callers but are
-**deprecated aliases**—prefer the evidence and operator commands:
-
-| Deprecated | Prefer |
-|---|---|
-| `test:dev-test-game-hosted-identity-partial-admin-proof` | progression / evidence admin-proof family (`test:dev-test-game-hosted-identity-progression-admin-proof` or `test:dev-test-game-hosted-identity-evidence-admin-proof`) |
-| `test:dev-test-game-hosted-identity-complete-admin-proof` | `test:dev-test-game-hosted-identity-evidence-admin-proof` (full redacted packet) / `test:dev-test-game-hosted-identity-operator-admin-proof` for the operator predicate |
+The former `hosted-identity-partial-admin-proof` and
+`hosted-identity-complete-admin-proof` npm scripts and entry modules are
+removed. The progression, evidence, and operator commands are the only named
+interfaces for those distinct predicates.
 
 See [human-run-test-games](human-run-test-games.md) for the hosted-identity
 command set.

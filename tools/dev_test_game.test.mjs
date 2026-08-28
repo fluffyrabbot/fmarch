@@ -418,9 +418,6 @@ import {
 import {
   assertDevTestGameHostedIdentityEvidence,
   buildDevTestGameHostedIdentityEvidence,
-  devTestGameHostedIdentityCompleteAdminProofCommand,
-  devTestGameHostedIdentityCompleteAdminProofPath,
-  devTestGameHostedIdentityCompleteEvidencePath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityOperatorAdminProofCommand,
@@ -1386,26 +1383,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.deepEqual(localSpineProofEnvironment({}), { FMARCH_DEV_AUTH: "1" });
   assert.throws(() => parseLocalSpineArgs(["--script"]), /requires/);
   assert.equal(
-    packageJson.scripts[
-      "test:dev-test-game-hosted-identity-partial-admin-proof"
-    ],
-    "node tools/dev_test_game_hosted_identity_partial_admin_proof.mjs",
-  );
-  assert.equal(
-    packageJson.scripts[devTestGameHostedIdentityCompleteAdminProofCommand],
-    "node tools/dev_test_game_hosted_identity_complete_admin_proof.mjs",
-  );
-  assert.equal(
     packageJson.scripts[devTestGameHostedIdentityOperatorAdminProofCommand],
     "node tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
-  );
-  assert.equal(
-    devTestGameHostedIdentityCompleteEvidencePath,
-    "target/dev-test-game/hosted-identity-evidence-complete.json",
-  );
-  assert.equal(
-    devTestGameHostedIdentityCompleteAdminProofPath,
-    "target/dev-test-game/hosted-identity-evidence-complete-admin-proof.json",
   );
   assert.equal(
     devTestGameHostedIdentityOperatorEvidencePath,
@@ -1495,11 +1474,6 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert(
     operatorDocs.includes(
       `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
-    ),
-  );
-  assert(
-    operatorDocs.includes(
-      `npm run ${devTestGameHostedIdentityCompleteAdminProofCommand}`,
     ),
   );
   assert(
@@ -5193,7 +5167,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     hostedIdentityProofGraphEdges,
   );
   const completedHostedIdentityOperatorProof =
-    hostedIdentityCompleteAdminProofFixture();
+    hostedIdentityPassedAdminProofFixture();
   completedHostedIdentityOperatorProof.generatedFrom.hostedIdentityEvidence =
     devTestGameHostedIdentityOperatorEvidencePath;
   completedHostedIdentityOperatorProof.generatedFrom.proofArtifact =
@@ -20683,9 +20657,6 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedIdentityEvidenceAdminProofPath:
       "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
     hostedIdentityEvidenceAdminProof: hostedIdentityEvidenceAdminProofFixture(),
-    hostedIdentityCompleteAdminProofPath:
-      devTestGameHostedIdentityCompleteAdminProofPath,
-    hostedIdentityCompleteAdminProof: hostedIdentityCompleteAdminProofFixture(),
     hostedIdentityProgressionSummaryPath:
       devTestGameHostedIdentityProgressionSummaryPath,
     hostedIdentityProgressionSummary:
@@ -20769,27 +20740,6 @@ test("session card and markdown include role credential URLs and tokens", async 
       hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
     ]),
   );
-  const hostedIdentityCompleteCheck =
-    identityReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-hosted-identity-complete-redacted-packet",
-    );
-  assert.equal(hostedIdentityCompleteCheck.status, "passed");
-  assert.equal(
-    hostedIdentityCompleteCheck.evidence,
-    devTestGameHostedIdentityCompleteAdminProofPath,
-  );
-  assert.equal(hostedIdentityCompleteCheck.rawEvidencePathKind, "fixture");
-  assert.equal(
-    hostedIdentityCompleteCheck.rawEvidencePath,
-    hostedIdentityEvidenceRedactedPassFixturePath,
-  );
-  assert.equal(hostedIdentityCompleteCheck.releaseReady, false);
-  assert.equal(hostedIdentityCompleteCheck.productionReady, false);
-  assert.deepEqual(hostedIdentityCompleteCheck.hostedIdentityPacketSummaryStatuses, {
-    status: "provided\n6/6 sections provided\n0 sections missing",
-    inputs: "16/16 inputs provided\n0 inputs missing",
-    "redacted-refs": "6 redacted refs",
-  });
   assert.equal(
     identityReadiness.releaseReadiness.unproven.some(
       (item) => item.id === "hosted-production-identity" && item.status === "unproven",
@@ -28118,7 +28068,7 @@ function hostedIdentityEvidenceAdminProofFixture() {
   };
 }
 
-function hostedIdentityCompleteAdminProofFixture() {
+function hostedIdentityPassedAdminProofFixture() {
   const proof = JSON.parse(JSON.stringify(hostedIdentityEvidenceAdminProofFixture()));
   const packetSummaryRows = [
     {
@@ -28141,10 +28091,9 @@ function hostedIdentityCompleteAdminProofFixture() {
         status: "provided",
       })),
   );
-  proof.proofBoundary =
-    "Local admin hosted identity complete redacted packet proof only.";
+  proof.proofBoundary = "Local admin hosted identity redacted packet proof only.";
   proof.generatedFrom.hostedIdentityEvidence =
-    "target/dev-test-game/hosted-identity-evidence-complete.json";
+    devTestGameHostedIdentityEvidencePath;
   proof.generatedFrom.status = "passed";
   proof.generatedFrom.rawEvidenceStatus = "passed";
   proof.generatedFrom.rawEvidencePath =

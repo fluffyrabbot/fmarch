@@ -70,8 +70,6 @@
     "test:dev-test-game-identity-admin-proof": "node tools/dev_test_game_identity_admin_proof.mjs",
     "test:dev-test-game-hosted-identity-evidence": "node tools/dev_test_game_hosted_identity_evidence.mjs",
     "test:dev-test-game-hosted-identity-evidence-admin-proof": "node tools/dev_test_game_hosted_identity_evidence_admin_proof.mjs",
-    "test:dev-test-game-hosted-identity-partial-admin-proof": "node tools/dev_test_game_hosted_identity_partial_admin_proof.mjs",
-    "test:dev-test-game-hosted-identity-complete-admin-proof": "node tools/dev_test_game_hosted_identity_complete_admin_proof.mjs",
     "test:dev-test-game-hosted-identity-operator-admin-proof": "node tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
     "test:dev-test-game-hosted-identity-progression-admin-proof": "node tools/dev_test_game_hosted_identity_progression_admin_proof.mjs",
     "test:dev-test-game-hosted-identity-progression-admin-proof:batch": "node tools/dev_test_game_hosted_identity_progression_admin_proof_batch.mjs",

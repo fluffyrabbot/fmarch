@@ -3,9 +3,6 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   buildHostedIdentityEvidenceFixtureSnapshot,
-  devTestGameHostedIdentityCompleteAdminProofCommand,
-  devTestGameHostedIdentityCompleteAdminProofPath,
-  devTestGameHostedIdentityCompleteEvidencePath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityOperatorAdminProofCommand,
@@ -66,20 +63,8 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     "test:dev-test-game-hosted-identity-progression-admin-proof",
   );
   assert.equal(
-    devTestGameHostedIdentityCompleteAdminProofCommand,
-    "test:dev-test-game-hosted-identity-complete-admin-proof",
-  );
-  assert.equal(
     devTestGameHostedIdentityOperatorAdminProofCommand,
     "test:dev-test-game-hosted-identity-operator-admin-proof",
-  );
-  assert.equal(
-    devTestGameHostedIdentityCompleteEvidencePath,
-    "target/dev-test-game/hosted-identity-evidence-complete.json",
-  );
-  assert.equal(
-    devTestGameHostedIdentityCompleteAdminProofPath,
-    "target/dev-test-game/hosted-identity-evidence-complete-admin-proof.json",
   );
   assert.equal(
     devTestGameHostedIdentityOperatorEvidencePath,

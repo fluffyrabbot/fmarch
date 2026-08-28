@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
-  devTestGameHostedIdentityCompleteAdminProofPath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceFixturePaths,
@@ -25,7 +24,6 @@ import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
   hostedIdentityEvidencePathKind,
-  hostedIdentityEvidenceSatisfiesCompleteLocalPacket,
   hostedIdentityEvidenceSatisfiesProductionIdentity,
   releaseReadinessBuildableItemForId,
   releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
@@ -243,21 +241,6 @@ test("release readiness keeps hosted identity fixture evidence out of release tr
     rawEvidencePath: hostedIdentityEvidenceRedactedPassFixturePath,
     fixtureEvidence: true,
   };
-  const completeLocalHostedIdentityEvidence = {
-    status: "passed",
-    evidenceStatus: "passed",
-    rawEvidenceStatus: "passed",
-    path: devTestGameHostedIdentityCompleteAdminProofPath,
-    rawEvidencePath: hostedIdentityEvidenceRedactedPassFixturePath,
-    fixtureEvidence: true,
-    hostedIdentityPacketSummaryStatuses: {
-      status: "provided\n6/6 sections provided\n0 sections missing",
-      inputs: "16/16 inputs provided\n0 inputs missing",
-      "redacted-refs": "6 redacted refs",
-    },
-    releaseReady: false,
-    productionReady: false,
-  };
   const operatorHostedIdentityEvidence = {
     evidenceStatus: "passed",
     rawEvidenceStatus: "passed",
@@ -300,24 +283,6 @@ test("release readiness keeps hosted identity fixture evidence out of release tr
       operatorHostedIdentityEvidence,
     ),
     true,
-  );
-  assert.equal(
-    hostedIdentityEvidenceSatisfiesCompleteLocalPacket(
-      fixtureHostedIdentityEvidence,
-    ),
-    false,
-  );
-  assert.equal(
-    hostedIdentityEvidenceSatisfiesCompleteLocalPacket(
-      completeLocalHostedIdentityEvidence,
-    ),
-    true,
-  );
-  assert.equal(
-    hostedIdentityEvidenceSatisfiesProductionIdentity(
-      completeLocalHostedIdentityEvidence,
-    ),
-    false,
   );
 
   assert(
