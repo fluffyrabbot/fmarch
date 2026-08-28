@@ -8,6 +8,23 @@ local proof databases, and the role-smoke/visual artifact handoff delivered
 2026-08-20; runner-scoped mutable npm proof leaves and canonical spine-leaf
 reuse delivered 2026-08-23.
 
+### Semantic-audit shard no-go — 2026-08-27
+
+The 140 leftover `host_resolve` cases were assigned to four deterministic,
+duration-balanced SQLx shards after two warm serial baselines of 648.0s and
+615.8s (631.9s median). Two same-commit warm shard executions both passed the
+complete corpus without a flaky result, at 672.88s and 577.97s (625.43s
+median). That is a 1.02% median improvement, below the required 15% promotion
+gate of 537.12s.
+
+The test-harness trace showed the long residual semantic tests occupying worker
+slots while the four shard bodies entered serially. The lane's critical path
+therefore was not the isolated 140-case tail. The shard assignment and
+four-database topology were removed as a measured no-go; stable case IDs, the
+140-case completeness contract, serial baseline data, and per-case timing
+artifacts remain. Any future optimization must profile the residual critical
+path before proposing another topology change.
+
 ## Delivered foundation
 
 The manifest now contains executable leaves only. The human-facing

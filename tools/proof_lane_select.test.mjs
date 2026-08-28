@@ -177,7 +177,7 @@ test('command audit is a dedicated exact-size integration target', () => {
 
   assert.equal([...ordinarySource.matchAll(testAttribute)].length, 107);
   assert.equal([...auditSource.matchAll(testAttribute)].length, 29);
-  assert.equal([...witnessSource.matchAll(testAttribute)].length, 3);
+  assert.equal([...witnessSource.matchAll(testAttribute)].length, 4);
   assert.ok(!ordinarySource.includes('#[ignore'));
   assert.ok(!auditSource.includes('#[ignore'));
   assert.ok(!witnessSource.includes('#[ignore'));
@@ -570,7 +570,7 @@ test('migrated mutable proof leaves consume runner-owned database and artifact r
   ]);
 });
 
-test('semantic audit shards retain 140 stable cases with deterministic isolated ownership', () => {
+test('semantic audit retains 140 stable timed cases after the shard no-go', () => {
   const baseline = JSON.parse(
     readFileSync(
       join(REPO_ROOT, 'crates', 'commands', 'tests', 'semantic_audit', 'serial_case_baseline.json'),
@@ -583,35 +583,14 @@ test('semantic audit shards retain 140 stable cases with deterministic isolated 
   assert.equal(new Set(ids).size, 140, 'semantic case IDs must be unique');
   assert.ok(baseline.cases.every((entry) => Number.isInteger(entry.milliseconds) && entry.milliseconds > 0));
 
-  const ordered = [...baseline.cases].sort(
-    (left, right) => right.milliseconds - left.milliseconds || left.id.localeCompare(right.id),
-  );
-  const loads = [0, 0, 0, 0];
-  const ownership = new Map();
-  for (const entry of ordered) {
-    const shard = loads.reduce(
-      (best, load, candidate) =>
-        load < loads[best] || (load === loads[best] && candidate < best) ? candidate : best,
-      0,
-    );
-    ownership.set(entry.id, shard);
-    loads[shard] += entry.milliseconds;
-  }
-  assert.equal(ownership.size, 140);
-  assert.ok(Math.max(...loads) - Math.min(...loads) <= 1_000, `unbalanced semantic shards: ${loads}`);
-
   const source = readFileSync(
     join(REPO_ROOT, 'crates', 'commands', 'tests', 'semantic_audit', 'golden_witness.rs'),
     'utf8',
   );
-  for (let shard = 0; shard < 4; shard += 1) {
-    assert.match(
-      source,
-      new RegExp(`semantic_shard_test!\\(leftover_host_resolve_phase_cases_shard_${shard}, ${shard}\\)`),
-      `semantic shard ${shard} must be a distinct sqlx::test database owner`,
-    );
-  }
-  assert.doesNotMatch(source, /share_one_migrated_database/);
+  assert.match(source, /leftover_host_resolve_phase_cases_share_one_migrated_database/);
+  assert.match(source, /FMARCH_SEMANTIC_CASE\\t\{\}\\tserial\\t\{\}/);
+  assert.match(source, /semantic-serial-case-timings\.json/);
+  assert.doesNotMatch(source, /semantic_shard_test|leftover_host_resolve_assignments/);
   for (const id of ids) assert.match(source, new RegExp(`\\b${id}\\b`));
 });
 
