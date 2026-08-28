@@ -8,6 +8,35 @@ local proof databases, and the role-smoke/visual artifact handoff delivered
 2026-08-20; runner-scoped mutable npm proof leaves and canonical spine-leaf
 reuse delivered 2026-08-23.
 
+### Full-sweep resource experiment — 2026-08-27
+
+Two clean, same-commit Darwin full sweeps passed all 62 manifest lanes at
+`95d1a1ae45e04b036e3cb31af4b89bf97160ffe1`. The default jobs=1 run
+(`run-20260828005214939-66886253`) completed in 2,229.80s with 1.152 GiB peak
+RSS, zero swaps, and 92.11% aggregate CPU use. The opt-in jobs=2 run
+(`run-20260828012938699-7b61e8c8`) completed in 1,920.56s with 0.972 GiB peak
+RSS, zero swaps, and 90.38% aggregate CPU use. That observed wall-clock delta
+is 309.24s, or 13.87%.
+
+The jobs=2 receipt exercised compatible Node/browser work beside one Cargo
+lane while the `cargo-target` resource continued to exclude overlapping
+Cargo/rustc closures. PostgreSQL administration, disposable databases, and
+run-scoped artifact ownership also remained isolated. The 131-case commands
+PostgreSQL lane passed in 98.34s and the complete semantic audit passed in
+525.05s, including all 140 stable serial case IDs.
+
+These runs were sequential, so jobs=2 inherited the warmer Cargo target left
+by jobs=1. The Cargo evidence wrappers make that visible: aggregate
+compile/discovery time for the server, media, and API producers fell from
+369.0s in jobs=1 to 2.0s in jobs=2, while their observed test-body time changed
+from 197.8s to 224.8s. The 13.87% result is therefore end-to-end evidence for
+these two runs, not an isolated scheduler-only speedup claim. Serial remains
+the canonical default. Promotion of jobs=2 still requires a second independent
+clean full sweep showing at least 10% wall-time improvement, zero swaps, and
+peak RSS below 20 GiB. The machine-readable observation is tracked in
+`docs/ops/proof-lane-full-experiment-2026-08-27.json`; ignored receipts remain
+the authoritative per-lane execution evidence.
+
 ### Semantic-audit shard no-go — 2026-08-27
 
 The 140 leftover `host_resolve` cases were assigned to four deterministic,
@@ -34,8 +63,9 @@ lanes are represented directly in the manifest. Selection deduplicates by a
 canonical execution key after cost ordering, and the manifest contract rejects
 an npm leaf that invokes another declared leaf.
 
-The remaining work packages below are intentionally narrowed: selective resume
-and measured expansion beyond the initial conservative resource capacities.
+The work packages below record the delivered architecture and the remaining
+measured decision: whether an independent jobs=2 experiment justifies changing
+the serial default.
 
 ### Mash-scale timing observation — 2026-08-23
 
@@ -89,14 +119,15 @@ longer declares are pruned on load.
 
 The proof selector now has a sound path-to-leaf model, a fast ordinary push
 path, physically separate ordinary and semantic-audit command targets, and
-runner-owned mutable npm leaves. The remaining resource-model work is:
+runner-owned mutable npm leaves. The resource-model result is:
 
 - Manifest-scheduled mutable npm leaves receive injected disposable databases
   and run-scoped artifact directories. The backup/restore drill owns separately
   named source and restore leases; aggregate compatibility aliases retain their
   self-managed scratch lifecycle only outside the canonical runner.
-- The tracked baseline covers every lane, while checkpoint/resume support and
-  evidence-backed expansion of conservative resource capacities remain open.
+- The tracked baseline covers every lane, checkpoint/resume is commit-safe, and
+  the first jobs=2 full experiment passed without weakening conservative
+  capacity-one Cargo and Postgres administration resources.
 
 The desired shape is a manifest-owned DAG of independently executable leaf
 lanes. Aggregates remain useful user-facing aliases, but they must not appear as
@@ -291,13 +322,15 @@ That is extra evidence beside Darwin push/sprint/full.
 - After one measured full sweep, all lane timings are populated and the full
   wall-clock target is documented from evidence rather than guessed.
 
-## Recommended Implementation Order
+## Recommended Followup
 
-1. Add `--only` and commit-safe `--resume` on top of the existing receipt
-   schema.
-2. Run a measured Darwin jobs=2 full sweep, then raise only capacities supported
-   by the receipt evidence.
-3. Simplify compatibility npm aliases that are no longer operationally useful.
+1. Run a second independent clean jobs=1/jobs=2 comparison after clearing any
+   experiment-specific Cargo warmth equally for both arms.
+2. Promote jobs=2 only if that comparison independently improves wall time by
+   at least 10%, records zero swaps, and stays below 20 GiB peak RSS.
+3. Use the compile/discovery versus test-body evidence to choose one focused
+   compilation experiment if compilation exceeds 25% of the confirmed full
+   wall time; otherwise profile the slowest semantic-audit case family.
 
 ## Non-Goals
 

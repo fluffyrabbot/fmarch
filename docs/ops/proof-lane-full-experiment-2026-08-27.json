@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "kind": "fmarch-proof-lane-full-experiment",
+  "date": "2026-08-27",
+  "platform": "darwin",
+  "commit": "95d1a1ae45e04b036e3cb31af4b89bf97160ffe1",
+  "manifest_lane_count": 62,
+  "runs": [
+    {
+      "jobs": 1,
+      "receipt_id": "run-20260828005214939-66886253",
+      "receipt_schema": 3,
+      "receipt_state": "passed",
+      "clean": true,
+      "wall_seconds": 2229.8,
+      "user_seconds": 1504.28,
+      "system_seconds": 549.59,
+      "aggregate_cpu_percent": 92.11,
+      "maximum_resident_set_bytes": 1237221376,
+      "maximum_resident_set_gib": 1.152,
+      "swaps": 0,
+      "commands_pg_test_body_seconds": 98.39,
+      "semantic_audit_test_body_seconds": 561.61,
+      "cargo_evidence": {
+        "compile_and_discovery_seconds": 369.0,
+        "test_body_seconds": 197.8,
+        "lanes": [
+          "cargo:server",
+          "cargo:media",
+          "cargo:api"
+        ]
+      }
+    },
+    {
+      "jobs": 2,
+      "receipt_id": "run-20260828012938699-7b61e8c8",
+      "receipt_schema": 3,
+      "receipt_state": "passed",
+      "clean": true,
+      "wall_seconds": 1920.56,
+      "user_seconds": 1363.24,
+      "system_seconds": 372.62,
+      "aggregate_cpu_percent": 90.38,
+      "maximum_resident_set_bytes": 1044086784,
+      "maximum_resident_set_gib": 0.972,
+      "swaps": 0,
+      "commands_pg_test_body_seconds": 98.34,
+      "semantic_audit_test_body_seconds": 525.05,
+      "cargo_evidence": {
+        "compile_and_discovery_seconds": 2.0,
+        "test_body_seconds": 224.8,
+        "lanes": [
+          "cargo:server",
+          "cargo:media",
+          "cargo:api"
+        ]
+      }
+    }
+  ],
+  "comparison": {
+    "jobs_2_wall_seconds_saved": 309.24,
+    "jobs_2_wall_percent_improvement": 13.87,
+    "both_passed": true,
+    "both_zero_swap": true,
+    "scheduler_safety_observed": true,
+    "scheduler_only_speedup_claimed": false,
+    "caveat": "The jobs=2 run followed jobs=1 and inherited a warmer Cargo target.",
+    "default_jobs": 1,
+    "promotion_decision": "retain-serial-pending-independent-confirmation"
+  }
+}
