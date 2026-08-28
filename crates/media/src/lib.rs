@@ -548,7 +548,7 @@ impl MediaStore {
                 self.verify_store_attached()?;
                 Ok(status)
             }
-            Err(error) => Err(MediaError::Io(error.into())),
+            Err(error) => Err(MediaError::Io(error)),
         }
     }
 
