@@ -1423,7 +1423,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     packageJson.scripts[
       "test:dev-test-game-hosted-identity-progression-admin-proof"
     ],
-    "node tools/dev_test_game_hosted_identity_progression_admin_proof.mjs",
+    "node tools/dev_test_game_hosted_identity_evidence_admin_proof.mjs --progression",
   );
   assert.equal(
     devTestGameHostedIdentityProgressionAdminProofBatchCommand,

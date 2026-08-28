@@ -41,3 +41,8 @@ interfaces for those distinct predicates.
 
 See [human-run-test-games](human-run-test-games.md) for the hosted-identity
 command set.
+
+The complete retained/merge/retire classification is recorded in
+[admin-proof-inventory](admin-proof-inventory.md). Pure forwarding entrypoints
+are removed immediately; coupled meta-proof surfaces retire only as one atomic
+admin-route and readiness-registry change.

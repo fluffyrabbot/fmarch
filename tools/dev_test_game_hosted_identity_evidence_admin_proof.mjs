@@ -514,7 +514,16 @@ export function hostedIdentityEvidenceAdminProofCase({
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
-  await runAdminAuditProof(hostedIdentityEvidenceAdminProofCase());
+  const progressionFlag = process.argv.indexOf("--progression");
+  if (progressionFlag === -1) {
+    await runAdminAuditProof(hostedIdentityEvidenceAdminProofCase());
+  } else {
+    await writeHostedIdentityProgressionAdminProof({
+      progressionId:
+        process.env.FMARCH_HOSTED_IDENTITY_PROGRESSION_ID ??
+        process.argv[progressionFlag + 1],
+    });
+  }
 }
 
 export async function writeHostedIdentityProgressionAdminProof({
