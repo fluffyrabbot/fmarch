@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "kind": "fmarch-proof-lane-full-experiment",
   "date": "2026-08-27",
   "platform": "darwin",
@@ -67,5 +67,92 @@
     "caveat": "The jobs=2 run followed jobs=1 and inherited a warmer Cargo target.",
     "default_jobs": 1,
     "promotion_decision": "retain-serial-pending-independent-confirmation"
+  },
+  "independent_confirmation": {
+    "commit": "615bb79d297819235ec6f8578aa610ca5787f713",
+    "order": [
+      2,
+      1
+    ],
+    "precondition": "A clean exact-commit full serial sweep had just exercised every manifest lane; jobs=2 ran first and jobs=1 followed on the unchanged worktree.",
+    "runs": [
+      {
+        "jobs": 2,
+        "receipt_id": "run-20260828042753634-6e0a5764",
+        "receipt_schema": 3,
+        "receipt_state": "passed",
+        "clean": true,
+        "wall_seconds": 2118.86,
+        "user_seconds": 1621.87,
+        "system_seconds": 748.28,
+        "aggregate_cpu_percent": 111.86,
+        "maximum_resident_set_bytes": 1142030336,
+        "maximum_resident_set_gib": 1.064,
+        "swaps": 0,
+        "semantic_audit_test_body_seconds": 608.36,
+        "semantic_tail_seconds": 190.652,
+        "cargo_evidence": {
+          "compile_and_discovery_seconds": 294.2,
+          "test_body_seconds": 188.3,
+          "lanes": [
+            "cargo:server",
+            "cargo:media",
+            "cargo:api"
+          ]
+        },
+        "clippy_seconds": 170.2,
+        "semantic_audit_compile_seconds": 27.93
+      },
+      {
+        "jobs": 1,
+        "receipt_id": "run-20260828050325238-34fc76f8",
+        "receipt_schema": 3,
+        "receipt_state": "passed",
+        "clean": true,
+        "wall_seconds": 1903.5,
+        "user_seconds": 1468.76,
+        "system_seconds": 344.3,
+        "aggregate_cpu_percent": 95.25,
+        "maximum_resident_set_bytes": 988512256,
+        "maximum_resident_set_gib": 0.921,
+        "swaps": 0,
+        "semantic_audit_test_body_seconds": 648.62,
+        "semantic_tail_seconds": 199.955,
+        "cargo_evidence": {
+          "compile_and_discovery_seconds": 2.1,
+          "test_body_seconds": 188.8,
+          "lanes": [
+            "cargo:server",
+            "cargo:media",
+            "cargo:api"
+          ]
+        },
+        "clippy_seconds": 1.4,
+        "semantic_audit_compile_seconds": 0.49
+      }
+    ],
+    "comparison": {
+      "jobs_2_wall_seconds_slower": 215.36,
+      "jobs_2_wall_percent_slower": 11.31,
+      "both_passed": true,
+      "both_zero_swap": true,
+      "both_below_20_gib": true,
+      "scheduler_safety_observed": true,
+      "promotion_threshold_met": false,
+      "default_jobs": 1,
+      "promotion_decision": "retain-serial-confirmed"
+    },
+    "telemetry_decision": {
+      "jobs_2_cargo_compile_and_discovery_percent_of_wall": 13.89,
+      "jobs_2_cargo_plus_semantic_compile_percent_of_wall": 15.2,
+      "compilation_experiment_threshold_percent": 25,
+      "next_target": "semantic-audit-mafia-universe-family",
+      "semantic_tail_two_run_mean_seconds": 195.304,
+      "mafia_universe_case_count": 31,
+      "mafia_universe_two_run_mean_seconds": 68.163,
+      "mafia_universe_percent_of_semantic_tail": 34.9,
+      "slowest_repeatable_case": "host_resolve_phase_carries_mafia_universe_culture_aliases",
+      "slowest_repeatable_case_two_run_mean_seconds": 4.317
+    }
   }
 }

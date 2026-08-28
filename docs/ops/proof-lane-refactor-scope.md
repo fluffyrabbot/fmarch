@@ -37,6 +37,33 @@ peak RSS below 20 GiB. The machine-readable observation is tracked in
 `docs/ops/proof-lane-full-experiment-2026-08-27.json`; ignored receipts remain
 the authoritative per-lane execution evidence.
 
+#### Independent jobs=2 confirmation — no-go
+
+A counter-ordered confirmation on clean commit
+`615bb79d297819235ec6f8578aa610ca5787f713` ran jobs=2 first after a complete
+serial warm-up, then jobs=1 on the unchanged worktree. Both runs passed all 62
+lanes directly with zero swaps and peak RSS far below 20 GiB. Jobs=2
+(`run-20260828042753634-6e0a5764`) took 2,118.86s and 1.064 GiB peak RSS;
+jobs=1 (`run-20260828050325238-34fc76f8`) took 1,903.50s and 0.921 GiB peak
+RSS. Jobs=2 was 215.36s, or 11.31%, slower. The required independent 10%
+improvement did not occur, so serial is the confirmed default.
+
+The counter-order deliberately exposed cache sensitivity instead of hiding it.
+Jobs=2 paid 294.2s of compile/discovery across the server, media, and API
+evidence producers plus 27.93s before semantic-audit execution; jobs=1 paid
+2.1s and 0.49s respectively. Even in the slower arm those compile/discovery
+phases were 15.2% of wall time, below the 25% threshold for a compilation
+experiment. Clippy also varied from 170.2s to 1.4s, so the earlier apparent
+jobs=2 gain is not reproducible scheduler evidence.
+
+Semantic work remains the next target. The instrumented 140-case tail averaged
+195.304s across the confirmation pair. Its 31 Mafia Universe cases averaged
+68.163s, 34.9% of the tail, and
+`host_resolve_phase_carries_mafia_universe_culture_aliases` was the slowest
+repeatable case at a 4.317s two-run mean. Profile that case's setup commands,
+resolution, projection rebuild, and resolution-audit phases before changing
+topology or assertions.
+
 ### Semantic-audit shard no-go — 2026-08-27
 
 The 140 leftover `host_resolve` cases were assigned to four deterministic,
@@ -63,9 +90,9 @@ lanes are represented directly in the manifest. Selection deduplicates by a
 canonical execution key after cost ordering, and the manifest contract rejects
 an npm leaf that invokes another declared leaf.
 
-The work packages below record the delivered architecture and the remaining
-measured decision: whether an independent jobs=2 experiment justifies changing
-the serial default.
+The work packages below record the delivered architecture. The independent
+jobs=2 experiment is resolved as a measured no-go, so serial remains the
+default.
 
 ### Mash-scale timing observation — 2026-08-23
 
@@ -324,13 +351,15 @@ That is extra evidence beside Darwin push/sprint/full.
 
 ## Recommended Followup
 
-1. Run a second independent clean jobs=1/jobs=2 comparison after clearing any
-   experiment-specific Cargo warmth equally for both arms.
-2. Promote jobs=2 only if that comparison independently improves wall time by
-   at least 10%, records zero swaps, and stays below 20 GiB peak RSS.
-3. Use the compile/discovery versus test-body evidence to choose one focused
-   compilation experiment if compilation exceeds 25% of the confirmed full
-   wall time; otherwise profile the slowest semantic-audit case family.
+1. Add disposable stage timing around the Mafia Universe `culture_aliases`
+   case: setup command fan-out, phase resolution, projection rebuild, and
+   resolution audit.
+2. Capture two warm isolated executions and optimize only the dominant stage,
+   preserving the same assertions, fixtures, event envelopes, and rebuild
+   checks.
+3. Require at least a 15% median case improvement with identical results before
+   promoting the optimization, then confirm the complete 140-case tail and the
+   full semantic-audit lane twice.
 
 ## Non-Goals
 
