@@ -20,6 +20,14 @@ LOCK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(LOCK)
 
 
+def unregistered_environment(**updates: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env.pop("HOST_HEAVY_BUILD_LOCK_HELD", None)
+    env.pop("MESH_HEAVY_BUILD_LOCK_HELD", None)
+    env.update(updates)
+    return env
+
+
 class FakeProcess:
     def __init__(self) -> None:
         self.pid = 4242
@@ -33,11 +41,10 @@ class HeavyBuildLockTests(unittest.TestCase):
     def test_acquires_lock_and_marks_registered_child(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             lock_path = pathlib.Path(directory, "host.lock")
-            env = {
-                **os.environ,
-                "HOST_HEAVY_BUILD_LOCK_PATH": str(lock_path),
-                "HOST_ALLOW_UNREGISTERED_CARGO": "1",
-            }
+            env = unregistered_environment(
+                HOST_HEAVY_BUILD_LOCK_PATH=str(lock_path),
+                HOST_ALLOW_UNREGISTERED_CARGO="1",
+            )
             result = subprocess.run(
                 [
                     sys.executable,
@@ -60,11 +67,10 @@ class HeavyBuildLockTests(unittest.TestCase):
 
     def test_nested_registered_invocation_is_reentrant(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            env = {
-                **os.environ,
-                "HOST_HEAVY_BUILD_LOCK_PATH": str(pathlib.Path(directory, "host.lock")),
-                "HOST_ALLOW_UNREGISTERED_CARGO": "1",
-            }
+            env = unregistered_environment(
+                HOST_HEAVY_BUILD_LOCK_PATH=str(pathlib.Path(directory, "host.lock")),
+                HOST_ALLOW_UNREGISTERED_CARGO="1",
+            )
             result = subprocess.run(
                 [
                     sys.executable,
@@ -110,7 +116,11 @@ class HeavyBuildLockTests(unittest.TestCase):
             sys, "argv", [str(SCRIPT), "--", "registered-command"]
         ), mock.patch.dict(
             os.environ,
-            {"HOST_HEAVY_BUILD_LOCK_PATH": str(pathlib.Path(directory, "host.lock"))},
+            {
+                "HOST_HEAVY_BUILD_LOCK_PATH": str(pathlib.Path(directory, "host.lock")),
+                "HOST_HEAVY_BUILD_LOCK_HELD": "0",
+                "MESH_HEAVY_BUILD_LOCK_HELD": "0",
+            },
             clear=False,
         ), mock.patch.object(
             LOCK, "competing_builds", side_effect=[[], ["pid=99 command=cargo test"]]
