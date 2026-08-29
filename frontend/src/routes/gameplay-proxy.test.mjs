@@ -48,6 +48,41 @@ test("gameplay proxy forwards the canonical exact-game thread resource", async (
   assert.equal(calls[0].init.headers.authorization, "Bearer opaque-session");
 });
 
+test("gameplay proxy owns browser projection reads outside the page namespace", async () => {
+  for (const projection of [
+    "votecount",
+    "day-vote-outcomes",
+    "endgame-summary",
+  ]) {
+    const calls = [];
+    const request = new Request(
+      `https://app.example/api/gameplay/games/game-1/${projection}`,
+    );
+    const response = await GET({
+      cookies: { get: () => "opaque-session" },
+      fetch: async (url, init) => {
+        calls.push({ url: url.toString(), init });
+        return Response.json({ projection });
+      },
+      params: { path: `games/game-1/${projection}` },
+      request,
+      url: new URL(request.url),
+    });
+
+    assert.equal(response.status, 200, projection);
+    assert.equal(
+      calls[0].url,
+      `https://app.example/games/game-1/${projection}`,
+      projection,
+    );
+    assert.equal(
+      calls[0].init.headers.authorization,
+      "Bearer opaque-session",
+      projection,
+    );
+  }
+});
+
 test("gameplay proxy rejects legacy public-main thread aliases", async () => {
   for (const path of [
     "games/game-1/thread",

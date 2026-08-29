@@ -1,11 +1,17 @@
 import { buildAppShell } from "../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../lib/app/app-surface-header-model.mjs";
+import { serverApiBaseUrl } from "../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../lib/server/session-capabilities.mjs";
 
 const FILTERS = new Set(["all", "discussions", "profiles", "games"]);
 
 export async function load({ locals, cookies, fetch, url }) {
-  const token = accessTokenForRequest({ locals, cookies });
+  // Search is a public read. Only forward the browser session after the
+  // identity hook has resolved it; a stale cookie must degrade to anonymous
+  // search instead of turning a public surface into a 401-derived outage.
+  const token = typeof locals.principalId === "string"
+    ? accessTokenForRequest({ locals, cookies })
+    : null;
   const query = optionalText(url.searchParams.get("q"));
   const requestedFilter = optionalText(url.searchParams.get("filter")) ?? "all";
   const filter = FILTERS.has(requestedFilter) ? requestedFilter : "all";
@@ -47,7 +53,7 @@ export async function load({ locals, cookies, fetch, url }) {
 }
 
 async function loadSearchPage({ fetch, query, filter, cursor, token }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const search = new URLSearchParams({ q: query, filter, limit: "20" });
   if (cursor !== null) search.set("cursor", cursor);
   const response = await fetch(`${apiBaseUrl}/search?${search.toString()}`, {

@@ -1,8 +1,9 @@
 import { buildAppShell } from "../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../lib/app/app-surface-header-model.mjs";
+import { serverApiBaseUrl } from "../../lib/server/api-base.mjs";
 
 export async function load({ locals, fetch }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const response = await fetch(`${apiBaseUrl}/discussions/areas`);
   const areas = response.ok ? await response.json().catch(() => null) : null;
   return {

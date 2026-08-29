@@ -1014,9 +1014,10 @@ function fixtureData(overrides = {}) {
     },
     coldLoad: {
       threadEndpoint: "/api/gameplay/games/midsummer?limit=50",
-      votecountEndpoint: "/games/midsummer/votecount",
-      dayVoteOutcomesEndpoint: "/games/midsummer/day-vote-outcomes",
-      endgameSummaryEndpoint: "/games/midsummer/endgame-summary",
+      votecountEndpoint: "/api/gameplay/games/midsummer/votecount",
+      dayVoteOutcomesEndpoint:
+        "/api/gameplay/games/midsummer/day-vote-outcomes",
+      endgameSummaryEndpoint: "/api/gameplay/games/midsummer/endgame-summary",
       notificationsEndpoint: "/api/gameplay/games/midsummer/notifications",
       investigationResultsEndpoint: "/api/gameplay/games/midsummer/investigation-results",
       commandStateEndpoint: "/api/gameplay/games/midsummer/player-command-state?slot_id=slot-7",

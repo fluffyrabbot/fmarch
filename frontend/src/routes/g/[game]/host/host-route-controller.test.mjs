@@ -794,8 +794,9 @@ function fixtureData(overrides = {}) {
     session: { principalId: HOST_PRINCIPAL_ID },
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
-    hostVotecountEndpoint: "/games/midsummer/votecount",
-    dayVoteOutcomesEndpoint: "/games/midsummer/day-vote-outcomes",
+    hostVotecountEndpoint: "/api/gameplay/games/midsummer/votecount",
+    dayVoteOutcomesEndpoint:
+      "/api/gameplay/games/midsummer/day-vote-outcomes",
     hostPromptEndpoint: "/games/midsummer/host-prompts",
     authority: {
       principalId: HOST_PRINCIPAL_ID,

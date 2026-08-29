@@ -1,4 +1,5 @@
 import { error, fail, redirect } from "@sveltejs/kit";
+import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 export async function load({ locals, cookies, fetch }) {
@@ -71,7 +72,7 @@ export function _profileRevision(form) {
 export async function _profileRequest({ locals, cookies, fetch, path, method = "GET", body = null }) {
   const token = accessTokenForRequest({ locals, cookies });
   if (typeof token !== "string" || token.trim() === "") return new Response(null, { status: 401 });
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   return fetch(`${apiBaseUrl}${path}`, {
     method,
     headers: { authorization: `Bearer ${token}`, accept: "application/json", ...(body === null ? {} : { "content-type": "application/json" }) },

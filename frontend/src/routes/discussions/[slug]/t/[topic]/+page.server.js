@@ -2,6 +2,7 @@ import { fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../../../../lib/app/capabilities.mjs";
+import { serverApiBaseUrl } from "../../../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../../../lib/server/session-capabilities.mjs";
 import {
   DISCUSSION_CITATION_PREVIEW_LIMIT,
@@ -11,7 +12,7 @@ import {
 } from "./discussion-thread-model.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const token = accessTokenForRequest({ locals, cookies });
   const search = new URLSearchParams({ limit: "50" });
   const beforeSeq = optionalSequence(url.searchParams.get("before_seq"));
@@ -238,7 +239,7 @@ async function mutation({ locals, cookies, fetch, path, body = undefined, method
   if (typeof token !== "string" || token.trim() === "") {
     return { ok: false, status: 401, json: async () => null };
   }
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+    const apiBaseUrl = serverApiBaseUrl();
   return fetch(`${apiBaseUrl}${path}`, {
     method,
     headers: {

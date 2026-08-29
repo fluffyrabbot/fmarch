@@ -1,6 +1,7 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../lib/app/app-surface-header-model.mjs";
+import { serverApiBaseUrl } from "../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../lib/server/session-capabilities.mjs";
 
 export async function load({ cookies, locals, fetch, url }) {
@@ -11,7 +12,7 @@ export async function load({ cookies, locals, fetch, url }) {
   const search = new URLSearchParams({ limit: "50" });
   const beforeSeq = positiveSequence(url.searchParams.get("before_seq"));
   if (beforeSeq !== null) search.set("before_seq", beforeSeq);
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const [response, muteResponse] = await Promise.all([
     fetch(`${apiBaseUrl}/inbox?${search}`, { headers: authHeaders(token) }),
     fetch(`${apiBaseUrl}/mutes?limit=50`, { headers: authHeaders(token) }),
@@ -99,7 +100,7 @@ async function mutation({ locals, cookies, fetch, path, method, body = undefined
   if (typeof token !== "string" || token.trim() === "") {
     return { ok: false, status: 401, json: async () => null };
   }
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   return fetch(`${apiBaseUrl}${path}`, {
     method,
     headers: {

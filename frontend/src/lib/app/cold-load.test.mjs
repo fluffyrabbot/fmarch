@@ -122,10 +122,13 @@ test("cold-load URLs keep the public main thread and private channel boundaries 
     }),
     "/api/gameplay/games/game-a/host-prompts",
   );
-  assert.equal(hostVotecountUrl({ game: "game-a" }), "/games/game-a/votecount");
+  assert.equal(
+    hostVotecountUrl({ game: "game-a" }),
+    "/api/gameplay/games/game-a/votecount",
+  );
   assert.equal(
     dayVoteOutcomesUrl({ game: "game-a" }),
-    "/games/game-a/day-vote-outcomes",
+    "/api/gameplay/games/game-a/day-vote-outcomes",
   );
   assert.equal(
     playerCommandStateUrl({
@@ -179,9 +182,9 @@ test("player cold-load uses channel-scoped thread endpoint for private channel r
 
   assert.deepEqual(seen, [
     "/api/gameplay/games/midsummer/channels/private%3Arole_pm%3Aslot-7/thread?limit=50",
-    "/games/midsummer/votecount",
-    "/games/midsummer/day-vote-outcomes",
-    "/games/midsummer/endgame-summary",
+    "/api/gameplay/games/midsummer/votecount",
+    "/api/gameplay/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/endgame-summary",
     "/api/gameplay/games/midsummer/notifications",
     "/api/gameplay/games/midsummer/investigation-results",
     "/api/gameplay/games/midsummer/player-command-state?slot_id=slot-7",
@@ -457,9 +460,9 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
 
   assert.deepEqual(seen, [
     "/api/gameplay/games/midsummer?limit=50",
-    "/games/midsummer/votecount",
-    "/games/midsummer/day-vote-outcomes",
-    "/games/midsummer/endgame-summary",
+    "/api/gameplay/games/midsummer/votecount",
+    "/api/gameplay/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/endgame-summary",
     "/api/gameplay/games/midsummer/notifications",
     "/api/gameplay/games/midsummer/investigation-results",
     "/api/gameplay/games/midsummer/player-command-state?slot_id=slot_4",
@@ -625,9 +628,9 @@ test("player cold-load skips private scoped endpoints without a principal", asyn
 
   assert.deepEqual(seen, [
     "/api/gameplay/games/midsummer?limit=50",
-    "/games/midsummer/votecount",
-    "/games/midsummer/day-vote-outcomes",
-    "/games/midsummer/endgame-summary",
+    "/api/gameplay/games/midsummer/votecount",
+    "/api/gameplay/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/endgame-summary",
   ]);
   assert.deepEqual(data.notifications, []);
   assert.deepEqual(data.investigationResults, []);
@@ -654,9 +657,9 @@ test("player cold-load skips player-private endpoints without an actor slot", as
 
   assert.deepEqual(seen, [
     "/api/gameplay/games/midsummer/channels/spectator/thread?limit=50",
-    "/games/midsummer/votecount",
-    "/games/midsummer/day-vote-outcomes",
-    "/games/midsummer/endgame-summary",
+    "/api/gameplay/games/midsummer/votecount",
+    "/api/gameplay/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/endgame-summary",
   ]);
   assert.deepEqual(data.notifications, []);
   assert.deepEqual(data.investigationResults, []);
@@ -792,7 +795,7 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
     fallback: FALLBACK,
     fetchImpl: async (url) => {
       seen.push(url);
-      if (url === "/games/midsummer/votecount") {
+      if (url === "/api/gameplay/games/midsummer/votecount") {
         return jsonResponse([
           {
             VoteCountChanged: {
@@ -803,7 +806,7 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
           },
         ]);
       }
-      if (url === "/games/midsummer/day-vote-outcomes") {
+      if (url === "/api/gameplay/games/midsummer/day-vote-outcomes") {
         return jsonResponse([
           {
             DayVoteOutcomeApplied: {
@@ -843,8 +846,8 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
 
   assert.deepEqual(seen, [
     "/api/gameplay/games/midsummer/host-prompts",
-    "/games/midsummer/votecount",
-    "/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/votecount",
+    "/api/gameplay/games/midsummer/day-vote-outcomes",
     "/api/gameplay/games/midsummer/host-console-state?slot_id=slot-7",
   ]);
   assert.deepEqual(data.hostPrompts, [

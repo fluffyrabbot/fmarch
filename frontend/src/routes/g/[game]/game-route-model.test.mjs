@@ -170,14 +170,17 @@ test("player route data exposes thread, channel, votecount, and touch command la
     channel: "main",
     olderEndpoint: "/api/gameplay/games/midsummer?limit=50&before_seq=441",
   });
-  assert.equal(data.coldLoad.votecountEndpoint, "/games/midsummer/votecount");
+  assert.equal(
+    data.coldLoad.votecountEndpoint,
+    "/api/gameplay/games/midsummer/votecount",
+  );
   assert.equal(
     data.coldLoad.dayVoteOutcomesEndpoint,
-    "/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/day-vote-outcomes",
   );
   assert.equal(
     data.coldLoad.endgameSummaryEndpoint,
-    "/games/midsummer/endgame-summary",
+    "/api/gameplay/games/midsummer/endgame-summary",
   );
   assert.deepEqual(data.dayVoteOutcomes, [
     {
@@ -954,9 +957,9 @@ test("player load rejects signed-out sessions without private scoped requests", 
   );
   assert.deepEqual(seen, [
     "/api/gameplay/games/midsummer?limit=50",
-    "/games/midsummer/votecount",
-    "/games/midsummer/day-vote-outcomes",
-    "/games/midsummer/endgame-summary",
+    "/api/gameplay/games/midsummer/votecount",
+    "/api/gameplay/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/endgame-summary",
   ]);
 });
 

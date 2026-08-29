@@ -2,6 +2,7 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../lib/app/capabilities.mjs";
+import { serverApiBaseUrl } from "../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../lib/server/session-capabilities.mjs";
 
 export async function load({ cookies, locals, fetch, url }) {
@@ -19,7 +20,7 @@ export async function load({ cookies, locals, fetch, url }) {
   const search = new URLSearchParams({ status, limit: "25" });
   const cursor = url.searchParams.get("cursor");
   if (typeof cursor === "string" && cursor !== "") search.set("cursor", cursor);
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const queueResponse = await fetch(`${apiBaseUrl}/moderation/cases?${search}`, {
     headers: authHeaders(token),
   });
@@ -67,7 +68,7 @@ export const actions = {
     const caseId = text(form.get("case_id"));
     const action = text(form.get("moderation_action"));
     const reason = text(form.get("reason"));
-    const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+    const apiBaseUrl = serverApiBaseUrl();
     const response = await fetch(
       `${apiBaseUrl}/moderation/cases/${encodeURIComponent(caseId)}/actions`,
       {

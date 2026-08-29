@@ -1140,6 +1140,7 @@ test("dev test-game commands traverse the authenticated same-origin route", asyn
     readFile("frontend/src/routes/commands/+server.js", "utf8"),
   ]);
   assert.doesNotMatch(harnessSource, /"\/commands": currentApiBaseUrl/);
+  assert.doesNotMatch(harnessSource, /"\/games": currentApiBaseUrl/);
   assert.match(
     harnessSource,
     /process\.env\.FMARCH_API_INTERNAL_URL = currentApiBaseUrl/,

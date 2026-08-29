@@ -380,7 +380,7 @@ async function proveModeratorHandlers() {
   assert.equal(ack.visible.state, "ack");
   assert.equal(reject.visible.state, "reject");
   assert.equal(slotLifecycle.visible.state, "ack");
-  assert.deepEqual(ack.refreshed, [["hostPrompts"]]);
+  assert.deepEqual(ack.refreshed, [["host", "hostPrompts"]]);
   assert.deepEqual(reject.refreshed, [
     ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   ]);
@@ -546,7 +546,7 @@ function moderatorData() {
     session: { principalId: "host_h" },
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
-    hostVotecountEndpoint: "/games/midsummer/votecount",
+    hostVotecountEndpoint: "/api/gameplay/games/midsummer/votecount",
     hostPromptEndpoint: "/games/midsummer/host-prompts",
   };
 }

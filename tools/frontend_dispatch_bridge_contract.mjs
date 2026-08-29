@@ -608,7 +608,7 @@ function moderatorData() {
     session: { principalId: "host_h" },
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
-    hostVotecountEndpoint: "/games/midsummer/votecount",
+    hostVotecountEndpoint: "/api/gameplay/games/midsummer/votecount",
     hostPromptEndpoint: "/games/midsummer/host-prompts",
   };
 }

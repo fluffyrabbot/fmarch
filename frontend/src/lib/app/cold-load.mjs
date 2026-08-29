@@ -1163,15 +1163,15 @@ export function playerThreadUrl({
 }
 
 export function playerVotecountUrl({ apiBaseUrl = "", game }) {
-  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/votecount`;
+  return `${privateGameplayBase(apiBaseUrl)}/games/${encodeURIComponent(game)}/votecount`;
 }
 
 export function dayVoteOutcomesUrl({ apiBaseUrl = "", game }) {
-  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/day-vote-outcomes`;
+  return `${privateGameplayBase(apiBaseUrl)}/games/${encodeURIComponent(game)}/day-vote-outcomes`;
 }
 
 export function endgameSummaryUrl({ apiBaseUrl = "", game }) {
-  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/endgame-summary`;
+  return `${privateGameplayBase(apiBaseUrl)}/games/${encodeURIComponent(game)}/endgame-summary`;
 }
 
 export function playerCommandStateUrl({

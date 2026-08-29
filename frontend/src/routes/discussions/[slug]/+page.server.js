@@ -3,10 +3,11 @@ import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../lib/app/app-surface-header-model.mjs";
 import { hasCapability } from "../../../lib/app/capabilities.mjs";
 import { buildCommunityAuthorView } from "../../../lib/app/community-author-model.mjs";
+import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const token = accessTokenForRequest({ locals, cookies });
   const search = new URLSearchParams({ limit: "12" });
   const cursor = optionalText(url.searchParams.get("cursor"));
@@ -103,7 +104,7 @@ async function discussionMutation({ locals, cookies, fetch, path, body }) {
   if (typeof token !== "string" || token.trim() === "") {
     return { ok: false, status: 401, json: async () => null };
   }
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+    const apiBaseUrl = serverApiBaseUrl();
   return fetch(`${apiBaseUrl}${path}`, {
     method: "POST",
     headers: {

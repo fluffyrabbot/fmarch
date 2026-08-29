@@ -468,12 +468,6 @@ async function startFrontend(currentApiBaseUrl) {
         port: args.frontendPort ?? 0,
         strictPort: args.frontendPort !== undefined,
         proxy: {
-          // Commands must traverse the SvelteKit same-origin route so the
-          // HttpOnly browser session cookie is translated into the backend
-          // bearer. A direct Vite proxy silently drops that authentication
-          // boundary because browsers never expose the cookie as an
-          // Authorization header.
-          "/games": currentApiBaseUrl,
           "/ws": {
             target: currentApiBaseUrl,
             ws: true,

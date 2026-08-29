@@ -70,8 +70,14 @@ test("host console route data is allowed for HostOf scoped to the current game",
     "cbor-ws-projection-deltas-with-resync-and-reconnect",
   );
   assert.equal(data.votecountBoundary.command, "official-votecount-live-ws");
-  assert.equal(data.hostVotecountEndpoint, "/games/midsummer/votecount");
-  assert.equal(data.dayVoteOutcomesEndpoint, "/games/midsummer/day-vote-outcomes");
+  assert.equal(
+    data.hostVotecountEndpoint,
+    "/api/gameplay/games/midsummer/votecount",
+  );
+  assert.equal(
+    data.dayVoteOutcomesEndpoint,
+    "/api/gameplay/games/midsummer/day-vote-outcomes",
+  );
   assert.deepEqual(data.commandContext, {
     gameId: "midsummer",
     principalId: HOST_PRINCIPAL_ID,
@@ -277,7 +283,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
     capabilities: [{ kind: "HostOf", game: "midsummer" }],
     fetchImpl: async (url) => {
       seen.push(url);
-      if (url === "/games/midsummer/votecount") {
+      if (url === "/api/gameplay/games/midsummer/votecount") {
         return jsonResponse([
           {
             VoteCountChanged: {
@@ -288,7 +294,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           },
         ]);
       }
-      if (url === "/games/midsummer/day-vote-outcomes") {
+      if (url === "/api/gameplay/games/midsummer/day-vote-outcomes") {
         return jsonResponse([
           {
             DayVoteOutcomeApplied: {
@@ -415,8 +421,8 @@ test("host console route data uses host prompt and votecount cold-loads when ava
 
   assert.deepEqual(seen, [
     "/api/gameplay/games/midsummer/host-prompts",
-    "/games/midsummer/votecount",
-    "/games/midsummer/day-vote-outcomes",
+    "/api/gameplay/games/midsummer/votecount",
+    "/api/gameplay/games/midsummer/day-vote-outcomes",
     "/api/gameplay/games/midsummer/host-console-state?slot_id=slot-7",
   ]);
   assert.deepEqual(data.hostPrompts, [

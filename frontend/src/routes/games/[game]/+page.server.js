@@ -1,5 +1,6 @@
 import { fail } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
+import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 import {
   GAME_CITATION_PREVIEW_LIMIT,
@@ -8,7 +9,7 @@ import {
 } from "./public-game-publication.mjs";
 
 export async function load({ params, locals, cookies, fetch, url }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const token = accessTokenForRequest({ locals, cookies });
   const search = new URLSearchParams({ limit: "50" });
   const beforeSeq = optionalSequence(url.searchParams.get("before_seq"));
@@ -94,7 +95,7 @@ export const actions = {
     if (!["subscribe", "unsubscribe"].includes(action)) {
       return fail(400, { id: "public-game-watch", state: "reject", message: "Invalid watch action" });
     }
-    const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+    const apiBaseUrl = serverApiBaseUrl();
     const response = await fetch(
       `${apiBaseUrl}/subscriptions/${encodeURIComponent(params.game)}`,
       {
@@ -127,7 +128,7 @@ export const actions = {
     if (sourceSeq === null) {
       return fail(400, { id: "public-game-report", state: "reject", message: "Invalid public post" });
     }
-    const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+    const apiBaseUrl = serverApiBaseUrl();
     const response = await fetch(`${apiBaseUrl}/moderation/reports`, {
       method: "POST",
       headers: {

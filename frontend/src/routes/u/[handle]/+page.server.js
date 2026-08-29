@@ -1,10 +1,11 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../lib/app/app-surface-header-model.mjs";
+import { serverApiBaseUrl } from "../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../lib/server/session-capabilities.mjs";
 
 export async function load({ params, locals, cookies, fetch }) {
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const apiBaseUrl = serverApiBaseUrl();
   const response = await fetch(`${apiBaseUrl}/profiles/${encodeURIComponent(params.handle)}`);
   const profile = response.ok ? await response.json() : null;
   const token = accessTokenForRequest({ locals, cookies });
@@ -56,7 +57,7 @@ async function updateMute({ params, locals, cookies, fetch, method, fallback }) 
   if (typeof token !== "string" || token.trim() === "") {
     return fail(401, { id: "profile-mute", state: "reject", message: "Sign in to manage muted members" });
   }
-  const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+    const apiBaseUrl = serverApiBaseUrl();
   const response = await fetch(`${apiBaseUrl}/mutes/profiles/${encodeURIComponent(params.handle)}`, {
     method,
     headers: authHeaders(token),

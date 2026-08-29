@@ -27,6 +27,24 @@ test("public search preserves filter, ranked result links, and stable cursor", a
   assert.match(data.search.nextHref, /cursor=opaque-cursor/);
 });
 
+test("public search ignores a stale cookie after identity resolution falls back to anonymous", async () => {
+  let headers;
+  const data = await load({
+    locals,
+    cookies: { get: () => "stale-session" },
+    url: new URL("http://localhost/search?q=signal"),
+    fetch: async (_url, init) => {
+      headers = new Headers(init.headers);
+      return {
+        ok: true,
+        json: async () => ({ results: [], next_cursor: null }),
+      };
+    },
+  });
+  assert.equal(headers.has("authorization"), false);
+  assert.equal(data.search.status, "ready");
+});
+
 test("public search distinguishes a stale cursor from service unavailability", async () => {
   const data = await load({
     locals,

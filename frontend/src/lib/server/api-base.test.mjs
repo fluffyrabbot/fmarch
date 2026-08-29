@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { publicApiBaseUrl, serverApiBaseUrl } from "./api-base.mjs";
 
@@ -96,5 +97,22 @@ test("public API bases are root origins and production requires HTTPS", () => {
     { FMARCH_API_BASE_URL: "http://api.example.test", NODE_ENV: "production" },
   ]) {
     assert.throws(() => serverApiBaseUrl(env), /FMARCH_API_BASE_URL must/u);
+  }
+});
+
+test("server route modules resolve API authority through the validated owner", async () => {
+  const routeRoot = new URL("../../routes/", import.meta.url);
+  const entries = await readdir(routeRoot, { recursive: true });
+  const serverRoutes = entries.filter(
+    (entry) => entry.endsWith("+page.server.js") || entry.endsWith("+server.js"),
+  );
+  assert(serverRoutes.length > 0);
+  for (const route of serverRoutes) {
+    const source = await readFile(new URL(route, routeRoot), "utf8");
+    assert.doesNotMatch(
+      source,
+      /process\.env\.FMARCH_API_(?:INTERNAL_)?BASE_URL/u,
+      `${route} bypasses serverApiBaseUrl/publicApiBaseUrl`,
+    );
   }
 });
