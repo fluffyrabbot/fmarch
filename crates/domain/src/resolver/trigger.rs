@@ -42,6 +42,43 @@ pub(super) struct TriggerResolutionContext<'a> {
     pub(super) cascade: Option<TriggerCascadeContext<'a>>,
 }
 
+fn night_resolution_generated_kill_bypasses_protect(pack: &Pack, trigger: &TriggerRule) -> bool {
+    if pack.night_resolution.is_explicit() {
+        return pack
+            .night_resolution
+            .generated_kill_cause_policy
+            .get(&trigger.id)
+            .map(|policy| policy.strongman_bypasses_protect)
+            .unwrap_or_else(|| {
+                panic!(
+                    "invalid night_resolution generated kill cause policy: generated kill trigger `{}` must declare generated kill cause policy",
+                    trigger.id
+                )
+            });
+    }
+    trigger.produces.modifiers.contains(&Modifier::Strongman)
+}
+
+fn night_resolution_trigger_participates_in_fixpoint(pack: &Pack, trigger: &TriggerRule) -> bool {
+    if trigger.produces.ability != IrAbility::Kill {
+        return true;
+    }
+    if pack.night_resolution.is_explicit() {
+        return pack
+            .night_resolution
+            .trigger_fixpoint_policy
+            .get(&trigger.id)
+            .map(|policy| policy.produced_kill_reenters)
+            .unwrap_or_else(|| {
+                panic!(
+                    "invalid night_resolution trigger fixpoint policy: generated kill trigger `{}` must declare trigger fixpoint policy",
+                    trigger.id
+                )
+            });
+    }
+    true
+}
+
 fn trigger_slot_has_tags(tags: &[String], slot: &SlotState, observation_tags: &[String]) -> bool {
     tags.iter()
         .all(|tag| slot.effects.contains(tag) || observation_tags.contains(tag))

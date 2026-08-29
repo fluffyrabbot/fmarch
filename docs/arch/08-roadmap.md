@@ -72,19 +72,19 @@ the binary boundary remain singular and testable.
 ## Next buildable coding slice
 
 The next dependency-satisfied coding item is
-`foundation.maintainable-core`. Its active slice extracts night-resolution
-pack-policy admission from `crates/domain/src/resolver.rs` into the private
-`resolver/policy.rs` owner described by the generated completeness scorecard.
-The resolver pipelines should each state one typed admission boundary while
-preserving admission order, panic text and triggers, derived policy catalogs,
-public resolver APIs, deterministic seeds, and golden behavior. The pack façade
-remains the sole pack dependency and policy code imports the intake-owned action
-type directly; no forwarding compatibility façade is retained.
+`foundation.maintainable-core`. Pack validation now exclusively owns policy
+admission, the resolver no longer revalidates an unforgeable `ValidatedPack`,
+and action/trigger policy accessors live with their consumers. The active slice
+now extracts the night protection/kill stage orchestration from
+`crates/domain/src/resolver.rs` behind typed stage contexts, preserving event
+order, trace payloads, public resolver APIs, deterministic seeds, and golden
+behavior without reopening validation, intake, suppression, redirect, or
+trigger ownership.
 
 After that extraction, maintainable-core closure proceeds in this order:
 
-1. split the broad remaining resolver phase coordinator along the next typed
-   ownership boundary;
+1. split the broad remaining resolver phase coordinator along the typed
+   protection/kill stage boundary;
 2. split the next independently changing projection family and the remaining
    physical command-test family;
 3. split proof-runner scenario/runtime orchestration only when the next change

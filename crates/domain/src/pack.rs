@@ -12,7 +12,5 @@ pub use validation::{
     validate_pack_validated, PackLoadError, PackValidationError, PackValidationIssue,
     ValidatedPack,
 };
-pub(crate) use validation::{visibility_required_families, win_required_families};
-
 #[cfg(test)]
 mod validation_tests;

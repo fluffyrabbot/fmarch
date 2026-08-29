@@ -86,6 +86,22 @@ pub(super) struct ProtectionResolutionContext<'a> {
     pub(super) trace_decisions: &'a mut Vec<DecisionTrace>,
 }
 
+fn night_resolution_chosen_retaliation_bypasses_protect(pack: &Pack, source_action: &str) -> bool {
+    if pack.night_resolution.is_explicit() {
+        return pack
+            .night_resolution
+            .chosen_retaliation_cause_policy
+            .get(source_action)
+            .map(|policy| policy.strongman_bypasses_protect)
+            .unwrap_or_else(|| {
+                panic!(
+                    "invalid night_resolution chosen retaliation cause policy: Retaliate action `{source_action}` must declare chosen retaliation cause policy"
+                )
+            });
+    }
+    false
+}
+
 pub(super) fn counter_use_counted(input: CounterUseInput) -> InnerEvent {
     InnerEvent::ActionUseCounted {
         counter_id: input.counter_id,

@@ -23,14 +23,13 @@ use crate::events::{
 };
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
-    visibility_required_families, win_required_families, ActionTemplate, ActorRef,
-    BackupPriorityPolicy, BadgeOperation, ConversionDeadTargetPolicy, ConversionMode,
-    ConversionPendingDeathPolicy, DayNoteRolePayload, DeathRetaliationTiming, DeathRevealMode,
-    EffectDuration, EffectSourceDeathRevealKind, EffectVisibility, GrantKind, GrantSpec,
-    GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy,
-    ItaVoteConflictPolicy, KillStackingPolicy, Pack, ResultMemoryOutput, ResultMemoryScope,
-    TargetRef, TriggerEvent, TriggerOn, TriggerRule, ValidatedPack, VisibilityFamily,
-    VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
+    ActionTemplate, ActorRef, BackupPriorityPolicy, BadgeOperation, ConversionDeadTargetPolicy,
+    ConversionMode, ConversionPendingDeathPolicy, DayNoteRolePayload, DeathRetaliationTiming,
+    DeathRevealMode, EffectDuration, EffectSourceDeathRevealKind, EffectVisibility, GrantKind,
+    GrantSpec, GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec,
+    ItaTargetAlreadyDeadPolicy, KillStackingPolicy, Pack, ResultMemoryOutput, ResultMemoryScope,
+    TargetRef, TriggerEvent, TriggerOn, TriggerRule, ValidatedPack, VoteDuelTieBreaker, VoteMethod,
+    VoteTieBreaker, WeightPolicy, WinCondition, Window,
 };
 use crate::phase::{PhaseId, PhaseKind};
 use crate::state::{
@@ -576,106 +575,6 @@ fn target_state_gate_reason<'a>(
     }
 }
 
-fn require_conversion_policy(pack: &Pack) {
-    if !pack_has_convert_action(pack) {
-        return;
-    }
-    if pack.conversion_policy.on_dead_target != Some(ConversionDeadTargetPolicy::Block) {
-        panic!(
-            "invalid conversion policy: packs with Convert actions must declare on_dead_target Block"
-        );
-    }
-    if pack.conversion_policy.on_pending_death != Some(ConversionPendingDeathPolicy::Block) {
-        panic!(
-            "invalid conversion policy: packs with Convert actions must declare on_pending_death Block"
-        );
-    }
-}
-
-fn pack_has_convert_action(pack: &Pack) -> bool {
-    pack.roles
-        .values()
-        .flat_map(|role| role.actions.iter())
-        .chain(pack.item_actions.values())
-        .any(|action| action.has_ability(IrAbility::Convert))
-}
-
-fn require_ninja_visibility_policy(pack: &Pack) {
-    if !pack_has_ninja_action(pack) {
-        return;
-    }
-    let Some(rule) = pack.visibility.get(&IrAbility::Investigate) else {
-        panic!("invalid visibility policy: Ninja actions require Investigate visibility policy");
-    };
-    if !rule.unless_modifiers.contains(&Modifier::Ninja) {
-        panic!(
-            "invalid visibility policy: Ninja actions require Investigate visibility unless_modifiers Ninja"
-        );
-    }
-}
-
-fn require_visibility_families(pack: &Pack) {
-    let declared = pack
-        .visibility_families
-        .iter()
-        .copied()
-        .collect::<BTreeSet<_>>();
-    if declared.len() != pack.visibility_families.len() {
-        panic!("invalid visibility families: visibility_families must not contain duplicates");
-    }
-    let required = visibility_required_families(pack);
-    if !required.is_empty() && declared.is_empty() {
-        panic!(
-            "invalid visibility families: packs with visibility policy surfaces must declare visibility_families"
-        );
-    }
-    for family in &required {
-        if !declared.contains(family) {
-            panic!("invalid visibility families: visibility_families must include `{family:?}`");
-        }
-    }
-    for family in &declared {
-        if !required.contains(family) {
-            panic!(
-                "invalid visibility families: declared visibility family `{family:?}` has no matching policy surface"
-            );
-        }
-    }
-    if required.contains(&VisibilityFamily::GraphVisitResults)
-        || required.contains(&VisibilityFamily::StealthNinjaVisits)
-        || required.contains(&VisibilityFamily::ResultTampering)
-        || required.contains(&VisibilityFamily::PrivateInvestigationResults)
-    {
-        let Some(rule) = pack.visibility.get(&IrAbility::Investigate) else {
-            panic!("invalid visibility policy: visibility families require Investigate visibility policy");
-        };
-        if (required.contains(&VisibilityFamily::GraphVisitResults)
-            || required.contains(&VisibilityFamily::StealthNinjaVisits))
-            && !rule.sees.contains(&crate::pack::VisField::TargetId)
-        {
-            panic!(
-                "invalid visibility policy: graph-derived visit visibility requires Investigate visibility to expose TargetId"
-            );
-        }
-        if (required.contains(&VisibilityFamily::ResultTampering)
-            || required.contains(&VisibilityFamily::PrivateInvestigationResults))
-            && !rule.sees.contains(&crate::pack::VisField::Result)
-        {
-            panic!(
-                "invalid visibility policy: result visibility families require Investigate visibility to expose Result"
-            );
-        }
-    }
-}
-
-fn pack_has_ninja_action(pack: &Pack) -> bool {
-    pack.roles
-        .values()
-        .flat_map(|role| role.actions.iter())
-        .chain(pack.item_actions.values())
-        .any(|action| action.has_modifier(Modifier::Ninja))
-}
-
 fn bulletproof_reason(tags: &BTreeSet<String>) -> Option<&'static str> {
     if tags.contains("bulletproof") {
         Some("bulletproof")
@@ -1100,7 +999,6 @@ fn treestump_applies(
 /// at phase end, on the state produced by folding this resolution's events
 /// (`apply_events`); it never runs mid-resolution.
 fn resolve_inner(input: &ResolutionInput) -> InnerResolution {
-    require_conversion_policy(input.pack.document());
     let mut events = grant_consumption_events(input);
     let (mut ingest_events, mut ingest_decisions) = invalid_submission_ingest_halts(input);
     events.append(&mut ingest_events);
@@ -1372,48 +1270,6 @@ fn check_win_document(state: &StateSnapshot, pack: &Pack) -> Option<InnerEvent> 
         }
     }
     None
-}
-
-fn require_win_families(pack: &Pack) {
-    let declared = pack.win_families.iter().copied().collect::<BTreeSet<_>>();
-    if declared.len() != pack.win_families.len() {
-        panic!("invalid win families: win_families must not contain duplicates");
-    }
-    if pack.ir_version < 46 {
-        if !declared.is_empty() {
-            panic!("invalid win families: win_families requires ir_version >= 46");
-        }
-        return;
-    }
-    let required = win_required_families(pack);
-    if !required.is_empty() && declared.is_empty() {
-        panic!("invalid win families: packs with win policy surfaces must declare win_families");
-    }
-    for family in &required {
-        if !declared.contains(family) {
-            panic!("invalid win families: win_families must include `{family:?}`");
-        }
-    }
-    for family in &declared {
-        if !required.contains(family) {
-            panic!(
-                "invalid win families: declared win family `{family:?}` has no matching policy surface"
-            );
-        }
-    }
-    if required.contains(&WinFamily::TargetLynchIndependent)
-        && pack.target_lynch_win_policies.is_empty()
-    {
-        panic!("invalid win families: TargetLynchIndependent requires target_lynch_win_policies");
-    }
-    if required.contains(&WinFamily::SelfLynchIndependent)
-        && pack.self_lynch_win_policies.is_empty()
-    {
-        panic!("invalid win families: SelfLynchIndependent requires self_lynch_win_policies");
-    }
-    if required.contains(&WinFamily::SurvivalIndependent) && pack.win.survival_awards.is_empty() {
-        panic!("invalid win families: SurvivalIndependent requires win.survival_awards");
-    }
 }
 
 fn alive_in_faction_for_win(state: &StateSnapshot, pack: &Pack, faction: &str) -> usize {
@@ -1745,9 +1601,6 @@ fn apply_backup_inheritance(
 
 fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     let pack: &Pack = input.pack.document();
-    require_conversion_policy(pack);
-    require_visibility_families(pack);
-    require_ninja_visibility_policy(pack);
 
     let NightActionPreparationOutput {
         mut actions,
@@ -3668,59 +3521,6 @@ fn night_resolution_kill_participates(pack: &Pack, template: &ActionTemplate) ->
         .any(|action_id| action_id == &template.id)
 }
 
-fn night_resolution_chosen_retaliation_bypasses_protect(pack: &Pack, source_action: &str) -> bool {
-    if pack.night_resolution.is_explicit() {
-        return pack
-            .night_resolution
-            .chosen_retaliation_cause_policy
-            .get(source_action)
-            .map(|policy| policy.strongman_bypasses_protect)
-            .unwrap_or_else(|| {
-                panic!(
-                    "invalid night_resolution chosen retaliation cause policy: Retaliate action `{source_action}` must declare chosen retaliation cause policy"
-                )
-            });
-    }
-    false
-}
-
-fn night_resolution_generated_kill_bypasses_protect(pack: &Pack, trigger: &TriggerRule) -> bool {
-    if pack.night_resolution.is_explicit() {
-        return pack
-            .night_resolution
-            .generated_kill_cause_policy
-            .get(&trigger.id)
-            .map(|policy| policy.strongman_bypasses_protect)
-            .unwrap_or_else(|| {
-                panic!(
-                    "invalid night_resolution generated kill cause policy: generated kill trigger `{}` must declare generated kill cause policy",
-                    trigger.id
-                )
-            });
-    }
-    trigger.produces.modifiers.contains(&Modifier::Strongman)
-}
-
-fn night_resolution_trigger_participates_in_fixpoint(pack: &Pack, trigger: &TriggerRule) -> bool {
-    if trigger.produces.ability != IrAbility::Kill {
-        return true;
-    }
-    if pack.night_resolution.is_explicit() {
-        return pack
-            .night_resolution
-            .trigger_fixpoint_policy
-            .get(&trigger.id)
-            .map(|policy| policy.produced_kill_reenters)
-            .unwrap_or_else(|| {
-                panic!(
-                    "invalid night_resolution trigger fixpoint policy: generated kill trigger `{}` must declare trigger fixpoint policy",
-                    trigger.id
-                )
-            });
-    }
-    true
-}
-
 fn info_audience(
     audience: crate::pack::InfoAudience,
     actor: &SlotId,
@@ -3855,9 +3655,6 @@ fn resolve_twilight(input: &ResolutionInput) -> InnerResolution {
 }
 
 fn resolve_day(input: &ResolutionInput) -> InnerResolution {
-    let pack: &Pack = input.pack.document();
-    require_visibility_families(pack);
-    require_win_families(pack);
     let mut events = Vec::new();
     let mut trace_decisions = Vec::new();
     let mut trace_notes = Vec::new();
@@ -3866,7 +3663,6 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     let badges = resolve_badge_actions(input, &mut events);
     resolve_self_destruct_actions(input, &mut events);
     resolve_day_kill_actions(input, &mut events, &mut trace_decisions);
-    require_ita_vote_conflict_policy(pack);
     resolve_ita_actions(input, &mut events, &mut trace_decisions);
     resolve_duel_actions(input, &mut events, &mut trace_decisions, &mut trace_notes);
     resolve_day_vote(DayVoteResolutionContext {
@@ -4466,20 +4262,6 @@ fn resolve_badge_actions(
     }
 
     badges.into_values().collect()
-}
-
-fn require_ita_vote_conflict_policy(pack: &Pack) {
-    if pack.ita.sessions.is_empty() {
-        return;
-    }
-    if !matches!(
-        pack.ita.vote_conflict,
-        Some(ItaVoteConflictPolicy::ResolveShotsBeforeVote)
-    ) {
-        panic!(
-            "invalid ITA vote conflict policy: packs with ITA sessions must declare ResolveShotsBeforeVote"
-        );
-    }
 }
 
 #[derive(Debug, Default)]

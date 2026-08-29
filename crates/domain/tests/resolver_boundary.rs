@@ -231,8 +231,36 @@ fn public_win_evaluation_requires_a_validated_pack() {
 }
 
 #[test]
-fn resolver_retires_validation_owned_night_resolution_policy_guards() {
+fn resolver_consumes_validated_policy_without_revalidation_or_cross_family_accessors() {
     let coordinator = resolver_coordinator_source();
+    let action = resolver_source("action.rs");
+    let trigger = resolver_source("trigger.rs");
+
+    for validation_owned_guard in [
+        "fn require_conversion_policy(",
+        "fn require_ninja_visibility_policy(",
+        "fn require_visibility_families(",
+        "fn require_win_families(",
+        "fn require_ita_vote_conflict_policy(",
+    ] {
+        assert!(
+            !coordinator.contains(validation_owned_guard),
+            "validated packs make resolver revalidation unreachable: `{validation_owned_guard}`"
+        );
+    }
+    assert!(!coordinator.contains("visibility_required_families"));
+    assert!(!coordinator.contains("win_required_families"));
+
+    let action_owned_accessor = "fn night_resolution_chosen_retaliation_bypasses_protect(";
+    assert!(action.contains(action_owned_accessor));
+    assert!(!coordinator.contains(action_owned_accessor));
+    for trigger_owned_accessor in [
+        "fn night_resolution_generated_kill_bypasses_protect(",
+        "fn night_resolution_trigger_participates_in_fixpoint(",
+    ] {
+        assert!(trigger.contains(trigger_owned_accessor));
+        assert!(!coordinator.contains(trigger_owned_accessor));
+    }
 
     for retired_guard in [
         "fn require_night_resolution_kill_stacking_policy(",
