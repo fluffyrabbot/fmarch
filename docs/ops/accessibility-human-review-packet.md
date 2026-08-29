@@ -11,14 +11,17 @@ packet and must not be recorded as human approval.
 
 - Reviewer:
 - Review date:
-- fmarch commit:
-- Environment and base URL:
-- Operating system and version:
-- Browser and version:
+- fmarch commit: `c8304f943ec017c40def8e6bd9cce0ec22ee83c4`
+- Environment and base URL: local seeded development harness at
+  `http://127.0.0.1:5173` (human reviewer must confirm this same target)
+- Operating system and version: macOS 26.6, build 25G5028f
+- Browser and version: human pass not run; automated preflight used Google
+  Chrome for Testing 148.0.7778.96 via Playwright
 - Keyboard layout/input method:
 - Screen reader and version:
 - Screen-reader verbosity/settings changed from defaults:
-- Viewports or physical devices used:
+- Viewports or physical devices used: human pass not run; automated preflight
+  covered 390x844, 1024x768, 1180x820, 1280x900, and 1440x920 CSS pixels
 
 Record the exact combination for every rerun if it differs from the initial
 review. At minimum, use one desktop keyboard pass, one tablet/touch pass, and a
@@ -33,17 +36,71 @@ npm run test:frontend-keyboard-traversal
 npm run test:frontend-role-proof:quick
 ```
 
-- Preflight commit:
-- Preflight date:
-- Keyboard traversal result/artifact:
-- Quick role proof result/artifacts:
-- Known automated limitations reviewed: yes / no
+- Preflight commit: `c8304f943ec017c40def8e6bd9cce0ec22ee83c4`
+- Preflight date: 2026-08-29 00:49 PDT
+- Keyboard traversal result/artifact: passed;
+  [`target/frontend-keyboard-traversal/keyboard-traversal.json`](../../target/frontend-keyboard-traversal/keyboard-traversal.json)
+  records 20 surface/viewport combinations and 75 route-state/viewport
+  combinations across the five viewports above.
+- Quick role proof result/artifacts: passed; frontend contract tests, build-mode
+  route-state rendering, the static role contract, tablet interaction contract,
+  and DOM smoke all exited successfully. Generated evidence:
+  [`route-state-render.json`](../../target/frontend-route-state-render/route-state-render.json),
+  [`role-contract.json`](../../target/frontend-static-role-contract/role-contract.json),
+  [`tablet-interaction.json`](../../target/frontend-tablet-interaction/tablet-interaction.json),
+  and [`dom-smoke.json`](../../target/frontend-role-dom-smoke/dom-smoke.json).
+- Known automated limitations reviewed: yes
 
 The keyboard artifact proves build-mode Chromium tab order and focus outlines.
 The quick role proof proves static contracts, rendered route states, tablet
 geometry, and DOM structure. Neither proves speech output, user comprehension,
 touch exploration, browser/assistive-technology interoperability, or a live
 command round trip.
+
+### Automated preparation evidence — not human verdicts
+
+The following findings narrow the human review but do not change any matrix
+cell from `not run`. The browser checks use SSR markup and synthetic input; the
+contract checks do not exercise a live command transport.
+
+| Family | Machine-observed preparation evidence | Still requires human observation |
+|---|---|---|
+| Identity | Registration, login, recovery, account-security, invitation, session-revocation, and logout route contracts passed. Local return-path and visible recovery-state contracts are covered. | Spoken labels/instructions, validation announcement timing, focus placement after every redirect or error, and comprehension of security/session consequences. |
+| Public | Board, discussion, public-game, search, profile, quotation/citation, report, and watch contracts passed. Board focus traversal passed across all five synthetic viewports. | Reading order, perceivability of quotations/citations and state changes, zoom/reflow quality, and live control feedback. |
+| Player | Player and private-channel focus traversal passed. DOM evidence covers player, private-channel, and private-review surfaces; route contracts cover paging, quoting, posting, voting/withdrawal, ACK/reject/interrupted state, and scoped channels. | Real speech and focus sequences, command round trips, private-boundary comprehension, transient feedback, and recovery after transport interruption. |
+| Host | Host setup, invitation, action-confirmation, task-workspace, prompt, phase/deadline, stale-reject, and interrupted-command contracts passed. | End-to-end keyboard operation, alert-dialog speech/focus containment and return, command feedback timing, and touch operation on a real device. |
+| Admin | Admin focus traversal and DOM smoke passed, including the audit-detail surface. Contracts cover the roving inbox model, selected canvas, confirmations, session grant, create game, cancellation, and task-key navigation. | Actual roving-focus usability, announcement of selection and authority, confirmation comprehension, and focus return after cancel in the hydrated application. |
+| Moderation | Moderator focus traversal, DOM smoke, and empty/loading/reject route-state checks passed. Queue authorization, selected audit detail, and unavailable-action contracts passed. | Spoken distinction between permitted and unavailable actions, reading efficiency, live focus movement, and zoom/touch usability. |
+| Inbox | Inbox route contracts cover authenticated loading, mark-read, target following, and private mute controls. | Whether reading position and focus are preserved in the real journey and whether updates are announced understandably. |
+| Mute | Public-profile mute and inbox unmute contracts passed; personalized relationship authority is kept private in the route models. | Live suppression across discussion/search/inbox, clear spoken state, absence of hidden content from screen-reader navigation, and understandable unmute recovery. |
+| Errors | Keyboard and DOM artifacts cover empty/loading/reject states for board, admin, player, player-private-channel, and moderator surfaces. Contract tests cover denied, validation, stale, unavailable, and interrupted variants. | Announcement timing and interruption behavior, visible and spoken recovery actions, focus placement, and whether the distinctions are understandable without visual context. |
+
+The human pass should concentrate on the evidence automation cannot safely
+infer: exact speech output and order; readily perceivable focus indication;
+focus placement and return across hydrated transitions; transient status
+announcements; 200% clipping, overlap, and reading order; physical touch
+exploration; and any private content that is visually suppressed but remains
+reachable through assistive technology.
+
+### Live seeded preparation — not a human pass
+
+On 2026-08-29, an agent-driven inspection reached the hydrated signed-out shell
+at `http://127.0.0.1:5173`. The shell exposed a skip link, named primary and
+workspace navigation, a single `main` region, one page-level heading, explicit
+signed-out/disabled role controls, and labeled public search controls. The
+invitation entry surface exposed a page-level heading, a named invitation
+region, labeled credential/account/password fields, and named Continue and
+Back controls. No invitation credential was submitted during this inspection.
+
+The live public journey is not ready for human review. Both games listed on the
+board returned the shared `Route not found` surface from their public-thread
+links; Community reported that its directory was unavailable; and submitting a
+non-sensitive five-character public search produced an `alert` stating that
+search was unavailable. The generated handoff at
+[`target/dev-test-game/session.md`](../../target/dev-test-game/session.md)
+matched the running frontend, game, and API port. The failure is therefore
+recorded as a live review blocker with cause unassigned; diagnose and rerun it
+before beginning the human Public journey.
 
 ## Review rules
 
@@ -93,7 +150,7 @@ replace observations with a bare checkbox.
 
 | Issue | Severity | Journey(s) | Observed behavior | Expected behavior | Fix commit | Rerun environment/date | Rerun result |
 |---|---|---|---|---|---|---|---|
-| — | — | — | — | — | — | — | — |
+| AR-LIVE-001 | critical review blocker | Public | The aligned seeded harness listed two active games whose public-thread links both rendered `Route not found`; Community and a valid public search rendered unavailable states. | The board, public game, community, and search journey loads successfully so assistive-technology review can begin. | pending diagnosis | not run | not run |
 
 Attach screenshots only as supporting context. For speech or focus defects,
 retain the exact announcement/focus sequence in text so the evidence remains
