@@ -52,6 +52,22 @@ the family atomically by deleting those admin audit rows and readiness inputs,
 then preserve any still-useful CLI-only diagnostics behind one local proof
 report with no role-surface adapter.
 
+### Retirement gate status
+
+The 2026-08-28 review found that this gate is **not yet met**. The canonical
+`spine-manifest`, `admin-spine`, `proof-graph`, `next-action`, and selected
+handoff receipt diagnostics exist, but the admin-spine and release-readiness
+orchestrators still consume the six role-surface artifacts as sequencing and
+freshness dependencies. Proof freshness also has no consolidated CLI report
+owner independent of the admin adapter. Deleting the wrappers now would either
+break the canonical local spine or silently weaken it.
+
+The next retirement slice must first introduce one CLI-only local proof report
+that owns freshness, graph, next-action, and selected-handoff validation; move
+admin-spine and release-readiness dependencies to that report; and prove output
+parity. Only then should the six admin audit rows, adapter modules, paths,
+fixtures, scripts, and documentation be deleted in one commit.
+
 ## Freeze rule
 
 No new admin-proof command is allowed unless it consumes operator-provided,

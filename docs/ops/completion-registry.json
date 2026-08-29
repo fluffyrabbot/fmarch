@@ -318,7 +318,7 @@
       "title": "Reviewable 1.0 core and toolchain",
       "execution_class": "code",
       "status": "open",
-      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, provider-neutral identity-delivery cancellation/audit persistence, and live publication, media attached-variant reads, command action submission/validation, host-prompt resolution/replay, DayEvent resolution application, operator-proof report/tool ownership, command verification cost boundaries, domain pack model/validation, resolver intake/suppression/redirect/action/trigger/outcome/trace, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Remaining resolver night-policy admission and broad-stage coordination, other projection, physical command-test family, and proof-runner scenario/orchestration concentrations remain inventoried.",
+      "summary": "Rust 1.95.0 and strict workspace Clippy are proof-enforced; API media, auth, community, game-read, command/import, and live WebSocket delivery, authentication attempt/delivery, provider-neutral identity-delivery cancellation/audit persistence, and live publication, media attached-variant reads, command action submission/validation, host-prompt resolution/replay, DayEvent resolution application, operator-proof report/tool ownership, command verification cost boundaries, domain pack model/validation, resolver intake/suppression/redirect/action/trigger/outcome/trace, projection effect/private-channel, and proof-runner configuration/session-artifact ownership are isolated behind typed boundaries. Pack validation exclusively owns policy admission and resolver action/trigger accessors live with their consuming families. Remaining broad resolver stage coordination, other projection, physical command-test family, and proof-runner scenario/orchestration concentrations remain inventoried.",
       "complete_when": [
         "The Rust toolchain is pinned, workspace Clippy is warning-clean, and concentrated pack, resolver, API, projection, command-test, and proof orchestration responsibilities are split into coherent modules without weakening proof coverage."
       ],
@@ -533,16 +533,15 @@
         }
       ],
       "remaining": [
-        "Split remaining resolver night-policy admission and broad-stage coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
+        "Split the broad resolver protection/kill stage coordinator, other projection, physical command-test family, and proof-runner scenario/orchestration responsibilities along the dependency direction recorded in docs/arch/16-maintainable-core.md.",
         "Remove the remaining localized lint expectations and allowances as typed contexts and bounded modules supersede them."
       ],
       "recommended_slice": {
-        "objective": "Extract night-resolution pack-policy admission from crates/domain/src/resolver.rs into a private crates/domain/src/resolver/policy.rs owner. Move the require_night_resolution_* admission family, require_conversion_policy, require_ninja_visibility_policy, require_valid_night_ability_order, and the night_resolution_* catalog/classifier/precedence derivation helpers they consume behind a typed NightPolicyAdmission boundary, so the coordinator states which policies a pipeline admits rather than how each is checked. Give resolve_inner and resolve_night one admission call each in place of their current open-coded require_* sequences. Keep the pack fa\u00e7ade the only pack dependency and import the intake-owned Action directly where action shape is inspected, without a resolver-root re-export or forwarding compatibility wrapper. Extend the resolver source-boundary contract to fix moved ownership, the single admission call per pipeline, and the absence of local lint suppression. Preserve exact panic messages and their trigger conditions, admission order within each pipeline, derived catalog and classifier contents, and golden semantics.",
+        "objective": "Extract the night Protect and Kill stage bodies from crates/domain/src/resolver.rs into a private crates/domain/src/resolver/night_action.rs owner. Introduce typed ProtectionStageContext and KillStageContext inputs that carry prepared actions, validated pack/state, deterministic chance RNG, protection/dependency/effect state, event and trace sinks, kill attribution, and carry tokens without a broad resolver-root facade. Keep action resolution in resolver/action.rs, intake ordering in resolver/intake.rs, trigger fixpoint behavior in resolver/trigger.rs, and policy admission exclusively in pack/validation.rs. Extend the resolver source-boundary contract to fix one coordinator call per stage, direct dependency direction, moved stage ownership, and the absence of local lint suppression. Preserve event and trace order, RNG consumption order, target-state gating, wolf-carry behavior, public resolver APIs, and every golden semantic.",
         "paths": [
           "crates/domain/src/resolver.rs",
-          "crates/domain/src/resolver/policy.rs",
+          "crates/domain/src/resolver/night_action.rs",
           "crates/domain/tests/resolver_boundary.rs",
-          "crates/domain/tests/pack_validation.rs",
           "docs/arch/16-maintainable-core.md"
         ],
         "proof_commands": [
@@ -554,10 +553,10 @@
           "npm run proof:lanes -- --mode full --run"
         ],
         "non_claims": [
-          "Do not redesign pack validation itself, night ability execution, suppression/redirect/kill/protection/trigger/outcome policy behavior, event schemas or versions, public resolver APIs, or deterministic seed behavior as part of policy-admission ownership extraction.",
-          "Do not change which packs are admitted or rejected, the exact panic message text or the condition that raises each one, admission order within a pipeline, or the derived catalogs, classifiers, and precedence edges the admission family computes.",
-          "Do not leave admission helpers in the coordinator as re-exports or forwarding compatibility facades, and do not route the new owner around the public pack facade.",
-          "Do not mark foundation.maintainable-core complete; broad night stage coordination, other projection families, physical command-test family, and remaining proof-runner scenario/orchestration concentrations remain."
+          "Do not redesign pack validation, intake ordering, suppression, redirect, trigger fixpoint, outcome policy, event schemas or versions, public resolver APIs, or deterministic seed behavior as part of stage ownership extraction.",
+          "Do not change event order, trace payloads, action-chance RNG consumption, target-state gating, protection/kill precedence, wolf-carry token consumption, or accepted pack behavior.",
+          "Do not leave stage forwarding helpers or resolver-root re-exports; the coordinator constructs each typed context and calls its owner directly.",
+          "Do not mark foundation.maintainable-core complete; later resolver stage coordination, other projection families, physical command-test family, and remaining proof-runner scenario/orchestration concentrations remain."
         ]
       }
     },
@@ -2270,6 +2269,10 @@
         {
           "kind": "source",
           "value": "docs/ui-ux-tablet-first-viewport-audit-2026-07-17.md"
+        },
+        {
+          "kind": "source",
+          "value": "docs/ops/accessibility-human-review-packet.md"
         }
       ],
       "remaining": [

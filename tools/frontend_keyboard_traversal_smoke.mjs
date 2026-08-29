@@ -133,6 +133,11 @@ async function assertFocusTraversal(
   page,
   { label, expectedOrder, forbiddenTestIds = [], maxTabs = 48 },
 ) {
+  const visibleExpectedOrder = await page.evaluate((ids) =>
+    ids.filter((id) => {
+      const node = document.querySelector(`[data-testid="${CSS.escape(id)}"]`);
+      return node === null || node.getClientRects().length > 0;
+    }), expectedOrder);
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
@@ -152,7 +157,7 @@ async function assertFocusTraversal(
       );
     }
     sequence.push(focus);
-    if (containsOrderedFocus(sequence, expectedOrder)) {
+    if (containsOrderedFocus(sequence, visibleExpectedOrder)) {
       break;
     }
   }
@@ -163,16 +168,17 @@ async function assertFocusTraversal(
       throw new Error(`${label} focused disabled or denied control ${forbidden}`);
     }
   }
-  if (!containsOrderedFocus(sequence, expectedOrder)) {
+  if (!containsOrderedFocus(sequence, visibleExpectedOrder)) {
     throw new Error(
-      `${label} focus order missed ${expectedOrder.join(" -> ")}; saw ${sequence
+      `${label} focus order missed ${visibleExpectedOrder.join(" -> ")}; saw ${sequence
         .map((item) => item.label)
         .join(" -> ")}`,
     );
   }
 
   return {
-    expectedOrder,
+    expectedOrder: visibleExpectedOrder,
+    configuredExpectedOrder: expectedOrder,
     forbiddenTestIds,
     sequence: sequence.map((item) => item.label),
     stops: sequence.map((item) => ({

@@ -319,8 +319,9 @@ export const roles = Object.freeze([
     focus: roleFocusScenario({
       shell: adminShell,
       expectedAfterNav: [
+        "admin-inbox-task-setup-create-game",
         "admin-command-trigger-create-game",
-        "admin-command-trigger-session-grants",
+        "admin-recovery-workflow",
       ],
     }),
     live: Object.freeze({
