@@ -11,7 +11,7 @@ packet and must not be recorded as human approval.
 
 - Reviewer:
 - Review date:
-- fmarch commit: `c8304f943ec017c40def8e6bd9cce0ec22ee83c4`
+- fmarch commit: `a22beb192d2308ed68a7a5a40b8e8043407dd078`
 - Environment and base URL: local seeded development harness at
   `http://127.0.0.1:5173` (human reviewer must confirm this same target)
 - Operating system and version: macOS 26.6, build 25G5028f
@@ -36,8 +36,8 @@ npm run test:frontend-keyboard-traversal
 npm run test:frontend-role-proof:quick
 ```
 
-- Preflight commit: `c8304f943ec017c40def8e6bd9cce0ec22ee83c4`
-- Preflight date: 2026-08-29 00:49 PDT
+- Preflight commit: `a22beb192d2308ed68a7a5a40b8e8043407dd078`
+- Preflight date: 2026-08-29 01:15 PDT
 - Keyboard traversal result/artifact: passed;
   [`target/frontend-keyboard-traversal/keyboard-traversal.json`](../../target/frontend-keyboard-traversal/keyboard-traversal.json)
   records 20 surface/viewport combinations and 75 route-state/viewport
@@ -92,15 +92,25 @@ invitation entry surface exposed a page-level heading, a named invitation
 region, labeled credential/account/password fields, and named Continue and
 Back controls. No invitation credential was submitted during this inspection.
 
-The live public journey is not ready for human review. Both games listed on the
-board returned the shared `Route not found` surface from their public-thread
-links; Community reported that its directory was unavailable; and submitting a
-non-sensitive five-character public search produced an `alert` stating that
-search was unavailable. The generated handoff at
+The initial live public journey was blocked: both games listed on the board
+returned the shared `Route not found` surface from their public-thread links;
+Community reported that its directory was unavailable; and submitting a
+non-sensitive five-character public search produced an unavailable `alert`.
+The cause was split route authority: several SSR loaders bypassed the validated
+server API owner, while the development server's broad `/games` proxy consumed
+the public SvelteKit page namespace. Public search also forwarded a stale
+browser cookie after identity resolution had already fallen back to anonymous.
+
+After `a22beb192d2308ed68a7a5a40b8e8043407dd078`, the canonical seeded harness
+was reset and inspected again at `http://127.0.0.1:5173` on 2026-08-29 01:29
+PDT. The board listed both seeded games; both public-thread links rendered live
+public records; Community rendered its genuine empty state; and the same public
+search rendered a genuine empty result despite the stale pre-reset cookie. The
+generated handoff at
 [`target/dev-test-game/session.md`](../../target/dev-test-game/session.md)
-matched the running frontend, game, and API port. The failure is therefore
-recorded as a live review blocker with cause unassigned; diagnose and rerun it
-before beginning the human Public journey.
+matched the running frontend, game, and API port. `AR-LIVE-001` is therefore
+cleared as a preparation blocker, and the human Public journey may begin. This
+agent-driven rerun is not a keyboard, screen-reader, tablet, or human verdict.
 
 ## Review rules
 
@@ -150,7 +160,7 @@ replace observations with a bare checkbox.
 
 | Issue | Severity | Journey(s) | Observed behavior | Expected behavior | Fix commit | Rerun environment/date | Rerun result |
 |---|---|---|---|---|---|---|---|
-| AR-LIVE-001 | critical review blocker | Public | The aligned seeded harness listed two active games whose public-thread links both rendered `Route not found`; Community and a valid public search rendered unavailable states. | The board, public game, community, and search journey loads successfully so assistive-technology review can begin. | pending diagnosis | not run | not run |
+| AR-LIVE-001 | critical review blocker | Public | The aligned seeded harness listed two active games whose public-thread links both rendered `Route not found`; Community and a valid public search rendered unavailable states. | The board, public game, community, and search journey loads successfully so assistive-technology review can begin. | `a22beb192d2308ed68a7a5a40b8e8043407dd078` | local seeded harness at `http://127.0.0.1:5173`; 2026-08-29 01:29 PDT | passed as agent preparation: both public games, Community, and Search loaded truthfully; human Public journey remains `not run` |
 
 Attach screenshots only as supporting context. For speech or focus defects,
 retain the exact announcement/focus sequence in text so the evidence remains
