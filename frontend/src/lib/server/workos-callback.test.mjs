@@ -48,6 +48,32 @@ test("callback exchanges the typed AuthKit result directly for one backend sessi
   assert.equal(observed.logs.join(" ").includes("provider-token"), false);
 });
 
+test("sign-up callback consumes the pending community invitation exactly once", async () => {
+  const cookies = cookieJar({
+    fmarch_pending_community_invitation: "fmci_example",
+  });
+  let body = null;
+  const response = await callbackHandler(callbackService(), [])(
+    callbackEvent({
+      cookies,
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(init.body);
+        return jsonResponse({
+          principal_id: PRINCIPAL_ID,
+          session_token: "fmss_admitted",
+        });
+      },
+    }),
+  );
+
+  assert.equal(response.status, 303);
+  assert.deepEqual(body, {
+    method: "workos",
+    invitation_credential: "fmci_example",
+  });
+  assert.equal(cookies.values.has("fmarch_pending_community_invitation"), false);
+});
+
 test("callback collapses an unsafe SDK return target before emitting Location", async () => {
   for (const returnPathname of [
     "/\\evil.example/phish",

@@ -97,7 +97,7 @@ export function roleLoginUrl({ frontendBaseUrl, session }) {
     session.credentialKind === "invite" ||
     session.inviteToken !== undefined
   ) {
-    route = "/auth/invite";
+    route = "/auth/game-invite";
     params.set("invite", session.inviteToken);
     if (session.accountId !== undefined) {
       params.set("account", session.accountId);
@@ -106,7 +106,7 @@ export function roleLoginUrl({ frontendBaseUrl, session }) {
     route = "/auth/login/classic";
     params.set("account", session.accountId);
   } else if (typeof session.token === "string" && session.token !== "") {
-    route = "/auth/invite";
+    route = "/auth/game-invite";
   }
   return `${frontendBaseUrl}${route}?${params.toString()}`;
 }

@@ -73,22 +73,61 @@ async fn post_json(
 
 async fn register_classic_account(
     app: &axum::Router,
+    pool: &sqlx::PgPool,
     account_id: &str,
     password: &str,
 ) -> (PrincipalId, String) {
-    let response = post_json(
-        app,
-        "/auth/accounts/registrations",
-        None,
-        serde_json::json!({ "account_id": account_id, "password": password }),
-    )
-    .await;
+    let response = register_classic_response(app, pool, account_id, password).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     (
         response_principal_id(&body),
         body["session_token"].as_str().unwrap().to_string(),
     )
+}
+
+async fn register_classic_response(
+    app: &axum::Router,
+    pool: &sqlx::PgPool,
+    account_id: &str,
+    password: &str,
+) -> axum::response::Response {
+    let invitation_credential = community_invitation_for(pool, account_id).await;
+    post_json(
+        app,
+        "/auth/accounts/registrations",
+        None,
+        serde_json::json!({
+            "invitation_credential": invitation_credential,
+            "account_id": account_id,
+            "password": password
+        }),
+    )
+    .await
+}
+
+async fn community_invitation_for(pool: &sqlx::PgPool, account_id: &str) -> String {
+    let founder = PrincipalId::random();
+    let now = 1_700_000_000;
+    let mut tx = pool.begin().await.unwrap();
+    identity::methods::ensure_principal(&mut tx, &founder, &[], now)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    membership_application::ensure_founder_membership(pool, founder, now)
+        .await
+        .unwrap();
+    membership_application::issue_invitation(
+        pool,
+        &membership_application::InvitationTargetIndex::from_env_or_local().unwrap(),
+        founder,
+        account_id,
+        4_102_444_800,
+        now,
+    )
+    .await
+    .unwrap()
+    .credential
 }
 
 async fn issue_dev_admin(app: &axum::Router, principal_id: PrincipalId) -> String {
@@ -270,14 +309,11 @@ async fn registration_issues_backend_token_and_method_rows(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
 
-    let response = post_json(
+    let response = register_classic_response(
         &app,
-        "/auth/accounts/registrations",
-        None,
-        serde_json::json!({
-            "account_id": "new-player@example.test",
-            "password": "correct horse battery staple"
-        }),
+        &pool,
+        "new-player@example.test",
+        "correct horse battery staple",
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -474,18 +510,25 @@ fn workos_race_verifier() -> StaticAccessTokenVerifier {
                 subject: "user_workos_race".to_string(),
                 session_id: session_id.clone(),
                 expires_at: 4_102_444_800,
-                email: None,
+                email: Some("user_workos_race@example.test".to_string()),
             },
         )
     }))
 }
 
-async fn seed_workos_race_session(app: &axum::Router) -> (PrincipalId, String) {
+async fn seed_workos_race_session(
+    app: &axum::Router,
+    pool: &sqlx::PgPool,
+) -> (PrincipalId, String) {
+    let invitation = community_invitation_for(pool, "user_workos_race@example.test").await;
     let response = post_json(
         app,
         "/auth/sessions",
         Some("workos-race-a"),
-        serde_json::json!({ "method": "workos" }),
+        serde_json::json!({
+            "method": "workos",
+            "invitation_credential": invitation
+        }),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -529,6 +572,7 @@ async fn workos_link_closes_the_provider_session_before_a_queued_login(pool: sql
     );
     let (principal, local_token) = register_classic_account(
         &app,
+        &pool,
         "workos-lock-order@example.test",
         "correct horse battery staple",
     )
@@ -600,6 +644,7 @@ async fn concurrent_exact_workos_link_retries_share_one_committed_ceremony(pool:
     );
     let (principal, local_token) = register_classic_account(
         &app,
+        &pool,
         "workos-duplicate-link@example.test",
         "correct horse battery staple",
     )
@@ -678,6 +723,7 @@ async fn workos_link_revalidates_the_local_session_after_queued_logout(pool: sql
     );
     let (principal, local_token) = register_classic_account(
         &app,
+        &pool,
         "workos-stale-link@example.test",
         "correct horse battery staple",
     )
@@ -745,7 +791,7 @@ async fn workos_exchange_queued_before_logout_is_revoked_by_the_following_tombst
         test_state(pool.clone(), &root)
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
-    let (principal, first_local_token) = seed_workos_race_session(&app).await;
+    let (principal, first_local_token) = seed_workos_race_session(&app, &pool).await;
     let gate = hold_identity_owner(&pool, principal).await;
 
     let exchange_app = app.clone();
@@ -805,7 +851,7 @@ async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(po
         test_state(pool.clone(), &root)
             .with_access_token_verifier(Arc::new(workos_race_verifier())),
     );
-    let (principal, first_local_token) = seed_workos_race_session(&app).await;
+    let (principal, first_local_token) = seed_workos_race_session(&app, &pool).await;
     let gate = hold_identity_owner(&pool, principal).await;
 
     let logout_app = app.clone();
@@ -875,11 +921,15 @@ async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool)
         .to_string();
 
     // Sign in with WorkOS: one exchange, one backend session.
+    let invitation = community_invitation_for(&pool, "user_convert@example.test").await;
     let response = post_json(
         &app,
         "/auth/sessions",
         Some("workos-token"),
-        serde_json::json!({ "method": "workos" }),
+        serde_json::json!({
+            "method": "workos",
+            "invitation_credential": invitation
+        }),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1133,11 +1183,15 @@ async fn rotation_cannot_refresh_recent_authentication(pool: sqlx::PgPool) {
         .with_access_token_verifier(Arc::new(workos_verifier("workos-old", "user_old")));
     let app = api::router_with_state(state);
 
+    let invitation = community_invitation_for(&pool, "user_old@example.test").await;
     let response = post_json(
         &app,
         "/auth/sessions",
         Some("workos-old"),
-        serde_json::json!({ "method": "workos" }),
+        serde_json::json!({
+            "method": "workos",
+            "invitation_credential": invitation
+        }),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1194,16 +1248,8 @@ async fn idle_expired_sessions_cannot_rotate_or_choose_legacy_bearers(pool: sqlx
     let app = api::router_with_state(test_state(pool.clone(), &root));
     let password = "correct horse battery staple";
 
-    let response = post_json(
-        &app,
-        "/auth/accounts/registrations",
-        None,
-        serde_json::json!({
-            "account_id": "idle-expired@example.test",
-            "password": password
-        }),
-    )
-    .await;
+    let response =
+        register_classic_response(&app, &pool, "idle-expired@example.test", password).await;
     assert_eq!(response.status(), StatusCode::OK);
     let expired_token = json_body(response).await["session_token"]
         .as_str()
@@ -1330,14 +1376,11 @@ async fn idle_session_cannot_resurrect_after_expiring_while_rotation_waits_for_i
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
 
-    let response = post_json(
+    let response = register_classic_response(
         &app,
-        "/auth/accounts/registrations",
-        None,
-        serde_json::json!({
-            "account_id": "lock-expired@example.test",
-            "password": "correct horse battery staple"
-        }),
+        &pool,
+        "lock-expired@example.test",
+        "correct horse battery staple",
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1528,13 +1571,7 @@ async fn ordinary_sessions_do_not_preserve_revoked_principal_capabilities(pool: 
     let app = api::router_with_state(test_state(pool.clone(), &root));
     let password = "correct horse battery staple";
 
-    let response = post_json(
-        &app,
-        "/auth/accounts/registrations",
-        None,
-        serde_json::json!({ "account_id": "revoked@example.test", "password": password }),
-    )
-    .await;
+    let response = register_classic_response(&app, &pool, "revoked@example.test", password).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = json_body(response).await;
     let principal = response_principal_id(&body);
@@ -1628,6 +1665,7 @@ async fn classic_to_workos_link_recovers_verified_stale_provider_sessions_withou
     );
     let (_, local_session) = register_classic_account(
         &app,
+        &pool,
         "link-recovery@example.test",
         "correct horse battery staple",
     )
@@ -1738,14 +1776,11 @@ async fn workos_attachment_is_symmetric_and_reactivates_in_place(pool: sqlx::PgP
     let state = test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier));
     let app = api::router_with_state(state);
 
-    let response = post_json(
+    let response = register_classic_response(
         &app,
-        "/auth/accounts/registrations",
-        None,
-        serde_json::json!({
-            "account_id": "classic-first@example.test",
-            "password": "correct horse battery staple"
-        }),
+        &pool,
+        "classic-first@example.test",
+        "correct horse battery staple",
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1883,7 +1918,7 @@ async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sq
                     subject: "user_disable_replay".to_string(),
                     session_id,
                     expires_at: 4_102_444_800,
-                    email: None,
+                    email: Some("disable-replay@example.test".to_string()),
                 },
             )
         }),
@@ -1892,11 +1927,15 @@ async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sq
         test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier)),
     );
 
+    let invitation = community_invitation_for(&pool, "disable-replay@example.test").await;
     let login = post_json(
         &app,
         "/auth/sessions",
         Some("disable-login-a"),
-        serde_json::json!({ "method": "workos" }),
+        serde_json::json!({
+            "method": "workos",
+            "invitation_credential": invitation
+        }),
     )
     .await;
     assert_eq!(login.status(), StatusCode::OK);
@@ -2009,14 +2048,11 @@ async fn link_only_workos_session_is_tombstoned_before_subject_erasure_removes_i
     let app = api::router_with_state(
         test_state(pool.clone(), &root).with_access_token_verifier(Arc::new(verifier)),
     );
-    let registration = post_json(
+    let registration = register_classic_response(
         &app,
-        "/auth/accounts/registrations",
-        None,
-        serde_json::json!({
-            "account_id": "link-only-erasure@example.test",
-            "password": "correct horse battery staple"
-        }),
+        &pool,
+        "link-only-erasure@example.test",
+        "correct horse battery staple",
     )
     .await;
     assert_eq!(registration.status(), StatusCode::OK);
@@ -2173,14 +2209,11 @@ async fn member_export_then_erasure_revokes_authority_and_pseudonymizes_retained
 ) {
     let root = TempDir::new().unwrap();
     let app = api::router_with_state(test_state(pool.clone(), &root));
-    let response = post_json(
+    let response = register_classic_response(
         &app,
-        "/auth/accounts/registrations",
-        None,
-        serde_json::json!({
-            "account_id": "erase-me@example.test",
-            "password": "correct horse battery staple"
-        }),
+        &pool,
+        "erase-me@example.test",
+        "correct horse battery staple",
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -2474,7 +2507,7 @@ async fn account_recovery_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     let app = api::router_with_state(test_state(pool.clone(), &root));
     let account_id = "recovery-race@example.test";
     let password = "correct horse battery staple";
-    let (principal, token) = register_classic_account(&app, account_id, password).await;
+    let (principal, token) = register_classic_account(&app, &pool, account_id, password).await;
     let response = post_json(
         &app,
         "/auth/accounts/recovery-credentials",
@@ -2551,12 +2584,12 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
     let account_id = "invite-race@example.test";
     let password = "correct horse battery staple";
     let invite_token = "invite-erasure-race-token";
-    let (principal, _) = register_classic_account(&app, account_id, password).await;
+    let (principal, _) = register_classic_account(&app, &pool, account_id, password).await;
     let admin_token =
         issue_dev_admin(&app, principal::PrincipalId::fixture("invite-race-admin")).await;
     let response = post_json(
         &app,
-        "/auth/invites",
+        "/auth/game-invitations",
         Some(&admin_token),
         serde_json::json!({
             "invite_token": invite_token,
@@ -2583,7 +2616,7 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
         mutation_start.wait().await;
         post_json(
             &mutation_app,
-            "/auth/invites/redeem",
+            "/auth/game-invitations/redeem",
             None,
             serde_json::json!({
                 "invite_token": invite_token,
@@ -2596,7 +2629,7 @@ async fn invite_redemption_waits_at_owner_boundary_before_erasure(pool: sqlx::Pg
     start.wait().await;
     wait_for_owner_lock_waiters(&pool, 1).await;
     let mut probe = pool.begin().await.unwrap();
-    sqlx::query("SELECT token_hash FROM auth_invite WHERE token_hash = $1 FOR UPDATE NOWAIT")
+    sqlx::query("SELECT token_hash FROM game_invitation WHERE token_hash = $1 FOR UPDATE NOWAIT")
         .bind(&invite_hash)
         .execute(&mut *probe)
         .await
@@ -2626,7 +2659,7 @@ async fn account_disable_waits_at_owner_boundary_before_erasure(pool: sqlx::PgPo
     let app = api::router_with_state(test_state(pool.clone(), &root).with_dev_auth(true));
     let account_id = "disable-race@example.test";
     let (principal, _) =
-        register_classic_account(&app, account_id, "correct horse battery staple").await;
+        register_classic_account(&app, &pool, account_id, "correct horse battery staple").await;
     let admin_token =
         issue_dev_admin(&app, principal::PrincipalId::fixture("disable-race-admin")).await;
 
@@ -2682,6 +2715,7 @@ async fn session_rotation_waits_at_owner_boundary_before_erasure(pool: sqlx::PgP
     let app = api::router_with_state(test_state(pool.clone(), &root));
     let (principal, token) = register_classic_account(
         &app,
+        &pool,
         "session-race@example.test",
         "correct horse battery staple",
     )
@@ -2740,6 +2774,7 @@ async fn lifecycle_rebuild_locks_owner_before_projection_and_erasure(pool: sqlx:
     let app = api::router_with_state(test_state(pool.clone(), &root));
     let (principal, _) = register_classic_account(
         &app,
+        &pool,
         "rebuild-race@example.test",
         "correct horse battery staple",
     )

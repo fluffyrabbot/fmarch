@@ -412,7 +412,7 @@ pub async fn lock_identity_mutation(
         .fetch_all(&mut *conn)
         .await?;
         sqlx::query_scalar::<_, String>(
-            "SELECT token_hash FROM auth_invite WHERE principal_id = $1 ORDER BY token_hash FOR UPDATE",
+            "SELECT token_hash FROM game_invitation WHERE principal_id = $1 ORDER BY token_hash FOR UPDATE",
         )
         .bind(principal_id.as_uuid())
         .fetch_all(&mut *conn)

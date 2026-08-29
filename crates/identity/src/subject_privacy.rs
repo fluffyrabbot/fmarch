@@ -2196,7 +2196,7 @@ async fn finalize_subject_erasure(
         .execute(&mut *tx)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM auth_invite WHERE principal_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1)")
+    sqlx::query("DELETE FROM game_invitation WHERE principal_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1)")
         .bind(principal.as_uuid()).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("DELETE FROM auth_delivery_intent WHERE principal_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1)")
@@ -2540,6 +2540,23 @@ async fn scrub_subject_projections(
     destroyed_at: i64,
 ) -> Result<(), SubjectPrivacyError> {
     let database_error = |error: sqlx::Error| SubjectPrivacyError::Storage(error.to_string());
+    let principal_id = sqlx::query_scalar::<_, Uuid>(
+        "SELECT principal_id FROM privacy_subject WHERE subject_id = $1",
+    )
+    .bind(subject_id.as_uuid())
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(database_error)?;
+    if let Some(principal_id) = principal_id {
+        crate::member_lifecycle::redact_community_membership_in_tx(
+            tx,
+            &PrincipalId::from_uuid(principal_id),
+            alias,
+            destroyed_at,
+        )
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    }
     // A redacted identity retains only its non-authorizing attribution alias.
     // Delete the public materialization rather than carrying an alias through
     // a current-profile table, and clear every active ownership lookup token.

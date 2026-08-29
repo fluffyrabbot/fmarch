@@ -1,6 +1,6 @@
 //! Authentication, account, session, invite, and credential-delivery HTTP boundary.
 
-use super::{acquire_workload_slot, ApiError, ApiState, REGISTRATION_SESSION_TTL_SECONDS};
+use super::{acquire_workload_slot, ApiError, ApiState};
 use crate::authentication::{
     auth_attempt_policy_from_env, cancel_auth_delivery_intent, clear_auth_attempt_failures,
     deliver_auth_credential, enforce_auth_attempt_limit, enforce_recovery_request_limit,
@@ -42,6 +42,7 @@ pub(super) struct AuthHttpState {
     pub(super) access_token_verifier: Option<Arc<dyn AccessTokenVerifier>>,
     pub(super) session_policy: identity::SessionPolicy,
     pub(super) classic_enabled: bool,
+    pub(super) invitation_target_index: Arc<membership_application::InvitationTargetIndex>,
 }
 
 impl AuthHttpState {
@@ -80,6 +81,10 @@ impl AuthHttpState {
             access_token_verifier: None,
             session_policy: identity::SessionPolicy::from_env(),
             classic_enabled: std::env::var("FMARCH_CLASSIC_AUTH").ok().as_deref() != Some("0"),
+            invitation_target_index: Arc::new(
+                membership_application::InvitationTargetIndex::from_env_or_local()
+                    .expect("invitation target-index configuration must be valid"),
+            ),
         }
     }
 }
@@ -113,9 +118,15 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .route("/auth/session-rotations", post(rotate_auth_session))
         .route("/auth/session-logout", post(logout_auth_session))
         .route("/auth/session-revocations", post(revoke_auth_session))
-        .route("/auth/invites", post(create_auth_invite))
-        .route("/auth/invites/redeem", post(redeem_auth_invite))
-        .route("/auth/invite-revocations", post(revoke_auth_invite))
+        .route("/auth/game-invitations", post(create_game_invitation))
+        .route(
+            "/auth/game-invitations/redeem",
+            post(redeem_game_invitation),
+        )
+        .route(
+            "/auth/game-invitation-revocations",
+            post(revoke_game_invitation),
+        )
         .route("/admin/auth-deliveries", get(admin_auth_delivery_queue))
         .route(
             "/auth/delivery-intents/{delivery_id}/retry",
@@ -253,6 +264,18 @@ fn identity_api_error(error: IdentityError) -> ApiError {
     }
 }
 
+fn membership_admission_api_error(
+    error: membership_application::MembershipApplicationError,
+) -> ApiError {
+    use membership_application::MembershipApplicationError as Error;
+    match error {
+        Error::Unavailable | Error::Invitation(_) | Error::Membership(_) => unauthorized_invite(),
+        Error::Database(error) => ApiError::from(error),
+        Error::Identity(identity::IdentityFlowError::AlreadyExists(_)) => unauthorized_invite(),
+        other => internal_auth_error(format!("community admission failed: {other}")),
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct AuthSessionQuery {
     game: Option<Uuid>,
@@ -380,6 +403,9 @@ pub async fn bootstrap_workos_global_admin(
         }
     };
     if already_admin {
+        membership_application::ensure_founder_membership_in_tx(&mut tx, principal_id, now)
+            .await
+            .map_err(|error| error.to_string())?;
         tx.commit().await.map_err(|error| error.to_string())?;
         return Ok(false);
     }
@@ -405,6 +431,9 @@ pub async fn bootstrap_workos_global_admin(
     .execute(&mut *tx)
     .await
     .map_err(|error| error.to_string())?;
+    membership_application::ensure_founder_membership_in_tx(&mut tx, principal_id, now)
+        .await
+        .map_err(|error| error.to_string())?;
     tx.commit().await.map_err(|error| error.to_string())?;
     Ok(true)
 }
@@ -521,6 +550,9 @@ pub async fn bootstrap_classic_global_admin(
     .execute(&mut *tx)
     .await
     .map_err(|error| error.to_string())?;
+    membership_application::ensure_founder_membership_in_tx(&mut tx, principal_id, now)
+        .await
+        .map_err(|error| error.to_string())?;
     tx.commit().await.map_err(|error| error.to_string())?;
     Ok(true)
 }
@@ -528,6 +560,7 @@ pub async fn bootstrap_classic_global_admin(
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RegisterAuthAccount {
+    invitation_credential: String,
     account_id: String,
     password: String,
 }
@@ -1012,6 +1045,13 @@ async fn create_auth_account(
         });
     }
 
+    // This operator-only endpoint is an explicit trusted-root ceremony, not
+    // ordinary public registration. Accounts admitted here therefore receive
+    // a founder-origin membership in the same transaction.
+    membership_application::ensure_founder_membership_in_tx(&mut tx, principal_id, now)
+        .await
+        .map_err(membership_admission_api_error)?;
+
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
@@ -1054,6 +1094,10 @@ async fn register_auth_account(
 ) -> Result<Json<AuthAccountRegistrationResponse>, ApiError> {
     require_classic_enabled(&state)?;
     let account_id = normalize_registration_account_id(request.account_id.as_str())?;
+    let invitation_credential = request.invitation_credential.trim();
+    if invitation_credential.is_empty() {
+        return Err(unauthorized_invite());
+    }
     let password = request.password.as_str();
     validate_new_account_password(password)?;
     enforce_registration_source_limit(&state, &headers).await?;
@@ -1062,114 +1106,24 @@ async fn register_auth_account(
         "password processing capacity is exhausted; retry shortly",
     )?;
 
-    let now = unix_now_seconds();
-    let expires_at =
-        (now + REGISTRATION_SESSION_TTL_SECONDS).min(state.session_policy.classic_expiry(now));
-    let principal_id = PrincipalId::random();
     let password_hash = hash_account_password(password).await?;
-    let mut tx = state.pool.begin().await?;
-    identity::methods::ensure_principal(&mut tx, &principal_id, &[], now).await?;
-    let method_id = identity::methods::create_method(
-        &mut tx,
-        &principal_id,
-        identity::MethodKind::ClassicPassword,
-        now,
+    let admission = membership_application::admit_classic(
+        &state.pool,
+        state.invitation_target_index.as_ref(),
+        invitation_credential,
+        account_id.as_str(),
+        password_hash.as_str(),
+        &state.session_policy,
+        unix_now_seconds(),
     )
-    .await?;
-    let inserted = sqlx::query(
-        r#"
-        INSERT INTO auth_account (
-            account_id,
-            principal_id,
-            method_id,
-            password_hash,
-            created_at,
-            disabled_at,
-            global_capabilities
-        )
-        VALUES ($1, $2, $3, $4, $5, NULL, '{}')
-        ON CONFLICT (account_id) DO NOTHING
-        "#,
-    )
-    .bind(account_id.as_str())
-    .bind(principal_id.as_uuid())
-    .bind(method_id)
-    .bind(&password_hash)
-    .bind(now)
-    .execute(&mut *tx)
-    .await?;
-    if inserted.rows_affected() != 1 {
-        return Err(ApiError::Reject {
-            status: StatusCode::CONFLICT,
-            error: RejectCode::Internal,
-            message: "account already exists".to_string(),
-        });
-    }
-
-    let issued = identity::session::issue_session(
-        &mut tx,
-        identity::SessionSpec {
-            principal_id: &principal_id,
-            session_capabilities: &[],
-            authenticated_via_method_id: Some(method_id),
-            assurance: identity::Assurance::Password,
-            workos_session_id: None,
-            authenticated_at: now,
-            expires_at,
-            idle_expires_at: state.session_policy.idle_expiry(now, expires_at),
-        },
-        now,
-    )
-    .await?;
-    let session_hash = issued.token_hash.clone();
-    for (event_kind, metadata) in [
-        (
-            "account_registered",
-            serde_json::json!({
-                "account_id": account_id.as_str(),
-                "global_capability_count": 0
-            }),
-        ),
-        (
-            "account_session_created",
-            serde_json::json!({
-                "account_id": account_id.as_str(),
-                "session_expires_at": expires_at,
-                "global_capability_count": 0,
-                "registration": true
-            }),
-        ),
-    ] {
-        sqlx::query(
-            r#"
-            INSERT INTO identity_lifecycle_audit (
-                event_at,
-                event_kind,
-                actor_principal_id,
-                principal_id,
-                token_hash,
-                related_token_hash,
-                metadata
-            )
-            VALUES ($1, $2, $3, $4, $5, NULL, $6::JSONB)
-            "#,
-        )
-        .bind(now)
-        .bind(event_kind)
-        .bind(principal_id.as_uuid())
-        .bind(principal_id.as_uuid())
-        .bind(&session_hash)
-        .bind(metadata.to_string())
-        .execute(&mut *tx)
-        .await?;
-    }
-    tx.commit().await?;
+    .await
+    .map_err(membership_admission_api_error)?;
 
     Ok(Json(AuthAccountRegistrationResponse {
         account_id,
-        principal_id,
-        session_token: issued.session_token,
-        expires_at,
+        principal_id: admission.principal_id,
+        session_token: admission.session.session_token,
+        expires_at: admission.session.expires_at,
     }))
 }
 
@@ -1606,7 +1560,10 @@ enum CreateAuthSessionRequest {
         password: String,
     },
     #[serde(rename = "workos")]
-    Workos,
+    Workos {
+        #[serde(default)]
+        invitation_credential: Option<String>,
+    },
 }
 
 async fn create_auth_session(
@@ -1624,7 +1581,9 @@ async fn create_auth_session(
                     .await?;
             Ok(Json(response))
         }
-        CreateAuthSessionRequest::Workos => {
+        CreateAuthSessionRequest::Workos {
+            invitation_credential,
+        } => {
             let verifier =
                 state
                     .access_token_verifier
@@ -1642,19 +1601,50 @@ async fn create_auth_session(
             }
             enforce_workos_tombstone_recovery_boundary(&state.pool, &verified).await?;
             let mut tx = state.pool.begin().await?;
-            let resolution = match identity::workos::resolve_subject(&mut tx, &verified, now).await
-            {
-                Ok(resolution) => resolution,
-                Err(identity::IdentityFlowError::Unauthorized) => {
-                    // `resolve_subject` performs its own post-advisory-lock
-                    // tombstone read. Reclassify that failure while the same
-                    // transaction is still open so a concurrent provider
-                    // logout cannot collapse into an unrecoverable generic 401.
-                    enforce_workos_tombstone_recovery_boundary(&mut *tx, &verified).await?;
-                    return Err(unauthorized_account());
-                }
-                Err(other) => return Err(ApiError::from(other)),
-            };
+            let (resolution, admission_permit) =
+                match identity::workos::resolve_subject(&mut tx, &verified, now).await {
+                    Ok(resolution) => (resolution, None),
+                    Err(identity::IdentityFlowError::Unauthorized) => {
+                        // `resolve_subject` performs its own post-advisory-lock
+                        // tombstone read. Reclassify that failure while the same
+                        // transaction is still open so a concurrent provider
+                        // logout cannot collapse into an unrecoverable generic 401.
+                        enforce_workos_tombstone_recovery_boundary(&mut *tx, &verified).await?;
+                        let invitation_credential = invitation_credential
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .ok_or_else(unauthorized_account)?;
+                        let target_account_id =
+                            verified.email.as_deref().ok_or_else(unauthorized_account)?;
+                        // The admission-only binding takes the provider-subject
+                        // lock before the membership credential and sponsor locks.
+                        // Any later rejection rolls these new identity rows back.
+                        let resolution = identity::workos::bind_new_subject_for_admission(
+                            &mut tx, &verified, now,
+                        )
+                        .await?;
+                        let permit = membership_application::lock_admission(
+                            &mut tx,
+                            state.invitation_target_index.as_ref(),
+                            invitation_credential,
+                            target_account_id,
+                            now,
+                        )
+                        .await
+                        .map_err(membership_admission_api_error)?;
+                        membership_application::complete_admission(
+                            &mut tx,
+                            &permit,
+                            resolution.principal_id,
+                            now,
+                        )
+                        .await
+                        .map_err(membership_admission_api_error)?;
+                        (resolution, Some(permit))
+                    }
+                    Err(other) => return Err(ApiError::from(other)),
+                };
             claim_workos_provider_session(&mut tx, &verified, &resolution, token, None, now)
                 .await?;
             let expires_at = state.session_policy.workos_expiry(now);
@@ -1689,7 +1679,8 @@ async fn create_auth_session(
             .bind(
                 serde_json::json!({
                     "method_kind": "workos",
-                    "session_expires_at": issued.expires_at
+                    "session_expires_at": issued.expires_at,
+                    "community_admission": admission_permit.is_some()
                 })
                 .to_string(),
             )
@@ -3415,7 +3406,7 @@ async fn revoke_auth_session(
     }))
 }
 
-async fn create_auth_invite(
+async fn create_game_invitation(
     State(state): State<AuthHttpState>,
     auth: AuthenticatedRequest,
     Json(request): Json<CreateAuthInvite>,
@@ -3505,7 +3496,7 @@ async fn create_auth_invite(
     let mut tx = state.pool.begin().await?;
     let inserted = sqlx::query(
         r#"
-        INSERT INTO auth_invite (
+        INSERT INTO game_invitation (
             token_hash,
             account_id,
             principal_id,
@@ -3572,7 +3563,7 @@ async fn create_auth_invite(
     }))
 }
 
-async fn redeem_auth_invite(
+async fn redeem_game_invitation(
     State(state): State<AuthHttpState>,
     headers: HeaderMap,
     Json(request): Json<RedeemAuthInvite>,
@@ -3602,7 +3593,7 @@ async fn redeem_auth_invite(
     let discovered_principal_id = sqlx::query_scalar::<_, Uuid>(
         r#"
         SELECT invite.principal_id
-        FROM auth_invite AS invite
+        FROM game_invitation AS invite
         JOIN auth_account AS account
           ON account.account_id = invite.account_id
         WHERE invite.token_hash = $1
@@ -3642,7 +3633,7 @@ async fn redeem_auth_invite(
                invite.expires_at,
                invite.global_capabilities,
                account.password_hash
-        FROM auth_invite AS invite
+        FROM game_invitation AS invite
         JOIN auth_account AS account
           ON account.account_id = invite.account_id
         WHERE invite.token_hash = $1
@@ -3704,7 +3695,7 @@ async fn redeem_auth_invite(
 
     sqlx::query(
         r#"
-        UPDATE auth_invite
+        UPDATE game_invitation
         SET redeemed_at = $1,
             redeemed_session_token_hash = $2
         WHERE token_hash = $3
@@ -3754,7 +3745,7 @@ async fn redeem_auth_invite(
     Ok(Json(response))
 }
 
-async fn revoke_auth_invite(
+async fn revoke_game_invitation(
     State(state): State<AuthHttpState>,
     auth: AuthenticatedRequest,
     Json(request): Json<RevokeAuthInvite>,
@@ -3776,7 +3767,7 @@ async fn revoke_auth_invite(
     let mut tx = state.pool.begin().await?;
     let principal_id = sqlx::query_scalar::<_, Uuid>(
         r#"
-        UPDATE auth_invite
+        UPDATE game_invitation
         SET revoked_at = $1
         WHERE token_hash = $2
           AND redeemed_at IS NULL
@@ -3857,7 +3848,7 @@ async fn admin_auth_delivery_queue(
                    AND delivery.credential_expires_at > $1
                    AND CASE delivery.delivery_kind
                        WHEN 'invite' THEN EXISTS (
-                           SELECT 1 FROM auth_invite
+                           SELECT 1 FROM game_invitation
                            WHERE token_hash = delivery.credential_hash
                              AND redeemed_at IS NULL
                              AND revoked_at IS NULL
@@ -4239,7 +4230,9 @@ fn unauthorized_invite() -> ApiError {
     ApiError::Reject {
         status: StatusCode::UNAUTHORIZED,
         error: RejectCode::NotAuthorized,
-        message: "invite token is missing, expired, revoked, or already redeemed".to_string(),
+        message:
+            "community invitation is missing, mismatched, expired, revoked, or already redeemed"
+                .to_string(),
     }
 }
 

@@ -77,7 +77,7 @@ test("session card assembly owns role URLs and preserves the exact card schema",
     },
     identityBootstrap: {
       rootSessionSource: "auth_session",
-      browserCredentialIssuer: "/auth/accounts + /auth/invites",
+      browserCredentialIssuer: "/auth/accounts + /auth/game-invitations",
       devSessionEndpointEnabled: false,
     },
   });
@@ -105,7 +105,7 @@ test("session card assembly owns role URLs and preserves the exact card schema",
   assert.equal(card.directSeedCommandCount, 1);
   assert.equal(
     card.sessions.host.loginUrl,
-    "http://127.0.0.1:4102/auth/invite?returnTo=%2Fg%2Fgame-a%2Fhost&invite=host-token&account=host_h%40local.fmarch.test",
+    "http://127.0.0.1:4102/auth/game-invite?returnTo=%2Fg%2Fgame-a%2Fhost&invite=host-token&account=host_h%40local.fmarch.test",
   );
   assert.equal(
     card.sessions.player.loginUrl,
@@ -119,7 +119,7 @@ test("session card assembly owns role URLs and preserves the exact card schema",
       frontendBaseUrl: "https://app.example.test",
       session: { returnTo: "/g/game-a", token: "legacy-token" },
     }),
-    "https://app.example.test/auth/invite?returnTo=%2Fg%2Fgame-a",
+    "https://app.example.test/auth/game-invite?returnTo=%2Fg%2Fgame-a",
   );
 });
 

@@ -667,7 +667,7 @@ async function seedRootAdminSession() {
     status: "passed",
     devSessionEndpointEnabled: false,
     rootSessionSource: "auth_session",
-    browserCredentialIssuer: "/auth/accounts + /auth/invites",
+    browserCredentialIssuer: "/auth/accounts + /auth/game-invitations",
     browserCredentialKinds: ["account", "account-bound-invite"],
     browserSessionGrantUsage: false,
     rootPrincipalId: session.principal_id,
@@ -703,7 +703,7 @@ async function createInviteCredential({
     principalId,
     globalCapabilities,
   });
-  const invite = await fetchJson(`${apiBaseUrl}/auth/invites`, {
+  const invite = await fetchJson(`${apiBaseUrl}/auth/game-invitations`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${tokens.rootAdmin}`,
@@ -14084,7 +14084,7 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
     !statusText.includes("Replacement invite issued") ||
     targetLabel !== "Slot 7 / player-rowan" ||
     loginUrl.origin !== frontendBaseUrl ||
-    loginUrl.pathname !== "/auth/invite" ||
+    loginUrl.pathname !== "/auth/game-invite" ||
     returnTo !== `/g/${game}` ||
     accountId !== replacementAccount.accountId ||
     typeof inviteToken !== "string" ||

@@ -922,7 +922,7 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
         1
     );
     insert_classic_account_fixture(&pool, &account_id, principal, "secret-hash").await;
-    sqlx::query("INSERT INTO auth_invite (token_hash, principal_id, created_at, expires_at, global_capabilities, invited_by_principal_id, account_id) VALUES ($1,$2,1,100,'{}'::text[],$3,$4)")
+    sqlx::query("INSERT INTO game_invitation (token_hash, principal_id, created_at, expires_at, global_capabilities, invited_by_principal_id, account_id) VALUES ($1,$2,1,100,'{}'::text[],$3,$4)")
         .bind("11".repeat(32))
         .bind(principal.as_uuid())
         .bind(principal.as_uuid())
@@ -975,11 +975,13 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
         4
     );
     assert_eq!(
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM auth_invite WHERE principal_id = $1",)
-            .bind(principal.as_uuid())
-            .fetch_one(&pool)
-            .await
-            .unwrap(),
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM game_invitation WHERE principal_id = $1",
+        )
+        .bind(principal.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
         0
     );
     assert_eq!(

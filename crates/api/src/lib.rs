@@ -14,6 +14,7 @@ mod live_delivery;
 mod live_projection;
 pub mod mash_scale;
 mod media_http;
+mod membership_http;
 pub mod program_library;
 mod public_platform_http;
 
@@ -84,8 +85,6 @@ impl FromRef<ApiState> for AuthHttpState {
         state.auth.clone()
     }
 }
-
-const REGISTRATION_SESSION_TTL_SECONDS: i64 = 60 * 60 * 24 * 7;
 
 impl ApiState {
     pub fn new(pool: PgPool, media_store: impl Into<MediaRepository>) -> Self {
@@ -276,6 +275,7 @@ pub fn router_with_state(state: ApiState) -> Router {
     let embed_routes = embed_http::routes();
     let game_routes = game_http::routes(&state);
     let live_delivery_routes = live_delivery::routes(&state);
+    let membership_routes = membership_http::routes(&state);
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz));
@@ -287,6 +287,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         .merge(embed_routes)
         .merge(game_routes)
         .merge(live_delivery_routes);
+    let app = app.merge(membership_routes);
     app.with_state(state)
 }
 

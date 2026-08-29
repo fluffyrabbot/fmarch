@@ -72,7 +72,7 @@
       <a href={`/auth/login?returnTo=${encodeURIComponent(returnTo)}`}>Other sign-in methods</a>
       <a href={`/auth/account/recovery?returnTo=${encodeURIComponent(returnTo)}`}>Forgot password?</a>
       <a href={`/auth/register?returnTo=${encodeURIComponent(returnTo)}`}>Create account</a>
-      <a href={`/auth/invite?returnTo=${encodeURIComponent(returnTo)}`}>Use an invitation</a>
+      <a href={`/auth/invite?returnTo=${encodeURIComponent(returnTo)}`}>Join with a community invitation</a>
     </nav>
   </section>
 </main>

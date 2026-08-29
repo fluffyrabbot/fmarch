@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { load } from "./+page.server.js";
 
-test("registration chooser preserves the local game return path", () => {
+test("registration chooser requires a server-held invitation and preserves the local return path", () => {
   assert.deepEqual(
     load({
+      cookies: invitationCookies(),
       url: new URL(
         "http://localhost/auth/register?account=New%40Example.test&returnTo=%2Fg%2Fmidsummer",
       ),
@@ -17,10 +18,20 @@ test("registration chooser preserves the local game return path", () => {
       },
     },
   );
-  assert.deepEqual(
-    load({
-      url: new URL("http://localhost/auth/register?returnTo=//evil.test/"),
-    }),
-    { chooser: { accountId: "", returnTo: "/", workosAvailable: false } },
+  assert.throws(
+    () =>
+      load({
+        cookies: { get() {} },
+        url: new URL("http://localhost/auth/register?returnTo=//evil.test/"),
+      }),
+    (error) => error.status === 303 && error.location === "/auth/invite?returnTo=%2F",
   );
 });
+
+function invitationCookies() {
+  return {
+    get(name) {
+      return name === "fmarch_pending_community_invitation" ? "fmci_example" : undefined;
+    },
+  };
+}

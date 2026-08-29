@@ -1,7 +1,7 @@
 {
   "version": 1,
   "epoch": 1,
-  "current_schema_sha256": "9ac962857f8851a2afb85f7d5ea21ef579fdca1f3a8e1f6c62bc5949c088a543",
+  "current_schema_sha256": "cee000d19d56966f578b411a6231415d35c768d0250218a215601a6ee32c89a1",
   "migrations": [
     {
       "version": 1,
@@ -12,7 +12,12 @@
       "version": 2,
       "filename": "0002_profile_mute_durable_target.sql",
       "sha256": "62c019398093aee48ed46af980b4cb69e7432ec90d3cd9f8d06d694ea453427c"
+    },
+    {
+      "version": 3,
+      "filename": "0003_closed_community_admission.sql",
+      "sha256": "b7a4ba915c4f3713f34e6ea334f81d38eaf6b88d8a4f89ac859427c85c779fc4"
     }
   ],
-  "authority_fingerprint_sha256": "6aaf9d10ead281354ab8b993bf666f422dbb29a68ca23446a4f216bc6ab294e1"
+  "authority_fingerprint_sha256": "37eb22b425bb45771d380d88524974bf5415255a7ead7280580276e55217ee9d"
 }

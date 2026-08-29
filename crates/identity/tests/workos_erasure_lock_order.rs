@@ -1,4 +1,4 @@
-use identity::workos::{attach_subject, resolve_subject};
+use identity::workos::{attach_subject, bind_new_subject_for_admission, resolve_subject};
 use identity::{methods, MethodKind, PrincipalId, VerifiedIdentity, WorkosSessionId};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -103,10 +103,12 @@ async fn name_transaction(tx: &mut Transaction<'_, Postgres>, application_name: 
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
-async fn first_sight_workos_provisions_privacy_subject_before_provider_binding(pool: PgPool) {
+async fn admission_binding_provisions_privacy_subject_before_provider_binding(pool: PgPool) {
     let assertion = verified(format!("first-sight-{}", Uuid::new_v4().simple()));
     let mut tx = pool.begin().await.unwrap();
-    let resolution = resolve_subject(&mut tx, &assertion, 100).await.unwrap();
+    let resolution = bind_new_subject_for_admission(&mut tx, &assertion, 100)
+        .await
+        .unwrap();
 
     let ownership = sqlx::query_as::<_, (String, String, Uuid, Uuid)>(
         r#"

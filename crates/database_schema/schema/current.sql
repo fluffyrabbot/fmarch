@@ -561,30 +561,11 @@ CREATE TABLE public.auth_delivery_intent (
     CONSTRAINT auth_delivery_intent_credential_envelope_check CHECK (((credential_envelope IS NULL) OR (jsonb_typeof(credential_envelope) = 'object'::text))),
     CONSTRAINT auth_delivery_intent_credential_envelope_kid_shape CHECK ((((credential_envelope IS NULL) AND (credential_envelope_kid IS NULL)) OR ((credential_envelope IS NOT NULL) AND (credential_envelope_kid IS NOT NULL)))),
     CONSTRAINT auth_delivery_intent_credential_expiry_check CHECK ((credential_expires_at > created_at)),
-    CONSTRAINT auth_delivery_intent_delivery_kind_check CHECK ((delivery_kind = ANY (ARRAY['invite'::text, 'recovery'::text]))),
+    CONSTRAINT auth_delivery_intent_delivery_kind_check CHECK ((delivery_kind = ANY (ARRAY['invite'::text, 'recovery'::text, 'community_invitation'::text]))),
     CONSTRAINT auth_delivery_intent_delivery_shape_check CHECK ((((status = 'queued'::text) AND (outcome_kind = 'queued'::text) AND (next_attempt_at IS NOT NULL) AND (delivered_at IS NULL) AND (outcome_code IS NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'processing'::text) AND (outcome_kind = 'processing'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NULL) AND (outcome_code IS NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NOT NULL) AND (claim_expires_at IS NOT NULL)) OR ((status = 'delivered'::text) AND (outcome_kind = 'delivered'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NOT NULL) AND (outcome_code IS NULL) AND (provider_receipt_id IS NOT NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'retryable_failed'::text) AND (outcome_kind = 'retryable_failure'::text) AND (next_attempt_at IS NOT NULL) AND (delivered_at IS NULL) AND (outcome_code IS NOT NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'permanent_failed'::text) AND (outcome_kind = 'permanent_failure'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NULL) AND (outcome_code IS NOT NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL)) OR ((status = 'cancelled'::text) AND (outcome_kind = 'cancelled'::text) AND (next_attempt_at IS NULL) AND (delivered_at IS NULL) AND (outcome_code IS NOT NULL) AND (provider_receipt_id IS NULL) AND (claim_token IS NULL) AND (claim_expires_at IS NULL) AND (credential_envelope IS NULL)))),
     CONSTRAINT auth_delivery_intent_outcome_kind_check CHECK ((outcome_kind = ANY (ARRAY['queued'::text, 'processing'::text, 'delivered'::text, 'retryable_failure'::text, 'permanent_failure'::text, 'cancelled'::text]))),
     CONSTRAINT auth_delivery_intent_provider_id_check CHECK ((length(TRIM(BOTH FROM provider_id)) > 0)),
     CONSTRAINT auth_delivery_intent_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'processing'::text, 'delivered'::text, 'retryable_failed'::text, 'permanent_failed'::text, 'cancelled'::text])))
-);
-
-
---
--- Name: auth_invite; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.auth_invite (
-    token_hash text NOT NULL,
-    principal_id uuid NOT NULL,
-    created_at bigint NOT NULL,
-    expires_at bigint NOT NULL,
-    redeemed_at bigint,
-    redeemed_session_token_hash text,
-    global_capabilities text[] DEFAULT '{}'::text[] NOT NULL,
-    invited_by_principal_id uuid NOT NULL,
-    revoked_at bigint,
-    game uuid,
-    account_id text NOT NULL
 );
 
 
@@ -682,6 +663,68 @@ CREATE TABLE public.command_receipt (
     stream_seqs bigint[] NOT NULL,
     command_fingerprint bytea NOT NULL,
     CONSTRAINT command_receipt_fingerprint_check CHECK ((octet_length(command_fingerprint) = 32))
+);
+
+
+--
+-- Name: community_invitation; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.community_invitation (
+    invitation_id uuid NOT NULL,
+    sponsoring_membership_id uuid NOT NULL,
+    target_index text NOT NULL,
+    expires_at bigint NOT NULL,
+    status text NOT NULL,
+    admitted_membership_id uuid,
+    created_at bigint NOT NULL,
+    updated_at bigint NOT NULL,
+    revision bigint NOT NULL,
+    CONSTRAINT community_invitation_revision_check CHECK ((revision > 0)),
+    CONSTRAINT community_invitation_status_check CHECK ((status = ANY (ARRAY['issued'::text, 'accepted'::text, 'revoked'::text]))),
+    CONSTRAINT community_invitation_status_shape_check CHECK ((((status = 'accepted'::text) AND (admitted_membership_id IS NOT NULL)) OR ((status = ANY (ARRAY['issued'::text, 'revoked'::text])) AND (admitted_membership_id IS NULL)))),
+    CONSTRAINT community_invitation_target_check CHECK (((length(target_index) = 64) AND (target_index ~ '^[0-9a-f]{64}$'::text))),
+    CONSTRAINT community_invitation_time_check CHECK (((expires_at > created_at) AND (updated_at >= created_at)))
+);
+
+
+--
+-- Name: community_invitation_credential; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.community_invitation_credential (
+    token_hash text NOT NULL,
+    invitation_id uuid NOT NULL,
+    created_at bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    consumed_at bigint,
+    revoked_at bigint,
+    CONSTRAINT community_invitation_credential_hash_check CHECK (((length(token_hash) = 64) AND (token_hash ~ '^[0-9a-f]{64}$'::text))),
+    CONSTRAINT community_invitation_credential_terminal_check CHECK ((NOT ((consumed_at IS NOT NULL) AND (revoked_at IS NOT NULL)))),
+    CONSTRAINT community_invitation_credential_time_check CHECK ((expires_at > created_at))
+);
+
+
+--
+-- Name: community_membership; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.community_membership (
+    membership_id uuid NOT NULL,
+    active_principal_id uuid,
+    status text NOT NULL,
+    origin_kind text NOT NULL,
+    admission_invitation_id uuid,
+    sponsoring_membership_id uuid,
+    admitted_at bigint NOT NULL,
+    updated_at bigint NOT NULL,
+    revision bigint NOT NULL,
+    retained_alias text,
+    CONSTRAINT community_membership_origin_shape_check CHECK ((((origin_kind = 'founder'::text) AND (admission_invitation_id IS NULL) AND (sponsoring_membership_id IS NULL)) OR ((origin_kind = 'invitation'::text) AND (admission_invitation_id IS NOT NULL) AND (sponsoring_membership_id IS NOT NULL) AND (sponsoring_membership_id <> membership_id)))),
+    CONSTRAINT community_membership_principal_shape_check CHECK ((((status = ANY (ARRAY['active'::text, 'suspended'::text])) AND (active_principal_id IS NOT NULL) AND (retained_alias IS NULL)) OR ((status = 'withdrawn'::text) AND (retained_alias IS NULL)) OR ((status = 'redacted'::text) AND (active_principal_id IS NULL) AND (retained_alias IS NOT NULL)))),
+    CONSTRAINT community_membership_revision_check CHECK ((revision > 0)),
+    CONSTRAINT community_membership_status_check CHECK ((status = ANY (ARRAY['active'::text, 'suspended'::text, 'withdrawn'::text, 'redacted'::text]))),
+    CONSTRAINT community_membership_time_check CHECK ((updated_at >= admitted_at))
 );
 
 
@@ -1289,6 +1332,25 @@ CREATE TABLE public.game_index (
 
 
 --
+-- Name: game_invitation; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.game_invitation (
+    token_hash text NOT NULL,
+    principal_id uuid NOT NULL,
+    created_at bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    redeemed_at bigint,
+    redeemed_session_token_hash text,
+    global_capabilities text[] DEFAULT '{}'::text[] NOT NULL,
+    invited_by_principal_id uuid NOT NULL,
+    revoked_at bigint,
+    game uuid,
+    account_id text NOT NULL
+);
+
+
+--
 -- Name: game_persona; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1583,6 +1645,19 @@ CREATE TABLE public.member_profile (
     current_claim_id uuid,
     CONSTRAINT member_profile_active_redacted_shape_check CHECK ((((lifecycle = 'active'::text) AND (active_principal_id IS NOT NULL) AND (current_claim_id IS NOT NULL) AND (handle_hmac IS NOT NULL) AND (octet_length(handle_hmac) = 32) AND (redacted_alias IS NULL)) OR ((lifecycle = 'redacted'::text) AND (active_principal_id IS NULL) AND (current_claim_id IS NULL) AND (handle_hmac IS NULL) AND (redacted_alias IS NOT NULL)))),
     CONSTRAINT member_profile_lifecycle_check CHECK ((lifecycle = ANY (ARRAY['active'::text, 'redacted'::text])))
+);
+
+
+--
+-- Name: membership_ancestry; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.membership_ancestry (
+    ancestor_membership_id uuid NOT NULL,
+    descendant_membership_id uuid NOT NULL,
+    depth integer NOT NULL,
+    CONSTRAINT membership_ancestry_depth_check CHECK ((depth >= 0)),
+    CONSTRAINT membership_ancestry_self_shape_check CHECK ((((depth = 0) AND (ancestor_membership_id = descendant_membership_id)) OR ((depth > 0) AND (ancestor_membership_id <> descendant_membership_id))))
 );
 
 
@@ -2254,14 +2329,6 @@ ALTER TABLE ONLY public.auth_delivery_intent
 
 
 --
--- Name: auth_invite auth_invite_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.auth_invite
-    ADD CONSTRAINT auth_invite_pkey PRIMARY KEY (token_hash);
-
-
---
 -- Name: auth_registration_attempt auth_registration_attempt_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2307,6 +2374,54 @@ ALTER TABLE ONLY public.authentication_method
 
 ALTER TABLE ONLY public.command_receipt
     ADD CONSTRAINT command_receipt_pkey PRIMARY KEY (principal_id, command_id);
+
+
+--
+-- Name: community_invitation community_invitation_admitted_membership_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_invitation
+    ADD CONSTRAINT community_invitation_admitted_membership_id_key UNIQUE (admitted_membership_id);
+
+
+--
+-- Name: community_invitation_credential community_invitation_credential_invitation_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_invitation_credential
+    ADD CONSTRAINT community_invitation_credential_invitation_id_key UNIQUE (invitation_id);
+
+
+--
+-- Name: community_invitation_credential community_invitation_credential_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_invitation_credential
+    ADD CONSTRAINT community_invitation_credential_pkey PRIMARY KEY (token_hash);
+
+
+--
+-- Name: community_invitation community_invitation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_invitation
+    ADD CONSTRAINT community_invitation_pkey PRIMARY KEY (invitation_id);
+
+
+--
+-- Name: community_membership community_membership_admission_invitation_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_membership
+    ADD CONSTRAINT community_membership_admission_invitation_id_key UNIQUE (admission_invitation_id);
+
+
+--
+-- Name: community_membership community_membership_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_membership
+    ADD CONSTRAINT community_membership_pkey PRIMARY KEY (membership_id);
 
 
 --
@@ -2518,6 +2633,14 @@ ALTER TABLE ONLY public.game_index
 
 
 --
+-- Name: game_invitation game_invitation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.game_invitation
+    ADD CONSTRAINT game_invitation_pkey PRIMARY KEY (token_hash);
+
+
+--
 -- Name: game_persona_name_claim game_persona_name_claim_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2683,6 +2806,14 @@ ALTER TABLE ONLY public.member_profile
 
 ALTER TABLE ONLY public.member_profile
     ADD CONSTRAINT member_profile_subject_id_key UNIQUE (subject_id);
+
+
+--
+-- Name: membership_ancestry membership_ancestry_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.membership_ancestry
+    ADD CONSTRAINT membership_ancestry_pkey PRIMARY KEY (ancestor_membership_id, descendant_membership_id);
 
 
 --
@@ -3247,41 +3378,6 @@ CREATE INDEX auth_delivery_intent_retry_idx ON public.auth_delivery_intent USING
 
 
 --
--- Name: auth_invite_account_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX auth_invite_account_idx ON public.auth_invite USING btree (account_id);
-
-
---
--- Name: auth_invite_expiry_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX auth_invite_expiry_idx ON public.auth_invite USING btree (expires_at) WHERE (redeemed_at IS NULL);
-
-
---
--- Name: auth_invite_game_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX auth_invite_game_idx ON public.auth_invite USING btree (game) WHERE (game IS NOT NULL);
-
-
---
--- Name: auth_invite_principal_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX auth_invite_principal_idx ON public.auth_invite USING btree (principal_id);
-
-
---
--- Name: auth_invite_revocation_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX auth_invite_revocation_idx ON public.auth_invite USING btree (revoked_at) WHERE (revoked_at IS NOT NULL);
-
-
---
 -- Name: auth_registration_attempt_blocked_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3363,6 +3459,48 @@ CREATE INDEX authentication_method_principal_idx ON public.authentication_method
 --
 
 CREATE INDEX command_receipt_stream_idx ON public.command_receipt USING btree (stream_id);
+
+
+--
+-- Name: community_invitation_credential_expiry_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX community_invitation_credential_expiry_idx ON public.community_invitation_credential USING btree (expires_at) WHERE ((consumed_at IS NULL) AND (revoked_at IS NULL));
+
+
+--
+-- Name: community_invitation_expiry_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX community_invitation_expiry_idx ON public.community_invitation USING btree (expires_at) WHERE (status = 'issued'::text);
+
+
+--
+-- Name: community_invitation_sponsor_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX community_invitation_sponsor_idx ON public.community_invitation USING btree (sponsoring_membership_id, status, invitation_id);
+
+
+--
+-- Name: community_membership_active_principal_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX community_membership_active_principal_unique ON public.community_membership USING btree (active_principal_id) WHERE (active_principal_id IS NOT NULL);
+
+
+--
+-- Name: community_membership_sponsor_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX community_membership_sponsor_idx ON public.community_membership USING btree (sponsoring_membership_id) WHERE (sponsoring_membership_id IS NOT NULL);
+
+
+--
+-- Name: community_membership_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX community_membership_status_idx ON public.community_membership USING btree (status, membership_id);
 
 
 --
@@ -3506,6 +3644,41 @@ CREATE INDEX game_index_public_page_idx ON public.game_index USING btree (update
 
 
 --
+-- Name: game_invitation_account_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX game_invitation_account_idx ON public.game_invitation USING btree (account_id);
+
+
+--
+-- Name: game_invitation_expiry_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX game_invitation_expiry_idx ON public.game_invitation USING btree (expires_at) WHERE (redeemed_at IS NULL);
+
+
+--
+-- Name: game_invitation_game_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX game_invitation_game_idx ON public.game_invitation USING btree (game) WHERE (game IS NOT NULL);
+
+
+--
+-- Name: game_invitation_principal_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX game_invitation_principal_idx ON public.game_invitation USING btree (principal_id);
+
+
+--
+-- Name: game_invitation_revocation_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX game_invitation_revocation_idx ON public.game_invitation USING btree (revoked_at) WHERE (revoked_at IS NOT NULL);
+
+
+--
 -- Name: game_persona_subject_binding_erasure_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3643,6 +3816,13 @@ CREATE INDEX member_personal_export_subject_idx ON public.member_personal_export
 --
 
 CREATE INDEX member_profile_subject_idx ON public.member_profile USING btree (subject_id);
+
+
+--
+-- Name: membership_ancestry_descendant_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX membership_ancestry_descendant_idx ON public.membership_ancestry USING btree (descendant_membership_id, depth);
 
 
 --
@@ -4174,27 +4354,11 @@ ALTER TABLE ONLY public.auth_account_recovery_credential
 
 
 --
--- Name: auth_delivery_intent auth_delivery_intent_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.auth_delivery_intent
-    ADD CONSTRAINT auth_delivery_intent_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.auth_account(account_id) ON DELETE CASCADE;
-
-
---
 -- Name: auth_delivery_intent auth_delivery_intent_credential_envelope_kid_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.auth_delivery_intent
     ADD CONSTRAINT auth_delivery_intent_credential_envelope_kid_fkey FOREIGN KEY (credential_envelope_kid) REFERENCES public.event_direct_key_sentinel(kid);
-
-
---
--- Name: auth_invite auth_invite_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.auth_invite
-    ADD CONSTRAINT auth_invite_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.auth_account(account_id);
 
 
 --
@@ -4227,6 +4391,54 @@ ALTER TABLE ONLY public.auth_session
 
 ALTER TABLE ONLY public.authentication_method
     ADD CONSTRAINT authentication_method_principal_id_fkey FOREIGN KEY (principal_id) REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: community_invitation community_invitation_admitted_membership_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_invitation
+    ADD CONSTRAINT community_invitation_admitted_membership_fkey FOREIGN KEY (admitted_membership_id) REFERENCES public.community_membership(membership_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: community_invitation_credential community_invitation_credential_invitation_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_invitation_credential
+    ADD CONSTRAINT community_invitation_credential_invitation_fkey FOREIGN KEY (invitation_id) REFERENCES public.community_invitation(invitation_id) ON DELETE CASCADE;
+
+
+--
+-- Name: community_invitation community_invitation_sponsor_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_invitation
+    ADD CONSTRAINT community_invitation_sponsor_fkey FOREIGN KEY (sponsoring_membership_id) REFERENCES public.community_membership(membership_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: community_membership community_membership_active_principal_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_membership
+    ADD CONSTRAINT community_membership_active_principal_fkey FOREIGN KEY (active_principal_id) REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: community_membership community_membership_admission_invitation_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_membership
+    ADD CONSTRAINT community_membership_admission_invitation_fkey FOREIGN KEY (admission_invitation_id) REFERENCES public.community_invitation(invitation_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: community_membership community_membership_sponsor_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.community_membership
+    ADD CONSTRAINT community_membership_sponsor_fkey FOREIGN KEY (sponsoring_membership_id) REFERENCES public.community_membership(membership_id) ON DELETE RESTRICT;
 
 
 --
@@ -4355,6 +4567,14 @@ ALTER TABLE ONLY public.external_identity
 
 ALTER TABLE ONLY public.game_index
     ADD CONSTRAINT game_index_pack_artifact_fkey FOREIGN KEY (pack_key, pack_version, pack_content_hash) REFERENCES public.pack_artifact(pack_key, pack_version, content_hash) ON DELETE RESTRICT;
+
+
+--
+-- Name: game_invitation game_invitation_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.game_invitation
+    ADD CONSTRAINT game_invitation_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.auth_account(account_id);
 
 
 --
@@ -4499,6 +4719,22 @@ ALTER TABLE ONLY public.member_profile
 
 ALTER TABLE ONLY public.member_profile
     ADD CONSTRAINT member_profile_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.privacy_subject(subject_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: membership_ancestry membership_ancestry_ancestor_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.membership_ancestry
+    ADD CONSTRAINT membership_ancestry_ancestor_fkey FOREIGN KEY (ancestor_membership_id) REFERENCES public.community_membership(membership_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: membership_ancestry membership_ancestry_descendant_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.membership_ancestry
+    ADD CONSTRAINT membership_ancestry_descendant_fkey FOREIGN KEY (descendant_membership_id) REFERENCES public.community_membership(membership_id) ON DELETE RESTRICT;
 
 
 --

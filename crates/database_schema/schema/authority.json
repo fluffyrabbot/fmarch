@@ -360,55 +360,6 @@
     {
       "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arwd/$schema_owner}",
       "kind": "relation",
-      "name": "auth_invite",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "",
-      "kind": "relation",
-      "name": "auth_invite_account_idx",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "",
-      "kind": "relation",
-      "name": "auth_invite_expiry_idx",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "",
-      "kind": "relation",
-      "name": "auth_invite_game_idx",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "",
-      "kind": "relation",
-      "name": "auth_invite_pkey",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "",
-      "kind": "relation",
-      "name": "auth_invite_principal_idx",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "",
-      "kind": "relation",
-      "name": "auth_invite_revocation_idx",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arwd/$schema_owner}",
-      "kind": "relation",
       "name": "auth_registration_attempt",
       "owner": "$schema_owner",
       "namespace": "public"
@@ -564,6 +515,111 @@
       "acl": "",
       "kind": "relation",
       "name": "command_receipt_stream_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arw/$schema_owner}",
+      "kind": "relation",
+      "name": "community_invitation",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_invitation_admitted_membership_id_key",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arwd/$schema_owner}",
+      "kind": "relation",
+      "name": "community_invitation_credential",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_invitation_credential_expiry_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_invitation_credential_invitation_id_key",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_invitation_credential_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_invitation_expiry_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_invitation_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_invitation_sponsor_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arw/$schema_owner}",
+      "kind": "relation",
+      "name": "community_membership",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_membership_active_principal_unique",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_membership_admission_invitation_id_key",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_membership_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_membership_sponsor_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "community_membership_status_idx",
       "owner": "$schema_owner",
       "namespace": "public"
     },
@@ -1053,6 +1109,55 @@
     {
       "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arwd/$schema_owner}",
       "kind": "relation",
+      "name": "game_invitation",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "game_invitation_account_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "game_invitation_expiry_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "game_invitation_game_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "game_invitation_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "game_invitation_principal_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "game_invitation_revocation_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arwd/$schema_owner}",
+      "kind": "relation",
       "name": "game_persona",
       "owner": "$schema_owner",
       "namespace": "public"
@@ -1474,6 +1579,27 @@
       "acl": "",
       "kind": "relation",
       "name": "member_profile_subject_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ar/$schema_owner}",
+      "kind": "relation",
+      "name": "membership_ancestry",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "membership_ancestry_descendant_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "membership_ancestry_pkey",
       "owner": "$schema_owner",
       "namespace": "public"
     },

@@ -16,6 +16,7 @@ non-interchangeable concepts:
 
 ```text
 Principal        authenticated authority and durable grants
+CommunityMembership admission, member standing, and sponsorship provenance
 PrivacySubject   confidential-state and erasure boundary
 MemberProfile    one optional social presentation for an active principal
 GamePersona      a game-local public identity with occupancy history
@@ -66,8 +67,9 @@ The current product has exactly two profile audiences:
 - `public`: eligible for public profile reads and public search;
 - `private`: visible only to the owner/editor boundary.
 
-`members` is removed. It may return only with a dedicated membership aggregate,
-a typed viewer/audience policy, and an authenticated member-readable query.
+`members` is removed here. RFC 0005 restores it only through its dedicated
+membership aggregate, typed viewer/audience policy, and authenticated
+member-readable query.
 
 ### 4. Ownership of decisions
 

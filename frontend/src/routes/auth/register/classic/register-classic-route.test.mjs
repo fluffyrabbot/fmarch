@@ -7,6 +7,7 @@ const PRINCIPAL_ID = "00000000-0000-5000-8000-000000000001";
 test("classic registration load preserves the local game return path", () => {
   assert.deepEqual(
     load({
+      cookies: invitationCookies(),
       url: new URL(
         "http://localhost/auth/register/classic?account=New%40Example.test&returnTo=%2Fg%2Fmidsummer",
       ),
@@ -21,12 +22,18 @@ test("classic registration load preserves the local game return path", () => {
 });
 
 test("classic registration stores the backend-issued session and enters account security", async () => {
-  const observed = { request: null, cookie: null };
+  const observed = { request: null, cookie: null, invitationCleared: false };
   await assert.rejects(
     actions.default({
       cookies: {
+        get(name) {
+          return name === "fmarch_pending_community_invitation" ? "fmci_example" : undefined;
+        },
         set(name, value, options) {
           observed.cookie = { name, value, options };
+        },
+        delete(name) {
+          observed.invitationCleared = name === "fmarch_pending_community_invitation";
         },
       },
       fetch: async (url, init) => {
@@ -45,6 +52,7 @@ test("classic registration stores the backend-issued session and enters account 
       },
       getClientAddress: () => "203.0.113.45",
       request: formRequest({
+        invitationCredential: "fmci_example",
         accountId: " New@Example.Test ",
         password: "correct horse battery",
         confirmPassword: "correct horse battery",
@@ -61,6 +69,7 @@ test("classic registration stores the backend-issued session and enters account 
   assert.equal(observed.request.method, "POST");
   assert.equal(observed.request.headers["x-fmarch-auth-source"], "203.0.113.45");
   assert.deepEqual(observed.request.body, {
+    invitation_credential: "fmci_example",
     account_id: "New@Example.Test",
     password: "correct horse battery",
   });
@@ -69,6 +78,7 @@ test("classic registration stores the backend-issued session and enters account 
     value: "fmss_registered-session",
     options: { path: "/", httpOnly: true, sameSite: "lax", secure: false },
   });
+  assert.equal(observed.invitationCleared, true);
 });
 
 test("classic registration rejects missing and mismatched credentials before calling auth", async () => {
@@ -76,6 +86,7 @@ test("classic registration rejects missing and mismatched credentials before cal
     { accountId: "", password: "", confirmPassword: "", returnTo: "/g/midsummer" },
     {
       accountId: "new@example.test",
+      invitationCredential: "fmci_example",
       password: "correct horse battery",
       confirmPassword: "different horse battery",
       returnTo: "//evil.test/",
@@ -102,6 +113,7 @@ test("classic registration rejects a session response without a backend token", 
         expires_at: 4_102_444_800,
       }),
     request: formRequest({
+      invitationCredential: "fmci_example",
       accountId: "new@example.test",
       password: "correct horse battery",
       confirmPassword: "correct horse battery",
@@ -138,6 +150,7 @@ test("classic registration rejects missing or noncanonical principal IDs from th
         cookies: forbiddenCookieJar(),
         fetch: async () => jsonResponse(responseBody),
         request: formRequest({
+          invitationCredential: "fmci_example",
           accountId: "new@example.test",
           password: "correct horse battery",
           confirmPassword: "correct horse battery",
@@ -157,6 +170,7 @@ test("classic registration exposes duplicate and rate-limit recovery states", as
     cookies: forbiddenCookieJar(),
     fetch: async () => jsonResponse({ message: "account already exists" }, { ok: false, status: 409 }),
     request: formRequest({
+      invitationCredential: "fmci_example",
       accountId: "new@example.test",
       password: "correct horse battery",
       confirmPassword: "correct horse battery",
@@ -172,6 +186,7 @@ test("classic registration exposes duplicate and rate-limit recovery states", as
     fetch: async () =>
       jsonResponse({}, { ok: false, status: 429, headers: { "retry-after": "23" } }),
     request: formRequest({
+      invitationCredential: "fmci_example",
       accountId: "new@example.test",
       password: "correct horse battery",
       confirmPassword: "correct horse battery",
@@ -204,8 +219,22 @@ function jsonResponse(body, { ok = true, status = 200, headers = {} } = {}) {
 
 function forbiddenCookieJar() {
   return {
+    get(name) {
+      return name === "fmarch_pending_community_invitation" ? "fmci_example" : undefined;
+    },
     set() {
       throw new Error("registration failure must not set a cookie");
+    },
+    delete() {
+      throw new Error("registration failure must not clear the invitation");
+    },
+  };
+}
+
+function invitationCookies() {
+  return {
+    get(name) {
+      return name === "fmarch_pending_community_invitation" ? "fmci_example" : undefined;
     },
   };
 }

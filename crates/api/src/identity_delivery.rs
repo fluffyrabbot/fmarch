@@ -17,6 +17,7 @@ pub const DISABLED_PROVIDER_ID: &str = "disabled";
 pub enum IdentityDeliveryKind {
     Invite,
     Recovery,
+    CommunityInvitation,
 }
 
 impl IdentityDeliveryKind {
@@ -24,6 +25,7 @@ impl IdentityDeliveryKind {
         match self {
             Self::Invite => "invite",
             Self::Recovery => "recovery",
+            Self::CommunityInvitation => "community_invitation",
         }
     }
 
@@ -31,6 +33,7 @@ impl IdentityDeliveryKind {
         match value {
             "invite" => Some(Self::Invite),
             "recovery" => Some(Self::Recovery),
+            "community_invitation" => Some(Self::CommunityInvitation),
             _ => None,
         }
     }
@@ -745,7 +748,7 @@ async fn credential_is_active(
                 r#"
                 SELECT EXISTS (
                     SELECT 1
-                    FROM auth_invite
+                    FROM game_invitation
                     WHERE token_hash = $1
                       AND redeemed_at IS NULL
                       AND revoked_at IS NULL
@@ -772,6 +775,22 @@ async fn credential_is_active(
             .fetch_one(&mut **tx)
             .await
         }
+        IdentityDeliveryKind::CommunityInvitation => {
+            sqlx::query_scalar::<_, bool>(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM community_invitation_credential
+                    WHERE token_hash = $1
+                      AND consumed_at IS NULL
+                      AND revoked_at IS NULL
+                )
+                "#,
+            )
+            .bind(credential_hash)
+            .fetch_one(&mut **tx)
+            .await
+        }
     }
 }
 
@@ -785,7 +804,7 @@ async fn lock_active_credential(
             let state = sqlx::query_as::<_, (Option<i64>, Option<i64>)>(
                 r#"
                 SELECT redeemed_at, revoked_at
-                FROM auth_invite
+                FROM game_invitation
                 WHERE token_hash = $1
                 FOR SHARE
                 "#,
@@ -800,6 +819,20 @@ async fn lock_active_credential(
                 r#"
                 SELECT used_at, revoked_at
                 FROM auth_account_recovery_credential
+                WHERE token_hash = $1
+                FOR SHARE
+                "#,
+            )
+            .bind(credential_hash)
+            .fetch_optional(&mut **tx)
+            .await?;
+            Ok(matches!(state, Some((None, None))))
+        }
+        IdentityDeliveryKind::CommunityInvitation => {
+            let state = sqlx::query_as::<_, (Option<i64>, Option<i64>)>(
+                r#"
+                SELECT consumed_at, revoked_at
+                FROM community_invitation_credential
                 WHERE token_hash = $1
                 FOR SHARE
                 "#,
@@ -1038,6 +1071,18 @@ async fn record_delivery_audit(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     record: IdentityDeliveryAuditRecord<'_>,
 ) -> Result<(), sqlx::Error> {
+    let mut metadata = serde_json::json!({
+        "delivery_id": record.delivery_id,
+        "delivery_kind": record.delivery_kind.as_str(),
+        "adapter": record.provider_id,
+        "provider_id": record.provider_id,
+        "outcome_kind": record.outcome_kind,
+        "outcome_code": record.outcome_code,
+        "provider_receipt_id": record.provider_receipt_id
+    });
+    if record.delivery_kind != IdentityDeliveryKind::CommunityInvitation {
+        metadata["account_id"] = serde_json::Value::String(record.account_id.to_string());
+    }
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
@@ -1050,19 +1095,7 @@ async fn record_delivery_audit(
     .bind(record.actor_principal_id.as_uuid())
     .bind(record.principal_id.as_uuid())
     .bind(record.credential_hash)
-    .bind(
-        serde_json::json!({
-            "delivery_id": record.delivery_id,
-            "delivery_kind": record.delivery_kind.as_str(),
-            "account_id": record.account_id,
-            "adapter": record.provider_id,
-            "provider_id": record.provider_id,
-            "outcome_kind": record.outcome_kind,
-            "outcome_code": record.outcome_code,
-            "provider_receipt_id": record.provider_receipt_id
-        })
-        .to_string(),
-    )
+    .bind(metadata.to_string())
     .execute(&mut **tx)
     .await?;
     Ok(())

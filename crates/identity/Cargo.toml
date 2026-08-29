@@ -10,6 +10,8 @@ async-trait = "0.1"
 base64 = "0.22"
 bytes = "1"
 chacha20poly1305 = "0.10"
+community_membership = { path = "../community_membership", version = "0.1.0" }
+eventstore = { path = "../eventstore", version = "0.1.0" }
 futures-util = "0.3"
 hmac = "0.12"
 jsonwebtoken = "9"

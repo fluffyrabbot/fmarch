@@ -82,6 +82,7 @@ dependencies = [
  "caps",
  "ciborium",
  "commands",
+ "community_membership",
  "content_reference",
  "content_registry",
  "database_schema",
@@ -93,6 +94,7 @@ dependencies = [
  "hmac 0.12.1",
  "identity",
  "media",
+ "membership_application",
  "object_store",
  "png",
  "principal",
@@ -670,6 +672,17 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "community_membership"
+version = "0.1.0"
+dependencies = [
+ "principal",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
  "uuid",
 ]
 
@@ -1610,6 +1623,8 @@ dependencies = [
  "base64",
  "bytes",
  "chacha20poly1305",
+ "community_membership",
+ "eventstore",
  "futures-util",
  "hmac 0.12.1",
  "jsonwebtoken",
@@ -1999,6 +2014,26 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "membership_application"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "community_membership",
+ "eventstore",
+ "hmac 0.12.1",
+ "identity",
+ "principal",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

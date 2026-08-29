@@ -337,7 +337,7 @@ async fn disable_auth_for_erasure(
         .bind(principal_id.as_uuid()).bind(now).bind(format!("erasure-pending:{erasure_id}")).execute(&mut **tx).await?;
     sqlx::query("UPDATE auth_account_recovery_credential SET revoked_at = COALESCE(revoked_at, $2) WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1) AND used_at IS NULL")
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_invite SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_id = $1 AND redeemed_at IS NULL")
+    sqlx::query("UPDATE game_invitation SET revoked_at = COALESCE(revoked_at, $2) WHERE principal_id = $1 AND redeemed_at IS NULL")
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
     sqlx::query("UPDATE auth_delivery_intent SET status = 'cancelled', outcome_kind = 'cancelled', outcome_code = 'member_erasure_pending', next_attempt_at = NULL, delivered_at = NULL, provider_receipt_id = NULL, claim_token = NULL, claim_expires_at = NULL, credential_envelope = NULL, updated_at = $2 WHERE principal_id = $1 AND status IN ('queued', 'processing', 'retryable_failed')")
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
@@ -977,6 +977,7 @@ async fn apply_retained_authorship_redaction(
     pseudonym: &str,
     redacted_at: i64,
 ) -> Result<(), IdentityFlowError> {
+    redact_community_membership_in_tx(tx, principal_id, pseudonym, redacted_at).await?;
     // Public materialization is removed, not pseudonymized in place. Retained
     // attribution lives only on the redacted identity root; it cannot leak a
     // former private profile through a live public profile join.
@@ -1025,5 +1026,105 @@ async fn apply_retained_authorship_redaction(
         .bind(principal_id.as_uuid())
         .execute(&mut **tx)
         .await?;
+    Ok(())
+}
+
+pub(crate) async fn redact_community_membership_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    principal_id: &PrincipalId,
+    retained_alias: &str,
+    redacted_at: i64,
+) -> Result<(), IdentityFlowError> {
+    use community_membership::{
+        decide_membership, InvitationId, MembershipCommand, MembershipEvent, MembershipId,
+        MembershipOrigin, MembershipState, MembershipStatus,
+    };
+    use eventstore::{ActorId, EventInput};
+
+    let row = sqlx::query_as::<_, (Uuid, String, String, Option<Uuid>, Option<Uuid>, i64)>(
+        "SELECT membership_id, status, origin_kind, admission_invitation_id, sponsoring_membership_id, revision FROM community_membership WHERE active_principal_id = $1 FOR UPDATE",
+    )
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some((membership_id, status, origin_kind, invitation_id, sponsor_id, revision)) = row
+    else {
+        return Ok(());
+    };
+    let membership_id = MembershipId::from_uuid(membership_id);
+    let status = match status.as_str() {
+        "active" => MembershipStatus::Active,
+        "suspended" => MembershipStatus::Suspended,
+        "withdrawn" => MembershipStatus::Withdrawn,
+        "redacted" => MembershipStatus::Redacted,
+        value => {
+            return Err(IdentityFlowError::Internal(format!(
+                "community membership has unknown status {value}"
+            )))
+        }
+    };
+    let origin = match (origin_kind.as_str(), invitation_id, sponsor_id) {
+        ("founder", None, None) => MembershipOrigin::Founder,
+        ("invitation", Some(invitation_id), Some(sponsor_id)) => MembershipOrigin::Invitation {
+            invitation_id: InvitationId::from_uuid(invitation_id),
+            sponsoring_membership_id: MembershipId::from_uuid(sponsor_id),
+        },
+        _ => {
+            return Err(IdentityFlowError::Internal(
+                "community membership has malformed provenance".to_string(),
+            ))
+        }
+    };
+    let state = MembershipState {
+        membership_id,
+        status,
+        origin,
+        revision,
+    };
+    let events = decide_membership(
+        membership_id,
+        Some(&state),
+        MembershipCommand::Redact {
+            retained_alias: retained_alias.to_string(),
+        },
+    )
+    .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    let inputs = events
+        .iter()
+        .map(|event| {
+            EventInput::new(
+                event.kind(),
+                1,
+                event.payload(),
+                ActorId::System,
+                redacted_at,
+            )
+        })
+        .collect::<Vec<_>>();
+    let stored = eventstore::append_expected_in_tx(tx, membership_id.as_uuid(), revision, &inputs)
+        .await
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    let next_revision = stored.last().map(|event| event.stream_seq).ok_or_else(|| {
+        IdentityFlowError::Internal("membership redaction emitted no event".to_string())
+    })?;
+    debug_assert!(matches!(
+        events.as_slice(),
+        [MembershipEvent::Redacted { .. }]
+    ));
+    let updated = sqlx::query(
+        "UPDATE community_membership SET active_principal_id = NULL, status = 'redacted', retained_alias = $2, updated_at = $3, revision = $4 WHERE membership_id = $1 AND revision = $5",
+    )
+    .bind(membership_id.as_uuid())
+    .bind(retained_alias)
+    .bind(redacted_at)
+    .bind(next_revision)
+    .bind(revision)
+    .execute(&mut **tx)
+    .await?;
+    if updated.rows_affected() != 1 {
+        return Err(IdentityFlowError::Internal(
+            "community membership changed during redaction".to_string(),
+        ));
+    }
     Ok(())
 }

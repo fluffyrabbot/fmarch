@@ -7,12 +7,20 @@ import {
   browserSessionCookieOptions,
   SESSION_COOKIE_NAME,
 } from "../../../../lib/server/session-capabilities.mjs";
+import {
+  clearPendingCommunityInvitation,
+  pendingCommunityInvitation,
+} from "../../../../lib/server/pending-community-invitation.mjs";
 
-export function load({ url }) {
+export function load({ cookies, url }) {
+  const returnTo = authReturnPath(url.searchParams.get("returnTo"));
+  if (pendingCommunityInvitation(cookies) === null) {
+    throw redirect(303, `/auth/invite?returnTo=${encodeURIComponent(returnTo)}`);
+  }
   return {
     registration: {
       accountId: optionalField(url.searchParams.get("account")),
-      returnTo: authReturnPath(url.searchParams.get("returnTo")),
+      returnTo,
     },
   };
 }
@@ -21,12 +29,13 @@ export const actions = {
   default: async ({ cookies, fetch, getClientAddress, request, url }) => {
     const formData = await request.formData();
     const accountId = optionalField(formData.get("accountId"));
+    const invitationCredential = pendingCommunityInvitation(cookies);
     const password = passwordField(formData.get("password"));
     const confirmPassword = passwordField(formData.get("confirmPassword"));
     const returnTo = authReturnPath(formData.get("returnTo"));
-    if (accountId === "" || password === null || confirmPassword === null) {
+    if (invitationCredential === null || accountId === "" || password === null || confirmPassword === null) {
       return fail(400, rejection({
-        message: "Account, password, and confirmation are required",
+        message: "Community invitation, account, password, and confirmation are required",
         accountId,
         returnTo,
       }));
@@ -47,6 +56,7 @@ export const actions = {
         ...authSourceHeader(clientAuthSource(getClientAddress)),
       },
       body: JSON.stringify({
+        invitation_credential: invitationCredential,
         account_id: accountId,
         password,
       }),
@@ -68,6 +78,7 @@ export const actions = {
     }
 
     cookies.set(SESSION_COOKIE_NAME, body.session_token, browserSessionCookieOptions(url));
+    clearPendingCommunityInvitation(cookies);
     throw redirect(303, accountSecurityPath({ accountId: body.account_id, returnTo }));
   },
 };

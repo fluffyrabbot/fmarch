@@ -606,7 +606,7 @@ test('migrated mutable proof leaves consume runner-owned database and artifact r
   }
 
   for (const sourcePath of [
-    join(REPO_ROOT, 'tools', 'auth_invite_role_proof.mjs'),
+    join(REPO_ROOT, 'tools', 'game_invitation_role_proof.mjs'),
     join(REPO_ROOT, 'tools', 'host_console_live_stack_smoke.mjs'),
     join(REPO_ROOT, 'tools', 'live_stack_backup_restore_drill.mjs'),
     join(REPO_ROOT, 'tools', 'mash_scale_acceptance.mjs'),
@@ -705,7 +705,7 @@ test('Cargo test lanes select only inventoried assertion-bearing targets', () =>
     }
   }
 
-  assert.equal(cargoLaneCount, 22, 'every current cargo test lane must be inventoried');
+  assert.equal(cargoLaneCount, 24, 'every current cargo test lane must be inventoried');
   assert.equal(manifest.lanes['cargo:profile-application'], undefined);
 });
 
@@ -1349,7 +1349,7 @@ test('direct proof-tool sources select their owning proof lanes', () => {
       'tools/frontend_screenshot_pixels.mjs',
       ['test:frontend-role-smoke', 'test:frontend-visual-regression'],
     ],
-    ['tools/auth_invite_role_proof.mjs', 'test:auth-invite-role-proof'],
+    ['tools/game_invitation_role_proof.mjs', 'test:auth-invite-role-proof'],
     ['tools/public_search_role_proof.mjs', 'test:public-search-role-proof'],
     [
       'tools/capacity_overload_proof.mjs',

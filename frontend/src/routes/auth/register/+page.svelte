@@ -23,7 +23,7 @@
     <div>
       <p class="fm-eyebrow">Account</p>
       <h1>Create account</h1>
-      <p class="fm-summary">Choose how to create your account on this server.</p>
+      <p class="fm-summary">Accept your community invitation and choose how to create your account.</p>
     </div>
   </section>
 
@@ -64,7 +64,7 @@
 
     <nav class="auth-chooser__links" aria-label="Account help">
       <a href={`/auth/login?returnTo=${encodeURIComponent(returnTo)}`}>Already have an account?</a>
-      <a href={`/auth/invite?returnTo=${encodeURIComponent(returnTo)}`}>Use an invitation</a>
+      <a href={`/auth/invite?returnTo=${encodeURIComponent(returnTo)}`}>Enter a community invitation</a>
     </nav>
   </section>
 </main>

@@ -4,6 +4,7 @@ import {
   beginWorkosAuthorization,
   workosAuthKitConfigured,
 } from "$lib/server/workos-authkit.mjs";
+import { pendingCommunityInvitation } from "$lib/server/pending-community-invitation.mjs";
 
 export async function GET({ cookies, url }) {
   if (!workosAuthKitConfigured()) {
@@ -11,6 +12,10 @@ export async function GET({ cookies, url }) {
   }
   const returnTo = authReturnPath(url.searchParams.get("returnTo"));
   const loginHint = optionalValue(url.searchParams.get("loginHint"));
+  const invitationCredential = pendingCommunityInvitation(cookies);
+  if (invitationCredential === null) {
+    throw redirect(302, `/auth/register?returnTo=${encodeURIComponent(returnTo)}`);
+  }
   const signUpUrl = await beginWorkosAuthorization({
     cookies,
     intent: "sign-up",

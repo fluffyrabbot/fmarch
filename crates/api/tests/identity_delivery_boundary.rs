@@ -198,21 +198,28 @@ fn identity_delivery_lifecycle_has_immutable_request_and_audit_boundaries() {
     assert_ordered(
         audit,
         &[
-            ".bind(record.event_at)",
-            ".bind(record.event_kind)",
-            ".bind(record.actor_principal_id.as_uuid())",
-            ".bind(record.principal_id.as_uuid())",
-            ".bind(record.credential_hash)",
+            "let mut metadata = serde_json::json!({",
             "\"delivery_id\": record.delivery_id",
             "\"delivery_kind\": record.delivery_kind.as_str()",
-            "\"account_id\": record.account_id",
             "\"adapter\": record.provider_id",
             "\"provider_id\": record.provider_id",
             "\"outcome_kind\": record.outcome_kind",
             "\"outcome_code\": record.outcome_code",
             "\"provider_receipt_id\": record.provider_receipt_id",
+            "if record.delivery_kind != IdentityDeliveryKind::CommunityInvitation",
+            "metadata[\"account_id\"]",
+            ".bind(record.event_at)",
+            ".bind(record.event_kind)",
+            ".bind(record.actor_principal_id.as_uuid())",
+            ".bind(record.principal_id.as_uuid())",
+            ".bind(record.credential_hash)",
+            ".bind(metadata.to_string())",
         ],
         "delivery audit persistence",
+    );
+    assert!(
+        !audit.contains("\"account_id\": record.account_id"),
+        "community invitation audits must not serialize the recipient contact"
     );
 
     assert_eq!(

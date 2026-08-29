@@ -12,7 +12,7 @@ import {
 } from "./run_fmarch_migrations.mjs";
 
 const migrationHarnessCallers = Object.freeze([
-  "auth_invite_role_proof.mjs",
+  "game_invitation_role_proof.mjs",
   "capacity_overload_proof.mjs",
   "community_moderation_role_proof.mjs",
   "public_watch_role_proof.mjs",

@@ -287,7 +287,7 @@ function inviteLoginPath({ returnTo, inviteToken, accountId }) {
     invite: inviteToken,
     account: accountId,
   });
-  return `/auth/invite?${params.toString()}`;
+  return `/auth/game-invite?${params.toString()}`;
 }
 
 function workosInviteLoginPath({ returnTo, loginHint }) {
@@ -326,7 +326,7 @@ async function currentInviteTargetOccupant({
 }
 
 function authInvitesUrl(env) {
-  return `${serverApiBaseUrl(env)}/auth/invites`;
+  return `${serverApiBaseUrl(env)}/auth/game-invitations`;
 }
 
 function hostConsoleStateUrl(env, { game, slotId }) {

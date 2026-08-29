@@ -23,7 +23,7 @@ fn auth_http_has_one_typed_owner_without_transport_or_persistence_drift() {
         "async fn login_auth_account(",
         "async fn rotate_auth_session(",
         "async fn logout_auth_session(",
-        "async fn create_auth_invite(",
+        "async fn create_game_invitation(",
         "async fn retry_auth_delivery_intent(",
     ] {
         assert!(

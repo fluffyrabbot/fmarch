@@ -797,7 +797,7 @@ test("host action issues a replacement invite through the authenticated host ses
   );
   assert.equal(observed[0].authorization, "Bearer host-session-token");
   assert.equal(observed[0].accept, "application/json");
-  assert.equal(observed[1].url, "/auth/invites");
+  assert.equal(observed[1].url, "/auth/game-invitations");
   assert.equal(observed[1].method, "POST");
   assert.equal(observed[1].authorization, "Bearer host-session-token");
   assert.equal(observed[1].accept, "application/json");
@@ -814,8 +814,8 @@ test("host action issues a replacement invite through the authenticated host ses
     invitedByPrincipalId: HOST_PRINCIPAL_ID,
     game: "midsummer",
     returnTo: "/g/midsummer",
-    loginUrl: `http://localhost/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
-    loginPath: `/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
+    loginUrl: `http://localhost/auth/game-invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
+    loginPath: `/auth/game-invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=rowan%40example.test`,
     expiresAt: observed[1].body.expires_at,
   });
 });
@@ -870,7 +870,7 @@ test("host action issues a player invite through the authenticated host session"
   );
   assert.equal(observed[0].authorization, "Bearer host-session-token");
   assert.equal(observed[0].accept, "application/json");
-  assert.equal(observed[1].url, "/auth/invites");
+  assert.equal(observed[1].url, "/auth/game-invitations");
   assert.equal(observed[1].method, "POST");
   assert.equal(observed[1].authorization, "Bearer host-session-token");
   assert.equal(observed[1].accept, "application/json");
@@ -887,8 +887,8 @@ test("host action issues a player invite through the authenticated host session"
     invitedByPrincipalId: HOST_PRINCIPAL_ID,
     game: "midsummer",
     returnTo: "/g/midsummer",
-    loginUrl: `http://localhost/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
-    loginPath: `/auth/invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
+    loginUrl: `http://localhost/auth/game-invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
+    loginPath: `/auth/game-invite?returnTo=%2Fg%2Fmidsummer&invite=${observed[1].body.invite_token}&account=mira%40example.test`,
     expiresAt: observed[1].body.expires_at,
   });
 });
@@ -1039,7 +1039,7 @@ test("host action retries stale player invites against the current occupant", as
     url: new URL("http://localhost/g/midsummer/host"),
   });
 
-  assert.equal(observed[1].url, "/auth/invites");
+  assert.equal(observed[1].url, "/auth/game-invitations");
   assert.equal(observed[1].body.account_id, "rowan@example.test");
   assert.equal(observed[1].body.expected_principal_id, PLAYER_ROWAN_PRINCIPAL_ID);
   assert.match(observed[1].body.invite_token, /^player-midsummer-/);
@@ -1162,7 +1162,7 @@ test("host invites refuse malformed projection or mismatched invite response aut
   assert.match(mismatchedInvite.data.playerInvite.message, /mismatched principal authority/);
   assert.deepEqual(observed, [
     "/games/midsummer/host-console-state?slot_id=slot-7",
-    "/auth/invites",
+    "/auth/game-invitations",
   ]);
 });
 

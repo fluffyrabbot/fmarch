@@ -206,7 +206,7 @@ test("scratch server proofs isolate disposable subject authorities from repo sta
   // journal is deliberately authoritative across database restores, so sharing
   // it with an unrelated ephemeral database must fail server readiness.
   for (const file of [
-    "tools/auth_invite_role_proof.mjs",
+    "tools/game_invitation_role_proof.mjs",
     "tools/host_console_live_stack_smoke.mjs",
   ]) {
     const source = await readFile(file, "utf8");
@@ -221,7 +221,7 @@ test("scratch server proofs isolate disposable subject authorities from repo sta
 });
 
 test("auth invite scratch proof owns a deterministic database capacity budget", async () => {
-  const source = await readFile("tools/auth_invite_role_proof.mjs", "utf8");
+  const source = await readFile("tools/game_invitation_role_proof.mjs", "utf8");
 
   assert.match(
     source,

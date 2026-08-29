@@ -65,21 +65,22 @@ test("checked-in database schema is append-only with a generated current snapsho
   const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
   assert.equal(report.epoch, 1);
-  assert.equal(report.migration_head, "0002_profile_mute_durable_target.sql");
-  assert.equal(report.migration_file_count, 2);
+  assert.equal(report.migration_head, "0003_closed_community_admission.sql");
+  assert.equal(report.migration_file_count, 3);
   assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
   assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
-  assert.equal(report.table_count, 94);
+  assert.equal(report.table_count, 98);
 });
 
 test("database schema permits a contiguous destructive forward migration", async () => {
-  const filename = "0003_remove_obsolete_projection.sql";
+  const nextVersion = checkedEpoch.migrations.length + 1;
+  const filename = `${String(nextVersion).padStart(4, "0")}_remove_obsolete_projection.sql`;
   const sql = "DROP TABLE public.obsolete_projection;\n";
   const epoch = {
     ...checkedEpoch,
     migrations: [
       ...checkedEpoch.migrations,
-      { version: 3, filename, sha256: createHash("sha256").update(sql).digest("hex") },
+      { version: nextVersion, filename, sha256: createHash("sha256").update(sql).digest("hex") },
     ],
   };
   await withSchema(
@@ -109,19 +110,20 @@ test("database schema rejects checksum drift, gaps, and unmanifested files", asy
     async (root) => await assert.rejects(inspectDatabaseSchema({ root, baseEpoch: checkedEpoch }), /checksum drifted/),
   );
   const gapped = structuredClone(checkedEpoch);
-  gapped.migrations[1] = { ...gapped.migrations[1], version: 3, filename: "0003_profile_mute_durable_target.sql" };
+  gapped.migrations[1] = { ...gapped.migrations[1], version: 4 };
   await withSchema(
     {
       migrations: {
         [baselineFilename]: checkedMigrations[baselineFilename],
         [gapped.migrations[1].filename]: checkedMigrations[checkedEpoch.migrations[1].filename],
+        [checkedEpoch.migrations[2].filename]: checkedMigrations[checkedEpoch.migrations[2].filename],
       },
       epoch: gapped,
     },
     async (root) => await assert.rejects(inspectDatabaseSchema({ root, baseEpoch: null }), /contiguous version 0002/),
   );
   await withSchema(
-    { migrations: { ...checkedMigrations, "0003_unmanifested.sql": "SELECT 1;\n" } },
+    { migrations: { ...checkedMigrations, "0004_unmanifested.sql": "SELECT 1;\n" } },
     async (root) => await assert.rejects(inspectDatabaseSchema({ root, baseEpoch: checkedEpoch }), /exactly match/),
   );
 });

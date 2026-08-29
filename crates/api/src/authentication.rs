@@ -693,6 +693,17 @@ async fn record_auth_delivery_audit(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     audit: &AuthDeliveryAudit<'_>,
 ) -> Result<(), ApiError> {
+    let mut metadata = serde_json::json!({
+        "delivery_id": audit.delivery_id,
+        "delivery_kind": audit.delivery_kind,
+        "adapter": audit.provider_id,
+        "provider_id": audit.provider_id,
+        "outcome_kind": audit.outcome_kind,
+        "outcome_code": audit.outcome_code
+    });
+    if audit.delivery_kind != IdentityDeliveryKind::CommunityInvitation.as_str() {
+        metadata["account_id"] = serde_json::Value::String(audit.account_id.to_string());
+    }
     sqlx::query(
         r#"
         INSERT INTO identity_lifecycle_audit (
@@ -712,18 +723,7 @@ async fn record_auth_delivery_audit(
     .bind(audit.actor_principal_id.as_uuid())
     .bind(audit.principal_id.as_uuid())
     .bind(audit.credential_hash)
-    .bind(
-        serde_json::json!({
-            "delivery_id": audit.delivery_id,
-            "delivery_kind": audit.delivery_kind,
-            "account_id": audit.account_id,
-            "adapter": audit.provider_id,
-            "provider_id": audit.provider_id,
-            "outcome_kind": audit.outcome_kind,
-            "outcome_code": audit.outcome_code
-        })
-        .to_string(),
-    )
+    .bind(metadata.to_string())
     .execute(&mut **tx)
     .await?;
     Ok(())

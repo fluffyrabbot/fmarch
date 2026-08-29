@@ -16,6 +16,10 @@ import {
   WORKOS_SESSION_COOKIE_NAME,
 } from "./workos-authkit.mjs";
 import { workosProviderLogoutUrl } from "./workos-provider-logout.mjs";
+import {
+  clearPendingCommunityInvitation,
+  pendingCommunityInvitation,
+} from "./pending-community-invitation.mjs";
 
 const SAFE_PROVIDER_ERROR = /^[a-z][a-z0-9_.-]{0,63}$/u;
 const WORKOS_LINK_CALLBACK_PATH = "/auth/account/security";
@@ -91,6 +95,8 @@ export function createWorkosCallbackHandler({
 }
 
 async function completeWorkosLogin({ event, accessToken, callbackTarget, env, logger }) {
+  const invitationCredential = pendingCommunityInvitation(event.cookies);
+  clearPendingCommunityInvitation(event.cookies);
   let response;
   try {
     response = await event.fetch(`${serverApiBaseUrl(env)}/auth/sessions`, {
@@ -100,7 +106,12 @@ async function completeWorkosLogin({ event, accessToken, callbackTarget, env, lo
         "content-type": "application/json",
         accept: "application/json",
       },
-      body: JSON.stringify({ method: "workos" }),
+      body: JSON.stringify({
+        method: "workos",
+        ...(invitationCredential === null
+          ? {}
+          : { invitation_credential: invitationCredential }),
+      }),
     });
   } catch {
     logOutcome(logger, "rejected", "api_unavailable");

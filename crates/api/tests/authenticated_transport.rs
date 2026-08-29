@@ -53,6 +53,30 @@ fn test_state(pool: sqlx::PgPool, root: &TempDir) -> ApiState {
         .with_websocket_poll_interval(Duration::from_millis(20))
 }
 
+async fn community_invitation_for(pool: &sqlx::PgPool, account_id: &str) -> String {
+    let founder = PrincipalId::random();
+    let now = 1_700_000_000;
+    let mut tx = pool.begin().await.unwrap();
+    identity::methods::ensure_principal(&mut tx, &founder, &[], now)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    membership_application::ensure_founder_membership(pool, founder, now)
+        .await
+        .unwrap();
+    membership_application::issue_invitation(
+        pool,
+        &membership_application::InvitationTargetIndex::from_env_or_local().unwrap(),
+        founder,
+        account_id,
+        4_102_444_800,
+        now,
+    )
+    .await
+    .unwrap()
+    .credential
+}
+
 fn token_hash(token: &str) -> String {
     Sha256::digest(token.as_bytes())
         .iter()
@@ -806,6 +830,7 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
     // for a backend-owned app session.
     let (rejected, _) = issue_ticket(&app, "workos-token", game, 0).await;
     assert_eq!(rejected, StatusCode::UNAUTHORIZED);
+    let invitation = community_invitation_for(&pool, "host@example.test").await;
     let exchange = app
         .clone()
         .oneshot(
@@ -815,7 +840,11 @@ async fn external_identity_ticket_is_bound_to_the_enabled_platform_principal(poo
                 .header("authorization", "Bearer workos-token")
                 .header("content-type", "application/json")
                 .body(Body::from(
-                    serde_json::json!({ "method": "workos" }).to_string(),
+                    serde_json::json!({
+                        "method": "workos",
+                        "invitation_credential": invitation
+                    })
+                    .to_string(),
                 ))
                 .unwrap(),
         )

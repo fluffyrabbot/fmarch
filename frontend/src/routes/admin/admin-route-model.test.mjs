@@ -9164,7 +9164,7 @@ function spineManifestFixture() {
     commands: {
       live: { plan: [{ script: "dev:test-game:prebuild" }] },
       backupRestore: { plan: [{ script: "tools/live_stack_backup_restore_drill.mjs" }] },
-      identity: { plan: [{ script: "tools/auth_invite_role_proof.mjs" }] },
+      identity: { plan: [{ script: "tools/game_invitation_role_proof.mjs" }] },
       adminSpine: {
         plan: [
           { script: "tools/dev_test_game_core_loop_admin_proof.mjs" },

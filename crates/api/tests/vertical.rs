@@ -70,6 +70,30 @@ fn test_api_state(pool: sqlx::PgPool) -> ApiState {
     ApiState::new(pool, shared_test_media_store())
 }
 
+async fn community_invitation_for(pool: &sqlx::PgPool, account_id: &str) -> String {
+    let founder = PrincipalId::random();
+    let now = 1_700_000_000;
+    let mut tx = pool.begin().await.unwrap();
+    identity::methods::ensure_principal(&mut tx, &founder, &[], now)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    membership_application::ensure_founder_membership(pool, founder, now)
+        .await
+        .unwrap();
+    membership_application::issue_invitation(
+        pool,
+        &membership_application::InvitationTargetIndex::from_env_or_local().unwrap(),
+        founder,
+        account_id,
+        4_102_444_800,
+        now,
+    )
+    .await
+    .unwrap()
+    .credential
+}
+
 fn minimal_day_event(event_id: &str) -> game_platform::DayEvent {
     game_platform::DayEvent {
         id: game_platform::DayEventId::new(event_id).unwrap(),
@@ -660,6 +684,7 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
     );
 
     // The WorkOS access token is exchanged exactly once for a backend session.
+    let invitation = community_invitation_for(&pool, "player@example.test").await;
     let response = app
         .clone()
         .oneshot(
@@ -669,7 +694,11 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
                 .header("authorization", "Bearer workos-access-token")
                 .header("content-type", "application/json")
                 .body(Body::from(
-                    serde_json::json!({ "method": "workos" }).to_string(),
+                    serde_json::json!({
+                        "method": "workos",
+                        "invitation_credential": invitation
+                    })
+                    .to_string(),
                 ))
                 .unwrap(),
         )
@@ -876,12 +905,19 @@ async fn workos_logout_revokes_the_local_provider_session_scope_and_returns_a_co
         test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
     );
 
+    let invitation = community_invitation_for(&pool, "logout@example.test").await;
     let mut local_tokens = Vec::new();
-    for provider_token in ["workos-logout-token-a", "workos-logout-token-b"] {
+    for (index, provider_token) in ["workos-logout-token-a", "workos-logout-token-b"]
+        .into_iter()
+        .enumerate()
+    {
         let exchange = post_bearer_json(
             &app,
             "/auth/sessions",
-            serde_json::json!({ "method": "workos" }),
+            serde_json::json!({
+                "method": "workos",
+                "invitation_credential": (index == 0).then_some(invitation.as_str())
+            }),
             provider_token,
         )
         .await;
@@ -1022,16 +1058,20 @@ async fn workos_logout_fails_closed_if_persisted_provider_session_custody_is_cor
             subject: "user_tamper".to_string(),
             session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
             expires_at: 4_102_444_800,
-            email: None,
+            email: Some("tamper@example.test".to_string()),
         },
     )]);
     let app = api::router_with_state(
         test_api_state(pool.clone()).with_access_token_verifier(Arc::new(verifier)),
     );
+    let invitation = community_invitation_for(&pool, "tamper@example.test").await;
     let exchange = post_bearer_json(
         &app,
         "/auth/sessions",
-        serde_json::json!({ "method": "workos" }),
+        serde_json::json!({
+            "method": "workos",
+            "invitation_credential": invitation
+        }),
         "workos-tamper-token",
     )
     .await;
@@ -6662,12 +6702,13 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
     let thread = projections::thread_view(&pool, game, None, 10)
         .await
         .unwrap();
-    let public_source_seq = thread
+    let public_post = thread
         .posts
         .iter()
         .find(|post| post.channel_id == "main")
-        .unwrap()
-        .source_seq;
+        .unwrap();
+    let public_source_seq = public_post.source_seq;
+    let public_stream_seq = public_post.stream_seq;
     let private_source_seq =
         projections::thread_view_for_channel(&pool, game, "private:role_pm:slot_1", None, 10)
             .await
@@ -6786,6 +6827,29 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
         PrincipalId::fixture(&member_principal)
     );
 
+    let moderator_console = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/games/{game}/host-console-state"))
+                .header("authorization", format!("Bearer {moderator_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(moderator_console.status(), StatusCode::OK);
+    let moderator_console: HostConsoleStateResponse = serde_json::from_slice(
+        &to_bytes(moderator_console.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(moderator_console
+        .thread_posts
+        .iter()
+        .any(|post| post.stream_seq == public_stream_seq));
+
     let ticket = issue_websocket_ticket(&app, member_token.as_str(), game, "main").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -6832,7 +6896,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
                 envelope.body,
                 ServerMsg::Delta(ProjectionDelta::HostConsoleStateChanged(ref delta))
                     if delta.game == game
-                        && delta.thread_posts.iter().any(|post| post.stream_seq == public_source_seq)
+                        && delta.thread_posts.iter().any(|post| post.stream_seq == public_stream_seq)
             ) {
                 return;
             }
@@ -6888,7 +6952,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
             if let ServerMsg::Delta(ProjectionDelta::HostConsoleThreadPostRemoved(delta)) =
                 envelope.body
             {
-                if delta.game == game && delta.stream_seq == public_source_seq {
+                if delta.game == game && delta.stream_seq == public_stream_seq {
                     return;
                 }
             }
@@ -6951,7 +7015,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
         host_console
             .thread_posts
             .iter()
-            .all(|post| post.stream_seq != public_source_seq),
+            .all(|post| post.stream_seq != public_stream_seq),
         "host/global-operator reads must not bypass global post visibility"
     );
 
@@ -8570,7 +8634,7 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites")
+                .uri("/auth/game-invitations")
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
@@ -8812,7 +8876,7 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites")
+                .uri("/auth/game-invitations")
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
@@ -8950,7 +9014,7 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites")
+                .uri("/auth/game-invitations")
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
@@ -8978,7 +9042,7 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
     .fetch_one(&pool)
     .await
     .unwrap();
-    sqlx::query("UPDATE auth_invite SET revoked_at = 1 WHERE token_hash = $1")
+    sqlx::query("UPDATE game_invitation SET revoked_at = 1 WHERE token_hash = $1")
         .bind(&credential_hash)
         .execute(&pool)
         .await
@@ -9068,8 +9132,93 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
+async fn community_invitation_delivery_accepts_a_prospective_account_without_leaking_the_credential(
+    pool: sqlx::PgPool,
+) {
+    let app = router_with_dev_auth(pool.clone());
+    let sponsor = PrincipalId::fixture("community_sponsor");
+    let sponsor_token = issue_dev_session_for_principal(&app, sponsor, &[]).await;
+    membership_application::ensure_founder_membership(&pool, sponsor, unix_now_seconds())
+        .await
+        .unwrap();
+    let recipient = "future.member@example.test";
+    assert!(!sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS (SELECT 1 FROM auth_account WHERE account_id = $1)",
+    )
+    .bind(recipient)
+    .fetch_one(&pool)
+    .await
+    .unwrap());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/community/invitations")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {sponsor_token}"))
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": recipient,
+                        "expires_at": unix_now_seconds() + 3_600
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let issued: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(issued["invitation"]["target_account_id"], recipient);
+    assert!(issued["invitation"].get("credential").is_none());
+    assert_eq!(issued["delivery_status"], "queued");
+
+    let invitation_id = Uuid::parse_str(
+        issued["invitation"]["invitation_id"]
+            .as_str()
+            .expect("invitation id"),
+    )
+    .unwrap();
+    let (delivery_kind, account_id, delivery_hash, envelope) =
+        sqlx::query_as::<_, (String, String, String, Option<serde_json::Value>)>(
+            r#"
+            SELECT delivery_kind, account_id, credential_hash, credential_envelope
+            FROM auth_delivery_intent
+            WHERE delivery_id = $1
+            "#,
+        )
+        .bind(Uuid::parse_str(issued["delivery_id"].as_str().expect("delivery id")).unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(delivery_kind, "community_invitation");
+    assert_eq!(account_id, recipient);
+    assert!(envelope.is_some());
+    let credential_hash = sqlx::query_scalar::<_, String>(
+        "SELECT token_hash FROM community_invitation_credential WHERE invitation_id = $1",
+    )
+    .bind(invitation_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(delivery_hash, credential_hash);
+    let audit_metadata = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT metadata FROM identity_lifecycle_audit WHERE event_kind = 'auth_delivery_queued' AND token_hash = $1",
+    )
+    .bind(&credential_hash)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(audit_metadata.get("account_id").is_none());
+    assert!(!audit_metadata.to_string().contains(recipient));
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_account_registration_creates_unprivileged_opaque_session(pool: sqlx::PgPool) {
     let app = router(pool.clone());
+    let invitation = community_invitation_for(&pool, "New.User+One@Example.Test").await;
     let response = app
         .clone()
         .oneshot(
@@ -9079,6 +9228,7 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
+                        "invitation_credential": invitation,
                         "account_id": "New.User+One@Example.Test",
                         "password": "correct horse battery"
                     })
@@ -9106,6 +9256,7 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
         .expect("registration returns a backend-generated session token")
         .to_string();
 
+    let duplicate_invitation = community_invitation_for(&pool, "new.user+one@example.test").await;
     let response = app
         .clone()
         .oneshot(
@@ -9146,13 +9297,7 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(
-        audit_kinds,
-        vec![
-            "account_registered".to_string(),
-            "account_session_created".to_string(),
-        ]
-    );
+    assert_eq!(audit_kinds, vec!["community_member_admitted".to_string()]);
 
     let response = app
         .oneshot(
@@ -9162,6 +9307,7 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
+                        "invitation_credential": duplicate_invitation,
                         "account_id": "new.user+one@example.test",
                         "password": "correct horse battery"
                     })
@@ -9171,7 +9317,7 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -9185,6 +9331,7 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
         ("first@example.test", StatusCode::OK),
         ("second@example.test", StatusCode::TOO_MANY_REQUESTS),
     ] {
+        let invitation = community_invitation_for(&pool, account_id).await;
         let response = app
             .clone()
             .oneshot(
@@ -9195,6 +9342,7 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
                     .header("x-fmarch-auth-source", "198.51.100.71")
                     .body(Body::from(
                         serde_json::json!({
+                            "invitation_credential": invitation,
                             "account_id": account_id,
                             "password": "correct horse battery"
                         })
@@ -9207,6 +9355,7 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
         assert_eq!(response.status(), expected_status);
     }
 
+    let invitation = community_invitation_for(&pool, "other-source@example.test").await;
     let response = app
         .oneshot(
             Request::builder()
@@ -9216,6 +9365,7 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
                 .header("x-fmarch-auth-source", "198.51.100.72")
                 .body(Body::from(
                     serde_json::json!({
+                        "invitation_credential": invitation,
                         "account_id": "other-source@example.test",
                         "password": "correct horse battery"
                     })
@@ -10159,7 +10309,7 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
             }),
         ),
         (
-            "/auth/invites/redeem",
+            "/auth/game-invitations/redeem",
             serde_json::json!({
                 "invite_token": "invalid-invite",
                 "account_id": account_id,
@@ -10320,7 +10470,7 @@ async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sql
             "spoofed-source-a",
         ),
         (
-            "/auth/invites/redeem",
+            "/auth/game-invitations/redeem",
             serde_json::json!({
                 "invite_token": "missing-invite",
                 "account_id": "missing-invite@example.test",
@@ -10498,7 +10648,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites")
+                .uri("/auth/game-invitations")
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
@@ -10525,7 +10675,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites/redeem")
+                .uri("/auth/game-invitations/redeem")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
@@ -10546,7 +10696,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites/redeem")
+                .uri("/auth/game-invitations/redeem")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
@@ -10593,7 +10743,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites/redeem")
+                .uri("/auth/game-invitations/redeem")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
@@ -10673,7 +10823,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites")
+                .uri("/auth/game-invitations")
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {host_issuer_token}"))
                 .body(Body::from(
@@ -10709,7 +10859,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites/redeem")
+                .uri("/auth/game-invitations/redeem")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
@@ -10760,7 +10910,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites")
+                .uri("/auth/game-invitations")
                 .header("content-type", "application/json")
                 .header(
                     "authorization",
@@ -11079,7 +11229,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites")
+                .uri("/auth/game-invitations")
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
@@ -11106,7 +11256,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invite-revocations")
+                .uri("/auth/game-invitation-revocations")
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
@@ -11126,7 +11276,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites/redeem")
+                .uri("/auth/game-invitations/redeem")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
@@ -11147,7 +11297,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites")
+                .uri("/auth/game-invitations")
                 .header("content-type", "application/json")
                 .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
@@ -11174,7 +11324,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/invites/redeem")
+                .uri("/auth/game-invitations/redeem")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({

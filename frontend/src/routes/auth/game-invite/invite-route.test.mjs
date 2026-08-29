@@ -9,7 +9,7 @@ test("invitation load preserves local destinations and prefilled credentials", (
     load({
       locals: {},
       url: new URL(
-        "http://localhost/auth/invite?invite=host-token&account=host%40example.test&returnTo=/g/midsummer/host",
+        "http://localhost/auth/game-invite?invite=host-token&account=host%40example.test&returnTo=/g/midsummer/host",
       ),
     }),
     {
@@ -37,7 +37,7 @@ test("invitation route accepts an existing opaque session credential", async () 
           });
         },
         request: formRequest({ token: "session-token", returnTo: "/admin" }),
-        url: new URL("https://fmarch.local/auth/invite"),
+        url: new URL("https://fmarch.local/auth/game-invite"),
       }),
     (error) => error.status === 303 && error.location === "/admin",
   );
@@ -80,13 +80,13 @@ test("invitation route redeems an account-bound invitation", async () => {
           password: "invited account password",
           returnTo: "/g/midsummer/host",
         }),
-        url: new URL("http://localhost/auth/invite"),
+        url: new URL("http://localhost/auth/game-invite"),
       }),
     (error) => error.status === 303 && error.location === "/g/midsummer/host",
   );
 
   assert.equal(observed.requests[0].url, "/auth/session");
-  assert.equal(observed.requests[1].url, "/auth/invites/redeem");
+  assert.equal(observed.requests[1].url, "/auth/game-invitations/redeem");
   assert.equal(observed.requests[1].authSource, "203.0.113.17");
   assert.deepEqual(observed.requests[1].body, {
     invite_token: "host-invite-token",
@@ -105,7 +105,7 @@ test("invitation route rejects a noncanonical principal ID from session verifica
         capabilities: [{ kind: "GlobalMod" }],
       }),
     request: formRequest({ token: "session-token", returnTo: "/admin" }),
-    url: new URL("https://fmarch.local/auth/invite"),
+    url: new URL("https://fmarch.local/auth/game-invite"),
   });
 
   assert.equal(result.status, 502);
@@ -117,7 +117,7 @@ test("invitation route keeps failures and retry timing explicit", async () => {
     cookies: forbiddenCookieJar(),
     fetch: unreachableFetch,
     request: formRequest({ token: "", returnTo: "//evil.test" }),
-    url: new URL("http://localhost/auth/invite"),
+    url: new URL("http://localhost/auth/game-invite"),
   });
   assert.equal(missing.status, 400);
   assert.equal(missing.data.returnTo, "/");
@@ -133,7 +133,7 @@ test("invitation route keeps failures and retry timing explicit", async () => {
       accountId: "host@example.test",
       password: "wrong password",
     }),
-    url: new URL("http://localhost/auth/invite"),
+    url: new URL("http://localhost/auth/game-invite"),
   });
   assert.equal(limited.status, 429);
   assert.equal(limited.data.message, "Too many credential attempts. Try again in 17 seconds.");
@@ -144,7 +144,7 @@ function formRequest(fields) {
   for (const [key, value] of Object.entries(fields)) {
     formData.set(key, value);
   }
-  return new Request("http://localhost/auth/invite", { method: "POST", body: formData });
+  return new Request("http://localhost/auth/game-invite", { method: "POST", body: formData });
 }
 
 function cookieJar(observed) {

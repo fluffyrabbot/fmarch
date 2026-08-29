@@ -320,6 +320,24 @@ async fn unmute_public_profile(
 /// resource-owning public-platform surface.
 struct MemberAuthentication(PrincipalId);
 
+async fn require_active_community_membership(
+    pool: &PgPool,
+    principal_id: PrincipalId,
+) -> Result<(), ApiError> {
+    if membership_application::membership_for_principal(pool, principal_id)
+        .await
+        .map_err(|_| ApiError::Reject {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            error: RejectCode::Internal,
+            message: "community membership is temporarily unavailable".to_string(),
+        })?
+        .is_none()
+    {
+        return Err(unauthorized_account());
+    }
+    Ok(())
+}
+
 impl<S> FromRequestParts<S> for MemberAuthentication
 where
     AuthHttpState: FromRef<S>,
@@ -329,6 +347,8 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let request = AccountAuthenticatedRequest::from_request_parts(parts, state).await?;
+        let auth = AuthHttpState::from_ref(state);
+        require_active_community_membership(&auth.pool, request.context.principal_id).await?;
         Ok(Self(request.context.principal_id))
     }
 }
@@ -371,6 +391,7 @@ impl FromRequestParts<PublicPlatformHttpState> for DiscussionProfileAuthenticati
     ) -> Result<Self, Self::Rejection> {
         let request = AccountAuthenticatedRequest::from_request_parts(parts, state).await?;
         let principal_id = request.context.principal_id;
+        require_active_community_membership(&state.pool, principal_id).await?;
         let profile_id = projections::public_profile_id_by_principal(&state.pool, principal_id)
             .await?
             .ok_or_else(|| {
@@ -971,10 +992,9 @@ async fn moderate_discussion_topic(
 
 async fn submit_moderation_report(
     State(state): State<PublicPlatformHttpState>,
-    request: AccountAuthenticatedRequest,
+    MemberAuthentication(principal_id): MemberAuthentication,
     Json(request_body): Json<SubmitModerationReportRequest>,
 ) -> Result<(StatusCode, Json<ModerationReportReceipt>), ApiError> {
-    let principal_id = request.context.principal_id;
     let request = request_body;
     if request.source_seq <= 0 {
         return Err(moderation_bad_request("report source_seq must be positive"));
@@ -1007,9 +1027,8 @@ async fn submit_moderation_report(
 async fn moderation_report_receipt(
     State(state): State<PublicPlatformHttpState>,
     Path(report): Path<Uuid>,
-    request: AccountAuthenticatedRequest,
+    MemberAuthentication(principal_id): MemberAuthentication,
 ) -> Result<Json<ModerationReportReceipt>, ApiError> {
-    let principal_id = request.context.principal_id;
     let receipt = projections::moderation_report_receipt(&state.pool, report, principal_id)
         .await?
         .ok_or_else(|| discussion_not_found("moderation report receipt"))?;

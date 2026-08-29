@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
@@ -169,6 +170,7 @@ let proofDatabase;
 let server;
 let vite;
 let browser;
+let deliveryProvider;
 let subjectKeyRoot;
 let serverOutput = "";
 const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
@@ -185,7 +187,11 @@ try {
     migrationUrl: proofDatabase.migrationUrl,
   });
   proofDatabase.applicationUrl = authority.applicationUrl;
-  const apiBaseUrl = await startApi(authority.applicationUrl);
+  deliveryProvider = await startIdentityDeliveryCapture();
+  const apiBaseUrl = await startApi(
+    authority.applicationUrl,
+    deliveryProvider.endpoint,
+  );
   await seedRootAdminSession(authority.applicationUrl);
   const accounts = await createAccounts(apiBaseUrl);
   const seedTargetAccounts = await provisionSeedTargetAccounts({
@@ -277,7 +283,7 @@ try {
       ],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern:
-        "/auth/invite?returnTo=<role-surface>&invite=<token>&account=<account-id>",
+        "/auth/game-invite?returnTo=<role-surface>&invite=<token>&account=<account-id>",
       accountRoleSurfacePattern: "/auth/login/classic?returnTo=<role-surface>&account=<account-id>",
       accountSecurityRoleSurfacePattern:
         "/auth/account/security?account=<account-id>&returnTo=<role-surface>",
@@ -332,6 +338,9 @@ try {
   }
   if (server !== undefined) {
     await stopChild(server);
+  }
+  if (deliveryProvider !== undefined) {
+    await deliveryProvider.close();
   }
   if (proofDatabase !== undefined && !proofDatabase.runnerOwned) {
     await dropScratchDatabase(proofDatabase);
@@ -500,7 +509,7 @@ async function createInvite(
     bearerToken = rootAdminSessionToken,
   },
 ) {
-  const response = await fetchJson(`${apiBaseUrl}/auth/invites`, {
+  const response = await fetchJson(`${apiBaseUrl}/auth/game-invitations`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${bearerToken}`,
@@ -531,6 +540,68 @@ async function createInvite(
   };
 }
 
+async function issueCommunityInvitation({
+  apiBaseUrl,
+  sponsorSessionToken,
+  accountId,
+}) {
+  const response = await fetchJson(`${apiBaseUrl}/community/invitations`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${sponsorSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: accountId,
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
+    }),
+  });
+  if (
+    response.invitation?.target_account_id !== accountId.toLowerCase() ||
+    typeof response.delivery_id !== "string" ||
+    response.invitation?.credential !== undefined
+  ) {
+    throw new Error(`community invitation issuance drifted: ${JSON.stringify(response)}`);
+  }
+  const deadline = Date.now() + deliveryIntentPollTimeoutMs;
+  while (Date.now() <= deadline) {
+    const capture = deliveryProvider.captures.get(response.delivery_id);
+    if (capture !== undefined) {
+      if (
+        capture.schema !== "fmarch.identity-delivery.v1" ||
+        capture.delivery_kind !== "community_invitation" ||
+        capture.account_id !== accountId.toLowerCase() ||
+        typeof capture.credential !== "string" ||
+        !capture.credential.startsWith("fmci_")
+      ) {
+        throw new Error(`community invitation delivery drifted: ${JSON.stringify(capture)}`);
+      }
+      deliveryProvider.captures.delete(response.delivery_id);
+      return capture.credential;
+    }
+    await delay(deliveryIntentPollIntervalMs);
+  }
+  throw new Error(`community invitation ${response.delivery_id} was not delivered to the provider`);
+}
+
+async function storeCommunityInvitationCookie({
+  page,
+  frontendBaseUrl,
+  accountId,
+  invitationCredential,
+  returnTo,
+}) {
+  await page.goto(
+    `${frontendBaseUrl}/auth/invite?invite=${encodeURIComponent(
+      invitationCredential,
+    )}&account=${encodeURIComponent(accountId)}&returnTo=${encodeURIComponent(returnTo)}`,
+    { waitUntil: "networkidle" },
+  );
+  if (page.url().includes(invitationCredential)) {
+    throw new Error("community invitation credential remained in the browser URL");
+  }
+}
+
 async function driveInviteLogin({
   frontendBaseUrl,
   apiBaseUrl,
@@ -541,7 +612,7 @@ async function driveInviteLogin({
   expectedCapability,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const loginUrl = `${frontendBaseUrl}/auth/invite?returnTo=${encodeURIComponent(
+  const loginUrl = `${frontendBaseUrl}/auth/game-invite?returnTo=${encodeURIComponent(
     returnTo,
   )}&invite=${encodeURIComponent(inviteToken)}&account=${encodeURIComponent(
     accountCredential.accountId,
@@ -681,6 +752,7 @@ async function driveAccountLogin({
 async function driveAccountRegistration({
   apiBaseUrl,
   frontendBaseUrl,
+  sponsorSessionToken,
   accountCredential,
   returnTo,
 }) {
@@ -694,6 +766,18 @@ async function driveAccountRegistration({
   let sessionToken;
   let principalId;
   try {
+    const invitationCredential = await issueCommunityInvitation({
+      apiBaseUrl,
+      sponsorSessionToken,
+      accountId: accountCredential.accountId,
+    });
+    await storeCommunityInvitationCookie({
+      page,
+      frontendBaseUrl,
+      accountId: accountCredential.accountId,
+      invitationCredential,
+      returnTo,
+    });
     await page.goto(`${frontendBaseUrl}${registrationRoleUrl}`, {
       waitUntil: "networkidle",
     });
@@ -745,6 +829,18 @@ async function driveAccountRegistration({
   const duplicateContext = await browser.newContext();
   try {
     const duplicatePage = await duplicateContext.newPage();
+    const duplicateInvitation = await issueCommunityInvitation({
+      apiBaseUrl,
+      sponsorSessionToken,
+      accountId: accountCredential.accountId,
+    });
+    await storeCommunityInvitationCookie({
+      page: duplicatePage,
+      frontendBaseUrl,
+      accountId: accountCredential.accountId,
+      invitationCredential: duplicateInvitation,
+      returnTo,
+    });
     await duplicatePage.goto(`${frontendBaseUrl}${registrationRoleUrl}`, {
       waitUntil: "networkidle",
     });
@@ -759,7 +855,10 @@ async function driveAccountRegistration({
     });
     const duplicateText = await duplicatePage.getByTestId("auth-registration-reject").innerText();
     const duplicateCookies = await duplicateContext.cookies(frontendBaseUrl);
-    if (!duplicateText.includes("already exists") || duplicateCookies.some((cookie) => cookie.name === "fmarch_session")) {
+    if (
+      !duplicateText.includes("missing, mismatched, expired, revoked, or already redeemed") ||
+      duplicateCookies.some((cookie) => cookie.name === "fmarch_session")
+    ) {
       throw new Error(`account registration duplicate recovery drifted: ${duplicateText}`);
     }
   } finally {
@@ -769,9 +868,22 @@ async function driveAccountRegistration({
   const rateLimitContext = await browser.newContext();
   try {
     const rateLimitPage = await rateLimitContext.newPage();
+    const rateLimitAccountId = `rate-limit-${game}@example.test`;
+    const rateLimitInvitation = await issueCommunityInvitation({
+      apiBaseUrl,
+      sponsorSessionToken,
+      accountId: rateLimitAccountId,
+    });
+    await storeCommunityInvitationCookie({
+      page: rateLimitPage,
+      frontendBaseUrl,
+      accountId: rateLimitAccountId,
+      invitationCredential: rateLimitInvitation,
+      returnTo,
+    });
     await rateLimitPage.goto(
       `${frontendBaseUrl}/auth/register/classic?account=${encodeURIComponent(
-        `rate-limit-${game}@example.test`,
+        rateLimitAccountId,
       )}&returnTo=${encodeURIComponent(returnTo)}`,
       { waitUntil: "networkidle" },
     );
@@ -962,7 +1074,7 @@ async function proveUnknownCredentialAttemptBounding({
     if (operation === "invite-redemption") {
       return {
         operation,
-        url: `${apiBaseUrl}/auth/invites/redeem`,
+        url: `${apiBaseUrl}/auth/game-invitations/redeem`,
         body: {
           invite_token: `unknown-invite-${index}-${game}`,
           account_id: unknownAccountId,
@@ -1347,6 +1459,7 @@ async function proveIdentityLifecycle({
   const accountRegistration = await driveAccountRegistration({
     apiBaseUrl,
     frontendBaseUrl,
+    sponsorSessionToken: adminSessionToken,
     accountCredential: registrationCredentials,
     returnTo: `/g/${game}`,
   });
@@ -1771,7 +1884,7 @@ async function finishIdentityLifecycleProof({
   const registrationAuditEventKinds = registrationAuditTrail.entries
     .map((entry) => entry.event_kind)
     .sort();
-  for (const eventKind of ["account_registered", "account_session_created"]) {
+  for (const eventKind of ["community_member_admitted"]) {
     if (!registrationAuditEventKinds.includes(eventKind)) {
       throw new Error(`account registration audit missing ${eventKind}`);
     }
@@ -2331,7 +2444,7 @@ async function driveHostPlayerInviteSurface({
     const returnTo = loginUrl.searchParams.get("returnTo");
     const accountId = loginUrl.searchParams.get("account");
     if (
-      loginUrl.pathname !== "/auth/invite" ||
+      loginUrl.pathname !== "/auth/game-invite" ||
       inviteToken === null ||
       !inviteToken.startsWith(`player-${game}-`) ||
       returnTo !== `/g/${game}` ||
@@ -2377,7 +2490,7 @@ async function revokeSession({ apiBaseUrl, token }) {
 }
 
 async function revokeInvite({ apiBaseUrl, inviteToken }) {
-  return await fetchJson(`${apiBaseUrl}/auth/invite-revocations`, {
+  return await fetchJson(`${apiBaseUrl}/auth/game-invitation-revocations`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${rootAdminSessionToken}`,
@@ -2433,7 +2546,7 @@ async function retryFailedDeliveryForCredential({ apiBaseUrl, credential, expect
     delivery.status !== "retryable_failed" ||
     delivery.providerId !== "local-deterministic" ||
     delivery.outcomeKind !== "retryable_failure" ||
-    delivery.outcomeCode !== "local_transient"
+    delivery.outcomeCode !== "provider_unavailable"
   ) {
     throw new Error(`stored delivery intent drifted: ${JSON.stringify(delivery)}`);
   }
@@ -2456,7 +2569,7 @@ async function waitForRetryableDeliveryIntent({ credentialHash, expectedKind }) 
         lastDelivery.status === "retryable_failed" &&
         lastDelivery.providerId === "local-deterministic" &&
         lastDelivery.outcomeKind === "retryable_failure" &&
-        lastDelivery.outcomeCode === "local_transient"
+        lastDelivery.outcomeCode === "provider_unavailable"
       ) {
         return lastDelivery;
       }
@@ -2683,7 +2796,7 @@ async function storedInviteRecord(inviteToken) {
         'invitedByPrincipalId', invited_by_principal_id,
         'globalCapabilities', COALESCE(to_json(global_capabilities), '[]'::JSON)
       )::TEXT
-      FROM auth_invite
+      FROM game_invitation
       WHERE token_hash = ${sqlLiteral(hashSessionToken(inviteToken))}
     `,
   ]);
@@ -3241,7 +3354,7 @@ async function driveRejectedInviteLogin({
   returnTo,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const loginUrl = `${frontendBaseUrl}/auth/invite?returnTo=${encodeURIComponent(
+  const loginUrl = `${frontendBaseUrl}/auth/game-invite?returnTo=${encodeURIComponent(
     returnTo,
   )}&invite=${encodeURIComponent(inviteToken)}&account=${encodeURIComponent(
     accountCredential.accountId,
@@ -3733,7 +3846,66 @@ async function dropScratchDatabase({ adminUrl, name }) {
   ]);
 }
 
-async function startApi(applicationUrl) {
+async function startIdentityDeliveryCapture() {
+  const captures = new Map();
+  const authToken = `local-delivery-auth-${game}`;
+  const provider = createServer(async (request, response) => {
+    try {
+      if (
+        request.method !== "POST" ||
+        request.headers.authorization !== `Bearer ${authToken}`
+      ) {
+        response.writeHead(401).end();
+        return;
+      }
+      const chunks = [];
+      let size = 0;
+      for await (const chunk of request) {
+        size += chunk.length;
+        if (size > 64 * 1024) {
+          response.writeHead(413).end();
+          return;
+        }
+        chunks.push(chunk);
+      }
+      const delivery = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      captures.set(delivery.delivery_id, structuredClone(delivery));
+      const outcome =
+        delivery.attempt_number === 1
+          ? { status: "retryable_failure", code: "provider_unavailable" }
+          : {
+              status: "delivered",
+              provider_receipt_id: `local-${delivery.delivery_id}`,
+            };
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(outcome));
+    } catch {
+      response.writeHead(400).end();
+    }
+  });
+  await new Promise((resolve, reject) => {
+    provider.once("error", reject);
+    provider.listen(0, host, () => {
+      provider.off("error", reject);
+      resolve();
+    });
+  });
+  const address = provider.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("local identity delivery provider did not bind a TCP port");
+  }
+  return {
+    endpoint: `http://${host}:${address.port}/deliver`,
+    authToken,
+    captures,
+    close: () =>
+      new Promise((resolve, reject) => {
+        provider.close((error) => (error === undefined ? resolve() : reject(error)));
+      }),
+  };
+}
+
+async function startApi(applicationUrl, deliveryEndpoint) {
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
@@ -3764,7 +3936,9 @@ async function startApi(applicationUrl) {
       FMARCH_AUTH_RATE_LIMIT_WINDOW_SECONDS: "30",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "2",
       FMARCH_AUTH_RATE_LIMIT_RETENTION_SECONDS: "120",
-      FMARCH_LOCAL_DELIVERY_FAIL_FIRST_ATTEMPT: "1",
+      FMARCH_IDENTITY_DELIVERY_ENDPOINT: deliveryEndpoint,
+      FMARCH_IDENTITY_DELIVERY_PROVIDER_ID: "local-deterministic",
+      FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN: deliveryProvider.authToken,
       FMARCH_TRUST_AUTH_SOURCE_HEADER: "0",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },

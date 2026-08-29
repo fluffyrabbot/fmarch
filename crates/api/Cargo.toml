@@ -11,6 +11,7 @@ social = { path = "../social", version = "0.1.0" }
 trust_safety = { path = "../trust_safety", version = "0.1.0" }
 content_reference = { path = "../content_reference", version = "0.1.0" }
 commands = { path = "../commands", version = "0.1.0" }
+community_membership = { path = "../community_membership", version = "0.1.0" }
 content_registry = { path = "../content_registry", version = "0.1.0" }
 database_schema = { path = "../database_schema", version = "0.1.0" }
 domain = { path = "../domain", version = "0.1.0" }
@@ -19,6 +20,7 @@ game_platform = { path = "../game_platform", version = "0.1.0" }
 forum = { path = "../forum", version = "0.1.0" }
 identity = { path = "../identity", version = "0.1.0" }
 media = { path = "../media", version = "0.1.0" }
+membership_application = { path = "../membership_application", version = "0.1.0" }
 projections = { path = "../projections", version = "0.1.0" }
 profile_application = { path = "../profile_application", version = "0.1.0" }
 principal = { path = "../principal", version = "0.1.0" }

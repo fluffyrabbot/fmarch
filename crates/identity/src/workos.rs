@@ -375,11 +375,10 @@ async fn reject_tombstoned_identity(
     Ok(())
 }
 
-/// Resolve a verified WorkOS assertion onto a platform principal, provisioning
-/// principal, method, and external-identity rows on first sight. The email
-/// claim only ever becomes a display label; identities match by
-/// (provider, subject) alone. Runs in the caller's transaction; an advisory
-/// lock serializes concurrent first-sight provisioning per subject.
+/// Resolve a verified WorkOS assertion onto an existing platform principal.
+/// Previously unseen subjects are rejected: only the community-admission
+/// boundary may provision one. The email claim remains display metadata and
+/// is never an identity key or authorization input.
 pub async fn resolve_subject(
     conn: &mut PgConnection,
     verified: &VerifiedIdentity,
@@ -396,12 +395,10 @@ pub async fn resolve_subject(
     // Discovery must never take the provider-detail lock. The owner gives us
     // the canonical principal -> privacy-subject lock root; the binding is
     // re-read under lock only after its authentication method is locked.
-    let discovered = discover_subject(conn, verified.subject.as_str()).await?;
-    let principal_id = discovered
-        .as_ref()
-        .map(|identity| identity.principal_id)
-        .unwrap_or_else(PrincipalId::random);
-    methods::ensure_principal(conn, &principal_id, &[], now).await?;
+    let discovered = discover_subject(conn, verified.subject.as_str())
+        .await?
+        .ok_or(IdentityFlowError::Unauthorized)?;
+    let principal_id = discovered.principal_id;
     let owner = methods::lock_identity_mutation(
         conn,
         &principal_id,
@@ -411,62 +408,103 @@ pub async fn resolve_subject(
     owner.require_active()?;
     let global_capabilities = owner.global_capabilities;
 
-    let method_id = if let Some(identity) = discovered.as_ref() {
-        if lock_method(conn, identity.method_id, &principal_id).await? != "active" {
-            return Err(IdentityFlowError::Unauthorized);
-        }
-        identity.method_id
-    } else {
-        methods::create_method(conn, &principal_id, crate::MethodKind::Workos, now).await?
-    };
+    let method_id = discovered.method_id;
+    if lock_method(conn, method_id, &principal_id).await? != "active" {
+        return Err(IdentityFlowError::Unauthorized);
+    }
 
     let locked_binding = lock_subject_binding(conn, verified.subject.as_str()).await?;
-    if locked_binding != discovered {
+    if locked_binding.as_ref() != Some(&discovered) {
         return Err(IdentityFlowError::Unauthorized);
     }
     methods::touch_method(conn, method_id, now).await?;
-    if discovered.is_some() {
-        let updated = sqlx::query(
-            "UPDATE external_identity SET last_seen_at = $1, display_label = COALESCE($2, display_label) WHERE provider = 'workos' AND subject = $3 AND principal_id = $4",
-        )
-        .bind(now)
-        .bind(verified.email.as_deref())
-        .bind(verified.subject.as_str())
-        .bind(principal_id.as_uuid())
-        .execute(&mut *conn)
-        .await?;
-        if updated.rows_affected() != 1 {
-            return Err(IdentityFlowError::Unauthorized);
-        }
-    } else {
-        sqlx::query(
-            "INSERT INTO external_identity (provider, subject, principal_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, $4, $4, $5)",
-        )
-        .bind(verified.subject.as_str())
-        .bind(principal_id.as_uuid())
-        .bind(verified.email.as_deref())
-        .bind(now)
-        .bind(method_id)
-        .execute(&mut *conn)
-        .await?;
-        sqlx::query(
-            r#"
-            INSERT INTO identity_lifecycle_audit (
-                event_at, event_kind, actor_principal_id, principal_id,
-                token_hash, related_token_hash, metadata
-            )
-            VALUES ($1, 'external_identity_bound', NULL, $2, NULL, NULL, $3::JSONB)
-            "#,
-        )
-        .bind(now)
-        .bind(principal_id.as_uuid())
-        .bind(serde_json::json!({ "provider": "workos" }).to_string())
-        .execute(&mut *conn)
-        .await?;
+    let updated = sqlx::query(
+        "UPDATE external_identity SET last_seen_at = $1, display_label = COALESCE($2, display_label) WHERE provider = 'workos' AND subject = $3 AND principal_id = $4",
+    )
+    .bind(now)
+    .bind(verified.email.as_deref())
+    .bind(verified.subject.as_str())
+    .bind(principal_id.as_uuid())
+    .execute(&mut *conn)
+    .await?;
+    if updated.rows_affected() != 1 {
+        return Err(IdentityFlowError::Unauthorized);
     }
     Ok(WorkosResolution {
         principal_id,
         global_capabilities,
+        method_id,
+    })
+}
+
+/// Provision one previously unseen WorkOS subject for an invitation-gated
+/// admission transaction. The caller must complete membership admission in
+/// the same transaction; rollback removes every identity row if admission
+/// fails. Existing bindings are never moved or reused through this path.
+pub async fn bind_new_subject_for_admission(
+    conn: &mut PgConnection,
+    verified: &VerifiedIdentity,
+    now: i64,
+) -> Result<WorkosResolution, IdentityFlowError> {
+    if verified.expires_at <= now {
+        return Err(IdentityFlowError::Unauthorized);
+    }
+    lock_subject_advisory(conn, verified.subject.as_str()).await?;
+    reject_tombstoned_identity(conn, verified).await?;
+    if discover_subject(conn, verified.subject.as_str())
+        .await?
+        .is_some()
+    {
+        return Err(IdentityFlowError::AlreadyExists(
+            "this WorkOS identity is already bound",
+        ));
+    }
+    let principal_id = PrincipalId::random();
+    methods::ensure_principal(conn, &principal_id, &[], now).await?;
+    let owner = methods::lock_identity_mutation(
+        conn,
+        &principal_id,
+        methods::IdentityMutationExtent::Authentication,
+    )
+    .await?;
+    owner.require_active()?;
+    let method_id =
+        methods::create_method(conn, &principal_id, crate::MethodKind::Workos, now).await?;
+    if lock_subject_binding(conn, verified.subject.as_str())
+        .await?
+        .is_some()
+    {
+        return Err(IdentityFlowError::AlreadyExists(
+            "this WorkOS identity is already bound",
+        ));
+    }
+    sqlx::query(
+        "INSERT INTO external_identity (provider, subject, principal_id, display_label, created_at, last_seen_at, method_id) VALUES ('workos', $1, $2, $3, $4, $4, $5)",
+    )
+    .bind(verified.subject.as_str())
+    .bind(principal_id.as_uuid())
+    .bind(verified.email.as_deref())
+    .bind(now)
+    .bind(method_id)
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at, event_kind, actor_principal_id, principal_id,
+            token_hash, related_token_hash, metadata
+        )
+        VALUES ($1, 'external_identity_admitted', NULL, $2, NULL, NULL, $3::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(principal_id.as_uuid())
+    .bind(serde_json::json!({ "provider": "workos" }).to_string())
+    .execute(&mut *conn)
+    .await?;
+    Ok(WorkosResolution {
+        principal_id,
+        global_capabilities: owner.global_capabilities,
         method_id,
     })
 }

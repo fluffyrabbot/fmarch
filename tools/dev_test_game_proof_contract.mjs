@@ -7184,7 +7184,7 @@ export function assertDevTestGameProofRun(proof) {
     proof.identityBootstrap?.devSessionEndpointEnabled !== false ||
     proof.identityBootstrap?.rootSessionSource !== "auth_session" ||
     proof.identityBootstrap?.browserCredentialIssuer !==
-      "/auth/accounts + /auth/invites" ||
+      "/auth/accounts + /auth/game-invitations" ||
     proof.identityBootstrap?.browserSessionGrantUsage !== false ||
     JSON.stringify(proof.identityBootstrap?.browserCredentialKinds) !==
       JSON.stringify(["account", "account-bound-invite"]) ||
