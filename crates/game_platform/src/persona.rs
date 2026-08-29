@@ -6,7 +6,7 @@
 
 use std::{fmt, str::FromStr};
 
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
 use crate::ModelError;
@@ -14,10 +14,7 @@ use crate::ModelError;
 macro_rules! uuid_identifier {
     ($name:ident, $kind:literal) => {
         #[doc = $kind]
-        #[derive(
-            Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
-        )]
-        #[serde(transparent)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
         #[cfg_attr(feature = "typescript", ts(type = "string"))]
         pub struct $name(Uuid);
@@ -48,6 +45,24 @@ macro_rules! uuid_identifier {
         impl From<$name> for Uuid {
             fn from(value: $name) -> Self {
                 value.as_uuid()
+            }
+        }
+
+        impl Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+            {
+                self.0.serialize(serializer)
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                Uuid::deserialize(deserializer).map(Self::from_uuid)
             }
         }
 
@@ -178,6 +193,23 @@ mod tests {
         assert_eq!(
             transition.to_string().parse::<Uuid>().unwrap(),
             transition.as_uuid()
+        );
+        assert_eq!(
+            serde_json::from_str::<GamePersonaId>(&serde_json::to_string(&persona).unwrap())
+                .unwrap(),
+            persona
+        );
+        assert_eq!(
+            serde_json::from_str::<OccupancyId>(&serde_json::to_string(&occupancy).unwrap())
+                .unwrap(),
+            occupancy
+        );
+        assert_eq!(
+            serde_json::from_str::<OccupancyTransitionId>(
+                &serde_json::to_string(&transition).unwrap()
+            )
+            .unwrap(),
+            transition
         );
     }
 }

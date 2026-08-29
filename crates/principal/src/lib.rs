@@ -4,7 +4,7 @@
 //! names, profile identifiers, game personas, and privacy subjects. It is the
 //! sole identifier that may carry platform authority.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -13,9 +13,9 @@ use uuid::Uuid;
 ///
 /// Its JSON representation is the canonical UUID string. It is never derived
 /// from an account name or a provider-owned subject.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript", ts(type = "string"))]
 pub struct PrincipalId(Uuid);
 
 impl PrincipalId {
@@ -58,6 +58,24 @@ impl From<PrincipalId> for Uuid {
     }
 }
 
+impl Serialize for PrincipalId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PrincipalId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Uuid::deserialize(deserializer).map(Self::from_uuid)
+    }
+}
+
 impl FromStr for PrincipalId {
     type Err = uuid::Error;
 
@@ -84,6 +102,11 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&id).unwrap(),
             "\"00000000-0000-0000-0000-000000000001\""
+        );
+        assert_eq!(
+            serde_json::from_str::<PrincipalId>("\"00000000-0000-0000-0000-000000000001\"")
+                .unwrap(),
+            id
         );
         assert_eq!(PrincipalId::from_str(&id.to_string()).unwrap(), id);
     }
