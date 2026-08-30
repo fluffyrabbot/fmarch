@@ -44,7 +44,11 @@ direct `main` work, and atomic history over PR ceremony.
   reverse cargo dependency closure and `also_triggers` edges. Add `--run` to
   execute the selected lanes: `--mode push --run` before ordinary pushes,
   `--mode sprint --run` for an active-frontier checkpoint, and
-  `--mode full --run` for the full sweep.
+  `--mode full --run` for the content-addressed full sweep. Full mode selects
+  every lane, but may reuse an immutable passing result for a frozen lane when
+  its proof key still matches the lane's transitive sources, migrations, locks,
+  toolchain, command, and fixtures. Use `--mode full --force --run` to execute
+  every lane for release checkpoints and periodic exhaustive audits.
 - Tier discipline: `frozen` areas are completed surfaces trusted between full
   sweeps — their lanes leave the inner loop, never existence. Editing frozen
   paths is allowed (greenfield stance stands) but automatically re-arms their
@@ -53,7 +57,9 @@ direct `main` work, and atomic history over PR ceremony.
   closure; sprint mode adds every active-tier area. Re-declare tiers at sprint
   boundaries (current frontier = active), use sprint mode during frontier-wide
   checkpoints, and run `--mode full --run` before landing a sprint to `main` so
-  the freeze stays honest. Validate manifest integrity with
+  the freeze stays honest without rerunning unchanged frozen universes. Run a
+  forced full sweep for explicit release checkpoints and periodic exhaustive
+  audits. Validate manifest integrity with
   `npm run test:proof-lane-contract`. Normal `--run` executions record current
   costs under ignored `target/proof-lanes/`; deliberately promote a stable cost
   into the tracked baseline with

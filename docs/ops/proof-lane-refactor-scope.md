@@ -194,6 +194,26 @@ only for the same commit and manifest digest.
   digest, selected lane graph, and sanitized local database identity. Release
   coordination accepts only clean, exact-commit full receipts.
 
+### Content-address frozen full sweeps — delivered 2026-08-29
+
+- Full mode still selects every manifest lane. A lane is reusable only when
+  every area that owns it is frozen and an immutable schema-1 cache entry under
+  `target/proof-lanes/cache/` matches its current proof key.
+- The key binds the exact lane and hard-dependency execution graph, transitive
+  workspace Cargo package sources for canonical crate-owned lanes, explicit
+  manifest-owned paths for specialized semantic/proof lanes, generated-artifact
+  fixtures, every migration, root and frontend dependency locks, the pinned and
+  runtime Rust/Node/Postgres toolchains, and the selector/cache/runner sources.
+  Unrelated active-frontier source is intentionally absent.
+- Cache loading verifies the successful lane record and a recursive artifact
+  digest. Cached producer artifacts are copied into the new run before any
+  consumer starts, so artifact dependencies retain the same run-local boundary
+  as executed producers. Missing, malformed, corrupt, or incomplete entries are
+  ordinary cache misses and execute normally.
+- `npm run proof:lanes -- --mode full --force --run` disables reuse and executes
+  every selected lane. Successful forced runs may populate missing keys but do
+  not mutate an already-valid immutable entry.
+
 ### 2. Remove aggregate duplication — delivered 2026-07-26
 
 - Keep `test:frontend-role-proof:quick` and `test:local-postgres-ci` as optional
@@ -358,6 +378,10 @@ That is extra evidence beside Darwin push/sprint/full.
   declared 60-second budget.
 - A clean machine can run `npm run proof:lanes -- --mode full --run` without
   manually exporting `DATABASE_URL`.
+- A second unchanged full sweep reuses eligible frozen lanes, while changing a
+  transitive source, migration, lockfile, toolchain, command, fixture, or proof
+  runner invalidates the affected proof key. `--mode full --force --run` reuses
+  none.
 - Migrated lanes in two simultaneous proof runs cannot share a writable
   database or declared artifact directory.
 - A multi-database leaf receives distinct source and restore URLs and records

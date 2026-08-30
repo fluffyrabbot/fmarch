@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -102,7 +102,7 @@ test('runner max_parallel is a hard opt-in ceiling', async (t) => {
   );
 });
 
-test('manifest validation reserves resource-owned environment and validates the real v6 metadata', () => {
+test('manifest validation reserves resource-owned environment and validates the real v7 metadata', () => {
   assert.equal(validateExecutionManifest(loadManifest()), true);
   assert.throws(
     () => validateExecutionManifest(fixture({ implicit: { kind: 'npm' } })),
@@ -336,6 +336,47 @@ test('resumed execution records inherited successes without spawning them again'
   assert.deepEqual(started, ['retry']);
   assert.equal(result.receipt.lanes.inherited.state, 'passed');
   assert.equal(result.receipt.lanes.inherited.reused_from_receipt, 'prior-run');
+});
+
+test('content-addressed reuse materializes producer artifacts into the new run', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const cachedArtifacts = join(root, 'target', 'proof-lanes', 'cache', 'producer', 'key', 'artifacts');
+  await mkdir(cachedArtifacts, { recursive: true });
+  await writeFile(join(cachedArtifacts, 'evidence.json'), '{"passed":true}\n');
+  const manifest = fixture({
+    producer: lane(
+      ['producer'],
+      [{ kind: 'artifact-dir', env: 'FMARCH_PROOF_ARTIFACT_DIR' }],
+    ),
+    consumer: {
+      ...lane(
+        ['consumer'],
+        [{ kind: 'artifact-input', from: 'producer', env: 'PRODUCER_ARTIFACTS' }],
+      ),
+      depends_on: ['producer'],
+    },
+  });
+  let producerArtifacts;
+  const result = await runExecutionPlan(['producer', 'consumer'], manifest, {
+    root,
+    reusedLanes: new Map([['producer', {
+      receipt_id: 'cached-run',
+      proof_key: 'a'.repeat(64),
+      artifact_source_dir: cachedArtifacts,
+    }]]),
+    spawn(_file, _args, options) {
+      producerArtifacts = options.env.PRODUCER_ARTIFACTS;
+      return childThatCloses(0);
+    },
+    log: () => {},
+  });
+  assert.equal(result.success, true);
+  assert.notEqual(producerArtifacts, cachedArtifacts);
+  assert.match(producerArtifacts, /runs\/.*\/artifacts\/producer$/);
+  assert.equal(await readFile(join(producerArtifacts, 'evidence.json'), 'utf8'), '{"passed":true}\n');
+  assert.equal(result.receipt.lanes.producer.reused_from_proof_key, 'a'.repeat(64));
+  assert.equal(result.receipt.lanes.producer.artifact_dir, producerArtifacts);
 });
 
 test('a resource cleanup failure finalizes the receipt and blocks later work', async (t) => {

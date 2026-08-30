@@ -19,6 +19,7 @@
 //                                    [--changed <path> ...] [--json] [--list] [--run]
 //                                    [--jobs <positive integer>]
 //                                    [--only <lane-id>] [--resume <receipt>]
+//                                    [--force]
 //                                    [--record <lane-id>] [--regenerate <lane-id>]
 //                                    [--measure <lane-id> ...] [--measure-all]
 //
@@ -55,6 +56,15 @@ import {
   runExecutionPlan,
   validateExecutionManifest,
 } from './proof_lane_execution.mjs';
+import {
+  computeLaneProofKey,
+  frozenLaneIds,
+  loadProofCacheHits,
+  persistProofCacheEntries,
+  proofToolchain,
+  workspaceFiles,
+  workspaceMetadata,
+} from './proof_lane_cache.mjs';
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFEST_PATH = join(REPO_ROOT, 'docs', 'ops', 'proof-lane-manifest.json');
@@ -724,6 +734,7 @@ async function main(argv) {
     else if (arg === '--regenerate') args.regenerate = argv[++i];
     else if (arg === '--only') args.only = argv[++i];
     else if (arg === '--resume') args.resume = argv[++i];
+    else if (arg === '--force') args.force = true;
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!['inner', 'push', 'sprint', 'full'].includes(args.mode)) {
@@ -746,6 +757,9 @@ async function main(argv) {
   }
   if (args.jobs !== 1 && !args.run) {
     throw new Error('--jobs is only valid with --run');
+  }
+  if (args.force && (!args.run || args.mode !== 'full' || args.resume || args.only)) {
+    throw new Error('--force is valid only with --mode full --run');
   }
   if (measuring && (args.json || args.list || args.record || args.regenerate)) {
     throw new Error('--measure cannot be combined with --json, --list, --record, or --regenerate');
@@ -847,6 +861,44 @@ async function main(argv) {
     ? resume.selected
     : orderedExecutionPlan(dependencyExpandedLaneIds, manifest, timings);
 
+  let cachePlan = null;
+  if (args.run && selection.mode === 'full' && !resume) {
+    const eligible = ordered.filter((laneId) => frozenLaneIds(manifest).has(laneId));
+    try {
+      const sharedInputs = {
+        root: REPO_ROOT,
+        files: workspaceFiles(REPO_ROOT),
+        metadata: workspaceMetadata(REPO_ROOT),
+        toolchain: proofToolchain(),
+        fingerprints: new Map(),
+      };
+      const laneKeys = new Map(
+        eligible.map((laneId) => [laneId, computeLaneProofKey(laneId, manifest, sharedInputs)]),
+      );
+      const lookup = loadProofCacheHits(eligible, manifest, { ...sharedInputs, computedKeys: laneKeys });
+      cachePlan = {
+        eligible,
+        laneKeys,
+        hits: args.force ? new Map() : lookup.hits,
+        observedHits: lookup.hits,
+        misses: lookup.misses,
+        invalid: new Set(
+          [...lookup.misses].filter(([, miss]) => miss.reason !== 'not-found').map(([laneId]) => laneId),
+        ),
+      };
+    } catch (error) {
+      cachePlan = {
+        eligible,
+        laneKeys: new Map(),
+        hits: new Map(),
+        observedHits: new Map(),
+        misses: new Map(),
+        invalid: new Set(),
+        setupError: error.message,
+      };
+    }
+  }
+
   if (args.json) {
     console.log(JSON.stringify({
       ...selection,
@@ -861,6 +913,16 @@ async function main(argv) {
   console.log(`mode: ${selection.mode}   changed files: ${changed.length}`);
   if (resume) {
     console.log(`  resuming ${resume.receipt.id}: rerun ${resume.rerun.length}, reuse ${resume.reusedLanes.size}`);
+  }
+  if (cachePlan) {
+    const forced = args.force ? `; force reruns ${cachePlan.observedHits.size} reusable lane(s)` : '';
+    console.log(
+      `  frozen proof cache: reuse ${cachePlan.hits.size}, execute ${cachePlan.eligible.length - cachePlan.hits.size}${forced}`,
+    );
+    if (cachePlan.setupError) console.log(`    cache disabled; executing frozen lanes: ${cachePlan.setupError}`);
+    for (const [laneId, miss] of cachePlan.misses) {
+      if (miss.reason !== 'not-found') console.log(`    cache miss ${laneId}: ${miss.reason}`);
+    }
   }
   for (const { id, reasons } of selection.touched) {
     const shown = reasons.slice(0, 3).join(', ') + (reasons.length > 3 ? `, +${reasons.length - 3} more` : '');
@@ -898,7 +960,7 @@ async function main(argv) {
           receipt_sha256: resume.receiptSha256,
         } : null,
       },
-      reusedLanes: resume?.reusedLanes,
+      reusedLanes: resume?.reusedLanes ?? cachePlan?.hits,
       onResult(laneId, entry) {
         observations.set(laneId, entry);
       },
@@ -912,7 +974,20 @@ async function main(argv) {
       if (failed) console.error(`focused: npm run proof:lanes -- --only ${JSON.stringify(failed)} --run`);
       throw new Error(`proof failed: inspect ${execution.run.receiptPath}`);
     }
-    console.log(`\nproof passed: ${ordered.length} lane(s) — receipt ${execution.run.receiptPath}`);
+    let stored = [];
+    if (cachePlan) {
+      try {
+        stored = persistProofCacheEntries(execution, cachePlan.laneKeys, {
+          root: REPO_ROOT,
+          replaceLaneIds: cachePlan.invalid,
+        });
+      } catch (error) {
+        console.error(`warning: proof passed but frozen-lane cache persistence failed: ${error.message}`);
+      }
+    }
+    const reused = cachePlan?.hits.size ?? resume?.reusedLanes.size ?? 0;
+    const cacheSummary = cachePlan ? `; reused ${reused}, cached ${stored.length}` : '';
+    console.log(`\nproof passed: ${ordered.length} lane(s)${cacheSummary} — receipt ${execution.run.receiptPath}`);
   }
 }
 

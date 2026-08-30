@@ -6,7 +6,7 @@
 
 import { spawn as spawnChild } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -802,6 +802,8 @@ function serializableLane(record) {
     cleanup_error: record.cleanupError ?? null,
     interrupted_by: record.interruptedBy ?? null,
     reused_from_receipt: record.reusedFromReceipt ?? null,
+    reused_from_proof_key: record.reusedFromProofKey ?? null,
+    proof_key: record.proofKey ?? null,
   };
 }
 
@@ -855,6 +857,8 @@ export async function runExecutionPlan(
             startedAt: reused.started_at ?? null,
             finishedAt: reused.finished_at ?? null,
             reusedFromReceipt: reused.receipt_id,
+            reusedFromProofKey: reused.proof_key ?? null,
+            proofKey: reused.proof_key ?? null,
           }
         : { state: 'pending', command: laneLabel(laneId, manifest.lanes[laneId]) }];
     }),
@@ -885,6 +889,36 @@ export async function runExecutionPlan(
   const used = new Map();
   const running = new Map();
   const completedArtifacts = new Map();
+  for (const [laneId, reused] of reusedLanes) {
+    if (!reused.artifact_source_dir) continue;
+    const artifactDir = assertInsideRun(
+      run,
+      run.artifactDirectory(laneId),
+      `reused lane ${laneId} artifact directory`,
+    );
+    try {
+      await mkdir(dirname(artifactDir), { recursive: true });
+      await cp(reused.artifact_source_dir, artifactDir, {
+        recursive: true,
+        errorOnExist: true,
+        force: false,
+        verbatimSymlinks: true,
+      });
+      completedArtifacts.set(laneId, artifactDir);
+      const record = records.get(laneId);
+      record.artifactDir = artifactDir;
+      await refreshReceipt();
+    } catch (error) {
+      await rm(artifactDir, { recursive: true, force: true });
+      records.set(laneId, {
+        state: 'pending',
+        command: laneLabel(laneId, manifest.lanes[laneId]),
+        proofKey: reused.proof_key ?? null,
+      });
+      log(`warning: cached artifacts for ${laneId} could not be materialized; executing lane: ${error.message}`);
+      await refreshReceipt();
+    }
+  }
   const crossRunLocks = new CrossRunLockManager({
     root: run.root,
     runId: run.id,
