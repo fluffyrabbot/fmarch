@@ -254,7 +254,7 @@ try {
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit registration/login/logout/account-security/account-recovery/host/admin-audit routes, and Chromium proof. Proves Argon2id account credentials, bounded self-service registration into an unprivileged opaque session and seeded game pending-authority surface, hashed single-use recovery credentials, account-bound invite redemption, and a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs. Both invite and recovery issuance persist redacted typed delivery intents through a provider-neutral gateway, deterministically fail their first local-adapter attempt, record typed provider outcomes, observe the declared retry boundary, succeed through the GlobalAdmin retry transition, render the provider/outcome in the admin audit, and then reach the unchanged role surface without storing a raw credential. The lane also proves authenticated logout with denied role back navigation, atomic overdue-session rotation with one concurrent winner and a cleared stale loser, authenticated password rotation and account recovery with session revocation, invalid/expired/revoked/replayed recovery rejection, recovered-password return to the same host role URL, two-tier Postgres credential-attempt throttling with hashed account/source scopes, bounded unknown-account traffic, stale-row pruning, timing-equalized missing credentials, visible retry states, and post-lockout recovery to the same host role URL, host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove real email or SMS traffic, provider bounce handling, hosted delivery availability, hosted identity, distributed or edge abuse controls, hosted password-parameter monitoring, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit registration/login/logout/account-security/account-recovery/host/admin-audit/community-stewardship routes, and Chromium proof. Proves Argon2id account credentials, invite-only registration into an unprivileged opaque session, full membership lineage, privacy-safe pending-invitation inspection, GlobalAdmin invitation revocation, sponsor suspension with atomic pending-invitation revocation, and restoration without invitation resurrection. Both community and game invite delivery use the provider-neutral gateway without exposing raw credentials. The lane also covers session, password, recovery, throttling, account lifecycle, game-scoped issuance, and identity lifecycle audit controls; it does not prove real email or SMS traffic, provider bounce handling, hosted delivery availability, hosted identity, distributed or edge abuse controls, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -280,6 +280,9 @@ try {
         "session-logout",
         "session-revocation",
         "invite-revocation",
+        "community-invitation-revocation",
+        "community-membership-suspension",
+        "community-membership-restoration",
       ],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern:
@@ -1448,6 +1451,144 @@ async function driveAccountRecovery({
   }
 }
 
+async function proveCommunityStewardship({
+  apiBaseUrl,
+  frontendBaseUrl,
+  adminSessionToken,
+  memberSessionToken,
+}) {
+  const lineage = await fetchJson(`${apiBaseUrl}/community/membership/lineage`, {
+    headers: { authorization: `Bearer ${memberSessionToken}` },
+  });
+  const member = lineage.lineage?.find((entry) => entry.depth === 0);
+  const sponsor = lineage.lineage?.find((entry) => entry.depth === 1);
+  if (typeof member?.membership_id !== "string" || typeof sponsor?.membership_id !== "string") {
+    throw new Error(`community lineage provenance drifted: ${JSON.stringify(lineage)}`);
+  }
+
+  const firstTarget = `steward-revoke-${game}@example.test`;
+  const first = await issuePendingCommunityInvitation({
+    apiBaseUrl,
+    memberSessionToken,
+    accountId: firstTarget,
+  });
+  const initialSnapshot = await fetchJson(`${apiBaseUrl}/admin/community/stewardship`, {
+    headers: { authorization: `Bearer ${adminSessionToken}` },
+  });
+  const pending = initialSnapshot.pending_invitations?.find(
+    (entry) => entry.invitation_id === first.invitationId,
+  );
+  if (
+    typeof pending?.target_fingerprint !== "string" ||
+    pending.target_fingerprint.length !== 12 ||
+    JSON.stringify(initialSnapshot).includes(firstTarget)
+  ) {
+    throw new Error("community stewardship snapshot exposed recipient identity");
+  }
+
+  const page = await browser.newPage({ viewport: { width: 1024, height: 900 } });
+  try {
+    await page.context().addCookies([{
+      name: "fmarch_session",
+      value: adminSessionToken,
+      url: frontendBaseUrl,
+      httpOnly: true,
+      sameSite: "Lax",
+    }]);
+    await page.goto(`${frontendBaseUrl}/admin/community`, { waitUntil: "networkidle" });
+    await page.getByTestId("community-stewardship").waitFor({ state: "visible", timeout: 15000 });
+    const firstCard = page.getByTestId(`community-invitation-${first.invitationId}`);
+    await firstCard.waitFor({ state: "visible", timeout: 15000 });
+    if ((await page.locator("body").innerText()).includes(firstTarget)) {
+      throw new Error("community stewardship browser surface exposed recipient identity");
+    }
+    await firstCard.getByRole("button", { name: "Revoke" }).click();
+    await page.getByRole("status").filter({ hasText: "Invitation revoked" }).waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+
+    const secondTarget = `steward-suspend-${game}@example.test`;
+    const second = await issuePendingCommunityInvitation({
+      apiBaseUrl,
+      memberSessionToken,
+      accountId: secondTarget,
+    });
+    await page.goto(`${frontendBaseUrl}/admin/community`, { waitUntil: "networkidle" });
+    await page.getByTestId(`community-invitation-${second.invitationId}`).waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const memberCard = page.getByTestId(`community-member-${member.membership_id}`);
+    await memberCard.getByLabel("Reason").fill("live stewardship proof");
+    await memberCard.getByRole("button", { name: "Suspend" }).click();
+    await page.getByRole("status").filter({ hasText: "Membership suspended" }).waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const suspendedCard = page.getByTestId(`community-member-${member.membership_id}`);
+    if ((await suspendedCard.getAttribute("data-status")) !== "suspended") {
+      throw new Error("community membership suspension did not render");
+    }
+    if ((await page.getByTestId(`community-invitation-${second.invitationId}`).count()) !== 0) {
+      throw new Error("sponsor suspension did not revoke its pending invitation");
+    }
+    await suspendedCard.getByRole("button", { name: "Restore" }).click();
+    await page.getByRole("status").filter({ hasText: "Membership restored" }).waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const restoredCard = page.getByTestId(`community-member-${member.membership_id}`);
+    if ((await restoredCard.getAttribute("data-status")) !== "active") {
+      throw new Error("community membership restoration did not render");
+    }
+    return {
+      status: "passed",
+      surfaceTestId: "community-stewardship",
+      memberMembershipId: member.membership_id,
+      sponsoringMembershipId: sponsor.membership_id,
+      lineageDepths: lineage.lineage.map((entry) => entry.depth),
+      targetRepresentation: "keyed-fingerprint-prefix",
+      recipientIdentityRendered: false,
+      deliveryObserved: first.deliveryStatus,
+      revokedThroughBrowser: true,
+      suspensionRevokedPendingInvitation: true,
+      restoredThroughBrowser: true,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function issuePendingCommunityInvitation({
+  apiBaseUrl,
+  memberSessionToken,
+  accountId,
+}) {
+  const response = await fetchJson(`${apiBaseUrl}/community/invitations`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${memberSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: accountId,
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
+    }),
+  });
+  if (
+    typeof response.invitation?.invitation_id !== "string" ||
+    response.invitation?.credential !== undefined ||
+    typeof response.delivery_status !== "string"
+  ) {
+    throw new Error(`pending community invitation drifted: ${JSON.stringify(response)}`);
+  }
+  return {
+    invitationId: response.invitation.invitation_id,
+    deliveryStatus: response.delivery_status,
+  };
+}
+
 async function proveIdentityLifecycle({
   apiBaseUrl,
   frontendBaseUrl,
@@ -1462,6 +1603,12 @@ async function proveIdentityLifecycle({
     sponsorSessionToken: adminSessionToken,
     accountCredential: registrationCredentials,
     returnTo: `/g/${game}`,
+  });
+  const communityStewardship = await proveCommunityStewardship({
+    apiBaseUrl,
+    frontendBaseUrl,
+    adminSessionToken,
+    memberSessionToken: accountRegistration.sessionToken,
   });
   const rotatedHostPassword = `rotated-host-password-${game}`;
   const recoveredHostPassword = `recovered-host-password-${game}`;
@@ -1809,6 +1956,7 @@ async function proveIdentityLifecycle({
       hostReturnTo,
       hostAccount,
       accountRegistration,
+      communityStewardship,
       inviteDelivery,
       recoveryDelivery,
       memberLifecycle,
@@ -1862,6 +2010,7 @@ async function finishIdentityLifecycleProof({
   hostReturnTo,
   hostAccount,
   accountRegistration,
+  communityStewardship,
   inviteDelivery,
   recoveryDelivery,
   memberLifecycle,
@@ -2023,6 +2172,7 @@ async function finishIdentityLifecycleProof({
       rawPasswordStored: false,
       auditEventKinds: registrationAuditEventKinds,
     },
+    communityStewardship,
     memberLifecycle,
     sessionRotation: {
       status: "passed",
@@ -3459,6 +3609,13 @@ function assertInviteProof(evidence) {
       "auth-registration-classic-surface" ||
     evidence.identityLifecycle?.accountRegistration?.securitySurfaceTestId !==
       "account-security-surface" ||
+    evidence.identityLifecycle?.communityStewardship?.status !== "passed" ||
+    evidence.identityLifecycle?.communityStewardship?.surfaceTestId !==
+      "community-stewardship" ||
+    evidence.identityLifecycle?.communityStewardship?.recipientIdentityRendered !== false ||
+    evidence.identityLifecycle?.communityStewardship?.revokedThroughBrowser !== true ||
+    evidence.identityLifecycle?.communityStewardship?.suspensionRevokedPendingInvitation !== true ||
+    evidence.identityLifecycle?.communityStewardship?.restoredThroughBrowser !== true ||
     evidence.identityLifecycle?.memberLifecycle?.status !== "passed" ||
     evidence.identityLifecycle?.memberLifecycle?.securitySurfaceTestId !==
       "account-security-surface" ||

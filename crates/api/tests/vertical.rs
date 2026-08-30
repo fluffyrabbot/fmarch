@@ -9216,6 +9216,118 @@ async fn community_invitation_delivery_accepts_a_prospective_account_without_lea
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
+async fn community_stewardship_is_global_admin_only_and_never_returns_recipient_identity(
+    pool: sqlx::PgPool,
+) {
+    let app = router_with_dev_auth(pool.clone());
+    let now = unix_now_seconds();
+    let admin = PrincipalId::fixture("community_steward_admin");
+    let member = PrincipalId::fixture("community_steward_member");
+    let admin_token = issue_dev_session_for_principal(&app, admin, &["GlobalAdmin"]).await;
+    let member_token = issue_dev_session_for_principal(&app, member, &[]).await;
+    membership_application::ensure_founder_membership(&pool, admin, now)
+        .await
+        .unwrap();
+    let member_id = membership_application::ensure_founder_membership(&pool, member, now)
+        .await
+        .unwrap();
+    let recipient = "private-recipient@example.test";
+    let pending = membership_application::issue_invitation(
+        &pool,
+        &membership_application::InvitationTargetIndex::from_env_or_local().unwrap(),
+        member,
+        recipient,
+        now + 3_600,
+        now,
+    )
+    .await
+    .unwrap();
+
+    let forbidden = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/admin/community/stewardship")
+                .header("authorization", format!("Bearer {member_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/admin/community/stewardship")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let snapshot: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(!String::from_utf8_lossy(&body).contains(recipient));
+    assert_eq!(
+        snapshot["pending_invitations"][0]["target_fingerprint"]
+            .as_str()
+            .unwrap()
+            .len(),
+        12
+    );
+
+    let suspended = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/admin/community/membership-suspensions")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::from(
+                    serde_json::json!({
+                        "membership_id": member_id,
+                        "reason": "verified stewardship test"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(suspended.status(), StatusCode::OK);
+    assert_eq!(
+        sqlx::query_scalar::<_, String>(
+            "SELECT status FROM community_invitation WHERE invitation_id = $1",
+        )
+        .bind(pending.invitation_id.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "revoked"
+    );
+
+    let restored = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/admin/community/membership-restorations")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {admin_token}"))
+                .body(Body::from(
+                    serde_json::json!({ "membership_id": member_id }).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(restored.status(), StatusCode::OK);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_account_registration_creates_unprivileged_opaque_session(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let invitation = community_invitation_for(&pool, "New.User+One@Example.Test").await;

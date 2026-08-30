@@ -1,6 +1,7 @@
 use membership_application::{
-    admit_classic, ensure_founder_membership, issue_invitation, lineage_for_principal,
-    revoke_invitation, InvitationTargetIndex, MembershipApplicationError,
+    admit_classic, community_stewardship_snapshot, ensure_founder_membership, issue_invitation,
+    lineage_for_principal, revoke_invitation, steward_membership, InvitationTargetIndex,
+    MembershipApplicationError, MAX_OPEN_INVITATIONS_PER_SPONSOR,
 };
 use principal::PrincipalId;
 use std::time::Duration;
@@ -16,6 +17,129 @@ async fn founder(pool: &sqlx::PgPool, now: i64) -> PrincipalId {
         .await
         .unwrap();
     principal
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn invitation_quota_is_serialized_by_the_sponsor_lock(pool: sqlx::PgPool) {
+    let now = 1_700_000_000;
+    let sponsor = founder(&pool, now).await;
+    let target_index = InvitationTargetIndex::from_env_or_local().unwrap();
+    for index in 0..MAX_OPEN_INVITATIONS_PER_SPONSOR {
+        issue_invitation(
+            &pool,
+            &target_index,
+            sponsor,
+            format!("quota-{index}@example.test").as_str(),
+            now + 3_600,
+            now,
+        )
+        .await
+        .unwrap();
+    }
+    let rejected = issue_invitation(
+        &pool,
+        &target_index,
+        sponsor,
+        "quota-blocked@example.test",
+        now + 3_600,
+        now,
+    )
+    .await;
+    assert!(matches!(
+        rejected,
+        Err(MembershipApplicationError::QuotaExceeded { .. })
+    ));
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn stewardship_preserves_lineage_and_suspension_revokes_pending_invites(pool: sqlx::PgPool) {
+    let now = 1_700_000_000;
+    let admin = founder(&pool, now).await;
+    let target_index = InvitationTargetIndex::from_env_or_local().unwrap();
+    let admission = issue_invitation(
+        &pool,
+        &target_index,
+        admin,
+        "member@example.test",
+        now + 3_600,
+        now,
+    )
+    .await
+    .unwrap();
+    let member = admit_classic(
+        &pool,
+        &target_index,
+        &admission.credential,
+        "member@example.test",
+        "$argon2id$fixture",
+        &identity::SessionPolicy::from_env(),
+        now + 1,
+    )
+    .await
+    .unwrap();
+    let pending = issue_invitation(
+        &pool,
+        &target_index,
+        member.principal_id,
+        "pending@example.test",
+        now + 3_600,
+        now + 2,
+    )
+    .await
+    .unwrap();
+
+    steward_membership(
+        &pool,
+        admin,
+        member.membership_id,
+        community_membership::MembershipCommand::Suspend {
+            reason: "credible abuse signal".to_string(),
+        },
+        now + 3,
+    )
+    .await
+    .unwrap();
+    let snapshot = community_stewardship_snapshot(&pool, None, now + 3)
+        .await
+        .unwrap();
+    let suspended = snapshot
+        .memberships
+        .iter()
+        .find(|entry| entry.membership_id == member.membership_id)
+        .unwrap();
+    assert_eq!(suspended.status, "suspended");
+    assert_eq!(suspended.depth, 1);
+    assert!(snapshot
+        .pending_invitations
+        .iter()
+        .all(|entry| entry.invitation_id != pending.invitation_id));
+    let status: String =
+        sqlx::query_scalar("SELECT status FROM community_invitation WHERE invitation_id = $1")
+            .bind(pending.invitation_id.as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(status, "revoked");
+
+    steward_membership(
+        &pool,
+        admin,
+        member.membership_id,
+        community_membership::MembershipCommand::Restore,
+        now + 4,
+    )
+    .await
+    .unwrap();
+    issue_invitation(
+        &pool,
+        &target_index,
+        member.principal_id,
+        "after-restore@example.test",
+        now + 3_600,
+        now + 5,
+    )
+    .await
+    .unwrap();
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]

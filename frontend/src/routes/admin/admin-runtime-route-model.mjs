@@ -31,6 +31,9 @@ export async function buildAdminRuntimeRouteData({
     principalId,
     capabilityLabel: access.capabilityLabel,
   });
+  const communityAudit = capabilities.some((capability) => capability?.kind === "GlobalAdmin")
+    ? [communityStewardshipAudit()]
+    : [];
 
   if (!access.allowed || selectedGame === null) {
     return Object.freeze({
@@ -42,7 +45,7 @@ export async function buildAdminRuntimeRouteData({
       bootstrap: normalizeAdminBootstrap(bootstrapCatalog, { access, capabilities }),
       command: emptyAdminCommand(),
       gameSetup: Object.freeze([]),
-      audit: Object.freeze([]),
+      audit: Object.freeze(communityAudit),
       recoveryTasks: Object.freeze([]),
       escalations: Object.freeze([]),
     });
@@ -84,6 +87,7 @@ export async function buildAdminRuntimeRouteData({
       }),
     ]),
     audit: Object.freeze([
+      ...communityAudit,
       ...(includeLegacyIdentityOps ? [authDeliveryQueueAudit()] : []),
       ...withRuntimeAuditLinks(coldData.audit, { game: selectedGame }),
     ]),
@@ -328,6 +332,19 @@ function authDeliveryQueueAudit() {
     boundaryDetail: "Failures and cancellations are visible without credential material",
     href: "/admin/deliveries",
     inspectHref: "/admin/deliveries",
+  });
+}
+
+function communityStewardshipAudit() {
+  return Object.freeze({
+    id: "community-stewardship",
+    label: "Community stewardship",
+    status: "Review provenance",
+    authority: "GlobalAdmin",
+    boundary: "Invite chain and membership controls",
+    boundaryDetail: "Privacy-safe invitation pressure, lineage, suspension, restoration, and revocation",
+    href: "/admin/community",
+    inspectHref: "/admin/community",
   });
 }
 

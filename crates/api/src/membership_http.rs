@@ -1,14 +1,19 @@
 //! Closed-community invitation and provenance HTTP adapters.
 
-use crate::auth_http::{unix_now_seconds, AuthHttpState, AuthenticatedRequest};
+use crate::auth_http::{
+    require_global_admin, unix_now_seconds, AuthHttpState, AuthenticatedRequest,
+};
 use crate::authentication::{deliver_auth_credential, AuthCredentialDeliveryRequest};
 use crate::identity_delivery::IdentityDeliveryKind;
 use crate::{ApiError, ApiState};
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use membership_application::{IssuedCommunityInvitation, MembershipLineageEntry};
+use membership_application::{
+    CommunityStewardshipSnapshot, IssuedCommunityInvitation, MembershipApplicationError,
+    MembershipLineageEntry,
+};
 use serde::{Deserialize, Serialize};
 use wire::RejectCode;
 
@@ -17,6 +22,19 @@ pub(super) fn routes(_state: &ApiState) -> Router<ApiState> {
         .route("/community/invitations", post(issue_invitation))
         .route("/community/invitation-revocations", post(revoke_invitation))
         .route("/community/membership/lineage", get(own_lineage))
+        .route("/admin/community/stewardship", get(community_stewardship))
+        .route(
+            "/admin/community/membership-suspensions",
+            post(suspend_membership),
+        )
+        .route(
+            "/admin/community/membership-restorations",
+            post(restore_membership),
+        )
+        .route(
+            "/admin/community/invitation-revocations",
+            post(steward_revoke_invitation),
+        )
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -57,10 +75,18 @@ async fn issue_invitation(
         now,
     )
     .await
-    .map_err(|error| ApiError::Reject {
-        status: StatusCode::FORBIDDEN,
-        error: RejectCode::NotAuthorized,
-        message: format!("community invitation was rejected: {error}"),
+    .map_err(|error| match error {
+        MembershipApplicationError::QuotaExceeded {
+            retry_after_seconds,
+        } => ApiError::RateLimited {
+            retry_after_seconds,
+            message: "community invitation quota is exhausted".to_string(),
+        },
+        error => ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: format!("community invitation was rejected: {error}"),
+        },
     })?;
     let credential_hash = membership_application::hash_credential(&invitation.credential);
     let delivery = deliver_auth_credential(
@@ -142,4 +168,131 @@ async fn own_lineage(
         });
     }
     Ok(Json(MembershipLineageResponse { lineage }))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StewardshipQuery {
+    root_membership_id: Option<uuid::Uuid>,
+}
+
+async fn community_stewardship(
+    State(state): State<AuthHttpState>,
+    auth: AuthenticatedRequest,
+    Query(query): Query<StewardshipQuery>,
+) -> Result<Json<CommunityStewardshipSnapshot>, ApiError> {
+    require_global_admin(&state, auth.bearer.as_str(), "community stewardship").await?;
+    let snapshot = membership_application::community_stewardship_snapshot(
+        &state.pool,
+        query
+            .root_membership_id
+            .map(community_membership::MembershipId::from_uuid),
+        unix_now_seconds(),
+    )
+    .await
+    .map_err(stewardship_error)?;
+    Ok(Json(snapshot))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SuspendMembershipRequest {
+    membership_id: uuid::Uuid,
+    reason: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RestoreMembershipRequest {
+    membership_id: uuid::Uuid,
+}
+
+async fn suspend_membership(
+    State(state): State<AuthHttpState>,
+    auth: AuthenticatedRequest,
+    Json(request): Json<SuspendMembershipRequest>,
+) -> Result<Json<StewardshipMutationResponse>, ApiError> {
+    let actor = require_global_admin(
+        &state,
+        auth.bearer.as_str(),
+        "community membership suspension",
+    )
+    .await?;
+    membership_application::steward_membership(
+        &state.pool,
+        actor,
+        community_membership::MembershipId::from_uuid(request.membership_id),
+        community_membership::MembershipCommand::Suspend {
+            reason: request.reason,
+        },
+        unix_now_seconds(),
+    )
+    .await
+    .map_err(stewardship_error)?;
+    Ok(Json(StewardshipMutationResponse {
+        status: "suspended",
+    }))
+}
+
+async fn restore_membership(
+    State(state): State<AuthHttpState>,
+    auth: AuthenticatedRequest,
+    Json(request): Json<RestoreMembershipRequest>,
+) -> Result<Json<StewardshipMutationResponse>, ApiError> {
+    let actor = require_global_admin(
+        &state,
+        auth.bearer.as_str(),
+        "community membership restoration",
+    )
+    .await?;
+    membership_application::steward_membership(
+        &state.pool,
+        actor,
+        community_membership::MembershipId::from_uuid(request.membership_id),
+        community_membership::MembershipCommand::Restore,
+        unix_now_seconds(),
+    )
+    .await
+    .map_err(stewardship_error)?;
+    Ok(Json(StewardshipMutationResponse { status: "active" }))
+}
+
+async fn steward_revoke_invitation(
+    State(state): State<AuthHttpState>,
+    auth: AuthenticatedRequest,
+    Json(request): Json<RevokeInvitationRequest>,
+) -> Result<Json<RevokeInvitationResponse>, ApiError> {
+    let actor = require_global_admin(
+        &state,
+        auth.bearer.as_str(),
+        "community invitation revocation",
+    )
+    .await?;
+    membership_application::steward_revoke_invitation(
+        &state.pool,
+        actor,
+        community_membership::InvitationId::from_uuid(request.invitation_id),
+        unix_now_seconds(),
+    )
+    .await
+    .map_err(stewardship_error)?;
+    Ok(Json(RevokeInvitationResponse { status: "revoked" }))
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct StewardshipMutationResponse {
+    status: &'static str,
+}
+
+fn stewardship_error(error: MembershipApplicationError) -> ApiError {
+    ApiError::Reject {
+        status: match &error {
+            MembershipApplicationError::Unavailable => StatusCode::NOT_FOUND,
+            MembershipApplicationError::Membership(_)
+            | MembershipApplicationError::Invitation(_) => StatusCode::CONFLICT,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        },
+        error: RejectCode::NotAuthorized,
+        message: format!("community stewardship operation failed: {error}"),
+    }
 }
