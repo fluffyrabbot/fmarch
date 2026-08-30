@@ -64,6 +64,15 @@ direct `main` work, and atomic history over PR ceremony.
   costs under ignored `target/proof-lanes/`; deliberately promote a stable cost
   into the tracked baseline with
   `node tools/proof_lane_select.mjs --record <lane-id>`.
+- Inspect a frozen lane's current cache decision with
+  `npm run proof:cache -- explain <lane-id>`. The explanation names every
+  changed input fingerprint, toolchain field, or execution-contract component
+  relative to the newest prior valid entry. Plan retention with
+  `npm run proof:cache -- gc --dry-run`; add `--apply` only after reviewing the
+  plan. GC retains current keys, keys referenced by the newest terminal full or
+  release receipts, and all in-flight keys. Applying GC serializes through the
+  shared host lock, quarantines corrupt entries, and fails closed when protected
+  evidence alone exceeds `--max-bytes`.
 - For frontend browser/readiness work, prefer the role proof and artifact
   contract lanes before pushing.
 - For Postgres-backed Rust work, use a local `DATABASE_URL` proof lane and run

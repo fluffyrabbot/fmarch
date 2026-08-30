@@ -56,7 +56,7 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function safeLaneSegment(laneId) {
+export function safeProofLaneSegment(laneId) {
   return laneId.replaceAll(':', '_').replaceAll(/[^A-Za-z0-9._-]/g, '_');
 }
 
@@ -210,7 +210,7 @@ export function computeLaneProofKey(laneId, manifest, {
   };
 }
 
-function directoryFingerprint(root) {
+export function proofCacheArtifactDigest(root) {
   const entries = [];
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
@@ -230,9 +230,25 @@ function directoryFingerprint(root) {
   return sha256(JSON.stringify(entries));
 }
 
-function cachePaths(root, laneId, proofKey) {
-  const directory = join(root, 'target', 'proof-lanes', 'cache', safeLaneSegment(laneId), proofKey);
+export function proofCachePaths(root, laneId, proofKey) {
+  const directory = join(root, 'target', 'proof-lanes', 'cache', safeProofLaneSegment(laneId), proofKey);
   return { directory, receipt: join(directory, 'entry.json'), artifacts: join(directory, 'artifacts') };
+}
+
+export function readProofCacheEntry(root, laneId, proofKey) {
+  const paths = proofCachePaths(root, laneId, proofKey);
+  const entry = JSON.parse(readFileSync(paths.receipt, 'utf8'));
+  if (entry.schema !== PROOF_CACHE_SCHEMA || entry.proof_key !== proofKey ||
+      entry.lane_id !== laneId || entry.state !== 'passed' || entry.lane?.status !== 0) {
+    throw new Error('cache entry identity or success state is invalid');
+  }
+  if (!inside(paths.directory, paths.artifacts) || !lstatSync(paths.artifacts).isDirectory()) {
+    throw new Error('cache artifact directory is invalid');
+  }
+  if (proofCacheArtifactDigest(paths.artifacts) !== entry.artifact_sha256) {
+    throw new Error('cache artifact digest does not match');
+  }
+  return { entry, paths };
 }
 
 export function loadProofCacheHits(laneIds, manifest, options = {}) {
@@ -242,18 +258,7 @@ export function loadProofCacheHits(laneIds, manifest, options = {}) {
     let computed;
     try {
       computed = options.computedKeys?.get(laneId) ?? computeLaneProofKey(laneId, manifest, options);
-      const paths = cachePaths(options.root, laneId, computed.proofKey);
-      const entry = JSON.parse(readFileSync(paths.receipt, 'utf8'));
-      if (entry.schema !== PROOF_CACHE_SCHEMA || entry.proof_key !== computed.proofKey ||
-          entry.lane_id !== laneId || entry.state !== 'passed' || entry.lane?.status !== 0) {
-        throw new Error('cache entry identity or success state is invalid');
-      }
-      if (!inside(paths.directory, paths.artifacts) || !lstatSync(paths.artifacts).isDirectory()) {
-        throw new Error('cache artifact directory is invalid');
-      }
-      if (directoryFingerprint(paths.artifacts) !== entry.artifact_sha256) {
-        throw new Error('cache artifact digest does not match');
-      }
+      const { entry, paths } = readProofCacheEntry(options.root, laneId, computed.proofKey);
       hits.set(laneId, {
         ...entry.lane,
         receipt_id: entry.source_receipt_id,
@@ -272,7 +277,7 @@ export function persistProofCacheEntries(execution, laneKeys, { root, replaceLan
   for (const [laneId, computed] of laneKeys) {
     const lane = execution.receipt.lanes[laneId];
     if (lane?.state !== 'passed' || lane.status !== 0 || lane.reused_from_proof_key) continue;
-    const paths = cachePaths(root, laneId, computed.proofKey);
+    const paths = proofCachePaths(root, laneId, computed.proofKey);
     if (replaceLaneIds.has(laneId)) rmSync(paths.directory, { recursive: true, force: true });
     if (existsSync(paths.receipt)) continue;
     const sourceArtifacts = lane.artifact_dir;
@@ -291,7 +296,7 @@ export function persistProofCacheEntries(execution, laneKeys, { root, replaceLan
         created_at: new Date().toISOString(),
         source_receipt_id: execution.receipt.id,
         source_receipt_sha256: sha256(readFileSync(execution.run.receiptPath)),
-        artifact_sha256: directoryFingerprint(artifacts),
+        artifact_sha256: proofCacheArtifactDigest(artifacts),
         lane,
         inputs: computed.payload,
       };

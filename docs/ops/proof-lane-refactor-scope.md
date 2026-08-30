@@ -8,6 +8,30 @@ local proof databases, and the role-smoke/visual artifact handoff delivered
 2026-08-20; runner-scoped mutable npm proof leaves and canonical spine-leaf
 reuse delivered 2026-08-23.
 
+### Content-addressed cache operations — 2026-08-30
+
+Frozen-lane reuse now has an operator surface separate from proof execution.
+`npm run proof:cache -- explain <lane-id>` recomputes the canonical key and
+compares it with the newest prior valid entry. Its stable report enumerates
+added, removed, and changed file fingerprints, toolchain fields, and hashed
+execution-contract components, so a miss is attributable rather than merely
+reported.
+
+`npm run proof:cache -- gc --dry-run` plans retention without mutation.
+Current frozen-lane keys and keys referenced by in-flight receipts are absolute
+roots. The newest terminal full or release receipts (ten by default, controlled
+by `--keep-receipts`) preserve historical reachability. Every other valid entry
+is unreachable and eligible for deletion; invalid identity, artifact symlinks,
+and digest corruption are quarantined instead. `--max-bytes` is a fail-closed
+ceiling: GC never evicts a protected key to satisfy it, and reports an
+unsatisfied budget when the protected floor is already larger.
+
+Mutation requires `--apply` and acquires the same shared host lock as proof
+execution. That serialization closes the interval between cache lookup,
+running-receipt persistence, and artifact materialization; the running-receipt
+roots remain a second conservative defense. Cache administration never rewrites
+an immutable entry in place.
+
 ### Full-sweep resource experiment — 2026-08-27
 
 Two clean, same-commit Darwin full sweeps passed all 62 manifest lanes at
