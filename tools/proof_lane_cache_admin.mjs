@@ -12,8 +12,10 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   renameSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +34,9 @@ export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFEST_PATH = join(REPO_ROOT, 'docs', 'ops', 'proof-lane-manifest.json');
 const HOST_LOCK_SCRIPT = join(REPO_ROOT, 'scripts', 'with-heavy-build-lock.py');
 const KEY_PATTERN = /^[a-f0-9]{64}$/;
+export const PROOF_CACHE_GC_PLAN_SCHEMA = 1;
+const PROOF_CACHE_GC_PLAN_KIND = 'fmarch-proof-cache-gc-plan';
+const PROOF_CACHE_GC_APPLICATION_SCHEMA = 1;
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -54,20 +59,36 @@ function inside(root, candidate) {
   return path !== '' && !path.startsWith('..') && !path.startsWith('/');
 }
 
-function directoryBytes(directory) {
+function filesystemState(directory) {
   let bytes = 0;
+  const entries = [];
   const visit = (path) => {
-    for (const entry of readdirSync(path, { withFileTypes: true })) {
+    for (const entry of readdirSync(path, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
       const child = join(path, entry.name);
       const metadata = lstatSync(child);
-      if (metadata.isSymbolicLink()) throw new Error(`cache entry contains symlink ${child}`);
-      if (metadata.isDirectory()) visit(child);
-      else if (metadata.isFile()) bytes += metadata.size;
+      const name = relative(directory, child).replaceAll('\\', '/');
+      if (metadata.isSymbolicLink()) {
+        entries.push({ path: name, kind: 'symlink', mode: metadata.mode, target: readlinkSync(child) });
+      } else if (metadata.isDirectory()) {
+        entries.push({ path: name, kind: 'directory', mode: metadata.mode });
+        visit(child);
+      } else if (metadata.isFile()) {
+        bytes += metadata.size;
+        entries.push({ path: name, kind: 'file', mode: metadata.mode, bytes: metadata.size, sha256: sha256(readFileSync(child)) });
+      }
       else throw new Error(`cache entry contains unsupported file type ${child}`);
     }
   };
-  visit(directory);
-  return bytes;
+  const root = lstatSync(directory);
+  if (root.isSymbolicLink()) {
+    entries.push({ path: '.', kind: 'symlink', mode: root.mode, target: readlinkSync(directory) });
+  } else if (root.isDirectory()) {
+    visit(directory);
+  } else if (root.isFile()) {
+    bytes = root.size;
+    entries.push({ path: '.', kind: 'file', mode: root.mode, bytes: root.size, sha256: sha256(readFileSync(directory)) });
+  } else throw new Error(`cache entry has unsupported root type ${directory}`);
+  return { bytes, sha256: sha256(stableJson(entries)) };
 }
 
 function cacheRoots(root) {
@@ -76,6 +97,9 @@ function cacheRoots(root) {
     cache: join(base, 'cache'),
     quarantine: join(base, 'cache-quarantine'),
     runs: join(base, 'runs'),
+    maintenance: join(base, 'cache-maintenance'),
+    plans: join(base, 'cache-maintenance', 'plans'),
+    applications: join(base, 'cache-maintenance', 'applications'),
   };
 }
 
@@ -91,7 +115,8 @@ export function scanProofCache({ root }) {
   for (const laneDirectory of readdirSync(cache, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
     const lanePath = join(cache, laneDirectory.name);
     if (!laneDirectory.isDirectory() || lstatSync(lanePath).isSymbolicLink()) {
-      entries.push({ valid: false, directory: lanePath, laneId: null, proofKey: null, bytes: 0, reason: 'cache lane path is not a real directory' });
+      const state = filesystemState(lanePath);
+      entries.push({ valid: false, directory: lanePath, laneId: null, proofKey: null, bytes: state.bytes, stateSha256: state.sha256, reason: 'cache lane path is not a real directory' });
       continue;
     }
     for (const keyDirectory of readdirSync(lanePath, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -99,11 +124,14 @@ export function scanProofCache({ root }) {
       let laneId = null;
       let proofKey = KEY_PATTERN.test(keyDirectory.name) ? keyDirectory.name : null;
       let bytes = 0;
+      let stateSha256 = null;
       try {
+        const state = filesystemState(directory);
+        bytes = state.bytes;
+        stateSha256 = state.sha256;
         if (!keyDirectory.isDirectory() || lstatSync(directory).isSymbolicLink()) {
           throw new Error('cache key path is not a real directory');
         }
-        bytes = directoryBytes(directory);
         const raw = JSON.parse(readFileSync(join(directory, 'entry.json'), 'utf8'));
         laneId = raw.lane_id;
         if (typeof laneId !== 'string' || safeProofLaneSegment(laneId) !== laneDirectory.name) {
@@ -119,6 +147,7 @@ export function scanProofCache({ root }) {
           laneId,
           proofKey,
           bytes,
+          stateSha256,
           createdAt: entry.created_at ?? null,
           entry,
         });
@@ -129,6 +158,7 @@ export function scanProofCache({ root }) {
           laneId,
           proofKey,
           bytes,
+          stateSha256,
           reason: error.message,
         });
       }
@@ -239,8 +269,9 @@ export function scanProofReceipts({ root }) {
     if (!run.isDirectory()) continue;
     const path = join(runs, run.name, 'receipt.json');
     try {
-      const receipt = JSON.parse(readFileSync(path, 'utf8'));
-      receipts.push({ path, receipt });
+      const raw = readFileSync(path);
+      const receipt = JSON.parse(raw.toString('utf8'));
+      receipts.push({ path, receipt, sha256: sha256(raw) });
     } catch {
       // An unreadable run receipt proves no cache reachability. It is left in
       // place for separate run-receipt diagnostics and never treated as proof.
@@ -258,6 +289,10 @@ function addProtection(protectedEntries, laneId, proofKey, reason) {
   const id = referenceId(laneId, proofKey);
   if (!protectedEntries.has(id)) protectedEntries.set(id, []);
   if (!protectedEntries.get(id).includes(reason)) protectedEntries.get(id).push(reason);
+}
+
+function receiptRoot({ receipt, sha256: digest }) {
+  return { id: receipt.id, sha256: digest ?? sha256(stableJson(receipt)) };
 }
 
 export function planProofCacheGc({
@@ -289,7 +324,9 @@ export function planProofCacheGc({
       addProtection(protectedEntries, laneId, proofKey, `receipt:${receipt.id}`);
     }
   }
-  const inFlight = receipts.filter(({ receipt }) => receipt.state === 'running');
+  const inFlight = receipts
+    .filter(({ receipt }) => receipt.state === 'running')
+    .sort((left, right) => String(left.receipt.id).localeCompare(String(right.receipt.id)));
   for (const { receipt } of inFlight) {
     for (const { laneId, proofKey } of receiptReferences(receipt)) {
       addProtection(protectedEntries, laneId, proofKey, `in-flight:${receipt.id}`);
@@ -318,13 +355,155 @@ export function planProofCacheGc({
     budget_satisfied: retainedBytes <= maxBytes,
     retained_bytes: retainedBytes,
     reclaimed_bytes: reclaimedBytes,
-    terminal_receipts: terminal.map(({ receipt }) => receipt.id),
-    in_flight_receipts: inFlight.map(({ receipt }) => receipt.id),
+    current_keys: [...currentProofKeys]
+      .map(([laneId, computed]) => ({ lane_id: laneId, proof_key: typeof computed === 'string' ? computed : computed.proofKey }))
+      .sort((left, right) => left.lane_id.localeCompare(right.lane_id)),
+    terminal_receipts: terminal.map(receiptRoot),
+    in_flight_receipts: inFlight.map(receiptRoot),
     entries,
   };
 }
 
-export function applyProofCacheGc(plan) {
+function serializableGcEntry(root, entry) {
+  return {
+    directory: relative(root, entry.directory).replaceAll('\\', '/'),
+    lane_id: entry.laneId,
+    proof_key: entry.proofKey,
+    valid: entry.valid,
+    bytes: entry.bytes,
+    state_sha256: entry.stateSha256,
+    created_at: entry.createdAt ?? null,
+    reason: entry.reason ?? null,
+    action: entry.action,
+    protection: [...entry.protection].sort(),
+    quarantine: entry.quarantine ? relative(root, entry.quarantine).replaceAll('\\', '/') : null,
+  };
+}
+
+function proofCacheGcPlanPayload(plan) {
+  return stable({
+    generated_at: plan.generated_at,
+    repo_root: resolve(plan.root),
+    policy: {
+      keep_receipts: plan.keep_receipts,
+      max_bytes: plan.max_bytes,
+    },
+    protected_roots: {
+      current_keys: plan.current_keys,
+      terminal_receipts: plan.terminal_receipts,
+      in_flight_receipts: plan.in_flight_receipts,
+    },
+    inventory: plan.entries.map((entry) => serializableGcEntry(plan.root, entry)),
+    summary: {
+      budget_satisfied: plan.budget_satisfied,
+      retained_bytes: plan.retained_bytes,
+      reclaimed_bytes: plan.reclaimed_bytes,
+      retain_count: plan.entries.filter((entry) => entry.action === 'retain').length,
+      delete_count: plan.entries.filter((entry) => entry.action === 'delete').length,
+      quarantine_count: plan.entries.filter((entry) => entry.action === 'quarantine').length,
+    },
+  });
+}
+
+export function createProofCacheGcPlanReceipt(plan) {
+  const payload = proofCacheGcPlanPayload(plan);
+  const basisSha256 = sha256(stableJson(payload));
+  const stamp = plan.generated_at.replaceAll(/[^0-9A-Za-z.-]/g, '-');
+  const base = {
+    schema: PROOF_CACHE_GC_PLAN_SCHEMA,
+    kind: PROOF_CACHE_GC_PLAN_KIND,
+    id: `cache-gc-plan-${stamp}-${basisSha256.slice(0, 16)}`,
+    state: 'planned',
+    basis_sha256: basisSha256,
+    ...payload,
+  };
+  return { ...base, plan_sha256: sha256(stableJson(base)) };
+}
+
+export function writeProofCacheGcPlan(plan) {
+  const roots = cacheRoots(plan.root);
+  const receipt = createProofCacheGcPlanReceipt(plan);
+  const path = join(roots.plans, `${receipt.id}.json`);
+  mkdirSync(roots.plans, { recursive: true });
+  writeFileSync(path, `${JSON.stringify(receipt, null, 2)}\n`, { flag: 'wx' });
+  return { path, receipt };
+}
+
+export function readProofCacheGcPlan(path, { root }) {
+  const roots = cacheRoots(root);
+  const resolved = resolve(path);
+  if (!inside(roots.plans, resolved)) throw new Error(`GC plan must be under ${roots.plans}`);
+  const metadata = lstatSync(resolved);
+  if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('GC plan must be a real file');
+  const receipt = JSON.parse(readFileSync(resolved, 'utf8'));
+  const { plan_sha256: claimed, ...base } = receipt;
+  if (receipt.schema !== PROOF_CACHE_GC_PLAN_SCHEMA || receipt.kind !== PROOF_CACHE_GC_PLAN_KIND || receipt.state !== 'planned') {
+    throw new Error('invalid proof cache GC plan receipt identity');
+  }
+  if (receipt.repo_root !== resolve(root)) throw new Error('proof cache GC plan belongs to another repository root');
+  if (claimed !== sha256(stableJson(base))) throw new Error('proof cache GC plan receipt digest does not match');
+  return { path: resolved, receipt };
+}
+
+export function validateProofCacheGcPlan(receipt, freshPlan) {
+  const fresh = createProofCacheGcPlanReceipt(freshPlan);
+  if (fresh.basis_sha256 !== receipt.basis_sha256) {
+    throw new Error(`proof cache GC plan is stale: expected ${receipt.basis_sha256}, current ${fresh.basis_sha256}`);
+  }
+  return true;
+}
+
+function cacheInventorySha256(root) {
+  return sha256(stableJson(scanProofCache({ root }).map((entry) => ({
+    directory: relative(root, entry.directory).replaceAll('\\', '/'),
+    lane_id: entry.laneId,
+    proof_key: entry.proofKey,
+    valid: entry.valid,
+    bytes: entry.bytes,
+    state_sha256: entry.stateSha256,
+    reason: entry.reason ?? null,
+  }))));
+}
+
+function beginProofCacheGcApplication(planPath, receipt, { root, now }) {
+  const roots = cacheRoots(root);
+  mkdirSync(roots.applications, { recursive: true });
+  const directory = join(roots.applications, receipt.id);
+  mkdirSync(directory);
+  const base = {
+    schema: PROOF_CACHE_GC_APPLICATION_SCHEMA,
+    kind: 'fmarch-proof-cache-gc-application-intent',
+    state: 'applying',
+    plan_id: receipt.id,
+    plan_sha256: receipt.plan_sha256,
+    plan_path: relative(root, planPath).replaceAll('\\', '/'),
+    started_at: now.toISOString(),
+  };
+  const intent = { ...base, intent_sha256: sha256(stableJson(base)) };
+  const path = join(directory, 'intent.json');
+  writeFileSync(path, `${JSON.stringify(intent, null, 2)}\n`, { flag: 'wx' });
+  return { directory, intent, path };
+}
+
+function finishProofCacheGcApplication(application, { root, state, changed, error, now }) {
+  const base = {
+    schema: PROOF_CACHE_GC_APPLICATION_SCHEMA,
+    kind: 'fmarch-proof-cache-gc-application-result',
+    state,
+    plan_id: application.intent.plan_id,
+    plan_sha256: application.intent.plan_sha256,
+    finished_at: now.toISOString(),
+    changed,
+    error: error ?? null,
+    post_inventory_sha256: cacheInventorySha256(root),
+  };
+  const result = { ...base, result_sha256: sha256(stableJson(base)) };
+  const path = join(application.directory, 'result.json');
+  writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`, { flag: 'wx' });
+  return { path, receipt: result };
+}
+
+export function applyProofCacheGc(plan, { onChange = () => {} } = {}) {
   const roots = cacheRoots(plan.root);
   const changed = [];
   for (const entry of plan.entries) {
@@ -338,9 +517,42 @@ export function applyProofCacheGc(plan) {
       mkdirSync(dirname(entry.quarantine), { recursive: true });
       renameSync(entry.directory, entry.quarantine);
     } else throw new Error(`unknown cache GC action ${entry.action}`);
-    changed.push({ action: entry.action, lane_id: entry.laneId, proof_key: entry.proofKey });
+    const change = { action: entry.action, lane_id: entry.laneId, proof_key: entry.proofKey };
+    changed.push(change);
+    onChange(change);
   }
   return changed;
+}
+
+export function applyReviewedProofCacheGcPlan(planPath, {
+  root,
+  currentProofKeys,
+  receipts = scanProofReceipts({ root }),
+  now = new Date(),
+} = {}) {
+  const loaded = readProofCacheGcPlan(planPath, { root });
+  const applicationDirectory = join(cacheRoots(root).applications, loaded.receipt.id);
+  if (existsSync(applicationDirectory)) throw new Error(`proof cache GC plan ${loaded.receipt.id} was already attempted`);
+  const freshPlan = planProofCacheGc({
+    root,
+    currentProofKeys,
+    keepReceipts: loaded.receipt.policy.keep_receipts,
+    maxBytes: loaded.receipt.policy.max_bytes ?? Number.POSITIVE_INFINITY,
+    now: new Date(loaded.receipt.generated_at),
+    receipts,
+  });
+  validateProofCacheGcPlan(loaded.receipt, freshPlan);
+  if (!freshPlan.budget_satisfied) throw new Error('proof cache GC plan cannot apply because its protected floor exceeds the disk budget');
+  const application = beginProofCacheGcApplication(loaded.path, loaded.receipt, { root, now });
+  const changed = [];
+  try {
+    applyProofCacheGc(freshPlan, { onChange: (change) => changed.push(change) });
+    const result = finishProofCacheGcApplication(application, { root, state: 'applied', changed, error: null, now });
+    return { plan: loaded, gcPlan: freshPlan, application, result, changed };
+  } catch (error) {
+    finishProofCacheGcApplication(application, { root, state: 'failed', changed, error: error.message, now });
+    throw error;
+  }
 }
 
 export function requiresProofCacheMutationLock(argv) {
@@ -348,26 +560,49 @@ export function requiresProofCacheMutationLock(argv) {
 }
 
 export function parseProofCacheArguments(argv) {
-  const [command, subject, ...rest] = argv;
-  const options = { command, subject, json: false, apply: false, keepReceipts: 10, maxBytes: Number.POSITIVE_INFINITY };
-  const args = command === 'explain' ? rest : [subject, ...rest].filter((value) => value !== undefined);
+  const command = argv[0];
+  const usage = 'usage: proof:cache explain <lane-id> [--json] | proof:cache gc --dry-run [--keep-receipts N] [--max-bytes N] [--json] | proof:cache gc --apply <plan-path> [--json]';
+  if (!['explain', 'gc'].includes(command)) throw new Error(usage);
+  if (command === 'explain') {
+    const subject = argv[1];
+    if (!subject) throw new Error('proof:cache explain requires a lane id');
+    const rest = argv.slice(2);
+    if (rest.some((arg) => arg !== '--json')) throw new Error('proof:cache explain accepts only a lane id and --json');
+    return { command, subject, json: rest.includes('--json') };
+  }
+
+  const options = {
+    command,
+    json: false,
+    applyPlan: null,
+    dryRun: false,
+    keepReceipts: 10,
+    maxBytes: Number.POSITIVE_INFINITY,
+    policySpecified: false,
+  };
+  const args = argv.slice(1);
   let sawApply = false;
-  let sawDryRun = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--json') options.json = true;
-    else if (arg === '--apply') { options.apply = true; sawApply = true; }
-    else if (arg === '--dry-run') { options.apply = false; sawDryRun = true; }
-    else if (arg === '--keep-receipts') options.keepReceipts = Number(args[++index]);
-    else if (arg === '--max-bytes') options.maxBytes = Number(args[++index]);
+    else if (arg === '--apply') {
+      if (sawApply) throw new Error('--apply may be specified only once');
+      sawApply = true;
+      options.applyPlan = args[++index];
+      if (!options.applyPlan || options.applyPlan.startsWith('--')) throw new Error('--apply requires an immutable plan path');
+    } else if (arg === '--dry-run') options.dryRun = true;
+    else if (arg === '--keep-receipts') {
+      options.keepReceipts = Number(args[++index]);
+      options.policySpecified = true;
+    } else if (arg === '--max-bytes') {
+      options.maxBytes = Number(args[++index]);
+      options.policySpecified = true;
+    }
     else throw new Error(`unknown proof cache option ${arg}`);
   }
-  if (!['explain', 'gc'].includes(command)) throw new Error('usage: proof:cache explain <lane-id> [--json] | proof:cache gc [--dry-run|--apply] [--keep-receipts N] [--max-bytes N] [--json]');
-  if (command === 'explain' && !subject) throw new Error('proof:cache explain requires a lane id');
-  if (sawApply && sawDryRun) throw new Error('--apply and --dry-run are mutually exclusive');
-  if (command === 'explain' && (sawApply || sawDryRun || options.keepReceipts !== 10 || Number.isFinite(options.maxBytes))) {
-    throw new Error('proof:cache explain accepts only a lane id and --json');
-  }
+  if (options.applyPlan && options.dryRun) throw new Error('--apply and --dry-run are mutually exclusive');
+  if (options.applyPlan && options.policySpecified) throw new Error('GC policy comes from the immutable plan when using --apply');
+  if (!options.applyPlan && !options.dryRun) throw new Error('proof:cache gc requires either --dry-run or --apply <plan-path>');
   return options;
 }
 
@@ -402,14 +637,16 @@ function formatExplanation(explanation) {
   return lines.join('\n');
 }
 
-function formatGc(plan, apply) {
+function formatGc(plan, { planPath = null, applied = null } = {}) {
   const counts = Object.fromEntries(['retain', 'delete', 'quarantine'].map((action) => [action, plan.entries.filter((entry) => entry.action === action).length]));
   const lines = [
-    `proof cache GC ${apply ? 'applied' : 'dry-run'}`,
+    `proof cache GC ${applied ? 'applied' : 'planned'}`,
     `  retain ${counts.retain}; delete ${counts.delete}; quarantine ${counts.quarantine}`,
     `  retained bytes ${plan.retained_bytes}; reclaimable bytes ${plan.reclaimed_bytes}`,
     `  terminal receipts ${plan.terminal_receipts.length}; in-flight receipts ${plan.in_flight_receipts.length}`,
   ];
+  if (planPath) lines.push(`  immutable plan: ${planPath}`);
+  if (applied) lines.push(`  application result: ${applied.result.path}`);
   if (!plan.budget_satisfied) lines.push(`  budget unsatisfied: protected entries exceed ${plan.max_bytes} bytes`);
   for (const entry of plan.entries.filter((candidate) => candidate.action !== 'retain')) {
     lines.push(`  ${entry.action} ${entry.laneId ?? 'unknown'} ${entry.proofKey ?? relative(plan.root, entry.directory)}${entry.reason ? ` (${entry.reason})` : ''}`);
@@ -429,11 +666,20 @@ export async function main(argv = process.argv.slice(2), { root = REPO_ROOT } = 
   const currentProofKeys = new Map(
     [...frozenLaneIds(manifest)].map((laneId) => [laneId, computeLaneProofKey(laneId, manifest, inputs)]),
   );
+  if (args.applyPlan) {
+    const applied = applyReviewedProofCacheGcPlan(args.applyPlan, { root, currentProofKeys });
+    console.log(args.json
+      ? JSON.stringify({ plan_id: applied.plan.receipt.id, changed: applied.changed, application: applied.result }, null, 2)
+      : formatGc(applied.gcPlan, { applied }));
+    return applied;
+  }
   const plan = planProofCacheGc({ root, currentProofKeys, keepReceipts: args.keepReceipts, maxBytes: args.maxBytes });
-  if (args.apply) applyProofCacheGc(plan);
-  console.log(args.json ? JSON.stringify({ ...plan, entries: plan.entries.map(({ entry, ...rest }) => rest) }, null, 2) : formatGc(plan, args.apply));
+  const saved = writeProofCacheGcPlan(plan);
+  console.log(args.json
+    ? JSON.stringify({ plan_path: saved.path, receipt: saved.receipt }, null, 2)
+    : formatGc(plan, { planPath: saved.path }));
   if (!plan.budget_satisfied) process.exitCode = 2;
-  return plan;
+  return { plan, saved };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

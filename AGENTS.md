@@ -68,11 +68,15 @@ direct `main` work, and atomic history over PR ceremony.
   `npm run proof:cache -- explain <lane-id>`. The explanation names every
   changed input fingerprint, toolchain field, or execution-contract component
   relative to the newest prior valid entry. Plan retention with
-  `npm run proof:cache -- gc --dry-run`; add `--apply` only after reviewing the
-  plan. GC retains current keys, keys referenced by the newest terminal full or
-  release receipts, and all in-flight keys. Applying GC serializes through the
-  shared host lock, quarantines corrupt entries, and fails closed when protected
-  evidence alone exceeds `--max-bytes`.
+  `npm run proof:cache -- gc --dry-run`; it writes an immutable maintenance plan
+  under `target/proof-lanes/cache-maintenance/plans/`. After reviewing that
+  exact receipt, apply it with
+  `npm run proof:cache -- gc --apply <plan-path>`. GC retains current keys, keys
+  referenced by the newest terminal full or release receipts, and all in-flight
+  keys. Applying a reviewed plan serializes through the shared host lock,
+  revalidates the plan digest and complete cache/reachability basis, quarantines
+  corrupt entries, writes immutable application intent/result receipts, refuses
+  replay, and fails closed when protected evidence alone exceeds `--max-bytes`.
 - For frontend browser/readiness work, prefer the role proof and artifact
   contract lanes before pushing.
 - For Postgres-backed Rust work, use a local `DATABASE_URL` proof lane and run

@@ -7,11 +7,15 @@ import test from 'node:test';
 import { computeLaneProofKey, persistProofCacheEntries, proofCachePaths } from './proof_lane_cache.mjs';
 import {
   applyProofCacheGc,
+  applyReviewedProofCacheGcPlan,
+  createProofCacheGcPlanReceipt,
   explainProofCacheLane,
   parseProofCacheArguments,
   planProofCacheGc,
+  readProofCacheGcPlan,
   requiresProofCacheMutationLock,
   scanProofCache,
+  writeProofCacheGcPlan,
 } from './proof_lane_cache_admin.mjs';
 
 const toolchain = {
@@ -145,8 +149,8 @@ test('GC retains current, recent receipt, and in-flight keys while deleting unre
   assert.equal(action(oldKey.proofKey), 'delete');
   assert.equal(action(inFlightKey.proofKey), 'retain');
   assert.equal(action(currentKey.proofKey), 'retain');
-  assert.deepEqual(plan.terminal_receipts, ['terminal-new']);
-  assert.deepEqual(plan.in_flight_receipts, ['running']);
+  assert.deepEqual(plan.terminal_receipts.map(({ id }) => id), ['terminal-new']);
+  assert.deepEqual(plan.in_flight_receipts.map(({ id }) => id), ['running']);
   assert.deepEqual(applyProofCacheGc(plan), [
     { action: 'delete', lane_id: 'audit', proof_key: oldKey.proofKey },
   ]);
@@ -187,18 +191,112 @@ test('disk budget fails closed when protected evidence alone exceeds it', (t) =>
 });
 
 test('only an applying GC requires the proof host mutation lock', () => {
-  assert.equal(requiresProofCacheMutationLock(['gc', '--apply']), true);
+  assert.equal(requiresProofCacheMutationLock(['gc', '--apply', 'plan.json']), true);
   assert.equal(requiresProofCacheMutationLock(['gc', '--dry-run']), false);
   assert.equal(requiresProofCacheMutationLock(['explain', 'audit']), false);
 });
 
 test('cache CLI rejects contradictory mutation intent and GC flags on explain', () => {
   assert.throws(
-    () => parseProofCacheArguments(['gc', '--apply', '--dry-run']),
+    () => parseProofCacheArguments(['gc', '--apply', 'plan.json', '--dry-run']),
     /mutually exclusive/,
+  );
+  assert.throws(
+    () => parseProofCacheArguments(['gc', '--apply', 'plan.json', '--keep-receipts', '2']),
+    /policy comes from/,
+  );
+  assert.throws(
+    () => parseProofCacheArguments(['gc']),
+    /requires either/,
+  );
+  assert.throws(
+    () => parseProofCacheArguments(['gc', '--apply', '--json']),
+    /requires an immutable plan path/,
   );
   assert.throws(
     () => parseProofCacheArguments(['explain', 'audit', '--max-bytes', '1']),
     /accepts only/,
+  );
+});
+
+test('immutable GC plan receipts detect tampering before revalidation', (t) => {
+  const fixture = fixtureRoot(t);
+  const current = store(fixture, 'current');
+  const plan = planProofCacheGc({
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    keepReceipts: 0,
+    now: new Date('2026-08-30T12:00:00.000Z'),
+    receipts: [],
+  });
+  const created = createProofCacheGcPlanReceipt(plan);
+  assert.equal(created.basis_sha256.length, 64);
+  assert.equal(created.plan_sha256.length, 64);
+  const saved = writeProofCacheGcPlan(plan);
+  const raw = JSON.parse(readFileSync(saved.path, 'utf8'));
+  raw.summary.retained_bytes += 1;
+  writeFileSync(saved.path, `${JSON.stringify(raw, null, 2)}\n`);
+  assert.throws(() => readProofCacheGcPlan(saved.path, { root: fixture.root }), /digest does not match/);
+});
+
+test('reviewed GC apply rejects stale cache state without creating an intent', (t) => {
+  const fixture = fixtureRoot(t);
+  const old = store(fixture, 'old');
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'current');
+  const current = computed(fixture);
+  const plan = planProofCacheGc({
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    keepReceipts: 0,
+    now: new Date('2026-08-30T12:01:00.000Z'),
+    receipts: [],
+  });
+  const saved = writeProofCacheGcPlan(plan);
+  writeFileSync(join(proofCachePaths(fixture.root, 'audit', old.proofKey).artifacts, 'evidence.json'), 'changed-after-review');
+
+  assert.throws(
+    () => applyReviewedProofCacheGcPlan(saved.path, {
+      root: fixture.root,
+      currentProofKeys: new Map([['audit', current]]),
+      receipts: [],
+      now: new Date('2026-08-30T12:02:00.000Z'),
+    }),
+    /plan is stale/,
+  );
+  assert.equal(existsSync(proofCachePaths(fixture.root, 'audit', old.proofKey).directory), true);
+  assert.equal(existsSync(join(fixture.root, 'target/proof-lanes/cache-maintenance/applications', saved.receipt.id)), false);
+});
+
+test('reviewed GC apply executes exactly once and writes intent and result receipts', (t) => {
+  const fixture = fixtureRoot(t);
+  const old = store(fixture, 'old');
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'current');
+  const current = computed(fixture);
+  const plan = planProofCacheGc({
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    keepReceipts: 0,
+    now: new Date('2026-08-30T12:03:00.000Z'),
+    receipts: [],
+  });
+  const saved = writeProofCacheGcPlan(plan);
+  const applied = applyReviewedProofCacheGcPlan(saved.path, {
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    receipts: [],
+    now: new Date('2026-08-30T12:04:00.000Z'),
+  });
+
+  assert.deepEqual(applied.changed, [{ action: 'delete', lane_id: 'audit', proof_key: old.proofKey }]);
+  assert.equal(existsSync(proofCachePaths(fixture.root, 'audit', old.proofKey).directory), false);
+  assert.equal(JSON.parse(readFileSync(applied.application.path, 'utf8')).state, 'applying');
+  assert.equal(JSON.parse(readFileSync(applied.result.path, 'utf8')).state, 'applied');
+  assert.throws(
+    () => applyReviewedProofCacheGcPlan(saved.path, {
+      root: fixture.root,
+      currentProofKeys: new Map([['audit', current]]),
+      receipts: [],
+    }),
+    /already attempted/,
   );
 });

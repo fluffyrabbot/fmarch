@@ -17,7 +17,9 @@ added, removed, and changed file fingerprints, toolchain fields, and hashed
 execution-contract components, so a miss is attributable rather than merely
 reported.
 
-`npm run proof:cache -- gc --dry-run` plans retention without mutation.
+`npm run proof:cache -- gc --dry-run` plans retention without mutation and
+writes an immutable receipt under
+`target/proof-lanes/cache-maintenance/plans/`.
 Current frozen-lane keys and keys referenced by in-flight receipts are absolute
 roots. The newest terminal full or release receipts (ten by default, controlled
 by `--keep-receipts`) preserve historical reachability. Every other valid entry
@@ -26,8 +28,15 @@ and digest corruption are quarantined instead. `--max-bytes` is a fail-closed
 ceiling: GC never evicts a protected key to satisfy it, and reports an
 unsatisfied budget when the protected floor is already larger.
 
-Mutation requires `--apply` and acquires the same shared host lock as proof
-execution. That serialization closes the interval between cache lookup,
+Mutation requires `--apply <plan-path>` and acquires the same shared host lock
+as proof execution. The plan binds its policy, repository root, current proof
+keys, hashes of terminal and in-flight receipts, every cache entry's complete
+filesystem digest, protected roots, exact actions, and expected byte totals.
+Apply verifies the plan's self-digest, recomputes that complete basis under the
+lock, and fails before mutation if anything drifted. It then writes an immutable
+application intent, executes exactly the reviewed actions, writes a terminal
+result containing the post-inventory digest, and refuses any replay of the same
+plan. That serialization closes the interval between cache lookup,
 running-receipt persistence, and artifact materialization; the running-receipt
 roots remain a second conservative defense. Cache administration never rewrites
 an immutable entry in place.
