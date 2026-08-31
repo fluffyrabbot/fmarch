@@ -102,7 +102,7 @@ test('runner max_parallel is a hard opt-in ceiling', async (t) => {
   );
 });
 
-test('manifest validation reserves resource-owned environment and validates the real v7 metadata', () => {
+test('manifest validation reserves resource-owned environment and validates the real v8 metadata', () => {
   assert.equal(validateExecutionManifest(loadManifest()), true);
   assert.throws(
     () => validateExecutionManifest(fixture({ implicit: { kind: 'npm' } })),

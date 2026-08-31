@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "base_ref": "origin/main",
   "notes": [
     "Maps changed paths to the narrowest truthful proof-lane set. Consumed by tools/proof_lane_select.mjs.",
@@ -13,10 +13,11 @@
     "Every cargo test leaf declares assertion_targets and selects only those library, binary, or integration-test targets. The proof contract rejects missing targets and targets whose source contains no test declaration; rustdoc remains compilation coverage owned by workspace Clippy because the workspace doctest inventory is empty.",
     "Every leaf declares exact execution metadata. Cargo target access, browsers, frontend worktrees, container engines, network access, Postgres administration, disposable databases, and artifact directories are scheduled as independent resources.",
     "Push mode is the touched closure plus a measured bounded sentinel set. Sprint mode adds every active-tier area; full mode selects every declared lane.",
-    "Full execution is content-addressed: a lane owned exclusively by frozen areas may reuse an immutable passing result whose key still matches canonical crate proof-graph sources or specialized explicit sources, owned fixtures, migrations, dependency locks, toolchain, exact execution graph, and proof-runner implementation. --mode full --force executes every lane."
+    "Full execution is content-addressed: a lane owned exclusively by frozen areas may reuse an immutable passing result whose key still matches canonical crate proof-graph sources or specialized explicit sources, owned fixtures, migrations, dependency locks, toolchain, exact execution graph, and proof-runner implementation. --mode full --force executes every lane.",
+    "Proof-cache maintenance receipts are audited on every push. Recovery from an interrupted or failed application always creates a new current-state plan and immutable linkage; attempted plans are never replayed."
   ],
   "push_sentinel_budget_seconds": 60,
-  "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract"],
+  "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract", "test:proof-cache-maintenance"],
   "runner": {
     "max_parallel": 2,
     "lock_capacities": {
@@ -130,6 +131,7 @@
       "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:completeness-scorecard"], "resources": [] }
     },
     "test:proof-lane-contract": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:proof-lane-contract"], "resources": [] } },
+    "test:proof-cache-maintenance": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:proof-cache-maintenance"], "resources": [] } },
     "test:production-promotion": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:production-promotion"], "resources": [] } },
     "test:release-coordinator": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:release-coordinator"], "resources": [] } },
     "test:schema-epoch-reset": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:schema-epoch-reset"], "resources": [] } },
@@ -1134,6 +1136,7 @@
       "paths": ["tools/"],
       "lanes": [
         "test:proof-lane-contract",
+        "test:proof-cache-maintenance",
         "test:dev-postgres-contract",
         "test:dev-test-game-contract",
         "test:frontend-static-role-contract",

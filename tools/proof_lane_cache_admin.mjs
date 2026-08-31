@@ -37,6 +37,8 @@ const KEY_PATTERN = /^[a-f0-9]{64}$/;
 export const PROOF_CACHE_GC_PLAN_SCHEMA = 1;
 const PROOF_CACHE_GC_PLAN_KIND = 'fmarch-proof-cache-gc-plan';
 const PROOF_CACHE_GC_APPLICATION_SCHEMA = 1;
+const PROOF_CACHE_GC_RECOVERY_SCHEMA = 1;
+const PROOF_CACHE_GC_RECOVERY_KIND = 'fmarch-proof-cache-gc-recovery';
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -100,6 +102,7 @@ function cacheRoots(root) {
     maintenance: join(base, 'cache-maintenance'),
     plans: join(base, 'cache-maintenance', 'plans'),
     applications: join(base, 'cache-maintenance', 'applications'),
+    recoveries: join(base, 'cache-maintenance', 'recoveries'),
   };
 }
 
@@ -442,6 +445,18 @@ export function readProofCacheGcPlan(path, { root }) {
   }
   if (receipt.repo_root !== resolve(root)) throw new Error('proof cache GC plan belongs to another repository root');
   if (claimed !== sha256(stableJson(base))) throw new Error('proof cache GC plan receipt digest does not match');
+  const payload = {
+    generated_at: receipt.generated_at,
+    repo_root: receipt.repo_root,
+    policy: receipt.policy,
+    protected_roots: receipt.protected_roots,
+    inventory: receipt.inventory,
+    summary: receipt.summary,
+  };
+  if (receipt.basis_sha256 !== sha256(stableJson(payload))) throw new Error('proof cache GC plan basis digest does not match');
+  const stamp = receipt.generated_at.replaceAll(/[^0-9A-Za-z.-]/g, '-');
+  if (receipt.id !== `cache-gc-plan-${stamp}-${receipt.basis_sha256.slice(0, 16)}`) throw new Error('proof cache GC plan id does not match its content');
+  if (resolved !== join(roots.plans, `${receipt.id}.json`)) throw new Error('proof cache GC plan filename does not match its id');
   return { path: resolved, receipt };
 }
 
@@ -454,7 +469,7 @@ export function validateProofCacheGcPlan(receipt, freshPlan) {
 }
 
 function cacheInventorySha256(root) {
-  return sha256(stableJson(scanProofCache({ root }).map((entry) => ({
+  return inventorySha256(scanProofCache({ root }).map((entry) => ({
     directory: relative(root, entry.directory).replaceAll('\\', '/'),
     lane_id: entry.laneId,
     proof_key: entry.proofKey,
@@ -462,7 +477,29 @@ function cacheInventorySha256(root) {
     bytes: entry.bytes,
     state_sha256: entry.stateSha256,
     reason: entry.reason ?? null,
+  })));
+}
+
+function inventorySha256(inventory) {
+  return sha256(stableJson(inventory.map((entry) => ({
+    directory: entry.directory,
+    lane_id: entry.lane_id,
+    proof_key: entry.proof_key,
+    valid: entry.valid,
+    bytes: entry.bytes,
+    state_sha256: entry.state_sha256,
+    reason: entry.reason ?? null,
   }))));
+}
+
+function expectedAppliedChanges(plan) {
+  return plan.inventory
+    .filter((entry) => entry.action !== 'retain')
+    .map((entry) => ({ action: entry.action, lane_id: entry.lane_id, proof_key: entry.proof_key }));
+}
+
+function expectedPostInventorySha256(plan) {
+  return inventorySha256(plan.inventory.filter((entry) => entry.action === 'retain'));
 }
 
 function beginProofCacheGcApplication(planPath, receipt, { root, now }) {
@@ -555,20 +592,282 @@ export function applyReviewedProofCacheGcPlan(planPath, {
   }
 }
 
+function readApplicationReceipt(path, { kind, digestField, states }) {
+  const metadata = lstatSync(path);
+  if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error(`${kind} must be a real file`);
+  const receipt = JSON.parse(readFileSync(path, 'utf8'));
+  const { [digestField]: claimed, ...base } = receipt;
+  if (receipt.schema !== PROOF_CACHE_GC_APPLICATION_SCHEMA || receipt.kind !== kind || !states.includes(receipt.state)) {
+    throw new Error(`invalid ${kind} identity`);
+  }
+  if (claimed !== sha256(stableJson(base))) throw new Error(`${kind} digest does not match`);
+  return receipt;
+}
+
+function maintenanceIssue(code, subject, message) {
+  return { code, subject, message };
+}
+
+function directoryEntries(path) {
+  return existsSync(path)
+    ? readdirSync(path, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))
+    : [];
+}
+
+function readRecoveryReceipt(path, { root }) {
+  const metadata = lstatSync(path);
+  if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('recovery receipt must be a real file');
+  const receipt = JSON.parse(readFileSync(path, 'utf8'));
+  const { recovery_sha256: claimed, ...base } = receipt;
+  if (receipt.schema !== PROOF_CACHE_GC_RECOVERY_SCHEMA || receipt.kind !== PROOF_CACHE_GC_RECOVERY_KIND || receipt.state !== 'planned') {
+    throw new Error('invalid proof cache GC recovery receipt identity');
+  }
+  if (receipt.repo_root !== resolve(root)) throw new Error('proof cache GC recovery belongs to another repository root');
+  if (claimed !== sha256(stableJson(base))) throw new Error('proof cache GC recovery receipt digest does not match');
+  return receipt;
+}
+
+export function auditProofCacheMaintenance({ root }) {
+  const roots = cacheRoots(root);
+  const issues = [];
+  const plans = new Map();
+  const applications = new Map();
+  const recoveries = [];
+
+  for (const entry of directoryEntries(roots.plans)) {
+    const path = join(roots.plans, entry.name);
+    if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith('.json')) {
+      issues.push(maintenanceIssue('unexpected-plan-entry', entry.name, 'plan storage contains an unexpected entry'));
+      continue;
+    }
+    try {
+      const loaded = readProofCacheGcPlan(path, { root });
+      if (plans.has(loaded.receipt.id)) throw new Error('duplicate plan id');
+      plans.set(loaded.receipt.id, loaded);
+    } catch (error) {
+      issues.push(maintenanceIssue('invalid-plan', entry.name, error.message));
+    }
+  }
+
+  for (const entry of directoryEntries(roots.applications)) {
+    const directory = join(roots.applications, entry.name);
+    const record = { plan_id: entry.name, state: 'invalid', intent: null, result: null };
+    applications.set(entry.name, record);
+    if (!entry.isDirectory() || entry.isSymbolicLink()) {
+      issues.push(maintenanceIssue('invalid-application-directory', entry.name, 'application storage entry must be a real directory'));
+      continue;
+    }
+    const names = directoryEntries(directory).map((child) => child.name);
+    for (const name of names.filter((name) => !['intent.json', 'result.json'].includes(name))) {
+      issues.push(maintenanceIssue('unexpected-application-entry', `${entry.name}/${name}`, 'application directory contains an unexpected entry'));
+    }
+    const plan = plans.get(entry.name);
+    if (!plan) issues.push(maintenanceIssue('missing-application-plan', entry.name, 'application has no valid immutable plan'));
+    try {
+      const intentPath = join(directory, 'intent.json');
+      if (!existsSync(intentPath)) throw new Error('application intent is missing');
+      record.intent = readApplicationReceipt(intentPath, {
+        kind: 'fmarch-proof-cache-gc-application-intent', digestField: 'intent_sha256', states: ['applying'],
+      });
+      if (record.intent.plan_id !== entry.name) throw new Error('application intent plan id does not match its directory');
+      if (plan) {
+        if (record.intent.plan_sha256 !== plan.receipt.plan_sha256) throw new Error('application intent plan digest does not match its plan');
+        if (resolve(root, record.intent.plan_path) !== plan.path) throw new Error('application intent plan path does not match its plan');
+      }
+      if (timestamp(record.intent.started_at) === 0) throw new Error('application intent started_at is invalid');
+    } catch (error) {
+      issues.push(maintenanceIssue('invalid-application-intent', entry.name, error.message));
+      continue;
+    }
+
+    const resultPath = join(directory, 'result.json');
+    if (!existsSync(resultPath)) {
+      record.state = 'orphaned';
+      continue;
+    }
+    try {
+      record.result = readApplicationReceipt(resultPath, {
+        kind: 'fmarch-proof-cache-gc-application-result', digestField: 'result_sha256', states: ['applied', 'failed'],
+      });
+      if (record.result.plan_id !== entry.name || record.result.plan_sha256 !== record.intent.plan_sha256) {
+        throw new Error('application result does not link to its intent');
+      }
+      if (timestamp(record.result.finished_at) < timestamp(record.intent.started_at)) throw new Error('application result predates its intent');
+      record.state = record.result.state;
+      if (record.state === 'applied' && plan) {
+        if (stableJson(record.result.changed) !== stableJson(expectedAppliedChanges(plan.receipt))) {
+          throw new Error('application result changed-actions do not match its reviewed plan');
+        }
+        if (record.result.post_inventory_sha256 !== expectedPostInventorySha256(plan.receipt)) {
+          throw new Error('application result post-inventory digest does not match its reviewed plan');
+        }
+      }
+    } catch (error) {
+      record.state = 'invalid';
+      issues.push(maintenanceIssue('invalid-application-result', entry.name, error.message));
+    }
+  }
+
+  for (const sourceEntry of directoryEntries(roots.recoveries)) {
+    const sourceDirectory = join(roots.recoveries, sourceEntry.name);
+    if (!sourceEntry.isDirectory() || sourceEntry.isSymbolicLink()) {
+      issues.push(maintenanceIssue('invalid-recovery-directory', sourceEntry.name, 'recovery source entry must be a real directory'));
+      continue;
+    }
+    for (const entry of directoryEntries(sourceDirectory)) {
+      const path = join(sourceDirectory, entry.name);
+      if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith('.json')) {
+        issues.push(maintenanceIssue('unexpected-recovery-entry', `${sourceEntry.name}/${entry.name}`, 'recovery storage contains an unexpected entry'));
+        continue;
+      }
+      try {
+        const receipt = readRecoveryReceipt(path, { root });
+        if (receipt.source_plan_id !== sourceEntry.name) throw new Error('recovery source does not match its directory');
+        if (entry.name !== `${receipt.recovery_plan_id}.json`) throw new Error('recovery filename does not match its target plan');
+        const source = applications.get(receipt.source_plan_id);
+        const target = plans.get(receipt.recovery_plan_id);
+        if (!source?.intent) throw new Error('recovery source application is missing or invalid');
+        if (!['orphaned', 'failed'].includes(source.state)) throw new Error('recovery source application is not interrupted or failed');
+        if (receipt.source_plan_sha256 !== source.intent.plan_sha256 || receipt.source_intent_sha256 !== source.intent.intent_sha256) {
+          throw new Error('recovery source linkage does not match its application');
+        }
+        if ((receipt.source_result_sha256 ?? null) !== (source.result?.result_sha256 ?? null)) {
+          throw new Error('recovery result linkage does not match its application');
+        }
+        if (!target || receipt.recovery_plan_sha256 !== target.receipt.plan_sha256) {
+          throw new Error('recovery target plan is missing or does not match');
+        }
+        if (timestamp(receipt.created_at) === 0 || timestamp(receipt.created_at) < timestamp(source.intent.started_at)) {
+          throw new Error('recovery creation time is invalid or predates its source application');
+        }
+        if (timestamp(target.receipt.generated_at) !== timestamp(receipt.created_at)) {
+          throw new Error('recovery creation time does not match its fresh plan');
+        }
+        recoveries.push(receipt);
+      } catch (error) {
+        issues.push(maintenanceIssue('invalid-recovery', `${sourceEntry.name}/${entry.name}`, error.message));
+      }
+    }
+  }
+
+  const recoveryTargets = new Map();
+  for (const receipt of recoveries) {
+    if (!recoveryTargets.has(receipt.source_plan_id)) recoveryTargets.set(receipt.source_plan_id, []);
+    recoveryTargets.get(receipt.source_plan_id).push(receipt.recovery_plan_id);
+  }
+  const resolves = (planId, seen = new Set()) => {
+    if (seen.has(planId)) return false;
+    const application = applications.get(planId);
+    if (application?.state === 'applied') return true;
+    const nextSeen = new Set(seen).add(planId);
+    return (recoveryTargets.get(planId) ?? []).some((target) => resolves(target, nextSeen));
+  };
+  for (const application of applications.values()) {
+    if (!['orphaned', 'failed'].includes(application.state)) continue;
+    if (resolves(application.plan_id)) continue;
+    const targets = recoveryTargets.get(application.plan_id) ?? [];
+    issues.push(maintenanceIssue(
+      targets.length > 0 ? 'recovery-pending' : `application-${application.state}`,
+      application.plan_id,
+      targets.length > 0
+        ? `recovery plan has not completed: ${targets.join(', ')}`
+        : `application is ${application.state}; generate and apply a fresh current-state recovery plan`,
+    ));
+  }
+
+  return {
+    state: issues.length === 0 ? 'clean' : 'attention',
+    summary: {
+      plan_count: plans.size,
+      application_count: applications.size,
+      recovery_count: recoveries.length,
+      issue_count: issues.length,
+    },
+    plans: [...plans.keys()].sort(),
+    applications: [...applications.values()].map(({ plan_id, state }) => ({ plan_id, state })),
+    recoveries: recoveries.map(({ source_plan_id, recovery_plan_id }) => ({ source_plan_id, recovery_plan_id })),
+    issues,
+  };
+}
+
+export function writeProofCacheGcRecovery(sourcePlanId, {
+  root,
+  currentProofKeys,
+  keepReceipts = 10,
+  maxBytes = Number.POSITIVE_INFINITY,
+  now = new Date(),
+  receipts = scanProofReceipts({ root }),
+} = {}) {
+  const audit = auditProofCacheMaintenance({ root });
+  const source = audit.applications.find((application) => application.plan_id === sourcePlanId);
+  if (!source || !['orphaned', 'failed'].includes(source.state)) {
+    throw new Error(`recovery source ${sourcePlanId} is not a valid interrupted or failed application`);
+  }
+  const sourceDirectory = join(cacheRoots(root).applications, sourcePlanId);
+  const intent = readApplicationReceipt(join(sourceDirectory, 'intent.json'), {
+    kind: 'fmarch-proof-cache-gc-application-intent', digestField: 'intent_sha256', states: ['applying'],
+  });
+  const resultPath = join(sourceDirectory, 'result.json');
+  const result = existsSync(resultPath) ? readApplicationReceipt(resultPath, {
+    kind: 'fmarch-proof-cache-gc-application-result', digestField: 'result_sha256', states: ['failed'],
+  }) : null;
+  const plan = planProofCacheGc({ root, currentProofKeys, keepReceipts, maxBytes, now, receipts });
+  const saved = writeProofCacheGcPlan(plan);
+  const base = {
+    schema: PROOF_CACHE_GC_RECOVERY_SCHEMA,
+    kind: PROOF_CACHE_GC_RECOVERY_KIND,
+    state: 'planned',
+    repo_root: resolve(root),
+    source_plan_id: sourcePlanId,
+    source_plan_sha256: intent.plan_sha256,
+    source_intent_sha256: intent.intent_sha256,
+    source_result_sha256: result?.result_sha256 ?? null,
+    recovery_plan_id: saved.receipt.id,
+    recovery_plan_sha256: saved.receipt.plan_sha256,
+    created_at: now.toISOString(),
+  };
+  const receipt = { ...base, recovery_sha256: sha256(stableJson(base)) };
+  const directory = join(cacheRoots(root).recoveries, sourcePlanId);
+  mkdirSync(directory, { recursive: true });
+  const path = join(directory, `${saved.receipt.id}.json`);
+  writeFileSync(path, `${JSON.stringify(receipt, null, 2)}\n`, { flag: 'wx' });
+  return { plan, saved, receipt, path };
+}
+
 export function requiresProofCacheMutationLock(argv) {
-  return argv[0] === 'gc' && argv.includes('--apply');
+  return (argv[0] === 'gc' && argv.includes('--apply')) || (argv[0] === 'audit' && argv.includes('--recover'));
 }
 
 export function parseProofCacheArguments(argv) {
   const command = argv[0];
-  const usage = 'usage: proof:cache explain <lane-id> [--json] | proof:cache gc --dry-run [--keep-receipts N] [--max-bytes N] [--json] | proof:cache gc --apply <plan-path> [--json]';
-  if (!['explain', 'gc'].includes(command)) throw new Error(usage);
+  const usage = 'usage: proof:cache explain <lane-id> [--json] | proof:cache audit [--json] | proof:cache audit --recover <plan-id> [--keep-receipts N] [--max-bytes N] [--json] | proof:cache gc --dry-run [--keep-receipts N] [--max-bytes N] [--json] | proof:cache gc --apply <plan-path> [--json]';
+  if (!['explain', 'audit', 'gc'].includes(command)) throw new Error(usage);
   if (command === 'explain') {
     const subject = argv[1];
     if (!subject) throw new Error('proof:cache explain requires a lane id');
     const rest = argv.slice(2);
     if (rest.some((arg) => arg !== '--json')) throw new Error('proof:cache explain accepts only a lane id and --json');
     return { command, subject, json: rest.includes('--json') };
+  }
+
+  if (command === 'audit') {
+    const options = { command, json: false, recover: null, keepReceipts: 10, maxBytes: Number.POSITIVE_INFINITY };
+    const args = argv.slice(1);
+    for (let index = 0; index < args.length; index += 1) {
+      const arg = args[index];
+      if (arg === '--json') options.json = true;
+      else if (arg === '--recover') {
+        if (options.recover) throw new Error('--recover may be specified only once');
+        options.recover = args[++index];
+        if (!options.recover || options.recover.startsWith('--')) throw new Error('--recover requires an interrupted or failed plan id');
+      } else if (arg === '--keep-receipts') options.keepReceipts = Number(args[++index]);
+      else if (arg === '--max-bytes') options.maxBytes = Number(args[++index]);
+      else throw new Error(`unknown proof cache audit option ${arg}`);
+    }
+    if (!options.recover && (options.keepReceipts !== 10 || options.maxBytes !== Number.POSITIVE_INFINITY)) {
+      throw new Error('audit recovery policy requires --recover <plan-id>');
+    }
+    return options;
   }
 
   const options = {
@@ -654,8 +953,32 @@ function formatGc(plan, { planPath = null, applied = null } = {}) {
   return lines.join('\n');
 }
 
+function formatMaintenanceAudit(audit) {
+  const lines = [
+    `proof cache maintenance: ${audit.state}`,
+    `  plans ${audit.summary.plan_count}; applications ${audit.summary.application_count}; recoveries ${audit.summary.recovery_count}; issues ${audit.summary.issue_count}`,
+  ];
+  for (const issue of audit.issues) lines.push(`  ${issue.code} ${issue.subject}: ${issue.message}`);
+  return lines.join('\n');
+}
+
+function formatRecovery(recovery) {
+  return [
+    `proof cache recovery planned for ${recovery.receipt.source_plan_id}`,
+    `  fresh immutable plan: ${recovery.saved.path}`,
+    `  recovery linkage: ${recovery.path}`,
+    '  review the fresh plan, then apply it with npm run proof:cache -- gc --apply <plan-path>',
+  ].join('\n');
+}
+
 export async function main(argv = process.argv.slice(2), { root = REPO_ROOT } = {}) {
   const args = parseProofCacheArguments(argv);
+  if (args.command === 'audit' && !args.recover) {
+    const audit = auditProofCacheMaintenance({ root });
+    console.log(args.json ? JSON.stringify(audit, null, 2) : formatMaintenanceAudit(audit));
+    if (audit.state !== 'clean') process.exitCode = 2;
+    return audit;
+  }
   const manifest = JSON.parse(readFileSync(join(root, 'docs', 'ops', 'proof-lane-manifest.json'), 'utf8'));
   const inputs = sharedInputs(root);
   if (args.command === 'explain') {
@@ -666,6 +989,17 @@ export async function main(argv = process.argv.slice(2), { root = REPO_ROOT } = 
   const currentProofKeys = new Map(
     [...frozenLaneIds(manifest)].map((laneId) => [laneId, computeLaneProofKey(laneId, manifest, inputs)]),
   );
+  if (args.command === 'audit') {
+    const recovery = writeProofCacheGcRecovery(args.recover, {
+      root,
+      currentProofKeys,
+      keepReceipts: args.keepReceipts,
+      maxBytes: args.maxBytes,
+    });
+    console.log(args.json ? JSON.stringify(recovery, null, 2) : formatRecovery(recovery));
+    if (!recovery.plan.budget_satisfied) process.exitCode = 2;
+    return recovery;
+  }
   if (args.applyPlan) {
     const applied = applyReviewedProofCacheGcPlan(args.applyPlan, { root, currentProofKeys });
     console.log(args.json

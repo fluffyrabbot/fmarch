@@ -41,6 +41,18 @@ running-receipt persistence, and artifact materialization; the running-receipt
 roots remain a second conservative defense. Cache administration never rewrites
 an immutable entry in place.
 
+`npm run proof:cache -- audit` is the read-only maintenance sentinel. It checks
+every plan, application intent/result pair, and recovery receipt for its
+self-digest and one-to-one linkage. For completed applications it also derives
+the exact changed-action list and post-inventory digest from the historical
+reviewed plan, so later legitimate cache writes cannot create false drift.
+Missing results and terminal failures fail the sentinel. Recovery uses
+`audit --recover <plan-id>` under the shared host lock to write a fresh plan
+from current cache and reachability state plus immutable source-to-recovery
+linkage. The operator reviews and applies that fresh plan through the ordinary
+two-phase path; the source issue clears only when a linked recovery application
+has completed. No interrupted or failed plan can be replayed.
+
 ### Full-sweep resource experiment — 2026-08-27
 
 Two clean, same-commit Darwin full sweeps passed all 62 manifest lanes at

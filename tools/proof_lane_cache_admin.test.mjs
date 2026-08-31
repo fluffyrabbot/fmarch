@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +7,7 @@ import test from 'node:test';
 
 import { computeLaneProofKey, persistProofCacheEntries, proofCachePaths } from './proof_lane_cache.mjs';
 import {
+  auditProofCacheMaintenance,
   applyProofCacheGc,
   applyReviewedProofCacheGcPlan,
   createProofCacheGcPlanReceipt,
@@ -15,6 +17,7 @@ import {
   readProofCacheGcPlan,
   requiresProofCacheMutationLock,
   scanProofCache,
+  writeProofCacheGcRecovery,
   writeProofCacheGcPlan,
 } from './proof_lane_cache_admin.mjs';
 
@@ -22,6 +25,18 @@ const toolchain = {
   platform: 'test', arch: 'test', os_release: 'test', node: 'test', npm: 'test',
   cargo: 'test', rustc: 'test', psql: 'test', postgres: 'test', pg_config: 'test',
 };
+
+function stable(value) {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
+  }
+  return value;
+}
+
+function receiptSha256(value) {
+  return createHash('sha256').update(JSON.stringify(stable(value))).digest('hex');
+}
 
 function fixtureManifest() {
   return {
@@ -192,6 +207,8 @@ test('disk budget fails closed when protected evidence alone exceeds it', (t) =>
 
 test('only an applying GC requires the proof host mutation lock', () => {
   assert.equal(requiresProofCacheMutationLock(['gc', '--apply', 'plan.json']), true);
+  assert.equal(requiresProofCacheMutationLock(['audit', '--recover', 'plan-id']), true);
+  assert.equal(requiresProofCacheMutationLock(['audit']), false);
   assert.equal(requiresProofCacheMutationLock(['gc', '--dry-run']), false);
   assert.equal(requiresProofCacheMutationLock(['explain', 'audit']), false);
 });
@@ -217,6 +234,10 @@ test('cache CLI rejects contradictory mutation intent and GC flags on explain', 
     () => parseProofCacheArguments(['explain', 'audit', '--max-bytes', '1']),
     /accepts only/,
   );
+  assert.deepEqual(parseProofCacheArguments(['audit', '--json']), {
+    command: 'audit', json: true, recover: null, keepReceipts: 10, maxBytes: Number.POSITIVE_INFINITY,
+  });
+  assert.throws(() => parseProofCacheArguments(['audit', '--max-bytes', '1']), /requires --recover/);
 });
 
 test('immutable GC plan receipts detect tampering before revalidation', (t) => {
@@ -299,4 +320,88 @@ test('reviewed GC apply executes exactly once and writes intent and result recei
     }),
     /already attempted/,
   );
+});
+
+test('maintenance audit proves application hashes, linkage, actions, and historical post-inventory', (t) => {
+  const fixture = fixtureRoot(t);
+  const old = store(fixture, 'old');
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'current');
+  const current = computed(fixture);
+  const plan = planProofCacheGc({
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    keepReceipts: 0,
+    now: new Date('2026-08-30T13:00:00.000Z'),
+    receipts: [],
+  });
+  const saved = writeProofCacheGcPlan(plan);
+  const applied = applyReviewedProofCacheGcPlan(saved.path, {
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    receipts: [],
+    now: new Date('2026-08-30T13:01:00.000Z'),
+  });
+  assert.equal(auditProofCacheMaintenance({ root: fixture.root }).state, 'clean');
+
+  const result = JSON.parse(readFileSync(applied.result.path, 'utf8'));
+  result.post_inventory_sha256 = '0'.repeat(64);
+  const { result_sha256: ignored, ...base } = result;
+  result.result_sha256 = receiptSha256(base);
+  writeFileSync(applied.result.path, `${JSON.stringify(result, null, 2)}\n`);
+  const audit = auditProofCacheMaintenance({ root: fixture.root });
+  assert.equal(audit.state, 'attention');
+  assert.deepEqual(audit.issues.map(({ code }) => code), ['invalid-application-result']);
+  assert.match(audit.issues[0].message, /post-inventory digest/);
+  assert.equal(existsSync(proofCachePaths(fixture.root, 'audit', old.proofKey).directory), false);
+});
+
+test('interrupted applications recover through a fresh linked plan and never replay the source', (t) => {
+  const fixture = fixtureRoot(t);
+  store(fixture, 'old');
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'current');
+  const current = computed(fixture);
+  const sourcePlan = planProofCacheGc({
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    keepReceipts: 0,
+    now: new Date('2026-08-30T14:00:00.000Z'),
+    receipts: [],
+  });
+  const source = writeProofCacheGcPlan(sourcePlan);
+  const sourceApplication = applyReviewedProofCacheGcPlan(source.path, {
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    receipts: [],
+    now: new Date('2026-08-30T14:01:00.000Z'),
+  });
+  rmSync(sourceApplication.result.path);
+  let audit = auditProofCacheMaintenance({ root: fixture.root });
+  assert.deepEqual(audit.issues.map(({ code }) => code), ['application-orphaned']);
+
+  const recovery = writeProofCacheGcRecovery(source.receipt.id, {
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    keepReceipts: 0,
+    receipts: [],
+    now: new Date('2026-08-30T14:02:00.000Z'),
+  });
+  assert.notEqual(recovery.saved.receipt.id, source.receipt.id);
+  audit = auditProofCacheMaintenance({ root: fixture.root });
+  assert.deepEqual(audit.issues.map(({ code }) => code), ['recovery-pending']);
+  assert.throws(
+    () => applyReviewedProofCacheGcPlan(source.path, {
+      root: fixture.root, currentProofKeys: new Map([['audit', current]]), receipts: [],
+    }),
+    /already attempted/,
+  );
+
+  applyReviewedProofCacheGcPlan(recovery.saved.path, {
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', current]]),
+    receipts: [],
+    now: new Date('2026-08-30T14:03:00.000Z'),
+  });
+  audit = auditProofCacheMaintenance({ root: fixture.root });
+  assert.equal(audit.state, 'clean');
+  assert.deepEqual(audit.recoveries, [{ source_plan_id: source.receipt.id, recovery_plan_id: recovery.saved.receipt.id }]);
 });

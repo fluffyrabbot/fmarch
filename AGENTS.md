@@ -77,6 +77,14 @@ direct `main` work, and atomic history over PR ceremony.
   revalidates the plan digest and complete cache/reachability basis, quarantines
   corrupt entries, writes immutable application intent/result receipts, refuses
   replay, and fails closed when protected evidence alone exceeds `--max-bytes`.
+  Audit the complete maintenance receipt graph with
+  `npm run proof:cache -- audit`; this is also a bounded push sentinel. It
+  validates plan, intent, result, recovery, action, and historical
+  post-inventory hashes and fails on missing or tampered linkage. Recover an
+  interrupted or failed application with
+  `npm run proof:cache -- audit --recover <plan-id>`, review the newly written
+  current-state plan, then apply that new plan normally. Recovery never replays
+  an attempted plan.
 - For frontend browser/readiness work, prefer the role proof and artifact
   contract lanes before pushing.
 - For Postgres-backed Rust work, use a local `DATABASE_URL` proof lane and run
