@@ -1110,6 +1110,16 @@
       "capabilities": ["foundation.security-release-baseline"]
     },
     {
+      "id": "architecture:fitness",
+      "tier": "active",
+      "paths": [
+        "docs/rfcs/0006-executable-bounded-context-architecture.md",
+        "tools/architecture_fitness.mjs",
+        "tools/architecture_fitness.test.mjs"
+      ],
+      "lanes": ["test:proof-lane-contract"]
+    },
+    {
       "id": "proof:database-tls-boundary",
       "tier": "frozen",
       "paths": ["tools/database_tls_boundary.mjs"],
