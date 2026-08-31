@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { computeLaneProofKey, persistProofCacheEntries, proofCachePaths } from './proof_lane_cache.mjs';
@@ -25,6 +27,7 @@ const toolchain = {
   platform: 'test', arch: 'test', os_release: 'test', node: 'test', npm: 'test',
   cargo: 'test', rustc: 'test', psql: 'test', postgres: 'test', pg_config: 'test',
 };
+const CRASH_FIXTURE = fileURLToPath(new URL('./proof_lane_cache_crash_fixture.mjs', import.meta.url));
 
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
@@ -404,4 +407,90 @@ test('interrupted applications recover through a fresh linked plan and never rep
   audit = auditProofCacheMaintenance({ root: fixture.root });
   assert.equal(audit.state, 'clean');
   assert.deepEqual(audit.recoveries, [{ source_plan_id: source.receipt.id, recovery_plan_id: recovery.saved.receipt.id }]);
+});
+
+test('real process death at every GC persistence boundary recovers without losing protected evidence', (t) => {
+  const scenarios = [
+    { crashAt: 'after-intent', oldEntriesRemaining: 2, hour: 15 },
+    { crashAt: 'after-action:1', oldEntriesRemaining: 1, hour: 16 },
+    { crashAt: 'before-result', oldEntriesRemaining: 0, hour: 17 },
+  ];
+
+  for (const scenario of scenarios) {
+    const fixture = fixtureRoot(t);
+    writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), `${scenario.crashAt}-old-a`);
+    const oldA = store(fixture, `${scenario.crashAt}-old-a`);
+    writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), `${scenario.crashAt}-old-b`);
+    const oldB = store(fixture, `${scenario.crashAt}-old-b`);
+    writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), `${scenario.crashAt}-current`);
+    const current = store(fixture, `${scenario.crashAt}-current`);
+    const prefix = `2026-08-30T${String(scenario.hour).padStart(2, '0')}`;
+    const sourcePlan = planProofCacheGc({
+      root: fixture.root,
+      currentProofKeys: new Map([['audit', current]]),
+      keepReceipts: 0,
+      now: new Date(`${prefix}:00:00.000Z`),
+      receipts: [],
+    });
+    assert.equal(sourcePlan.entries.filter(({ action }) => action === 'delete').length, 2);
+    const source = writeProofCacheGcPlan(sourcePlan);
+    const configPath = join(fixture.root, 'crash-config.json');
+    writeFileSync(configPath, `${JSON.stringify({
+      root: fixture.root,
+      plan_path: source.path,
+      current_proof_keys: { audit: current.proofKey },
+      now: `${prefix}:01:00.000Z`,
+      crash_at: scenario.crashAt,
+    }, null, 2)}\n`);
+
+    const child = spawnSync(process.execPath, [CRASH_FIXTURE, configPath], { encoding: 'utf8' });
+    assert.ifError(child.error);
+    assert.equal(child.signal, 'SIGKILL', `${scenario.crashAt}: ${child.stderr}`);
+    assert.equal(child.status, null, `${scenario.crashAt}: ${child.stderr}`);
+
+    let audit = auditProofCacheMaintenance({ root: fixture.root });
+    assert.deepEqual(audit.issues.map(({ code }) => code), ['application-orphaned'], scenario.crashAt);
+    assert.equal(
+      existsSync(proofCachePaths(fixture.root, 'audit', current.proofKey).directory),
+      true,
+      `${scenario.crashAt} removed protected current evidence`,
+    );
+    const oldKeys = [oldA, oldB];
+    assert.equal(
+      oldKeys.filter((key) => existsSync(proofCachePaths(fixture.root, 'audit', key.proofKey).directory)).length,
+      scenario.oldEntriesRemaining,
+      `${scenario.crashAt} stopped at the wrong mutation boundary`,
+    );
+    assert.throws(
+      () => applyReviewedProofCacheGcPlan(source.path, {
+        root: fixture.root,
+        currentProofKeys: new Map([['audit', current]]),
+        receipts: [],
+      }),
+      /already attempted/,
+      `${scenario.crashAt} source plan was replayable`,
+    );
+
+    const recovery = writeProofCacheGcRecovery(source.receipt.id, {
+      root: fixture.root,
+      currentProofKeys: new Map([['audit', current]]),
+      keepReceipts: 0,
+      receipts: [],
+      now: new Date(`${prefix}:02:00.000Z`),
+    });
+    assert.notEqual(recovery.saved.receipt.id, source.receipt.id);
+    applyReviewedProofCacheGcPlan(recovery.saved.path, {
+      root: fixture.root,
+      currentProofKeys: new Map([['audit', current]]),
+      receipts: [],
+      now: new Date(`${prefix}:03:00.000Z`),
+    });
+
+    audit = auditProofCacheMaintenance({ root: fixture.root });
+    assert.equal(audit.state, 'clean', `${scenario.crashAt}: ${JSON.stringify(audit.issues)}`);
+    assert.equal(existsSync(proofCachePaths(fixture.root, 'audit', current.proofKey).directory), true);
+    for (const old of oldKeys) {
+      assert.equal(existsSync(proofCachePaths(fixture.root, 'audit', old.proofKey).directory), false);
+    }
+  }
 });

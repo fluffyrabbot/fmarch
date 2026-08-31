@@ -566,6 +566,7 @@ export function applyReviewedProofCacheGcPlan(planPath, {
   currentProofKeys,
   receipts = scanProofReceipts({ root }),
   now = new Date(),
+  onApplicationCheckpoint = () => {},
 } = {}) {
   const loaded = readProofCacheGcPlan(planPath, { root });
   const applicationDirectory = join(cacheRoots(root).applications, loaded.receipt.id);
@@ -583,7 +584,17 @@ export function applyReviewedProofCacheGcPlan(planPath, {
   const application = beginProofCacheGcApplication(loaded.path, loaded.receipt, { root, now });
   const changed = [];
   try {
-    applyProofCacheGc(freshPlan, { onChange: (change) => changed.push(change) });
+    onApplicationCheckpoint({ name: 'after-intent', plan_id: loaded.receipt.id, changed: [] });
+    applyProofCacheGc(freshPlan, { onChange: (change) => {
+      changed.push(change);
+      onApplicationCheckpoint({
+        name: 'after-action',
+        plan_id: loaded.receipt.id,
+        action_index: changed.length,
+        changed: [...changed],
+      });
+    } });
+    onApplicationCheckpoint({ name: 'before-result', plan_id: loaded.receipt.id, changed: [...changed] });
     const result = finishProofCacheGcApplication(application, { root, state: 'applied', changed, error: null, now });
     return { plan: loaded, gcPlan: freshPlan, application, result, changed };
   } catch (error) {

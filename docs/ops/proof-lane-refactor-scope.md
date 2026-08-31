@@ -53,6 +53,14 @@ linkage. The operator reviews and applies that fresh plan through the ordinary
 two-phase path; the source issue clears only when a linked recovery application
 has completed. No interrupted or failed plan can be replayed.
 
+The maintenance contract kills a real child process at each durable boundary:
+immediately after intent persistence, after the first of multiple cache
+actions, and after all actions but before result persistence. Each crash must
+leave an auditable orphan, preserve the current protected key, reject replay of
+the source plan, and converge through a newly planned recovery to a clean
+receipt graph. This exercises partial filesystem mutation rather than
+constructing orphan receipts directly.
+
 ### Full-sweep resource experiment — 2026-08-27
 
 Two clean, same-commit Darwin full sweeps passed all 62 manifest lanes at
