@@ -239,10 +239,6 @@ export const hostedIdentityExpectedRoleSurfaceContract = deepFreeze({
       id: "session",
       path: "/auth/session",
     },
-    {
-      id: "session-grants",
-      path: "/auth/session-grants",
-    },
   ],
   credentialPolicy: {
     rawInviteTokensInRoleUrls: false,
@@ -270,7 +266,6 @@ export const hostedIdentityProviderBoundary = deepFreeze({
       sessionCredential: "opaque-session",
       loginBoundary: "/auth/login",
       sessionBoundary: "/auth/session",
-      sessionGrantBoundary: "/auth/session-grants",
       browserCookieName: "fmarch_session",
       roleSurfaceArchitectureChanged: false,
       rawCredentialPolicy: "redacted",
@@ -285,7 +280,6 @@ export const hostedIdentityProviderBoundary = deepFreeze({
       sessionCredential: "hosted-session",
       loginBoundary: "/auth/login",
       sessionBoundary: "/auth/session",
-      sessionGrantBoundary: "/auth/session-grants",
       browserCookieName: "fmarch_session",
       roleSurfaceArchitectureChanged: false,
       rawCredentialPolicy: "operator-redacted",

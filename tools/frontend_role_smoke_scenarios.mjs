@@ -193,8 +193,8 @@ export const roles = Object.freeze([
     }),
     interactionGeometryBudget: Object.freeze({
       confirmation: Object.freeze({
-        anchorSelector: '[data-testid="admin-command-trigger-session-grants"]',
-        targetSelector: '[data-testid="admin-session-grant-form"]',
+        anchorSelector: '[data-testid="admin-command-trigger-cohost"]',
+        targetSelector: '[data-testid="admin-command-confirm-cohost"]',
         maxAnchorShiftPx: 1,
         maxCombinedSpanViewportRatio: 0.6,
         maxDocumentGrowthViewportRatio: 0.5,
@@ -263,7 +263,7 @@ export const roles = Object.freeze([
     ]),
     touchSelectors: [
       '[data-testid="admin-setup-create-game"] button',
-      '[data-testid="admin-setup-session-grants"] summary',
+      '[data-testid="admin-setup-cohost"] button',
       '[data-testid="admin-audit-link-proof-runs"]',
       '[data-testid="admin-recovery-recovery-gate"] button',
       '[data-testid="admin-status-overview"] > summary',
@@ -275,7 +275,6 @@ export const roles = Object.freeze([
         zone: "admin-setup-actions",
         targetSelectors: Object.freeze([
           '[data-testid="admin-command-trigger-create-game"]',
-          '[data-testid="admin-command-trigger-session-grants"]',
           '[data-testid="admin-command-trigger-cohost"]',
         ]),
       }),

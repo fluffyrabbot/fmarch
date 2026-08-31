@@ -14,7 +14,6 @@
 
   export let items = [];
   export let commandStatuses = {};
-  export let sessionGrant;
   export let onSetupAction = () => {};
   export let onConfirmSetupAction = () => {};
   export let onCancelSetupAction = () => {};
@@ -27,7 +26,6 @@
   $: view = buildAdminSetupGridViewModel({
     items,
     commandStatuses,
-    sessionGrant,
   });
   $: focusNewConfirmation(view.items);
 
@@ -138,104 +136,38 @@
         </div>
       </div>
       {#if item.status && item.status.state === "confirm"}
-          {#if item.isSessionGrant}
-            <ConfirmationShell
-              element="form"
-              method="POST"
-              action="?/grantSession"
-              className="admin-surface__grant-form"
-              confirmation={item.confirmation}
-              testId="admin-session-grant-form"
-              onKeydown={(event) => onConfirmationKeydown(event, item)}
-            >
-              <p
-                id={item.confirmation.messageId}
-                class="admin-surface__confirmation-message"
-                data-testid={item.confirmation.messageTestId}
-              >
-                {item.confirmation.message}
-              </p>
-              <label class="admin-surface__field fm-field">
-                <span>Principal</span>
-                <input
-                  name="principalId"
-                  value={item.sessionGrant.principalId}
-                  autocomplete="off"
-                  data-testid="admin-session-grant-principal"
-                />
-              </label>
-              <label class="admin-surface__field fm-field">
-                <span>Expires at</span>
-                <input
-                  name="expiresAt"
-                  inputmode="numeric"
-                  value={item.sessionGrant.expiresAt}
-                  data-testid="admin-session-grant-expires-at"
-                />
-              </label>
-              <label class="admin-surface__checkbox">
-                <input
-                  type="checkbox"
-                  name="globalCapability"
-                  value="GlobalMod"
-                  checked={item.sessionGrant.globalCapabilities.includes("GlobalMod")}
-                  data-testid="admin-session-grant-global-mod"
-                />
-                <span>Community moderator</span>
-              </label>
-              <button
-                type="submit"
-                class="fm-touch-button"
-                data-min-touch-target-px={item.minTouchTargetPx}
-                data-testid={item.confirmTestId}
-                bind:this={confirmButtonRefs[item.id]}
-              >
-                {item.displayConfirmLabel}
-              </button>
-              <button
-                type="button"
-                class="fm-touch-button fm-touch-button--secondary"
-                data-min-touch-target-px={item.minTouchTargetPx}
-                data-testid={item.cancelTestId}
-                on:click={() => cancelSetupAction(item)}
-              >
-                Cancel
-              </button>
-            </ConfirmationShell>
-          {:else}
-            <ConfirmationShell
-              className="fm-touch-row"
-              confirmation={item.confirmation}
-              onKeydown={(event) => onConfirmationKeydown(event, item)}
-            >
-              <span
-                id={item.confirmation.messageId}
-                class="admin-surface__confirmation-message"
-                data-testid={item.confirmation.messageTestId}
-              >
-                {item.confirmation.message}
-              </span>
-              <button
-                type="button"
-                class="fm-touch-button"
-                data-min-touch-target-px={item.minTouchTargetPx}
-                data-testid={item.confirmTestId}
-                bind:this={confirmButtonRefs[item.id]}
-                on:click={() => confirmSetupAction(item)}
-              >
-                {item.displayConfirmLabel}
-              </button>
-              <button
-                type="button"
-                class="fm-touch-button fm-touch-button--secondary"
-                data-min-touch-target-px={item.minTouchTargetPx}
-                data-testid={item.cancelTestId}
-                on:click={() => cancelSetupAction(item)}
-              >
-                Cancel
-              </button>
-            </ConfirmationShell>
-          {/if}
+        <ConfirmationShell
+          className="fm-touch-row"
+          confirmation={item.confirmation}
+          onKeydown={(event) => onConfirmationKeydown(event, item)}
+        >
+          <span
+            id={item.confirmation.messageId}
+            class="admin-surface__confirmation-message"
+            data-testid={item.confirmation.messageTestId}
+          >
+            {item.confirmation.message}
+          </span>
+          <button
+            type="button"
+            class="fm-touch-button"
+            data-min-touch-target-px={item.minTouchTargetPx}
+            data-testid={item.confirmTestId}
+            bind:this={confirmButtonRefs[item.id]}
+            on:click={() => confirmSetupAction(item)}
+          >
+            {item.displayConfirmLabel}
+          </button>
+          <button
+            type="button"
+            class="fm-touch-button fm-touch-button--secondary"
+            data-min-touch-target-px={item.minTouchTargetPx}
+            data-testid={item.cancelTestId}
+            on:click={() => cancelSetupAction(item)}
+          >
+            Cancel
+          </button>
+        </ConfirmationShell>
       {/if}
     </article>
   {/each}
@@ -270,11 +202,6 @@
     margin: 0;
   }
 
-  .admin-surface__grant-form {
-    display: grid;
-    gap: 10px;
-  }
-
   .admin-surface__confirmation-message {
     color: var(--fm-ink);
     font-size: 13px;
@@ -287,23 +214,5 @@
     .admin-action-grid {
       grid-template-columns: 1fr;
     }
-  }
-
-  .admin-surface__checkbox span {
-    color: var(--fm-ink-muted);
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .admin-surface__checkbox {
-    align-items: center;
-    display: inline-flex;
-    gap: 10px;
-    min-block-size: 44px;
-  }
-
-  .admin-surface__checkbox input {
-    block-size: 22px;
-    inline-size: 22px;
   }
 </style>

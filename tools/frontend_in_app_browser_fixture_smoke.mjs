@@ -168,6 +168,9 @@ function interactionScenarios(manifest) {
     errorSurface: scenario.errorSurface,
     confirmation: scenario.confirmation,
   }));
+  const adminOperationalForms = manifest.hydratedSurfaceScenarios.find(
+    (scenario) => scenario.id === "admin-operational-forms",
+  );
   return [
     ...commandScenarios,
     {
@@ -189,9 +192,10 @@ function interactionScenarios(manifest) {
       role: "admin",
       source: "manifest.hydratedSurfaceScenarios",
       rootSelector: '[data-iab-hydrated-scenario-id="admin-operational-forms"]',
-      targetSelector: '[data-testid="iab-admin-session-grant-ack"]',
-      targetTestId: "iab-admin-session-grant-ack",
-      expectedText: "Session grants completed.",
+      targetSelector: '[data-testid="iab-admin-recovery-gate-ack"]',
+      targetTestId: "iab-admin-recovery-gate-ack",
+      expectedText:
+        adminOperationalForms?.forms?.recoveryGate?.visible?.message,
       minTouchTargetPx: 44,
     },
     {

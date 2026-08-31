@@ -493,7 +493,6 @@ CREATE TABLE public.auth_account (
     password_hash text NOT NULL,
     created_at bigint NOT NULL,
     disabled_at bigint,
-    global_capabilities text[] DEFAULT '{}'::text[] NOT NULL,
     method_id uuid NOT NULL,
     method_kind text GENERATED ALWAYS AS ('classic_password'::text) STORED
 );
@@ -594,16 +593,19 @@ CREATE TABLE public.auth_session (
     created_at bigint NOT NULL,
     expires_at bigint NOT NULL,
     revoked_at bigint,
-    global_capabilities text[] DEFAULT '{}'::text[] NOT NULL,
     authenticated_via_method_id uuid,
     idle_expires_at bigint NOT NULL,
     assurance text NOT NULL,
     authenticated_at bigint NOT NULL,
     workos_session_id text,
-    CONSTRAINT auth_session_assurance_check CHECK ((assurance = ANY (ARRAY['password'::text, 'external_sso'::text, 'dev'::text, 'admin_grant'::text]))),
+    local_proof_instance_id text,
+    workos_signing_key_id text,
+    CONSTRAINT auth_session_assurance_check CHECK ((assurance = ANY (ARRAY['password'::text, 'external_sso'::text, 'dev'::text]))),
     CONSTRAINT auth_session_authenticated_at_check CHECK ((authenticated_at <= created_at)),
     CONSTRAINT auth_session_idle_expiry_check CHECK (((idle_expires_at > created_at) AND (idle_expires_at <= expires_at))),
-    CONSTRAINT auth_session_workos_session_shape_check CHECK ((((assurance = 'external_sso'::text) AND (workos_session_id IS NOT NULL) AND (authenticated_via_method_id IS NOT NULL) AND (workos_session_id ~ '^session_[0-9A-HJKMNP-TV-Z]{26}$'::text)) OR ((assurance = 'external_sso'::text) AND (workos_session_id IS NULL) AND (revoked_at IS NOT NULL)) OR ((assurance IS DISTINCT FROM 'external_sso'::text) AND (workos_session_id IS NULL))))
+    CONSTRAINT auth_session_local_proof_instance_shape_check CHECK ((((assurance = 'dev'::text) AND (local_proof_instance_id IS NOT NULL) AND (local_proof_instance_id ~ '^[0-9a-f]{64}$'::text)) OR ((assurance <> 'dev'::text) AND (local_proof_instance_id IS NULL)))),
+    CONSTRAINT auth_session_workos_session_shape_check CHECK ((((assurance = 'external_sso'::text) AND (workos_session_id IS NOT NULL) AND (authenticated_via_method_id IS NOT NULL) AND (workos_session_id ~ '^session_[0-9A-HJKMNP-TV-Z]{26}$'::text)) OR ((assurance = 'external_sso'::text) AND (workos_session_id IS NULL) AND (revoked_at IS NOT NULL)) OR ((assurance IS DISTINCT FROM 'external_sso'::text) AND (workos_session_id IS NULL)))),
+    CONSTRAINT auth_session_workos_signing_key_shape_check CHECK ((((assurance = 'external_sso'::text) AND (workos_signing_key_id IS NOT NULL) AND ((octet_length(workos_signing_key_id) >= 1) AND (octet_length(workos_signing_key_id) <= 256)) AND (workos_signing_key_id ~ '^[!-~]+$'::text)) OR ((assurance <> 'external_sso'::text) AND (workos_signing_key_id IS NULL))))
 );
 
 
@@ -613,10 +615,8 @@ CREATE TABLE public.auth_session (
 
 CREATE TABLE public.auth_websocket_ticket (
     token_hash text NOT NULL,
-    auth_kind text NOT NULL,
     session_reference text NOT NULL,
     access_expires_at bigint NOT NULL,
-    principal_id uuid NOT NULL,
     audience text NOT NULL,
     game_id uuid NOT NULL,
     channel_id text NOT NULL,
@@ -624,11 +624,9 @@ CREATE TABLE public.auth_websocket_ticket (
     after_seq bigint DEFAULT 0 NOT NULL,
     issued_at bigint NOT NULL,
     expires_at bigint NOT NULL,
-    consumed_at bigint,
     CONSTRAINT auth_websocket_ticket_access_expiry_check CHECK ((access_expires_at > issued_at)),
     CONSTRAINT auth_websocket_ticket_after_seq_check CHECK ((after_seq >= 0)),
     CONSTRAINT auth_websocket_ticket_audience_check CHECK ((length(TRIM(BOTH FROM audience)) > 0)),
-    CONSTRAINT auth_websocket_ticket_auth_kind_check CHECK ((auth_kind = ANY (ARRAY['classic'::text, 'workos'::text, 'dev'::text, 'admin_grant'::text]))),
     CONSTRAINT auth_websocket_ticket_channel_check CHECK ((length(TRIM(BOTH FROM channel_id)) > 0)),
     CONSTRAINT auth_websocket_ticket_expiry_check CHECK ((expires_at > issued_at))
 );
@@ -1342,7 +1340,6 @@ CREATE TABLE public.game_invitation (
     expires_at bigint NOT NULL,
     redeemed_at bigint,
     redeemed_session_token_hash text,
-    global_capabilities text[] DEFAULT '{}'::text[] NOT NULL,
     invited_by_principal_id uuid NOT NULL,
     revoked_at bigint,
     game uuid,
@@ -2203,6 +2200,20 @@ CREATE TABLE public.workos_session_exchange (
     CONSTRAINT workos_session_exchange_expiry_check CHECK ((access_expires_at > exchanged_at)),
     CONSTRAINT workos_session_exchange_linking_session_hash_check CHECK (((linking_session_hash IS NULL) OR (linking_session_hash ~ '^[0-9a-f]{64}$'::text))),
     CONSTRAINT workos_session_exchange_provider_session_id_check CHECK ((provider_session_id ~ '^session_[0-9A-HJKMNP-TV-Z]{26}$'::text))
+);
+
+
+--
+-- Name: workos_signing_key_tombstone; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.workos_signing_key_tombstone (
+    signing_key_id text NOT NULL,
+    retired_at bigint NOT NULL,
+    retired_by_principal_id uuid NOT NULL,
+    reason text NOT NULL,
+    CONSTRAINT workos_signing_key_tombstone_key_shape_check CHECK ((((octet_length(signing_key_id) >= 1) AND (octet_length(signing_key_id) <= 256)) AND (signing_key_id ~ '^[!-~]+$'::text))),
+    CONSTRAINT workos_signing_key_tombstone_reason_check CHECK (((reason = btrim(reason)) AND ((octet_length(reason) >= 1) AND (octet_length(reason) <= 512)) AND (reason !~ '[[:cntrl:]]'::text)))
 );
 
 
@@ -3265,6 +3276,14 @@ ALTER TABLE ONLY public.workos_session_exchange
 
 
 --
+-- Name: workos_signing_key_tombstone workos_signing_key_tombstone_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workos_signing_key_tombstone
+    ADD CONSTRAINT workos_signing_key_tombstone_pkey PRIMARY KEY (signing_key_id);
+
+
+--
 -- Name: workos_subject_tombstone workos_subject_tombstone_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3420,24 +3439,24 @@ CREATE INDEX auth_session_workos_session_idx ON public.auth_session USING btree 
 
 
 --
+-- Name: auth_session_workos_signing_key_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX auth_session_workos_signing_key_idx ON public.auth_session USING btree (workos_signing_key_id) WHERE ((revoked_at IS NULL) AND (workos_signing_key_id IS NOT NULL));
+
+
+--
 -- Name: auth_websocket_ticket_expiry_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX auth_websocket_ticket_expiry_idx ON public.auth_websocket_ticket USING btree (expires_at) WHERE (consumed_at IS NULL);
-
-
---
--- Name: auth_websocket_ticket_principal_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX auth_websocket_ticket_principal_idx ON public.auth_websocket_ticket USING btree (principal_id);
+CREATE INDEX auth_websocket_ticket_expiry_idx ON public.auth_websocket_ticket USING btree (LEAST(expires_at, access_expires_at));
 
 
 --
 -- Name: auth_websocket_ticket_session_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX auth_websocket_ticket_session_idx ON public.auth_websocket_ticket USING btree (auth_kind, session_reference);
+CREATE INDEX auth_websocket_ticket_session_idx ON public.auth_websocket_ticket USING btree (session_reference);
 
 
 --
@@ -4323,6 +4342,13 @@ CREATE TRIGGER workos_provider_session_truncate_guard BEFORE TRUNCATE ON public.
 
 
 --
+-- Name: workos_signing_key_tombstone workos_signing_key_tombstone_no_mutation; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER workos_signing_key_tombstone_no_mutation BEFORE DELETE OR UPDATE OR TRUNCATE ON public.workos_signing_key_tombstone FOR EACH STATEMENT EXECUTE FUNCTION public.subject_privacy_append_only_guard();
+
+
+--
 -- Name: workos_subject_tombstone workos_subject_tombstone_no_mutation; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4383,6 +4409,14 @@ ALTER TABLE ONLY public.auth_session
 
 ALTER TABLE ONLY public.auth_session
     ADD CONSTRAINT auth_session_workos_provider_session_fkey FOREIGN KEY (workos_session_id, principal_id, authenticated_via_method_id) REFERENCES public.workos_provider_session(provider_session_id, principal_id, method_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: auth_websocket_ticket auth_websocket_ticket_session_reference_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_websocket_ticket
+    ADD CONSTRAINT auth_websocket_ticket_session_reference_fkey FOREIGN KEY (session_reference) REFERENCES public.auth_session(token_hash) ON DELETE CASCADE;
 
 
 --
@@ -4959,6 +4993,14 @@ ALTER TABLE ONLY public.workos_session_exchange
 
 ALTER TABLE ONLY public.workos_session_exchange
     ADD CONSTRAINT workos_session_exchange_provider_session_fkey FOREIGN KEY (provider_session_id) REFERENCES public.workos_provider_session(provider_session_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: workos_signing_key_tombstone workos_signing_key_tombstone_retired_by_principal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workos_signing_key_tombstone
+    ADD CONSTRAINT workos_signing_key_tombstone_retired_by_principal_id_fkey FOREIGN KEY (retired_by_principal_id) REFERENCES public.platform_principal(principal_id) ON DELETE RESTRICT;
 
 
 --

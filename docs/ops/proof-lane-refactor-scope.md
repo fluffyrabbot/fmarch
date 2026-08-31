@@ -61,6 +61,23 @@ the source plan, and converge through a newly planned recovery to a clean
 receipt graph. This exercises partial filesystem mutation rather than
 constructing orphan receipts directly.
 
+Plans, application intents/results, and recovery links now share one durable
+immutable writer. It creates an exclusive same-directory stage, syncs the stage
+directory entry, writes and syncs the receipt inode, publishes the final name
+with an atomic no-clobber hard link, syncs that publication, removes the stage,
+and syncs the final directory state. Hard-link publication is used instead of
+plain rename because POSIX rename may replace an existing final name; receipt
+immutability requires atomic publication and exclusion together.
+
+The SIGKILL contract covers every publication boundary and accepts only two
+final-name outcomes: absent or byte-for-byte complete. Staging names bind a
+writer PID and random nonce. Read-only audit ignores a stage while that PID is
+alive, reports dead-writer stages with their complete filesystem digest, and
+never mistakes quarantine storage for live receipt topology. Explicit
+`audit --quarantine-staging` runs under the shared host lock, rescans and
+revalidates the staged bytes and dead owner immediately before moving them into
+the maintenance quarantine. It cannot move a live writer's stage.
+
 ### Full-sweep resource experiment — 2026-08-27
 
 Two clean, same-commit Darwin full sweeps passed all 62 manifest lanes at

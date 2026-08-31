@@ -65,11 +65,40 @@ test("checked-in database schema is append-only with a generated current snapsho
   const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
   assert.equal(report.epoch, 1);
-  assert.equal(report.migration_head, "0003_closed_community_admission.sql");
-  assert.equal(report.migration_file_count, 3);
+  assert.equal(report.migration_head, "0004_remove_admin_grant_assurance.sql");
+  assert.equal(report.migration_file_count, 4);
   assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
   assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
-  assert.equal(report.table_count, 98);
+  assert.equal(report.table_count, 99);
+  assert.doesNotMatch(checkedSnapshot, /admin_grant/u);
+  assert.match(
+    checkedMigrations["0004_remove_admin_grant_assurance.sql"],
+    /DELETE FROM public\.auth_session\s+WHERE assurance IN \('admin_grant', 'dev', 'external_sso'\)/u,
+  );
+  assert.match(
+    checkedMigrations["0004_remove_admin_grant_assurance.sql"],
+    /ADD COLUMN local_proof_instance_id text/u,
+  );
+  assert.match(
+    checkedMigrations["0004_remove_admin_grant_assurance.sql"],
+    /DROP COLUMN auth_kind/u,
+  );
+  assert.match(
+    checkedMigrations["0004_remove_admin_grant_assurance.sql"],
+    /FOREIGN KEY \(session_reference\)[\s\S]*ON DELETE CASCADE/u,
+  );
+  assert.match(
+    checkedMigrations["0004_remove_admin_grant_assurance.sql"],
+    /UPDATE public\.workos_session_exchange[\s\S]*SET linking_session_hash = NULL/u,
+  );
+  assert.match(
+    checkedMigrations["0004_remove_admin_grant_assurance.sql"],
+    /CREATE TABLE public\.workos_signing_key_tombstone/u,
+  );
+  assert.match(
+    checkedMigrations["0004_remove_admin_grant_assurance.sql"],
+    /DROP COLUMN principal_id,[\s\S]*DROP COLUMN consumed_at/u,
+  );
 });
 
 test("database schema permits a contiguous destructive forward migration", async () => {
@@ -113,17 +142,13 @@ test("database schema rejects checksum drift, gaps, and unmanifested files", asy
   gapped.migrations[1] = { ...gapped.migrations[1], version: 4 };
   await withSchema(
     {
-      migrations: {
-        [baselineFilename]: checkedMigrations[baselineFilename],
-        [gapped.migrations[1].filename]: checkedMigrations[checkedEpoch.migrations[1].filename],
-        [checkedEpoch.migrations[2].filename]: checkedMigrations[checkedEpoch.migrations[2].filename],
-      },
+      migrations: checkedMigrations,
       epoch: gapped,
     },
     async (root) => await assert.rejects(inspectDatabaseSchema({ root, baseEpoch: null }), /contiguous version 0002/),
   );
   await withSchema(
-    { migrations: { ...checkedMigrations, "0004_unmanifested.sql": "SELECT 1;\n" } },
+    { migrations: { ...checkedMigrations, "0005_unmanifested.sql": "SELECT 1;\n" } },
     async (root) => await assert.rejects(inspectDatabaseSchema({ root, baseEpoch: checkedEpoch }), /exactly match/),
   );
 });

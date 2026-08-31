@@ -39,10 +39,16 @@ fn command_http_has_one_typed_owner_without_decision_or_publication_drift() {
         "async fn prepare_wire_command(",
         "async fn prepare_command_media(",
         "async fn prepare_command_embed(",
+        "struct CommandAdmission",
+        "struct CommandAuthorityConnection",
+        "struct AuthorizedCommandCommit",
+        "enum AuthorizedCommandExecuteError",
         "async fn command(",
         "fn command_api_error_response(",
+        "fn command_authority_lease_expired_response(",
+        "fn command_commit_outcome_unknown_response(",
         "async fn import_completed_game_export(",
-        "async fn authenticated_transport_principal(",
+        "async fn authenticated_transport_authorization(",
         "struct CommandClassification",
         "struct DirtySurfaces",
         "fn classify_command(",
@@ -60,12 +66,21 @@ fn command_http_has_one_typed_owner_without_decision_or_publication_drift() {
     }
 
     for contract in [
-        "commands::handle_idempotent(",
+        "commands::handle_idempotent_in_tx(",
+        "commands::try_lock_command_stream_in_tx(",
+        "commands::set_command_lock_timeout_in_tx(",
+        "commands::command_identity_targets(",
+        "commands::CommandIdentityTargetPolicy::Active",
+        "identity::methods::IdentityMutationExtent::Owner",
+        "identity::session::validate_session_for_update(",
         "program_library::load_checked_in_program_library()",
         ".lookup_variant_set(",
         "crate::embed_http::resolve_youtube_snapshot(",
-        "require_global_admin(&state.auth, token, \"game creation\")",
+        "require_global_admin_context(&authorization, \"game creation\")",
         "require_global_admin(&state.auth, &request.bearer, \"completed-game import\")",
+        "command authority lease expired before commit; retry the exact same command_id",
+        "command commit outcome is unknown; retry the exact same command_id",
+        "connection.close_on_drop();",
         "LiveProjectionChangeSet {",
         ".live_projection",
         ".publish(",
@@ -77,6 +92,57 @@ fn command_http_has_one_typed_owner_without_decision_or_publication_drift() {
     }
 
     assert!(commands.contains("pub async fn handle_idempotent("));
+    assert!(commands.contains("pub async fn handle_idempotent_in_tx("));
+    assert!(commands.contains("pub async fn lock_command_stream_in_tx("));
+    assert!(commands.contains("pub async fn try_lock_command_stream_in_tx("));
+    assert!(commands.contains("pub fn command_identity_targets("));
+    let stream_lock = command_http
+        .find("commands::try_lock_command_stream_in_tx(")
+        .unwrap();
+    let identity_lock = command_http
+        .find("identity::methods::lock_identity_mutation(")
+        .unwrap();
+    let session_fence = command_http
+        .find("identity::session::validate_session_for_update(")
+        .unwrap();
+    let persistence = command_http
+        .find("commands::handle_idempotent_in_tx(")
+        .unwrap();
+    let authority_deadline = command_http
+        .find("let deadline = Instant::now() + COMMAND_AUTHORITY_LEASE_TIMEOUT;")
+        .unwrap();
+    let pool_checkout = command_http.find("self.state.pool.acquire()").unwrap();
+    let authorized_operation = command_http
+        .find("let operation = apply_authorized_command_in_tx(")
+        .unwrap();
+    let commit = command_http.find("tx.commit()").unwrap();
+    assert!(
+        stream_lock < identity_lock && identity_lock < session_fence && session_fence < persistence
+    );
+    assert!(
+        authority_deadline < pool_checkout
+            && pool_checkout < authorized_operation
+            && authorized_operation < commit,
+        "one deadline must cover pool checkout, every durable authority lock, persistence, and commit"
+    );
+    assert!(command_http.contains(
+        "COMMAND_AUTHORITY_LEASE_TIMEOUT.as_millis() + COMMAND_AUTHORITY_CLEANUP_TIMEOUT.as_millis()"
+    ));
+    assert!(command_http.contains("< identity::session::AUTHORITY_CUTOFF_LOCK_TIMEOUT.as_millis()"));
+    assert!(command_http.contains(".close(command_id, \"authority_lease_expired\")"));
+    let expired_transaction_drop = command_http.find("drop(tx);").unwrap();
+    let expired_connection_close = command_http
+        .find(".close(command_id, \"authority_lease_expired\")")
+        .unwrap();
+    assert!(
+        expired_transaction_drop < expired_connection_close,
+        "lease expiry must drop the borrowing transaction before closing its owned connection"
+    );
+    assert!(
+        !command_http.contains("set_command_lock_timeout_in_tx(&mut tx, None)"),
+        "command persistence must not restore an unbounded database lock wait"
+    );
+    assert!(command_http.contains("authority_transaction_slots"));
     assert!(live_projection.contains("struct LiveProjectionPublisher"));
     assert!(live_projection.contains("fn assemble_update("));
     assert!(

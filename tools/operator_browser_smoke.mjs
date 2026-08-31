@@ -5,6 +5,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import {
   fixturePrincipalAuthorityId,
   fixturePrincipalTransport,
@@ -17,6 +18,7 @@ const port = process.env.FMARCH_BROWSER_SMOKE_PORT
   ? Number(process.env.FMARCH_BROWSER_SMOKE_PORT)
   : await freePort();
 const baseUrl = `http://${host}:${port}`;
+const localProofAuth = createLocalProofAuth();
 const artifactDir = path.join(root, "target", "operator-browser-smoke");
 const configuredMediaRoot = process.env.FMARCH_MEDIA_ROOT;
 if (configuredMediaRoot !== undefined && configuredMediaRoot.trim() === "") {
@@ -1246,13 +1248,12 @@ async function main() {
   await writeSmokeProgress({ stage: "start-server", port });
   const server = spawn("cargo", ["run", "-p", "server"], {
     cwd: root,
-    env: {
+    env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl: authority.applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
-      FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -1969,10 +1970,10 @@ async function createOperatorSession(
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     const response = await fetchWithTimeout(
-      `${baseUrl}/auth/dev-session`,
+      `${baseUrl}/auth/local-proof/sessions`,
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: localProofAuth.requestHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({
           principal_id: fixturePrincipalAuthorityId(principalId),
           expires_at: 4_102_444_800,

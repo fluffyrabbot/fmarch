@@ -62,9 +62,9 @@ export const EXPECTED_COUNTS = Object.freeze({
   moderatorCriticalActions: MODERATOR_CRITICAL_ACTION_IDS.length,
   commandScenarios: COMMAND_SCENARIO_IDS.length,
   plannedInteractions: PLANNED_INTERACTION_IDS.length,
-  adminStabilityFloorTiles: 4,
-  stabilityCheckTiles: 4 + MODERATOR_CRITICAL_ACTION_IDS.length,
-  adminSetupZoneTargets: 3,
+  adminStabilityFloorTiles: 3,
+  stabilityCheckTiles: 3 + MODERATOR_CRITICAL_ACTION_IDS.length,
+  adminSetupZoneTargets: 2,
   adminRecoveryZoneTargets: 1,
   playerPrimaryZoneTargets: 3,
 });

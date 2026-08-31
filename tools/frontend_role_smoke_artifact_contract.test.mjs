@@ -197,7 +197,6 @@ const expectedPlannedStabilityChecks = Object.freeze([
     tileCount: EXPECTED_COUNTS.adminStabilityFloorTiles,
     tileIds: [
       "admin-setup-create-game",
-      "admin-setup-session-grants",
       "admin-setup-cohost",
       "admin-recovery-recovery-gate",
     ],
@@ -442,7 +441,7 @@ test("static role contract artifact records shared nav focus and route state mat
     surfaces: [
       {
         id: "admin-setup",
-        shellUsages: 2,
+        shellUsages: 1,
         rawAttributesAbsent: [
           "data-initial-focus-testid=",
           "data-return-focus-testid=",
@@ -493,11 +492,11 @@ test("static role contract artifact records shared nav focus and route state mat
     surfaces: [
       {
         surface: "admin-setup",
-        actionId: "session-grants",
-        messageId: "admin-command-confirmation-message-session-grants",
-        confirmTestId: "admin-command-confirm-session-grants",
-        cancelTestId: "admin-command-cancel-session-grants",
-        triggerTestId: "admin-command-trigger-session-grants",
+        actionId: "cohost",
+        messageId: "admin-command-confirmation-message-cohost",
+        confirmTestId: "admin-command-confirm-cohost",
+        cancelTestId: "admin-command-cancel-cohost",
+        triggerTestId: "admin-command-trigger-cohost",
         tabContainment: "local-confirmation-controls",
       },
       {
@@ -535,9 +534,9 @@ test("static role contract artifact records shared nav focus and route state mat
       },
       {
         surface: "admin-setup",
-        actionId: "session-grants",
-        statusKey: "session-grants",
-        dispatchKind: "grant_session",
+        actionId: "cohost",
+        statusKey: "cohost",
+        dispatchKind: "add_cohost",
       },
       {
         surface: "moderator-host",
@@ -709,11 +708,10 @@ test("static role contract artifact records shared nav focus and route state mat
   });
   assert.deepEqual(adminStaticRole.commandActivity, {
     component: "admin-command-activity",
-    summary: "4 recent admin command events",
+    summary: "3 recent admin command events",
     itemTestIds: [
       "admin-command-activity-recovery-gate",
       "admin-command-activity-cohost",
-      "admin-command-activity-session-grants",
       "admin-command-activity-create-game",
     ],
     confirmationTraces: [
@@ -739,18 +737,6 @@ test("static role contract artifact records shared nav focus and route state mat
           actionId: "cohost",
           statusKey: "cohost",
           dispatchKind: "add_cohost",
-        },
-      },
-      {
-        actionId: "session-grants",
-        statusTestId: "admin-command-activity-status-session-grants",
-        trace: {
-          kind: CONFIRMATION_COMMAND_TRACE_CONTRACT.kind,
-          confirmationKind: CONFIRMATION_COMMAND_TRACE_CONTRACT.confirmationKind,
-          surface: "admin-setup",
-          actionId: "session-grants",
-          statusKey: "session-grants",
-          dispatchKind: "grant_session",
         },
       },
       {
@@ -898,21 +884,6 @@ test("static role contract artifact records shared nav focus and route state mat
         "admin-command-cancel-create-game",
         "admin-command-confirm-create-game",
         "admin-command-trigger-create-game",
-        true,
-        "local-confirmation-controls",
-        44,
-      ],
-      [
-        "session-grants",
-        "alertdialog",
-        "true",
-        "grant_session",
-        "confirm",
-        "admin-command-trigger-session-grants",
-        "admin-command-confirm-session-grants",
-        "admin-command-cancel-session-grants",
-        "admin-command-confirm-session-grants",
-        "admin-command-trigger-session-grants",
         true,
         "local-confirmation-controls",
         44,
@@ -1591,30 +1562,11 @@ test("route-state render artifact covers every forced board and role page state"
   assert.deepEqual(routeStateRender.confirmationMarkup.adminSetup, {
     role: "admin",
     surface: "setup",
-    confirmTestIds: [
-      "admin-command-confirm-session-grants",
-      "admin-command-confirm-cohost",
-    ],
-    cancelTestIds: [
-      "admin-command-cancel-session-grants",
-      "admin-command-cancel-cohost",
-    ],
-    messageTestIds: [
-      "admin-command-confirmation-message-session-grants",
-      "admin-command-confirmation-message-cohost",
-    ],
-    formFieldTestIds: [
-      "admin-session-grant-principal",
-      "admin-session-grant-expires-at",
-      "admin-session-grant-global-mod",
-    ],
+    confirmTestIds: ["admin-command-confirm-cohost"],
+    cancelTestIds: ["admin-command-cancel-cohost"],
+    messageTestIds: ["admin-command-confirmation-message-cohost"],
+    formFieldTestIds: [],
     focusContracts: [
-      {
-        initialFocusTestId: "admin-command-confirm-session-grants",
-        returnFocusTestId: "admin-command-trigger-session-grants",
-        escapeCancels: true,
-        tabContainment: "local-confirmation-controls",
-      },
       {
         initialFocusTestId: "admin-command-confirm-cohost",
         returnFocusTestId: "admin-command-trigger-cohost",
@@ -1911,13 +1863,6 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
       statusTestId: "admin-command-activity-status-cohost",
     },
     forms: {
-      sessionGrant: {
-        actionId: "session-grants",
-        state: "ack",
-        message: "Session grants completed.",
-        testId: "admin-command-activity-session-grants",
-        statusTestId: "admin-command-activity-status-session-grants",
-      },
       recoveryGate: {
         actionId: "recovery-gate",
         state: "ack",
@@ -1927,7 +1872,6 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
       },
       exposureKeys: [
         "__fmarchAdminFormResults",
-        "__fmarchAdminSessionGrantResult",
         "__fmarchAdminRecoveryGateResult",
       ],
     },
@@ -2059,17 +2003,6 @@ test("hydrated surface artifact records route-backed surface adapters without lo
     overviewHref: "/admin?game=midsummer",
   });
   assert.deepEqual(hydratedSurfaces.admin.forms, {
-    sessionGrant: {
-      actionId: "session-grants",
-      exposureKey: "__fmarchAdminSessionGrantResult",
-      visible: {
-        actionId: "session-grants",
-        state: "ack",
-        message: "Session grants completed.",
-        testId: "admin-command-activity-session-grants",
-        statusTestId: "admin-command-activity-status-session-grants",
-      },
-    },
     recoveryGate: {
       actionId: "recovery-gate",
       exposureKey: "__fmarchAdminRecoveryGateResult",
@@ -2235,21 +2168,6 @@ test("component interaction artifact records no-bind command component wiring", 
           componentInteractions.interactions.admin.actions[0].renderedConfirmBytes,
       },
       {
-        action: "grant_session",
-        triggerTestId: "admin-command-trigger-session-grants",
-        confirmTestId: "admin-command-confirm-session-grants",
-        formAction: "?/grantSession",
-        formFieldTestIds: [
-          "admin-session-grant-principal",
-          "admin-session-grant-expires-at",
-          "admin-session-grant-global-mod",
-        ],
-        visibleRowTestId: "admin-command-activity-session-grants",
-        statusTestId: "admin-command-activity-status-session-grants",
-        renderedConfirmBytes:
-          componentInteractions.interactions.admin.actions[1].renderedConfirmBytes,
-      },
-      {
         action: "check_recovery_gate",
         triggerTestId: "admin-recovery-trigger-recovery-gate",
         confirmTestId: "admin-recovery-confirm-recovery-gate",
@@ -2257,7 +2175,7 @@ test("component interaction artifact records no-bind command component wiring", 
         visibleRowTestId: "admin-command-activity-recovery-gate",
         statusTestId: "admin-command-activity-status-recovery-gate",
         renderedConfirmBytes:
-          componentInteractions.interactions.admin.actions[2].renderedConfirmBytes,
+          componentInteractions.interactions.admin.actions[1].renderedConfirmBytes,
       },
     ],
     renderedAckBytes: componentInteractions.interactions.admin.renderedAckBytes,
@@ -2375,20 +2293,6 @@ test("no-bind browser interaction artifact records click focus evidence or a Chr
     render: "renderAdminSetupConfirmation",
     targetSelector: '[data-testid="admin-command-confirm-cohost"]',
     targetTestId: "admin-command-confirm-cohost",
-  });
-  assertNoBindInteractionEntries(noBindInteractions.interactions.admin, {
-    id: "admin-session-grant-confirm-click",
-    render: "renderAdminSetupConfirmation",
-    targetSelector: '[data-testid="admin-command-confirm-session-grants"]',
-    targetTestId: "admin-command-confirm-session-grants",
-    form: {
-      action: "?/grantSession",
-      fieldTestIds: [
-        "admin-session-grant-principal",
-        "admin-session-grant-expires-at",
-        "admin-session-grant-global-mod",
-      ],
-    },
   });
   assertNoBindInteractionEntries(noBindInteractions.interactions.admin, {
     id: "admin-recovery-gate-confirm-click",
@@ -2645,7 +2549,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
       zone.descendantCount,
     ]),
     [
-      ["admin-setup-action-zone", "admin-setup-actions", 1],
+      ["admin-setup-action-zone", "admin-setup-actions", 2],
       ["admin-recovery-action-zone", "admin-recovery-actions", 1],
     ],
   );
@@ -2978,15 +2882,6 @@ test("in-app browser interaction page fixture records role command targets", asy
         undefined,
       ],
       [
-        "admin-session-grant-confirm-click",
-        "admin",
-        "renderAdminSetupConfirmation",
-        undefined,
-        '[data-testid="admin-command-confirm-session-grants"]',
-        "admin-command-confirm-session-grants",
-        undefined,
-      ],
-      [
         "admin-recovery-gate-confirm-click",
         "admin",
         "renderAdminRecoveryConfirmation",
@@ -3165,11 +3060,6 @@ test("in-app browser interaction page fixture records role command targets", asy
     ]),
     [
       [
-        "iab-admin-session-grant-ack",
-        "button",
-        "__fmarchAdminSessionGrantResult",
-      ],
-      [
         "iab-admin-recovery-gate-ack",
         "button",
         "__fmarchAdminRecoveryGateResult",
@@ -3304,8 +3194,6 @@ test("in-app browser interaction page fixture records role command targets", asy
   assert.match(page, /data-testid="role-nav-moderator"/);
   assert.match(page, /data-iab-scenario-id="admin-cohost-confirm-click"/);
   assert.match(page, /data-testid="admin-command-confirm-cohost"/);
-  assert.match(page, /data-iab-scenario-id="admin-session-grant-confirm-click"/);
-  assert.match(page, /data-testid="admin-command-confirm-session-grants"/);
   assert.match(page, /data-iab-scenario-id="admin-recovery-gate-confirm-click"/);
   assert.match(page, /data-testid="admin-recovery-confirm-recovery-gate"/);
   assert.match(page, /data-action="submit_vote"/);
@@ -3328,7 +3216,6 @@ test("in-app browser interaction page fixture records role command targets", asy
   assert.match(page, /data-testid="iab-admin-audit-detail-link"/);
   assert.match(page, /data-testid="iab-admin-audit-evidence-link"/);
   assert.match(page, /data-iab-hydrated-scenario-id="admin-operational-forms"/);
-  assert.match(page, /data-testid="iab-admin-session-grant-ack"/);
   assert.match(page, /data-testid="iab-admin-recovery-gate-ack"/);
   assert.match(page, /data-testid="iab-player-private-toggle"/);
   assert.match(page, /data-testid="iab-player-private-review-link"/);
@@ -3380,14 +3267,6 @@ test("in-app browser static DOM artifact verifies generated fixture structure", 
         "admin",
         "button",
         "admin-command-confirm-cohost",
-        null,
-        44,
-      ],
-      [
-        "admin-session-grant-confirm-click",
-        "admin",
-        "button",
-        "admin-command-confirm-session-grants",
         null,
         44,
       ],
@@ -3589,7 +3468,6 @@ test("in-app browser fixture smoke records browser-run evidence or block", async
     const ids = new Set(run.interactions.map((interaction) => interaction.id));
     for (const id of [
       "admin-cohost-confirm-click",
-      "admin-session-grant-confirm-click",
       "admin-recovery-gate-confirm-click",
       "player-submit-vote-click",
       "player-submit-post-click",
@@ -3710,7 +3588,6 @@ test("in-app browser fixture replay handoff records portable rerun instructions"
   ]);
   assert.deepEqual(handoff.fixture.plannedInteractionIds, [
     "admin-cohost-confirm-click",
-    "admin-session-grant-confirm-click",
     "admin-recovery-gate-confirm-click",
     "player-submit-vote-click",
     "player-submit-post-click",
@@ -4327,7 +4204,7 @@ test("browser acceptance boundary records blocked and prepared browser lanes", a
   );
   assert.equal(
     boundary.promotionRule,
-    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player private:role_pm:slot-7 SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
+    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin cohost confirmation and recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player private:role_pm:slot-7 SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
   );
   const laneById = new Map(boundary.lanes.map((lane) => [lane.id, lane]));
   assert.deepEqual([...laneById.keys()], [
@@ -4822,7 +4699,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     noBindInteractionRequires: [
       "noBindInteractions.status == passed",
       "noBindInteractions.viewports is nonempty",
-      `noBindInteractions.interactions includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
+      `noBindInteractions.interactions includes admin cohost, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
       "all noBindInteractions entries include clicked target, activeElement, and targetBox",
     ],
     staticFocusabilityRequires: [
@@ -4855,7 +4732,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       "roleSmoke.routeStates is nonempty",
       "all roleSmoke role entries include screenshotPixels",
       "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry for setup/recovery, player vote/post, and moderator critical actions",
-      "admin roleSmoke entries include session-grant form evidence and recovery-gate ACK evidence",
+      "admin roleSmoke entries include cohost confirmation and recovery-gate ACK evidence",
       "player roleSmoke entries include SubmitPost ACK and refreshed thread evidence",
       "playerPrivateChannel roleSmoke entries include private:role_pm:slot-7 SubmitPost ACK evidence",
       "player roleSmoke entries include tablet-media browser request evidence without original/full/desktop URLs",
@@ -4864,7 +4741,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     inAppBrowserFixtureRequires: [
       "inAppBrowserPage.status == page-generated",
       "inAppBrowserPage.surfaces includes board-player, admin, player, and moderator",
-      `inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
+      `inAppBrowserPage.scenarios includes admin cohost, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
       "inAppBrowserPage.hydratedSurfaceScenarios includes shared shell, admin audit, admin operational forms, player private disclosure/vote/post, moderator host-prompt, and moderator slot-lifecycle controls",
       "inAppBrowserStaticDom.status == passed",
       "inAppBrowserStaticDom.scenarios includes every fixture command target with private:role_pm:slot-7 route evidence",
@@ -5089,7 +4966,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.board is empty or absent",
           "localhostBrowser: roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
           "localhostBrowser: roleSmoke.routeStates is empty or absent",
-          "localhostBrowser: roleSmoke.roles[admin] missing session-grant form or recovery-gate ACK evidence",
+          "localhostBrowser: roleSmoke.roles[admin] missing cohost confirmation or recovery-gate ACK evidence",
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
           "localhostBrowser: roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[player] missing tablet-media browser request evidence",
@@ -5143,7 +5020,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.board is empty or absent",
           "localhostBrowser: roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
           "localhostBrowser: roleSmoke.routeStates is empty or absent",
-          "localhostBrowser: roleSmoke.roles[admin] missing session-grant form or recovery-gate ACK evidence",
+          "localhostBrowser: roleSmoke.roles[admin] missing cohost confirmation or recovery-gate ACK evidence",
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
           "localhostBrowser: roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[player] missing tablet-media browser request evidence",
@@ -5197,7 +5074,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.board is empty or absent",
           "localhostBrowser: roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
           "localhostBrowser: roleSmoke.routeStates is empty or absent",
-          "localhostBrowser: roleSmoke.roles[admin] missing session-grant form or recovery-gate ACK evidence",
+          "localhostBrowser: roleSmoke.roles[admin] missing cohost confirmation or recovery-gate ACK evidence",
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
           "localhostBrowser: roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
           "localhostBrowser: roleSmoke.roles[player] missing tablet-media browser request evidence",
@@ -5394,7 +5271,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       state: "blocked_by_localhost_and_chromium_sandbox",
       proven: [
         "No-browser fallback artifacts are green and record the blocked browser boundary.",
-        `File-backed in-app browser fixture is generated and statically verified for role shells, representative admin/player controls including admin session-grant/recovery-gate forms and player role-PM private-channel post, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, plus separate hydrated-surface admin forms, host-prompt, and slot-lifecycle scenario controls, but it has not produced browser click/focus evidence.`,
+        `File-backed in-app browser fixture is generated and statically verified for role shells, representative admin/player controls including admin cohost/recovery-gate confirmations and player role-PM private-channel post, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, plus separate hydrated-surface admin forms, host-prompt, and slot-lifecycle scenario controls, but it has not produced browser click/focus evidence.`,
         "A localhost-served fixture run is modeled separately from the file URL lane and records the current localhost bind/Chromium boundary before promotion.",
       ],
       missing: [
@@ -5421,7 +5298,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "roleSmoke.board is empty or absent",
         "roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
         "roleSmoke.routeStates is empty or absent",
-        "roleSmoke.roles[admin] missing session-grant form or recovery-gate ACK evidence",
+        "roleSmoke.roles[admin] missing cohost confirmation or recovery-gate ACK evidence",
         "roleSmoke.roles missing tablet thumb-zone geometry evidence",
         "roleSmoke.roles[player] missing SubmitPost browser ACK evidence",
         "roleSmoke.roles[player] missing tablet-media browser request evidence",
@@ -5512,12 +5389,6 @@ test("frontend readiness summary reports role proof layers without promoting bro
           role: "admin",
           render: "renderAdminSetupConfirmation",
           targetTestId: "admin-command-confirm-cohost",
-        },
-        {
-          id: "admin-session-grant-confirm-click",
-          role: "admin",
-          render: "renderAdminSetupConfirmation",
-          targetTestId: "admin-command-confirm-session-grants",
         },
         {
           id: "admin-recovery-gate-confirm-click",
@@ -5691,7 +5562,6 @@ test("frontend readiness summary reports role proof layers without promoting bro
       pageUrl: summary.browserAcceptance.inAppBrowserRun.pageUrl,
       plannedInteractionIds: [
         "admin-cohost-confirm-click",
-        "admin-session-grant-confirm-click",
         "admin-recovery-gate-confirm-click",
         "player-submit-vote-click",
         "player-submit-post-click",
@@ -5727,7 +5597,6 @@ test("frontend readiness summary reports role proof layers without promoting bro
       pageUrl: summary.browserAcceptance.inAppBrowserLocalhostRun.pageUrl,
       plannedInteractionIds: [
         "admin-cohost-confirm-click",
-        "admin-session-grant-confirm-click",
         "admin-recovery-gate-confirm-click",
         "player-submit-vote-click",
         "player-submit-post-click",
@@ -6058,47 +5927,6 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
       continue;
     }
     assert.deepEqual(
-      entry.commandResult.sessionGrant.focus.contract,
-      {
-        initialFocusTestId: "admin-command-confirm-session-grants",
-        returnFocusTestId: "admin-command-trigger-session-grants",
-        escapeCancels: "true",
-        tabContainment: "local-confirmation-controls",
-      },
-    );
-    assert.deepEqual(
-      entry.commandResult.sessionGrant.focus.initialFocus.testId,
-      "admin-command-confirm-session-grants",
-    );
-    assert.deepEqual(
-      entry.commandResult.sessionGrant.focus.tabSequence.map((focus) => focus.testId),
-      [
-        "admin-command-cancel-session-grants",
-        "admin-session-grant-principal",
-        "admin-session-grant-expires-at",
-        "admin-session-grant-global-mod",
-        "admin-command-confirm-session-grants",
-      ],
-    );
-    assert.deepEqual(
-      entry.commandResult.sessionGrant.focus.shiftTabReturnFocus.testId,
-      "admin-command-cancel-session-grants",
-    );
-    assert.deepEqual(
-      entry.commandResult.sessionGrant.focus.escapeReturnFocus.testId,
-      "admin-command-trigger-session-grants",
-    );
-    assert.deepEqual(entry.commandResult.sessionGrant.form, {
-      formTestId: "admin-session-grant-form",
-      action: "?/grantSession",
-      fieldTestIds: [
-        "admin-session-grant-principal",
-        "admin-session-grant-expires-at",
-        "admin-session-grant-global-mod",
-      ],
-      fieldNames: [],
-    });
-    assert.deepEqual(
       entry.commandResult.cohost.focus.contract,
       {
         initialFocusTestId: "admin-command-confirm-cohost",
@@ -6106,6 +5934,10 @@ function assertBrowserConfirmationFocusEvidence(roleEntries) {
         escapeCancels: "true",
         tabContainment: "local-confirmation-controls",
       },
+    );
+    assert.equal(
+      entry.commandResult.cohost.focus.initialFocus.testId,
+      "admin-command-confirm-cohost",
     );
     assert.deepEqual(
       entry.commandResult.cohost.focus.tabSequence.map((focus) => focus.testId),
@@ -7103,7 +6935,6 @@ function assertNoBindPlannedInteractions(plannedInteractions) {
     plannedInteractions.admin.map((entry) => entry.id),
     [
       "admin-cohost-confirm-click",
-      "admin-session-grant-confirm-click",
       "admin-recovery-gate-confirm-click",
     ],
   );
@@ -7152,15 +6983,6 @@ function assertInAppBrowserPlannedInteractions(plannedInteractions) {
         "admin",
         "manifest.scenarios",
         "admin-command-confirm-cohost",
-        undefined,
-        undefined,
-        undefined,
-      ],
-      [
-        "admin-session-grant-confirm-click",
-        "admin",
-        "manifest.scenarios",
-        "admin-command-confirm-session-grants",
         undefined,
         undefined,
         undefined,
@@ -7250,7 +7072,7 @@ function assertInAppBrowserPlannedInteractions(plannedInteractions) {
         "admin-operational-forms",
         "admin",
         "manifest.hydratedSurfaceScenarios",
-        "iab-admin-session-grant-ack",
+        "iab-admin-recovery-gate-ack",
         undefined,
         undefined,
         undefined,

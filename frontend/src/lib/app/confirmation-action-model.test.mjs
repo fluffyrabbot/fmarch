@@ -56,13 +56,13 @@ test("confirmation action model rejects unnamed confirmation controls", () => {
     () =>
       buildConfirmationActionViewModel({
         surface: "admin-setup",
-        actionId: "session-grants",
-        label: "Session grants",
-        message: "Grant GlobalMod to mod_a",
+        actionId: "cohost",
+        label: "Add cohost",
+        message: "Delegate cohost_c as cohost",
         messageIdPrefix: "admin-command-confirmation-message",
         confirmTestId: "",
-        cancelTestId: "admin-command-cancel-session-grants",
-        triggerTestId: "admin-command-trigger-session-grants",
+        cancelTestId: "admin-command-cancel-cohost",
+        triggerTestId: "admin-command-trigger-cohost",
       }),
     /confirmTestId/,
   );

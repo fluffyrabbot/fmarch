@@ -1130,6 +1130,9 @@ test("dev test-game browser role entry uses accounts and invites only", async ()
   const source = await readFile("tools/dev_test_game.mjs", "utf8");
   assert.match(source, /createAccountLoginCredential/);
   assert.match(source, /createInviteCredential/);
+  assert.match(source, /\/auth\/local-proof\/sessions/);
+  assert.match(source, /localProofAuth\.requestHeaders/);
+  assert.doesNotMatch(source, /INSERT INTO auth_session/);
   assert.doesNotMatch(source, /createSessionGrantCredential/);
   assert.doesNotMatch(source, /\/auth\/session-grants/);
 });
@@ -1381,7 +1384,13 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     localSpineMigrationUrlFor({ FMARCH_DEV_POSTGRES_PORT: "5545" }),
     "postgres://fmarch:fmarch@127.0.0.1:5545/fmarch",
   );
-  assert.deepEqual(localSpineProofEnvironment({}), { FMARCH_DEV_AUTH: "1" });
+  assert.deepEqual(
+    localSpineProofEnvironment({
+      FMARCH_DEV_AUTH: "1",
+      FMARCH_LOCAL_PROOF_SECRET: "stale",
+    }),
+    {},
+  );
   assert.throws(() => parseLocalSpineArgs(["--script"]), /requires/);
   assert.equal(
     packageJson.scripts[devTestGameHostedIdentityOperatorAdminProofCommand],
@@ -11716,16 +11725,17 @@ test("session card and markdown include role credential URLs and tokens", async 
     setupBootstrap: setupBootstrapFixture,
     identityBootstrap: {
       status: "passed",
-      devSessionEndpointEnabled: false,
-      rootSessionSource: "auth_session",
+      rootSessionSource: "/auth/local-proof/sessions",
+      rootSessionProcessBound: true,
+      localProofInstanceIdExposed: false,
       browserCredentialIssuer: "/auth/accounts + /auth/game-invitations",
       browserCredentialKinds: ["account", "account-bound-invite"],
-      browserSessionGrantUsage: false,
+      browserLocalProofUsage: false,
       rootPrincipalId: "root_admin",
       rootCapabilityKinds: ["GlobalAdmin"],
       rawRootTokenStored: false,
       boundary:
-        "Root GlobalAdmin is seeded directly into the local auth_session table.",
+        "Root command authority is minted by the owned process-bound local proof control.",
     },
     sessions: {
       host: {
@@ -11784,8 +11794,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(card.name, "card");
   assert.equal(card.seedCommandCount, 19);
   assert.equal(card.directSeedCommandCount, 1);
-  assert.equal(card.identityBootstrap.devSessionEndpointEnabled, false);
-  assert.equal(card.identityBootstrap.rootSessionSource, "auth_session");
+  assert.equal(
+    card.identityBootstrap.rootSessionSource,
+    "/auth/local-proof/sessions",
+  );
+  assert.equal(card.identityBootstrap.rootSessionProcessBound, true);
+  assert.equal(card.identityBootstrap.localProofInstanceIdExposed, false);
   assert.equal(
     card.identityBootstrap.browserCredentialIssuer,
     "/auth/accounts + /auth/game-invitations",
@@ -11794,7 +11808,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     "account",
     "account-bound-invite",
   ]);
-  assert.equal(card.identityBootstrap.browserSessionGrantUsage, false);
+  assert.equal(card.identityBootstrap.browserLocalProofUsage, false);
   assert.equal(
     card.sessions.host.loginUrl,
     `http://127.0.0.1:4102/auth/game-invite?returnTo=%2Fg%2F${game}%2Fhost&invite=dev-test-card-host&account=host_h%40local.fmarch.test`,
@@ -18732,10 +18746,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("# fmarch Dev Test Game"));
   assert(
     markdown.includes(
-      "identity bootstrap: auth_session -> /auth/accounts + /auth/game-invitations",
+      "identity bootstrap: /auth/local-proof/sessions -> /auth/accounts + /auth/game-invitations",
     ),
   );
-  assert(markdown.includes("dev session endpoint enabled: false"));
+  assert(markdown.includes("root session process-bound: true"));
+  assert(markdown.includes("local proof instance id exposed: false"));
   assert(markdown.includes("Open a role login URL"));
   assert(markdown.includes("dev-test-card-host"));
   assert(markdown.includes("dev-test-card-cohost"));
@@ -18847,8 +18862,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   });
   assertDevTestGameProofRun(proofRun);
   assert.equal(proofRun.status, "passed");
-  assert.equal(proofRun.identityBootstrap.devSessionEndpointEnabled, false);
-  assert.equal(proofRun.identityBootstrap.rootSessionSource, "auth_session");
+  assert.equal(
+    proofRun.identityBootstrap.rootSessionSource,
+    "/auth/local-proof/sessions",
+  );
+  assert.equal(proofRun.identityBootstrap.rootSessionProcessBound, true);
+  assert.equal(proofRun.identityBootstrap.localProofInstanceIdExposed, false);
   assert.equal(proofRun.productionReady, false);
   assert.equal(proofRun.releaseReady, false);
   const stalePrivatePostLane = proofRun.lanes.find(

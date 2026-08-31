@@ -7181,18 +7181,20 @@ export function assertDevTestGameProofRun(proof) {
   }
   if (
     proof.identityBootstrap?.status !== "passed" ||
-    proof.identityBootstrap?.devSessionEndpointEnabled !== false ||
-    proof.identityBootstrap?.rootSessionSource !== "auth_session" ||
+    proof.identityBootstrap?.rootSessionSource !==
+      "/auth/local-proof/sessions" ||
+    proof.identityBootstrap?.rootSessionProcessBound !== true ||
+    proof.identityBootstrap?.localProofInstanceIdExposed !== false ||
     proof.identityBootstrap?.browserCredentialIssuer !==
       "/auth/accounts + /auth/game-invitations" ||
-    proof.identityBootstrap?.browserSessionGrantUsage !== false ||
+    proof.identityBootstrap?.browserLocalProofUsage !== false ||
     JSON.stringify(proof.identityBootstrap?.browserCredentialKinds) !==
       JSON.stringify(["account", "account-bound-invite"]) ||
     proof.identityBootstrap?.rawRootTokenStored !== false ||
     !proof.identityBootstrap?.rootCapabilityKinds?.includes("GlobalAdmin")
   ) {
     throw new Error(
-      "dev-test-game proof must bootstrap root identity through auth_session with /auth/dev-session disabled and browser roles on accounts/invites",
+      "dev-test-game proof must bootstrap command authority through its owned process-bound local proof control without exposing an instance id and keep browser roles on accounts/invites",
     );
   }
   if (

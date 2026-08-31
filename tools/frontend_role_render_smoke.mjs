@@ -52,6 +52,7 @@ try {
       const page = await newPage(viewport);
       const rendered = await bundle[surface.render]();
       await setRenderedContent(page, rendered, css);
+      await setDisclosureState(page, surface.expandBeforeChecks, true);
       await page.getByTestId(surface.surfaceTestId).waitFor({ state: "visible" });
       const text = await page.textContent("body");
       for (const requiredText of surface.requiredText) {
@@ -197,8 +198,9 @@ function surfaceScenarios() {
       render: "renderAdminSurface",
       surfaceTestId: "admin-surface",
       requiredText: ["Host setup workflow", "Recovery"],
-      requiredSelectors: ['[data-testid="admin-setup-session-grants"]'],
+      requiredSelectors: ['[data-testid="admin-setup-create-game"]'],
       thumbZones: roleById.get("admin")?.thumbZones ?? [],
+      expandBeforeChecks: ['[data-testid="admin-recovery-workflow"]'],
     },
     {
       id: "admin-audit-detail",
@@ -341,6 +343,18 @@ async function setRenderedContent(page, rendered, css) {
   // fonts swapping in after load shifts boxes mid-measurement and flakes
   // the geometry checks; settle them before any boundingBox call
   await page.evaluate(() => document.fonts.ready);
+}
+
+async function setDisclosureState(page, selectors = [], open) {
+  for (const selector of selectors) {
+    const disclosure = page.locator(selector);
+    if ((await disclosure.count()) !== 1) {
+      throw new Error(`render disclosure ${selector} did not resolve exactly once`);
+    }
+    await disclosure.evaluate((node, nextOpen) => {
+      node.open = nextOpen;
+    }, open);
+  }
 }
 
 async function assertFeedbackRailGeometry(page, rail, { viewport }) {

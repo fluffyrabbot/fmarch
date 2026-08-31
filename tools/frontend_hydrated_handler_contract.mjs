@@ -150,25 +150,9 @@ async function proveAdminHandlers() {
   assert.equal(windowRef.__fmarchAdminCommandDispatchBridgePlan, ackPlan);
   assert.equal(windowRef.__fmarchAdminCommandOutcome.state, "ack");
 
-  const sessionGrant = recordAdminFormStatus({
-    commandStatuses,
-    lastFormStatusKey: "",
-    form: {
-      id: "session-grants",
-      state: "ack",
-      message: "Granted GlobalMod to mod_a",
-      principalId: "mod_a",
-      capabilityKinds: "GlobalMod",
-    },
-  });
-  commandStatuses = sessionGrant.commandStatuses;
-  exposeAdminFormResult({
-    windowRef,
-    form: commandStatuses["session-grants"],
-  });
   const recoveryGate = recordAdminFormStatus({
     commandStatuses,
-    lastFormStatusKey: sessionGrant.lastFormStatusKey,
+    lastFormStatusKey: "",
     form: {
       id: "recovery-gate",
       state: "ack",
@@ -184,12 +168,9 @@ async function proveAdminHandlers() {
     form: commandStatuses["recovery-gate"],
   });
   const formView = buildAdminCommandActivityViewModel({ commandStatuses });
-  const sessionGrantRow = rowByAction(formView.items, "session-grants");
   const recoveryGateRow = rowByAction(formView.items, "recovery-gate");
 
-  assert.equal(sessionGrantRow.state, "ack");
   assert.equal(recoveryGateRow.state, "ack");
-  assert.equal(windowRef.__fmarchAdminSessionGrantResult.id, "session-grants");
   assert.equal(windowRef.__fmarchAdminRecoveryGateResult.id, "recovery-gate");
   assert.equal(windowRef.__fmarchAdminLatestFormResult.id, "recovery-gate");
 
@@ -201,11 +182,9 @@ async function proveAdminHandlers() {
     ack: visibleStatus(ackRow),
     reject: visibleStatus(rejectRow),
     forms: {
-      sessionGrant: visibleStatus(sessionGrantRow),
       recoveryGate: visibleStatus(recoveryGateRow),
       exposureKeys: [
         "__fmarchAdminFormResults",
-        "__fmarchAdminSessionGrantResult",
         "__fmarchAdminRecoveryGateResult",
       ],
     },

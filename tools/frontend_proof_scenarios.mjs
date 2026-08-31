@@ -31,30 +31,6 @@ export const COMMAND_SCENARIOS = Object.freeze([
     expectedText: "Delegate @cohost_c as cohost",
   },
   {
-    id: "admin-session-grant-confirm-click",
-    role: "admin",
-    render: "renderAdminSetupConfirmation",
-    lanes: ["iab", "no-bind"],
-    targetSelector: '[data-testid="admin-command-confirm-session-grants"]',
-    targetTestId: "admin-command-confirm-session-grants",
-    rootSelector: '[data-testid="admin-setup-session-grants"]',
-    expectedText: "Grant community moderator access",
-    form: {
-      action: "?/grantSession",
-      noBind: "testIds",
-      fields: [
-        { name: "principalId", value: "mod_a", testId: "admin-session-grant-principal" },
-        { name: "expiresAt", value: "4102444800", testId: "admin-session-grant-expires-at" },
-        { name: "globalCapability", value: "GlobalMod", testId: "admin-session-grant-global-mod" },
-      ],
-    },
-    focusContract: {
-      initialFocusTestId: "admin-command-confirm-session-grants",
-      returnFocusTestId: "admin-command-trigger-session-grants",
-      tabContainment: "local-confirmation-controls",
-    },
-  },
-  {
     id: "admin-recovery-gate-confirm-click",
     role: "admin",
     render: "renderAdminRecoveryConfirmation",

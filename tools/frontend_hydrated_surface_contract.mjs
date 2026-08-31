@@ -237,20 +237,6 @@ async function proveAdminSurfaceAdapter() {
   const activity = buildAdminCommandActivityViewModel({ commandStatuses });
   const row = rowByAction(activity.items, item.id);
 
-  const sessionGrantResult = {
-    id: "session-grants",
-    state: "ack",
-    message: "Granted GlobalMod to mod_a",
-    principalId: "mod_a",
-    capabilityKinds: "GlobalMod",
-  };
-  const sessionGrant = recordAdminFormStatus({
-    commandStatuses,
-    form: sessionGrantResult,
-    lastFormStatusKey: "",
-  });
-  commandStatuses = sessionGrant.commandStatuses;
-  exposeAdminFormResult({ windowRef, form: sessionGrantResult });
   const recoveryGateResult = {
     id: "recovery-gate",
     state: "ack",
@@ -262,12 +248,11 @@ async function proveAdminSurfaceAdapter() {
   const recoveryGate = recordAdminFormStatus({
     commandStatuses,
     form: recoveryGateResult,
-    lastFormStatusKey: sessionGrant.lastFormStatusKey,
+    lastFormStatusKey: "",
   });
   commandStatuses = recoveryGate.commandStatuses;
   exposeAdminFormResult({ windowRef, form: recoveryGateResult });
   const formActivity = buildAdminCommandActivityViewModel({ commandStatuses });
-  const sessionGrantRow = rowByAction(formActivity.items, "session-grants");
   const recoveryGateRow = rowByAction(formActivity.items, "recovery-gate");
 
   assert.equal(adminData.audit[0].inspectHref, "/admin/audit/proof-runs?game=midsummer");
@@ -275,10 +260,8 @@ async function proveAdminSurfaceAdapter() {
   assert.equal(adminAuditDetailData.surfaceHeader.title, "Proof runs");
   assert.equal(only(sent).command.AddCohost.principal_id, "cohost_c");
   assert.equal(windowRef.__fmarchAdminCommandDispatchBridgePlan, plan);
-  assert.equal(windowRef.__fmarchAdminSessionGrantResult.id, "session-grants");
   assert.equal(windowRef.__fmarchAdminRecoveryGateResult.id, "recovery-gate");
   assert.equal(row.state, "ack");
-  assert.equal(sessionGrantRow.state, "ack");
   assert.equal(recoveryGateRow.state, "ack");
 
   return {
@@ -296,11 +279,6 @@ async function proveAdminSurfaceAdapter() {
       visible: visibleStatus(row),
     },
     forms: {
-      sessionGrant: {
-        actionId: "session-grants",
-        exposureKey: "__fmarchAdminSessionGrantResult",
-        visible: visibleStatus(sessionGrantRow),
-      },
       recoveryGate: {
         actionId: "recovery-gate",
         exposureKey: "__fmarchAdminRecoveryGateResult",

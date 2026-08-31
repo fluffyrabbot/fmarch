@@ -1942,8 +1942,7 @@ async fn finalize_subject_erasure(
     verify_work_record(work, authenticated_record)?;
     let record = authenticated_record;
     let principal = &work.principal_id;
-    let mut tx = pool
-        .begin()
+    let mut tx = crate::session::begin_authority_transaction(pool)
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     profile_handle_index::acquire_profile_handle_index_writer_lease(&mut tx)
@@ -2135,6 +2134,9 @@ async fn finalize_subject_erasure(
     .execute(&mut *tx)
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    crate::session::lock_websocket_ticket_mutations_for_principal(&mut tx, principal)
+        .await
+        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query(
         r#"
         INSERT INTO workos_provider_session_tombstone (
@@ -2164,9 +2166,16 @@ async fn finalize_subject_erasure(
         .await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query(
-        "DELETE FROM auth_session WHERE principal_id = $1 AND workos_session_id IS NOT NULL",
+        r#"
+        UPDATE auth_session
+        SET revoked_at = COALESCE(revoked_at, $2),
+            workos_session_id = NULL
+        WHERE principal_id = $1
+          AND workos_session_id IS NOT NULL
+        "#,
     )
     .bind(principal.as_uuid())
+    .bind(record.destroyed_at)
     .execute(&mut *tx)
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
@@ -2191,11 +2200,18 @@ async fn finalize_subject_erasure(
     .execute(&mut *tx)
     .await
     .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
-    sqlx::query("DELETE FROM auth_websocket_ticket WHERE principal_id = $1")
-        .bind(principal.as_uuid())
-        .execute(&mut *tx)
-        .await
-        .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
+    sqlx::query(
+        r#"
+        DELETE FROM auth_websocket_ticket AS ticket
+        USING auth_session AS session
+        WHERE ticket.session_reference = session.token_hash
+          AND session.principal_id = $1
+        "#,
+    )
+    .bind(principal.as_uuid())
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query("DELETE FROM game_invitation WHERE principal_id = $1 OR account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1)")
         .bind(principal.as_uuid()).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
@@ -2206,7 +2222,7 @@ async fn finalize_subject_erasure(
         .bind(principal.as_uuid()).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     let erased_account_id = format!("erased_{}", record.receipt_id.simple());
-    sqlx::query("UPDATE auth_account SET account_id = $2, disabled_at = COALESCE(disabled_at, $3), password_hash = $4, global_capabilities = '{}'::text[] WHERE principal_id = $1")
+    sqlx::query("UPDATE auth_account SET account_id = $2, disabled_at = COALESCE(disabled_at, $3), password_hash = $4 WHERE principal_id = $1")
         .bind(principal.as_uuid()).bind(erased_account_id).bind(record.destroyed_at).bind(format!("erased:{}", record.receipt_id)).execute(&mut *tx).await
         .map_err(|error| SubjectPrivacyError::Storage(error.to_string()))?;
     sqlx::query(

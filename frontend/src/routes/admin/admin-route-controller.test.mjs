@@ -24,14 +24,14 @@ import { CommandInterruptedError } from "../../lib/app/command-interruption.mjs"
 
 test("admin route controller records server form results once per status key", () => {
   const form = {
-    id: "session-grants",
+    id: "recovery-gate",
     state: "ack",
-    message: "Granted GlobalMod to mod_a",
+    message: "Recovery gate trusted",
   };
 
   assert.equal(
     adminFormStatusKey(form),
-    "session-grants:ack:Granted GlobalMod to mod_a",
+    "recovery-gate:ack:Recovery gate trusted",
   );
 
   const recorded = recordAdminFormStatus({
@@ -42,7 +42,7 @@ test("admin route controller records server form results once per status key", (
   assert.equal(recorded.recorded, true);
   assert.equal(recorded.lastFormStatusKey, adminFormStatusKey(form));
   assert.deepEqual(recorded.commandStatuses, {
-    "session-grants": form,
+    "recovery-gate": form,
   });
 
   const skipped = recordAdminFormStatus({
@@ -57,7 +57,6 @@ test("admin route controller records server form results once per status key", (
 test("admin route controller maps setup actions to send confirm or readonly modes", () => {
   assert.equal(adminSetupActionMode({ commandAction: "create_game" }), "confirm");
   assert.equal(adminSetupActionMode({ commandAction: "add_cohost" }), "confirm");
-  assert.equal(adminSetupActionMode({ commandAction: "grant_session" }), "confirm");
   assert.equal(adminSetupActionMode({ commandAction: "audit_only" }), "readonly");
 
   assert.deepEqual(
@@ -165,10 +164,10 @@ test("admin route controller selects typed admin command config without ambient 
   assert.throws(
     () =>
       commandConfigForAdminItem({
-        item: { commandAction: "grant_session" },
+        item: { commandAction: "removed_session_grant" },
         data,
       }),
-    /authenticated server action/,
+    /unsupported admin command action/,
   );
   assert.throws(
     () =>
@@ -256,9 +255,9 @@ test("admin route controller exposes command and form results for smoke evidence
     "create-game": outcome,
   };
   const form = {
-    id: "session-grants",
+    id: "bootstrap",
     state: "ack",
-    message: "Granted GlobalMod to mod_a",
+    message: "Game created",
   };
   const recoveryForm = {
     id: "recovery-gate",
@@ -299,7 +298,6 @@ test("admin route controller exposes command and form results for smoke evidence
   assert.equal(windowRef.__fmarchAdminCommandOutcome, outcome);
   assert.deepEqual(windowRef.__fmarchAdminFormResults, [form, recoveryForm]);
   assert.equal(windowRef.__fmarchAdminLatestFormResult, recoveryForm);
-  assert.equal(windowRef.__fmarchAdminSessionGrantResult, form);
   assert.equal(windowRef.__fmarchAdminRecoveryGateResult, recoveryForm);
   assert.deepEqual(windowRef.__fmarchAdminCommandDispatchBridgePlan, {
     role: "admin",

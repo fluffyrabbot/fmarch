@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { seedCommandPlanForGame } from "./dev_test_game.mjs";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import {
   fixturePrincipalAuthorityId,
   fixturePrincipalTransport,
@@ -39,6 +40,7 @@ let adminSessionToken;
 const privateChannelId = "private:mafia_day_chat";
 const privatePostBody = "Backup restore private-channel proof post";
 const seedSessionTokens = new Map();
+const localProofAuthByApiBase = new Map();
 
 if (!migrationUrl) {
   throw new Error(
@@ -148,9 +150,9 @@ try {
 async function seedSourceGame(apiBaseUrl) {
   // The disposable dev endpoint is the root fixture's only authority mint.
   // This keeps auth_account creation behind the classic-method invariant.
-  const rootSession = await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
+  const rootSession = await fetchJson(`${apiBaseUrl}/auth/local-proof/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: localProofHeaders(apiBaseUrl, { "content-type": "application/json" }),
     body: JSON.stringify({
       principal_id: fixturePrincipalAuthorityId("root_admin"),
       expires_at: 4102444800,
@@ -199,16 +201,16 @@ async function seedSourceGame(apiBaseUrl) {
 
   await seedSessionToken(apiBaseUrl, "admin_a");
   const grants = {
-    admin: await createGrantedSession({
+    admin: await createLocalProofSession({
       apiBaseUrl,
       principalId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
-    host: await createGrantedSession({
+    host: await createLocalProofSession({
       apiBaseUrl,
       principalId: "host_h",
     }),
-    player: await createGrantedSession({
+    player: await createLocalProofSession({
       apiBaseUrl,
       principalId: "player-mira",
     }),
@@ -232,11 +234,28 @@ async function seedSourceGame(apiBaseUrl) {
     seedCommandKinds: seedCommands.map((command) => command.kind),
     grantedSessions,
     boundary:
-      "Source DB is seeded through the real Rust auth and /commands APIs; fixture aliases become UUID authority only at account, session, and command transports.",
+      "Source DB is seeded through the real Rust auth and /commands APIs; fixture aliases become UUID authority only at account, session, and command transports. The restored process rejects source local-proof sessions because their persisted instance id differs, and roles reauthenticate through durable classic methods.",
   };
 }
 
 async function assertRestoredApi(apiBaseUrl) {
+  const staleSessionStatuses = await Promise.all(
+    [hostSessionToken, playerSessionToken, adminSessionToken].map(async (sessionToken) => {
+      const response = await fetch(`${apiBaseUrl}/auth/session`, {
+        headers: { authorization: `Bearer ${sessionToken}` },
+      });
+      return response.status;
+    }),
+  );
+  if (!staleSessionStatuses.every((status) => status === 401)) {
+    throw new Error(
+      `restored process accepted foreign-instance local-proof sessions: ${staleSessionStatuses.join(",")}`,
+    );
+  }
+  hostSessionToken = await loginRestoredAccount(apiBaseUrl, "host_h");
+  playerSessionToken = await loginRestoredAccount(apiBaseUrl, "player-mira");
+  adminSessionToken = await loginRestoredAccount(apiBaseUrl, "admin_a");
+
   const hostSession = await fetchJson(
     `${apiBaseUrl}/auth/session?game=${game}`,
     {
@@ -304,6 +323,7 @@ async function assertRestoredApi(apiBaseUrl) {
 
   return {
     status: "passed",
+    sourceLocalProofSessionsRejectedByRestoredInstance: true,
     restoredSessions: {
       host: capabilityKinds(hostSession),
       player: capabilityKinds(playerSession),
@@ -578,6 +598,8 @@ async function dropScratchDatabase({ adminUrl, name }) {
 async function startApi(applicationUrl, label) {
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
+  const localProofAuth = createLocalProofAuth();
+  localProofAuthByApiBase.set(baseUrl, localProofAuth);
   const mediaRoot =
     configuredMediaRoot === undefined
       ? path.join(artifactDir, `media-store-${label}`)
@@ -585,7 +607,7 @@ async function startApi(applicationUrl, label) {
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   const child = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
-    env: {
+    env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
@@ -605,9 +627,8 @@ async function startApi(applicationUrl, label) {
       // This drill owns a local debug server and seeds classic credentials.
       // Keep the deterministic identity gateway explicit here rather than
       // depending on a caller to remember a dev-only auth switch.
-      FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (label === "source") {
@@ -636,8 +657,8 @@ async function startApi(applicationUrl, label) {
   return baseUrl;
 }
 
-// The strict wire rejects any actor field in the envelope; seed commands act
-// as a principal by presenting a granted session for that principal instead.
+// The strict wire rejects any actor field in the envelope. This local proof
+// therefore mints a debug-only session for each fixture principal.
 async function seedSessionToken(apiBaseUrl, principalId) {
   if (principalId === "root_admin") {
     if (typeof rootAdminSessionToken !== "string" || rootAdminSessionToken === "") {
@@ -650,7 +671,7 @@ async function seedSessionToken(apiBaseUrl, principalId) {
     return cached;
   }
   const globalCapabilities =
-    principalId === "host_h" ? ["GlobalAdmin"] : [];
+    principalId === "host_h" || principalId === "admin_a" ? ["GlobalAdmin"] : [];
   const authorityPrincipalId = fixturePrincipalAuthorityId(principalId);
   await fetchJson(`${apiBaseUrl}/auth/accounts`, {
     method: "POST",
@@ -665,23 +686,23 @@ async function seedSessionToken(apiBaseUrl, principalId) {
       global_capabilities: globalCapabilities,
     }),
   });
-  const granted = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
+  const localProofSession = await fetchJson(`${apiBaseUrl}/auth/local-proof/sessions`, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${rootAdminSessionToken}`,
-      "content-type": "application/json",
-    },
+    headers: localProofHeaders(apiBaseUrl, { "content-type": "application/json" }),
     body: JSON.stringify({
       principal_id: authorityPrincipalId,
       expires_at: 4102444800,
       global_capabilities: globalCapabilities,
     }),
   });
-  if (typeof granted.session_token !== "string" || granted.session_token === "") {
-    throw new Error(`session grant for ${principalId} returned no session_token`);
+  if (
+    typeof localProofSession.session_token !== "string" ||
+    localProofSession.session_token === ""
+  ) {
+    throw new Error(`local proof session for ${principalId} returned no session_token`);
   }
-  seedSessionTokens.set(principalId, granted.session_token);
-  return granted.session_token;
+  seedSessionTokens.set(principalId, localProofSession.session_token);
+  return localProofSession.session_token;
 }
 
 async function sendCommand(apiBaseUrl, id, principalId, command) {
@@ -714,18 +735,15 @@ async function sendCommand(apiBaseUrl, id, principalId, command) {
   };
 }
 
-async function createGrantedSession({
+async function createLocalProofSession({
   apiBaseUrl,
   principalId,
   globalCapabilities = [],
 }) {
   const authorityPrincipalId = fixturePrincipalAuthorityId(principalId);
-  const session = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
+  const session = await fetchJson(`${apiBaseUrl}/auth/local-proof/sessions`, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${rootAdminSessionToken}`,
-      "content-type": "application/json",
-    },
+    headers: localProofHeaders(apiBaseUrl, { "content-type": "application/json" }),
     body: JSON.stringify({
       principal_id: authorityPrincipalId,
       expires_at: 4102444800,
@@ -737,6 +755,29 @@ async function createGrantedSession({
     principalId: session.principal_id,
     capabilityKinds: capabilityKinds(session),
   };
+}
+
+function localProofHeaders(apiBaseUrl, headers = {}) {
+  const authority = localProofAuthByApiBase.get(apiBaseUrl);
+  if (authority === undefined) {
+    throw new Error(`no local-proof authority is bound to ${apiBaseUrl}`);
+  }
+  return authority.requestHeaders(headers);
+}
+
+async function loginRestoredAccount(apiBaseUrl, principalId) {
+  const session = await fetchJson(`${apiBaseUrl}/auth/accounts/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      account_id: `backup-restore-${principalId}@local.fmarch.test`,
+      password: `backup restore seed password ${principalId}`,
+    }),
+  });
+  if (typeof session.session_token !== "string" || session.session_token === "") {
+    throw new Error(`restored account login for ${principalId} returned no session_token`);
+  }
+  return session.session_token;
 }
 
 async function queryJson(url, sql) {

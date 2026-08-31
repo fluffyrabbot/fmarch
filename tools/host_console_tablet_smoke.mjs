@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import {
   assertPrincipalTransport,
   fixturePrincipalAuthorityId,
@@ -29,6 +30,7 @@ const evidencePath = path.join(artifactDir, "tablet-host-actions.json");
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const smokeGame = randomUUID();
 const hostPrincipal = "host_h";
+const localProofAuth = createLocalProofAuth();
 let sessionToken;
 let bootstrapSessionToken;
 const commandSessionTokens = {};
@@ -422,13 +424,12 @@ try {
 function startRustServer(port) {
   const child = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
-    env: {
+    env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl: smokeDatabase.applicationUrl }),
       FMARCH_BIND: `127.0.0.1:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
-      FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -530,14 +531,14 @@ async function seedLiveHostGame() {
     "player-target",
     "player-rowan",
   ]) {
-    const session = await postJson(`${apiBaseUrl}/auth/dev-session`, {
+    const session = await postLocalProofSession({
       principal_id: fixturePrincipalAuthorityId(principalId),
       expires_at: 4_102_444_800,
     });
     commandSessionTokens[principalId] = requiredSessionToken(session);
   }
   sessionToken = commandSessionTokens[hostPrincipal];
-  bootstrapSessionToken = requiredSessionToken(await postJson(`${apiBaseUrl}/auth/dev-session`, {
+  bootstrapSessionToken = requiredSessionToken(await postLocalProofSession({
     principal_id: fixturePrincipalAuthorityId(hostPrincipal),
     expires_at: 4_102_444_800,
     global_capabilities: ["GlobalAdmin"],
@@ -646,6 +647,14 @@ async function postJson(url, body, headers = {}) {
     throw new Error(`${url} returned ${response.status}: ${JSON.stringify(payload)}`);
   }
   return payload;
+}
+
+async function postLocalProofSession(body) {
+  return postJson(
+    `${apiBaseUrl}/auth/local-proof/sessions`,
+    body,
+    localProofAuth.requestHeaders(),
+  );
 }
 
 function requiredSessionToken(session) {

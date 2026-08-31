@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import {
   fixturePrincipalAuthorityId,
   fixturePrincipalTransport,
@@ -20,6 +21,7 @@ const artifactDir = path.join(root, "target", "community-moderation-role-proof")
 const evidencePath = path.join(artifactDir, "community-moderation-proof.json");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
+const localProofAuth = createLocalProofAuth();
 if (!migrationUrl) throw new Error("DATABASE_MIGRATION_URL is required");
 
 let database;
@@ -84,9 +86,9 @@ try {
 async function seed(api) {
   const member = "moderation_member";
   const moderator = "moderation_operator";
-  const memberToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_id: fixturePrincipalAuthorityId(member), expires_at: 4_102_444_800, global_capabilities: [] })));
-  const memberBootstrapToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_id: fixturePrincipalAuthorityId(member), expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin"] })));
-  const moderatorToken = requiredSessionToken(await json(`${api}/auth/dev-session`, post({ principal_id: fixturePrincipalAuthorityId(moderator), expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin", "GlobalMod"] })));
+  const memberToken = requiredSessionToken(await json(`${api}/auth/local-proof/sessions`, localProofPost({ principal_id: fixturePrincipalAuthorityId(member), expires_at: 4_102_444_800, global_capabilities: [] })));
+  const memberBootstrapToken = requiredSessionToken(await json(`${api}/auth/local-proof/sessions`, localProofPost({ principal_id: fixturePrincipalAuthorityId(member), expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin"] })));
+  const moderatorToken = requiredSessionToken(await json(`${api}/auth/local-proof/sessions`, localProofPost({ principal_id: fixturePrincipalAuthorityId(moderator), expires_at: 4_102_444_800, global_capabilities: ["GlobalAdmin", "GlobalMod"] })));
   await json(`${api}/auth/accounts`, post({ account_id: "moderation-member@example.test", password: "correct horse battery staple", principal_id: fixturePrincipalAuthorityId(member), global_capabilities: [] }, moderatorToken));
   await json(`${api}/auth/accounts`, post({ account_id: "moderation-operator@example.test", password: "correct horse battery staple", principal_id: fixturePrincipalAuthorityId(moderator), global_capabilities: ["GlobalAdmin", "GlobalMod"] }, moderatorToken));
   const game = randomUUID();
@@ -167,6 +169,11 @@ async function moderatorRestore(modContext, memberContext, base, seeded) {
 function post(body, token) {
   return { method: "POST", headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), "content-type": "application/json" }, body: JSON.stringify(body) };
 }
+function localProofPost(body) {
+  const options = post(body);
+  options.headers = localProofAuth.requestHeaders(options.headers);
+  return options;
+}
 async function command(api, id, sessionToken, commandBody) {
   const result = await json(`${api}/commands`, post({ v: 2, id, body: { kind: "Command", body: { command_id: randomUUID(), command: fixturePrincipalTransport(commandBody, "community moderation command transport") } } }, sessionToken));
   if (result.body?.kind !== "Ack") throw new Error(`seed command rejected: ${JSON.stringify(result)}`);
@@ -200,7 +207,7 @@ async function startApi(applicationUrl) {
   const base = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media");
   await mkdir(mediaRoot, { recursive: true });
-  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] });
+  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: localProofAuth.serverEnvironment({ ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, RUST_LOG: "warn" }), stdio: ["ignore", "pipe", "pipe"] });
   apiProcess.stdout.on("data", (chunk) => { apiOutput += chunk; });
   apiProcess.stderr.on("data", (chunk) => { apiOutput += chunk; });
   const deadline = Date.now() + 240_000;

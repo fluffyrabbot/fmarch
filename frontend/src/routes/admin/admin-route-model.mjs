@@ -1001,7 +1001,6 @@ function hostedIdentityProviderBoundaryRows(boundary) {
         { id: "sessionCredential", text: provider.sessionCredential },
         { id: "loginBoundary", text: provider.loginBoundary },
         { id: "sessionBoundary", text: provider.sessionBoundary },
-        { id: "sessionGrantBoundary", text: provider.sessionGrantBoundary },
         { id: "browserCookieName", text: provider.browserCookieName },
         { id: "rawCredentialPolicy", text: provider.rawCredentialPolicy },
         {
@@ -2102,12 +2101,6 @@ export async function buildAdminRouteData({
         game,
         principalId: "cohost_c",
       }),
-      sessionGrant: Object.freeze({
-        action: "grant_session",
-        principalId: "mod_a",
-        expiresAt: 4_102_444_800,
-        globalCapabilities: Object.freeze(["GlobalMod"]),
-      }),
     }),
     gameSetup: Object.freeze([
       Object.freeze({
@@ -2132,18 +2125,6 @@ export async function buildAdminRouteData({
         commandAction: "navigate",
         href: `/g/${game}/setup`,
         buttonLabel: "Open setup",
-      }),
-      Object.freeze({
-        id: "session-grants",
-        label: "Session grants",
-        value: "Community moderator for @mod_a",
-        authority: "GlobalAdmin",
-        boundary: "Authenticated session grant",
-        boundaryDetail: "/auth/session-grants requires active GlobalAdmin session",
-        commandAction: "grant_session",
-        confirmLabel: "Grant moderator access",
-        confirmMessage: "Grant community moderator access to @mod_a",
-        buttonLabel: "Review",
       }),
       Object.freeze({
         id: "cohost",
@@ -6573,7 +6554,6 @@ function normalizeHostedIdentityProviderBoundary(boundary) {
           sessionCredential: String(provider?.sessionCredential ?? ""),
           loginBoundary: String(provider?.loginBoundary ?? ""),
           sessionBoundary: String(provider?.sessionBoundary ?? ""),
-          sessionGrantBoundary: String(provider?.sessionGrantBoundary ?? ""),
           browserCookieName: String(provider?.browserCookieName ?? ""),
           rawCredentialPolicy: String(provider?.rawCredentialPolicy ?? ""),
           roleSurfaceArchitectureChanged:

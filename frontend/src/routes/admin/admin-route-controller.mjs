@@ -43,7 +43,6 @@ export function adminSetupActionMode(item) {
   switch (item.commandAction) {
     case "create_game":
     case "add_cohost":
-    case "grant_session":
       return "confirm";
     default:
       return "readonly";
@@ -125,11 +124,6 @@ export function commandConfigForAdminItem({ item, data }) {
   if (item.commandAction === "add_cohost") {
     return data.command.cohost;
   }
-  if (item.commandAction === "grant_session") {
-    throw new TypeError(
-      "session grants submit through the authenticated server action",
-    );
-  }
   throw new TypeError(`unsupported admin command action: ${item.commandAction}`);
 }
 
@@ -207,17 +201,10 @@ export function exposeAdminFormResult({ windowRef, form }) {
     form,
   ];
   windowRef.__fmarchAdminLatestFormResult = form;
-  if (form?.id === "session-grants") {
-    windowRef.__fmarchAdminSessionGrantResult = form;
-  }
   if (form?.id === "recovery-gate") {
     windowRef.__fmarchAdminRecoveryGateResult = form;
   }
   return true;
-}
-
-export function exposeAdminSessionGrantResult({ windowRef, form }) {
-  return exposeAdminFormResult({ windowRef, form });
 }
 
 function errorMessage(error) {

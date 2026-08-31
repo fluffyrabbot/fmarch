@@ -102,6 +102,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "vote_ballot",
     "workos_provider_session",
     "workos_provider_session_tombstone",
+    "workos_signing_key_tombstone",
     "workos_session_exchange",
     "workos_subject_tombstone",
 ];
@@ -125,12 +126,13 @@ const EXPECTED_AUTH_SESSION_COLUMNS: &[&str] = &[
     "created_at:bigint",
     "expires_at:bigint",
     "revoked_at:bigint",
-    "global_capabilities:ARRAY",
     "authenticated_via_method_id:uuid",
     "idle_expires_at:bigint",
     "assurance:text",
     "authenticated_at:bigint",
     "workos_session_id:text",
+    "local_proof_instance_id:text",
+    "workos_signing_key_id:text",
 ];
 
 const EXPECTED_WORKOS_SESSION_EXCHANGE_COLUMNS: &[&str] = &[
@@ -246,7 +248,6 @@ const EXPECTED_CANONICAL_PRINCIPAL_COLUMNS: &[&str] = &[
     "auth_account.principal_id:uuid",
     "auth_delivery_intent.principal_id:uuid",
     "auth_session.principal_id:uuid",
-    "auth_websocket_ticket.principal_id:uuid",
     "authentication_method.principal_id:uuid",
     "command_receipt.principal_id:uuid",
     "community_membership.active_principal_id:uuid",
@@ -271,6 +272,7 @@ const EXPECTED_CANONICAL_PRINCIPAL_COLUMNS: &[&str] = &[
     "spectator_membership.principal_id:uuid",
     "subject_erasure_outbox.principal_id:uuid",
     "workos_provider_session.principal_id:uuid",
+    "workos_signing_key_tombstone.retired_by_principal_id:uuid",
 ];
 
 const EXPECTED_INDEXES: &[&str] = &[
@@ -308,9 +310,9 @@ const EXPECTED_INDEXES: &[&str] = &[
     "auth_session_pkey",
     "auth_session_principal_idx",
     "auth_session_workos_session_idx",
+    "auth_session_workos_signing_key_idx",
     "auth_websocket_ticket_expiry_idx",
     "auth_websocket_ticket_pkey",
-    "auth_websocket_ticket_principal_idx",
     "auth_websocket_ticket_session_idx",
     "authentication_method_classic_unique",
     "authentication_method_identity_key",
@@ -517,6 +519,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "workos_provider_session_pkey",
     "workos_provider_session_principal_idx",
     "workos_provider_session_tombstone_pkey",
+    "workos_signing_key_tombstone_pkey",
     "workos_session_exchange_expiry_idx",
     "workos_session_exchange_pkey",
     "workos_session_exchange_provider_session_idx",
@@ -531,7 +534,8 @@ const EXPECTED_PUBLIC_SEARCH_INDEX_DEFINITIONS: &[&str] = &[
 
 const EXPECTED_ERASURE_INDEX_DEFINITIONS: &[&str] = &[
     "auth_delivery_intent_principal_idx:CREATE INDEX auth_delivery_intent_principal_idx ON public.auth_delivery_intent USING btree (principal_id)",
-    "auth_websocket_ticket_principal_idx:CREATE INDEX auth_websocket_ticket_principal_idx ON public.auth_websocket_ticket USING btree (principal_id)",
+    "auth_session_principal_idx:CREATE INDEX auth_session_principal_idx ON public.auth_session USING btree (principal_id)",
+    "auth_websocket_ticket_session_idx:CREATE INDEX auth_websocket_ticket_session_idx ON public.auth_websocket_ticket USING btree (session_reference)",
     "game_persona_subject_binding_erasure_idx:CREATE INDEX game_persona_subject_binding_erasure_idx ON public.game_persona_subject_binding USING btree (subject_id) WHERE (lifecycle = 'active'::text)",
     "identity_lifecycle_audit_actor_idx:CREATE INDEX identity_lifecycle_audit_actor_idx ON public.identity_lifecycle_audit USING btree (actor_principal_id)",
     "member_lifecycle_event_subject_idx:CREATE INDEX member_lifecycle_event_subject_idx ON public.member_lifecycle_event USING btree (subject_id)",
@@ -574,18 +578,20 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "auth_session_assurance_check:c",
     "auth_session_authenticated_at_check:c",
     "auth_session_idle_expiry_check:c",
+    "auth_session_local_proof_instance_shape_check:c",
     "auth_session_method_fkey:f",
     "auth_session_pkey:p",
     "auth_session_principal_id_fkey:f",
     "auth_session_workos_provider_session_fkey:f",
     "auth_session_workos_session_shape_check:c",
+    "auth_session_workos_signing_key_shape_check:c",
     "auth_websocket_ticket_access_expiry_check:c",
     "auth_websocket_ticket_after_seq_check:c",
     "auth_websocket_ticket_audience_check:c",
-    "auth_websocket_ticket_auth_kind_check:c",
     "auth_websocket_ticket_channel_check:c",
     "auth_websocket_ticket_expiry_check:c",
     "auth_websocket_ticket_pkey:p",
+    "auth_websocket_ticket_session_reference_fkey:f",
     "authentication_method_disabled_shape_check:c",
     "authentication_method_identity_key:u",
     "authentication_method_kind_check:c",
@@ -901,6 +907,10 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "workos_provider_session_tombstone_hash_check:c",
     "workos_provider_session_tombstone_pkey:p",
     "workos_provider_session_tombstone_reason_check:c",
+    "workos_signing_key_tombstone_key_shape_check:c",
+    "workos_signing_key_tombstone_pkey:p",
+    "workos_signing_key_tombstone_reason_check:c",
+    "workos_signing_key_tombstone_retired_by_principal_id_fkey:f",
     "workos_session_exchange_assertion_hash_check:c",
     "workos_session_exchange_expiry_check:c",
     "workos_session_exchange_linking_session_fkey:f",
@@ -928,7 +938,8 @@ async fn erasure_support_indexes_have_exact_catalog_definitions(pool: PgPool) {
          WHERE schemaname = 'public' \
            AND indexname IN ( \
                'auth_delivery_intent_principal_idx', \
-               'auth_websocket_ticket_principal_idx', \
+               'auth_session_principal_idx', \
+               'auth_websocket_ticket_session_idx', \
                'game_persona_subject_binding_erasure_idx', \
                'identity_lifecycle_audit_actor_idx', \
                'member_lifecycle_event_subject_idx', \
@@ -1083,7 +1094,6 @@ async fn canonical_authority_principal_columns_are_uuid(pool: PgPool) {
                ('game_invitation', 'principal_id'), \
                ('game_invitation', 'invited_by_principal_id'), \
                ('auth_session', 'principal_id'), \
-               ('auth_websocket_ticket', 'principal_id'), \
                ('authentication_method', 'principal_id'), \
                ('command_receipt', 'principal_id'), \
                ('community_membership', 'active_principal_id'), \
@@ -1105,7 +1115,8 @@ async fn canonical_authority_principal_columns_are_uuid(pool: PgPool) {
                ('public_watch', 'principal_id'), \
                ('spectator_membership', 'principal_id'), \
                ('subject_erasure_outbox', 'principal_id'), \
-               ('workos_provider_session', 'principal_id') \
+               ('workos_provider_session', 'principal_id'), \
+               ('workos_signing_key_tombstone', 'retired_by_principal_id') \
            ) \
          ORDER BY table_name, ordinal_position",
     )
@@ -1152,7 +1163,8 @@ async fn migrated_projection_schema_has_exact_catalog_inventory(pool: PgPool) {
          WHERE schemaname = 'public' \
            AND indexname IN ( \
                'auth_delivery_intent_principal_idx', \
-               'auth_websocket_ticket_principal_idx', \
+               'auth_session_principal_idx', \
+               'auth_websocket_ticket_session_idx', \
                'game_persona_subject_binding_erasure_idx', \
                'identity_lifecycle_audit_actor_idx', \
                'member_lifecycle_event_subject_idx', \
@@ -1730,9 +1742,9 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
             principal_id,
             created_at,
             expires_at,
-            global_capabilities,
             idle_expires_at,
             assurance,
+            local_proof_instance_id,
             authenticated_at
         )
         VALUES (
@@ -1740,9 +1752,9 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
             '00000000-0000-4000-8000-000000000001',
             1,
             100,
-            '{}',
             50,
-            'admin_grant',
+            'dev',
+            repeat('a', 64),
             1
         )
         "#,
@@ -1765,9 +1777,9 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
             principal_id,
             created_at,
             expires_at,
-            global_capabilities,
             idle_expires_at,
             assurance,
+            local_proof_instance_id,
             authenticated_at
         )
         VALUES (
@@ -1775,9 +1787,9 @@ async fn auth_sessions_require_a_live_platform_principal_owner(pool: PgPool) {
             '00000000-0000-4000-8000-000000000002',
             1,
             100,
-            '{}',
             50,
-            'admin_grant',
+            'dev',
+            repeat('a', 64),
             1
         )
         "#,
@@ -1932,10 +1944,11 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
         r#"
         INSERT INTO auth_session (
             token_hash, principal_id, created_at, expires_at,
-            global_capabilities, authenticated_via_method_id,
-            idle_expires_at, assurance, authenticated_at
+            authenticated_via_method_id,
+            idle_expires_at, assurance, authenticated_at,
+            workos_signing_key_id
         )
-        VALUES (repeat('a', 64), '00000000-0000-4000-8000-000000000004', 1, 100, '{}', $1, 50, 'external_sso', 1)
+        VALUES (repeat('a', 64), '00000000-0000-4000-8000-000000000004', 1, 100, $1, 50, 'external_sso', 1, 'test-workos-key')
         "#,
     )
     .bind(method_id)
@@ -1952,12 +1965,12 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
         r#"
         INSERT INTO auth_session (
             token_hash, principal_id, created_at, expires_at,
-            global_capabilities, idle_expires_at, assurance,
-            authenticated_at, workos_session_id
+            idle_expires_at, assurance,
+            authenticated_at, workos_session_id, local_proof_instance_id
         )
         VALUES (
-            repeat('b', 64), '00000000-0000-4000-8000-000000000004', 1, 100, '{}', 50,
-            'admin_grant', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B'
+            repeat('b', 64), '00000000-0000-4000-8000-000000000004', 1, 100, 50,
+            'dev', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B', repeat('a', 64)
         )
         "#,
     )
@@ -2008,12 +2021,13 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
         r#"
         INSERT INTO auth_session (
             token_hash, principal_id, created_at, expires_at,
-            global_capabilities, authenticated_via_method_id,
-            idle_expires_at, assurance, authenticated_at, workos_session_id
+            authenticated_via_method_id,
+            idle_expires_at, assurance, authenticated_at, workos_session_id,
+            workos_signing_key_id
         )
         VALUES (
-            repeat('c', 64), '00000000-0000-4000-8000-000000000004', 1, 100, '{}', $1, 50,
-            'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B'
+            repeat('c', 64), '00000000-0000-4000-8000-000000000004', 1, 100, $1, 50,
+            'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B', 'test-workos-key'
         )
         "#,
     )
@@ -2038,12 +2052,13 @@ async fn workos_session_catalog_binds_provider_custody_and_replays_exact_asserti
         r#"
         INSERT INTO auth_session (
             token_hash, principal_id, created_at, expires_at,
-            global_capabilities, authenticated_via_method_id,
-            idle_expires_at, assurance, authenticated_at, workos_session_id
+            authenticated_via_method_id,
+            idle_expires_at, assurance, authenticated_at, workos_session_id,
+            workos_signing_key_id
         )
         VALUES (
-            repeat('f', 64), '00000000-0000-4000-8000-000000000004', 1, 100, '{}', $1, 50,
-            'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0C'
+            repeat('f', 64), '00000000-0000-4000-8000-000000000004', 1, 100, $1, 50,
+            'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0C', 'test-workos-key'
         )
         "#,
     )

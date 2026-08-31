@@ -428,7 +428,14 @@
       "namespace": "public"
     },
     {
-      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arwd/$schema_owner}",
+      "acl": "",
+      "kind": "relation",
+      "name": "auth_session_workos_signing_key_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ard/$schema_owner}",
       "kind": "relation",
       "name": "auth_websocket_ticket",
       "owner": "$schema_owner",
@@ -445,13 +452,6 @@
       "acl": "",
       "kind": "relation",
       "name": "auth_websocket_ticket_pkey",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "",
-      "kind": "relation",
-      "name": "auth_websocket_ticket_principal_idx",
       "owner": "$schema_owner",
       "namespace": "public"
     },
@@ -2545,6 +2545,20 @@
       "acl": "",
       "kind": "relation",
       "name": "workos_session_exchange_provider_session_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ar/$schema_owner}",
+      "kind": "relation",
+      "name": "workos_signing_key_tombstone",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "workos_signing_key_tombstone_pkey",
       "owner": "$schema_owner",
       "namespace": "public"
     },

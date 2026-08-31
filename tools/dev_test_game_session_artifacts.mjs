@@ -290,7 +290,8 @@ export function markdownSessionCard(card) {
       ? []
       : [
           `- identity bootstrap: ${card.identityBootstrap.rootSessionSource} -> ${card.identityBootstrap.browserCredentialIssuer}`,
-          `- dev session endpoint enabled: ${card.identityBootstrap.devSessionEndpointEnabled}`,
+          `- root session process-bound: ${card.identityBootstrap.rootSessionProcessBound}`,
+          `- local proof instance id exposed: ${card.identityBootstrap.localProofInstanceIdExposed}`,
         ]),
     "",
     "Open a role login URL, enter the seeded account password, and submit. Invite tokens and account IDs are prefilled in the URL; session tokens are repeated below for recovery/debug use.",
@@ -659,5 +660,4 @@ export function markdownSessionCard(card) {
   }
   return `${lines.join("\n")}\n`;
 }
-
 

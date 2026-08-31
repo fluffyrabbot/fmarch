@@ -143,6 +143,27 @@ pub(super) async fn enforce_registration_source_limit(
     .await
 }
 
+/// Charge the bounded WorkOS verification budget before any JWT/JWKS work.
+/// The source designation follows the same signed-edge convention as classic
+/// credential limits; an untrusted or absent designation collapses into the
+/// deliberately conservative unattributed bucket.
+pub(super) async fn enforce_workos_verification_source_limit(
+    state: &AuthHttpState,
+    headers: &HeaderMap,
+) -> Result<(), ApiError> {
+    let policy = state.auth_attempt_policy.clone();
+    let normalized_source = normalized_auth_attempt_source(headers, &policy);
+    let source_hash =
+        hash_session_token(format!("workos-verification-source:\0{normalized_source}").as_str());
+    enforce_public_request_limit(
+        state,
+        source_hash.as_str(),
+        state.workos_verification_max_per_source,
+        &policy,
+    )
+    .await
+}
+
 pub(super) async fn enforce_recovery_request_limit(
     state: &AuthHttpState,
     headers: &HeaderMap,
@@ -175,13 +196,6 @@ pub(super) async fn enforce_public_request_limit(
 ) -> Result<(), ApiError> {
     let now = unix_now_seconds();
     let mut tx = state.pool.begin().await?;
-    sqlx::query(
-        "DELETE FROM auth_registration_attempt WHERE updated_at < $1 AND (blocked_until IS NULL OR blocked_until <= $2)",
-    )
-    .bind(now - policy.retention_seconds)
-    .bind(now)
-    .execute(&mut *tx)
-    .await?;
     let blocked_until = sqlx::query_scalar::<_, Option<i64>>(
         "SELECT blocked_until FROM auth_registration_attempt WHERE scope_hash = $1 FOR UPDATE",
     )
@@ -193,6 +207,30 @@ pub(super) async fn enforce_public_request_limit(
         tx.commit().await?;
         return Err(rate_limited(blocked_until - now));
     }
+
+    // Establish the request's canonical scope-row lock before opportunistic
+    // cleanup. Concurrent cleaners skip one another's live scope rows instead
+    // of forming a cleanup-scope lock cycle.
+    sqlx::query(
+        r#"
+        WITH stale AS (
+            SELECT scope_hash
+            FROM auth_registration_attempt
+            WHERE updated_at < $1
+              AND (blocked_until IS NULL OR blocked_until <= $2)
+            ORDER BY updated_at
+            FOR UPDATE SKIP LOCKED
+            LIMIT 256
+        )
+        DELETE FROM auth_registration_attempt AS attempt
+        USING stale
+        WHERE attempt.scope_hash = stale.scope_hash
+        "#,
+    )
+    .bind(now - policy.retention_seconds)
+    .bind(now)
+    .execute(&mut *tx)
+    .await?;
 
     let (_, blocked_until) = sqlx::query_as::<_, (i32, Option<i64>)>(
         r#"

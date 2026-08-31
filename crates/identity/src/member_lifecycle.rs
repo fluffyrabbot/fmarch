@@ -9,6 +9,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Postgres, Row, Transaction};
+use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 const PERSONAL_EXPORT_TTL_SECONDS: i64 = 60 * 60 * 24 * 14;
@@ -40,15 +41,55 @@ pub async fn apply_member_lifecycle(
     command: MemberLifecycleCommand,
     now: i64,
 ) -> Result<MemberLifecycleStatus, IdentityFlowError> {
-    let mut tx = pool.begin().await?;
+    apply_member_lifecycle_with_authority(pool, principal_id, command, now, None).await
+}
+
+/// Apply a member-owned lifecycle transition only if the exact initiating
+/// session is still eligible at the transaction's mutation boundary.
+///
+/// The request extractor's earlier authorization is intentionally not enough:
+/// password work, object-authority calls, and lock waits can all outlive a
+/// concurrent logout. This entry point turns that earlier result into a
+/// commit-bound proof after the canonical owner/session lock set is held.
+pub async fn apply_member_lifecycle_authenticated(
+    pool: &PgPool,
+    principal_id: &PrincipalId,
+    initiating_session: &crate::InitiatingSession,
+    session_policy: &crate::SessionPolicy,
+    command: MemberLifecycleCommand,
+    now: i64,
+    recent_auth_max_age_seconds: i64,
+) -> Result<MemberLifecycleStatus, IdentityFlowError> {
+    apply_member_lifecycle_with_authority(
+        pool,
+        principal_id,
+        command,
+        now,
+        Some((
+            initiating_session,
+            session_policy,
+            recent_auth_max_age_seconds,
+        )),
+    )
+    .await
+}
+
+async fn apply_member_lifecycle_with_authority(
+    pool: &PgPool,
+    principal_id: &PrincipalId,
+    command: MemberLifecycleCommand,
+    now: i64,
+    initiating_authority: Option<(&crate::InitiatingSession, &crate::SessionPolicy, i64)>,
+) -> Result<MemberLifecycleStatus, IdentityFlowError> {
+    let mut tx = crate::session::begin_authority_transaction(pool).await?;
     crate::methods::ensure_principal(&mut tx, principal_id, &[], now).await?;
-    crate::methods::lock_identity_mutation(
+    let owner = crate::methods::lock_identity_mutation(
         &mut tx,
         principal_id,
         crate::methods::IdentityMutationExtent::Complete,
     )
-    .await?
-    .require_active()?;
+    .await?;
+    require_initiating_authority(&mut tx, &owner, initiating_authority).await?;
     let snapshot = locked_snapshot(&mut tx, principal_id).await?;
     let events = decide_member_lifecycle(
         &MemberLifecycleState {
@@ -108,9 +149,43 @@ pub async fn request_member_erasure(
     let key_store = crate::active_subject_key_store()
         .await
         .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
-    request_member_erasure_with_store(pool, key_store.as_ref(), principal_id, now)
+    request_member_erasure_with_store_and_authority(
+        pool,
+        key_store.as_ref(),
+        principal_id,
+        now,
+        None,
+    )
+    .await
+    .map(|(snapshot, _)| snapshot)
+}
+
+/// Commit an erasure request only while the exact recently-authenticated
+/// session that initiated it remains eligible.
+pub async fn request_member_erasure_authenticated(
+    pool: &PgPool,
+    principal_id: &PrincipalId,
+    initiating_session: &crate::InitiatingSession,
+    session_policy: &crate::SessionPolicy,
+    now: i64,
+    recent_auth_max_age_seconds: i64,
+) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
+    let key_store = crate::active_subject_key_store()
         .await
-        .map(|(snapshot, _)| snapshot)
+        .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
+    request_member_erasure_with_store_and_authority(
+        pool,
+        key_store.as_ref(),
+        principal_id,
+        now,
+        Some((
+            initiating_session,
+            session_policy,
+            recent_auth_max_age_seconds,
+        )),
+    )
+    .await
+    .map(|(snapshot, _)| snapshot)
 }
 
 pub async fn request_member_erasure_with_store(
@@ -119,15 +194,27 @@ pub async fn request_member_erasure_with_store(
     principal_id: &PrincipalId,
     now: i64,
 ) -> Result<(MemberLifecycleSnapshot, SubjectErasureWork), IdentityFlowError> {
-    if let Some(existing) =
-        crate::subject_privacy::load_subject_erasure_work_by_principal(pool, principal_id)
-            .await
-            .map_err(|error| IdentityFlowError::Internal(error.to_string()))?
-    {
-        return Ok((
-            member_lifecycle_snapshot(pool, principal_id).await?,
-            existing,
-        ));
+    request_member_erasure_with_store_and_authority(pool, key_store, principal_id, now, None).await
+}
+
+async fn request_member_erasure_with_store_and_authority(
+    pool: &PgPool,
+    key_store: &dyn SubjectKeyStore,
+    principal_id: &PrincipalId,
+    now: i64,
+    initiating_authority: Option<(&crate::InitiatingSession, &crate::SessionPolicy, i64)>,
+) -> Result<(MemberLifecycleSnapshot, SubjectErasureWork), IdentityFlowError> {
+    if initiating_authority.is_none() {
+        if let Some(existing) =
+            crate::subject_privacy::load_subject_erasure_work_by_principal(pool, principal_id)
+                .await
+                .map_err(|error| IdentityFlowError::Internal(error.to_string()))?
+        {
+            return Ok((
+                member_lifecycle_snapshot(pool, principal_id).await?,
+                existing,
+            ));
+        }
     }
 
     // Discover and fingerprint before the owner transaction. Subject keys are
@@ -161,7 +248,7 @@ pub async fn request_member_erasure_with_store(
         requested_at: now,
     };
 
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::session::begin_authority_transaction(pool).await?;
     profile_handle_index::acquire_profile_handle_index_writer_lease(&mut tx)
         .await
         .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
@@ -171,12 +258,12 @@ pub async fn request_member_erasure_with_store(
         crate::methods::IdentityMutationExtent::Complete,
     )
     .await?;
+    require_initiating_authority(&mut tx, &owner, initiating_authority).await?;
     if let Some(existing) = load_subject_erasure_work_in_tx(&mut tx, principal_id).await? {
         let snapshot = locked_snapshot(&mut tx, principal_id).await?;
         tx.commit().await?;
         return Ok((snapshot, existing));
     }
-    owner.require_active()?;
     if owner.subject_id != discovered_subject_id
         || authority_binding_in_tx(&mut tx).await? != authority_before
     {
@@ -333,7 +420,7 @@ async fn disable_auth_for_erasure(
 ) -> Result<(), IdentityFlowError> {
     sqlx::query("UPDATE authentication_method SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2) WHERE principal_id = $1")
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
-    sqlx::query("UPDATE auth_account SET disabled_at = COALESCE(disabled_at, $2), password_hash = $3, global_capabilities = '{}'::text[] WHERE principal_id = $1")
+    sqlx::query("UPDATE auth_account SET disabled_at = COALESCE(disabled_at, $2), password_hash = $3 WHERE principal_id = $1")
         .bind(principal_id.as_uuid()).bind(now).bind(format!("erasure-pending:{erasure_id}")).execute(&mut **tx).await?;
     sqlx::query("UPDATE auth_account_recovery_credential SET revoked_at = COALESCE(revoked_at, $2) WHERE account_id IN (SELECT account_id FROM auth_account WHERE principal_id = $1) AND used_at IS NULL")
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
@@ -341,10 +428,18 @@ async fn disable_auth_for_erasure(
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
     sqlx::query("UPDATE auth_delivery_intent SET status = 'cancelled', outcome_kind = 'cancelled', outcome_code = 'member_erasure_pending', next_attempt_at = NULL, delivered_at = NULL, provider_receipt_id = NULL, claim_token = NULL, claim_expires_at = NULL, credential_envelope = NULL, updated_at = $2 WHERE principal_id = $1 AND status IN ('queued', 'processing', 'retryable_failed')")
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
-    sqlx::query("DELETE FROM auth_websocket_ticket WHERE principal_id = $1")
-        .bind(principal_id.as_uuid())
-        .execute(&mut **tx)
-        .await?;
+    crate::session::lock_websocket_ticket_mutations_for_principal(tx, principal_id).await?;
+    sqlx::query(
+        r#"
+        DELETE FROM auth_websocket_ticket AS ticket
+        USING auth_session AS session
+        WHERE ticket.session_reference = session.token_hash
+          AND session.principal_id = $1
+        "#,
+    )
+    .bind(principal_id.as_uuid())
+    .execute(&mut **tx)
+    .await?;
     sqlx::query("UPDATE platform_principal SET status = 'disabled', disabled_at = COALESCE(disabled_at, $2), global_capabilities = '{}'::text[] WHERE principal_id = $1")
         .bind(principal_id.as_uuid()).bind(now).execute(&mut **tx).await?;
     Ok(())
@@ -399,7 +494,7 @@ pub(crate) async fn recover_member_erasure_from_revocation(
         authority_manifest_sha256: authority.as_ref().map(|binding| binding.2.clone()),
         requested_at: record.destroyed_at,
     };
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::session::begin_authority_transaction(pool).await?;
     profile_handle_index::acquire_profile_handle_index_writer_lease(&mut tx)
         .await
         .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;
@@ -486,15 +581,47 @@ pub async fn create_personal_export(
     principal_id: &PrincipalId,
     now: i64,
 ) -> Result<PersonalExport, IdentityFlowError> {
-    let mut tx = pool.begin().await?;
+    create_personal_export_with_authority(pool, principal_id, now, None).await
+}
+
+/// Build and persist a private export under an exact, recently-authenticated
+/// initiating-session fence.
+pub async fn create_personal_export_authenticated(
+    pool: &PgPool,
+    principal_id: &PrincipalId,
+    initiating_session: &crate::InitiatingSession,
+    session_policy: &crate::SessionPolicy,
+    now: i64,
+    recent_auth_max_age_seconds: i64,
+) -> Result<PersonalExport, IdentityFlowError> {
+    create_personal_export_with_authority(
+        pool,
+        principal_id,
+        now,
+        Some((
+            initiating_session,
+            session_policy,
+            recent_auth_max_age_seconds,
+        )),
+    )
+    .await
+}
+
+async fn create_personal_export_with_authority(
+    pool: &PgPool,
+    principal_id: &PrincipalId,
+    now: i64,
+    initiating_authority: Option<(&crate::InitiatingSession, &crate::SessionPolicy, i64)>,
+) -> Result<PersonalExport, IdentityFlowError> {
+    let mut tx = crate::session::begin_authority_transaction(pool).await?;
     crate::methods::ensure_principal(&mut tx, principal_id, &[], now).await?;
-    crate::methods::lock_identity_mutation(
+    let owner = crate::methods::lock_identity_mutation(
         &mut tx,
         principal_id,
         crate::methods::IdentityMutationExtent::Complete,
     )
-    .await?
-    .require_active()?;
+    .await?;
+    require_initiating_authority(&mut tx, &owner, initiating_authority).await?;
     let snapshot = locked_snapshot(&mut tx, principal_id).await?;
     if snapshot.status == MemberLifecycleStatus::Erased {
         return Err(IdentityFlowError::Invalid(
@@ -566,15 +693,55 @@ pub async fn load_personal_export(
     export_id: Uuid,
     now: i64,
 ) -> Result<Option<PersonalExport>, IdentityFlowError> {
-    let mut tx = pool.begin().await?;
-    let principal_status: Option<String> = sqlx::query_scalar(
-        "SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE",
+    load_personal_export_with_authority(pool, principal_id, export_id, now, None).await
+}
+
+/// Decrypt a private export only after revalidating the exact initiating
+/// session under the same identity lock set used by cutoffs.
+pub async fn load_personal_export_authenticated(
+    pool: &PgPool,
+    principal_id: &PrincipalId,
+    initiating_session: &crate::InitiatingSession,
+    session_policy: &crate::SessionPolicy,
+    export_id: Uuid,
+    now: i64,
+) -> Result<Option<PersonalExport>, IdentityFlowError> {
+    load_personal_export_with_authority(
+        pool,
+        principal_id,
+        export_id,
+        now,
+        Some((initiating_session, session_policy, i64::MAX)),
     )
-    .bind(principal_id.as_uuid())
-    .fetch_optional(&mut *tx)
-    .await?;
-    if principal_status.as_deref() != Some("active") {
-        return Err(IdentityFlowError::Unauthorized);
+    .await
+}
+
+async fn load_personal_export_with_authority(
+    pool: &PgPool,
+    principal_id: &PrincipalId,
+    export_id: Uuid,
+    now: i64,
+    initiating_authority: Option<(&crate::InitiatingSession, &crate::SessionPolicy, i64)>,
+) -> Result<Option<PersonalExport>, IdentityFlowError> {
+    let mut tx = crate::session::begin_authority_transaction(pool).await?;
+    if initiating_authority.is_some() {
+        let owner = crate::methods::lock_identity_mutation(
+            &mut tx,
+            principal_id,
+            crate::methods::IdentityMutationExtent::Authentication,
+        )
+        .await?;
+        require_initiating_authority(&mut tx, &owner, initiating_authority).await?;
+    } else {
+        let principal_status: Option<String> = sqlx::query_scalar(
+            "SELECT status FROM platform_principal WHERE principal_id = $1 FOR UPDATE",
+        )
+        .bind(principal_id.as_uuid())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if principal_status.as_deref() != Some("active") {
+            return Err(IdentityFlowError::Unauthorized);
+        }
     }
     let row = sqlx::query(
         r#"
@@ -626,6 +793,40 @@ pub async fn load_personal_export(
     Ok(Some(export))
 }
 
+async fn require_initiating_authority(
+    tx: &mut Transaction<'_, Postgres>,
+    owner: &crate::methods::IdentityMutationOwner,
+    initiating_authority: Option<(&crate::InitiatingSession, &crate::SessionPolicy, i64)>,
+) -> Result<(), IdentityFlowError> {
+    let Some((initiating_session, session_policy, recent_auth_max_age_seconds)) =
+        initiating_authority
+    else {
+        return owner.require_active();
+    };
+    let authorization = crate::session::revalidate_initiating_session_after_owner_lock(
+        tx,
+        owner,
+        initiating_session,
+        session_policy,
+    )
+    .await?;
+    if recent_auth_max_age_seconds != i64::MAX {
+        crate::methods::require_recent_authentication(
+            authorization.authenticated_at,
+            current_unix_seconds(),
+            recent_auth_max_age_seconds,
+        )?;
+    }
+    Ok(())
+}
+
+fn current_unix_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock must be after Unix epoch")
+        .as_secs() as i64
+}
+
 /// Re-fold the lifecycle event stream into its projection. This deliberately
 /// owns no destructive side effects: rebuild restores a read model, while the
 /// append handler is the only authority that erases credentials/identifiers.
@@ -633,7 +834,7 @@ pub async fn rebuild_member_lifecycle(
     pool: &PgPool,
     principal_id: &PrincipalId,
 ) -> Result<MemberLifecycleSnapshot, IdentityFlowError> {
-    let mut tx = pool.begin().await?;
+    let mut tx = crate::session::begin_authority_transaction(pool).await?;
     profile_handle_index::acquire_profile_handle_index_writer_lease(&mut tx)
         .await
         .map_err(|error| IdentityFlowError::Internal(error.to_string()))?;

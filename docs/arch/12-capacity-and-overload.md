@@ -25,16 +25,19 @@ The defaults are conservative starting points, not claims about hosted capacity:
 
 | Resource | Default | Environment variable | Exhaustion behavior |
 |---|---:|---|---|
-| Postgres connections | 10 | `FMARCH_DB_MAX_CONNECTIONS` | Acquisition waits at most the DB acquire deadline. |
+| Postgres connections | 10 | `FMARCH_DB_MAX_CONNECTIONS` | Minimum 5: one durable LISTEN connection, at least two authority permits, and two connections outside the authority-fenced workload. Acquisition waits at most the DB acquire deadline. |
 | Postgres acquire wait | 250 ms | `FMARCH_DB_ACQUIRE_TIMEOUT_MS` | SQLx returns an error inside the enclosing HTTP deadline. |
-| Postgres statement | 5 s | `FMARCH_DB_STATEMENT_TIMEOUT_MS` | Postgres cancels the statement. |
-| Postgres lock wait | 1 s | `FMARCH_DB_LOCK_TIMEOUT_MS` | Postgres cancels lock acquisition rather than accumulating waiters. |
-| Idle transaction | 10 s | `FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS` | Postgres terminates the idle transaction. |
+| Postgres statement | 5 s | `FMARCH_DB_STATEMENT_TIMEOUT_MS` | General statements are cancelled at the pool deadline; identity-authority cutoff transactions use a fixed transaction-local 10 s budget. |
+| Postgres lock wait | 1 s | `FMARCH_DB_LOCK_TIMEOUT_MS` | General lock acquisition fails fast; identity-authority cutoff transactions use a fixed transaction-local 7 s wait so they can outlast one bounded delivery fence. |
+| Idle transaction | 10 s | `FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS` | Minimum 10 s so it cannot undercut the 5 s live-delivery fence; Postgres terminates longer-idle transactions. |
 | Admitted HTTP requests | 128 | `FMARCH_HTTP_MAX_IN_FLIGHT` | Further requests wait only for the queue deadline. |
 | HTTP admission queue | 50 ms | `FMARCH_HTTP_QUEUE_TIMEOUT_MS` | Retryable `503`. |
 | End-to-end HTTP request | 15 s | `FMARCH_HTTP_REQUEST_TIMEOUT_MS` | Retryable `503`; the request future is cancelled. |
 | Retry hint | 1 s | `FMARCH_HTTP_RETRY_AFTER_SECONDS` | Sent with capacity `503` responses. |
 | Live WebSocket connections | 512 | `FMARCH_WS_MAX_CONNECTIONS` | Retryable `503` handshake. |
+| Authority-bearing transactions | pool − 3 | `FMARCH_AUTHORITY_TRANSACTION_MAX_IN_FLIGHT` | Retryable `503`; the ceiling accounts for LISTEN and leaves two pool connections outside this workload. |
+| Live-delivery fence transactions | min(authority − 1, 4) | `FMARCH_WS_DELIVERY_MAX_IN_FLIGHT` | Backpressure; one shared authority permit remains available to commands and cutoffs. |
+| Gameplay commands | 32 | `FMARCH_COMMAND_MAX_IN_FLIGHT` | Retryable `503`, with an additional one-command-per-principal admission fence. |
 | Deltas retained per receiver | 256 | `FMARCH_LIVE_PROJECTION_CAPACITY` | Lagging receiver gets `ResyncRequired`. |
 
 Configuration is strict at startup for the database and HTTP budgets. Invalid or out-of-range
@@ -42,7 +45,34 @@ values fail the process rather than silently changing the capacity model. `FMARC
 and the live projection capacity are clamped by the API boundary to safe ranges.
 
 The HTTP semaphore bounds admitted request futures, not socket count. A WebSocket owns a separate
-connection permit for its entire lifetime. The HTTP permit covers only its upgrade request.
+connection permit for its entire lifetime. The HTTP permit covers only its upgrade request. The live
+loop polls inbound close/control frames alongside projection wakes, so a quiet peer disconnect returns
+both global and per-principal connection permits without waiting for a future game event. Control
+frames are rate-bounded per connection and every Pong/Close write has a one-second deadline; a peer
+that stops reading cannot pin those permits indefinitely.
+
+Identity cutoffs begin through one typed transaction constructor. It overrides the general pool
+timeouts locally: the 7 s lock budget exceeds the 5 s maximum live-delivery batch, the 10 s statement
+budget exceeds that lock budget, and both remain inside the default 15 s HTTP deadline. This lets an
+already-authorized final batch finish while ensuring logout, method/account disablement, erasure,
+session revocation, and signing-key retirement remain available rather than failing at the general
+1 s lock deadline. Delivery transactions join global key-retirement and principal-cutoff gates in
+shared mode before locking their exact session. A queued exclusive cutoff therefore blocks fresh
+delivery admission and waits at most for the already-entered batch set to drain in parallel, rather
+than consuming one deadline for each session. The same five-second deadline starts before gate,
+session, and capability acquisition, so database wait time reduces the socket-send remainder instead
+of extending the authority lease. A timed-out application-frame send is terminal: the server drops the socket without
+polling it again, because a cancelled sink send may already have buffered the private frame and a later
+Close write could flush it after the authority guard is released.
+
+Authenticated gameplay commands use a separate five-second authority lease that starts before
+pool checkout and covers `BEGIN`, canonical stream/identity/session locking, decision persistence,
+and the commit attempt. Normal rejection explicitly rolls back; lease expiry or a commit-edge error
+closes the owned database connection within a separate one-second cleanup reserve before responding.
+The combined six-second bound remains strictly below the seven-second cutoff lock budget, so a slow
+or cancelled command cannot starve logout, account/session disablement, or signing-key retirement.
+Pre-commit expiry and commit ambiguity both return retryable `503` responses that require the caller
+to reuse the exact command id; idempotent receipts resolve the latter safely.
 
 ## Query and command invariants
 
@@ -54,8 +84,9 @@ connection permit for its entire lifetime. The HTTP permit covers only its upgra
 - Search uses the dedicated document projection's stored weighted `tsvector` and partial GIN
   index. Search results are capped at 50; the capacity proof requests 20 and records search-only
   first/continuation-page latency plus the exact production statement's analyzed access path.
-- A command transaction appends its events and synchronous projections atomically. It is bounded
-  by the Postgres statement/lock limits and the encompassing HTTP deadline.
+- A command transaction appends its events and synchronous projections atomically. One deadline
+  bounds pool checkout through commit, and any non-committed exit rolls back or closes its owned
+  connection before the response releases command capacity.
 - Concurrent commands on one game stream use optimistic concurrency and bounded server retry.
   They may never produce duplicate committed posts or an internal error merely because they raced.
 - Live broadcast storage is independent of connection count. Per-event connection work is bounded

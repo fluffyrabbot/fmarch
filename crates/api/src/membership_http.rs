@@ -1,9 +1,11 @@
 //! Closed-community invitation and provenance HTTP adapters.
 
 use crate::auth_http::{
-    require_global_admin, unix_now_seconds, AuthHttpState, AuthenticatedRequest,
+    require_global_admin, unauthorized_session, unix_now_seconds, AuthHttpState,
+    AuthenticatedRequest,
 };
 use crate::authentication::{deliver_auth_credential, AuthCredentialDeliveryRequest};
+use crate::authority::AuthorizedUnitOfWork;
 use crate::identity_delivery::IdentityDeliveryKind;
 use crate::{ApiError, ApiState};
 use axum::extract::{Query, State};
@@ -65,11 +67,12 @@ async fn issue_invitation(
             message: "community invitation expiry must be within 30 days".to_string(),
         });
     }
-    let mut tx = state.pool.begin().await?;
+    let mut authority = AuthorizedUnitOfWork::begin(&state, &auth).await?;
+    let principal_id = authority.principal_id();
     let invitation = membership_application::issue_invitation_in_tx(
-        &mut tx,
+        authority.transaction(),
         state.invitation_target_index.as_ref(),
-        auth.context.principal_id,
+        principal_id,
         request.account_id.as_str(),
         request.expires_at,
         now,
@@ -91,11 +94,11 @@ async fn issue_invitation(
     let credential_hash = membership_application::hash_credential(&invitation.credential);
     let delivery = deliver_auth_credential(
         &state,
-        &mut tx,
+        authority.transaction(),
         &AuthCredentialDeliveryRequest {
             delivery_kind: IdentityDeliveryKind::CommunityInvitation,
             account_id: invitation.target_account_id.as_str(),
-            principal_id: &auth.context.principal_id,
+            principal_id: &principal_id,
             credential_hash: credential_hash.as_str(),
             credential_material: invitation.credential.as_str(),
             credential_expires_at: invitation.expires_at,
@@ -103,7 +106,7 @@ async fn issue_invitation(
         },
     )
     .await?;
-    tx.commit().await?;
+    authority.commit().await?;
     Ok(Json(IssueInvitationResponse {
         invitation,
         delivery_id: delivery.delivery_id,
@@ -133,9 +136,11 @@ async fn revoke_invitation(
     auth: AuthenticatedRequest,
     Json(request): Json<RevokeInvitationRequest>,
 ) -> Result<Json<RevokeInvitationResponse>, ApiError> {
-    membership_application::revoke_invitation(
-        &state.pool,
-        auth.context.principal_id,
+    let mut authority = AuthorizedUnitOfWork::begin(&state, &auth).await?;
+    let principal_id = authority.principal_id();
+    membership_application::revoke_invitation_for_sponsor_in_tx(
+        authority.transaction(),
+        principal_id,
         community_membership::InvitationId::from_uuid(request.invitation_id),
         unix_now_seconds(),
     )
@@ -145,6 +150,7 @@ async fn revoke_invitation(
         error: RejectCode::NotAuthorized,
         message: "open community invitation was not found".to_string(),
     })?;
+    authority.commit().await?;
     Ok(Json(RevokeInvitationResponse { status: "revoked" }))
 }
 
@@ -218,9 +224,14 @@ async fn suspend_membership(
         "community membership suspension",
     )
     .await?;
-    membership_application::steward_membership(
-        &state.pool,
-        actor,
+    let mut authority = AuthorizedUnitOfWork::begin(&state, &auth).await?;
+    let committed_actor = authority.require_global_admin("community membership suspension")?;
+    if committed_actor != actor {
+        return Err(unauthorized_session());
+    }
+    membership_application::steward_membership_in_tx(
+        authority.transaction(),
+        committed_actor,
         community_membership::MembershipId::from_uuid(request.membership_id),
         community_membership::MembershipCommand::Suspend {
             reason: request.reason,
@@ -229,6 +240,7 @@ async fn suspend_membership(
     )
     .await
     .map_err(stewardship_error)?;
+    authority.commit().await?;
     Ok(Json(StewardshipMutationResponse {
         status: "suspended",
     }))
@@ -245,15 +257,21 @@ async fn restore_membership(
         "community membership restoration",
     )
     .await?;
-    membership_application::steward_membership(
-        &state.pool,
-        actor,
+    let mut authority = AuthorizedUnitOfWork::begin(&state, &auth).await?;
+    let committed_actor = authority.require_global_admin("community membership restoration")?;
+    if committed_actor != actor {
+        return Err(unauthorized_session());
+    }
+    membership_application::steward_membership_in_tx(
+        authority.transaction(),
+        committed_actor,
         community_membership::MembershipId::from_uuid(request.membership_id),
         community_membership::MembershipCommand::Restore,
         unix_now_seconds(),
     )
     .await
     .map_err(stewardship_error)?;
+    authority.commit().await?;
     Ok(Json(StewardshipMutationResponse { status: "active" }))
 }
 
@@ -268,14 +286,20 @@ async fn steward_revoke_invitation(
         "community invitation revocation",
     )
     .await?;
-    membership_application::steward_revoke_invitation(
-        &state.pool,
-        actor,
+    let mut authority = AuthorizedUnitOfWork::begin(&state, &auth).await?;
+    let committed_actor = authority.require_global_admin("community invitation revocation")?;
+    if committed_actor != actor {
+        return Err(unauthorized_session());
+    }
+    membership_application::steward_revoke_invitation_in_tx(
+        authority.transaction(),
+        committed_actor,
         community_membership::InvitationId::from_uuid(request.invitation_id),
         unix_now_seconds(),
     )
     .await
     .map_err(stewardship_error)?;
+    authority.commit().await?;
     Ok(Json(RevokeInvitationResponse { status: "revoked" }))
 }
 

@@ -12,6 +12,7 @@ import {
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import {
   fixturePrincipalAuthorityId,
   fixturePrincipalTransport,
@@ -26,6 +27,7 @@ const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
 const pageSize = 12;
 const seedSessionTokens = new Map();
+const localProofAuth = createLocalProofAuth();
 
 if (!migrationUrl) {
   throw new Error(
@@ -329,13 +331,12 @@ async function startApi(applicationUrl) {
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
-    env: {
+    env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
-      FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (chunk) => {
@@ -382,9 +383,9 @@ async function seedSessionToken(apiBaseUrl, principalId) {
   if (cached !== undefined) {
     return cached;
   }
-  const session = await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
+  const session = await fetchJson(`${apiBaseUrl}/auth/local-proof/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: localProofAuth.requestHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({
       principal_id: fixturePrincipalAuthorityId(principalId),
       expires_at: 4_102_444_800,

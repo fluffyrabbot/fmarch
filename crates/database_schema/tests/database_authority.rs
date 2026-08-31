@@ -41,6 +41,19 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
         .execute(&application)
         .await
         .expect("ordinary application insert");
+    sqlx::query("SELECT token_hash FROM auth_session WHERE FALSE FOR UPDATE")
+        .fetch_all(&application)
+        .await
+        .expect("application may lock the authority-owning session row");
+    sqlx::query("DELETE FROM auth_websocket_ticket WHERE FALSE")
+        .execute(&application)
+        .await
+        .expect("application may atomically redeem a session-derived ticket");
+    assert_denied(
+        &application,
+        "SELECT token_hash FROM auth_websocket_ticket WHERE FALSE FOR UPDATE",
+    )
+    .await;
     for sequence in [
         "events_seq_seq",
         "game_thread_visibility_change_id_seq",
@@ -71,6 +84,17 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
     .fetch_one(&application)
     .await
     .expect("application row-lock privilege is intentionally narrow");
+    for statement in [
+        "SELECT principal_id FROM game_authority WHERE FALSE FOR SHARE",
+        "SELECT principal_id FROM spectator_membership WHERE FALSE FOR SHARE",
+    ] {
+        sqlx::query(sqlx::AssertSqlSafe(statement.to_string()))
+            .fetch_all(&application)
+            .await
+            .unwrap_or_else(|error| {
+                panic!("application must hold live-delivery row locks: {error}")
+            });
+    }
 
     for statement in [
         "CREATE TEMP TABLE authority_escape (id bigint)",
@@ -79,6 +103,7 @@ async fn database_roles_are_exact_non_owner_authorities(owner: PgPool) {
         "TRUNCATE TABLE public.events",
         "UPDATE public.events SET kind = kind",
         "DELETE FROM public.events",
+        "DELETE FROM public.auth_session",
         "UPDATE public.event_direct_key_sentinel SET lifecycle = 'retiring' WHERE kid = 'authority-proof'",
         "SET session_replication_role = replica",
     ] {

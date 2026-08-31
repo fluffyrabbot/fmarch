@@ -217,7 +217,7 @@ test("role smoke scenarios pin tablet thumb-zone target counts", () => {
       [
         "admin",
         [
-          ["admin-setup-action-zone", "admin-setup-actions", 3],
+          ["admin-setup-action-zone", "admin-setup-actions", 2],
           ["admin-recovery-action-zone", "admin-recovery-actions", 1],
         ],
       ],

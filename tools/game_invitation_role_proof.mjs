@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { seedCommandPlanForGame } from "./dev_test_game.mjs";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 import {
   assertDevTestGameIdentityAdapterContractPacket,
@@ -71,7 +72,7 @@ const scratchApiDatabaseCapacity = Object.freeze({
 });
 const host = "127.0.0.1";
 const game = randomUUID();
-const rootAdminSessionToken = canonicalSessionToken(`invite-proof-root-admin-${game}`);
+let rootAdminSessionToken;
 const seedSessionTokens = new Map();
 const inviteTokens = Object.freeze({
   admin: `invite-proof-admin-${game}`,
@@ -188,11 +189,12 @@ try {
   });
   proofDatabase.applicationUrl = authority.applicationUrl;
   deliveryProvider = await startIdentityDeliveryCapture();
-  const apiBaseUrl = await startApi(
+  const ownedApi = await startApi(
     authority.applicationUrl,
     deliveryProvider.endpoint,
   );
-  await seedRootAdminSession(authority.applicationUrl);
+  const apiBaseUrl = ownedApi.baseUrl;
+  await seedRootAdminSession(apiBaseUrl, ownedApi.localProofAuth);
   const accounts = await createAccounts(apiBaseUrl);
   const seedTargetAccounts = await provisionSeedTargetAccounts({
     apiBaseUrl,
@@ -200,7 +202,7 @@ try {
       (account) => account.principalId,
     ),
   });
-  const seedCommands = await seedGame(apiBaseUrl);
+  const seedCommands = await seedGame(apiBaseUrl, ownedApi.localProofAuth);
   const invites = await createInvites(apiBaseUrl);
   const frontendBaseUrl = await startFrontend(apiBaseUrl);
   browser = await chromium.launch();
@@ -363,48 +365,28 @@ try {
   }
 }
 
-async function seedGame(apiBaseUrl) {
+async function seedGame(apiBaseUrl, localProofAuth) {
   const commands = [];
   for (const [principalId, command] of seedCommandPlanForGame(game)) {
     commands.push(
-      await sendCommand(apiBaseUrl, commands.length + 1, principalId, command),
+      await sendCommand(
+        apiBaseUrl,
+        localProofAuth,
+        commands.length + 1,
+        principalId,
+        command,
+      ),
     );
   }
   return commands;
 }
 
-async function seedRootAdminSession(url) {
-  const rootPrincipalId = authorityPrincipalId("root_admin");
-  await runSql(url, `
-    INSERT INTO platform_principal (
-      principal_id, status, global_capabilities, created_at, disabled_at
-    ) VALUES (${sqlLiteral(rootPrincipalId)}, 'active', ARRAY[]::TEXT[], 0, NULL)
-    ON CONFLICT (principal_id) DO NOTHING;
-  `);
-  await runSql(url, `
-    INSERT INTO auth_session (
-      token_hash,
-      principal_id,
-      created_at,
-      expires_at,
-      revoked_at,
-      global_capabilities,
-      idle_expires_at,
-      assurance,
-      authenticated_at
-    )
-    VALUES (
-      ${sqlLiteral(hashSessionToken(rootAdminSessionToken))},
-      ${sqlLiteral(rootPrincipalId)},
-      0,
-      4102444800,
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[],
-      4102444800,
-      'admin_grant',
-      0
-    );
-  `);
+async function seedRootAdminSession(apiBaseUrl, localProofAuth) {
+  rootAdminSessionToken = await mintLocalProofSession({
+    apiBaseUrl,
+    localProofAuth,
+    principalId: "root_admin",
+  });
 }
 
 async function createInvites(apiBaseUrl) {
@@ -524,7 +506,6 @@ async function createInvite(
       expected_principal_id: authorityPrincipalId(principalId),
       expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
       ...(gameScope === null ? {} : { game: gameScope }),
-      global_capabilities: globalCapabilities,
     }),
   });
   return {
@@ -532,7 +513,7 @@ async function createInvite(
     principalId,
     expiresAt: response.expires_at,
     game: response.game,
-    globalCapabilities: response.global_capabilities,
+    globalCapabilities,
     invitedByPrincipalId: response.invited_by_principal_id,
     deliveryId: response.delivery_id,
     deliveryStatus: response.delivery_status,
@@ -2944,7 +2925,7 @@ async function storedInviteRecord(inviteToken) {
         'principalId', principal_id,
         'game', COALESCE(game::TEXT, ''),
         'invitedByPrincipalId', invited_by_principal_id,
-        'globalCapabilities', COALESCE(to_json(global_capabilities), '[]'::JSON)
+        'globalCapabilities', '[]'::JSON
       )::TEXT
       FROM game_invitation
       WHERE token_hash = ${sqlLiteral(hashSessionToken(inviteToken))}
@@ -4063,12 +4044,13 @@ async function startIdentityDeliveryCapture() {
 }
 
 async function startApi(applicationUrl, deliveryEndpoint) {
+  const localProofAuth = createLocalProofAuth();
   const port = await freePort();
   const baseUrl = `http://${host}:${port}`;
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
-    env: {
+    env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl }),
       FMARCH_BIND: `${host}:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
@@ -4081,7 +4063,6 @@ async function startApi(applicationUrl, deliveryEndpoint) {
       // This scratch-stack lane deliberately exercises the debug-only local
       // delivery adapter. Hosted and release-mode classic auth must provide an
       // explicit HTTP delivery endpoint instead.
-      FMARCH_DEV_AUTH: "1",
       FMARCH_CLASSIC_AUTH: "1",
       FMARCH_AUTH_RATE_LIMIT_MAX_FAILURES: "5",
       FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "7",
@@ -4098,7 +4079,7 @@ async function startApi(applicationUrl, deliveryEndpoint) {
       FMARCH_IDENTITY_DELIVERY_AUTH_TOKEN: deliveryProvider.authToken,
       FMARCH_TRUST_AUTH_SOURCE_HEADER: "0",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (chunk) => {
@@ -4108,7 +4089,7 @@ async function startApi(applicationUrl, deliveryEndpoint) {
     serverOutput += chunk.toString();
   });
   await waitForHealth(baseUrl);
-  return baseUrl;
+  return Object.freeze({ baseUrl, localProofAuth });
 }
 
 async function startFrontend(apiBaseUrl) {
@@ -4152,9 +4133,9 @@ async function startFrontend(apiBaseUrl) {
   return `http://${host}:${address.port}`;
 }
 
-// The strict wire rejects any actor field in the envelope; seed commands act
-// as a principal by presenting a granted session for that principal instead.
-async function seedSessionToken(apiBaseUrl, principalId) {
+// The strict wire rejects any actor field in the envelope. This local proof
+// therefore mints a debug-only session for each fixture principal.
+async function seedSessionToken(apiBaseUrl, localProofAuth, principalId) {
   if (principalId === "root_admin") {
     return rootAdminSessionToken;
   }
@@ -4162,27 +4143,37 @@ async function seedSessionToken(apiBaseUrl, principalId) {
   if (cached !== undefined) {
     return cached;
   }
-  const granted = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
+  const token = await mintLocalProofSession({
+    apiBaseUrl,
+    localProofAuth,
+    principalId,
+  });
+  seedSessionTokens.set(principalId, token);
+  return token;
+}
+
+async function mintLocalProofSession({ apiBaseUrl, localProofAuth, principalId }) {
+  const session = await fetchJson(`${apiBaseUrl}/auth/local-proof/sessions`, {
     method: "POST",
-    headers: {
-      authorization: `Bearer ${rootAdminSessionToken}`,
-      "content-type": "application/json",
-    },
+    headers: localProofAuth.requestHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({
       principal_id: authorityPrincipalId(principalId),
       expires_at: 4102444800,
       global_capabilities: ["GlobalAdmin"],
     }),
   });
-  if (typeof granted.session_token !== "string" || granted.session_token === "") {
-    throw new Error(`session grant for ${principalId} returned no session_token`);
+  if (typeof session.session_token !== "string" || session.session_token === "") {
+    throw new Error(`local proof session for ${principalId} returned no session_token`);
   }
-  seedSessionTokens.set(principalId, granted.session_token);
-  return granted.session_token;
+  return session.session_token;
 }
 
-async function sendCommand(apiBaseUrl, id, principalId, command) {
-  const sessionToken = await seedSessionToken(apiBaseUrl, principalId);
+async function sendCommand(apiBaseUrl, localProofAuth, id, principalId, command) {
+  const sessionToken = await seedSessionToken(
+    apiBaseUrl,
+    localProofAuth,
+    principalId,
+  );
   const result = await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
     headers: {
@@ -4309,10 +4300,6 @@ async function freePort() {
 
 function hashSessionToken(token) {
   return createHash("sha256").update(token).digest("hex");
-}
-
-function canonicalSessionToken(seed) {
-  return `fmss_${hashSessionToken(seed)}`;
 }
 
 function sqlLiteral(value) {

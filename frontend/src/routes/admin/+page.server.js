@@ -203,84 +203,6 @@ export const actions = {
       ...summarizeRecoveryGate(body),
     };
   },
-
-  grantSession: async ({ cookies, fetch, locals, request }) => {
-    const apiBaseUrl = serverApiBaseUrl();
-    const capabilities = Array.isArray(locals.resolvedCapabilities)
-      ? locals.resolvedCapabilities
-      : [];
-    const canGrant = capabilities.some(
-      (capability) => capability?.kind === "GlobalAdmin",
-    );
-    if (!canGrant) {
-      return fail(403, {
-        id: "session-grants",
-        state: "reject",
-        message: "Session grants require GlobalAdmin",
-      });
-    }
-
-    const sessionToken = accessTokenForRequest({ locals, cookies });
-    if (!sessionToken) {
-      return fail(401, {
-        id: "session-grants",
-        state: "reject",
-        message: "Missing authenticated admin session",
-      });
-    }
-
-    const formData = await request.formData();
-    const grantPayload = parseSessionGrantPayload(formData);
-    if (grantPayload.status === "reject") {
-      return fail(400, {
-        id: "session-grants",
-        state: "reject",
-        message: grantPayload.message,
-      });
-    }
-
-    const response = await fetch(`${apiBaseUrl}/auth/session-grants`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${sessionToken}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(grantPayload.payload),
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      return fail(response.status, {
-        id: "session-grants",
-        state: "reject",
-        message: body?.message ?? "Session grant rejected",
-      });
-    }
-
-    const principalId = canonicalPrincipalId(body?.principal_id);
-    const grantedCapabilities = Array.isArray(body?.capabilities) ? body.capabilities : null;
-    const grantedKinds = grantedCapabilities?.map((capability) => capability.kind).join(", ") ?? "";
-    const issuedSessionToken = body?.session_token;
-    if (
-      principalId === null ||
-      grantedCapabilities === null ||
-      typeof issuedSessionToken !== "string" ||
-      issuedSessionToken.trim() === ""
-    ) {
-      return fail(502, {
-        id: "session-grants",
-        state: "reject",
-        message: "Auth service returned a malformed session grant",
-      });
-    }
-    return {
-      id: "session-grants",
-      state: "ack",
-      message: `Granted ${grantedKinds} to ${principalId}`,
-      principalId,
-      capabilityKinds: grantedKinds,
-      sessionToken: issuedSessionToken,
-    };
-  },
 };
 
 // Classic identity operations are first-class whenever the classic sign-in
@@ -295,53 +217,6 @@ function requiredFormString(formData, field) {
     throw error(400, `${field} is required`);
   }
   return value;
-}
-
-function parseSessionGrantPayload(formData) {
-  const principalId = canonicalPrincipalId(formData.get("principalId"));
-  if (principalId === null) {
-    return Object.freeze({
-      status: "reject",
-      message: "Session grant principal must be a canonical UUID",
-    });
-  }
-  const expiresAtText = requiredFormString(formData, "expiresAt");
-  if (!/^\d+$/u.test(expiresAtText)) {
-    return Object.freeze({
-      status: "reject",
-      message: "Session grant expiry must be a positive Unix timestamp",
-    });
-  }
-  const expiresAt = Number(expiresAtText);
-  if (!Number.isSafeInteger(expiresAt) || expiresAt <= 0) {
-    return Object.freeze({
-      status: "reject",
-      message: "Session grant expiry must be a positive Unix timestamp",
-    });
-  }
-
-  const globalCapabilities = [
-    ...new Set(formData.getAll("globalCapability").map(String)),
-  ];
-  const unsupported = globalCapabilities.filter(
-    (capability) => capability !== "GlobalMod",
-  );
-  if (globalCapabilities.length === 0 || unsupported.length > 0) {
-    return Object.freeze({
-      status: "reject",
-      message:
-        "Session grant form can only request the explicit GlobalMod capability",
-    });
-  }
-
-  return Object.freeze({
-    status: "ok",
-    payload: Object.freeze({
-      principal_id: principalId,
-      expires_at: expiresAt,
-      global_capabilities: Object.freeze(globalCapabilities),
-    }),
-  });
 }
 
 function fixtureRecoveryGateReport() {

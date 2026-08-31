@@ -130,7 +130,7 @@ const boundary = {
   boundary:
     "Generated browser acceptance boundary over the current frontend proof artifacts. It distinguishes proven browser evidence from blocked or prepared-only lanes, and does not promote model/SSR/DOM evidence to hydrated browser acceptance.",
   promotionRule:
-    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player private:role_pm:slot-7 SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
+    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin cohost confirmation and recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player private:role_pm:slot-7 SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
   lanes,
   overall: {
     state: fullAppBrowserProven ? "browser_proven" : "not_complete",
@@ -159,7 +159,7 @@ function localhostLane(roleSmoke) {
           "roleSmoke.roles includes admin/player/moderator screenshot pixel evidence",
           "roleSmoke.setup includes /g/midsummer/setup workbench geometry evidence",
           "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry evidence",
-          "roleSmoke admin entries include session-grant/recovery-gate form evidence",
+          "roleSmoke admin entries include cohost confirmation and recovery-gate form evidence",
           "roleSmoke player entries include SubmitPost ACK and refreshed thread evidence",
           "roleSmoke playerPrivateChannel entries include private:role_pm:slot-7 SubmitPost ACK evidence",
           "roleSmoke player entries include tablet-media browser request evidence without original/full/desktop URLs",
@@ -175,7 +175,7 @@ function localhostLane(roleSmoke) {
           "setup workbench browser geometry evidence is absent",
           "board and route-state browser screenshots are absent",
           "admin/player/moderator tablet thumb-zone geometry evidence is absent",
-          "admin session-grant/recovery-gate browser form evidence is absent",
+          "admin cohost confirmation or recovery-gate browser form evidence is absent",
           "player private:role_pm:slot-7 SubmitPost browser ACK evidence is absent",
           "player tablet-media browser request evidence is absent",
         ],
@@ -219,7 +219,7 @@ function noBindInteractionLane(noBindInteractions) {
     evidence: proven
       ? [
           "noBindInteractions.status == passed",
-          "admin cohost/session-grant/recovery-gate, player vote/post/private-channel post, and moderator clicked target and activeElement evidence exists",
+          "admin cohost/recovery-gate, player vote/post/private-channel post, and moderator clicked target and activeElement evidence exists",
         ]
       : [],
     missing: proven
@@ -268,7 +268,7 @@ function inAppFileLane(inAppBrowserPage) {
       ? [
           "inAppBrowserPage.status == page-generated",
           "first-viewport board/admin/player/moderator shells are present",
-          `admin cohost/session-grant/recovery-gate, player main/private-channel, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation controls are present`,
+          `admin cohost/recovery-gate, player main/private-channel, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmation controls are present`,
           "hydrated-surface admin operational forms, player, moderator host-prompt, and slot-lifecycle scenario controls are present",
         ]
       : [],
@@ -328,7 +328,7 @@ function inAppFileBrowserRunLane(inAppBrowserRun, inAppBrowserImportedRun) {
         ? [
           "inAppBrowserRun.status == passed",
           "fixture file URL loaded in Chromium for every proof viewport",
-          `admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence`,
+          `admin cohost/recovery-gate, player main/private-channel, route-error, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence`,
           "moderator critical host confirmation records include alertdialog focus metadata and object/outcome text",
           "fixture screenshots include nonblank pixel evidence",
         ]
@@ -365,7 +365,7 @@ function inAppLocalhostBrowserRunLane(inAppBrowserLocalhostRun) {
       ? [
           "inAppBrowserLocalhostRun.status == passed",
           "fixture loaded from localhost for every proof viewport",
-          `admin cohost/session-grant/recovery-gate, player main/private-channel, route-error, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence`,
+          `admin cohost/recovery-gate, player main/private-channel, route-error, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, and hydrated-surface controls recorded click/focus evidence`,
           "moderator critical host confirmation records include alertdialog focus metadata and object/outcome text",
           "fixture screenshots include nonblank pixel evidence",
         ]
@@ -397,7 +397,7 @@ function inAppImportedBrowserRunLane(inAppBrowserImportedRun) {
           "inAppBrowserImportedRun.status == imported-passed",
           "source browser-run evidence was validated without launching Chromium locally",
           `imported browser-run includes every proof viewport and all ${EXPECTED_COUNTS.plannedInteractions} planned interactions`,
-          "imported browser-run includes 2 reserved status-floor checks covering 15 admin/moderator action tiles",
+          `imported browser-run includes 2 reserved status-floor checks covering ${EXPECTED_COUNTS.stabilityCheckTiles} admin/moderator action tiles`,
           "referenced fixture screenshots were re-read as PNGs and matched nonblank pixel evidence",
         ]
       : [],
@@ -427,7 +427,7 @@ function importedRoleSmokeLane(importedRoleSmoke) {
           "importedRoleSmoke.status == imported-passed",
           "imported role-smoke evidence was validated without relaunching Chromium locally",
           "imported role-smoke includes board/admin/player/moderator, forbidden-route, and route-state screenshots",
-          "imported role-smoke includes admin session-grant/recovery-gate, player SubmitPost/private-channel/media, and moderator SetSlotStatus evidence",
+          "imported role-smoke includes admin cohost/recovery-gate, player SubmitPost/private-channel/media, and moderator SetSlotStatus evidence",
           "referenced role-smoke screenshots were re-read as PNGs and matched nonblank pixel evidence",
         ]
       : [],
@@ -500,17 +500,8 @@ function adminBrowserOperationalEvidenceComplete(roleSmoke) {
     return false;
   }
   return adminEntries.every((entry) =>
-    entry.commandResult?.sessionGrant?.focus?.initialFocus?.testId ===
-      "admin-command-confirm-session-grants" &&
-    entry.commandResult?.sessionGrant?.form?.action === "?/grantSession" &&
-    includesAll(
-      entry.commandResult?.sessionGrant?.form?.fieldTestIds,
-      [
-        "admin-session-grant-principal",
-        "admin-session-grant-expires-at",
-        "admin-session-grant-global-mod",
-      ],
-    ) &&
+    entry.commandResult?.cohost?.focus?.initialFocus?.testId ===
+      "admin-command-confirm-cohost" &&
     entry.commandResult?.recovery?.state === "ack" &&
     entry.commandResult?.recovery?.focus?.initialFocus?.testId ===
       "admin-recovery-confirm-recovery-gate" &&
@@ -714,7 +705,6 @@ function noBindInteractionScenarioIds() {
   return {
     admin: [
       "admin-cohost-confirm-click",
-      "admin-session-grant-confirm-click",
       "admin-recovery-gate-confirm-click",
     ],
     player: [
@@ -784,7 +774,6 @@ function inAppBrowserFixtureComplete(inAppBrowserPage) {
   );
   for (const id of [
     "admin-cohost-confirm-click",
-    "admin-session-grant-confirm-click",
     "admin-recovery-gate-confirm-click",
     "player-submit-vote-click",
     "player-submit-post-click",
@@ -884,7 +873,6 @@ function inAppBrowserRunEvidenceComplete(inAppBrowserRun) {
     const ids = new Set((run.interactions ?? []).map((entry) => entry.id));
     for (const id of [
       "admin-cohost-confirm-click",
-      "admin-session-grant-confirm-click",
       "admin-recovery-gate-confirm-click",
       "player-submit-vote-click",
       "player-submit-post-click",

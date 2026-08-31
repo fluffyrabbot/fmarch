@@ -49,21 +49,31 @@ remain adapter-local strings; none is an application principal or an authorizati
   key; provider JWTs are never stored as reusable credentials or accepted as per-request
   application bearers.
 - **API verification (exchange only):** the Rust `identity::workos` adapter accepts RS256
-  only, selects the WorkOS JWKS key by `kid`, refreshes the key set once on an unknown key,
-  validates `exp`, `iss`, and `sub`, and requires a WorkOS session id. The issuer and JWKS
-  URL must exactly match the application's client-scoped OIDC discovery document; the JWKS
-  URL is configuration, not a token claim. Promotion rechecks discovery and a nonempty key
-  set for both hosted environments without receiving a WorkOS secret. Provider failures fail
-  closed.
+  only, accepts bounded compact JWTs and prevalidated unique RSA verification keys, selects
+  the WorkOS JWKS key by `kid`, and permits one rate-limited refresh leader for an unknown
+  key while followers fail fast. Positive key snapshots expire after five minutes and are
+  never used stale. The adapter validates `exp`, `iat`, `iss`, `sub`, client id, and WorkOS
+  session id; assertions must be exchanged within ten minutes of issuance and may span no
+  more than one day. The issuer and JWKS URL are derived from the canonical WorkOS client
+  authority and supplied configuration must match those exact HTTPS endpoints. Redirects,
+  oversized responses, ambiguous key sets, and provider failures fail closed. Promotion
+  independently rechecks discovery and a nonempty key set for both hosted environments
+  without receiving a WorkOS secret.
+  Before any JWT decoding, signature verification, or JWKS work, the API first acquires a
+  dedicated verification semaphore and then charges a bounded signed-edge source budget. Source
+  excess is retryable HTTP 429; process verifier saturation is retryable HTTP 503 and consumes no
+  source quota. An absent or unauthenticated source designation shares the conservative
+  `unattributed` budget rather than becoming caller-selected authority. Stale budget cleanup uses
+  a bounded, skip-locked candidate batch so an unauthenticated request cannot monopolize the table.
 - **Stable local authority:** the immutable WorkOS `sub` is bound exactly once to a
   generated `platform_principal` through `external_identity` (`(provider, subject)` is the
   identity key; email is display metadata, never a primary key, authorization input, or
   auto-linking signal). Session validation rechecks that the principal and the
   authenticating method are still active on every request. Durable global capabilities are
-  read from the principal on every validation; the session row stores only intentionally
-  session-scoped grants, so removing a principal capability takes effect immediately.
-  Per-game capabilities are likewise derived from local state. Disabling a principal
-  revokes every method and session.
+  read from the principal on every validation; hosted session, account, and invitation rows
+  store no capability snapshot at all, so removing a principal capability takes effect
+  immediately. Per-game capabilities are likewise derived from current local state.
+  Disabling a principal revokes every method and session.
 - **Provider-session cutoff:** every accepted WorkOS assertion must carry one canonical
   provider session id (`sid`). `workos_provider_session` binds that id to exactly one local
   subject, principal, and method; `auth_session.workos_session_id` makes all local sessions
@@ -107,9 +117,24 @@ remain adapter-local strings; none is an application principal or an authorizati
 - **WorkOS adapter policy (recorded tradeoff):** there is no AuthKit refresh loop and no
   provider webhook. App-initiated logout ends the observed provider session immediately as
   described above, but provider-originated revocation elsewhere is learned only when the
-  local session expires, which is why WorkOS-exchanged sessions default to a shorter absolute TTL
-  (`FMARCH_WORKOS_SESSION_TTL_SECONDS`, 24h) than classic ones
-  (`FMARCH_SESSION_TTL_SECONDS`, 30d). A signed-out user cannot escape a WorkOS outage
+  local session expires. A WorkOS-exchanged session therefore expires at the earlier of the
+  signed assertion's `exp` or `FMARCH_WORKOS_SESSION_TTL_SECONDS`, which is capped at 24h;
+  the verified signing `kid` is retained as backend-only provenance on every external session
+  and identity-link lifecycle audit. A recent-method GlobalAdmin can invoke
+  `POST /auth/workos-signing-key-retirements`; retirement commands first take one global
+  transaction fence before locking the administrator session, preventing concurrent incident
+  responders from forming a session-row deadlock. The command then takes the exclusive per-key
+  gate, appends an immutable `workos_signing_key_tombstone`, revokes only currently live sessions
+  bearing the key, and records the lifecycle event. Expired and already-revoked history is neither
+  locked nor rewritten. Every WorkOS issuance, link, and rotation takes the shared form of the
+  per-key gate and checks the durable tombstone in its transaction, so retirement is monotonic
+  across processes and restarts. Repeating retirement returns the original tombstone without
+  rewriting evidence or duplicating the audit. Gameplay commands lock and revalidate their exact
+  session in the same transaction that claims the command receipt and appends events. Retirement
+  therefore waits for every earlier authorized commit, while a retirement that wins the fence makes
+  every later command reject; no detached mutation can commit after the retirement receipt. Classic
+  sessions retain their independent 30d default
+  (`FMARCH_SESSION_TTL_SECONDS`). A signed-out user cannot escape a WorkOS outage
   unless they added classic or recovery credentials beforehand — the security page
   therefore prompts WorkOS-only principals to add classic sign-in proactively.
 - **Bootstrap (provider-neutral):** `FMARCH_BOOTSTRAP_ADMIN_METHOD=classic|workos` with
@@ -122,11 +147,27 @@ remain adapter-local strings; none is an application principal or an authorizati
   primary/direct option and WorkOS appears only when its complete configuration is present
   (`workosAuthKitConfigured` is the single availability predicate). Every route is always
   mounted; classic availability is a runtime policy check, not a compile-or-mount fork.
-- **Dev shortcuts:** `FMARCH_DEV_AUTH=1` gates the dev-session endpoint in debug builds.
-  That endpoint still issues a server-generated canonical app-session credential; callers
-  cannot select or replace bearer material. WebSockets use the same one-time ticket boundary
-  in every environment. Dev auth is orthogonal to classic availability, which is production
+- **Dev shortcuts:** the local-proof session endpoint exists only in debug builds and requires
+  all of `FMARCH_DEV_AUTH=1`, an explicit loopback bind, and a fresh high-entropy per-process
+  `FMARCH_LOCAL_PROOF_SECRET`; the flag alone grants nothing. The secret authenticates the
+  control endpoint; verifier construction independently generates a non-secret random process
+  instance id, so even accidentally repeated secrets cannot merge process authority. Every issued Dev
+  session persists that id but no capability grant. Debug-only grants live in a process-owned
+  map keyed by the session hash and disappear on restart; bearer, trusted-reference, and locked
+  rotation validation require both the current process instance and its live map entry.
+  Callers cannot select bearer material.
+  WebSockets use the same one-time session-backed ticket boundary in every environment; no
+  query-parameter principal shortcut exists. Dev auth is orthogonal to classic availability, which is production
   identity.
+- **Commit-bound application authority:** request extraction is an admission check, not a
+  durable authorization receipt. Security-sensitive mutations use an identity-owned
+  transaction, lock the canonical principal/session owner, revalidate the exact initiating
+  session, resolve current global or game authority, perform the mutation, and commit without
+  allowing that transaction to escape. Member lifecycle and private exports carry an opaque
+  `InitiatingSession`; community membership and stewardship use `AuthorizedUnitOfWork`; game
+  invitations re-resolve `GlobalAdmin` or `HostOf(game)` inside their insertion transaction.
+  Logout, role removal, or key retirement therefore either waits for an earlier authorized
+  commit or wins first and makes the later operation reject.
 - **CSRF:** AuthKit's OAuth callback uses PKCE and state validation. Authenticated API
   calls carry explicit bearer authority from server-side SvelteKit code rather than ambient
   API cookies. The WebSocket uses a one-time, audience-bound ticket rather than a bearer
@@ -140,15 +181,50 @@ remain adapter-local strings; none is an application principal or an authorizati
   upstream call. Command wire bodies contain only a durable command id and the typed command.
   Any legacy or forged actor field is rejected by strict deserialization, and the API derives
   the actor from the enabled, unexpired, unrevoked session before it reads or writes gameplay
-  state.
+  state. A command's five-second authority lease begins before pool checkout and spans stream,
+  principal, exact-session, decision, receipt, and commit work. Timeout closes its owned
+  connection within a separate one-second reserve; an ambiguous commit is recovered only by
+  retrying the same command id.
 - Split-domain WebSockets use `POST /auth/websocket-tickets`. The API stores only a hash of
-  each random ticket and binds it to the app session (its hash, method kind, principal),
+  each random ticket and binds its session reference by foreign key to the app-session hash,
   configured audience, game, channel, optional slot, durable `after_seq`, and the earlier of
-  the local ticket TTL or session expiry. Redemption is an atomic one-time consume.
+  the local ticket TTL or session expiry. Principal authority is derived from that session,
+  never duplicated on the ticket. Minting re-locks and revalidates the exact bearer inside the
+  insertion transaction, so lifecycle revocation cannot race a late derived credential into existence.
+  Admission first reserves process-wide connection capacity. Redemption discovers only the candidate
+  session owner, reserves per-principal capacity before opening a lock-bearing transaction, then locks
+  and revalidates that exact session, resamples time, deletes and returns the outstanding ticket, and
+  commits as one short transaction. A ticket cannot outwait its own expiry behind a session lock.
+  Retryable global or
+  per-principal capacity rejection releases or rolls back its admission state, preserving the
+  one-time ticket for retry. Successful mints sweep a bounded shortlist of expired tickets under
+  per-ticket try-advisory locks. Redemption and identity lifecycle deletion take the blocking form of
+  that same canonical lock, so cleanup skips their tickets rather than convoying behind them and does
+  not need broad ticket `UPDATE` authority.
   Wrong-audience attempts do not consume the ticket; expired, replayed, forged, or
   disabled-principal/disabled-method tickets are rejected before upgrade, so no Hello frame
-  or private byte is emitted. Session, method, and principal liveness are checked again while
-  the socket remains open.
+  or private byte is emitted. Session, method, principal, expiry, retired WorkOS-key liveness, and
+  current game authority are checked before every outbound application batch. The transaction first
+  takes the global signing-key-retirement advisory gate and principal owner row in shared mode, then
+  shared locks on the exact session and the existing game-role, spectator, persona-binding, occupancy,
+  slot-state, and private-channel rows that support the resolved grants. The five-second authority lease
+  starts before those gates, so database acquisition consumes (rather than extends) the remaining socket
+  budget. Exclusive key/principal cutoffs
+  queue ahead of later shared readers, so they drain the bounded set of already-entered deliveries once
+  rather than accumulating one socket deadline per session. The final guard validates the
+  ticket's channel/slot scope and every host/player-only delta audience before encoding. Those bounded
+  locks span one whole-send deadline, making successful session/key retirement, role removal, channel
+  removal, or player replacement wait out an earlier authorized delivery on a healthy PostgreSQL
+  connection. Delivery capacity is capped below the shared authority budget, and the database idle
+  transaction timeout cannot be configured below ten seconds. Identity cutoffs use a centralized
+  transaction-local seven-second lock wait and ten-second statement deadline, so the general one-second
+  pool lock timeout cannot make them fail behind a permitted five-second delivery. Release failure
+  closes the socket before any later batch. A timed-out or failed application-frame send is stricter:
+  it drops the socket without a later Close/flush, because cancellation may leave that private frame
+  buffered inside the sink. Inbound close/control frames are polled even on a quiet game so abandoned
+  connections promptly return their admission permits. Backend termination during the in-flight network
+  write remains a documented fail-stop gap that requires the future revocation-epoch/instance-ack
+  protocol for a database-failure-proof no-post-receipt guarantee.
 - In-process broadcast remains the low-latency path for game events, while every API instance
   polls the durable game event sequence and the durable main-thread visibility log. A commit or
   moderation action on instance A therefore reaches a socket on B; hides emit a removal tombstone

@@ -18,6 +18,14 @@ use wire::{
 
 static ENCRYPTION_ENV_LOCK: Mutex<()> = Mutex::new(());
 
+const TEST_LOCAL_PROOF_SECRET: &str =
+    "23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01";
+
+fn test_local_proof_verifier() -> api::LocalProofAuthVerifier {
+    api::LocalProofAuthVerifier::from_secret(TEST_LOCAL_PROOF_SECRET)
+        .expect("test local-proof secret is canonical")
+}
+
 struct EncryptionEnvGuard {
     prior_key: Option<String>,
     prior_kid: Option<String>,
@@ -124,8 +132,9 @@ async fn dev_session_token(
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/dev-session")
+                .uri("/auth/local-proof/sessions")
                 .header("content-type", "application/json")
+                .header(api::LOCAL_PROOF_AUTH_HEADER, TEST_LOCAL_PROOF_SECRET)
                 .body(Body::from(
                     serde_json::json!({
                         "principal_id": principal_id,
@@ -168,8 +177,10 @@ async fn mixed_kid_private_payloads_survive_rebuild_and_private_thread_api_read(
     let env = EncryptionEnvGuard::new();
     let media_root = tempfile::tempdir().unwrap();
     let media_store = MediaStore::open(media_root.path(), MediaLimits::default()).unwrap();
-    let app =
-        api::router_with_state(api::ApiState::new(pool.clone(), media_store).with_dev_auth(true));
+    let app = api::router_with_state(
+        api::ApiState::new(pool.clone(), media_store)
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
     let game = Uuid::new_v4();
     let old_kid = "old-kid";
     let old_key = "old private event encryption key";

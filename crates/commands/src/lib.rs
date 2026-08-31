@@ -25,7 +25,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use caps::{Capability, CapabilitySet, Principal};
 use content_reference::{self, ContentReferenceReject};
@@ -496,6 +496,29 @@ pub async fn handle_idempotent(
         .await
 }
 
+/// Apply one authenticated, idempotent command inside a caller-owned
+/// transaction. This is the production HTTP boundary's authority-safe entry
+/// point: the caller can lock and revalidate its session in `tx`, execute the
+/// command here, and commit both as one authorized unit of work.
+///
+/// The caller owns commit or rollback. Receipt replay is intentionally
+/// returned without committing so it cannot escape the surrounding authority
+/// fence.
+pub async fn handle_idempotent_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    command_id: Uuid,
+    command: Command,
+) -> Result<Ack, Reject> {
+    let receipt = ReceiptClaim::new(principal, command_id, &command)?;
+    COMMAND_RUNTIME_TEST_CONTROL
+        .scope(
+            None,
+            handle_in_tx(tx, principal, command_id, command, Some(&receipt)),
+        )
+        .await
+}
+
 /// Run an idempotent command with a deterministic cancellation checkpoint.
 /// This is intentionally hidden from the production API documentation.
 #[doc(hidden)]
@@ -522,48 +545,102 @@ async fn handle_inner(
     command: Command,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let game = command_game(&command);
     let mut tx = pool
         .begin()
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
     command_runtime_checkpoint(CommandRuntimeCheckpoint::TransactionBegun).await;
 
-    if let Some(receipt) = receipt {
-        let replay = claim_or_replay_receipt_in_tx(&mut tx, game, receipt).await?;
-        command_runtime_checkpoint(CommandRuntimeCheckpoint::ReceiptClaimed).await;
-        if let Some(ack) = replay {
-            tx.commit()
-                .await
-                .map_err(|error| Reject::Internal(error.to_string()))?;
-            command_runtime_checkpoint(CommandRuntimeCheckpoint::Committed).await;
-            return Ok(ack);
-        }
-    }
-
-    eventstore::lock_stream_in_tx(&mut tx, game)
-        .await
-        .map_err(|error| Reject::Internal(error.to_string()))?;
-    command_runtime_checkpoint(CommandRuntimeCheckpoint::StreamLocked).await;
-    if game_closed_by_completion(&command).is_some() {
-        require_game_not_completed(&mut tx, game).await?;
-        command_runtime_checkpoint(CommandRuntimeCheckpoint::CompletionChecked).await;
-    }
-    let audit_context = command_audit_context(&mut tx, principal, command_id, &command).await?;
-    let ack = COMMAND_AUDIT_CONTEXT
-        .scope(audit_context, handle_command(&mut tx, principal, command))
-        .await?;
-    command_runtime_checkpoint(CommandRuntimeCheckpoint::CommandApplied).await;
-
-    if let Some(receipt) = receipt {
-        store_receipt_ack_in_tx(&mut tx, receipt, &ack).await?;
-        command_runtime_checkpoint(CommandRuntimeCheckpoint::ReceiptStored).await;
-    }
+    let ack = handle_in_tx(&mut tx, principal, command_id, command, receipt).await?;
     tx.commit()
         .await
         .map_err(|error| Reject::Internal(error.to_string()))?;
     command_runtime_checkpoint(CommandRuntimeCheckpoint::Committed).await;
     Ok(ack)
+}
+
+async fn handle_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    command_id: Uuid,
+    command: Command,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    let game = command_game(&command);
+
+    lock_command_stream_in_tx(tx, &command).await?;
+    command_runtime_checkpoint(CommandRuntimeCheckpoint::StreamLocked).await;
+
+    if let Some(receipt) = receipt {
+        let replay = claim_or_replay_receipt_in_tx(tx, game, receipt).await?;
+        command_runtime_checkpoint(CommandRuntimeCheckpoint::ReceiptClaimed).await;
+        if let Some(ack) = replay {
+            return Ok(ack);
+        }
+    }
+
+    if game_closed_by_completion(&command).is_some() {
+        require_game_not_completed(tx, game).await?;
+        command_runtime_checkpoint(CommandRuntimeCheckpoint::CompletionChecked).await;
+    }
+    let audit_context = command_audit_context(tx, principal, command_id, &command).await?;
+    let ack = COMMAND_AUDIT_CONTEXT
+        .scope(audit_context, handle_command(tx, principal, command))
+        .await?;
+    command_runtime_checkpoint(CommandRuntimeCheckpoint::CommandApplied).await;
+
+    if let Some(receipt) = receipt {
+        store_receipt_ack_in_tx(tx, receipt, &ack).await?;
+        command_runtime_checkpoint(CommandRuntimeCheckpoint::ReceiptStored).await;
+    }
+    Ok(ack)
+}
+
+/// Acquire the first lock in every command transaction's canonical order.
+/// HTTP authorization uses this before locking any participating identity;
+/// the command pipeline reacquires it defensively before receipt or domain
+/// persistence. Transaction-scoped advisory locks are idempotent.
+pub async fn lock_command_stream_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    command: &Command,
+) -> Result<(), Reject> {
+    eventstore::lock_stream_in_tx(tx, command_game(command))
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))
+}
+
+/// Fail-fast network admission for the first lock in the command order. A
+/// caller that does not acquire the stream owns no other durable lock, so it
+/// can safely return the typed retryable conflict without tying up a pool
+/// connection behind another command.
+pub async fn try_lock_command_stream_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    command: &Command,
+) -> Result<(), Reject> {
+    match eventstore::try_lock_stream_in_tx(tx, command_game(command))
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?
+    {
+        true => Ok(()),
+        false => Err(Reject::StreamConflict),
+    }
+}
+
+/// Bound waits while the HTTP boundary acquires the canonical authority lock
+/// set, or restore PostgreSQL's unbounded default after that set is owned.
+pub async fn set_command_lock_timeout_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    timeout: Option<Duration>,
+) -> Result<(), Reject> {
+    let value = timeout
+        .map(|timeout| format!("{}ms", timeout.as_millis()))
+        .unwrap_or_else(|| "0".to_string());
+    sqlx::query("SELECT set_config('lock_timeout', $1, TRUE)")
+        .bind(value)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| Reject::Internal(error.to_string()))?;
+    Ok(())
 }
 
 async fn handle_command(
@@ -986,6 +1063,76 @@ fn command_game(command: &Command) -> Uuid {
         | Command::ExtendDeadline { game, .. }
         | Command::ProcessReplacement { game, .. } => *game,
     }
+}
+
+/// State the owner-state requirement for a non-actor command principal. Some
+/// commands grant new authority and require an active owner; authority removal
+/// deliberately remains valid for an existing inactive owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CommandIdentityTargetPolicy {
+    Existing,
+    Active,
+}
+
+/// Every non-actor platform principal whose owner rows a command may read,
+/// lock, or reference, paired with the state that must still hold after the
+/// lock. The exhaustive match is a compile-time change detector.
+pub fn command_identity_targets(
+    command: &Command,
+) -> BTreeMap<PrincipalId, CommandIdentityTargetPolicy> {
+    let mut targets = BTreeMap::new();
+    match command {
+        Command::SeatPersona { principal_id, .. }
+        | Command::AddCohost { principal_id, .. }
+        | Command::GrantSpectator { principal_id, .. } => {
+            targets.insert(*principal_id, CommandIdentityTargetPolicy::Active);
+        }
+        Command::RevokeSpectator { principal_id, .. } => {
+            targets.insert(*principal_id, CommandIdentityTargetPolicy::Existing);
+        }
+        Command::ProcessReplacement {
+            incoming_principal_id,
+            ..
+        } => {
+            targets.insert(*incoming_principal_id, CommandIdentityTargetPolicy::Active);
+        }
+        Command::CreateGame { .. }
+        | Command::AddSlot { .. }
+        | Command::RenameGamePersona { .. }
+        | Command::AssignRole { .. }
+        | Command::SetSlotStatus { .. }
+        | Command::AddSlotStatusTag { .. }
+        | Command::RemoveSlotStatusTag { .. }
+        | Command::StartGame { .. }
+        | Command::OpenDayPhase { .. }
+        | Command::AdvancePhase { .. }
+        | Command::AdvancePhaseByDeadline { .. }
+        | Command::LockThread { .. }
+        | Command::UnlockThread { .. }
+        | Command::ResolvePhase { .. }
+        | Command::CompleteGame { .. }
+        | Command::PublishVotecount { .. }
+        | Command::ResolveHostPrompt { .. }
+        | Command::SetPostPolicy { .. }
+        | Command::PublishSpectatorPost { .. }
+        | Command::ControlItaSession { .. }
+        | Command::ApplyEffectPlan { .. }
+        | Command::AttachDayProgram { .. }
+        | Command::ScheduleDayEvent { .. }
+        | Command::OpenDayEvent { .. }
+        | Command::LockDayEvent { .. }
+        | Command::CancelDayEvent { .. }
+        | Command::SubmitDayEventParticipation { .. }
+        | Command::WithdrawDayEventParticipation { .. }
+        | Command::ResolveDayEvent { .. }
+        | Command::SubmitVote { .. }
+        | Command::WithdrawVote { .. }
+        | Command::SubmitAction { .. }
+        | Command::WithdrawAction { .. }
+        | Command::SubmitPost { .. }
+        | Command::ExtendDeadline { .. } => {}
+    }
+    targets
 }
 
 fn game_closed_by_completion(command: &Command) -> Option<Uuid> {

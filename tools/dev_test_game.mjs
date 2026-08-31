@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import net from "node:net";
@@ -7,10 +6,10 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import {
-  localDatabaseAuthority,
   runFmarchMigrations,
   serverRuntimeEnvironment,
 } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
 import {
   completeDevTestGameConfiguration,
@@ -210,6 +209,8 @@ let proofStabilityAudit;
 let identityBootstrap;
 let localAccounts;
 let seedSessionTokens;
+let rootAdminSessionToken;
+let localProofAuth;
 
 export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   configuration = normalizeDevTestGameConfiguration({ rawArgs, env });
@@ -217,6 +218,11 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   if (args.help) {
     console.log(devTestGameHelp());
     return;
+  }
+  if (configuration.apiBaseUrl !== undefined) {
+    throw new Error(
+      "--api-base-url cannot seed process-bound local proof sessions; run dev:test-game with its owned API process",
+    );
   }
   const registry = await readNamedGames();
   configuration = completeDevTestGameConfiguration({
@@ -240,15 +246,13 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   identityBootstrap = undefined;
   localAccounts = new Map();
   seedSessionTokens = new Map();
+  rootAdminSessionToken = undefined;
+  localProofAuth = undefined;
 
   await mkdir(configuration.paths.artifactDir, { recursive: true });
-  if (apiBaseUrl === undefined) {
-    apiBaseUrl = await startApi();
-  } else {
-    databaseUrl = localDatabaseAuthority({ migrationUrl, env }).applicationUrl;
-    await assertPostgresReachable(databaseUrl);
-    await waitForHealth(apiBaseUrl);
-  }
+  const ownedApi = await startApi();
+  apiBaseUrl = ownedApi.baseUrl;
+  localProofAuth = ownedApi.localProofAuth;
 
   identityBootstrap = await seedRootAdminSession();
   const seedResult = await seedGame();
@@ -370,6 +374,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
 }
 
 async function startApi() {
+  const serverLocalProofAuth = createLocalProofAuth();
   const port = args.apiPort ?? (await freePort());
   if (args.apiPort !== undefined) {
     await assertPortAvailable(port, "API");
@@ -385,7 +390,7 @@ async function startApi() {
   console.log(`starting Rust API on ${baseUrl} with cargo run -p server`);
   apiServer = spawn("cargo", ["run", "-p", "server"], {
     cwd: configuration.paths.repoRoot,
-    env: {
+    env: serverLocalProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({
         applicationUrl: databaseUrl,
         env: runtimeEnvironment,
@@ -415,7 +420,7 @@ async function startApi() {
       FMARCH_DB_ACQUIRE_TIMEOUT_MS:
         process.env.FMARCH_DB_ACQUIRE_TIMEOUT_MS ?? "2000",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   console.log(`Rust API process pid: ${apiServer.pid}`);
@@ -443,7 +448,10 @@ async function startApi() {
       }
     },
   });
-  return baseUrl;
+  return Object.freeze({
+    baseUrl,
+    localProofAuth: serverLocalProofAuth,
+  });
 }
 
 async function startFrontend(currentApiBaseUrl) {
@@ -612,45 +620,12 @@ async function createSessions() {
 }
 
 async function seedRootAdminSession() {
-  const rootPrincipalId = authorityPrincipalId("root_admin");
-  await runSql(databaseUrl, `
-    INSERT INTO platform_principal (
-      principal_id, status, global_capabilities, created_at, disabled_at
-    ) VALUES (${sqlLiteral(rootPrincipalId)}, 'active', ARRAY[]::TEXT[], 0, NULL)
-    ON CONFLICT (principal_id) DO NOTHING;
-  `);
-  await runSql(databaseUrl, `
-    INSERT INTO auth_session (
-      token_hash,
-      principal_id,
-      created_at,
-      expires_at,
-      revoked_at,
-      global_capabilities,
-      idle_expires_at,
-      assurance,
-      authenticated_at
-    )
-    VALUES (
-      ${sqlLiteral(hashSessionToken(tokens.rootAdmin))},
-      ${sqlLiteral(rootPrincipalId)},
-      0,
-      ${Number(expiresAt)},
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[],
-      ${Number(expiresAt)},
-      'admin_grant',
-      0
-    )
-    ON CONFLICT (token_hash) DO UPDATE SET
-      principal_id = EXCLUDED.principal_id,
-      expires_at = EXCLUDED.expires_at,
-      revoked_at = NULL,
-      global_capabilities = EXCLUDED.global_capabilities,
-      idle_expires_at = EXCLUDED.idle_expires_at;
-  `);
+  rootAdminSessionToken = await mintLocalProofSession({
+    principalId: "root_admin",
+    globalCapabilities: ["GlobalAdmin"],
+  });
   const session = await fetchJson(`${apiBaseUrl}/auth/session`, {
-    headers: { authorization: `Bearer ${tokens.rootAdmin}` },
+    headers: { authorization: `Bearer ${rootAdminSessionToken}` },
   });
   const capabilityKinds = (session.capabilities ?? []).map(
     (capability) => capability.kind,
@@ -665,22 +640,22 @@ async function seedRootAdminSession() {
   }
   return {
     status: "passed",
-    devSessionEndpointEnabled: false,
-    rootSessionSource: "auth_session",
+    rootSessionSource: "/auth/local-proof/sessions",
+    rootSessionProcessBound: true,
+    localProofInstanceIdExposed: false,
     browserCredentialIssuer: "/auth/accounts + /auth/game-invitations",
     browserCredentialKinds: ["account", "account-bound-invite"],
-    browserSessionGrantUsage: false,
+    browserLocalProofUsage: false,
     rootPrincipalId: session.principal_id,
     rootCapabilityKinds: capabilityKinds,
     rawRootTokenStored: false,
     boundary:
-      "Root GlobalAdmin is seeded directly into the local auth_session table so the dev-test-game spine keeps /auth/dev-session disabled while every browser role enters through account login or account-bound invite redemption.",
+      "The owned API mints root and command-only authority through its secret-authenticated, process-bound local proof control; the instance id remains backend-only, while every browser role enters through account login or account-bound invite redemption.",
   };
 }
 
 export function createTokenSet(prefix) {
   return Object.freeze({
-    rootAdmin: canonicalSessionToken(`${prefix}-root-admin`),
     admin: `${prefix}-admin`,
     host: `${prefix}-host`,
     hostSetup: `${prefix}-host-setup`,
@@ -703,10 +678,10 @@ async function createInviteCredential({
     principalId,
     globalCapabilities,
   });
-  const invite = await fetchJson(`${apiBaseUrl}/auth/game-invitations`, {
+  await fetchJson(`${apiBaseUrl}/auth/game-invitations`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${tokens.rootAdmin}`,
+      authorization: `Bearer ${rootAdminSessionToken}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({
@@ -714,7 +689,6 @@ async function createInviteCredential({
       account_id: account.accountId,
       expected_principal_id: authorityPrincipalId(principalId),
       expires_at: expiresAt,
-      global_capabilities: globalCapabilities,
     }),
   });
   return {
@@ -731,7 +705,9 @@ async function createInviteCredential({
     directUrl: frontendBaseUrl === undefined ? null : `${frontendBaseUrl}${returnTo}`,
     returnTo,
     expectedCapabilityKind,
-    globalCapabilities: invite.global_capabilities ?? [],
+    // Global authority belongs to the principal seeded above, never to the
+    // invitation credential.
+    globalCapabilities,
   };
 }
 
@@ -751,7 +727,7 @@ async function ensureLocalAccount({ principalId, globalCapabilities = [] }) {
   const response = await fetch(`${apiBaseUrl}/auth/accounts`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${tokens.rootAdmin}`,
+      authorization: `Bearer ${rootAdminSessionToken}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({
@@ -822,55 +798,49 @@ async function sendCommand(principalId, command) {
   return commandSummary(principalId, command, response);
 }
 
-// The strict wire rejects any actor field in the envelope; seed commands act
-// as a principal by presenting a session for that principal instead. Seed
-// sessions are inserted directly into scratch-Postgres, exactly like the root
-// admin session, so browser roles still enter only through accounts and
-// invites.
+// The strict wire rejects any actor field in the envelope. The owned API's
+// process-bound local proof control mints command-only authority, while browser
+// roles still enter only through accounts and invites.
 async function seedSessionToken(principalId) {
   if (principalId === "root_admin") {
-    return tokens.rootAdmin;
+    if (rootAdminSessionToken === undefined) {
+      throw new Error("root local proof session has not been minted");
+    }
+    return rootAdminSessionToken;
   }
   const cached = seedSessionTokens.get(principalId);
   if (cached !== undefined) {
     return cached;
   }
-  const token = canonicalSessionToken(`${tokenPrefix}-seed-${principalId}`);
-  const authorityId = authorityPrincipalId(principalId);
-  await runSql(databaseUrl, `
-    INSERT INTO platform_principal (
-      principal_id, status, global_capabilities, created_at, disabled_at
-    ) VALUES (
-      ${sqlLiteral(authorityId)}, 'active', ARRAY[]::TEXT[], 0, NULL
-    ) ON CONFLICT (principal_id) DO NOTHING;
-  `);
-  await runSql(databaseUrl, `
-    INSERT INTO auth_session (
-      token_hash,
-      principal_id,
-      created_at,
-      expires_at,
-      revoked_at,
-      global_capabilities,
-      idle_expires_at,
-      assurance,
-      authenticated_at
-    )
-    VALUES (
-      ${sqlLiteral(hashSessionToken(token))},
-      ${sqlLiteral(authorityId)},
-      0,
-      ${Number(expiresAt)},
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[],
-      ${Number(expiresAt)},
-      'admin_grant',
-      0
-    )
-    ON CONFLICT (token_hash) DO NOTHING;
-  `);
+  const token = await mintLocalProofSession({
+    principalId,
+    globalCapabilities: ["GlobalAdmin"],
+  });
   seedSessionTokens.set(principalId, token);
   return token;
+}
+
+async function mintLocalProofSession({ principalId, globalCapabilities }) {
+  if (localProofAuth === undefined) {
+    throw new Error(
+      "local proof authority is unavailable without the exact owned API process",
+    );
+  }
+  const session = await fetchJson(`${apiBaseUrl}/auth/local-proof/sessions`, {
+    method: "POST",
+    headers: localProofAuth.requestHeaders({
+      "content-type": "application/json",
+    }),
+    body: JSON.stringify({
+      principal_id: authorityPrincipalId(principalId),
+      expires_at: expiresAt,
+      global_capabilities: globalCapabilities,
+    }),
+  });
+  if (typeof session.session_token !== "string" || session.session_token === "") {
+    throw new Error(`local proof session for ${principalId} returned no session_token`);
+  }
+  return session.session_token;
 }
 
 async function sendCommandResult(principalId, command) {
@@ -26870,7 +26840,7 @@ async function revokeAuthSession({ apiBaseUrl, token }) {
   return await fetchJson(`${apiBaseUrl}/auth/session-revocations`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${tokens.rootAdmin}`,
+      authorization: `Bearer ${rootAdminSessionToken}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({ token }),
@@ -26921,14 +26891,6 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   } finally {
     globalThis.clearTimeout(timeout);
   }
-}
-
-function hashSessionToken(token) {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-function canonicalSessionToken(seed) {
-  return `fmss_${hashSessionToken(seed)}`;
 }
 
 function sqlLiteral(value) {

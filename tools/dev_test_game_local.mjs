@@ -35,10 +35,10 @@ export async function main(args = process.argv.slice(2), env = process.env) {
 }
 
 export function localDevTestGameEnvironment(env = process.env) {
-  return {
-    ...env,
-    FMARCH_DEV_AUTH: "1",
-  };
+  const childEnvironment = { ...env };
+  delete childEnvironment.FMARCH_DEV_AUTH;
+  delete childEnvironment.FMARCH_LOCAL_PROOF_SECRET;
+  return childEnvironment;
 }
 
 async function run(command, args, { env, allowFailure = false } = {}) {

@@ -977,7 +977,7 @@ session-secret policy, hosted deployment, hosted demo fixtures,
 production-like backup/PITR, exhaustive race coverage, hosted
 logs/metrics/traces, upload or transcode behavior, beta readiness, or
 rollback/delete semantics for existing append-only games. The harness seeds a
-local root GlobalAdmin row directly into `auth_session` with `/auth/dev-session`
+local root GlobalAdmin row directly into `auth_session` with `/auth/local-proof/sessions`
 disabled; every seeded browser role then enters through account login or
 account-bound invite redemption. Hosted production accounts, recovery,
 delivery, and distributed abuse controls remain a later identity layer over the same role

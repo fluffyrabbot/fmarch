@@ -995,7 +995,7 @@ async function proveConfirmationShellContract() {
         "admin",
         "AdminSetupGrid.svelte",
       ),
-      expectedUsages: 2,
+      expectedUsages: 1,
     },
     {
       id: "admin-recovery",
@@ -1113,20 +1113,21 @@ async function proveConfirmationActionContract() {
   const adminSetup = buildAdminSetupGridViewModel({
     items: [
       {
-        id: "session-grants",
-        label: "Session grants",
-        authority: "GlobalAdmin",
-        boundary: "Authenticated session grant",
-        boundaryDetail: "/auth/session-grants requires active GlobalAdmin session",
-        commandAction: "grant_session",
+        id: "cohost",
+        label: "Cohost delegation",
+        authority: "HostOf(game)",
+        boundary: "Command pipeline",
+        boundaryDetail: "/commands AddCohost host-gated by committed game grants",
+        commandAction: "add_cohost",
         buttonLabel: "Review",
-        confirmLabel: "Grant GlobalMod",
+        confirmLabel: "Delegate @cohost_c",
+        confirmMessage: "Delegate @cohost_c as cohost for this game",
       },
     ],
     commandStatuses: {
-      "session-grants": {
+      cohost: {
         state: "confirm",
-        message: "Grant GlobalMod to mod_a",
+        message: "Delegate @cohost_c as cohost for this game",
       },
     },
   });
@@ -1219,10 +1220,10 @@ async function proveConfirmationActionContract() {
 async function proveConfirmationCommandTraceContract() {
   const adminActivity = buildAdminCommandActivityViewModel({
     commandStatuses: {
-      "session-grants": adminConfirmStatus({
-        id: "session-grants",
-        commandAction: "grant_session",
-        confirmMessage: "Grant GlobalMod to mod_a",
+      "create-game": adminConfirmStatus({
+        id: "create-game",
+        commandAction: "create_game",
+        confirmMessage: "Create game midsummer from pack mafiascum",
       }),
       "recovery-gate": adminConfirmStatus({
         id: "recovery-gate",
@@ -1333,14 +1334,12 @@ async function proveAdminSurface() {
   const gameSetupById = new Map(data.gameSetup.map((item) => [item.id, item]));
   const commandStatuses = {
     "create-game": adminConfirmStatus(gameSetupById.get("create-game")),
-    "session-grants": adminConfirmStatus(gameSetupById.get("session-grants")),
     cohost: adminConfirmStatus(gameSetupById.get("cohost")),
     "recovery-gate": adminConfirmStatus(data.recoveryTasks[0]),
   };
   const setup = buildAdminSetupGridViewModel({
     items: data.gameSetup,
     commandStatuses,
-    sessionGrant: data.command.sessionGrant,
   });
   const readiness = buildAdminReadinessStripViewModel({
     operator: data.operator,
@@ -1362,7 +1361,7 @@ async function proveAdminSurface() {
 
   assert.deepEqual(
     setup.items.map((item) => item.id),
-    ["create-game", "host-setup", "session-grants", "cohost"],
+    ["create-game", "host-setup", "cohost"],
   );
   assert.equal(audit.items.length >= 1, true);
   assert.equal(recovery.items.length, 1);
@@ -1389,16 +1388,14 @@ async function proveAdminSurface() {
     ...audit.items.map((item) => item.minTouchTargetPx),
     ...recovery.items.map((item) => item.minTouchTargetPx),
   ]);
-  assert.equal(setup.items.find((item) => item.id === "session-grants").isSessionGrant, true);
   assert.equal(recovery.items[0].form.action, "?/checkRecoveryGate");
   assert.equal(activity.root.data.component, "admin-command-activity");
-  assert.equal(activity.summary, "4 recent admin command events");
+  assert.equal(activity.summary, "3 recent admin command events");
   assert.deepEqual(
     activity.items.map((item) => item.statusTestId),
     [
       "admin-command-activity-status-recovery-gate",
       "admin-command-activity-status-cohost",
-      "admin-command-activity-status-session-grants",
       "admin-command-activity-status-create-game",
     ],
   );
@@ -2194,7 +2191,7 @@ async function proveModeratorSurface() {
 }
 
 function proveConfirmationCoverage({ admin, moderator }) {
-  assert.equal(admin.setup.length, 3);
+  assert.equal(admin.setup.length, 2);
   assert.equal(admin.recovery.length, 1);
   assert.equal(moderator.actions.length >= 9, true);
   assert.equal(
@@ -2233,7 +2230,7 @@ function proveAdminConfirmationCoverage({ data, setup, recovery }) {
   );
   assert.deepEqual(
     confirmableSetup.map((item) => item.id),
-    ["create-game", "session-grants", "cohost"],
+    ["create-game", "cohost"],
   );
 
   const setupCoverage = confirmableSetup.map((source) => {
@@ -2257,12 +2254,6 @@ function proveAdminConfirmationCoverage({ data, setup, recovery }) {
     assert.equal(item.boundary.length > 0, true);
     assert.equal(typeof item.boundaryDetail, "string");
     assert.equal(item.boundaryDetail.length > 0, true);
-
-    if (source.id === "session-grants") {
-      assert.equal(item.isSessionGrant, true);
-      assert.equal(item.boundaryDetail.includes("/auth/session-grants"), true);
-      assert.equal(data.command.sessionGrant.action, "grant_session");
-    }
 
     return {
       id: item.id,

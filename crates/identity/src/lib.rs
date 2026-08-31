@@ -21,16 +21,24 @@ pub use data_lifecycle::{
 
 pub use error::IdentityFlowError;
 pub use member_lifecycle::{
-    apply_member_lifecycle, create_personal_export, erase_member, load_personal_export,
-    rebuild_member_lifecycle, request_member_erasure, request_member_erasure_with_store,
+    apply_member_lifecycle, apply_member_lifecycle_authenticated, create_personal_export,
+    create_personal_export_authenticated, erase_member, load_personal_export,
+    load_personal_export_authenticated, rebuild_member_lifecycle, request_member_erasure,
+    request_member_erasure_authenticated, request_member_erasure_with_store,
     MemberLifecycleSnapshot, PersonalExport,
 };
 pub use private_claims::{
     ensure_active_subject, insert_subject_claim, open_active_subject_claim, PrivateClaimError,
 };
+#[cfg(debug_assertions)]
+pub use session::{activate_local_proof_authorization, LocalProofAuthorization};
 pub use session::{
-    AuthorizationContext, CompletedWorkosLogout, IssuedSession, LogoutSessionState, RotatedSession,
-    SessionPolicy, SessionSpec,
+    require_active_workos_signing_key, retire_workos_signing_key,
+    revalidate_initiating_session_after_owner_lock, revoke_local_proof_sessions_for_startup,
+    validate_session_reference_for_update, AuthorizationContext, CompletedWorkosLogout,
+    InitiatingSession, IssuedSession, LocalProofInstanceId, LocalProofStartupRevocation,
+    LogoutSessionState, RotatedSession, SessionPolicy, SessionSpec, WorkosSigningKeyId,
+    WorkosSigningKeyRetirement,
 };
 pub use subject_privacy::{
     active_subject_key_store, bootstrap_subject_key_authority_from_environment,
@@ -73,14 +81,14 @@ impl MethodKind {
     }
 }
 
-/// How a session was authenticated. Dev sessions and admin session grants have
-/// no authentication method; their assurance records what stood in for one.
+/// How a session was authenticated. Debug-only local-proof sessions have no
+/// authentication method; their assurance records that exceptional origin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Assurance {
     Password,
     ExternalSso,
+    #[cfg(debug_assertions)]
     Dev,
-    AdminGrant,
 }
 
 impl Assurance {
@@ -88,8 +96,8 @@ impl Assurance {
         match self {
             Assurance::Password => "password",
             Assurance::ExternalSso => "external_sso",
+            #[cfg(debug_assertions)]
             Assurance::Dev => "dev",
-            Assurance::AdminGrant => "admin_grant",
         }
     }
 
@@ -97,8 +105,8 @@ impl Assurance {
         match value {
             "password" => Some(Assurance::Password),
             "external_sso" => Some(Assurance::ExternalSso),
+            #[cfg(debug_assertions)]
             "dev" => Some(Assurance::Dev),
-            "admin_grant" => Some(Assurance::AdminGrant),
             _ => None,
         }
     }

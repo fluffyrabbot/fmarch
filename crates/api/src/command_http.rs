@@ -6,8 +6,8 @@
 //! `commands`; live update assembly and publication remain in `live_projection`.
 
 use super::auth_http::{
-    authorization_context, bearer_token, require_global_admin, unauthorized_session, AuthHttpState,
-    AuthenticatedRequest,
+    authorization_context, bearer_token, require_global_admin, require_global_admin_context,
+    unauthorized_session, AuthHttpState, AuthenticatedRequest,
 };
 use super::live_projection::{self, LiveProjectionChangeSet, LiveProjectionPublisher};
 use super::{program_library, ApiError, ApiState};
@@ -18,13 +18,29 @@ use axum::routing::post;
 use axum::{Json, Router};
 use caps::Principal;
 use media::{ContentId, MediaRepository, VariantFormat, VariantLimits};
-use principal::PrincipalId;
-use sqlx::PgPool;
-use std::collections::{BTreeMap, BTreeSet};
+use sqlx::pool::PoolConnection;
+use sqlx::{Connection as _, PgConnection, PgPool, Postgres, Transaction};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::{Arc, Weak};
+use std::time::Duration;
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
+use tokio::time::{timeout, timeout_at, Instant};
 use uuid::Uuid;
 use wire::{
     AckMsg, ClientEnvelope, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, PROTOCOL_VERSION,
 };
+
+/// Commands may hold identity owner/session locks only inside this end-to-end
+/// budget. The cleanup reserve is separate so a timed-out SQL future can be
+/// dropped and its connection closed before a seven-second authority cutoff
+/// gives up waiting for the same rows.
+const COMMAND_AUTHORITY_LEASE_TIMEOUT: Duration = Duration::from_secs(5);
+const COMMAND_AUTHORITY_CLEANUP_TIMEOUT: Duration = Duration::from_secs(1);
+
+const _: () = assert!(
+    COMMAND_AUTHORITY_LEASE_TIMEOUT.as_millis() + COMMAND_AUTHORITY_CLEANUP_TIMEOUT.as_millis()
+        < identity::session::AUTHORITY_CUTOFF_LOCK_TIMEOUT.as_millis()
+);
 
 #[derive(Clone)]
 pub(super) struct CommandHttpState {
@@ -34,6 +50,10 @@ pub(super) struct CommandHttpState {
     variant_limits: VariantLimits,
     live_projection: LiveProjectionPublisher,
     embed_lookup: crate::embed_http::YoutubeSnapshotLookup,
+    command_slots: Arc<Semaphore>,
+    command_principal_slots: Arc<Mutex<HashMap<principal::PrincipalId, Weak<Semaphore>>>>,
+    command_lock_timeout: Duration,
+    authority_transaction_slots: Arc<Semaphore>,
 }
 
 impl FromRef<CommandHttpState> for AuthHttpState {
@@ -51,7 +71,389 @@ impl CommandHttpState {
             variant_limits: state.variant_limits,
             live_projection: state.live_projection.clone(),
             embed_lookup: state.embed_lookup.clone(),
+            command_slots: state.command_slots.clone(),
+            command_principal_slots: state.command_principal_slots.clone(),
+            command_lock_timeout: state.command_lock_timeout,
+            authority_transaction_slots: state.authority_transaction_slots.clone(),
         }
+    }
+}
+
+/// Process-local admission bounds both total command preparation and one
+/// principal's concurrency before any durable transaction is checked out.
+struct CommandAdmission {
+    _global_permit: OwnedSemaphorePermit,
+    _principal_permit: OwnedSemaphorePermit,
+}
+
+impl CommandAdmission {
+    async fn acquire(
+        state: &CommandHttpState,
+        principal_id: principal::PrincipalId,
+    ) -> Result<Self, ApiError> {
+        let global_permit = state
+            .command_slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| ApiError::Unavailable {
+                retry_after_seconds: 1,
+                message: "command capacity is exhausted; retry shortly".to_string(),
+            })?;
+        let principal_slots = {
+            let mut slots = state.command_principal_slots.lock().await;
+            slots.retain(|_, slots| slots.strong_count() > 0);
+            if let Some(existing) = slots.get(&principal_id).and_then(Weak::upgrade) {
+                existing
+            } else {
+                let created = Arc::new(Semaphore::new(1));
+                slots.insert(principal_id, Arc::downgrade(&created));
+                created
+            }
+        };
+        let principal_permit =
+            principal_slots
+                .try_acquire_owned()
+                .map_err(|_| ApiError::Unavailable {
+                    retry_after_seconds: 1,
+                    message: "principal command capacity is exhausted; retry shortly".to_string(),
+                })?;
+        Ok(Self {
+            _global_permit: global_permit,
+            _principal_permit: principal_permit,
+        })
+    }
+}
+
+/// Keep an owned pool connection armed for closure until its transaction has
+/// definitely committed or rolled back. If the request future is cancelled at
+/// any await, Rust drops the transaction first (queueing SQLx's rollback) and
+/// this guard then prevents the possibly-busy connection from re-entering the
+/// pool; SQLx closes it instead, forcing PostgreSQL to abort outstanding work.
+struct CommandAuthorityConnection {
+    connection: Option<PoolConnection<Postgres>>,
+}
+
+impl CommandAuthorityConnection {
+    fn new(connection: PoolConnection<Postgres>) -> Self {
+        Self {
+            connection: Some(connection),
+        }
+    }
+
+    fn connection_mut(&mut self) -> &mut PgConnection {
+        self.connection
+            .as_deref_mut()
+            .expect("command authority connection is present until terminal cleanup")
+    }
+
+    fn release(mut self) {
+        drop(self.connection.take());
+    }
+
+    async fn close(mut self, command_id: Uuid, reason: &'static str) {
+        let Some(mut connection) = self.connection.take() else {
+            return;
+        };
+        connection.close_on_drop();
+        match timeout(COMMAND_AUTHORITY_CLEANUP_TIMEOUT, connection.close()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(
+                    event = "command_authority_connection_close_failed",
+                    %command_id,
+                    reason,
+                    %error,
+                    "command authority connection failed to close cleanly"
+                );
+            }
+            Err(_) => {
+                tracing::warn!(
+                    event = "command_authority_connection_close_timed_out",
+                    %command_id,
+                    reason,
+                    "command authority connection close exceeded its cleanup reserve"
+                );
+            }
+        }
+    }
+}
+
+impl Drop for CommandAuthorityConnection {
+    fn drop(&mut self) {
+        if let Some(connection) = self.connection.as_mut() {
+            connection.close_on_drop();
+        }
+    }
+}
+
+/// One authority-bearing command operation. The transaction never escapes
+/// `execute`, so callers cannot accidentally pause between session validation
+/// and persistence or extend the identity-lock lifetime past its deadline.
+struct AuthorizedCommandCommit<'a> {
+    state: &'a CommandHttpState,
+    bearer: &'a str,
+    expected_principal_id: principal::PrincipalId,
+    command_id: Uuid,
+    command: commands::Command,
+    requires_global_admin: bool,
+}
+
+enum AuthorizedCommandExecuteError {
+    Boundary(ApiError),
+    Reject(commands::Reject),
+    LeaseExpired,
+    CommitOutcomeUnknown,
+}
+
+impl From<ApiError> for AuthorizedCommandExecuteError {
+    fn from(error: ApiError) -> Self {
+        Self::Boundary(error)
+    }
+}
+
+impl From<sqlx::Error> for AuthorizedCommandExecuteError {
+    fn from(error: sqlx::Error) -> Self {
+        Self::Boundary(ApiError::from(error))
+    }
+}
+
+impl<'a> AuthorizedCommandCommit<'a> {
+    fn new(
+        state: &'a CommandHttpState,
+        bearer: &'a str,
+        expected_principal_id: principal::PrincipalId,
+        command_id: Uuid,
+        command: commands::Command,
+        requires_global_admin: bool,
+    ) -> Self {
+        Self {
+            state,
+            bearer,
+            expected_principal_id,
+            command_id,
+            command,
+            requires_global_admin,
+        }
+    }
+
+    async fn execute(self) -> Result<commands::Ack, AuthorizedCommandExecuteError> {
+        // Start before pool checkout/BEGIN: every wait capable of delaying the
+        // first identity lock or extending an already-owned one consumes the
+        // same lease.
+        let deadline = Instant::now() + COMMAND_AUTHORITY_LEASE_TIMEOUT;
+        let authority_permit = self
+            .state
+            .authority_transaction_slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| {
+                AuthorizedCommandExecuteError::Boundary(ApiError::Unavailable {
+                    retry_after_seconds: 1,
+                    message: "authority transaction capacity is exhausted; retry shortly"
+                        .to_string(),
+                })
+            })?;
+        let connection = match timeout_at(deadline, self.state.pool.acquire()).await {
+            Ok(Ok(connection)) => connection,
+            Ok(Err(error)) => return Err(error.into()),
+            Err(_) => return Err(AuthorizedCommandExecuteError::LeaseExpired),
+        };
+        let mut connection = CommandAuthorityConnection::new(connection);
+        let mut tx = match timeout_at(deadline, connection.connection_mut().begin()).await {
+            Ok(Ok(tx)) => tx,
+            // The BEGIN future still carries the mutable connection borrow in
+            // this match temporary. Returning leaves the cancellation guard
+            // armed; its Drop marks the pooled connection close-on-drop so an
+            // errored or indeterminate BEGIN can never re-enter the pool.
+            Ok(Err(error)) => return Err(error.into()),
+            Err(_) => return Err(AuthorizedCommandExecuteError::LeaseExpired),
+        };
+
+        let command_id = self.command_id;
+        let operation = apply_authorized_command_in_tx(
+            &mut tx,
+            self.state,
+            self.bearer,
+            self.expected_principal_id,
+            self.command_id,
+            self.command,
+            self.requires_global_admin,
+        );
+        let ack = match timeout_at(deadline, operation).await {
+            Ok(Ok(ack)) => ack,
+            Ok(Err(error)) => {
+                if rollback_authority_transaction(tx, deadline, command_id, "command_rejected")
+                    .await
+                {
+                    connection.release();
+                } else {
+                    connection.close(command_id, "command_rejected").await;
+                }
+                drop(authority_permit);
+                return Err(error);
+            }
+            Err(_) => {
+                drop(tx);
+                connection
+                    .close(command_id, "authority_lease_expired")
+                    .await;
+                drop(authority_permit);
+                return Err(AuthorizedCommandExecuteError::LeaseExpired);
+            }
+        };
+
+        match timeout_at(deadline, tx.commit()).await {
+            Ok(Ok(())) => {
+                connection.release();
+                drop(authority_permit);
+                Ok(ack)
+            }
+            Ok(Err(error)) => {
+                tracing::error!(
+                    event = "command_commit_outcome_unknown",
+                    %command_id,
+                    %error,
+                    "command commit acknowledgement was lost; retry requires the same command id"
+                );
+                connection.close(command_id, "commit_failed").await;
+                drop(authority_permit);
+                Err(AuthorizedCommandExecuteError::CommitOutcomeUnknown)
+            }
+            Err(_) => {
+                tracing::error!(
+                    event = "command_commit_outcome_unknown",
+                    %command_id,
+                    "command commit exceeded its authority lease; retry requires the same command id"
+                );
+                connection.close(command_id, "commit_timed_out").await;
+                drop(authority_permit);
+                Err(AuthorizedCommandExecuteError::CommitOutcomeUnknown)
+            }
+        }
+    }
+}
+
+async fn apply_authorized_command_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    state: &CommandHttpState,
+    bearer: &str,
+    expected_principal_id: principal::PrincipalId,
+    command_id: Uuid,
+    command: commands::Command,
+    requires_global_admin: bool,
+) -> Result<commands::Ack, AuthorizedCommandExecuteError> {
+    commands::set_command_lock_timeout_in_tx(
+        tx,
+        Some(
+            state
+                .command_lock_timeout
+                .min(COMMAND_AUTHORITY_LEASE_TIMEOUT),
+        ),
+    )
+    .await
+    .map_err(AuthorizedCommandExecuteError::Reject)?;
+    commands::try_lock_command_stream_in_tx(tx, &command)
+        .await
+        .map_err(AuthorizedCommandExecuteError::Reject)?;
+
+    let mut identity_owners = commands::command_identity_targets(&command);
+    identity_owners
+        .entry(expected_principal_id)
+        .and_modify(|policy| *policy = (*policy).max(commands::CommandIdentityTargetPolicy::Active))
+        .or_insert(commands::CommandIdentityTargetPolicy::Active);
+    for (principal_id, policy) in identity_owners {
+        let is_actor = principal_id == expected_principal_id;
+        let owner = match identity::methods::lock_identity_mutation(
+            tx,
+            &principal_id,
+            identity::methods::IdentityMutationExtent::Owner,
+        )
+        .await
+        {
+            Ok(owner) => owner,
+            Err(identity::IdentityFlowError::Unauthorized) if !is_actor => {
+                return Err(AuthorizedCommandExecuteError::Reject(
+                    commands::Reject::InvalidTarget,
+                ));
+            }
+            Err(error) => {
+                return Err(AuthorizedCommandExecuteError::Boundary(
+                    command_identity_error(error, is_actor),
+                ));
+            }
+        };
+        if policy == commands::CommandIdentityTargetPolicy::Active {
+            owner.require_active().map_err(|error| {
+                AuthorizedCommandExecuteError::Boundary(command_identity_error(error, is_actor))
+            })?;
+        }
+    }
+
+    let authorization =
+        identity::session::validate_session_for_update(tx, bearer, &state.auth.session_policy)
+            .await
+            .map_err(|error| {
+                AuthorizedCommandExecuteError::Boundary(command_identity_error(error, true))
+            })?;
+    if authorization.principal_id != expected_principal_id {
+        return Err(AuthorizedCommandExecuteError::Boundary(
+            unauthorized_session(),
+        ));
+    }
+    if requires_global_admin {
+        require_global_admin_context(&authorization, "game creation")?;
+    }
+
+    commands::handle_idempotent_in_tx(
+        tx,
+        &Principal::authenticated(authorization.principal_id),
+        command_id,
+        command,
+    )
+    .await
+    .map_err(AuthorizedCommandExecuteError::Reject)
+}
+
+async fn rollback_authority_transaction(
+    tx: Transaction<'_, Postgres>,
+    deadline: Instant,
+    command_id: Uuid,
+    reason: &'static str,
+) -> bool {
+    match timeout_at(deadline, tx.rollback()).await {
+        Ok(Ok(())) => true,
+        Ok(Err(error)) => {
+            tracing::warn!(
+                event = "command_authority_rollback_failed",
+                %command_id,
+                reason,
+                %error,
+                "command authority transaction failed to roll back cleanly"
+            );
+            false
+        }
+        Err(_) => false,
+    }
+}
+
+fn command_identity_error(error: identity::IdentityFlowError, actor: bool) -> ApiError {
+    match error {
+        identity::IdentityFlowError::Unauthorized if !actor => {
+            command_reject_api_error(commands::Reject::InvalidTarget)
+        }
+        identity::IdentityFlowError::Db(error)
+            if error
+                .as_database_error()
+                .and_then(|error| error.code())
+                .as_deref()
+                == Some("55P03") =>
+        {
+            ApiError::Unavailable {
+                retry_after_seconds: 1,
+                message: "command authority is busy; retry shortly".to_string(),
+            }
+        }
+        error => ApiError::from(error),
     }
 }
 
@@ -228,16 +630,23 @@ async fn command(
         .into_response();
     };
 
-    let principal_id = match authenticated_transport_principal(&state, &headers).await {
-        Ok(principal_id) => principal_id,
-        Err(error) => return command_api_error_response(envelope.id, error),
-    };
-    if matches!(&msg.command, wire::Command::CreateGame { .. }) {
-        let token = bearer_token(&headers).expect("authenticated command has bearer token");
-        if let Err(error) = require_global_admin(&state.auth, token, "game creation").await {
+    let (token, initial_authorization) =
+        match authenticated_transport_authorization(&state, &headers).await {
+            Ok(authorization) => authorization,
+            Err(error) => return command_api_error_response(envelope.id, error),
+        };
+    let requires_global_admin = matches!(&msg.command, wire::Command::CreateGame { .. });
+    if requires_global_admin {
+        if let Err(error) = require_global_admin_context(&initial_authorization, "game creation") {
             return command_api_error_response(envelope.id, error);
         }
     }
+
+    let principal_id = initial_authorization.principal_id;
+    let _admission = match CommandAdmission::acquire(&state, principal_id).await {
+        Ok(admission) => admission,
+        Err(error) => return command_api_error_response(envelope.id, error),
+    };
 
     let classified = classify_command(&msg.command);
     let previous_votecount = if classified.dirty.votecount {
@@ -254,14 +663,21 @@ async fn command(
     } else {
         None
     };
-    let principal = Principal::authenticated(principal_id);
     let prepared_command = prepare_wire_command(&state, msg.command).await;
     let body = match prepared_command {
         Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
         Ok(command) => {
             let _inflight = state.live_projection.inflight_guard(classified.game);
-            match commands::handle_idempotent(&state.pool, &principal, msg.command_id, command)
-                .await
+            match AuthorizedCommandCommit::new(
+                &state,
+                token.as_str(),
+                principal_id,
+                msg.command_id,
+                command,
+                requires_global_admin,
+            )
+            .execute()
+            .await
             {
                 Ok(ack) => {
                     state
@@ -282,11 +698,56 @@ async fn command(
                         .await;
                     ServerMsg::Ack(AckMsg::from(ack))
                 }
-                Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
+                Err(AuthorizedCommandExecuteError::Boundary(error)) => {
+                    return command_api_error_response(envelope.id, error);
+                }
+                Err(AuthorizedCommandExecuteError::Reject(reject)) => {
+                    ServerMsg::Reject(RejectMsg::from(reject))
+                }
+                Err(AuthorizedCommandExecuteError::LeaseExpired) => {
+                    return command_authority_lease_expired_response(envelope.id);
+                }
+                Err(AuthorizedCommandExecuteError::CommitOutcomeUnknown) => {
+                    return command_commit_outcome_unknown_response(envelope.id);
+                }
             }
         }
     };
     Json(ServerEnvelope::new(envelope.id, body)).into_response()
+}
+
+fn command_authority_lease_expired_response(id: u64) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(ServerEnvelope::new(
+            id,
+            ServerMsg::Reject(RejectMsg {
+                error: RejectCode::Internal,
+                retryable: true,
+                message:
+                    "command authority lease expired before commit; retry the exact same command_id"
+                        .to_string(),
+            }),
+        )),
+    )
+        .into_response()
+}
+
+fn command_commit_outcome_unknown_response(id: u64) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(ServerEnvelope::new(
+            id,
+            ServerMsg::Reject(RejectMsg {
+                error: RejectCode::Internal,
+                retryable: true,
+                message:
+                    "command commit outcome is unknown; retry the exact same command_id to recover"
+                        .to_string(),
+            }),
+        )),
+    )
+        .into_response()
 }
 
 fn command_api_error_response(id: u64, error: ApiError) -> Response {
@@ -323,14 +784,15 @@ async fn import_completed_game_export(
     ))
 }
 
-async fn authenticated_transport_principal(
+async fn authenticated_transport_authorization(
     state: &CommandHttpState,
     headers: &HeaderMap,
-) -> Result<PrincipalId, ApiError> {
-    let token = bearer_token(headers).ok_or_else(unauthorized_session)?;
-    Ok(authorization_context(&state.auth, token)
-        .await?
-        .principal_id)
+) -> Result<(String, identity::AuthorizationContext), ApiError> {
+    let token = bearer_token(headers)
+        .ok_or_else(unauthorized_session)?
+        .to_string();
+    let authorization = authorization_context(&state.auth, token.as_str()).await?;
+    Ok((token, authorization))
 }
 
 /// The single classification site for wire commands: which game a command
@@ -501,7 +963,18 @@ fn protocol_reject(message: impl Into<String>) -> RejectMsg {
 }
 
 pub(super) fn command_reject_api_error(reject: commands::Reject) -> ApiError {
-    let status = match &reject {
+    let status = command_reject_status(&reject);
+    let error = RejectCode::from(&reject);
+    let message = reject.to_string();
+    ApiError::Reject {
+        status,
+        error,
+        message,
+    }
+}
+
+fn command_reject_status(reject: &commands::Reject) -> StatusCode {
+    match reject {
         commands::Reject::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         commands::Reject::PackValidation(_) => StatusCode::BAD_REQUEST,
         commands::Reject::UnknownGame
@@ -512,20 +985,24 @@ pub(super) fn command_reject_api_error(reject: commands::Reject) -> ApiError {
         | commands::Reject::CohostPermissionDenied(_)
         | commands::Reject::NotYourSlot => StatusCode::FORBIDDEN,
         _ => StatusCode::CONFLICT,
-    };
-    let error = RejectCode::from(&reject);
-    let message = reject.to_string();
-    ApiError::Reject {
-        status,
-        error,
-        message,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_command, DirtySurfaces};
+    use super::{
+        classify_command, DirtySurfaces, COMMAND_AUTHORITY_CLEANUP_TIMEOUT,
+        COMMAND_AUTHORITY_LEASE_TIMEOUT,
+    };
     use uuid::Uuid;
+
+    #[test]
+    fn command_authority_lease_and_cleanup_fit_inside_cutoff_wait_budget() {
+        assert!(
+            COMMAND_AUTHORITY_LEASE_TIMEOUT + COMMAND_AUTHORITY_CLEANUP_TIMEOUT
+                < identity::session::AUTHORITY_CUTOFF_LOCK_TIMEOUT
+        );
+    }
 
     #[test]
     fn host_prompt_resolution_refreshes_player_command_and_outcome_state() {

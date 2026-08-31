@@ -365,7 +365,6 @@
               <AdminSetupGrid
                 items={[operatorInbox.selectedTask.item]}
                 {commandStatuses}
-                sessionGrant={data.command.sessionGrant}
                 onSetupAction={handleSetupAction}
                 onConfirmSetupAction={confirmSetupAction}
                 onCancelSetupAction={cancelSetupAction}

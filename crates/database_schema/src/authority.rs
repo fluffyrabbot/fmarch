@@ -22,7 +22,6 @@ const APPLICATION_UPDATE_TABLES: &[&str] = &[
     "game_invitation",
     "auth_registration_attempt",
     "auth_session",
-    "auth_websocket_ticket",
     "authentication_method",
     "command_receipt",
     "community_invitation",
@@ -80,6 +79,15 @@ const APPLICATION_UPDATE_TABLES: &[&str] = &[
     "visit_history",
     "vote_ballot",
     "workos_provider_session",
+];
+
+// PostgreSQL row locks require UPDATE on at least one column. These relations
+// are already application-owned projection surfaces with INSERT/DELETE
+// authority; granting one key column lets live delivery take FOR SHARE without
+// broadening them to table-wide UPDATE.
+const APPLICATION_ROW_LOCK_COLUMN_UPDATES: &[(&str, &[&str])] = &[
+    ("game_authority", &["principal_id"]),
+    ("spectator_membership", &["principal_id"]),
 ];
 
 const APPLICATION_DELETE_TABLES: &[&str] = &[
@@ -334,6 +342,11 @@ const EXPECTED_GUARDS: &[(&str, &str, &str)] = &[
         "subject_privacy_append_only_guard",
     ),
     (
+        "workos_signing_key_tombstone",
+        "workos_signing_key_tombstone_no_mutation",
+        "subject_privacy_append_only_guard",
+    ),
+    (
         "workos_subject_tombstone",
         "workos_subject_tombstone_no_mutation",
         "subject_privacy_append_only_guard",
@@ -482,6 +495,10 @@ const EXPECTED_TRIGGER_DEFINITION_HASHES: &[(&str, &str)] = &[
     (
         "workos_provider_session_tombstone_no_mutation",
         "2a3e2b7929ec9a1673d273aea70f5f325b5379a5a378fa6b9d9ebe582f0c23ce",
+    ),
+    (
+        "workos_signing_key_tombstone_no_mutation",
+        "1d34e5eda4008611452005a1263efd8642be74ddedc1a7f43410936565d9fe10",
     ),
     (
         "workos_subject_tombstone_no_mutation",
@@ -641,6 +658,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "workos_provider_session",
     "workos_provider_session_tombstone",
     "workos_session_exchange",
+    "workos_signing_key_tombstone",
     "workos_subject_tombstone",
 ];
 
@@ -832,6 +850,9 @@ pub async fn reconcile_database_authority(
         ],
     )
     .await?;
+    for (table, columns) in APPLICATION_ROW_LOCK_COLUMN_UPDATES {
+        grant_columns(&mut tx, APPLICATION_DATABASE_ROLE, table, "UPDATE", columns).await?;
+    }
     grant_relations(
         &mut tx,
         APPLICATION_DATABASE_ROLE,
@@ -1577,6 +1598,15 @@ fn expected_column_privileges(expected: DatabasePrincipal) -> BTreeSet<(String, 
             "kid".to_string(),
             "UPDATE".to_string(),
         ));
+        for (table, columns) in APPLICATION_ROW_LOCK_COLUMN_UPDATES {
+            for column in *columns {
+                privileges.insert((
+                    (*table).to_string(),
+                    (*column).to_string(),
+                    "UPDATE".to_string(),
+                ));
+            }
+        }
     } else {
         for (table, columns) in KEY_ADMIN_COLUMN_UPDATES {
             for column in *columns {

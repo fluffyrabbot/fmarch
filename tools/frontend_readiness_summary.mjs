@@ -197,7 +197,7 @@ const summary = {
     noBindInteractionRequires: [
       "noBindInteractions.status == passed",
       "noBindInteractions.viewports is nonempty",
-      `noBindInteractions.interactions includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
+      `noBindInteractions.interactions includes admin cohost, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
       "all noBindInteractions entries include clicked target, activeElement, and targetBox",
     ],
     staticFocusabilityRequires: [
@@ -230,7 +230,7 @@ const summary = {
       "roleSmoke.routeStates is nonempty",
       "all roleSmoke role entries include screenshotPixels",
       "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry for setup/recovery, player vote/post, and moderator critical actions",
-      "admin roleSmoke entries include session-grant form evidence and recovery-gate ACK evidence",
+      "admin roleSmoke entries include cohost confirmation and recovery-gate ACK evidence",
       "player roleSmoke entries include SubmitPost ACK and refreshed thread evidence",
       "playerPrivateChannel roleSmoke entries include private:role_pm:slot-7 SubmitPost ACK evidence",
       "player roleSmoke entries include tablet-media browser request evidence without original/full/desktop URLs",
@@ -239,7 +239,7 @@ const summary = {
     inAppBrowserFixtureRequires: [
       "inAppBrowserPage.status == page-generated",
       "inAppBrowserPage.surfaces includes board-player, admin, player, and moderator",
-      `inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
+      `inAppBrowserPage.scenarios includes admin cohost, admin recovery-gate, player vote, player post, player private-channel post, and all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations`,
       "inAppBrowserPage.hydratedSurfaceScenarios includes shared shell, admin audit, admin operational forms, player private disclosure/vote/post, moderator host-prompt, and moderator slot-lifecycle controls",
       "inAppBrowserStaticDom.status == passed",
       "inAppBrowserStaticDom.scenarios includes every fixture command target with private:role_pm:slot-7 route evidence",
@@ -1071,7 +1071,6 @@ function importedRoleSmokeSetupWorkbenchEvidenceComplete(importedRoleSmoke) {
 function inAppBrowserCommandScenarioIds() {
   return [
     "admin-cohost-confirm-click",
-    "admin-session-grant-confirm-click",
     "admin-recovery-gate-confirm-click",
     "player-submit-vote-click",
     "player-submit-post-click",
@@ -1225,17 +1224,8 @@ function adminBrowserOperationalEvidenceComplete(roleSmoke) {
     return false;
   }
   return adminEntries.every((entry) =>
-    entry.commandResult?.sessionGrant?.focus?.initialFocus?.testId ===
-      "admin-command-confirm-session-grants" &&
-    entry.commandResult?.sessionGrant?.form?.action === "?/grantSession" &&
-    includesAll(
-      entry.commandResult?.sessionGrant?.form?.fieldTestIds,
-      [
-        "admin-session-grant-principal",
-        "admin-session-grant-expires-at",
-        "admin-session-grant-global-mod",
-      ],
-    ) &&
+    entry.commandResult?.cohost?.focus?.initialFocus?.testId ===
+      "admin-command-confirm-cohost" &&
     entry.commandResult?.recovery?.state === "ack" &&
     entry.commandResult?.recovery?.focus?.initialFocus?.testId ===
       "admin-recovery-confirm-recovery-gate" &&
@@ -1439,7 +1429,6 @@ function noBindInteractionScenarioIds() {
   return {
     admin: [
       "admin-cohost-confirm-click",
-      "admin-session-grant-confirm-click",
       "admin-recovery-gate-confirm-click",
     ],
     player: [
@@ -1517,7 +1506,7 @@ function localhostFailureReasons(roleSmoke) {
   }
   if (!adminBrowserOperationalEvidenceComplete(roleSmoke)) {
     failures.push(
-      "roleSmoke.roles[admin] missing session-grant form or recovery-gate ACK evidence",
+      "roleSmoke.roles[admin] missing cohost confirmation or recovery-gate ACK evidence",
     );
   }
   if (!roleSmokeThumbZoneEvidenceComplete(roleSmoke)) {

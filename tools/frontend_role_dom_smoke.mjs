@@ -308,7 +308,7 @@ function surfaceScenarios() {
         "admin-operator-decision-canvas",
         "admin-command-activity",
         "admin-command-activity-empty",
-        "admin-inbox-task-setup-session-grants",
+        "admin-inbox-task-setup-create-game",
         "admin-audit-link-proof-runs",
         "admin-recovery-trigger-recovery-gate",
       ],

@@ -68,10 +68,9 @@ const devTestGameArgs = [
   "--verify",
   "--no-keepalive",
 ];
-if (process.env.FMARCH_DEV_TEST_GAME_API_BASE_URL) {
-  devTestGameArgs.push(
-    "--api-base-url",
-    process.env.FMARCH_DEV_TEST_GAME_API_BASE_URL,
+if (process.env.FMARCH_DEV_TEST_GAME_API_BASE_URL !== undefined) {
+  throw new Error(
+    "FMARCH_DEV_TEST_GAME_API_BASE_URL cannot supply the exact process-bound local proof authority; run the proof with its owned API process",
   );
 }
 if (process.env.FMARCH_DEV_TEST_GAME_FRONTEND_BASE_URL) {

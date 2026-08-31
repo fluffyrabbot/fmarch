@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import { main } from "./dev_test_game.mjs";
 import { devTestGameHelp } from "./dev_test_game_configuration.mjs";
@@ -34,6 +34,10 @@ test("composition root preserves help return and verification validation before 
   await assert.rejects(
     () => main(["--verify", "--verify-host-setup-only"], {}),
     /only one dev-test-game verification mode may be selected/,
+  );
+  await assert.rejects(
+    () => main(["--api-base-url", "http://127.0.0.1:4101"], {}),
+    /cannot seed process-bound local proof sessions/,
   );
 });
 
@@ -217,6 +221,41 @@ test("scratch server proofs isolate disposable subject authorities from repo sta
     );
     assert.match(source, /FMARCH_SUBJECT_KEY_DIR:\s*subjectKeyRoot/);
     assert.match(source, /rm\(subjectKeyRoot, \{ recursive: true, force: true \}\)/);
+  }
+});
+
+test("owned proof servers mint Dev authority through their exact process-bound control", async () => {
+  for (const file of [
+    "tools/dev_test_game.mjs",
+    "tools/game_invitation_role_proof.mjs",
+    "tools/host_console_live_stack_smoke.mjs",
+  ]) {
+    const source = await readFile(file, "utf8");
+    assert.match(source, /createLocalProofAuth\(\)/, file);
+    assert.match(source, /\.serverEnvironment\(\{/, file);
+    assert.match(source, /\/auth\/local-proof\/sessions/, file);
+    assert.match(source, /\.requestHeaders\(\{/, file);
+    assert.doesNotMatch(source, /INSERT INTO auth_session/, file);
+    assert.doesNotMatch(source, /local_proof_instance_id|\binstance_id\b/, file);
+  }
+});
+
+test("active JavaScript proofs cannot manufacture auth_session rows or instance ids", async () => {
+  const files = (await readdir("tools"))
+    .filter((file) => file.endsWith(".mjs") && !file.endsWith(".test.mjs"))
+    .filter((file) => file !== "database_schema_upgrade_proof.mjs");
+  for (const file of files) {
+    const source = await readFile(`tools/${file}`, "utf8");
+    assert.doesNotMatch(
+      source,
+      /INSERT\s+INTO\s+(?:public\.)?auth_session/u,
+      `${file} must use an authentication control rather than storage writes`,
+    );
+    assert.doesNotMatch(
+      source,
+      /local_proof_instance_id/u,
+      `${file} must leave process instance derivation to the backend`,
+    );
   }
 });
 

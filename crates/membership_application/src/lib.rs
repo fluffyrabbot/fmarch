@@ -300,22 +300,34 @@ pub async fn revoke_invitation(
     now: i64,
 ) -> Result<(), MembershipApplicationError> {
     let mut tx = pool.begin().await?;
-    let sponsor = load_membership_for_principal(&mut tx, sponsoring_principal_id)
+    revoke_invitation_for_sponsor_in_tx(&mut tx, sponsoring_principal_id, invitation_id, now)
+        .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Revoke one invitation inside a caller-owned, authority-fenced transaction.
+pub async fn revoke_invitation_for_sponsor_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    sponsoring_principal_id: PrincipalId,
+    invitation_id: InvitationId,
+    now: i64,
+) -> Result<(), MembershipApplicationError> {
+    let sponsor = load_membership_for_principal(tx, sponsoring_principal_id)
         .await?
         .ok_or(MembershipApplicationError::Unavailable)?;
     let owner = sqlx::query_scalar::<_, Uuid>(
         "SELECT sponsoring_membership_id FROM community_invitation WHERE invitation_id = $1",
     )
     .bind(invitation_id.as_uuid())
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?
     .map(MembershipId::from_uuid)
     .ok_or(MembershipApplicationError::Unavailable)?;
     if owner != sponsor.membership_id {
         return Err(MembershipApplicationError::Unavailable);
     }
-    revoke_invitation_in_tx(&mut tx, invitation_id, now).await?;
-    tx.commit().await?;
+    revoke_invitation_in_tx(tx, invitation_id, now).await?;
     Ok(())
 }
 
@@ -363,10 +375,9 @@ pub async fn admit_classic(
     sqlx::query(
         r#"
         INSERT INTO auth_account (
-            account_id, principal_id, method_id, password_hash, created_at,
-            disabled_at, global_capabilities
+            account_id, principal_id, method_id, password_hash, created_at, disabled_at
         )
-        VALUES ($1, $2, $3, $4, $5, NULL, '{}')
+        VALUES ($1, $2, $3, $4, $5, NULL)
         "#,
     )
     .bind(account_id.as_str())
@@ -383,10 +394,11 @@ pub async fn admit_classic(
         &mut tx,
         SessionSpec {
             principal_id: &principal_id,
-            session_capabilities: &[],
             authenticated_via_method_id: Some(method_id),
             assurance: Assurance::Password,
+            local_proof_instance_id: None,
             workos_session_id: None,
+            workos_signing_key_id: None,
             authenticated_at: now,
             expires_at,
             idle_expires_at: session_policy.idle_expiry(now, expires_at),
@@ -831,12 +843,25 @@ pub async fn steward_membership(
     now: i64,
 ) -> Result<(), MembershipApplicationError> {
     let mut tx = pool.begin().await?;
-    let membership = load_membership_by_id(&mut tx, membership_id)
+    steward_membership_in_tx(&mut tx, actor_principal_id, membership_id, command, now).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Apply a stewardship command inside the caller's exact-session transaction.
+pub async fn steward_membership_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_principal_id: PrincipalId,
+    membership_id: MembershipId,
+    command: MembershipCommand,
+    now: i64,
+) -> Result<(), MembershipApplicationError> {
+    let membership = load_membership_by_id(tx, membership_id)
         .await?
         .ok_or(MembershipApplicationError::Unavailable)?;
     let events = decide_membership(membership_id, Some(&membership), command)?;
     append_membership_events_expected(
-        &mut tx,
+        tx,
         membership_id,
         actor_principal_id,
         membership.revision,
@@ -845,10 +870,10 @@ pub async fn steward_membership(
     )
     .await?;
     if matches!(events.as_slice(), [MembershipEvent::Suspended { .. }]) {
-        revoke_open_invitations_for_sponsor(&mut tx, membership_id, now).await?;
+        revoke_open_invitations_for_sponsor(tx, membership_id, now).await?;
     }
     insert_stewardship_audit(
-        &mut tx,
+        tx,
         actor_principal_id,
         membership_id,
         if matches!(events.as_slice(), [MembershipEvent::Suspended { .. }]) {
@@ -859,7 +884,6 @@ pub async fn steward_membership(
         now,
     )
     .await?;
-    tx.commit().await?;
     Ok(())
 }
 
@@ -870,18 +894,30 @@ pub async fn steward_revoke_invitation(
     now: i64,
 ) -> Result<(), MembershipApplicationError> {
     let mut tx = pool.begin().await?;
+    steward_revoke_invitation_in_tx(&mut tx, actor_principal_id, invitation_id, now).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Revoke an invitation as a steward inside a caller-owned authority fence.
+pub async fn steward_revoke_invitation_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_principal_id: PrincipalId,
+    invitation_id: InvitationId,
+    now: i64,
+) -> Result<(), MembershipApplicationError> {
     let owner = sqlx::query_scalar::<_, Uuid>(
         "SELECT sponsoring_membership_id FROM community_invitation WHERE invitation_id = $1",
     )
     .bind(invitation_id.as_uuid())
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?
     .map(MembershipId::from_uuid)
     .ok_or(MembershipApplicationError::Unavailable)?;
-    load_membership_by_id(&mut tx, owner)
+    load_membership_by_id(tx, owner)
         .await?
         .ok_or(MembershipApplicationError::Unavailable)?;
-    revoke_invitation_in_tx(&mut tx, invitation_id, now).await?;
+    revoke_invitation_in_tx(tx, invitation_id, now).await?;
     sqlx::query(
         r#"INSERT INTO identity_lifecycle_audit
            (event_at, event_kind, actor_principal_id, principal_id, token_hash, related_token_hash, metadata)
@@ -890,9 +926,8 @@ pub async fn steward_revoke_invitation(
     .bind(now)
     .bind(actor_principal_id.as_uuid())
     .bind(serde_json::json!({ "invitation_id": invitation_id }).to_string())
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
-    tx.commit().await?;
     Ok(())
 }
 

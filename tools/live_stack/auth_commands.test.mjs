@@ -6,6 +6,41 @@ import {
   hashSessionToken,
 } from "./auth_commands.mjs";
 import { principalFixtureId } from "../principal_fixture.mjs";
+import {
+  createLocalProofAuth,
+  localProofSecretHeader,
+} from "../local_proof_auth.mjs";
+
+test("local-proof authority bundles are unique, canonical, and override-proof", () => {
+  const first = createLocalProofAuth();
+  const second = createLocalProofAuth();
+  const attackerValues = {
+    FMARCH_DEV_AUTH: "0",
+    FMARCH_LOCAL_PROOF_SECRET: "attacker-selected",
+    KEEP: "yes",
+  };
+  const firstEnvironment = first.serverEnvironment(attackerValues);
+  const secondEnvironment = second.serverEnvironment(attackerValues);
+  const firstHeaders = first.requestHeaders({ [localProofSecretHeader]: "attacker-selected" });
+  const secondHeaders = second.requestHeaders();
+
+  assert.equal(firstEnvironment.FMARCH_DEV_AUTH, "1");
+  assert.equal(firstEnvironment.KEEP, "yes");
+  assert.match(firstEnvironment.FMARCH_LOCAL_PROOF_SECRET, /^[0-9a-f]{64}$/u);
+  assert.match(secondEnvironment.FMARCH_LOCAL_PROOF_SECRET, /^[0-9a-f]{64}$/u);
+  assert.notEqual(
+    firstEnvironment.FMARCH_LOCAL_PROOF_SECRET,
+    secondEnvironment.FMARCH_LOCAL_PROOF_SECRET,
+  );
+  assert.equal(
+    firstHeaders[localProofSecretHeader],
+    firstEnvironment.FMARCH_LOCAL_PROOF_SECRET,
+  );
+  assert.equal(
+    secondHeaders[localProofSecretHeader],
+    secondEnvironment.FMARCH_LOCAL_PROOF_SECRET,
+  );
+});
 
 test("enabled-account sessions are created and logged in through public auth", async () => {
   const requests = [];
@@ -43,7 +78,7 @@ test("enabled-account sessions are created and logged in through public auth", a
   assert.deepEqual(session.capabilityKinds, ["SlotOccupant"]);
 });
 
-test("granted sessions resolve their authoritative capability projection", async () => {
+test("account login resolves its authoritative global capability projection", async () => {
   const requests = [];
   const auth = createLiveStackAuth({
     apiBaseUrl: "http://127.0.0.1:4000",
@@ -51,7 +86,7 @@ test("granted sessions resolve their authoritative capability projection", async
     uuid: sequence(["account-id", "password-id"]),
     fetchJson: async (url, options) => {
       requests.push({ url, options, body: JSON.parse(options.body) });
-      return url.endsWith("/session-grants") ? {
+      return url.endsWith("/login") ? {
         principal_id: principalFixtureId("host-h"),
         capabilities: [{ kind: "GlobalAdmin" }],
         session_token: "issued-host-token",
@@ -59,18 +94,22 @@ test("granted sessions resolve their authoritative capability projection", async
     },
   });
 
-  const session = await auth.createGrantedSession({
+  const session = await auth.createAccountSession({
     principalId: "host-h",
+    label: "host-h",
     globalCapabilities: ["GlobalAdmin"],
   });
 
   assert.equal(requests[0].url, "http://127.0.0.1:4000/auth/accounts");
   assert.deepEqual(requests[0].body.global_capabilities, ["GlobalAdmin"]);
-  assert.equal(requests[1].url, "http://127.0.0.1:4000/auth/session-grants");
+  assert.equal(requests[1].url, "http://127.0.0.1:4000/auth/accounts/login");
   assert.equal(Object.hasOwn(requests[1].body, "token"), false);
   assert.equal(requests[0].body.principal_id, principalFixtureId("host-h"));
-  assert.equal(requests[1].body.principal_id, principalFixtureId("host-h"));
+  assert.equal(requests[1].body.account_id, requests[0].body.account_id);
+  assert.equal(requests[1].body.password, requests[0].body.password);
+  assert.equal(requests[1].options.headers.authorization, undefined);
   assert.equal(requests.length, 2);
+  assert.equal(session.authentication, "enabled-account-login");
   assert.equal(session.sessionToken, "issued-host-token");
   assert.deepEqual(session.capabilityKinds, ["GlobalAdmin"]);
 });

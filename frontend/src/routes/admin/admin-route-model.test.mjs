@@ -382,7 +382,6 @@ const HOSTED_IDENTITY_PROOF_GRAPH_EDGES = Object.freeze({
 const HOSTED_EVIDENCE_LANE_DEMO_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
 const ADMIN_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000004";
-const MOD_PRINCIPAL_ID = "00000000-0000-5000-8000-000000000002";
 
 test("admin route data exposes setup, audit, and escalation work surfaces", async () => {
   const data = await buildAdminRouteData({
@@ -426,21 +425,14 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
     game: "midsummer",
     principalId: "cohost_c",
   });
-  assert.deepEqual(data.command.sessionGrant, {
-    action: "grant_session",
-    principalId: "mod_a",
-    expiresAt: 4102444800,
-    globalCapabilities: ["GlobalMod"],
-  });
   assert.deepEqual(
     data.gameSetup.map((item) => item.id),
-    ["create-game", "host-setup", "session-grants", "cohost"],
+    ["create-game", "host-setup", "cohost"],
   );
   assert.equal(data.gameSetup[0].commandAction, "create_game");
   assert.equal(data.gameSetup[1].commandAction, "navigate");
   assert.equal(data.gameSetup[1].href, "/g/midsummer/setup");
-  assert.equal(data.gameSetup[2].commandAction, "grant_session");
-  assert.equal(data.gameSetup[3].commandAction, "add_cohost");
+  assert.equal(data.gameSetup[2].commandAction, "add_cohost");
   assert.equal(data.gameSetup[0].boundary, "Command pipeline");
   assert.equal(data.gameSetup[0].buttonLabel, "Review");
   assert.equal(data.gameSetup[0].confirmLabel, "Create game");
@@ -448,11 +440,8 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
     data.gameSetup[0].confirmMessage,
     "Create game midsummer from pack mafiascum",
   );
-  assert.equal(data.gameSetup[2].boundary, "Authenticated session grant");
-  assert.match(data.gameSetup[2].boundaryDetail, /GlobalAdmin session/);
-  assert.match(data.gameSetup[3].boundaryDetail, /host-gated/);
-  assert.equal(data.gameSetup[2].confirmLabel, "Grant moderator access");
-  assert.equal(data.gameSetup[3].confirmLabel, "Delegate @cohost_c");
+  assert.match(data.gameSetup[2].boundaryDetail, /host-gated/);
+  assert.equal(data.gameSetup[2].confirmLabel, "Delegate @cohost_c");
   assert.equal(
     data.audit[0].href,
     "/games/midsummer/operator/proof-runs",
@@ -665,186 +654,8 @@ test("admin recovery gate action requires admin surface authority", async () => 
   assert.equal(result.data.message, "Recovery gate checks require GlobalAdmin or GlobalMod");
 });
 
-test("admin session grant action requires GlobalAdmin", async () => {
-  const result = await actions.grantSession({
-    cookies: { get: () => "admin-session" },
-    fetch: async () => {
-      throw new Error("GlobalMod must not call the session grant API");
-    },
-    locals: {
-      resolvedCapabilities: [{ kind: "GlobalMod" }],
-    },
-    request: formRequest({
-      principalId: MOD_PRINCIPAL_ID,
-      expiresAt: "4102444800",
-      globalCapability: "GlobalMod",
-    }),
-  });
-
-  assert.equal(result.status, 403);
-  assert.equal(result.data.id, "session-grants");
-  assert.equal(result.data.state, "reject");
-  assert.equal(result.data.message, "Session grants require GlobalAdmin");
-});
-
-test("admin session grant action posts the authenticated API request", async () => {
-  let observedRequest = null;
-  const result = await actions.grantSession({
-    cookies: { get: () => "admin-session" },
-    fetch: async (url, init) => {
-      observedRequest = {
-        url,
-        method: init.method,
-        authorization: init.headers.authorization,
-        contentType: init.headers["content-type"],
-        body: JSON.parse(init.body),
-      };
-      return jsonResponse({
-        principal_id: MOD_PRINCIPAL_ID,
-        capabilities: [{ kind: "GlobalMod" }],
-        session_token: "fmss_backend-issued-session",
-      });
-    },
-    locals: {
-      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
-    },
-    request: formRequest({
-      principalId: MOD_PRINCIPAL_ID,
-      expiresAt: "4102444800",
-      globalCapability: "GlobalMod",
-    }),
-  });
-
-  assert.deepEqual(observedRequest, {
-    url: "/auth/session-grants",
-    method: "POST",
-    authorization: "Bearer admin-session",
-    contentType: "application/json",
-    body: {
-      principal_id: MOD_PRINCIPAL_ID,
-      expires_at: 4102444800,
-      global_capabilities: ["GlobalMod"],
-    },
-  });
-  assert.equal(result.id, "session-grants");
-  assert.equal(result.state, "ack");
-  assert.equal(result.message, `Granted GlobalMod to ${MOD_PRINCIPAL_ID}`);
-  assert.equal(result.sessionToken, "fmss_backend-issued-session");
-});
-
-test("admin session grant action rejects malformed grant payloads before the API", async () => {
-  const invalidPrincipal = await actions.grantSession({
-    cookies: { get: () => "admin-session" },
-    fetch: async () => {
-      throw new Error("noncanonical session grant principal must not call the API");
-    },
-    locals: {
-      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
-    },
-    request: formRequest({
-      principalId: "mod_a",
-      expiresAt: "4102444800",
-      globalCapability: "GlobalMod",
-    }),
-  });
-
-  assert.equal(invalidPrincipal.status, 400);
-  assert.equal(invalidPrincipal.data.id, "session-grants");
-  assert.equal(invalidPrincipal.data.message, "Session grant principal must be a canonical UUID");
-
-  const invalidExpiry = await actions.grantSession({
-    cookies: { get: () => "admin-session" },
-    fetch: async () => {
-      throw new Error("invalid session grant expiry must not call the API");
-    },
-    locals: {
-      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
-    },
-    request: formRequest({
-      principalId: MOD_PRINCIPAL_ID,
-      expiresAt: "later",
-      globalCapability: "GlobalMod",
-    }),
-  });
-
-  assert.equal(invalidExpiry.status, 400);
-  assert.equal(invalidExpiry.data.id, "session-grants");
-  assert.equal(invalidExpiry.data.state, "reject");
-  assert.equal(
-    invalidExpiry.data.message,
-    "Session grant expiry must be a positive Unix timestamp",
-  );
-
-  const unsupportedCapability = await actions.grantSession({
-    cookies: { get: () => "admin-session" },
-    fetch: async () => {
-      throw new Error("unsupported session grant capability must not call the API");
-    },
-    locals: {
-      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
-    },
-    request: formRequest({
-      principalId: MOD_PRINCIPAL_ID,
-      expiresAt: "4102444800",
-      globalCapability: ["GlobalMod", "GlobalAdmin"],
-    }),
-  });
-
-  assert.equal(unsupportedCapability.status, 400);
-  assert.equal(unsupportedCapability.data.id, "session-grants");
-  assert.equal(unsupportedCapability.data.state, "reject");
-  assert.equal(
-    unsupportedCapability.data.message,
-    "Session grant form can only request the explicit GlobalMod capability",
-  );
-});
-
-test("admin session grant action surfaces API rejection", async () => {
-  const result = await actions.grantSession({
-    cookies: { get: () => "admin-session" },
-    fetch: async () =>
-      jsonResponse(
-        { message: "session grants require GlobalAdmin" },
-        { ok: false, status: 403 },
-      ),
-    locals: {
-      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
-    },
-    request: formRequest({
-      principalId: MOD_PRINCIPAL_ID,
-      expiresAt: "4102444800",
-      globalCapability: "GlobalMod",
-    }),
-  });
-
-  assert.equal(result.status, 403);
-  assert.equal(result.data.id, "session-grants");
-  assert.equal(result.data.state, "reject");
-  assert.equal(result.data.message, "session grants require GlobalAdmin");
-});
-
-test("admin session grant action rejects a malformed principal in the API response", async () => {
-  const result = await actions.grantSession({
-    cookies: { get: () => "admin-session" },
-    fetch: async () =>
-      jsonResponse({
-        principal_id: "mod_a",
-        capabilities: [{ kind: "GlobalMod" }],
-        session_token: "fmss_backend-issued-session",
-      }),
-    locals: {
-      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
-    },
-    request: formRequest({
-      principalId: MOD_PRINCIPAL_ID,
-      expiresAt: "4102444800",
-      globalCapability: "GlobalMod",
-    }),
-  });
-
-  assert.equal(result.status, 502);
-  assert.equal(result.data.id, "session-grants");
-  assert.equal(result.data.message, "Auth service returned a malformed session grant");
+test("admin transport exposes no arbitrary-principal session delegation action", () => {
+  assert.equal("grantSession" in actions, false);
 });
 
 test("admin route data uses operator proof status when available", async () => {
@@ -8927,7 +8738,6 @@ function normalizeHostedIdentityProviderBoundaryFixture(boundary) {
       sessionCredential: provider.sessionCredential,
       loginBoundary: provider.loginBoundary,
       sessionBoundary: provider.sessionBoundary,
-      sessionGrantBoundary: provider.sessionGrantBoundary,
       browserCookieName: provider.browserCookieName,
       rawCredentialPolicy: provider.rawCredentialPolicy,
       roleSurfaceArchitectureChanged:
@@ -12809,7 +12619,6 @@ function expectedHostedIdentityProviderBoundaryRows(boundary) {
         ["sessionCredential", provider.sessionCredential, false],
         ["loginBoundary", provider.loginBoundary, false],
         ["sessionBoundary", provider.sessionBoundary, false],
-        ["sessionGrantBoundary", provider.sessionGrantBoundary, false],
         ["browserCookieName", provider.browserCookieName, false],
         ["rawCredentialPolicy", provider.rawCredentialPolicy, false],
         [
@@ -13540,7 +13349,7 @@ function formRequest(fields) {
       formData.append(key, value);
     }
   }
-  return new Request("http://localhost/admin?/grantSession", {
+  return new Request("http://localhost/admin?/checkRecoveryGate", {
     method: "POST",
     body: formData,
   });

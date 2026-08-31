@@ -212,8 +212,8 @@ async fn seed_direct_surfaces(pool: &PgPool, game: Uuid, delivery: Uuid) {
             .unwrap();
     sqlx::query(
         "INSERT INTO auth_account \
-         (account_id, principal_id, method_id, password_hash, created_at, global_capabilities) \
-         VALUES ('rotation@example.test', $1, $2, 'unused', 1, '{}')",
+         (account_id, principal_id, method_id, password_hash, created_at) \
+         VALUES ('rotation@example.test', $1, $2, 'unused', 1)",
     )
     .bind(principal_id.as_uuid())
     .bind(method_id)

@@ -15,6 +15,11 @@
 //!   capabilities the principal holds — never from ambient globals. Capability is
 //!   resolved ONCE at the boundary; inner code receives a [`CapabilitySet`] and
 //!   asks it `grants(required)`. It does not re-derive authority.
+//! - [`resolve_live_delivery_in_tx`] is the delivery-fence variant. It resolves
+//!   the same authority while taking shared row locks on every existing row
+//!   whose mutation could revoke a returned capability. The caller keeps that
+//!   transaction open through the protected delivery, then commits or rolls it
+//!   back to release the fence.
 //!
 //! This is the confused-deputy defense: a component can only exercise authority
 //! it was handed.
@@ -161,9 +166,10 @@ pub enum CapError {
 /// least one of their occupied slots is dead; restoring that slot alive revokes
 /// the capability on the next boundary resolution.
 ///
-/// Global capabilities (`GlobalAdmin`/`GlobalMod`) are intentionally NOT derived
-/// here: there is no auth/role store yet (a later phase). They can be injected by
-/// the caller into the returned set if a future global-role projection exists.
+/// Global capabilities (`GlobalAdmin`/`GlobalMod`) are intentionally not derived
+/// here. The identity boundary reads their single durable source on
+/// `platform_principal`; callers may combine that freshly validated authority
+/// with this game-scoped result without making the game resolver an auth store.
 pub async fn resolve(
     pool: &PgPool,
     principal: &Principal,
@@ -182,6 +188,127 @@ pub async fn resolve_in_tx(
     game: GameId,
 ) -> Result<CapabilitySet, CapError> {
     resolve_with(tx, principal, game).await
+}
+
+const LIVE_DELIVERY_GAME_AUTHORITY_SQL: &str = "SELECT role FROM game_authority \
+     WHERE game_id = $1 AND principal_id = $2 \
+     ORDER BY role FOR SHARE";
+const LIVE_DELIVERY_SPECTATOR_SQL: &str = "SELECT principal_id FROM spectator_membership \
+     WHERE game_id = $1 AND principal_id = $2 \
+     ORDER BY principal_id FOR SHARE";
+const LIVE_DELIVERY_SUBJECT_SQL: &str = "SELECT subject_id FROM privacy_subject \
+     WHERE principal_id = $1 \
+     ORDER BY subject_id";
+const LIVE_DELIVERY_BINDING_SQL: &str = "SELECT persona_id FROM game_persona_subject_binding \
+     WHERE game_id = $1 AND subject_id = ANY($2::uuid[]) AND lifecycle = 'active' \
+     ORDER BY persona_id FOR SHARE";
+const LIVE_DELIVERY_OCCUPANCY_SQL: &str = "SELECT occupancy_id, slot_id FROM slot_occupancy_epoch \
+     WHERE game_id = $1 AND persona_id = ANY($2::uuid[]) AND ended_seq IS NULL \
+     ORDER BY slot_id, occupancy_id FOR SHARE";
+const LIVE_DELIVERY_SLOT_STATE_SQL: &str = "SELECT slot_id, alive FROM slot_state \
+     WHERE game_id = $1 AND slot_id = ANY($2::text[]) \
+     ORDER BY slot_id FOR SHARE";
+const LIVE_DELIVERY_CHANNEL_SQL: &str = "SELECT channel_id, slot_id FROM private_channel_member \
+     WHERE game_id = $1 AND slot_id = ANY($2::text[]) \
+     ORDER BY channel_id, slot_id FOR SHARE";
+
+/// Resolve current game capabilities and fence every existing row whose
+/// mutation can revoke one of the returned grants.
+///
+/// The lock order is deliberately fixed across relation types and total within
+/// each query:
+///
+/// 1. `game_authority` by role;
+/// 2. `spectator_membership` by principal;
+/// 3. read the `privacy_subject` identifier while the caller's exact-session
+///    fence transitively prevents owner lifecycle completion;
+/// 4. active `game_persona_subject_binding` by persona;
+/// 5. open `slot_occupancy_epoch` by slot and occupancy id;
+/// 6. `slot_state` by slot;
+/// 7. `private_channel_member` by channel and slot.
+///
+/// These are separate statements rather than a joined `SELECT DISTINCT ...
+/// FOR SHARE`: PostgreSQL cannot apply a locking clause to a `DISTINCT` result,
+/// and explicit statements make both the locked relation and acquisition order
+/// reviewable. The subject lookup deliberately does not take a row lock after
+/// the session: every owner lifecycle mutation follows owner -> session order,
+/// and the caller's exact-session lock already prevents it from completing.
+/// Locking the owner after the session would invert that order. Inserts can only
+/// add authority and need not be fenced. Updates or deletes of rows supporting
+/// a returned game capability conflict with `FOR SHARE` and wait until the
+/// caller commits or rolls back `tx` after delivery.
+pub async fn resolve_live_delivery_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    principal: &Principal,
+    game: GameId,
+) -> Result<CapabilitySet, CapError> {
+    let principal_id = principal.id().as_uuid();
+    let mut set = CapabilitySet::new();
+
+    let authority = sqlx::query(LIVE_DELIVERY_GAME_AUTHORITY_SQL)
+        .bind(game)
+        .bind(principal_id)
+        .fetch_all(&mut **tx)
+        .await?;
+    for row in authority {
+        match row.get::<String, _>("role").as_str() {
+            "host" => set.insert(Capability::HostOf(game)),
+            "cohost" => set.insert(Capability::CohostOf(game)),
+            _ => {}
+        }
+    }
+
+    let spectator = sqlx::query_scalar::<_, Uuid>(LIVE_DELIVERY_SPECTATOR_SQL)
+        .bind(game)
+        .bind(principal_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+    if spectator.is_some() {
+        set.insert(Capability::SpectatorOf(game));
+    }
+
+    let subject_ids = sqlx::query_scalar::<_, Uuid>(LIVE_DELIVERY_SUBJECT_SQL)
+        .bind(principal_id)
+        .fetch_all(&mut **tx)
+        .await?;
+    let persona_ids = sqlx::query_scalar::<_, Uuid>(LIVE_DELIVERY_BINDING_SQL)
+        .bind(game)
+        .bind(&subject_ids)
+        .fetch_all(&mut **tx)
+        .await?;
+    let occupancy = sqlx::query_as::<_, (Uuid, String)>(LIVE_DELIVERY_OCCUPANCY_SQL)
+        .bind(game)
+        .bind(&persona_ids)
+        .fetch_all(&mut **tx)
+        .await?;
+    let occupied_slots = occupancy
+        .into_iter()
+        .map(|(_, slot_id)| slot_id)
+        .collect::<BTreeSet<_>>();
+    for slot_id in &occupied_slots {
+        set.insert(Capability::SlotOccupant(slot_id.clone()));
+    }
+    let occupied_slots = occupied_slots.into_iter().collect::<Vec<_>>();
+
+    let slot_states = sqlx::query_as::<_, (String, bool)>(LIVE_DELIVERY_SLOT_STATE_SQL)
+        .bind(game)
+        .bind(&occupied_slots)
+        .fetch_all(&mut **tx)
+        .await?;
+    if slot_states.iter().any(|(_, alive)| !alive) {
+        set.insert(Capability::DeadViewer(game));
+    }
+
+    let channels = sqlx::query_as::<_, (String, String)>(LIVE_DELIVERY_CHANNEL_SQL)
+        .bind(game)
+        .bind(&occupied_slots)
+        .fetch_all(&mut **tx)
+        .await?;
+    for (channel_id, _) in channels {
+        set.insert(Capability::ChannelMember(channel_id));
+    }
+
+    Ok(set)
 }
 
 async fn resolve_with(
@@ -319,5 +446,74 @@ mod tests {
         let set = CapabilitySet::new();
         assert!(!set.grants(&Capability::HostOf(game())));
         assert!(!set.grants(&Capability::SlotOccupant("slot_1".into())));
+    }
+
+    #[test]
+    fn live_delivery_lock_contract_is_total_ordered_and_distinct_free() {
+        let queries = [
+            (
+                "game_authority",
+                LIVE_DELIVERY_GAME_AUTHORITY_SQL,
+                "ORDER BY role FOR SHARE",
+            ),
+            (
+                "spectator_membership",
+                LIVE_DELIVERY_SPECTATOR_SQL,
+                "ORDER BY principal_id FOR SHARE",
+            ),
+            (
+                "game_persona_subject_binding",
+                LIVE_DELIVERY_BINDING_SQL,
+                "ORDER BY persona_id FOR SHARE",
+            ),
+            (
+                "slot_occupancy_epoch",
+                LIVE_DELIVERY_OCCUPANCY_SQL,
+                "ORDER BY slot_id, occupancy_id FOR SHARE",
+            ),
+            (
+                "slot_state",
+                LIVE_DELIVERY_SLOT_STATE_SQL,
+                "ORDER BY slot_id FOR SHARE",
+            ),
+            (
+                "private_channel_member",
+                LIVE_DELIVERY_CHANNEL_SQL,
+                "ORDER BY channel_id, slot_id FOR SHARE",
+            ),
+        ];
+
+        assert_eq!(
+            queries.map(|(relation, _, _)| relation),
+            [
+                "game_authority",
+                "spectator_membership",
+                "game_persona_subject_binding",
+                "slot_occupancy_epoch",
+                "slot_state",
+                "private_channel_member",
+            ]
+        );
+        for (relation, query, ordered_lock_clause) in queries {
+            assert!(
+                query.contains(relation),
+                "lock query must name {relation}: {query}"
+            );
+            assert!(
+                query.contains(ordered_lock_clause),
+                "{relation} rows must be totally ordered before locking: {query}"
+            );
+            assert_eq!(
+                query.matches("FOR SHARE").count(),
+                1,
+                "{relation} must be locked exactly once"
+            );
+            assert!(
+                !query.contains("DISTINCT"),
+                "PostgreSQL rejects DISTINCT results with FOR SHARE: {query}"
+            );
+        }
+        assert!(LIVE_DELIVERY_SUBJECT_SQL.contains("ORDER BY subject_id"));
+        assert!(!LIVE_DELIVERY_SUBJECT_SQL.contains("FOR SHARE"));
     }
 }

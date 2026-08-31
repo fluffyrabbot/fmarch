@@ -912,39 +912,34 @@ async function proveRenderedAdminSetupConfirmation(bundle) {
   assertIncludes(html, 'aria-modal="true"', "admin setup confirmation modal");
   assertIncludes(
     html,
-    'aria-describedby="admin-command-confirmation-message-session-grants"',
-    "admin session-grant described-by",
+    'aria-describedby="admin-command-confirmation-message-create-game"',
+    "admin create-game described-by",
   );
   assertIncludes(
     html,
-    'data-testid="admin-command-confirmation-message-session-grants"',
-    "admin session-grant confirmation message",
+    'data-testid="admin-command-confirmation-message-create-game"',
+    "admin create-game confirmation message",
   );
   assertIncludes(
     html,
-    'data-testid="admin-command-trigger-session-grants"',
-    "admin session-grant trigger",
+    'data-testid="admin-command-trigger-create-game"',
+    "admin create-game trigger",
   );
   assertIncludes(
     html,
-    'data-testid="admin-command-confirm-session-grants"',
-    "admin session-grant confirm",
+    'data-testid="admin-command-confirm-create-game"',
+    "admin create-game confirm",
   );
   assertConfirmationFocusContract(html, {
-    initialFocusTestId: "admin-command-confirm-session-grants",
-    returnFocusTestId: "admin-command-trigger-session-grants",
+    initialFocusTestId: "admin-command-confirm-create-game",
+    returnFocusTestId: "admin-command-trigger-create-game",
     tabContainment: "local-confirmation-controls",
-    label: "admin session-grant",
+    label: "admin create-game",
   });
   assertIncludes(
     html,
-    'data-testid="admin-session-grant-global-mod"',
-    "admin session-grant global capability checkbox",
-  );
-  assertIncludes(
-    html,
-    'data-testid="admin-command-cancel-session-grants"',
-    "admin session-grant cancel",
+    'data-testid="admin-command-cancel-create-game"',
+    "admin create-game cancel",
   );
   assertIncludes(
     html,
@@ -977,26 +972,22 @@ async function proveRenderedAdminSetupConfirmation(bundle) {
     role: "admin",
     surface: "setup",
     confirmTestIds: [
-      "admin-command-confirm-session-grants",
+      "admin-command-confirm-create-game",
       "admin-command-confirm-cohost",
     ],
     cancelTestIds: [
-      "admin-command-cancel-session-grants",
+      "admin-command-cancel-create-game",
       "admin-command-cancel-cohost",
     ],
     messageTestIds: [
-      "admin-command-confirmation-message-session-grants",
+      "admin-command-confirmation-message-create-game",
       "admin-command-confirmation-message-cohost",
     ],
-    formFieldTestIds: [
-      "admin-session-grant-principal",
-      "admin-session-grant-expires-at",
-      "admin-session-grant-global-mod",
-    ],
+    formFieldTestIds: [],
     focusContracts: [
       {
-        initialFocusTestId: "admin-command-confirm-session-grants",
-        returnFocusTestId: "admin-command-trigger-session-grants",
+        initialFocusTestId: "admin-command-confirm-create-game",
+        returnFocusTestId: "admin-command-trigger-create-game",
         escapeCancels: true,
         tabContainment: "local-confirmation-controls",
       },
@@ -1352,8 +1343,8 @@ async function proveRenderedAdminSurface(bundle) {
   assertIncludes(html, 'data-testid="admin-setup-create-game"', "admin create-game setup");
   assertIncludes(
     html,
-    'data-testid="admin-inbox-task-setup-session-grants"',
-    "admin session-grant inbox task",
+    'data-testid="admin-inbox-task-setup-cohost"',
+    "admin cohost inbox task",
   );
   assertIncludes(
     html,
@@ -2720,7 +2711,6 @@ export async function renderPlayerPrivateDisclosure(expanded) {
 
 export async function renderAdminCommandActivity() {
   const data = await buildAdminRouteData(fixtureRouteInputForRole("admin"));
-  const sessionGrants = data.gameSetup.find((item) => item.id === "session-grants");
   const recoveryGate = data.recoveryTasks.find((item) => item.id === "recovery-gate");
   const recoveryStatus = {
     ...adminConfirmStatus(recoveryGate),
@@ -2730,7 +2720,6 @@ export async function renderAdminCommandActivity() {
   return render(AdminCommandActivity, {
     props: {
       commandStatuses: {
-        "session-grants": adminConfirmStatus(sessionGrants),
         "recovery-gate": recoveryStatus,
       },
     },
@@ -2816,16 +2805,15 @@ export async function renderAdminAuditDetailSurface() {
 
 export async function renderAdminSetupConfirmation() {
   const data = await buildAdminRouteData(fixtureRouteInputForRole("admin"));
-  const sessionGrants = data.gameSetup.find((item) => item.id === "session-grants");
+  const createGame = data.gameSetup.find((item) => item.id === "create-game");
   const cohost = data.gameSetup.find((item) => item.id === "cohost");
   return render(AdminSetupGrid, {
     props: {
       items: data.gameSetup,
       commandStatuses: {
-        "session-grants": adminConfirmStatus(sessionGrants),
+        "create-game": adminConfirmStatus(createGame),
         cohost: adminConfirmStatus(cohost),
       },
-      sessionGrant: data.command.sessionGrant,
       onSetupAction: () => {},
       onConfirmSetupAction: () => {},
       onCancelSetupAction: () => {},

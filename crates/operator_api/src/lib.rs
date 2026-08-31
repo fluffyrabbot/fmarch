@@ -72,6 +72,14 @@ impl OperatorApiState {
             )),
         }
     }
+
+    pub fn with_local_proof_instance(
+        mut self,
+        instance_id: identity::LocalProofInstanceId,
+    ) -> Self {
+        self.session_policy = self.session_policy.with_local_proof_instance(instance_id);
+        self
+    }
 }
 
 pub fn router(pool: PgPool) -> Router {

@@ -19,6 +19,7 @@ import {
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 import { decodeServerEnvelopeFrame } from "../frontend/src/lib/app/live-transport.mjs";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import {
   fixturePrincipalAuthorityId,
   fixturePrincipalTransport,
@@ -49,6 +50,7 @@ const postBurstGame = randomUUID();
 const postPrefix = `capacity-post-${runId}`;
 const wsPostPrefix = `capacity-ws-${runId}`;
 const seedSessionTokens = new Map();
+const localProofAuth = createLocalProofAuth();
 
 let server;
 let serverOutput = "";
@@ -204,7 +206,7 @@ function parseArgs(argv) {
 async function startServer({ baseUrl, port, databaseUrl, env }) {
   server = spawn(serverBinary, [], {
     cwd: repoRoot,
-    env: {
+    env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl: databaseUrl, env }),
       FMARCH_BIND: `127.0.0.1:${port}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
@@ -223,9 +225,8 @@ async function startServer({ baseUrl, port, databaseUrl, env }) {
       FMARCH_AUTH_SOURCE_RATE_LIMIT_MAX_FAILURES: "3",
       FMARCH_AUTH_RATE_LIMIT_LOCKOUT_SECONDS: "60",
       FMARCH_TRUST_AUTH_SOURCE_HEADER: "1",
-      FMARCH_DEV_AUTH: "1",
       RUST_LOG: env.RUST_LOG ?? "warn",
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", recordServerOutput);
@@ -1033,9 +1034,9 @@ async function seedSessionToken(baseUrl, principalId) {
   if (cached !== undefined) {
     return cached;
   }
-  const response = await fetch(`${baseUrl}/auth/dev-session`, {
+  const response = await fetch(`${baseUrl}/auth/local-proof/sessions`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: localProofAuth.requestHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({
       principal_id: fixturePrincipalAuthorityId(principalId),
       expires_at: 4_102_444_800,

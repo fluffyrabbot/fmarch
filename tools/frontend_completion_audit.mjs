@@ -562,22 +562,22 @@ const audit = {
       label: "Admin/operator setup, audit, and recovery",
       state: fullBrowserProof ? "browser_proven" : "dom_and_model_proven_browser_blocked",
       proven: [
-        "Admin route model exposes setup, readiness, audit, recovery, session grant, and recovery-gate actions without ambient superuser checks.",
+        "Admin route model exposes setup, readiness, audit, recovery, and recovery-gate actions through explicit capability checks.",
         "Admin audit list links to native SvelteKit detail route with principal-scoped machine evidence endpoint.",
         "Static source proof records shared ConfirmationShell ownership for admin setup/recovery confirmation wrapper attributes.",
         "Static model proof records shared confirmation-action ownership for admin setup/recovery payloads.",
         "Static model and SSR DOM proof record confirmation-command traces from admin confirmations into command activity rows.",
         "No-browser dispatch bridge proof maps admin setup confirmation trace metadata through the admin route handler into the real AddCohost request plus pending, ACK, reject command activity states, smoke-exposed bridge plan, and route-owned generic admin form result exposure.",
-        "No-localhost hydrated-handler proof records admin AddCohost ACK/reject plus distinct session-grant and recovery-gate server form ACK outcomes into DOM-facing admin command activity view models and smoke-exposed form result keys.",
-        "No-localhost hydrated-surface adapter proof records native admin audit-list to audit-detail route data, machine evidence href, overview return href, AddCohost ACK through the admin command adapter and browser bridge, plus session-grant and recovery-gate server form ACK rows through the route form-result bridge.",
-        "No-bind component interaction proof records admin cohost, session-grant, and recovery-gate confirmation/form wiring plus re-rendered ACK rows through compiled Svelte components.",
+        "No-localhost hydrated-handler proof records admin AddCohost ACK/reject plus a recovery-gate server form ACK outcome into DOM-facing admin command activity view models and smoke-exposed form result keys.",
+        "No-localhost hydrated-surface adapter proof records native admin audit-list to audit-detail route data, machine evidence href, overview return href, AddCohost ACK through the admin command adapter and browser bridge, plus the recovery-gate server form ACK row through the route form-result bridge.",
+        "No-bind component interaction proof records admin cohost and recovery-gate confirmation/form wiring plus re-rendered ACK rows through compiled Svelte components.",
         "Static SSR focusability proof verifies admin focus targets and denied nav ids against rendered markup.",
-        ...noBindInteractionProof("admin", "admin cohost, session-grant, and recovery-gate confirm click hit-testing and focus landing"),
+        ...noBindInteractionProof("admin", "admin cohost and recovery-gate confirm click hit-testing and focus landing"),
         ...noBindKeyboardProof("admin surface Tab traversal, visible focus outlines, and denied-control exclusion"),
         "SSR and DOM proof render admin setup/recovery confirmations with DOM-visible focus/escape/tab metadata plus a single admin command activity rail for setup/recovery command feedback.",
         "Static command proof records admin create_game reject handling.",
         ...fullBrowserProofLines(
-          "Dev-server role smoke proves admin screenshots, audit-detail click-through evidence, session-grant and recovery-gate ACK evidence, setup/recovery thumb zones, overlap-checked targets, and focus traversal.",
+          "Dev-server role smoke proves admin screenshots, audit-detail click-through evidence, cohost confirmation and recovery-gate ACK evidence, setup/recovery thumb zones, overlap-checked targets, and focus traversal.",
         ),
       ],
       evidence: [
@@ -664,7 +664,7 @@ const audit = {
       proven:
         browserRoleSmokeEvidenceComplete()
           ? [
-              "Dev-server Chromium role smoke passed, generated screenshots, recorded setup workbench geometry for /g/midsummer/setup, recorded tablet thumb-zone geometry, and recorded admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK, player private:role_pm:slot-7 SubmitPost ACK, player tablet-media browser request evidence, and moderator SetSlotStatus ACK evidence with refreshed projections.",
+              "Dev-server Chromium role smoke passed, generated screenshots, recorded setup workbench geometry for /g/midsummer/setup, recorded tablet thumb-zone geometry, and recorded admin cohost confirmation/recovery-gate form evidence, player main-thread SubmitPost ACK, player private:role_pm:slot-7 SubmitPost ACK, player tablet-media browser request evidence, and moderator SetSlotStatus ACK evidence with refreshed projections.",
             ]
           : inAppBrowserImportedRunEvidenceComplete()
             ? [
@@ -673,7 +673,7 @@ const audit = {
               ]
           : [
               "No-browser fallback artifacts are green and record the blocked browser boundary.",
-              `File-backed in-app browser fixture is generated and statically verified for role shells, representative admin/player controls including admin session-grant/recovery-gate forms and player role-PM private-channel post, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, plus separate hydrated-surface admin forms, host-prompt, and slot-lifecycle scenario controls, but it has not produced browser click/focus evidence.`,
+              `File-backed in-app browser fixture is generated and statically verified for role shells, representative admin/player controls including admin cohost/recovery-gate confirmations and player role-PM private-channel post, all ${EXPECTED_COUNTS.moderatorCriticalActions} moderator critical host confirmations, plus separate hydrated-surface admin forms, host-prompt, and slot-lifecycle scenario controls, but it has not produced browser click/focus evidence.`,
               "A localhost-served fixture run is modeled separately from the file URL lane and records the current localhost bind/Chromium boundary before promotion.",
             ],
       evidence: [
@@ -917,17 +917,8 @@ function adminBrowserOperationalEvidenceComplete() {
     return false;
   }
   return adminEntries.every((entry) =>
-    entry.commandResult?.sessionGrant?.focus?.initialFocus?.testId ===
-      "admin-command-confirm-session-grants" &&
-    entry.commandResult?.sessionGrant?.form?.action === "?/grantSession" &&
-    includesAll(
-      entry.commandResult?.sessionGrant?.form?.fieldTestIds,
-      [
-        "admin-session-grant-principal",
-        "admin-session-grant-expires-at",
-        "admin-session-grant-global-mod",
-      ],
-    ) &&
+    entry.commandResult?.cohost?.focus?.initialFocus?.testId ===
+      "admin-command-confirm-cohost" &&
     entry.commandResult?.recovery?.state === "ack" &&
     entry.commandResult?.recovery?.focus?.initialFocus?.testId ===
       "admin-recovery-confirm-recovery-gate" &&
@@ -1041,7 +1032,6 @@ function iabFixtureEvidenceComplete() {
   );
   for (const id of [
     "admin-cohost-confirm-click",
-    "admin-session-grant-confirm-click",
     "admin-recovery-gate-confirm-click",
     "player-submit-vote-click",
     "player-submit-post-click",
@@ -1185,7 +1175,6 @@ function noBindInteractionScenarioIds() {
   return {
     admin: [
       "admin-cohost-confirm-click",
-      "admin-session-grant-confirm-click",
       "admin-recovery-gate-confirm-click",
     ],
     player: [

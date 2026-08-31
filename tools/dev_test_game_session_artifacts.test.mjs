@@ -76,9 +76,10 @@ test("session card assembly owns role URLs and preserves the exact card schema",
       commandCount: 4,
     },
     identityBootstrap: {
-      rootSessionSource: "auth_session",
+      rootSessionSource: "/auth/local-proof/sessions",
       browserCredentialIssuer: "/auth/accounts + /auth/game-invitations",
-      devSessionEndpointEnabled: false,
+      rootSessionProcessBound: true,
+      localProofInstanceIdExposed: false,
     },
   });
   assert.deepEqual(Object.keys(card), [

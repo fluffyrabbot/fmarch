@@ -40,6 +40,7 @@ thiserror = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
+async-trait = "0.1"
 futures-util = "0.3"
 object_store = { version = "0.14.1", default-features = false }
 png = "0.18"

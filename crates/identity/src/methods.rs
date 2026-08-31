@@ -324,6 +324,31 @@ impl IdentityMutationOwner {
     }
 }
 
+/// Join the principal-wide identity cutoff gate without taking mutation
+/// authority. Live delivery acquires this shared row lock before its exact
+/// session lock; destructive identity work takes the exclusive form in
+/// [`lock_identity_mutation`]. Once an exclusive waiter queues, later delivery
+/// readers cannot enter behind it, so a cutoff drains the already-active batch
+/// set once instead of chasing staggered session locks.
+pub async fn lock_identity_delivery_gate(
+    conn: &mut PgConnection,
+    principal_id: &PrincipalId,
+) -> Result<(), IdentityFlowError> {
+    sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT principal_id
+        FROM platform_principal
+        WHERE principal_id = $1
+        FOR SHARE
+        "#,
+    )
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(IdentityFlowError::Unauthorized)?;
+    Ok(())
+}
+
 /// Serialize every identity mutation on its owner before taking subordinate
 /// locks. The order is deliberately centralized here:
 ///
@@ -374,13 +399,6 @@ pub async fn lock_identity_mutation(
         .bind(principal_id.as_uuid())
         .fetch_all(&mut *conn)
         .await?;
-        sqlx::query_scalar::<_, String>(
-            "SELECT token_hash FROM auth_websocket_ticket WHERE principal_id = $1 ORDER BY token_hash FOR UPDATE",
-        )
-        .bind(principal_id.as_uuid())
-        .fetch_all(&mut *conn)
-        .await?;
-
         // Authentication methods.
         sqlx::query_scalar::<_, Uuid>(
             "SELECT method_id FROM authentication_method WHERE principal_id = $1 ORDER BY method_id FOR UPDATE",

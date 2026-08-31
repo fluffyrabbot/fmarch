@@ -229,7 +229,7 @@ function buildStabilityChecks(moderatorActionManifest) {
       statusFloorMinBlockSizePx:
         ADMIN_SURFACE_CONTRACT.commandStatusFloorMinBlockSizePx,
       tiles: [
-        ...["create-game", "session-grants", "cohost"].map((id) => ({
+        ...["create-game", "cohost"].map((id) => ({
           id: `admin-setup-${id}`,
           tileSelector: `[data-testid="admin-setup-${id}"]`,
           triggerSelector: `[data-testid="admin-command-trigger-${id}"]`,
@@ -330,12 +330,6 @@ function buildHydratedSurfaceScenarios(evidence) {
       source: "hydratedSurfaces.admin",
       forms: evidence.admin.forms,
       controls: [
-        {
-          testId: "iab-admin-session-grant-ack",
-          kind: "button",
-          expectedText: evidence.admin.forms.sessionGrant.visible.message,
-          exposureKey: evidence.admin.forms.sessionGrant.exposureKey,
-        },
         {
           testId: "iab-admin-recovery-gate-ack",
           kind: "button",
@@ -472,9 +466,6 @@ function assertHydratedSurfaceEvidence(evidence) {
   }
   if (evidence.admin.command.visible.state !== "ack") {
     throw new Error("hydrated admin evidence missing ACK command row");
-  }
-  if (evidence.admin.forms?.sessionGrant?.visible?.state !== "ack") {
-    throw new Error("hydrated admin evidence missing session-grant ACK row");
   }
   if (evidence.admin.forms?.recoveryGate?.visible?.state !== "ack") {
     throw new Error("hydrated admin evidence missing recovery-gate ACK row");
@@ -753,7 +744,6 @@ function renderHydratedSurfaceScenario(scenario) {
 >
   <h2>admin operational forms</h2>
   <div class="proof-controls">
-    <button data-testid="iab-admin-session-grant-ack" type="button">${escapeHtml(scenario.forms.sessionGrant.visible.message)}</button>
     <button data-testid="iab-admin-recovery-gate-ack" type="button">${escapeHtml(scenario.forms.recoveryGate.visible.message)}</button>
   </div>
 </section>`;

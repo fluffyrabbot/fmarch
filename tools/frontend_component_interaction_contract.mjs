@@ -92,7 +92,6 @@ async function proveSourceContracts() {
         "on:click={() => onSetupAction(item)}",
         "on:click={() => confirmSetupAction(item)}",
         "onConfirmSetupAction(item)",
-        'action="?/grantSession"',
         "<CommandRecovery",
       ],
     }),
@@ -144,40 +143,22 @@ async function proveSourceContracts() {
 
 async function proveAdminInteraction(bundle) {
   const confirm = await bundle.renderAdminSetupGridConfirm();
-  const sessionGrantConfirm = await bundle.renderAdminSessionGrantConfirm();
   const recoveryConfirm = await bundle.renderAdminRecoveryGateConfirm();
   const ack = await bundle.renderAdminCommandActivityAck();
   const invoked = [];
   const item = adminCohostItem();
-  const sessionGrantItem = adminSessionGrantItem();
   const recoveryGateItem = adminRecoveryGateItem();
   const confirmationStatus = adminConfirmStatus(item);
-  const sessionGrantStatus = adminConfirmStatus(sessionGrantItem);
   const recoveryGateStatus = adminConfirmStatus(recoveryGateItem);
   const optimisticStatuses = recordAdminCommandStatus(
     {},
     item.id,
     adminPendingStatus(),
   );
-  invoked.push(item.commandAction, sessionGrantItem.commandAction, recoveryGateItem.action);
+  invoked.push(item.commandAction, recoveryGateItem.action);
 
   assertIncludes(confirm.html, 'data-testid="admin-command-confirm-cohost"', "admin confirm button");
   assertIncludes(confirm.html, "Delegate @cohost_c as cohost", "admin confirmation copy");
-  assertIncludes(
-    sessionGrantConfirm.html,
-    'action="?/grantSession"',
-    "admin session grant form action",
-  );
-  assert.equal(
-    sessionGrantConfirm.html.includes('data-testid="admin-session-grant-token"'),
-    false,
-    "admin session grant must not accept a caller-selected bearer",
-  );
-  assertIncludes(
-    sessionGrantConfirm.html,
-    'data-testid="admin-session-grant-global-mod"',
-    "admin session grant GlobalMod field",
-  );
   assertIncludes(
     recoveryConfirm.html,
     'action="?/checkRecoveryGate"',
@@ -189,15 +170,12 @@ async function proveAdminInteraction(bundle) {
     "admin recovery principal hidden field",
   );
   assertIncludes(ack.html, 'data-testid="admin-command-activity-cohost"', "admin ack row");
-  assertIncludes(ack.html, 'data-testid="admin-command-activity-session-grants"', "admin session grant ack row");
   assertIncludes(ack.html, 'data-testid="admin-command-activity-recovery-gate"', "admin recovery gate ack row");
   assertIncludes(ack.html, 'data-state="ack"', "admin ack state");
   assert.equal(invoked[0], "add_cohost");
-  assert.equal(invoked[1], "grant_session");
-  assert.equal(invoked[2], "check_recovery_gate");
+  assert.equal(invoked[1], "check_recovery_gate");
   assert.equal(optimisticStatuses.cohost.state, "pending");
   assert.equal(confirmationStatus.confirmationTrace.dispatchKind, "add_cohost");
-  assert.equal(sessionGrantStatus.confirmationTrace.dispatchKind, "grant_session");
   assert.equal(recoveryGateStatus.confirmationTrace.dispatchKind, "check_recovery_gate");
 
   return {
@@ -213,20 +191,6 @@ async function proveAdminInteraction(bundle) {
       },
       {
         action: invoked[1],
-        triggerTestId: "admin-command-trigger-session-grants",
-        confirmTestId: "admin-command-confirm-session-grants",
-        formAction: "?/grantSession",
-        formFieldTestIds: [
-          "admin-session-grant-principal",
-          "admin-session-grant-expires-at",
-          "admin-session-grant-global-mod",
-        ],
-        visibleRowTestId: "admin-command-activity-session-grants",
-        statusTestId: "admin-command-activity-status-session-grants",
-        renderedConfirmBytes: Buffer.byteLength(sessionGrantConfirm.html),
-      },
-      {
-        action: invoked[2],
         triggerTestId: "admin-recovery-trigger-recovery-gate",
         confirmTestId: "admin-recovery-confirm-recovery-gate",
         formAction: "?/checkRecoveryGate",
@@ -397,21 +361,6 @@ function adminCohostItem() {
   };
 }
 
-function adminSessionGrantItem() {
-  return {
-    id: "session-grants",
-    label: "Session grants",
-    value: "Grant GlobalMod to mod_a",
-    authority: "GlobalAdmin",
-    boundary: "Authenticated session grant",
-    boundaryDetail: "/auth/session-grants requires active GlobalAdmin session",
-    buttonLabel: "Grant session",
-    commandAction: "grant_session",
-    confirmLabel: "Grant GlobalMod",
-    confirmMessage: "Grant GlobalMod to mod_a until 4102444800.",
-  };
-}
-
 function adminRecoveryGateItem() {
   return {
     id: "recovery-gate",
@@ -490,21 +439,6 @@ function adminCohostItem() {
   };
 }
 
-function adminSessionGrantItem() {
-  return {
-    id: "session-grants",
-    label: "Session grants",
-    value: "Grant GlobalMod to mod_a",
-    authority: "GlobalAdmin",
-    boundary: "Authenticated session grant",
-    boundaryDetail: "/auth/session-grants requires active GlobalAdmin session",
-    buttonLabel: "Grant session",
-    commandAction: "grant_session",
-    confirmLabel: "Grant GlobalMod",
-    confirmMessage: "Grant GlobalMod to mod_a until 4102444800.",
-  };
-}
-
 function adminRecoveryGateItem() {
   return {
     id: "recovery-gate",
@@ -566,27 +500,6 @@ export function renderAdminSetupGridConfirm() {
       commandStatuses: {
         cohost: adminConfirmStatus(item),
       },
-      sessionGrant: {},
-      onSetupAction: () => {},
-      onConfirmSetupAction: () => {},
-      onCancelSetupAction: () => {},
-    },
-  });
-}
-
-export function renderAdminSessionGrantConfirm() {
-  const item = adminSessionGrantItem();
-  return render(AdminSetupGrid, {
-    props: {
-      items: [item],
-      commandStatuses: {
-        "session-grants": adminConfirmStatus(item),
-      },
-      sessionGrant: {
-        principalId: "mod_a",
-        expiresAt: 4102444800,
-        globalCapabilities: ["GlobalMod"],
-      },
       onSetupAction: () => {},
       onConfirmSetupAction: () => {},
       onCancelSetupAction: () => {},
@@ -618,12 +531,6 @@ export function renderAdminCommandActivityAck() {
           state: "ack",
           message: "Ack: stream seqs 61",
           confirmationTrace: adminConfirmStatus(adminCohostItem()).confirmationTrace,
-        },
-        "session-grants": {
-          state: "ack",
-          message: "Granted GlobalMod to mod_a",
-          confirmationTrace:
-            adminConfirmStatus(adminSessionGrantItem()).confirmationTrace,
         },
         "recovery-gate": {
           state: "ack",

@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
@@ -28,7 +29,6 @@ import {
 import {
   createLiveStackAuth,
   createLiveStackCommandSender,
-  hashSessionToken,
 } from "./live_stack/auth_commands.mjs";
 import {
   createLiveStackViteLogger,
@@ -152,9 +152,7 @@ const spectatorGame = crypto.randomUUID();
 const dayEventRoomFixture = createDayEventRoomFixture();
 const dayEventRoomGame = dayEventRoomFixture.game;
 const adminCreatedGame = crypto.randomUUID();
-const rootAdminSessionToken = canonicalSessionToken(
-  `host-console-live-stack-root-admin-${crypto.randomUUID()}`,
-);
+let rootAdminSessionToken;
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
 const playerSessionToken = `host-console-live-stack-player-${crypto.randomUUID()}`;
 const rolePmIncomingSessionToken = `host-console-live-stack-role-pm-incoming-${crypto.randomUUID()}`;
@@ -299,12 +297,8 @@ if (!migrationUrl) {
 }
 
 let commandEnvelopeId = 1;
-const issuedSessionTokens = new Map([[rootAdminSessionToken, rootAdminSessionToken]]);
-const liveStackAuth = createLiveStackAuth({
-  apiBaseUrl,
-  fetchJson,
-  rootAdminSessionToken,
-});
+const issuedSessionTokens = new Map();
+let liveStackAuth;
 const createAuthAccount = async ({ principalId, ...options }) =>
   await liveStackAuth.createAuthAccount({
     ...options,
@@ -317,9 +311,10 @@ const createAccountSession = async ({ sessionAlias, principalId, ...options }) =
   });
   return registerIssuedSession(sessionAlias, { ...session, principalId });
 };
-const createGrantedSession = async ({ sessionAlias, principalId, ...options }) => {
-  const session = await liveStackAuth.createGrantedSession({
+const createPrivilegedAccountSession = async ({ sessionAlias, principalId, ...options }) => {
+  const session = await liveStackAuth.createAccountSession({
     ...options,
+    label: options.label ?? principalId,
     principalId: authorityPrincipalId(principalId),
   });
   return registerIssuedSession(sessionAlias, { ...session, principalId });
@@ -366,6 +361,7 @@ process.env.FMARCH_API_INTERNAL_URL = apiBaseUrl;
 process.chdir(frontendRoot);
 
 try {
+  const localProofAuth = createLocalProofAuth();
   await mkdir(artifactDir, { recursive: true });
   subjectKeyRoot = await mkdtemp(path.join(artifactDir, "subject-authority-"));
   await mkdir(mediaRoot, { recursive: true, mode: 0o700 });
@@ -382,7 +378,7 @@ try {
   await writeProgress({ stage: "start-rust-server", apiPort });
   server = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
-    env: {
+    env: localProofAuth.serverEnvironment({
       ...serverRuntimeEnvironment({ applicationUrl: smokeDatabase.applicationUrl }),
       FMARCH_BIND: `${host}:${apiPort}`,
       FMARCH_MEDIA_ROOT: mediaRoot,
@@ -405,7 +401,7 @@ try {
       FMARCH_HTTP_REQUEST_TIMEOUT_MS:
         process.env.FMARCH_HTTP_REQUEST_TIMEOUT_MS ?? "180000",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
-    },
+    }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (chunk) => {
@@ -418,7 +414,12 @@ try {
   await writeProgress({ stage: "wait-for-rust-health" });
   await waitForHealth();
   await writeProgress({ stage: "seed-root-admin-session" });
-  const rootAdminSession = await seedRootAdminSession();
+  const rootAdminSession = await seedRootAdminSession(localProofAuth);
+  liveStackAuth = createLiveStackAuth({
+    apiBaseUrl,
+    fetchJson,
+    rootAdminSessionToken,
+  });
   let grantedSessions;
   let seedCommands = null;
   let actionSeedCommands = null;
@@ -433,7 +434,7 @@ try {
   if (dayEventRoomOnly) {
     await writeProgress({ stage: "create-day-event-room-host-session", dayEventRoomGame });
     grantedSessions = {
-      host: await createGrantedSession({
+      host: await createPrivilegedAccountSession({
         sessionAlias: hostSessionToken,
         principalId: "host_h",
         globalCapabilities: ["GlobalAdmin"],
@@ -1092,44 +1093,25 @@ async function seedFactionDayChatFixture() {
   };
 }
 
-async function seedRootAdminSession() {
-  const rootPrincipalId = authorityPrincipalId("root_admin");
-  await runSql(smokeDatabase.applicationUrl, `
-    INSERT INTO platform_principal (
-      principal_id, status, global_capabilities, created_at, disabled_at
-    ) VALUES (${sqlLiteral(rootPrincipalId)}, 'active', ARRAY[]::TEXT[], 0, NULL)
-    ON CONFLICT (principal_id) DO NOTHING;
-  `);
-  await runSql(smokeDatabase.applicationUrl, `
-    INSERT INTO auth_session (
-      token_hash,
-      principal_id,
-      created_at,
-      expires_at,
-      revoked_at,
-      global_capabilities,
-      idle_expires_at,
-      assurance,
-      authenticated_at
-    )
-    VALUES (
-      ${sqlLiteral(hashSessionToken(rootAdminSessionToken))},
-      ${sqlLiteral(rootPrincipalId)},
-      0,
-      4102444800,
-      NULL,
-      ARRAY['GlobalAdmin']::TEXT[],
-      4102444800,
-      'admin_grant',
-      0
-    )
-    ON CONFLICT (token_hash) DO UPDATE SET
-      principal_id = EXCLUDED.principal_id,
-      expires_at = EXCLUDED.expires_at,
-      revoked_at = NULL,
-      global_capabilities = EXCLUDED.global_capabilities,
-      idle_expires_at = EXCLUDED.idle_expires_at;
-  `);
+async function seedRootAdminSession(localProofAuth) {
+  const minted = await fetchJson(`${apiBaseUrl}/auth/local-proof/sessions`, {
+    method: "POST",
+    headers: localProofAuth.requestHeaders({
+      "content-type": "application/json",
+    }),
+    body: JSON.stringify({
+      principal_id: authorityPrincipalId("root_admin"),
+      expires_at: 4102444800,
+      global_capabilities: ["GlobalAdmin"],
+    }),
+  });
+  rootAdminSessionToken = minted.session_token;
+  if (
+    typeof rootAdminSessionToken !== "string" ||
+    rootAdminSessionToken === ""
+  ) {
+    throw new Error("root local proof session returned no session_token");
+  }
   const session = await fetchJson(`${apiBaseUrl}/auth/session`, {
     headers: {
       authorization: `Bearer ${rootAdminSessionToken}`,
@@ -1147,7 +1129,7 @@ async function seedRootAdminSession() {
     principalId: session.principal_id,
     capabilityKinds,
     boundary:
-      "root GlobalAdmin is seeded directly into the scratch auth_session table so the live browser proof can keep /auth/dev-session disabled and mint all browser tokens through /auth/session-grants",
+      "the owned API mints root command authority through its secret-authenticated, process-bound local proof control; the backend keeps the instance id private and every browser identity authenticates through /auth/accounts/login",
   };
 }
 
@@ -1163,12 +1145,12 @@ function resolveSessionToken(token) {
 
 async function createGrantedSessions() {
   return {
-    admin: await createGrantedSession({
+    admin: await createPrivilegedAccountSession({
       sessionAlias: adminSessionToken,
       principalId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
-    host: await createGrantedSession({
+    host: await createPrivilegedAccountSession({
       sessionAlias: hostSessionToken,
       principalId: "host_h",
       globalCapabilities: ["GlobalAdmin"],
@@ -1184,27 +1166,27 @@ async function createGrantedSessions() {
       label: "role-pm-incoming",
       accountId: rolePmIncomingAccountId,
     }),
-    actionPlayer: await createGrantedSession({
+    actionPlayer: await createPrivilegedAccountSession({
       sessionAlias: actionPlayerSessionToken,
       principalId: "action-goon",
     }),
-    racePlayer: await createGrantedSession({
+    racePlayer: await createPrivilegedAccountSession({
       sessionAlias: racePlayerSessionToken,
       principalId: "player-goon-a",
     }),
-    seedPlayer: await createGrantedSession({
+    seedPlayer: await createPrivilegedAccountSession({
       sessionAlias: seedPlayerSessionToken,
       principalId: "player-seed",
     }),
-    targetPlayer: await createGrantedSession({
+    targetPlayer: await createPrivilegedAccountSession({
       sessionAlias: targetPlayerSessionToken,
       principalId: "player-target",
     }),
-    goonB: await createGrantedSession({
+    goonB: await createPrivilegedAccountSession({
       sessionAlias: goonBSessionToken,
       principalId: "player-goon-b",
     }),
-    cohost: await createGrantedSession({
+    cohost: await createPrivilegedAccountSession({
       sessionAlias: cohostSessionToken,
       principalId: "cohost_c",
     }),
@@ -6615,10 +6597,6 @@ function assertVisibleBox(box, label) {
   if (box.width <= 0 || box.height <= 0) {
     throw new Error(`${label} is ${box.width}x${box.height}, expected visible pixels`);
   }
-}
-
-function canonicalSessionToken(seed) {
-  return `fmss_${hashSessionToken(seed)}`;
 }
 
 process.on("uncaughtException", (error) => {

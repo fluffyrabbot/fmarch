@@ -22,7 +22,7 @@ test("admin readiness strip summarizes authority and operator proof boundaries",
       },
       gameSetup: [
         { id: "create-game", label: "Create game" },
-        { id: "session-grants", label: "Session grants" },
+        { id: "cohost", label: "Cohost delegation" },
       ],
       audit: [
         {
@@ -62,7 +62,7 @@ test("admin readiness strip summarizes authority and operator proof boundaries",
       {
         id: "setup",
         value: "2 available actions",
-        detail: "Create game, Session grants",
+        detail: "Create game, Cohost delegation",
         status: {
           state: "pending",
           message: "Game and account actions are ready",
@@ -132,16 +132,16 @@ test("admin command activity summarizes recent setup and recovery status", () =>
         state: "reject",
         message: "Reject DuplicateGame: already exists",
       },
-      "session-grants": {
+      cohost: {
         state: "confirm",
-        message: "Grant GlobalMod to mod_a",
+        message: "Delegate @cohost_c as cohost for this game",
         confirmationTrace: {
           kind: "confirmation-command-trace",
           confirmationKind: "confirmation-action",
           surface: "admin-setup",
-          actionId: "session-grants",
-          statusKey: "session-grants",
-          dispatchKind: "grant_session",
+          actionId: "cohost",
+          statusKey: "cohost",
+          dispatchKind: "add_cohost",
         },
       },
       "recovery-gate": {
@@ -175,19 +175,19 @@ test("admin command activity summarizes recent setup and recovery status", () =>
         confirmationTrace: null,
       },
       {
-        actionId: "session-grants",
+        actionId: "cohost",
         state: "confirm",
-        label: "Session grants",
-        message: "Grant community moderator access to @mod_a",
-        testId: "admin-command-activity-session-grants",
-        statusTestId: "admin-command-activity-status-session-grants",
+        label: "Cohost",
+        message: "Delegate @cohost_c as cohost for this game",
+        testId: "admin-command-activity-cohost",
+        statusTestId: "admin-command-activity-status-cohost",
         confirmationTrace: {
           kind: "confirmation-command-trace",
           confirmationKind: "confirmation-action",
           surface: "admin-setup",
-          actionId: "session-grants",
-          statusKey: "session-grants",
-          dispatchKind: "grant_session",
+          actionId: "cohost",
+          statusKey: "cohost",
+          dispatchKind: "add_cohost",
         },
       },
       {
@@ -217,23 +217,8 @@ test("admin command activity has a stable empty state", () => {
 });
 
 test("admin setup grid view model binds command status and confirmation metadata", () => {
-  const sessionGrant = {
-    principalId: "mod_a",
-    expiresAt: 4102444800,
-    globalCapabilities: ["GlobalMod"],
-  };
   const view = buildAdminSetupGridViewModel({
     items: [
-      {
-        id: "session-grants",
-        label: "Session grants",
-        authority: "GlobalAdmin",
-        boundary: "Authenticated session grant",
-        boundaryDetail: "/auth/session-grants requires active GlobalAdmin session",
-        commandAction: "grant_session",
-        buttonLabel: "Review",
-        confirmLabel: "Grant GlobalMod",
-      },
       {
         id: "cohost",
         label: "Cohost delegation",
@@ -242,15 +227,26 @@ test("admin setup grid view model binds command status and confirmation metadata
         boundaryDetail: "/commands AddCohost",
         commandAction: "add_cohost",
         buttonLabel: "Review",
+        confirmLabel: "Delegate @cohost_c",
+        confirmMessage: "Delegate cohost_c as cohost for this game",
+      },
+      {
+        id: "host-setup",
+        label: "Host setup workflow",
+        authority: "HostOf(game)",
+        boundary: "Game-specific setup",
+        boundaryDetail: "Roster and policy",
+        commandAction: "navigate",
+        href: "/g/midsummer/setup",
+        buttonLabel: "Open setup",
       },
     ],
     commandStatuses: {
-      "session-grants": {
+      cohost: {
         state: "confirm",
-        message: "Grant GlobalMod to mod_a",
+        message: "Delegate cohost_c as cohost for this game",
       },
     },
-    sessionGrant,
   });
 
   assert.equal(view.root.ariaLabel, "Game setup");
@@ -261,12 +257,12 @@ test("admin setup grid view model binds command status and confirmation metadata
   assert.equal(view.root.data.thumbZone, "admin-setup-actions");
   assert.equal(view.root.data.actionTileStabilityMode, "reserved-status-floor");
   assert.equal(view.root.testId, "admin-setup-action-zone");
-  assert.equal(view.items[0].testId, "admin-setup-session-grants");
-  assert.equal(view.items[0].boundaryTestId, "admin-boundary-session-grants");
-  assert.equal(view.items[0].statusTestId, "admin-command-status-session-grants");
+  assert.equal(view.items[0].testId, "admin-setup-cohost");
+  assert.equal(view.items[0].boundaryTestId, "admin-boundary-cohost");
+  assert.equal(view.items[0].statusTestId, "admin-command-status-cohost");
   assert.equal(
     view.items[0].statusFloorTestId,
-    "admin-command-status-floor-session-grants",
+    "admin-command-status-floor-cohost",
   );
   assert.equal(view.items[0].statusFloorMinBlockSizePx, 44);
   assert.equal(view.items[0].actionTileClassName, "admin-surface__action-tile");
@@ -274,34 +270,32 @@ test("admin setup grid view model binds command status and confirmation metadata
     view.items[0].statusFloorClassName,
     "admin-surface__command-status-floor",
   );
-  assert.equal(view.items[0].confirmTestId, "admin-command-confirm-session-grants");
-  assert.equal(view.items[0].cancelTestId, "admin-command-cancel-session-grants");
-  assert.equal(view.items[0].triggerTestId, "admin-command-trigger-session-grants");
+  assert.equal(view.items[0].confirmTestId, "admin-command-confirm-cohost");
+  assert.equal(view.items[0].cancelTestId, "admin-command-cancel-cohost");
+  assert.equal(view.items[0].triggerTestId, "admin-command-trigger-cohost");
   assert.equal(view.items[0].minTouchTargetPx, 44);
-  assert.equal(view.items[0].isSessionGrant, true);
-  assert.equal(view.items[0].sessionGrant, sessionGrant);
-  assert.equal(view.items[0].displayConfirmLabel, "Grant community moderator access");
+  assert.equal(view.items[0].displayConfirmLabel, "Delegate @cohost_c");
   assert.deepEqual(view.items[0].status, {
     state: "confirm",
-    message: "Grant community moderator access to @mod_a",
+    message: "Delegate @cohost_c as cohost for this game",
   });
   assert.deepEqual(view.items[0].confirmation, {
     kind: "confirmation-action",
     surface: "admin-setup",
-    actionId: "session-grants",
+    actionId: "cohost",
     role: ADMIN_CONFIRMATION_CONTRACT.role,
     ariaModal: ADMIN_CONFIRMATION_CONTRACT.ariaModal,
-    ariaLabel: "Confirm Session grants",
-    label: "Session grants",
-    message: "Grant community moderator access to @mod_a",
-    messageId: "admin-command-confirmation-message-session-grants",
-    messageTestId: "admin-command-confirmation-message-session-grants",
+    ariaLabel: "Confirm Cohost delegation",
+    label: "Cohost delegation",
+    message: "Delegate @cohost_c as cohost for this game",
+    messageId: "admin-command-confirmation-message-cohost",
+    messageTestId: "admin-command-confirmation-message-cohost",
     confirmationTestId: null,
-    confirmTestId: "admin-command-confirm-session-grants",
-    cancelTestId: "admin-command-cancel-session-grants",
-    triggerTestId: "admin-command-trigger-session-grants",
-    initialFocusTestId: "admin-command-confirm-session-grants",
-    returnFocusTestId: "admin-command-trigger-session-grants",
+    confirmTestId: "admin-command-confirm-cohost",
+    cancelTestId: "admin-command-cancel-cohost",
+    triggerTestId: "admin-command-trigger-cohost",
+    initialFocusTestId: "admin-command-confirm-cohost",
+    returnFocusTestId: "admin-command-trigger-cohost",
     escapeCancels: true,
     tabContainment: "local-confirmation-controls",
     className: null,
@@ -309,7 +303,6 @@ test("admin setup grid view model binds command status and confirmation metadata
     objectLabel: null,
     outcomeLabel: null,
   });
-  assert.equal(view.items[1].isSessionGrant, false);
   assert.equal(view.items[1].status, null);
 });
 
@@ -340,7 +333,6 @@ test("admin setup grid treats create-game as an explicit confirmation action", (
   assert.equal(view.items[0].confirmTestId, "admin-command-confirm-create-game");
   assert.equal(view.items[0].cancelTestId, "admin-command-cancel-create-game");
   assert.equal(view.items[0].triggerTestId, "admin-command-trigger-create-game");
-  assert.equal(view.items[0].isSessionGrant, false);
   assert.deepEqual(view.items[0].confirmation, {
     kind: "confirmation-action",
     surface: "admin-setup",

@@ -6,6 +6,7 @@
 
 mod auth_http;
 mod authentication;
+mod authority;
 mod command_http;
 mod embed_http;
 mod game_http;
@@ -18,7 +19,10 @@ mod membership_http;
 pub mod program_library;
 mod public_platform_http;
 
-pub use auth_http::{bootstrap_classic_global_admin, bootstrap_workos_global_admin};
+pub use auth_http::{
+    bootstrap_classic_global_admin, bootstrap_workos_global_admin, LocalProofAuthVerifier,
+    LOCAL_PROOF_AUTH_HEADER,
+};
 pub use embed_http::YoutubeSnapshotLookup;
 pub use game_http::{
     load_host_console_state_for_principal, load_player_day_event_attention_for_principal,
@@ -54,7 +58,7 @@ use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
@@ -73,6 +77,13 @@ pub struct ApiState {
     live_connection_slots: Arc<Semaphore>,
     live_principal_slots: Arc<Mutex<HashMap<PrincipalId, Arc<Semaphore>>>>,
     live_principal_limit: usize,
+    live_delivery_transaction_slots: Arc<Semaphore>,
+    live_delivery_transaction_limit: usize,
+    command_slots: Arc<Semaphore>,
+    command_principal_slots: Arc<Mutex<HashMap<PrincipalId, Weak<Semaphore>>>>,
+    command_lock_timeout: Duration,
+    authority_transaction_slots: Arc<Semaphore>,
+    authority_transaction_limit: usize,
     media_slots: Arc<Semaphore>,
     media_account_quota_bytes: i64,
     websocket_poll_interval: Duration,
@@ -97,6 +108,29 @@ impl ApiState {
         let live_connection_limit = env_i64("FMARCH_WS_MAX_CONNECTIONS", 512, 1, 65_536) as usize;
         let live_principal_limit =
             env_i64("FMARCH_WS_MAX_CONNECTIONS_PER_PRINCIPAL", 4, 1, 128) as usize;
+        let pool_capacity = pool.options().get_max_connections() as usize;
+        assert!(
+            pool_capacity >= 5,
+            "ApiState requires at least five database connections: one listener, two authority transactions, and two general-operation connections"
+        );
+        // The durable LISTEN loop owns one pool connection. Keep authority-
+        // fenced work below the remaining pool by two connections, while the
+        // delivery sub-limit leaves one authority permit for cutoffs/commands.
+        // Other pool users remain independently admission-bounded; this is a
+        // capacity ceiling, not a priority reservation.
+        let authority_transaction_ceiling = pool_capacity - 3;
+        let authority_transaction_limit = env_i64(
+            "FMARCH_AUTHORITY_TRANSACTION_MAX_IN_FLIGHT",
+            authority_transaction_ceiling as i64,
+            2,
+            authority_transaction_ceiling as i64,
+        ) as usize;
+        let live_delivery_transaction_limit = env_i64(
+            "FMARCH_WS_DELIVERY_MAX_IN_FLIGHT",
+            authority_transaction_limit.saturating_sub(1).min(4) as i64,
+            1,
+            authority_transaction_limit.saturating_sub(1) as i64,
+        ) as usize;
         let auth = AuthHttpState::new(pool.clone());
         let live_event_wake = GameEventWakeHub::new();
         live_event_wake.spawn_listener(pool.clone());
@@ -118,6 +152,25 @@ impl ApiState {
             live_connection_slots: Arc::new(Semaphore::new(live_connection_limit)),
             live_principal_slots: Arc::new(Mutex::new(HashMap::new())),
             live_principal_limit,
+            live_delivery_transaction_slots: Arc::new(Semaphore::new(
+                live_delivery_transaction_limit,
+            )),
+            live_delivery_transaction_limit,
+            command_slots: Arc::new(Semaphore::new(env_i64(
+                "FMARCH_COMMAND_MAX_IN_FLIGHT",
+                32,
+                1,
+                1_024,
+            ) as usize)),
+            command_principal_slots: Arc::new(Mutex::new(HashMap::new())),
+            command_lock_timeout: Duration::from_millis(env_i64(
+                "FMARCH_COMMAND_LOCK_TIMEOUT_MS",
+                5_000,
+                100,
+                30_000,
+            ) as u64),
+            authority_transaction_slots: Arc::new(Semaphore::new(authority_transaction_limit)),
+            authority_transaction_limit,
             media_slots: Arc::new(Semaphore::new(
                 env_i64("FMARCH_MEDIA_MAX_IN_FLIGHT", 2, 1, 32) as usize,
             )),
@@ -155,8 +208,27 @@ impl ApiState {
         self
     }
 
-    pub fn with_dev_auth(mut self, enabled: bool) -> Self {
-        self.auth.dev_auth_enabled = enabled && cfg!(debug_assertions);
+    pub fn with_local_proof_auth(mut self, verifier: LocalProofAuthVerifier) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            self.auth.session_policy = self
+                .auth
+                .session_policy
+                .with_local_proof_instance(verifier.instance_id().clone());
+            self.auth.local_proof_auth = Some(verifier);
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = verifier;
+            self.auth.local_proof_auth = None;
+            self.auth.session_policy = self.auth.session_policy.without_local_proof_instance();
+        }
+        self
+    }
+
+    pub fn without_local_proof_auth(mut self) -> Self {
+        self.auth.local_proof_auth = None;
+        self.auth.session_policy = self.auth.session_policy.without_local_proof_instance();
         self
     }
 
@@ -221,8 +293,58 @@ impl ApiState {
         self
     }
 
+    pub fn with_live_principal_connection_limit(mut self, limit: usize) -> Self {
+        self.live_principal_limit = limit.clamp(1, 1_024);
+        self
+    }
+
+    pub fn with_live_delivery_transaction_limit(mut self, limit: usize) -> Self {
+        self.live_delivery_transaction_limit =
+            limit.clamp(1, self.authority_transaction_limit.saturating_sub(1));
+        self.live_delivery_transaction_slots =
+            Arc::new(Semaphore::new(self.live_delivery_transaction_limit));
+        self
+    }
+
+    pub fn with_command_limit(mut self, limit: usize) -> Self {
+        self.command_slots = Arc::new(Semaphore::new(limit.clamp(1, 1_024)));
+        self
+    }
+
+    pub fn with_command_lock_timeout(mut self, timeout: Duration) -> Self {
+        self.command_lock_timeout =
+            timeout.clamp(Duration::from_millis(100), Duration::from_secs(30));
+        self
+    }
+
+    pub fn with_authority_transaction_limit(mut self, limit: usize) -> Self {
+        let pool_capacity = self.pool.options().get_max_connections() as usize;
+        let ceiling = pool_capacity
+            .checked_sub(3)
+            .expect("ApiState database pool reserve was validated at construction");
+        self.authority_transaction_limit = limit.clamp(2, ceiling);
+        self.authority_transaction_slots =
+            Arc::new(Semaphore::new(self.authority_transaction_limit));
+        self.live_delivery_transaction_limit = self
+            .live_delivery_transaction_limit
+            .min(self.authority_transaction_limit - 1);
+        self.live_delivery_transaction_slots =
+            Arc::new(Semaphore::new(self.live_delivery_transaction_limit));
+        self
+    }
+
     pub fn with_password_limit(mut self, limit: usize) -> Self {
         self.auth.password_slots = Arc::new(Semaphore::new(limit.clamp(1, 64)));
+        self
+    }
+
+    pub fn with_workos_verification_limit(mut self, limit: usize) -> Self {
+        self.auth.workos_verification_slots = Arc::new(Semaphore::new(limit.clamp(1, 128)));
+        self
+    }
+
+    pub fn with_workos_verification_source_limit(mut self, limit: i32) -> Self {
+        self.auth.workos_verification_max_per_source = limit.clamp(2, 10_000);
         self
     }
 

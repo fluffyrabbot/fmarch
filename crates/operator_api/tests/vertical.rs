@@ -37,6 +37,20 @@ use wire::{
     RejectMsg, ResolutionTraceInspectionReport, ServerEnvelope, ServerMsg, VoteTarget,
 };
 
+const LOCAL_PROOF_INSTANCE_ID: &str =
+    "2222222222222222222222222222222222222222222222222222222222222222";
+
+fn local_proof_instance_id() -> identity::LocalProofInstanceId {
+    static INSTANCE: std::sync::OnceLock<identity::LocalProofInstanceId> =
+        std::sync::OnceLock::new();
+    INSTANCE
+        .get_or_init(|| {
+            identity::LocalProofInstanceId::parse(LOCAL_PROOF_INSTANCE_ID)
+                .expect("operator vertical local-proof instance is canonical")
+        })
+        .clone()
+}
+
 macro_rules! seat_persona {
     ($game:ident, slot: $slot:expr, user: $user:expr $(,)?) => {{
         let slot: String = $slot;
@@ -56,7 +70,11 @@ struct CommandRouteState {
 }
 
 fn router(pool: sqlx::PgPool) -> Router {
-    let operator = operator_api::router(pool.clone()).layer(middleware::from_fn_with_state(
+    let operator = operator_api::router_with_state(
+        operator_api::OperatorApiState::new(pool.clone())
+            .with_local_proof_instance(local_proof_instance_id()),
+    )
+    .layer(middleware::from_fn_with_state(
         pool.clone(),
         authenticate_operator_fixture,
     ));
@@ -97,19 +115,35 @@ async fn authenticate_operator_fixture(
     .expect("insert vertical operator fixture principal");
     sqlx::query(
         "INSERT INTO auth_session \
-         (token_hash, principal_id, created_at, expires_at, global_capabilities, idle_expires_at, assurance, authenticated_at) \
-         VALUES ($1, $2, 0, 4102444800, ARRAY[]::TEXT[], 4102444800, 'admin_grant', 0) \
+         (token_hash, principal_id, created_at, expires_at, idle_expires_at, assurance, authenticated_at, local_proof_instance_id) \
+         VALUES ($1, $2, 0, 4102444800, 4102444800, 'dev', 0, $3) \
          ON CONFLICT (token_hash) DO UPDATE SET \
            principal_id = EXCLUDED.principal_id, \
            expires_at = EXCLUDED.expires_at, \
            idle_expires_at = EXCLUDED.idle_expires_at, \
+           local_proof_instance_id = EXCLUDED.local_proof_instance_id, \
            revoked_at = NULL",
     )
     .bind(session_token_hash(&token))
     .bind(principal_id.as_uuid())
+    .bind(LOCAL_PROOF_INSTANCE_ID)
     .execute(&pool)
     .await
     .expect("insert vertical operator fixture session");
+    let instance_id = local_proof_instance_id();
+    let authorization = identity::LocalProofAuthorization::new(&instance_id, Vec::new())
+        .expect("vertical operator fixture local-proof authorization");
+    identity::activate_local_proof_authorization(
+        &identity::IssuedSession {
+            session_token: token.clone(),
+            token_hash: session_token_hash(&token),
+            principal_id,
+            expires_at: 4_102_444_800,
+            idle_expires_at: 4_102_444_800,
+        },
+        authorization,
+    )
+    .expect("activate vertical operator fixture local-proof authorization");
     request.headers_mut().insert(
         AUTHORIZATION,
         HeaderValue::from_str(&format!("Bearer {token}"))

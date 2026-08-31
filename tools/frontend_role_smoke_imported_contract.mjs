@@ -71,7 +71,7 @@ async function importedPassedEvidence() {
     status: "imported-passed",
     proof: "frontend-role-smoke-imported-contract",
     boundary:
-      "Validates a passed localhost dev-server role-smoke artifact without binding localhost or launching Chromium locally. It rechecks board/admin/player/moderator/setup, forbidden-route, and route-state screenshots; screenshot PNG pixels; focus traversal evidence; overlap-checked targets; setup workbench geometry; tablet thumb-zone geometry; admin session-grant/recovery-gate form evidence; player main-thread and role-PM SubmitPost ACK evidence; player tablet-media request evidence; and moderator SetSlotStatus lifecycle evidence. It does not prove that the imported artifact was produced by this exact checkout unless the operator imports evidence from a matching commit.",
+      "Validates a passed localhost dev-server role-smoke artifact without binding localhost or launching Chromium locally. It rechecks board/admin/player/moderator/setup, forbidden-route, and route-state screenshots; screenshot PNG pixels; focus traversal evidence; overlap-checked targets; setup workbench geometry; tablet thumb-zone geometry; admin cohost confirmation and recovery-gate form evidence; player main-thread and role-PM SubmitPost ACK evidence; player tablet-media request evidence; and moderator SetSlotStatus lifecycle evidence. It does not prove that the imported artifact was produced by this exact checkout unless the operator imports evidence from a matching commit.",
     generatedFrom: {
       sourceRoleSmoke: relativeOrAbsolute(sourceRoleSmoke),
     },
@@ -263,14 +263,8 @@ function adminBrowserOperationalEvidenceComplete(smoke) {
     return false;
   }
   return adminEntries.every((entry) =>
-    entry.commandResult?.sessionGrant?.focus?.initialFocus?.testId ===
-      "admin-command-confirm-session-grants" &&
-    entry.commandResult?.sessionGrant?.form?.action === "?/grantSession" &&
-    includesAll(entry.commandResult?.sessionGrant?.form?.fieldTestIds, [
-      "admin-session-grant-principal",
-      "admin-session-grant-expires-at",
-      "admin-session-grant-global-mod",
-    ]) &&
+    entry.commandResult?.cohost?.focus?.initialFocus?.testId ===
+      "admin-command-confirm-cohost" &&
     entry.commandResult?.recovery?.state === "ack" &&
     entry.commandResult?.recovery?.focus?.initialFocus?.testId ===
       "admin-recovery-confirm-recovery-gate" &&

@@ -32,6 +32,19 @@ use wire::{
     PROTOCOL_VERSION,
 };
 
+const TEST_LOCAL_PROOF_SECRET: &str =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const SECOND_TEST_LOCAL_PROOF_SECRET: &str =
+    "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
+fn test_local_proof_verifier() -> api::LocalProofAuthVerifier {
+    test_local_proof_verifier_for(TEST_LOCAL_PROOF_SECRET)
+}
+
+fn test_local_proof_verifier_for(secret: &str) -> api::LocalProofAuthVerifier {
+    api::LocalProofAuthVerifier::from_secret(secret).expect("test local-proof secret is canonical")
+}
+
 fn fixture_principal_json(label: impl AsRef<str>) -> serde_json::Value {
     serde_json::json!(PrincipalId::fixture(label))
 }
@@ -59,11 +72,18 @@ fn decode_server_envelope(message: tokio_tungstenite::tungstenite::Message) -> S
 }
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
-    api::router_with_state(test_api_state(pool).with_dev_auth(true))
+    api::router_with_state(test_api_state(pool).with_local_proof_auth(test_local_proof_verifier()))
 }
 
-fn router_with_dev_auth(pool: sqlx::PgPool) -> axum::Router {
-    api::router_with_state(test_api_state(pool).with_dev_auth(true))
+fn router_with_local_proof_auth(pool: sqlx::PgPool) -> axum::Router {
+    router_with_local_proof_verifier(pool, test_local_proof_verifier())
+}
+
+fn router_with_local_proof_verifier(
+    pool: sqlx::PgPool,
+    verifier: api::LocalProofAuthVerifier,
+) -> axum::Router {
+    api::router_with_state(test_api_state(pool).with_local_proof_auth(verifier))
 }
 
 fn test_api_state(pool: sqlx::PgPool) -> ApiState {
@@ -167,10 +187,11 @@ async fn issue_dev_session(
     principal_label: &str,
     global_capabilities: &[&str],
 ) -> String {
-    issue_dev_session_for_principal(
+    issue_dev_session_for_principal_with_secret(
         app,
         PrincipalId::fixture(principal_label),
         global_capabilities,
+        TEST_LOCAL_PROOF_SECRET,
     )
     .await
 }
@@ -180,13 +201,29 @@ async fn issue_dev_session_for_principal(
     principal_id: PrincipalId,
     global_capabilities: &[&str],
 ) -> String {
+    issue_dev_session_for_principal_with_secret(
+        app,
+        principal_id,
+        global_capabilities,
+        TEST_LOCAL_PROOF_SECRET,
+    )
+    .await
+}
+
+async fn issue_dev_session_for_principal_with_secret(
+    app: &axum::Router,
+    principal_id: PrincipalId,
+    global_capabilities: &[&str],
+    local_proof_secret: &str,
+) -> String {
     let response = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/dev-session")
+                .uri("/auth/local-proof/sessions")
                 .header("content-type", "application/json")
+                .header(api::LOCAL_PROOF_AUTH_HEADER, local_proof_secret)
                 .body(Body::from(
                     serde_json::json!({
                         "principal_id": principal_id,
@@ -479,7 +516,9 @@ async fn verified_workos_sid_tombstones_return_the_exact_provider_logout_recover
             VerifiedIdentity {
                 subject: format!("user_{token}"),
                 session_id: WorkosSessionId::parse(session_id).unwrap(),
+                issued_at: 1,
                 expires_at: 4_102_444_800,
+                signing_key_id: "test-workos-key".to_string(),
                 email: None,
             },
         )
@@ -546,7 +585,9 @@ async fn workos_subject_erasure_tombstone_never_discloses_provider_logout_recove
             VerifiedIdentity {
                 subject: subject.to_string(),
                 session_id: WorkosSessionId::parse(subject_only_sid).unwrap(),
+                issued_at: 1,
                 expires_at: 4_102_444_800,
+                signing_key_id: "test-workos-key".to_string(),
                 email: None,
             },
         ),
@@ -555,7 +596,9 @@ async fn workos_subject_erasure_tombstone_never_discloses_provider_logout_recove
             VerifiedIdentity {
                 subject: subject.to_string(),
                 session_id: WorkosSessionId::parse(subject_and_sid).unwrap(),
+                issued_at: 1,
                 expires_at: 4_102_444_800,
+                signing_key_id: "test-workos-key".to_string(),
                 email: None,
             },
         ),
@@ -613,7 +656,9 @@ async fn unverified_malformed_and_expired_workos_assertions_never_receive_logout
         VerifiedIdentity {
             subject: "user_expired_workos_recovery".to_string(),
             session_id: expired_sid.clone(),
+            issued_at: 0,
             expires_at: 1,
+            signing_key_id: "test-workos-key".to_string(),
             email: None,
         },
     )]);
@@ -656,7 +701,9 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
             VerifiedIdentity {
                 subject: "user_01HWORKOS".to_string(),
                 session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+                issued_at: 1,
                 expires_at: 4_102_444_800,
+                signing_key_id: "test-workos-key".to_string(),
                 email: Some("player@example.test".to_string()),
             },
         ),
@@ -665,7 +712,9 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
             VerifiedIdentity {
                 subject: "user_01HWORKOS".to_string(),
                 session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+                issued_at: 1,
                 expires_at: 4_102_444_800,
+                signing_key_id: "test-workos-key".to_string(),
                 email: Some("player@example.test".to_string()),
             },
         ),
@@ -674,7 +723,9 @@ async fn workos_exchange_binds_a_stable_local_principal_and_coexists_with_classi
             VerifiedIdentity {
                 subject: "user_01HWORKOS".to_string(),
                 session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+                issued_at: 1,
                 expires_at: 4_102_444_800,
+                signing_key_id: "test-workos-key".to_string(),
                 email: Some("player@example.test".to_string()),
             },
         ),
@@ -895,7 +946,9 @@ async fn workos_logout_revokes_the_local_provider_session_scope_and_returns_a_co
                 VerifiedIdentity {
                     subject: "user_logout".to_string(),
                     session_id: session_id.clone(),
+                    issued_at: 1,
                     expires_at: 4_102_444_800,
+                    signing_key_id: "test-workos-key".to_string(),
                     email: Some("logout@example.test".to_string()),
                 },
             )
@@ -1057,7 +1110,9 @@ async fn workos_logout_fails_closed_if_persisted_provider_session_custody_is_cor
         VerifiedIdentity {
             subject: "user_tamper".to_string(),
             session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+            issued_at: 1,
             expires_at: 4_102_444_800,
+            signing_key_id: "test-workos-key".to_string(),
             email: Some("tamper@example.test".to_string()),
         },
     )]);
@@ -1230,7 +1285,7 @@ async fn media_upload_authorized_is_idempotent_and_restart_verified(pool: sqlx::
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
     let app = api::router_with_state(
         ApiState::new(pool, store.clone())
-            .with_dev_auth(true)
+            .with_local_proof_auth(test_local_proof_verifier())
             .with_variant_limits(VariantLimits::default()),
     );
     let (token, _) = create_media_upload_account_session(&app, "authorized").await;
@@ -1276,7 +1331,9 @@ async fn media_upload_rejects_missing_expired_revoked_and_disabled_sessions_with
 ) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let app = api::router_with_state(
+        ApiState::new(pool.clone(), store).with_local_proof_auth(test_local_proof_verifier()),
+    );
     let png = media_upload_png(2, 2);
 
     let missing = post_media_upload(&app, None, "image/png", png.clone()).await;
@@ -1345,7 +1402,9 @@ async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_r
     let root = tempfile::tempdir().unwrap();
     let media_limits = MediaLimits::new(1_024, 1, 1, 1, 4).unwrap();
     let store = MediaStore::open(root.path(), media_limits).unwrap();
-    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let app = api::router_with_state(
+        ApiState::new(pool.clone(), store).with_local_proof_auth(test_local_proof_verifier()),
+    );
     let (token, _) = create_media_upload_account_session(&app, "invalid").await;
     let png = media_upload_png(2, 2);
 
@@ -1375,7 +1434,7 @@ async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_r
     let variant_limits = VariantLimits::new(2_560, 2_560, 6_553_600, 8, 48).unwrap();
     let variant_app = api::router_with_state(
         ApiState::new(pool, variant_store)
-            .with_dev_auth(true)
+            .with_local_proof_auth(test_local_proof_verifier())
             .with_variant_limits(variant_limits),
     );
     let (variant_token, _) =
@@ -1395,8 +1454,10 @@ async fn media_upload_rejects_type_malformed_dimension_and_body_limits_without_r
 async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    let app =
-        api::router_with_state(ApiState::new(pool.clone(), store.clone()).with_dev_auth(true));
+    let app = api::router_with_state(
+        ApiState::new(pool.clone(), store.clone())
+            .with_local_proof_auth(test_local_proof_verifier()),
+    );
     let (outgoing_token, outgoing_principal) =
         create_media_upload_account_session(&app, "private-post-member").await;
     let (incoming_token, incoming_principal) =
@@ -1565,7 +1626,9 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     drop(app);
     drop(store);
     let restarted = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    let app = api::router_with_state(ApiState::new(pool.clone(), restarted).with_dev_auth(true));
+    let app = api::router_with_state(
+        ApiState::new(pool.clone(), restarted).with_local_proof_auth(test_local_proof_verifier()),
+    );
     let incoming_ticket = issue_websocket_ticket(&app, &incoming_token, game, &channel_id).await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -1639,25 +1702,16 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
     ))
     .await
     .unwrap();
-    let stale_hello = stale_socket.next().await.unwrap().unwrap();
-    let stale_hello: ServerEnvelope = decode_server_envelope(stale_hello);
-    assert!(matches!(stale_hello.body, ServerMsg::Hello(_)));
-    let stale_thread = tokio::time::timeout(std::time::Duration::from_millis(500), async {
-        loop {
-            let frame = stale_socket.next().await.unwrap().unwrap();
-            let envelope: ServerEnvelope = decode_server_envelope(frame);
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(_))
-            ) {
-                return envelope;
-            }
-        }
-    })
-    .await;
+    let stale_frame =
+        tokio::time::timeout(std::time::Duration::from_millis(500), stale_socket.next())
+            .await
+            .expect("stale scoped socket must be closed promptly");
     assert!(
-        stale_thread.is_err(),
-        "the replaced principal must not receive Role PM rows on websocket hydration"
+        !matches!(
+            stale_frame,
+            Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(_)))
+        ),
+        "the replaced principal must not receive even Hello on stale Role PM authority"
     );
     drop(socket);
     drop(stale_socket);
@@ -1785,7 +1839,9 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
 async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let app = api::router_with_state(
+        ApiState::new(pool.clone(), store).with_local_proof_auth(test_local_proof_verifier()),
+    );
     let (mason_outgoing_token, mason_outgoing) =
         create_media_upload_account_session(&app, "mason-outgoing").await;
     let (mason_incoming_token, mason_incoming) =
@@ -2214,7 +2270,9 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
 async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let app = api::router_with_state(
+        ApiState::new(pool.clone(), store).with_local_proof_auth(test_local_proof_verifier()),
+    );
     let (outgoing_token, outgoing) =
         create_media_upload_account_session(&app, "dead-chat-outgoing").await;
     let (incoming_token, incoming) =
@@ -2628,7 +2686,11 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
 async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool) {
     let root = tempfile::tempdir().unwrap();
     let store = MediaStore::open(root.path(), MediaLimits::default()).unwrap();
-    let app = api::router_with_state(ApiState::new(pool.clone(), store).with_dev_auth(true));
+    let app = api::router_with_state(
+        ApiState::new(pool.clone(), store)
+            .with_local_proof_auth(test_local_proof_verifier())
+            .with_live_projection_delivery_delay(std::time::Duration::from_millis(500)),
+    );
     let (spectator_token, spectator) =
         create_media_upload_account_session(&app, "spectator-room").await;
     let game = Uuid::new_v4();
@@ -2880,10 +2942,26 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         ],
         "encrypted spectator history and media references survive rebuild",
     );
+    // Publication is committed and queued before revocation, but the delivery
+    // delay keeps its already-assembled private payload behind the final
+    // transaction-held capability fence.
     expect_ack(
         post_command(
             app.clone(),
             7,
+            "host_h",
+            Command::PublishSpectatorPost {
+                game,
+                body: "Notice racing spectator revocation".into(),
+                media: None,
+            },
+        )
+        .await,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            8,
             "host_h",
             Command::RevokeSpectator {
                 game,
@@ -2923,7 +3001,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     expect_reject(
         post_command(
             app.clone(),
-            8,
+            9,
             spectator.as_str(),
             Command::SubmitPost {
                 game,
@@ -2941,7 +3019,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
     expect_ack(
         post_command(
             app,
-            9,
+            10,
             "host_h",
             Command::PublishSpectatorPost {
                 game,
@@ -2951,22 +3029,30 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
         )
         .await,
     );
-    let revoked_live = tokio::time::timeout(std::time::Duration::from_millis(500), async {
-        loop {
-            let envelope: ServerEnvelope =
-                decode_server_envelope(socket.next().await.unwrap().unwrap());
-            if matches!(
-                envelope.body,
-                ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref thread))
-                    if thread.posts.iter().any(|post| post.body == "Notice after revocation")
-            ) {
-                return envelope;
+    let revoked_live = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while let Some(frame) = socket.next().await {
+            match frame {
+                Ok(tokio_tungstenite::tungstenite::Message::Binary(bytes)) => {
+                    let envelope: ServerEnvelope = ciborium::from_reader(bytes.as_ref()).unwrap();
+                    if matches!(
+                        envelope.body,
+                        ServerMsg::Delta(ProjectionDelta::ThreadPostsChanged(ref thread))
+                            if thread.posts.iter().any(|post| matches!(post.body.as_str(),
+                                "Notice racing spectator revocation" | "Notice after revocation"))
+                    ) {
+                        return true;
+                    }
+                }
+                Ok(tokio_tungstenite::tungstenite::Message::Close(_)) | Err(_) => return false,
+                _ => {}
             }
         }
+        false
     })
-    .await;
+    .await
+    .expect("revoked spectator socket did not terminate after the delayed delivery fence");
     assert!(
-        revoked_live.is_err(),
+        !revoked_live,
         "revoked spectator receives no thread rows from later host publications",
     );
     drop(socket);
@@ -4465,7 +4551,7 @@ async fn websocket_game_connection_streams_command_following_votecount_delta(poo
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
     let state = test_api_state(pool)
-        .with_dev_auth(true)
+        .with_local_proof_auth(test_local_proof_verifier())
         .with_live_projection_capacity(1)
         .with_live_projection_delivery_delay(std::time::Duration::from_secs(2));
     let app = api::router_with_state(state);
@@ -5670,7 +5756,7 @@ async fn public_game_index_cold_load_pages_only_active_and_completed_rows(pool: 
         .unwrap();
     }
 
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let response = app
         .clone()
         .oneshot(
@@ -5851,7 +5937,7 @@ async fn completed_game_export_is_host_gated_and_checksum_bearing(pool: sqlx::Pg
 async fn discussion_and_public_search_api_enforce_visibility_sessions_and_moderation(
     pool: sqlx::PgPool,
 ) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let discussion_member_token = issue_dev_session(&app, "discussion_member", &[]).await;
     let discussion_moderator_token =
         issue_dev_session(&app, "discussion_moderator", &["GlobalMod"]).await;
@@ -6167,7 +6253,7 @@ async fn discussion_and_public_search_api_enforce_visibility_sessions_and_modera
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_search_cursor_is_opaque_context_bound_and_accepts_each_group(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool);
+    let app = router_with_local_proof_auth(pool);
     for cursor in [
         "abc:1:discussions:key",
         "1:abc:discussions:key",
@@ -6271,7 +6357,7 @@ fn public_search_test_cursor(query: &str, filter: &str, document_type: &str) -> 
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn member_mute_api_is_authenticated_private_and_reversible(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool);
+    let app = router_with_local_proof_auth(pool);
     let (reader_token, _) = create_media_upload_account_session(&app, "mute-reader").await;
     let (target_token, _) = create_media_upload_account_session(&app, "mute-target").await;
     for (token, handle, display_name) in [
@@ -6420,7 +6506,7 @@ async fn member_mute_api_is_authenticated_private_and_reversible(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let (author_token, author_principal) =
         create_media_upload_account_session(&app, "subscription-author").await;
     let (watcher_token, watcher_principal) =
@@ -6603,8 +6689,9 @@ async fn subscription_api_keeps_member_inboxes_private_and_cursors_monotonic(poo
 async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchronously(
     pool: sqlx::PgPool,
 ) {
-    let app = router_with_dev_auth(pool.clone());
-    let moderation_app = router_with_dev_auth(pool.clone());
+    let verifier = test_local_proof_verifier();
+    let app = router_with_local_proof_verifier(pool.clone(), verifier.clone());
+    let moderation_app = router_with_local_proof_verifier(pool.clone(), verifier);
     let (member_token, member_principal) =
         create_media_upload_account_session(&app, "moderation-member").await;
     let moderator_principal = "community_moderator";
@@ -7149,7 +7236,7 @@ async fn moderation_api_keeps_receipts_private_and_actions_public_content_synchr
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn profile_api_uses_enabled_accounts_and_principal_addressed_editing(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool);
+    let app = router_with_local_proof_auth(pool);
     let (owner_token, owner_principal) =
         create_media_upload_account_session(&app, "profile-owner").await;
     let (other_token, _) = create_media_upload_account_session(&app, "profile-other").await;
@@ -8326,7 +8413,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -8343,12 +8430,14 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
         .await,
     );
 
-    let disabled_app = api::router_with_state(test_api_state(pool.clone()).with_dev_auth(false));
+    let disabled_app =
+        api::router_with_state(test_api_state(pool.clone()).without_local_proof_auth());
     let disabled_response = disabled_app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/dev-session")
+                .uri("/auth/local-proof/sessions")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     serde_json::json!({
@@ -8378,6 +8467,44 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
 
     let host_session_token = issue_dev_session(&app, "host_h", &[]).await;
 
+    let disabled_app =
+        api::router_with_state(test_api_state(pool.clone()).without_local_proof_auth());
+    let disabled_response = disabled_app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/auth/session?game={game}"))
+                .header("authorization", format!("Bearer {host_session_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        disabled_response.status(),
+        StatusCode::UNAUTHORIZED,
+        "a previously issued local-proof bearer must lose all authority when the runtime gate is disabled"
+    );
+
+    let disabled_rotation = disabled_app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/session-rotations")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {host_session_token}"))
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        disabled_rotation.status(),
+        StatusCode::UNAUTHORIZED,
+        "locked session-update paths must reject a local-proof bearer when the runtime gate is disabled"
+    );
+
     let response = app
         .oneshot(
             Request::builder()
@@ -8398,8 +8525,204 @@ async fn opaque_auth_session_resolves_committed_host_capabilities(pool: sqlx::Pg
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
+async fn local_proof_sessions_and_mint_credentials_are_bound_to_one_server_process(
+    pool: sqlx::PgPool,
+) {
+    let first_verifier = test_local_proof_verifier_for(TEST_LOCAL_PROOF_SECRET);
+    let first_instance_id = first_verifier.instance_id().clone();
+    let second_verifier = test_local_proof_verifier_for(TEST_LOCAL_PROOF_SECRET);
+    let second_instance_id = second_verifier.instance_id().clone();
+    assert_ne!(first_instance_id, second_instance_id);
+
+    let first_app =
+        api::router_with_state(test_api_state(pool.clone()).with_local_proof_auth(first_verifier));
+    let second_app =
+        api::router_with_state(test_api_state(pool.clone()).with_local_proof_auth(second_verifier));
+
+    // Both servers use the same endpoint credential and already exist before
+    // either bearer is minted. Their independent process instances prevent
+    // shared storage from making possession of A's token authority in B.
+    let first_token = issue_dev_session_for_principal_with_secret(
+        &first_app,
+        PrincipalId::fixture("boot_a_principal"),
+        &[],
+        TEST_LOCAL_PROOF_SECRET,
+    )
+    .await;
+    let second_token = issue_dev_session_for_principal_with_secret(
+        &second_app,
+        PrincipalId::fixture("boot_b_principal"),
+        &[],
+        TEST_LOCAL_PROOF_SECRET,
+    )
+    .await;
+
+    let first_stored_instance: String = sqlx::query_scalar(
+        "SELECT local_proof_instance_id FROM auth_session WHERE token_hash = $1",
+    )
+    .bind(identity::token::hash_token(first_token.as_str()))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let second_stored_instance: String = sqlx::query_scalar(
+        "SELECT local_proof_instance_id FROM auth_session WHERE token_hash = $1",
+    )
+    .bind(identity::token::hash_token(second_token.as_str()))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(first_stored_instance, first_instance_id.as_str());
+    assert_eq!(second_stored_instance, second_instance_id.as_str());
+
+    let reconstituted_instance = identity::LocalProofInstanceId::parse(first_stored_instance)
+        .expect("stored local-proof designation remains canonical");
+    let reconstituted_policy =
+        identity::SessionPolicy::from_env().with_local_proof_instance(reconstituted_instance);
+    assert!(matches!(
+        identity::session::validate_session(
+            &pool,
+            first_token.as_str(),
+            &reconstituted_policy,
+            unix_now_seconds(),
+        )
+        .await,
+        Err(identity::IdentityFlowError::Unauthorized)
+    ), "a persisted process designation must not reconstruct local-proof authority without the original process store");
+
+    assert_eq!(
+        get_with_bearer(&first_app, &first_token, "/auth/session")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        get_with_bearer(&second_app, &second_token, "/auth/session")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        get_with_bearer(&first_app, &second_token, "/auth/session")
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED,
+        "server A must reject server B's local-proof bearer"
+    );
+    assert_eq!(
+        get_with_bearer(&second_app, &first_token, "/auth/session")
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED,
+        "server B must reject a bearer minted by A after B started"
+    );
+
+    let cross_process_rotation = second_app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/session-rotations")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {first_token}"))
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(cross_process_rotation.status(), StatusCode::UNAUTHORIZED);
+
+    let own_rotation = first_app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/session-rotations")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {first_token}"))
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(own_rotation.status(), StatusCode::OK);
+    let rotated_body = to_bytes(own_rotation.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let rotated_body: serde_json::Value = serde_json::from_slice(&rotated_body).unwrap();
+    let rotated_token = rotated_body["session_token"].as_str().unwrap();
+    let rotated_instance: String = sqlx::query_scalar(
+        "SELECT local_proof_instance_id FROM auth_session WHERE token_hash = $1",
+    )
+    .bind(identity::token::hash_token(rotated_token))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rotated_instance, first_instance_id.as_str());
+
+    let mut rejection_body = None;
+    for presented_secret in [
+        None,
+        Some(SECOND_TEST_LOCAL_PROOF_SECRET),
+        Some("malformed"),
+    ] {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/auth/local-proof/sessions")
+            .header("content-type", "application/json");
+        if let Some(secret) = presented_secret {
+            request = request.header(api::LOCAL_PROOF_AUTH_HEADER, secret);
+        }
+        let response = second_app
+            .clone()
+            .oneshot(
+                request
+                    .body(Body::from(
+                        serde_json::json!({
+                            "principal_id": PrincipalId::fixture("boot_b_principal"),
+                            "expires_at": 4_102_444_800i64
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        if let Some(expected) = &rejection_body {
+            assert_eq!(body.as_ref(), expected.as_slice());
+        } else {
+            rejection_body = Some(body.to_vec());
+        }
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO auth_websocket_ticket (
+            token_hash, session_reference, access_expires_at,
+            audience, game_id, channel_id, after_seq, issued_at, expires_at
+        )
+        VALUES ($1, $2, 4_102_444_800, 'fmarch-live', $3,
+                'main', 0, 1, 4_102_444_800)
+        "#,
+    )
+    .bind(identity::token::hash_token("boot-b-websocket-ticket"))
+    .bind(identity::token::hash_token(second_token.as_str()))
+    .bind(Uuid::new_v4())
+    .execute(&pool)
+    .await
+    .unwrap();
+    let startup_cleanup =
+        identity::revoke_local_proof_sessions_for_startup(&pool, unix_now_seconds())
+            .await
+            .unwrap();
+    assert_eq!(startup_cleanup.sessions, 2);
+    assert_eq!(startup_cleanup.websocket_tickets, 1);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
 async fn dev_global_admin_session_round_trips_global_capability(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool);
+    let app = router_with_local_proof_auth(pool);
 
     let admin_session_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
 
@@ -8423,7 +8746,7 @@ async fn dev_global_admin_session_round_trips_global_capability(pool: sqlx::PgPo
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_console_authority_is_scoped_to_the_presented_session(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool);
+    let app = router_with_local_proof_auth(pool);
     let game = Uuid::new_v4();
     expect_ack(
         post_command(
@@ -8534,8 +8857,8 @@ async fn host_console_authority_is_scoped_to_the_presented_session(pool: sqlx::P
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
-async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+async fn legacy_session_grant_route_is_absent_even_for_global_admin(pool: sqlx::PgPool) {
+    let app = router_with_local_proof_auth(pool.clone());
     let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
 
     let response = app
@@ -8558,46 +8881,31 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_id"], fixture_principal_json("mod_a"));
-    assert_eq!(session["capabilities"][0]["kind"], "GlobalMod");
-    let global_mod_token = session["session_token"]
-        .as_str()
-        .expect("session grant returns a backend-generated session token")
-        .to_string();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let target_session_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM auth_session WHERE principal_id = $1")
+            .bind(PrincipalId::fixture("mod_a").as_uuid())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        target_session_count, 0,
+        "the removed operator route must not mint a target session"
+    );
 
     let response = app
         .clone()
         .oneshot(
             Request::builder()
-                .method("GET")
-                .uri("/auth/session")
-                .header("authorization", format!("Bearer {global_mod_token}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(session["principal_id"], fixture_principal_json("mod_a"));
-    assert_eq!(session["capabilities"][0]["kind"], "GlobalMod");
-
-    let response = app
-        .oneshot(
-            Request::builder()
                 .method("POST")
-                .uri("/auth/session-grants")
+                .uri("/auth/local-proof/sessions")
                 .header("content-type", "application/json")
-                .header("authorization", format!("Bearer {global_mod_token}"))
+                .header(api::LOCAL_PROOF_AUTH_HEADER, TEST_LOCAL_PROOF_SECRET)
                 .body(Body::from(
                     serde_json::json!({
-                        "principal_id": PrincipalId::fixture("other_admin"),
+                        "principal_id": PrincipalId::fixture("mod_a"),
                         "expires_at": 4_102_444_800i64,
-                        "global_capabilities": ["GlobalAdmin"]
+                        "global_capabilities": ["GlobalMod"]
                     })
                     .to_string(),
                 ))
@@ -8605,10 +8913,11 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
+    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(session["principal_id"], fixture_principal_json("mod_a"));
+    assert_eq!(session["capabilities"][0]["kind"], "GlobalMod");
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -8616,7 +8925,7 @@ async fn identity_delivery_intent_is_redacted_and_retryable(pool: sqlx::PgPool) 
     let gateway = Arc::new(LocalDeterministicIdentityDeliveryGateway::new(true));
     let app = api::router_with_state(
         test_api_state(pool.clone())
-            .with_dev_auth(true)
+            .with_local_proof_auth(test_local_proof_verifier())
             .with_identity_delivery_gateway(gateway.clone()),
     );
     let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
@@ -8858,7 +9167,7 @@ async fn identity_delivery_gateway_persists_terminal_provider_outcomes(pool: sql
     let gateway = Arc::new(PermanentFailureIdentityDeliveryGateway);
     let app = api::router_with_state(
         test_api_state(pool.clone())
-            .with_dev_auth(true)
+            .with_local_proof_auth(test_local_proof_verifier())
             .with_identity_delivery_gateway(gateway.clone()),
     );
     let admin_token = issue_dev_session(&app, "permanent_admin", &["GlobalAdmin"]).await;
@@ -8997,7 +9306,7 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
     let gateway = Arc::new(UnexpectedIdentityDeliveryGateway);
     let app = api::router_with_state(
         test_api_state(pool.clone())
-            .with_dev_auth(true)
+            .with_local_proof_auth(test_local_proof_verifier())
             .with_identity_delivery_gateway(gateway.clone()),
     );
     let admin_token = issue_dev_session(&app, "cancel_delivery_admin", &["GlobalAdmin"]).await;
@@ -9135,7 +9444,7 @@ async fn identity_delivery_claim_cancels_an_inactive_credential(pool: sqlx::PgPo
 async fn community_invitation_delivery_accepts_a_prospective_account_without_leaking_the_credential(
     pool: sqlx::PgPool,
 ) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let sponsor = PrincipalId::fixture("community_sponsor");
     let sponsor_token = issue_dev_session_for_principal(&app, sponsor, &[]).await;
     membership_application::ensure_founder_membership(&pool, sponsor, unix_now_seconds())
@@ -9219,7 +9528,7 @@ async fn community_invitation_delivery_accepts_a_prospective_account_without_lea
 async fn community_stewardship_is_global_admin_only_and_never_returns_recipient_identity(
     pool: sqlx::PgPool,
 ) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let now = unix_now_seconds();
     let admin = PrincipalId::fixture("community_steward_admin");
     let member = PrincipalId::fixture("community_steward_member");
@@ -9390,17 +9699,15 @@ async fn public_account_registration_creates_unprivileged_opaque_session(pool: s
     assert_eq!(session["principal_id"], serde_json::json!(principal_id));
     assert_eq!(session["capabilities"], serde_json::json!([]));
 
-    let (stored_principal, password_hash, global_capabilities) =
-        sqlx::query_as::<_, (Uuid, String, Vec<String>)>(
-            "SELECT principal_id, password_hash, global_capabilities FROM auth_account WHERE account_id = $1",
-        )
-        .bind("new.user+one@example.test")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let (stored_principal, password_hash) = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT principal_id, password_hash FROM auth_account WHERE account_id = $1",
+    )
+    .bind("new.user+one@example.test")
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(stored_principal, principal_id.as_uuid());
     assert!(password_hash.starts_with("$argon2id$"));
-    assert!(global_capabilities.is_empty());
 
     let audit_kinds = sqlx::query_scalar::<_, String>(
         "SELECT event_kind FROM identity_lifecycle_audit WHERE principal_id = $1 ORDER BY id",
@@ -9504,7 +9811,7 @@ async fn public_account_registration_bounds_hashed_source_attempts(pool: sqlx::P
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -10128,7 +10435,7 @@ async fn public_recovery_request_is_non_enumerating_and_rotates_credentials(pool
     let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
     let app = api::router_with_state(
         test_api_state(pool.clone())
-            .with_dev_auth(true)
+            .with_local_proof_auth(test_local_proof_verifier())
             .with_identity_delivery_gateway(gateway.clone()),
     );
     let account_id = "recovery-request@example.test";
@@ -10230,7 +10537,7 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
     let gateway = Arc::new(RecoveryProofIdentityDeliveryGateway::default());
     let app = api::router_with_state(
         test_api_state(pool.clone())
-            .with_dev_auth(true)
+            .with_local_proof_auth(test_local_proof_verifier())
             .with_identity_delivery_gateway(gateway.clone()),
     );
     let account_id = "recovery-delivery@example.test";
@@ -10406,7 +10713,7 @@ async fn recovery_delivery_is_expiry_bound_redacted_retryable_and_replay_safe(po
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let account_id = "throttled-host@example.test";
     let password = "correct horse battery";
     let admin_token = issue_dev_session(&app, "admin_a", &["GlobalAdmin"]).await;
@@ -10557,7 +10864,7 @@ async fn public_credential_failures_share_a_hashed_retryable_lockout(pool: sqlx:
 async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sqlx::PgPool) {
     let app = api::router_with_state(
         test_api_state(pool.clone())
-            .with_dev_auth(true)
+            .with_local_proof_auth(test_local_proof_verifier())
             .with_auth_attempt_limits(2, 3, 900, 900, 900),
     );
     sqlx::query(
@@ -10652,7 +10959,7 @@ async fn unknown_credentials_use_one_source_scope_and_prune_stale_rows(pool: sql
 async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx::PgPool) {
     let app = api::router_with_state(
         test_api_state(pool.clone())
-            .with_dev_auth(true)
+            .with_local_proof_auth(test_local_proof_verifier())
             .with_auth_attempt_limits(3, 20, 900, 900, 900)
             .with_trusted_auth_attempt_source_header(true),
     );
@@ -10727,7 +11034,7 @@ async fn trusted_credential_sources_cannot_partition_account_lockouts(pool: sqlx
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -10877,7 +11184,7 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -10964,7 +11271,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         invite["invited_by_principal_id"],
         serde_json::json!(PrincipalId::fixture("host_h"))
     );
-    assert_eq!(invite["global_capabilities"].as_array().unwrap().len(), 0);
+    assert!(invite.get("global_capabilities").is_none());
 
     let response = app
         .clone()
@@ -11043,19 +11350,20 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let response = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/dev-session")
+                .uri("/auth/local-proof/sessions")
                 .header("content-type", "application/json")
+                .header(api::LOCAL_PROOF_AUTH_HEADER, TEST_LOCAL_PROOF_SECRET)
                 .body(Body::from(
                     serde_json::json!({
                         "principal_id": PrincipalId::fixture("host_h"),
@@ -11187,7 +11495,7 @@ async fn session_lifecycle_rotates_once_and_logs_out_the_presented_token(pool: s
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
 async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool) {
-    let app = router_with_dev_auth(pool.clone());
+    let app = router_with_local_proof_auth(pool.clone());
     let game = Uuid::new_v4();
 
     expect_ack(
@@ -11220,13 +11528,12 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/session-grants")
+                .uri("/auth/accounts/login")
                 .header("content-type", "application/json")
-                .header("authorization", format!("Bearer {admin_token}"))
                 .body(Body::from(
                     serde_json::json!({
-                        "principal_id": PrincipalId::fixture("host_h"),
-                        "expires_at": 4_102_444_800i64
+                        "account_id": "lifecycle-host@example.test",
+                        "password": "lifecycle invite password"
                     })
                     .to_string(),
                 ))
@@ -11236,10 +11543,10 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let granted: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    let initial_host_session_token = granted["session_token"]
+    let logged_in: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let initial_host_session_token = logged_in["session_token"]
         .as_str()
-        .expect("session grant returns a backend-generated session token")
+        .expect("account login returns a backend-generated session token")
         .to_string();
 
     let response = app

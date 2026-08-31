@@ -86,8 +86,8 @@ async fn seed_account(pool: &PgPool) {
     .unwrap();
     sqlx::query(
         "INSERT INTO auth_account \
-         (account_id, principal_id, method_id, password_hash, created_at, global_capabilities) \
-         VALUES ('reseal@example.test', $1, $2, 'unused', 1, '{}')",
+         (account_id, principal_id, method_id, password_hash, created_at) \
+         VALUES ('reseal@example.test', $1, $2, 'unused', 1)",
     )
     .bind(principal_id.as_uuid())
     .bind(method_id)

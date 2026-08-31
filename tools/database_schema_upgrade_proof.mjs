@@ -125,6 +125,255 @@ INSERT INTO profile_mute
 VALUES
   ('50000000-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000001',
    '40000000-0000-4000-8000-000000000001', true, 1, 1);
+
+-- Behavioral fixtures for the 0004 authority cut. Ticket kinds are
+-- deliberately mismatched so cleanup must follow the session reference.
+INSERT INTO authentication_method
+  (method_id, principal_id, kind, status, created_at, last_authenticated_at)
+VALUES
+  ('71000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
+   'workos', 'active', 1, 1),
+  ('71000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001',
+   'classic_password', 'active', 1, 1);
+INSERT INTO external_identity
+  (provider, subject, principal_id, created_at, last_seen_at, method_id)
+VALUES
+  ('workos', 'user_upgrade_admin', '10000000-0000-4000-8000-000000000001',
+   1, 1, '71000000-0000-4000-8000-000000000001');
+INSERT INTO workos_provider_session
+  (provider_session_id, subject, principal_id, method_id, status,
+   created_at, last_seen_at, access_expires_at)
+VALUES
+  ('session_01HQAG1HENBZMAZD82YRXDFC0B', 'user_upgrade_admin',
+   '10000000-0000-4000-8000-000000000001',
+   '71000000-0000-4000-8000-000000000001', 'active', 1, 1, 100);
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
+   idle_expires_at, assurance, authenticated_at)
+VALUES
+  (repeat('a', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+   ARRAY['GlobalAdmin'], 100, 'admin_grant', 1);
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
+   idle_expires_at, assurance, authenticated_at)
+VALUES
+  (repeat('d', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+   ARRAY[]::text[], 100, 'dev', 1);
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
+   authenticated_via_method_id, idle_expires_at, assurance, authenticated_at,
+   workos_session_id)
+VALUES
+  (repeat('f', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+   ARRAY[]::text[], '71000000-0000-4000-8000-000000000001', 100,
+   'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B');
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
+   authenticated_via_method_id, idle_expires_at, assurance, authenticated_at)
+VALUES
+  (repeat('b', 63) || '1', '10000000-0000-4000-8000-000000000001', 1, 100,
+   ARRAY[]::text[], '71000000-0000-4000-8000-000000000002', 100,
+   'password', 1);
+-- A password label cannot launder a legacy session-local capability snapshot.
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
+   authenticated_via_method_id, idle_expires_at, assurance, authenticated_at)
+VALUES
+  (repeat('b', 63) || '7', '10000000-0000-4000-8000-000000000001', 1, 100,
+   ARRAY['GlobalAdmin'], '71000000-0000-4000-8000-000000000002', 100,
+   'password', 1);
+INSERT INTO workos_session_exchange
+  (provider_session_id, access_token_hash, exchanged_at, access_expires_at,
+   linking_session_hash)
+VALUES
+  ('session_01HQAG1HENBZMAZD82YRXDFC0B', repeat('b', 64), 1, 100,
+   repeat('a', 64));
+INSERT INTO workos_session_exchange
+  (provider_session_id, access_token_hash, exchanged_at, access_expires_at,
+   linking_session_hash)
+VALUES
+  ('session_01HQAG1HENBZMAZD82YRXDFC0B', repeat('8', 64), 1, 100,
+   repeat('f', 64));
+INSERT INTO auth_websocket_ticket
+  (token_hash, auth_kind, session_reference, access_expires_at, principal_id,
+   audience, game_id, channel_id, after_seq, issued_at, expires_at)
+VALUES
+  (repeat('c', 64), 'classic', repeat('a', 64), 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+INSERT INTO auth_websocket_ticket
+  (token_hash, auth_kind, session_reference, access_expires_at, principal_id,
+   audience, game_id, channel_id, after_seq, issued_at, expires_at)
+VALUES
+  (repeat('e', 64), 'workos', repeat('d', 64), 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+INSERT INTO auth_websocket_ticket
+  (token_hash, auth_kind, session_reference, access_expires_at, principal_id,
+   audience, game_id, channel_id, after_seq, issued_at, expires_at)
+VALUES
+  (repeat('9', 64), 'classic', repeat('f', 64), 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+INSERT INTO auth_websocket_ticket
+  (token_hash, auth_kind, session_reference, access_expires_at, principal_id,
+   audience, game_id, channel_id, after_seq, issued_at, expires_at)
+VALUES
+  (repeat('b', 63) || '2', 'classic', repeat('b', 63) || '1', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100),
+  (repeat('b', 63) || '3', 'dev', repeat('b', 63) || '1', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100),
+  (repeat('b', 63) || '4', 'admin_grant', repeat('b', 63) || '1', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100),
+  (repeat('b', 63) || '5', 'classic', repeat('b', 63) || '6', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100),
+  (repeat('b', 63) || '8', 'classic', repeat('b', 63) || '7', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+`;
+
+const postMigrationAuthorityInvariantSql = String.raw`
+DO $proof$
+BEGIN
+  BEGIN
+    INSERT INTO auth_session
+      (token_hash, principal_id, created_at, expires_at,
+       idle_expires_at, assurance, authenticated_at)
+    VALUES
+      (repeat('5', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+       100, 'admin_grant', 1);
+    RAISE EXCEPTION 'post-0004 auth_session accepted admin_grant';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    INSERT INTO auth_session
+      (token_hash, principal_id, created_at, expires_at,
+       idle_expires_at, assurance, authenticated_at)
+    VALUES
+      (repeat('6', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+       100, 'dev', 1);
+    RAISE EXCEPTION 'post-0004 Dev session accepted without an instance id';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    INSERT INTO auth_session
+      (token_hash, principal_id, created_at, expires_at,
+       idle_expires_at, assurance, authenticated_at, local_proof_instance_id)
+    VALUES
+      (repeat('7', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+       100, 'password', 1, repeat('a', 64));
+    RAISE EXCEPTION 'post-0004 non-Dev session accepted a local-proof instance id';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    INSERT INTO auth_session
+      (token_hash, principal_id, created_at, expires_at,
+       authenticated_via_method_id, idle_expires_at, assurance, authenticated_at,
+       workos_session_id)
+    VALUES
+      (repeat('0', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+       '71000000-0000-4000-8000-000000000001', 100,
+       'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B');
+    RAISE EXCEPTION 'post-0004 WorkOS session accepted without signing-key provenance';
+  EXCEPTION WHEN check_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    INSERT INTO auth_websocket_ticket
+      (token_hash, session_reference, access_expires_at,
+       audience, game_id, channel_id, after_seq, issued_at, expires_at)
+    VALUES
+      (repeat('4', 64), repeat('3', 64), 100, 'fmarch-live',
+       '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+    RAISE EXCEPTION 'post-0004 websocket ticket accepted an orphan session reference';
+  EXCEPTION WHEN foreign_key_violation THEN
+    NULL;
+  END;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'auth_websocket_ticket'
+      AND column_name IN ('auth_kind', 'principal_id', 'consumed_at')
+  ) THEN
+    RAISE EXCEPTION 'post-0004 websocket ticket retained redundant authority metadata';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND column_name = 'global_capabilities'
+      AND table_name IN ('auth_session', 'game_invitation', 'auth_account')
+  ) THEN
+    RAISE EXCEPTION 'post-0004 hosted identity rows retained global capability snapshots';
+  END IF;
+END
+$proof$;
+
+INSERT INTO workos_signing_key_tombstone
+  (signing_key_id, retired_at, retired_by_principal_id, reason)
+VALUES
+  ('retired-upgrade-key', 2, '10000000-0000-4000-8000-000000000001',
+   'upgrade retirement proof');
+DO $proof$
+BEGIN
+  BEGIN
+    UPDATE workos_signing_key_tombstone
+    SET reason = 'rewritten'
+    WHERE signing_key_id = 'retired-upgrade-key';
+    RAISE EXCEPTION 'post-0004 WorkOS signing-key tombstone accepted update';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'post-0004%' THEN
+      RAISE;
+    END IF;
+  END;
+  BEGIN
+    DELETE FROM workos_signing_key_tombstone
+    WHERE signing_key_id = 'retired-upgrade-key';
+    RAISE EXCEPTION 'post-0004 WorkOS signing-key tombstone accepted deletion';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'post-0004%' THEN
+      RAISE;
+    END IF;
+  END;
+END
+$proof$;
+
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at,
+   idle_expires_at, assurance, authenticated_at, local_proof_instance_id)
+VALUES
+  (repeat('1', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+   100, 'dev', 1, repeat('a', 64));
+INSERT INTO auth_websocket_ticket
+  (token_hash, session_reference, access_expires_at,
+   audience, game_id, channel_id, after_seq, issued_at, expires_at)
+VALUES
+  (repeat('2', 64), repeat('1', 64), 100, 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+DELETE FROM auth_session WHERE token_hash = repeat('1', 64);
+DO $proof$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM auth_websocket_ticket WHERE token_hash = repeat('2', 64)
+  ) THEN
+    RAISE EXCEPTION 'auth-session deletion did not cascade to websocket ticket';
+  END IF;
+END
+$proof$;
 `;
 
 function authorityArtifact(epoch, rawFingerprint, schemaOwner) {
@@ -216,6 +465,83 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
       { tuplesOnly: true },
     );
     assert.equal(preserved, "50000000-0000-4000-8000-000000000001:true:1");
+    const removedLegacyAuthority = databaseCommand(
+      "psql",
+      upgradeUrl,
+      String.raw`SELECT
+        (SELECT count(*) FROM auth_session WHERE token_hash = repeat('a', 64))::text || ':' ||
+        (SELECT count(*) FROM workos_session_exchange WHERE linking_session_hash = repeat('a', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket WHERE session_reference = repeat('a', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_session WHERE token_hash = repeat('d', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket WHERE session_reference = repeat('d', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_session WHERE token_hash = repeat('f', 64))::text || ':' ||
+        (SELECT count(*) FROM workos_session_exchange WHERE linking_session_hash = repeat('f', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket WHERE session_reference = repeat('f', 64))::text || ':' ||
+        (SELECT count(*) FROM workos_session_exchange WHERE access_token_hash = repeat('b', 64))::text || ':' ||
+        (SELECT count(*) FROM workos_session_exchange WHERE access_token_hash = repeat('8', 64))::text`,
+      { tuplesOnly: true },
+    );
+    assert.equal(
+      removedLegacyAuthority,
+      "0:0:0:0:0:0:0:0:1:1",
+      "0004 must delete unproven AdminGrant, Dev, and WorkOS sessions, sever their references, and preserve one-time assertion replay evidence",
+    );
+    const preservedPasswordAuthority = databaseCommand(
+      "psql",
+      upgradeUrl,
+      String.raw`SELECT
+        (SELECT count(*) FROM authentication_method
+         WHERE method_id = '71000000-0000-4000-8000-000000000002'
+           AND kind = 'classic_password')::text || ':' ||
+        (SELECT count(*) FROM auth_session
+         WHERE token_hash = repeat('b', 63) || '1'
+           AND authenticated_via_method_id = '71000000-0000-4000-8000-000000000002'
+           AND assurance = 'password')::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '2'
+           AND session_reference = repeat('b', 63) || '1')::text`,
+      { tuplesOnly: true },
+    );
+    assert.equal(
+      preservedPasswordAuthority,
+      "1:1:1",
+      "0004 must preserve a valid password method, its session, and its websocket ticket",
+    );
+    const removedPoisonedPasswordAuthority = databaseCommand(
+      "psql",
+      upgradeUrl,
+      String.raw`SELECT
+        (SELECT count(*) FROM auth_session
+         WHERE token_hash = repeat('b', 63) || '7')::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '8')::text`,
+      { tuplesOnly: true },
+    );
+    assert.equal(
+      removedPoisonedPasswordAuthority,
+      "0:0",
+      "0004 must revoke a password-labeled session carrying a legacy capability snapshot and its derivative ticket",
+    );
+    const removedSuspiciousTickets = databaseCommand(
+      "psql",
+      upgradeUrl,
+      String.raw`SELECT
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '3')::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '4')::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '5')::text || ':' ||
+        (SELECT count(*) FROM auth_session
+         WHERE token_hash = repeat('b', 63) || '1')::text`,
+      { tuplesOnly: true },
+    );
+    assert.equal(
+      removedSuspiciousTickets,
+      "0:0:0:1",
+      "0004 must remove Dev/AdminGrant-labeled and orphan tickets without deleting their valid password session",
+    );
+    databaseCommand("psql", upgradeUrl, postMigrationAuthorityInvariantSql);
     const targetConstraint = databaseCommand(
       "psql",
       upgradeUrl,
@@ -250,6 +576,15 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
       authority_equal: true,
       authority_fingerprint_sha256: authoritySha256,
       checksum_mismatch_terminal: true,
+      delegated_admin_authority_removed: true,
+      delegated_admin_reintroduction_rejected: true,
+      legacy_unbound_sessions_removed: true,
+      poisoned_password_session_removed: true,
+      hosted_authority_snapshots_removed: true,
+      workos_signing_key_retirement_monotonic: true,
+      websocket_session_reference_enforced: true,
+      websocket_redundant_authority_removed: true,
+      websocket_session_delete_cascades: true,
     };
   } finally {
     await rm(previousDirectory, { recursive: true, force: true });

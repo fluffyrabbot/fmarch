@@ -12,41 +12,41 @@ import {
 test("confirmation command trace binds confirmation action to status key", () => {
   const confirmation = buildConfirmationActionViewModel({
     surface: "admin-setup",
-    actionId: "session-grants",
-    label: "Session grants",
-    message: "Grant GlobalMod to mod_a",
+    actionId: "cohost",
+    label: "Add cohost",
+    message: "Delegate cohost_c as cohost",
     messageIdPrefix: "admin-command-confirmation-message",
-    confirmTestId: "admin-command-confirm-session-grants",
-    cancelTestId: "admin-command-cancel-session-grants",
-    triggerTestId: "admin-command-trigger-session-grants",
+    confirmTestId: "admin-command-confirm-cohost",
+    cancelTestId: "admin-command-cancel-cohost",
+    triggerTestId: "admin-command-trigger-cohost",
   });
   const trace = buildConfirmationCommandTrace({
     surface: "admin-setup",
-    actionId: "session-grants",
-    statusKey: "session-grants",
+    actionId: "cohost",
+    statusKey: "cohost",
     confirmation,
-    dispatchKind: "grant_session",
+    dispatchKind: "add_cohost",
   });
 
   assert.deepEqual(trace, {
     kind: CONFIRMATION_COMMAND_TRACE_CONTRACT.kind,
     confirmationKind: CONFIRMATION_COMMAND_TRACE_CONTRACT.confirmationKind,
     surface: "admin-setup",
-    actionId: "session-grants",
-    statusKey: "session-grants",
-    dispatchKind: "grant_session",
+    actionId: "cohost",
+    statusKey: "cohost",
+    dispatchKind: "add_cohost",
   });
   assert.deepEqual(
     attachConfirmationCommandTrace(
       {
         state: "confirm",
-        message: "Grant GlobalMod to mod_a",
+        message: "Delegate cohost_c as cohost",
       },
       trace,
     ),
     {
       state: "confirm",
-      message: "Grant GlobalMod to mod_a",
+      message: "Delegate cohost_c as cohost",
       confirmationTrace: trace,
     },
   );

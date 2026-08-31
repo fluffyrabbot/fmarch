@@ -176,6 +176,13 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     handoff.operatorEvidenceGate.providerBoundary.id,
     hostedIdentityProviderBoundary.id,
   );
+  assert.deepEqual(hostedIdentityExpectedRoleSurfaceContract.authBoundaries, [
+    { id: "login", path: "/auth/login" },
+    { id: "session", path: "/auth/session" },
+  ]);
+  for (const provider of hostedIdentityProviderBoundary.providers) {
+    assert.equal(Object.hasOwn(provider, "sessionGrantBoundary"), false);
+  }
   assert.deepEqual(
     handoff.operatorEvidenceGate.providerBoundary.providers.map((provider) => [
       provider.id,

@@ -185,7 +185,6 @@ function adminCommandActivityItem({ actionId, status }) {
 export function buildAdminSetupGridViewModel({
   items = [],
   commandStatuses = {},
-  sessionGrant,
 } = {}) {
   return Object.freeze({
     root: Object.freeze({
@@ -228,8 +227,6 @@ export function buildAdminSetupGridViewModel({
           cancelTestId: `admin-command-cancel-${item.id}`,
           triggerTestId: `admin-command-trigger-${item.id}`,
           confirmation: adminConfirmationView(item, "admin-command", visibleStatus),
-          isSessionGrant: item.commandAction === "grant_session",
-          sessionGrant,
         });
       }),
     ),
@@ -407,9 +404,6 @@ function adminConfirmationView(item, testIdPrefix, status) {
 
 function adminSetupDisplayValue(item) {
   const value = String(item.value ?? "");
-  if (item.commandAction === "grant_session") {
-    return humanizeAdminMessage(value);
-  }
   if (item.commandAction === "add_cohost") {
     return value.startsWith("@") ? value : `@${value}`;
   }

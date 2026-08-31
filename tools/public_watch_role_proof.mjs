@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
+import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import { fixturePrincipalAuthorityId } from "./principal_fixture.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -16,6 +17,7 @@ const artifactDir = path.join(root, "target", "community-subscription-role-proof
 const evidencePath = path.join(artifactDir, "community-subscription-proof.json");
 const migrationUrl = process.env.DATABASE_MIGRATION_URL;
 const host = "127.0.0.1";
+const localProofAuth = createLocalProofAuth();
 if (!migrationUrl) throw new Error("DATABASE_MIGRATION_URL is required");
 
 let database;
@@ -193,7 +195,7 @@ async function seed(api) {
     [watcher, []],
     [operator, ["GlobalAdmin", "GlobalMod"]],
   ]) {
-    const session = await json(`${api}/auth/dev-session`, post({
+    const session = await json(`${api}/auth/local-proof/sessions`, localProofPost({
       principal_id: fixturePrincipalAuthorityId(principal),
       expires_at: 4_102_444_800,
       global_capabilities: globals,
@@ -318,6 +320,11 @@ function get(token) {
 function post(body, token) {
   return { method: "POST", headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), "content-type": "application/json" }, body: JSON.stringify(body) };
 }
+function localProofPost(body) {
+  const options = post(body);
+  options.headers = localProofAuth.requestHeaders(options.headers);
+  return options;
+}
 async function cookie(context, base, value) {
   await context.addCookies([{ name: "fmarch_session", value, url: base, httpOnly: true, sameSite: "Lax" }]);
 }
@@ -347,7 +354,7 @@ async function startApi(applicationUrl) {
   const base = `http://${host}:${port}`;
   const mediaRoot = path.join(artifactDir, "media");
   await mkdir(mediaRoot, { recursive: true });
-  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: { ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, FMARCH_DEV_AUTH: "1", RUST_LOG: "warn" }, stdio: ["ignore", "pipe", "pipe"] });
+  apiProcess = spawn("cargo", ["run", "-p", "server"], { cwd: root, env: localProofAuth.serverEnvironment({ ...serverRuntimeEnvironment({ applicationUrl }), FMARCH_BIND: `${host}:${port}`, FMARCH_MEDIA_ROOT: mediaRoot, RUST_LOG: "warn" }), stdio: ["ignore", "pipe", "pipe"] });
   apiProcess.stdout.on("data", (chunk) => { apiOutput += chunk; });
   apiProcess.stderr.on("data", (chunk) => { apiOutput += chunk; });
   const deadline = Date.now() + 240_000;

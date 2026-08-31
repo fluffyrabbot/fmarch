@@ -86,8 +86,8 @@ async fn insert_classic_account_fixture(
     .unwrap();
     sqlx::query(
         "INSERT INTO auth_account \
-         (account_id, principal_id, method_id, password_hash, created_at, global_capabilities) \
-         VALUES ($1, $2, $3, $4, 1, '{}'::text[])",
+         (account_id, principal_id, method_id, password_hash, created_at) \
+         VALUES ($1, $2, $3, $4, 1)",
     )
     .bind(account_id)
     .bind(principal.as_uuid())
@@ -922,7 +922,7 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
         1
     );
     insert_classic_account_fixture(&pool, &account_id, principal, "secret-hash").await;
-    sqlx::query("INSERT INTO game_invitation (token_hash, principal_id, created_at, expires_at, global_capabilities, invited_by_principal_id, account_id) VALUES ($1,$2,1,100,'{}'::text[],$3,$4)")
+    sqlx::query("INSERT INTO game_invitation (token_hash, principal_id, created_at, expires_at, invited_by_principal_id, account_id) VALUES ($1,$2,1,100,$3,$4)")
         .bind("11".repeat(32))
         .bind(principal.as_uuid())
         .bind(principal.as_uuid())
@@ -952,8 +952,9 @@ async fn authentication_only_member_gets_a_subject_and_erases_account_dependenci
         r#"
         INSERT INTO auth_session
             (token_hash, principal_id, created_at, expires_at,
-             idle_expires_at, authenticated_at, assurance, global_capabilities)
-        VALUES ($1,$2,1,100,50,1,'admin_grant','{}'::text[])
+             idle_expires_at, authenticated_at, assurance,
+             local_proof_instance_id)
+        VALUES ($1,$2,1,100,50,1,'dev',repeat('a', 64))
         "#,
     )
     .bind("33".repeat(32))

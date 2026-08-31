@@ -58,12 +58,13 @@ export function localSpineMigrationUrlFor(env = process.env) {
 }
 
 export function localSpineProofEnvironment(env = process.env) {
-  return {
-    ...env,
-    // This wrapper is exclusively for local deterministic proof. Never rely on
-    // the caller's shell to opt into the debug-only local identity gateway.
-    FMARCH_DEV_AUTH: "1",
-  };
+  const childEnvironment = { ...env };
+  // The concrete proof harness that spawns a server creates and attenuates its
+  // own per-process local-proof authority. This outer orchestration wrapper
+  // must not provide ambient auth configuration.
+  delete childEnvironment.FMARCH_DEV_AUTH;
+  delete childEnvironment.FMARCH_LOCAL_PROOF_SECRET;
+  return childEnvironment;
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {

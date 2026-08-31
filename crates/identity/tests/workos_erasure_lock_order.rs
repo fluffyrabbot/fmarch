@@ -7,7 +7,9 @@ fn verified(subject: String) -> VerifiedIdentity {
     VerifiedIdentity {
         subject,
         session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
+        issued_at: 1,
         expires_at: 4_102_444_800,
+        signing_key_id: "workos-erasure-test-key".to_string(),
         email: Some("workos-proof@example.test".to_string()),
     }
 }

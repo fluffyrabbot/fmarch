@@ -1,7 +1,7 @@
 {
   "version": 1,
   "epoch": 1,
-  "current_schema_sha256": "cee000d19d56966f578b411a6231415d35c768d0250218a215601a6ee32c89a1",
+  "current_schema_sha256": "e8e34b88c80cab496e45f0e2a0b6e10284dda793443c3fb0625f0b207db0f32d",
   "migrations": [
     {
       "version": 1,
@@ -17,7 +17,12 @@
       "version": 3,
       "filename": "0003_closed_community_admission.sql",
       "sha256": "b7a4ba915c4f3713f34e6ea334f81d38eaf6b88d8a4f89ac859427c85c779fc4"
+    },
+    {
+      "version": 4,
+      "filename": "0004_remove_admin_grant_assurance.sql",
+      "sha256": "a243923239fb6a35de130254d65bb85d7dda39dbcff0c00c213dbe07c6c047cc"
     }
   ],
-  "authority_fingerprint_sha256": "37eb22b425bb45771d380d88524974bf5415255a7ead7280580276e55217ee9d"
+  "authority_fingerprint_sha256": "e5444908d1b8cb78d204ab0edf0e99c76b0dd4da515e24e81f5bf7886f11546c"
 }

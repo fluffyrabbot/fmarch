@@ -71,7 +71,6 @@ export async function buildAdminRuntimeRouteData({
     command: Object.freeze({
       endpoint: "/commands",
       createGame: Object.freeze({ action: "create_game", game: selectedGame, pack: "mafiascum" }),
-      sessionGrant: null,
     }),
     gameSetup: Object.freeze([
       Object.freeze({
@@ -269,7 +268,7 @@ function adminSurfaceHeader(capabilityLabel) {
 }
 
 function emptyAdminCommand() {
-  return Object.freeze({ endpoint: "/commands", sessionGrant: null });
+  return Object.freeze({ endpoint: "/commands" });
 }
 
 function normalizeAdminBootstrap(catalog, { access, capabilities }) {

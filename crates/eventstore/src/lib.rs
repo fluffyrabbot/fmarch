@@ -490,6 +490,22 @@ pub async fn lock_stream_in_tx(
     Ok(())
 }
 
+/// Attempt to acquire the command stream serialization point without adding
+/// a pool-backed waiter. Network admission uses this fail-fast form and maps a
+/// busy stream to its retryable conflict contract; once acquired, the regular
+/// lock call remains idempotent inside the same transaction.
+pub async fn try_lock_stream_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+) -> Result<bool, StoreError> {
+    Ok(
+        sqlx::query_scalar("SELECT pg_try_advisory_xact_lock(hashtextextended($1::text, 0))")
+            .bind(stream_id)
+            .fetch_one(&mut **tx)
+            .await?,
+    )
+}
+
 async fn active_stream_data_key_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     stream_id: Uuid,

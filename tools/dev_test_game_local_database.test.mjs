@@ -30,9 +30,13 @@ test("an explicit migration URL remains caller-owned", async () => {
   await lease.release();
 });
 
-test("the one-command local harness always enables deterministic development auth", () => {
+test("the outer local wrapper strips ambient development auth authority", () => {
   assert.deepEqual(
-    localDevTestGameEnvironment({ FMARCH_DEV_AUTH: "0", KEEP: "yes" }),
-    { FMARCH_DEV_AUTH: "1", KEEP: "yes" },
+    localDevTestGameEnvironment({
+      FMARCH_DEV_AUTH: "0",
+      FMARCH_LOCAL_PROOF_SECRET: "stale",
+      KEEP: "yes",
+    }),
+    { KEEP: "yes" },
   );
 });

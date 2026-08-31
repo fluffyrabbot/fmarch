@@ -10,6 +10,12 @@ mod admission;
 
 use admission::{enforce_http_admission, HttpAdmission};
 
+// Live delivery holds an authority transaction across a socket write for at
+// most five seconds. Keep the server-side idle transaction timeout above that
+// protocol deadline so a valid fence cannot be killed before it commits.
+const MIN_IDLE_TRANSACTION_TIMEOUT_MS: u64 = 10_000;
+const MIN_DATABASE_POOL_CONNECTIONS: u64 = 5;
+
 #[derive(Debug, Clone)]
 struct Config {
     database_url: String,
@@ -121,7 +127,12 @@ impl Config {
             bind,
             media,
             database: DatabaseCapacity {
-                max_connections: bounded_env("FMARCH_DB_MAX_CONNECTIONS", 10, 1, 256)? as u32,
+                max_connections: bounded_env(
+                    "FMARCH_DB_MAX_CONNECTIONS",
+                    10,
+                    MIN_DATABASE_POOL_CONNECTIONS,
+                    256,
+                )? as u32,
                 acquire_timeout_ms: bounded_env("FMARCH_DB_ACQUIRE_TIMEOUT_MS", 250, 1, 60_000)?,
                 statement_timeout_ms: bounded_env(
                     "FMARCH_DB_STATEMENT_TIMEOUT_MS",
@@ -133,7 +144,7 @@ impl Config {
                 idle_transaction_timeout_ms: bounded_env(
                     "FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS",
                     10_000,
-                    10,
+                    MIN_IDLE_TRANSACTION_TIMEOUT_MS,
                     300_000,
                 )?,
             },
@@ -368,6 +379,48 @@ fn identity_delivery_mode(
     ))
 }
 
+fn local_proof_auth_from_values(
+    enabled: bool,
+    debug_build: bool,
+    bind: SocketAddr,
+    secret: Option<&str>,
+) -> Result<Option<api::LocalProofAuthVerifier>, std::io::Error> {
+    if !enabled {
+        if secret.is_some() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "FMARCH_LOCAL_PROOF_SECRET must be absent unless FMARCH_DEV_AUTH=1",
+            ));
+        }
+        return Ok(None);
+    }
+    if !debug_build {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "FMARCH_DEV_AUTH cannot be enabled in a release build",
+        ));
+    }
+    if !bind.ip().is_loopback() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "FMARCH_DEV_AUTH requires an explicit loopback FMARCH_BIND; wildcard, platform PORT, and non-loopback listeners are forbidden",
+        ));
+    }
+    let secret = secret.ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "FMARCH_LOCAL_PROOF_SECRET is required when FMARCH_DEV_AUTH=1",
+        )
+    })?;
+    let verifier = api::LocalProofAuthVerifier::from_secret(secret).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "FMARCH_LOCAL_PROOF_SECRET must be a freshly generated 32-byte lowercase-hex value",
+        )
+    })?;
+    Ok(Some(verifier))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
@@ -413,14 +466,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // connection. `--check-content` intentionally exits above this requirement.
     let subject_authority = identity::configured_subject_key_authority().await?;
     identity::install_subject_key_store(subject_authority.key_store.clone())?;
-    let dev_auth_enabled = env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
-    if dev_auth_enabled && !cfg!(debug_assertions) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "FMARCH_DEV_AUTH cannot be enabled in a release build",
-        )
-        .into());
-    }
+    let dev_auth_requested = env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1");
+    let local_proof_secret = env::var("FMARCH_LOCAL_PROOF_SECRET").ok();
+    let local_proof_auth = local_proof_auth_from_values(
+        dev_auth_requested,
+        cfg!(debug_assertions),
+        config.bind,
+        local_proof_secret.as_deref(),
+    )?;
+    let dev_auth_enabled = local_proof_auth.is_some();
+    let local_proof_instance_id = local_proof_auth
+        .as_ref()
+        .map(|verifier| verifier.instance_id().clone());
     eventstore::require_secure_event_encryption_configuration()?;
     let auth_source_key = env::var("FMARCH_AUTH_SOURCE_SIGNING_KEY").ok();
     if auth_source_key
@@ -486,6 +543,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     server::ensure_schema_ready(&pool).await?;
     server::verify_database_principal(&pool, server::DatabasePrincipal::Application).await?;
+    let local_proof_revocation =
+        identity::revoke_local_proof_sessions_for_startup(&pool, unix_now_seconds()).await?;
+    if local_proof_revocation.sessions > 0 || local_proof_revocation.websocket_tickets > 0 {
+        tracing::info!(
+            revoked_local_proof_sessions = local_proof_revocation.sessions,
+            removed_local_proof_websocket_tickets = local_proof_revocation.websocket_tickets,
+            "invalidated stale local-proof authority before accepting traffic"
+        );
+    }
     eventstore::attest_active_runtime_kek(&pool).await?;
     eventstore::audit_event_encryption_key_coverage(&pool).await?;
     identity::prepare_subject_authority_for_service(&pool, &subject_authority).await?;
@@ -498,7 +564,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
     // Classic is a first-class method, enabled by default; WorkOS is additive.
     // Startup requires at least one enabled sign-in method. FMARCH_DEV_AUTH
-    // only unlocks dev shortcuts (dev-session endpoint, query-param sockets).
+    // unlocks only the loopback, secret-authenticated local-proof control.
     let classic_enabled = env::var("FMARCH_CLASSIC_AUTH").ok().as_deref() != Some("0");
     if !classic_enabled && workos_verifier.is_none() {
         return Err(std::io::Error::new(
@@ -588,14 +654,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let mut api_state = api::ApiState::new(pool.clone(), media_store)
         .with_classic_auth(classic_enabled)
-        .with_dev_auth(dev_auth_enabled)
         .with_subject_key_store(subject_authority.key_store.clone())
         .with_identity_delivery_gateway(gateway);
+    if let Some(verifier) = local_proof_auth {
+        api_state = api_state.with_local_proof_auth(verifier);
+    }
     if let Some(verifier) = workos_verifier {
         api_state = api_state.with_access_token_verifier(std::sync::Arc::new(verifier));
     }
+    let mut operator_state = operator_api::OperatorApiState::new(pool);
+    if let Some(instance_id) = local_proof_instance_id {
+        operator_state = operator_state.with_local_proof_instance(instance_id);
+    }
     let app = api::router_with_state(api_state)
-        .merge(operator_api::router(pool))
+        .merge(operator_api::router_with_state(operator_state))
         .layer(middleware::from_fn_with_state(
             HttpAdmission::new(
                 config.http.max_in_flight,
@@ -616,8 +688,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::{
         bind_from_values, bootstrap_admin_from_values, bounded_env, identity_delivery_mode,
-        virtual_hosted_style_from_value, IdentityDeliveryMode,
+        local_proof_auth_from_values, virtual_hosted_style_from_value, IdentityDeliveryMode,
+        MIN_DATABASE_POOL_CONNECTIONS, MIN_IDLE_TRANSACTION_TIMEOUT_MS,
     };
+
+    const TEST_LOCAL_PROOF_SECRET: &str =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     #[test]
     fn identity_delivery_selection_is_explicit_and_fail_closed() {
@@ -663,11 +739,130 @@ mod tests {
     }
 
     #[test]
+    fn local_proof_auth_requires_debug_loopback_and_a_256_bit_hex_secret() {
+        assert!(
+            local_proof_auth_from_values(false, false, "[::]:8080".parse().unwrap(), None,)
+                .unwrap()
+                .is_none()
+        );
+        assert!(local_proof_auth_from_values(
+            false,
+            true,
+            "127.0.0.1:4000".parse().unwrap(),
+            Some(TEST_LOCAL_PROOF_SECRET),
+        )
+        .is_err());
+
+        for bind in ["[::]:8080", "0.0.0.0:4000", "192.0.2.10:4000"] {
+            let error = local_proof_auth_from_values(
+                true,
+                true,
+                bind.parse().unwrap(),
+                Some(TEST_LOCAL_PROOF_SECRET),
+            )
+            .unwrap_err();
+            assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        }
+
+        for bind in ["127.0.0.1:4000", "[::1]:4000"] {
+            assert!(local_proof_auth_from_values(
+                true,
+                true,
+                bind.parse().unwrap(),
+                Some(TEST_LOCAL_PROOF_SECRET),
+            )
+            .unwrap()
+            .is_some());
+        }
+
+        assert!(
+            local_proof_auth_from_values(true, true, "127.0.0.1:4000".parse().unwrap(), None,)
+                .is_err()
+        );
+        assert!(local_proof_auth_from_values(
+            true,
+            true,
+            "127.0.0.1:4000".parse().unwrap(),
+            Some("not-a-random-32-byte-hex-secret"),
+        )
+        .is_err());
+        assert!(local_proof_auth_from_values(
+            true,
+            false,
+            "127.0.0.1:4000".parse().unwrap(),
+            Some(TEST_LOCAL_PROOF_SECRET),
+        )
+        .is_err());
+
+        let first = local_proof_auth_from_values(
+            true,
+            true,
+            "127.0.0.1:4000".parse().unwrap(),
+            Some(TEST_LOCAL_PROOF_SECRET),
+        )
+        .unwrap()
+        .unwrap();
+        let same_credential = local_proof_auth_from_values(
+            true,
+            true,
+            "127.0.0.1:4001".parse().unwrap(),
+            Some(TEST_LOCAL_PROOF_SECRET),
+        )
+        .unwrap()
+        .unwrap();
+        let second = local_proof_auth_from_values(
+            true,
+            true,
+            "127.0.0.1:4002".parse().unwrap(),
+            Some("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"),
+        )
+        .unwrap()
+        .unwrap();
+        assert_ne!(first.instance_id(), same_credential.instance_id());
+        assert_ne!(first.instance_id(), second.instance_id());
+        assert_eq!(first.instance_id().as_str().len(), 64);
+    }
+
+    #[test]
     fn bounded_capacity_values_reject_invalid_configuration() {
         std::env::set_var("FMARCH_TEST_CAPACITY_VALUE", "0");
         let error = bounded_env("FMARCH_TEST_CAPACITY_VALUE", 10, 1, 100).unwrap_err();
         std::env::remove_var("FMARCH_TEST_CAPACITY_VALUE");
         assert!(error.to_string().contains("between 1 and 100"));
+    }
+
+    #[test]
+    fn idle_transaction_timeout_cannot_undercut_live_delivery_fence() {
+        std::env::set_var(
+            "FMARCH_TEST_IDLE_TRANSACTION_TIMEOUT_MS",
+            (MIN_IDLE_TRANSACTION_TIMEOUT_MS - 1).to_string(),
+        );
+        let error = bounded_env(
+            "FMARCH_TEST_IDLE_TRANSACTION_TIMEOUT_MS",
+            MIN_IDLE_TRANSACTION_TIMEOUT_MS,
+            MIN_IDLE_TRANSACTION_TIMEOUT_MS,
+            300_000,
+        )
+        .unwrap_err();
+        std::env::remove_var("FMARCH_TEST_IDLE_TRANSACTION_TIMEOUT_MS");
+        assert!(error.to_string().contains("between 10000 and 300000"));
+    }
+
+    #[test]
+    fn database_pool_capacity_accounts_for_listener_and_authority_headroom() {
+        std::env::set_var(
+            "FMARCH_TEST_DATABASE_POOL_CONNECTIONS",
+            (MIN_DATABASE_POOL_CONNECTIONS - 1).to_string(),
+        );
+        let error = bounded_env(
+            "FMARCH_TEST_DATABASE_POOL_CONNECTIONS",
+            10,
+            MIN_DATABASE_POOL_CONNECTIONS,
+            256,
+        )
+        .unwrap_err();
+        std::env::remove_var("FMARCH_TEST_DATABASE_POOL_CONNECTIONS");
+        assert!(error.to_string().contains("between 5 and 256"));
     }
 
     #[test]

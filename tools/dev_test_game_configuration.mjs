@@ -269,7 +269,7 @@ creates browser-login tokens, prints role URLs, and writes target/dev-test-game/
 With --verify, it also writes target/dev-test-game/proof-run.json.
 
 Options:
-  --api-base-url URL       Use an existing API instead of starting cargo run -p server
+  --api-base-url URL       Rejected: local proof authority is bound to the owned API process
   --api-port PORT          Port for a started API
   --api-startup-timeout-ms Milliseconds to wait for a started API (default: ${defaultApiStartupTimeoutMs})
   --frontend-base-url URL  Use an existing frontend instead of starting Vite
