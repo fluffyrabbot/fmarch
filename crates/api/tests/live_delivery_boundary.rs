@@ -115,7 +115,7 @@ fn live_delivery_has_one_typed_owner_without_composition_root_drift() {
         "the live delivery boundary must not hide ownership or lint debt"
     );
     assert!(live_delivery.contains("GuardedSendOutcome::Close(next_envelope_id)"));
-    assert!(live_delivery.contains("socket.send(Message::Close(None))"));
+    assert!(live_delivery.contains("bounded_control_send(socket, Message::Close(None))"));
     assert!(live_delivery.contains("if inner.strong_count() == 0"));
     assert!(live_delivery.contains("inner: &std::sync::Weak<GameEventWakeInner>"));
     assert!(!live_delivery.contains("listen_live_events(&pool, &hub)"));

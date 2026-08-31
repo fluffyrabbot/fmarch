@@ -199,6 +199,10 @@ pub async fn ensure_principal(
     global_capabilities: &[String],
     now: i64,
 ) -> Result<(), IdentityFlowError> {
+    // The gate must precede even the upsert: an ON CONFLICT wait is part of the
+    // principal-row lock order and cannot be allowed to invert live delivery's
+    // gate-then-row acquisition.
+    lock_identity_cutoff_gate_exclusive(conn, principal_id).await?;
     sqlx::query(
         r#"
         INSERT INTO platform_principal (
@@ -231,6 +235,10 @@ pub(crate) async fn lock_active_principal_and_subject(
 ) -> Result<Vec<String>, IdentityFlowError> {
     use crate::{active_subject_key_store, SubjectId};
 
+    // Direct authentication callers do not necessarily pass through
+    // `ensure_principal`, so this boundary independently enforces the same
+    // gate-before-row order. Reacquisition in one transaction is harmless.
+    lock_identity_cutoff_gate_exclusive(conn, principal_id).await?;
     let principal = sqlx::query_as::<_, (String, Vec<String>)>(
         "SELECT status, global_capabilities FROM platform_principal WHERE principal_id = $1 FOR UPDATE",
     )
@@ -324,16 +332,58 @@ impl IdentityMutationOwner {
     }
 }
 
+async fn lock_identity_cutoff_gate_shared(
+    conn: &mut PgConnection,
+    principal_id: &PrincipalId,
+) -> Result<(), IdentityFlowError> {
+    // Hash collisions can only conservatively serialize unrelated principals.
+    // The domain prefix keeps this protocol independent from every other
+    // advisory-lock namespace in the database.
+    sqlx::query(
+        r#"
+        SELECT pg_catalog.pg_advisory_xact_lock_shared(
+            pg_catalog.hashtextextended(
+                'fmarch.identity-cutoff:' || $1::text, 0
+            )
+        )
+        "#,
+    )
+    .bind(principal_id.as_uuid())
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+async fn lock_identity_cutoff_gate_exclusive(
+    conn: &mut PgConnection,
+    principal_id: &PrincipalId,
+) -> Result<(), IdentityFlowError> {
+    sqlx::query(
+        r#"
+        SELECT pg_catalog.pg_advisory_xact_lock(
+            pg_catalog.hashtextextended(
+                'fmarch.identity-cutoff:' || $1::text, 0
+            )
+        )
+        "#,
+    )
+    .bind(principal_id.as_uuid())
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
 /// Join the principal-wide identity cutoff gate without taking mutation
-/// authority. Live delivery acquires this shared row lock before its exact
-/// session lock; destructive identity work takes the exclusive form in
-/// [`lock_identity_mutation`]. Once an exclusive waiter queues, later delivery
-/// readers cannot enter behind it, so a cutoff drains the already-active batch
-/// set once instead of chasing staggered session locks.
+/// authority. Live delivery acquires this shared advisory lock before its
+/// exact session lock; destructive identity work takes the exclusive form in
+/// [`lock_identity_mutation`]. The database lock queue prevents a later shared
+/// entrant from barging ahead of an already-waiting exclusive cutoff, while
+/// the owner row lock below preserves the durable identity read boundary.
 pub async fn lock_identity_delivery_gate(
     conn: &mut PgConnection,
     principal_id: &PrincipalId,
 ) -> Result<(), IdentityFlowError> {
+    lock_identity_cutoff_gate_shared(conn, principal_id).await?;
     sqlx::query_scalar::<_, Uuid>(
         r#"
         SELECT principal_id
@@ -352,8 +402,9 @@ pub async fn lock_identity_delivery_gate(
 /// Serialize every identity mutation on its owner before taking subordinate
 /// locks. The order is deliberately centralized here:
 ///
-/// principal -> privacy subject -> sessions -> methods -> accounts ->
-/// recovery/invites/delivery -> external identities -> projections.
+/// principal cutoff gate -> principal -> privacy subject -> sessions ->
+/// methods -> accounts -> recovery/invites/delivery -> external identities ->
+/// projections.
 ///
 /// Identifiers such as a session hash, account id, invite hash, or recovery
 /// hash must be discovered without a row lock, then their owner is passed here.
@@ -363,6 +414,7 @@ pub async fn lock_identity_mutation(
     principal_id: &PrincipalId,
     extent: IdentityMutationExtent,
 ) -> Result<IdentityMutationOwner, IdentityFlowError> {
+    lock_identity_cutoff_gate_exclusive(conn, principal_id).await?;
     let (principal_status, global_capabilities) = sqlx::query_as::<_, (String, Vec<String>)>(
         r#"
             SELECT status, global_capabilities

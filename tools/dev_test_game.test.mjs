@@ -11,6 +11,7 @@ import {
 import path from "node:path";
 import { test } from "node:test";
 import {
+  commandTargetPrincipalAliases,
   createTokenSet,
   hostCommandStatusReachedExpectedState,
   seedCommandPlanForGame,
@@ -11536,6 +11537,28 @@ test("hosted handoff proof catalog requires explicit readiness decisions", async
       artifactExists: async () => false,
     }),
   );
+});
+
+test("command target principals cover every identity-owning command variant", () => {
+  assert.deepEqual(
+    commandTargetPrincipalAliases({
+      SeatPersona: { principal_id: "seated" },
+    }),
+    ["seated"],
+  );
+  assert.deepEqual(
+    commandTargetPrincipalAliases({
+      ProcessReplacement: { incoming_principal_id: "replacement" },
+    }),
+    ["replacement"],
+  );
+  for (const kind of ["AddCohost", "GrantSpectator", "RevokeSpectator"]) {
+    assert.deepEqual(
+      commandTargetPrincipalAliases({ [kind]: { principal_id: "target" } }),
+      ["target"],
+    );
+  }
+  assert.deepEqual(commandTargetPrincipalAliases({ StartGame: {} }), []);
 });
 
 test("seed plan creates a playable mafiascum D01 game shape", () => {

@@ -888,7 +888,7 @@ async fn ws(
     if params
         .ticket
         .as_deref()
-        .map_or(true, |ticket| ticket.trim().is_empty())
+        .is_none_or(|ticket| ticket.trim().is_empty())
         || params.audience.as_deref() != Some(state.auth.websocket_audience.as_str())
     {
         return unauthorized_session().into_response();
@@ -1730,12 +1730,16 @@ async fn send_projection_deltas(
     mut next_envelope_id: u64,
     deltas: Vec<ProjectionDelta>,
 ) -> GuardedSendOutcome {
-    if deltas.is_empty() {
-        return GuardedSendOutcome::Continue(next_envelope_id);
-    }
     let Some(guard) = SessionDeliveryGuard::acquire(state, claim).await else {
         return close_guarded_delivery(socket, next_envelope_id).await;
     };
+    if deltas.is_empty() {
+        return if guard.release().await {
+            GuardedSendOutcome::Continue(next_envelope_id)
+        } else {
+            close_guarded_delivery(socket, next_envelope_id).await
+        };
+    }
     if !delivery_deltas_authorized(guard.capabilities(), claim, &deltas) {
         let _ = guard.release().await;
         return close_guarded_delivery(socket, next_envelope_id).await;

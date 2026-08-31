@@ -701,6 +701,9 @@ async fn command(
                 Err(AuthorizedCommandExecuteError::Boundary(error)) => {
                     return command_api_error_response(envelope.id, error);
                 }
+                Err(AuthorizedCommandExecuteError::Reject(reject)) if reject.is_retryable() => {
+                    return command_retryable_reject_response(envelope.id, reject);
+                }
                 Err(AuthorizedCommandExecuteError::Reject(reject)) => {
                     ServerMsg::Reject(RejectMsg::from(reject))
                 }
@@ -745,6 +748,17 @@ fn command_commit_outcome_unknown_response(id: u64) -> Response {
                     "command commit outcome is unknown; retry the exact same command_id to recover"
                         .to_string(),
             }),
+        )),
+    )
+        .into_response()
+}
+
+fn command_retryable_reject_response(id: u64, reject: commands::Reject) -> Response {
+    (
+        command_reject_status(&reject),
+        Json(ServerEnvelope::new(
+            id,
+            ServerMsg::Reject(RejectMsg::from(reject)),
         )),
     )
         .into_response()

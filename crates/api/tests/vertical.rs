@@ -3314,6 +3314,7 @@ async fn seed_single_vote_game(app: axum::Router, game: Uuid) {
 }
 
 async fn seed_beloved_princess_ready_to_resolve(app: axum::Router, game: Uuid) {
+    let _ = issue_dev_session(&app, "cohost_c", &[]).await;
     expect_ack(
         post_command(
             app.clone(),
@@ -4945,6 +4946,7 @@ async fn day_event_vertical_exposes_player_attention_and_permission_aware_host_t
 ) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
+    let _ = issue_dev_session(&app, "cohost_c", &[]).await;
     expect_ack(
         post_command(
             app.clone(),
@@ -8211,6 +8213,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
 async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();
+    let _ = issue_dev_session(&app, "cohost_c", &[]).await;
 
     expect_ack(
         post_command(
@@ -8659,7 +8662,7 @@ async fn local_proof_sessions_and_mint_credentials_are_bound_to_one_server_proce
     .unwrap();
     assert_eq!(rotated_instance, first_instance_id.as_str());
 
-    let mut rejection_body = None;
+    let mut rejection_body: Option<Vec<u8>> = None;
     for presented_secret in [
         None,
         Some(SECOND_TEST_LOCAL_PROOF_SECRET),
@@ -11326,6 +11329,7 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
     assert_eq!(session["capabilities"][0]["body"]["slot"], "slot-7");
 
     let response = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -11350,7 +11354,33 @@ async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgP
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/game-invitations")
+                .header("content-type", "application/json")
+                .header(
+                    "authorization",
+                    format!("Bearer {replacement_session_token}"),
+                )
+                .body(Body::from(
+                    serde_json::json!({
+                        "invite_token": "forbidden-target-probe",
+                        "account_id": "missing@example.test",
+                        "expected_principal_id": PrincipalId::fixture("other"),
+                        "expires_at": unix_now_seconds() + 3_600,
+                        "game": game
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -11807,6 +11837,7 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         event_kinds,
         BTreeSet::from([
             "account_created",
+            "account_session_created",
             "auth_delivery_cancelled",
             "auth_delivery_queued",
             "invite_redeemed",

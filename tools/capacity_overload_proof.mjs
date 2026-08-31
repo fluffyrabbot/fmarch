@@ -214,7 +214,7 @@ async function startServer({ baseUrl, port, databaseUrl, env }) {
       FMARCH_DB_ACQUIRE_TIMEOUT_MS: "250",
       FMARCH_DB_STATEMENT_TIMEOUT_MS: "4000",
       FMARCH_DB_LOCK_TIMEOUT_MS: "2000",
-      FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS: "5000",
+      FMARCH_DB_IDLE_TRANSACTION_TIMEOUT_MS: "10000",
       FMARCH_HTTP_MAX_IN_FLIGHT: "8",
       FMARCH_HTTP_QUEUE_TIMEOUT_MS: "75",
       FMARCH_HTTP_REQUEST_TIMEOUT_MS: "5000",
@@ -987,9 +987,11 @@ async function proveCallerRateLimit({ baseUrl }) {
 
 async function submitPostWithRetry({ baseUrl, index, prefix }) {
   const started = performance.now();
+  const commandId = randomUUID();
+  const maxAttempts = budgets.postBurstRequests * 2;
   let retryable503s = 0;
   let streamConflictRetries = 0;
-  for (let attempt = 1; attempt <= 12; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const response = await sendCommand(
       baseUrl,
       "player-mira",
@@ -1001,11 +1003,23 @@ async function submitPostWithRetry({ baseUrl, index, prefix }) {
           body: `${prefix}-${index}`,
         },
       },
-      { tolerate503: true },
+      { tolerateRetryable: true, commandId },
     );
-    if (response.httpStatus === 503) {
-      retryable503s += 1;
-      await delay(25 * attempt);
+    if (response.httpStatus === 409 || response.httpStatus === 503) {
+      const serverMessage = response.body?.body;
+      const reject =
+        serverMessage?.kind === "Reject" ? serverMessage.body : response.body;
+      if (reject?.retryable !== true) {
+        throw new Error(`post burst received non-retryable conflict: ${JSON.stringify(response)}`);
+      }
+      if (reject.error === "StreamConflict") {
+        streamConflictRetries += 1;
+      } else {
+        retryable503s += 1;
+      }
+      await delay(
+        Math.min(75, 5 * attempt) + ((index * 17 + attempt * 13) % 23),
+      );
       continue;
     }
     if (response.kind === "Ack") {
@@ -1023,7 +1037,10 @@ async function submitPostWithRetry({ baseUrl, index, prefix }) {
     }
     throw new Error(`post burst rejected: ${JSON.stringify(response)}`);
   }
-  throw new Error(`post burst exhausted retries for ${prefix}-${index}`);
+  throw new Error(
+    `post burst exhausted ${maxAttempts} exact-command retries for ${prefix}-${index} ` +
+      `(admission=${retryable503s}, stream_conflict=${streamConflictRetries})`,
+  );
 }
 
 // The strict wire rejects any actor field in the envelope; seed and burst
@@ -1096,7 +1113,7 @@ async function sendCommand(
   baseUrl,
   principalId,
   command,
-  { tolerate503 = false } = {},
+  { tolerateRetryable = false, commandId = randomUUID() } = {},
 ) {
   const sessionToken = await seedSessionToken(baseUrl, principalId);
   const response = await fetch(`${baseUrl}/commands`, {
@@ -1111,15 +1128,19 @@ async function sendCommand(
       body: {
         kind: "Command",
         body: {
-          command_id: randomUUID(),
+          command_id: commandId,
           command: fixturePrincipalTransport(command, "capacity command transport"),
         },
       },
     }),
   });
   const body = await response.json();
-  if (response.status === 503 && tolerate503) {
-    return { httpStatus: 503, headers: Object.fromEntries(response.headers), body };
+  if ((response.status === 409 || response.status === 503) && tolerateRetryable) {
+    return {
+      httpStatus: response.status,
+      headers: Object.fromEntries(response.headers),
+      body,
+    };
   }
   assert(response.status === 200, `command HTTP status was ${response.status}`);
   return { httpStatus: response.status, ...body.body };

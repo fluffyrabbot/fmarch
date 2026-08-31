@@ -195,8 +195,16 @@ async fn wait_for_owner_lock_waiters(pool: &sqlx::PgPool, expected: i64) {
             WHERE datname = current_database()
               AND pid <> pg_backend_pid()
               AND wait_event_type = 'Lock'
-              AND query LIKE '%FROM platform_principal%'
-              AND query LIKE '%FOR UPDATE%'
+              AND (
+                    (
+                        query LIKE '%FROM platform_principal%'
+                        AND query LIKE '%FOR UPDATE%'
+                    )
+                    OR (
+                        query LIKE '%fmarch.identity-cutoff:%'
+                        AND query LIKE '%pg_advisory_xact_lock(%'
+                    )
+              )
             "#,
         )
         .fetch_one(pool)
@@ -579,12 +587,20 @@ async fn local_proof_sessions_and_rotation_issue_backend_tokens(pool: sqlx::PgPo
 }
 
 fn workos_verifier(token: &str, subject: &str) -> StaticAccessTokenVerifier {
+    workos_verifier_issued_at(token, subject, 1)
+}
+
+fn workos_verifier_issued_at(
+    token: &str,
+    subject: &str,
+    issued_at: i64,
+) -> StaticAccessTokenVerifier {
     StaticAccessTokenVerifier::new([(
         token.to_string(),
         VerifiedIdentity {
             subject: subject.to_string(),
             session_id: WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap(),
-            issued_at: 1,
+            issued_at,
             expires_at: 4_102_444_800,
             signing_key_id: "test-workos-key".to_string(),
             email: Some(format!("{subject}@example.test")),
@@ -1712,7 +1728,11 @@ async fn workos_logout_queued_before_exchange_tombstones_the_unused_assertion(po
 async fn one_principal_survives_workos_to_classic_conversion(pool: sqlx::PgPool) {
     let root = TempDir::new().unwrap();
     let state = test_state(pool.clone(), &root)
-        .with_access_token_verifier(Arc::new(workos_verifier("workos-token", "user_convert")))
+        .with_access_token_verifier(Arc::new(workos_verifier_issued_at(
+            "workos-token",
+            "user_convert",
+            unix_now_seconds(),
+        )))
         .with_local_proof_auth(test_local_proof_verifier());
     let app = api::router_with_state(state);
 
@@ -2742,6 +2762,7 @@ async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sq
     let root = TempDir::new().unwrap();
     let first_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0B").unwrap();
     let second_session_id = WorkosSessionId::parse("session_01HQAG1HENBZMAZD82YRXDFC0C").unwrap();
+    let issued_at = unix_now_seconds();
     let verifier = StaticAccessTokenVerifier::new(
         [
             ("disable-login-a", first_session_id.clone()),
@@ -2754,7 +2775,7 @@ async fn disabled_workos_method_never_reopens_an_older_provider_session(pool: sq
                 VerifiedIdentity {
                     subject: "user_disable_replay".to_string(),
                     session_id,
-                    issued_at: 1,
+                    issued_at,
                     expires_at: 4_102_444_800,
                     signing_key_id: "test-workos-key".to_string(),
                     email: Some("disable-replay@example.test".to_string()),

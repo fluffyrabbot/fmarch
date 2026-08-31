@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;
 use tokio_tungstenite::tungstenite::Message;
 use tower::ServiceExt;
@@ -156,6 +156,30 @@ async fn wait_for_owner_lock_waiters(pool: &sqlx::PgPool, expected: i64) {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("expected {expected} owner-lock waiter(s)");
+}
+
+async fn wait_for_identity_cutoff_lock_waiters(pool: &sqlx::PgPool, expected: i64) {
+    for _ in 0..200 {
+        let waiters: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND pid <> pg_backend_pid()
+              AND wait_event_type = 'Lock'
+              AND query LIKE '%fmarch.identity-cutoff:%'
+              AND query LIKE '%pg_advisory_xact_lock(%'
+            "#,
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if waiters >= expected {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("expected {expected} identity-cutoff lock waiter(s)");
 }
 
 async fn wait_until_session_is_write_locked(pool: &sqlx::PgPool, token: &str) {
@@ -664,7 +688,7 @@ async fn logout_waits_out_the_bounded_delivery_fence_despite_the_general_lock_ti
         .unwrap()
     });
 
-    wait_for_owner_lock_waiters(&pool, 1).await;
+    wait_for_identity_cutoff_lock_waiters(&pool, 1).await;
     let fresh_pool = pool.clone();
     let fresh_gate = tokio::spawn(async move {
         let mut guard = fresh_pool.begin().await.unwrap();
@@ -791,6 +815,19 @@ async fn command_authority_lease_cannot_starve_workos_key_retirement(pool: sqlx:
         &["GlobalAdmin"],
     )
     .await;
+    sqlx::query(
+        "UPDATE auth_session SET created_at = $2, authenticated_at = $2 WHERE token_hash = $1",
+    )
+    .bind(token_hash(HOST_TOKEN))
+    .bind(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     // An uncommitted duplicate receipt deterministically blocks command work
     // only after the HTTP boundary has locked the actor owner and exact session.
@@ -850,7 +887,7 @@ async fn command_authority_lease_cannot_starve_workos_key_retirement(pool: sqlx:
             .await
             .unwrap()
     });
-    wait_for_owner_lock_waiters(&pool, 1).await;
+    wait_for_session_lock_waiters(&pool, 1).await;
 
     let retirement = tokio::time::timeout(Duration::from_secs(8), retirement)
         .await
@@ -958,6 +995,33 @@ async fn authority_grant_revalidates_target_after_waiting_for_its_owner(pool: sq
         .status(),
         StatusCode::OK
     );
+    let missing_target = post_command(
+        &app,
+        111,
+        Some(HOST_TOKEN),
+        Command::AddCohost {
+            game,
+            principal_id: PrincipalId::fixture("missing-grant-target"),
+        },
+    )
+    .await;
+    assert_eq!(missing_target.status(), StatusCode::OK);
+    let envelope: ServerEnvelope = serde_json::from_slice(
+        &to_bytes(missing_target.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let ServerMsg::Reject(reject) = envelope.body else {
+        panic!("missing cohost target must return a typed rejection");
+    };
+    assert_eq!(reject.error, wire::RejectCode::InvalidTarget);
+    assert!(!reject.retryable);
+    assert!(!eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .iter()
+        .any(|event| event.kind == "CohostAdded"));
 
     let mut target_fence = pool.begin().await.unwrap();
     sqlx::query("SELECT principal_id FROM platform_principal WHERE principal_id = $1 FOR UPDATE")
@@ -969,7 +1033,7 @@ async fn authority_grant_revalidates_target_after_waiting_for_its_owner(pool: sq
     let raced_grant = tokio::spawn(async move {
         post_command(
             &command_app,
-            111,
+            112,
             Some(HOST_TOKEN),
             Command::AddCohost {
                 game,
@@ -1009,7 +1073,7 @@ async fn authority_grant_revalidates_target_after_waiting_for_its_owner(pool: sq
     assert_eq!(
         post_command(
             &app,
-            112,
+            113,
             Some(HOST_TOKEN),
             Command::AddCohost {
                 game,

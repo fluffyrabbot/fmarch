@@ -102,8 +102,8 @@ const EXPECTED_TABLES: &[&str] = &[
     "vote_ballot",
     "workos_provider_session",
     "workos_provider_session_tombstone",
-    "workos_signing_key_tombstone",
     "workos_session_exchange",
+    "workos_signing_key_tombstone",
     "workos_subject_tombstone",
 ];
 
@@ -519,10 +519,10 @@ const EXPECTED_INDEXES: &[&str] = &[
     "workos_provider_session_pkey",
     "workos_provider_session_principal_idx",
     "workos_provider_session_tombstone_pkey",
-    "workos_signing_key_tombstone_pkey",
     "workos_session_exchange_expiry_idx",
     "workos_session_exchange_pkey",
     "workos_session_exchange_provider_session_idx",
+    "workos_signing_key_tombstone_pkey",
     "workos_subject_tombstone_pkey",
 ];
 
@@ -907,10 +907,6 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "workos_provider_session_tombstone_hash_check:c",
     "workos_provider_session_tombstone_pkey:p",
     "workos_provider_session_tombstone_reason_check:c",
-    "workos_signing_key_tombstone_key_shape_check:c",
-    "workos_signing_key_tombstone_pkey:p",
-    "workos_signing_key_tombstone_reason_check:c",
-    "workos_signing_key_tombstone_retired_by_principal_id_fkey:f",
     "workos_session_exchange_assertion_hash_check:c",
     "workos_session_exchange_expiry_check:c",
     "workos_session_exchange_linking_session_fkey:f",
@@ -918,6 +914,10 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "workos_session_exchange_pkey:p",
     "workos_session_exchange_provider_session_fkey:f",
     "workos_session_exchange_provider_session_id_check:c",
+    "workos_signing_key_tombstone_key_shape_check:c",
+    "workos_signing_key_tombstone_pkey:p",
+    "workos_signing_key_tombstone_reason_check:c",
+    "workos_signing_key_tombstone_retired_by_principal_id_fkey:f",
     "workos_subject_tombstone_hash_check:c",
     "workos_subject_tombstone_pkey:p",
     "workos_subject_tombstone_reason_check:c",

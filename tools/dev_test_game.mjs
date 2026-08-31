@@ -179,6 +179,25 @@ function commandForAuthorityTransport(command) {
   return transport;
 }
 
+export function commandTargetPrincipalAliases(command) {
+  return [
+    command.SeatPersona?.principal_id,
+    command.ProcessReplacement?.incoming_principal_id,
+    command.AddCohost?.principal_id,
+    command.GrantSpectator?.principal_id,
+    command.RevokeSpectator?.principal_id,
+  ]
+    .filter(
+      (principalId) =>
+        typeof principalId === "string" && principalId.trim() !== "",
+    )
+    .filter(
+      (principalId, index, principalIds) =>
+        principalIds.indexOf(principalId) === index,
+    )
+    .sort();
+}
+
 function isStaleVotePhaseLockedMessage(message) {
   return (
     String(message ?? "").includes("stale projection") ||
@@ -867,17 +886,7 @@ async function sendCommandResult(principalId, command) {
 }
 
 async function ensureCommandTargetPrincipal(command) {
-  const principalIds = [
-    command.SeatPersona?.principal_id,
-    command.ProcessReplacement?.incoming_principal_id,
-    command.AddCohost?.principal_id,
-    command.GrantSpectator?.principal_id,
-    command.RevokeSpectator?.principal_id,
-  ];
-  for (const principalId of principalIds) {
-    if (typeof principalId !== "string" || principalId.trim() === "") {
-      continue;
-    }
+  for (const principalId of commandTargetPrincipalAliases(command)) {
     await ensureLocalAccount({ principalId });
   }
 }

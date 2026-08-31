@@ -8,7 +8,10 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { seedCommandPlanForGame } from "./dev_test_game.mjs";
+import {
+  commandTargetPrincipalAliases,
+  seedCommandPlanForGame,
+} from "./dev_test_game.mjs";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import { isPrincipalId, principalFixtureId } from "./principal_fixture.mjs";
@@ -435,11 +438,10 @@ async function provisionSeedTargetAccounts({ apiBaseUrl, existingPrincipals }) {
   const existing = new Set(existingPrincipals);
   const targets = new Set();
   for (const [, command] of seedCommandPlanForGame(game)) {
-    const principalId =
-      command.SeatPersona?.principal_id ??
-      command.ProcessReplacement?.incoming_principal_id;
-    if (typeof principalId === "string" && !existing.has(principalId)) {
-      targets.add(principalId);
+    for (const principalId of commandTargetPrincipalAliases(command)) {
+      if (!existing.has(principalId)) {
+        targets.add(principalId);
+      }
     }
   }
   return await Promise.all(

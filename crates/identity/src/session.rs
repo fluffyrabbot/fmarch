@@ -886,7 +886,7 @@ pub async fn rotate_session(
     let idle_expires_at = policy.idle_expiry(now, eligible.context.expires_at);
     #[cfg(debug_assertions)]
     let successor_local_proof_instance_id = (eligible.context.assurance == Assurance::Dev)
-        .then(|| policy.local_proof_instance_id.as_ref())
+        .then_some(policy.local_proof_instance_id.as_ref())
         .flatten()
         .map(LocalProofInstanceId::as_str);
     #[cfg(not(debug_assertions))]

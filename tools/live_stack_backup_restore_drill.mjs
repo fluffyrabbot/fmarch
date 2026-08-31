@@ -5,7 +5,10 @@ import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { seedCommandPlanForGame } from "./dev_test_game.mjs";
+import {
+  commandTargetPrincipalAliases,
+  seedCommandPlanForGame,
+} from "./dev_test_game.mjs";
 import { runFmarchMigrations, serverRuntimeEnvironment } from "./run_fmarch_migrations.mjs";
 import { createLocalProofAuth } from "./local_proof_auth.mjs";
 import {
@@ -183,9 +186,8 @@ async function seedSourceGame(apiBaseUrl) {
   ];
   const authenticatedPrincipals = new Set(seedPlan.map(([principalId]) => principalId));
   for (const [, command] of seedPlan) {
-    const seatedPrincipal = command.SeatPersona?.principal_id;
-    if (typeof seatedPrincipal === "string" && seatedPrincipal !== "") {
-      authenticatedPrincipals.add(seatedPrincipal);
+    for (const targetPrincipal of commandTargetPrincipalAliases(command)) {
+      authenticatedPrincipals.add(targetPrincipal);
     }
   }
   for (const principalId of authenticatedPrincipals) {
@@ -707,32 +709,55 @@ async function seedSessionToken(apiBaseUrl, principalId) {
 
 async function sendCommand(apiBaseUrl, id, principalId, command) {
   const sessionToken = await seedSessionToken(apiBaseUrl, principalId);
-  const result = await fetchJson(`${apiBaseUrl}/commands`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${sessionToken}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      v: 2,
-      id,
-      body: {
-        kind: "Command",
-        body: {
-          command_id: randomUUID(),
-          command: fixturePrincipalTransport(command, "backup restore command transport"),
-        },
+  const commandId = randomUUID();
+  const maxAttempts = 16;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const url = `${apiBaseUrl}/commands`;
+    const response = await fetchWithTimeout(url, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        "content-type": "application/json",
       },
-    }),
-  });
-  if (result.body?.kind !== "Ack") {
-    throw new Error(`command rejected: ${JSON.stringify(result)}`);
+      body: JSON.stringify({
+        v: 2,
+        id,
+        body: {
+          kind: "Command",
+          body: {
+            command_id: commandId,
+            command: fixturePrincipalTransport(command, "backup restore command transport"),
+          },
+        },
+      }),
+    });
+    const result = await response.json();
+    if (response.ok) {
+      if (result.body?.kind !== "Ack") {
+        throw new Error(`command rejected: ${JSON.stringify(result)}`);
+      }
+      return {
+        principalId,
+        kind: Object.keys(command)[0],
+        streamSeqs: result.body.body.stream_seqs,
+      };
+    }
+    const reject = result.body;
+    const retryableConflict =
+      (response.status === 409 || response.status === 503) &&
+      reject?.kind === "Reject" &&
+      reject.body?.retryable === true;
+    if (!retryableConflict) {
+      throw new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(result)}`);
+    }
+    if (attempt === maxAttempts) {
+      throw new Error(
+        `command exhausted ${maxAttempts} exact-command retries: ${JSON.stringify(result)}`,
+      );
+    }
+    await delay(Math.min(250, 25 * attempt) + ((id * 17 + attempt * 13) % 23));
   }
-  return {
-    principalId,
-    kind: Object.keys(command)[0],
-    streamSeqs: result.body.body.stream_seqs,
-  };
+  throw new Error("unreachable command retry state");
 }
 
 async function createLocalProofSession({
