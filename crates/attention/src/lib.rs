@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub const SUBSCRIPTION_ENABLED: &str = "PublicWatchEnabled";
 pub const SUBSCRIPTION_DISABLED: &str = "PublicWatchDisabled";
 pub const SUBSCRIPTION_READ_ADVANCED: &str = "PublicWatchReadAdvanced";
+pub const INBOX_CURSOR_ADVANCED: &str = "MemberInboxCursorAdvanced";
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum AttentionReject {
@@ -137,6 +138,65 @@ pub fn decide_watch(
     }
 }
 
+/// Durable per-principal inbox cursor for the reason-derived member inbox.
+///
+/// Watch cursors are per-target; a mention can arrive on a surface the member
+/// does not watch, so the inbox needs a principal-scoped cursor that clears
+/// rows no watch covers. One stream per principal, decided with the same
+/// strictly-monotonic discipline as watch reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InboxCursorState {
+    pub principal_id: PrincipalId,
+    pub read_through_seq: i64,
+    pub version: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InboxCursorCommand {
+    AdvanceRead { read_through_seq: i64 },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InboxCursorEvent {
+    Advanced { read_through_seq: i64 },
+}
+
+impl InboxCursorEvent {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Advanced { .. } => INBOX_CURSOR_ADVANCED,
+        }
+    }
+
+    pub fn payload(&self) -> serde_json::Value {
+        match self {
+            Self::Advanced { read_through_seq } => {
+                serde_json::json!({ "read_through_seq": read_through_seq })
+            }
+        }
+    }
+}
+
+pub fn decide_inbox_cursor(
+    state: Option<&InboxCursorState>,
+    command: InboxCursorCommand,
+) -> Result<Vec<InboxCursorEvent>, AttentionReject> {
+    match (state, command) {
+        (None, InboxCursorCommand::AdvanceRead { read_through_seq }) => {
+            if read_through_seq < 0 {
+                return Err(AttentionReject::ReadCursorMustAdvance);
+            }
+            Ok(vec![InboxCursorEvent::Advanced { read_through_seq }])
+        }
+        (Some(state), InboxCursorCommand::AdvanceRead { read_through_seq }) => {
+            if read_through_seq <= state.read_through_seq {
+                return Err(AttentionReject::ReadCursorMustAdvance);
+            }
+            Ok(vec![InboxCursorEvent::Advanced { read_through_seq }])
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,6 +261,73 @@ mod tests {
                 },
             ),
             Err(AttentionReject::ReadCursorMustAdvance),
+        );
+    }
+
+    fn inbox_cursor_state() -> InboxCursorState {
+        InboxCursorState {
+            principal_id: PrincipalId::from_uuid(Uuid::from_u128(1)),
+            read_through_seq: 7,
+            version: 2,
+        }
+    }
+
+    #[test]
+    fn inbox_cursor_bootstraps_on_first_advance() {
+        assert_eq!(
+            decide_inbox_cursor(
+                None,
+                InboxCursorCommand::AdvanceRead {
+                    read_through_seq: 7,
+                },
+            ),
+            Ok(vec![InboxCursorEvent::Advanced {
+                read_through_seq: 7,
+            }]),
+        );
+    }
+
+    #[test]
+    fn inbox_cursor_rejects_negative_bootstrap() {
+        assert_eq!(
+            decide_inbox_cursor(
+                None,
+                InboxCursorCommand::AdvanceRead {
+                    read_through_seq: -1,
+                },
+            ),
+            Err(AttentionReject::ReadCursorMustAdvance),
+        );
+    }
+
+    #[test]
+    fn inbox_cursor_must_strictly_advance() {
+        assert_eq!(
+            decide_inbox_cursor(
+                Some(&inbox_cursor_state()),
+                InboxCursorCommand::AdvanceRead {
+                    read_through_seq: 7,
+                },
+            ),
+            Err(AttentionReject::ReadCursorMustAdvance),
+        );
+        assert_eq!(
+            decide_inbox_cursor(
+                Some(&inbox_cursor_state()),
+                InboxCursorCommand::AdvanceRead {
+                    read_through_seq: 9,
+                },
+            ),
+            Ok(vec![InboxCursorEvent::Advanced {
+                read_through_seq: 9,
+            }]),
+        );
+        assert_eq!(
+            InboxCursorEvent::Advanced {
+                read_through_seq: 9,
+            }
+            .kind(),
+            INBOX_CURSOR_ADVANCED,
         );
     }
 }
