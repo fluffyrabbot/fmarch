@@ -411,7 +411,17 @@ async fn apply_authorized_command_in_tx(
         command,
     )
     .await
-    .map_err(AuthorizedCommandExecuteError::Reject)
+    .map_err(|reject| {
+        // A receipt-claim lock timeout (55P03) means the command exhausted its
+        // authority lock budget. It must surface as a retryable lease expiry
+        // (503), not a terminal internal reject (200): the Postgres lock_timeout
+        // races the Rust lease deadline, and both outcomes must agree.
+        if commands::reject_is_authority_lock_timeout(&reject) {
+            AuthorizedCommandExecuteError::LeaseExpired
+        } else {
+            AuthorizedCommandExecuteError::Reject(reject)
+        }
+    })
 }
 
 async fn rollback_authority_transaction(

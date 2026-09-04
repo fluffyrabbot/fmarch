@@ -18,15 +18,7 @@
   ],
   "push_sentinel_budget_seconds": 60,
   "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract", "test:proof-cache-maintenance"],
-  "quarantine": [
-    {
-      "lane": "cargo:api",
-      "test": "command_authority_lease_cannot_starve_workos_key_retirement",
-      "owner": "@fluffyrabbot",
-      "expires": "2026-10-16",
-      "reason": "authenticated_transport::command_authority_lease_cannot_starve_workos_key_retirement asserts 503 but observes 200; a pre-existing red already present at 0163867c and unrelated to recent work. It fails the whole cargo:api lane, which under fail-fast blocked 30-34 downstream lanes. The 200-vs-503 bug is unfixed and unowned; quarantined so the rest of a full sweep can reach green while the expiry forces the fix. Renewing this date without fixing the bug defeats the purpose."
-    }
-  ],
+  "quarantine": [],
   "runner": {
     "max_parallel": 2,
     "lock_capacities": {

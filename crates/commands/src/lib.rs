@@ -4619,6 +4619,36 @@ fn hammer_lock_event(
     }))
 }
 
+/// Message embedded in [`Reject::Internal`] when a command database operation
+/// could not acquire a lock within the command's lock budget (Postgres 55P03,
+/// `lock_timeout`). The HTTP boundary promotes this to a retryable
+/// authority-lease-expired response, so a lock timeout that races the Rust lease
+/// deadline is never reported as a false success.
+const AUTHORITY_LOCK_TIMEOUT_MARKER: &str = "authority lock budget exhausted before commit";
+
+/// Classify a command database error: a `lock_timeout` (55P03) becomes a tagged
+/// internal reject the boundary can promote to lease expiry; anything else stays
+/// a generic internal reject.
+fn command_db_reject(error: sqlx::Error) -> Reject {
+    if error
+        .as_database_error()
+        .and_then(|db| db.code())
+        .as_deref()
+        == Some("55P03")
+    {
+        Reject::Internal(AUTHORITY_LOCK_TIMEOUT_MARKER.to_string())
+    } else {
+        Reject::Internal(error.to_string())
+    }
+}
+
+/// Whether a reject represents a command-authority lock timeout (55P03) that the
+/// HTTP boundary should surface as a retryable lease expiry rather than a
+/// terminal internal error.
+pub fn reject_is_authority_lock_timeout(reject: &Reject) -> bool {
+    matches!(reject, Reject::Internal(message) if message == AUTHORITY_LOCK_TIMEOUT_MARKER)
+}
+
 async fn claim_or_replay_receipt_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     game: Uuid,
@@ -4636,7 +4666,7 @@ async fn claim_or_replay_receipt_in_tx(
     .bind(game)
     .execute(&mut **tx)
     .await
-    .map_err(|e| Reject::Internal(e.to_string()))?;
+    .map_err(command_db_reject)?;
 
     if result.rows_affected() == 1 {
         return Ok(None);

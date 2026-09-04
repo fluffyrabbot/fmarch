@@ -1752,17 +1752,14 @@ test('the dependency policy lane is split on the network boundary', () => {
   assert.match(packageScripts['test:dependency-policy:audit'], /npm --prefix frontend audit/);
 });
 
-test('quarantine declares the known api red with an owner and a not-yet-expired promise', () => {
+test('quarantine entries reference real lanes, carry an owner and ISO expiry, and none are expired', () => {
   const entries = quarantineEntries(manifest);
-  assert.ok(entries.length >= 1, 'at least one quarantine entry');
-  const first = entries[0];
-  assert.equal(first.lane, 'cargo:api');
-  assert.equal(first.test, 'command_authority_lease_cannot_starve_workos_key_retirement');
-  assert.ok(typeof first.owner === 'string' && first.owner.length > 0);
-  assert.match(first.expires, /^\d{4}-\d{2}-\d{2}$/);
   for (const entry of entries) {
     assert.ok(manifest.lanes[entry.lane], `quarantine lane ${entry.lane} must exist`);
+    assert.ok(typeof entry.owner === 'string' && entry.owner.length > 0, `${entry.lane} needs an owner`);
+    assert.match(entry.expires, /^\d{4}-\d{2}-\d{2}$/);
   }
+  // The tree must never ship an already-expired quarantine promise.
   assert.deepEqual(expiredQuarantineEntries(entries), []);
 });
 
