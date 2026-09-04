@@ -177,6 +177,23 @@ impl InboxCursorEvent {
     }
 }
 
+/// Namespace for the per-principal inbox-cursor stream id. The cursor
+/// projection stores no stream id of its own — the RFC 0007 table is keyed by
+/// principal alone — so the stream identity must be derivable. A namespaced v5
+/// uuid keeps it deterministic (rebuild finds the same stream) and disjoint
+/// from every randomly generated stream id in the log, which a bare
+/// `principal_id` would not be.
+const INBOX_CURSOR_STREAM_NAMESPACE: Uuid =
+    Uuid::from_u128(0x6d_65_6d_62_65_72_5f_69_6e_62_6f_78_5f_63_75_72);
+
+/// The one inbox-cursor stream a principal owns.
+pub fn inbox_cursor_stream_id(principal_id: PrincipalId) -> Uuid {
+    Uuid::new_v5(
+        &INBOX_CURSOR_STREAM_NAMESPACE,
+        principal_id.as_uuid().as_bytes(),
+    )
+}
+
 pub fn decide_inbox_cursor(
     state: Option<&InboxCursorState>,
     command: InboxCursorCommand,
@@ -272,6 +289,15 @@ mod tests {
             read_through_seq: 7,
             version: 2,
         }
+    }
+
+    #[test]
+    fn inbox_cursor_stream_id_is_deterministic_and_principal_scoped() {
+        let one = PrincipalId::from_uuid(Uuid::from_u128(41));
+        let two = PrincipalId::from_uuid(Uuid::from_u128(42));
+        assert_eq!(inbox_cursor_stream_id(one), inbox_cursor_stream_id(one));
+        assert_ne!(inbox_cursor_stream_id(one), inbox_cursor_stream_id(two));
+        assert_ne!(inbox_cursor_stream_id(one), one.as_uuid());
     }
 
     #[test]

@@ -1,5 +1,6 @@
 <script>
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
+  import MentionComposer from "$lib/components/discussion/MentionComposer.svelte";
   export let data;
   export let form;
 
@@ -69,7 +70,14 @@
               </cite>
             </blockquote>
           {/each}
-          <p>{post.body}</p>
+          <p data-testid={`discussion-post-body-${post.sourceSeq}`}>{#each post.bodySegments as segment}{#if segment.kind === "mention" && segment.href !== null}<a
+                class="discussion-mention"
+                href={segment.href}
+                data-testid={`discussion-mention-${post.sourceSeq}-${segment.text.slice(1)}`}
+              >{segment.text}</a>{:else if segment.kind === "mention"}<span
+                class="discussion-mention discussion-mention--unresolved"
+                data-testid={`discussion-mention-unresolved-${post.sourceSeq}`}
+              >{segment.text}</span>{:else}{segment.text}{/if}{/each}</p>
           {#if post.citationCount > 0}
             <details class="discussion-citations" data-testid={`discussion-citations-${post.sourceSeq}`}>
               <summary>
@@ -106,7 +114,7 @@
                 <summary>Report this post</summary>
                 <form method="POST" action="?/report" class="discussion-form">
                   <input type="hidden" name="source_seq" value={post.sourceSeq} />
-                  <label class="fm-field"><span>Reason</span><select name="reason_family" required><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="hate">Hate</option><option value="sexual_content">Sexual content</option><option value="self_harm">Self-harm</option><option value="other">Other</option></select></label>
+                  <label class="fm-field"><span>Reason</span><select name="reason_family" required><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="hate">Hate</option><option value="sexual_content">Sexual content</option><option value="self_harm">Self-harm</option><option value="mention_abuse">Mention abuse</option><option value="other">Other</option></select></label>
                   <label class="fm-field"><span>Context (optional)</span><textarea name="details" maxlength="1000"></textarea></label>
                   <button class="fm-touch-button fm-touch-button--secondary" type="submit">Submit report</button>
                 </form>
@@ -150,15 +158,7 @@
             </ul>
             <input type="hidden" name="quotations" value={discussion.quotationsJson} />
           {/if}
-          <label class="fm-field">
-            <span>Reply</span>
-            <textarea
-              name="body"
-              required={discussion.attachedQuotations.length === 0}
-              maxlength="10000"
-              data-testid="discussion-post-body"
-            ></textarea>
-          </label>
+          <MentionComposer required={discussion.attachedQuotations.length === 0} />
           <button type="submit" class="fm-touch-button" data-testid="discussion-create-post-submit">Post reply</button>
         </form>
       {:else if thread.topic.posting_state === "locked"}
@@ -229,6 +229,8 @@
     padding: 10px;
   }
   .discussion-quote-chips p { margin: 0; white-space: pre-wrap; }
+  .discussion-mention { font-weight: 600; }
+  .discussion-mention--unresolved { color: var(--fm-ink-muted); font-weight: 400; }
   .discussion-report { margin-block-start: 0; }
   .discussion-pagination { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 16px; }
   textarea { min-block-size: 112px; resize: vertical; }

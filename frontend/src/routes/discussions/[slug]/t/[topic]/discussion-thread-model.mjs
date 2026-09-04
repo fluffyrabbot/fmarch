@@ -1,4 +1,5 @@
 import { buildCommunityAuthorView } from "../../../../../lib/app/community-author-model.mjs";
+import { buildMentionSegments } from "../../../../../lib/app/mention-model.mjs";
 
 export const DISCUSSION_QUOTATION_EXCERPT_BYTES = 1000;
 export const DISCUSSION_CITATION_PREVIEW_LIMIT = 5;
@@ -171,6 +172,7 @@ export function buildDiscussionPostView(post, { posts = [], citations = null } =
     sourceSeq: Number(post?.source_seq),
     author: buildCommunityAuthorView(post?.author),
     body: typeof post?.body === "string" ? post.body : "",
+    bodySegments: buildMentionSegments(post?.body, post?.mentions),
     createdAt: post?.created_at ?? null,
     quotations,
     citationCount: Number.isFinite(citationCount) ? citationCount : 0,

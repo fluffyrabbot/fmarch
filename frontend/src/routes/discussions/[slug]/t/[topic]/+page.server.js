@@ -4,6 +4,7 @@ import { buildAppSurfaceHeaderViewModel } from "../../../../../lib/app/app-surfa
 import { hasCapability } from "../../../../../lib/app/capabilities.mjs";
 import { serverApiBaseUrl } from "../../../../../lib/server/api-base.mjs";
 import { accessTokenForRequest } from "../../../../../lib/server/session-capabilities.mjs";
+import { parseSubmittedMentions } from "../../../../../lib/app/mention-model.mjs";
 import {
   DISCUSSION_CITATION_PREVIEW_LIMIT,
   buildDiscussionThreadView,
@@ -173,12 +174,13 @@ export const actions = {
   createPost: async ({ locals, cookies, fetch, params, request }) => {
     const form = await request.formData();
     const quotations = parseSubmittedQuotations(form, params.topic);
+    const mentions = parseSubmittedMentions(form);
     const response = await mutation({
       cookies,
       locals,
       fetch,
       path: `/discussions/topics/${encodeURIComponent(params.topic)}/posts`,
-      body: { body: text(form.get("body")), quotations },
+      body: { body: text(form.get("body")), quotations, mentions },
     });
     if (!response.ok) return mutationFailure(response, "Unable to post discussion reply");
     const topic = await response.json();

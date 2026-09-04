@@ -24,9 +24,9 @@ use uuid::Uuid;
 use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, DiscussionThreadPage, DiscussionTopic,
     DiscussionTopicPage, GameIndexPage, GameThreadAuthor, InvestigationResultBody, MemberMutePage,
-    MemberMuteState, ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt,
-    PlayerInvestigationResult, PlayerNotification, ProfileEditor, ProjectionDelta,
-    PublicGameThreadPage, PublicInboxPage, PublicProfile, PublicSearchFilterValue,
+    MemberMuteState, MentionSuggestionPage, ModerationCaseDetail, ModerationCasePage,
+    ModerationReportReceipt, PlayerInvestigationResult, PlayerNotification, ProfileEditor,
+    ProjectionDelta, PublicGameThreadPage, PublicInboxPage, PublicProfile, PublicSearchFilterValue,
     PublicSearchPage, PublicSearchResultKind, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
     SlotLifecycle, SubmitPostMedia, SubscriptionTargetState, ThreadPage, VoteTarget,
     PROTOCOL_VERSION,
@@ -12648,4 +12648,238 @@ async fn discussion_mention_delivers_to_non_watcher_through_api(pool: sqlx::PgPo
     )
     .unwrap();
     assert!(author_inbox.items.is_empty());
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn discussion_mention_read_contract_and_typeahead_stay_non_disclosing(pool: sqlx::PgPool) {
+    let app = router_with_local_proof_auth(pool.clone());
+    let (author_token, _) = create_media_upload_account_session(&app, "mention-read-author").await;
+    let (target_token, _) = create_media_upload_account_session(&app, "mention-read-target").await;
+    let (private_token, _) =
+        create_media_upload_account_session(&app, "mention-read-private").await;
+    for (token, handle, visibility) in [
+        (&author_token, "read_author", "public"),
+        (&target_token, "read_target", "public"),
+        (&private_token, "read_private", "private"),
+    ] {
+        let profile_response = post_bearer_json(
+            &app,
+            "/profiles",
+            serde_json::json!({
+                "handle": handle,
+                "display_name": handle,
+                "bio": "mention read",
+                "visibility": visibility
+            }),
+            token,
+        )
+        .await;
+        assert_eq!(profile_response.status(), StatusCode::CREATED);
+    }
+
+    // The typeahead sees the public corpus and only the public corpus: a
+    // private handle and a handle nobody holds are the same empty answer.
+    let suggestions = mention_suggestions(&app, "read_", &author_token).await;
+    assert_eq!(
+        suggestions
+            .suggestions
+            .iter()
+            .map(|entry| entry.handle.as_str())
+            .collect::<Vec<_>>(),
+        vec!["read_author", "read_target"]
+    );
+    assert!(mention_suggestions(&app, "read_private", &author_token)
+        .await
+        .suggestions
+        .is_empty());
+    assert!(mention_suggestions(&app, "read_nobody", &author_token)
+        .await
+        .suggestions
+        .is_empty());
+    let anonymous = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/profiles/mention-suggestions?q=read_")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+
+    let area = Uuid::new_v4();
+    projections::append_discussion_and_project(
+        &pool,
+        area,
+        &[eventstore::EventInput::new(
+            forum::AREA_CREATED,
+            1,
+            serde_json::json!({
+                "slug": "mention-read",
+                "title": "Mention Read",
+                "description": "read proofs"
+            }),
+            eventstore::ActorId::Principal(PrincipalId::fixture("moderator")),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    let topic_response = post_bearer_json(
+        &app,
+        "/discussions/areas/mention-read/topics",
+        serde_json::json!({ "title": "Read", "body": "Opening" }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(topic_response.status(), StatusCode::CREATED);
+    let topic: DiscussionTopic = serde_json::from_slice(
+        &to_bytes(topic_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let reply = post_bearer_json(
+        &app,
+        &format!("/discussions/topics/{}/posts", topic.topic),
+        serde_json::json!({
+            "body": "@read_target consider this",
+            "mentions": [{ "handle": "read_target", "offset": 0, "len": 12 }]
+        }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(reply.status(), StatusCode::CREATED);
+
+    let thread = discussion_thread(&app, "mention-read", topic.topic).await;
+    let mentioning = thread
+        .posts
+        .iter()
+        .find(|post| post.body.starts_with("@read_target"))
+        .unwrap();
+    assert_eq!(mentioning.mentions.len(), 1);
+    assert_eq!(mentioning.mentions[0].offset, 0);
+    assert_eq!(mentioning.mentions[0].len, 12);
+    assert_eq!(
+        mentioning.mentions[0]
+            .profile
+            .as_ref()
+            .map(|profile| profile.handle.as_str()),
+        Some("read_target")
+    );
+
+    // The addressed member clears the row through the principal cursor even
+    // though no watch exists on this surface.
+    let inbox = member_inbox(&app, &target_token).await;
+    assert_eq!(inbox.unread_count, 1);
+    assert_eq!(inbox.items[0].reason, "mention");
+    assert!(!inbox.items[0].subscribed);
+    let cleared = post_bearer_json(
+        &app,
+        "/inbox/read",
+        serde_json::json!({ "read_through_seq": inbox.items[0].source_seq }),
+        &target_token,
+    )
+    .await;
+    assert_eq!(cleared.status(), StatusCode::OK);
+    let cleared: PublicInboxPage =
+        serde_json::from_slice(&to_bytes(cleared.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(cleared.unread_count, 0);
+    let repeat = post_bearer_json(
+        &app,
+        "/inbox/read",
+        serde_json::json!({ "read_through_seq": inbox.items[0].source_seq }),
+        &target_token,
+    )
+    .await;
+    assert_eq!(repeat.status(), StatusCode::BAD_REQUEST);
+
+    // Once the target stops being public the read unlinks the span and keeps it.
+    let privatize = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .uri("/profiles/me")
+                .header("authorization", format!("Bearer {target_token}"))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "display_name": "read_target",
+                        "bio": "mention read",
+                        "visibility": "private",
+                        "expected_revision": 1,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(privatize.status(), StatusCode::OK);
+    let thread = discussion_thread(&app, "mention-read", topic.topic).await;
+    let mentioning = thread
+        .posts
+        .iter()
+        .find(|post| post.body.starts_with("@read_target"))
+        .unwrap();
+    assert_eq!(mentioning.mentions.len(), 1);
+    assert_eq!(mentioning.mentions[0].len, 12);
+    assert!(mentioning.mentions[0].profile.is_none());
+}
+
+async fn mention_suggestions(
+    app: &axum::Router,
+    query: &str,
+    token: &str,
+) -> MentionSuggestionPage {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/profiles/mention-suggestions?q={query}"))
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
+}
+
+async fn member_inbox(app: &axum::Router, token: &str) -> PublicInboxPage {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/inbox")
+                .header("authorization", format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
+}
+
+async fn discussion_thread(app: &axum::Router, slug: &str, topic: Uuid) -> DiscussionThreadPage {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/discussions/areas/{slug}/topics/{topic}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap()
 }

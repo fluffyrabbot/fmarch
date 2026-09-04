@@ -1733,7 +1733,7 @@ CREATE TABLE public.moderation_report (
     active boolean DEFAULT true NOT NULL,
     submitted_seq bigint NOT NULL,
     submitted_at bigint NOT NULL,
-    CONSTRAINT moderation_report_reason_family_check CHECK ((reason_family = ANY (ARRAY['spam'::text, 'harassment'::text, 'hate'::text, 'sexual_content'::text, 'self_harm'::text, 'other'::text])))
+    CONSTRAINT moderation_report_reason_family_check CHECK ((reason_family = ANY (ARRAY['spam'::text, 'harassment'::text, 'hate'::text, 'sexual_content'::text, 'self_harm'::text, 'mention_abuse'::text, 'other'::text])))
 );
 
 

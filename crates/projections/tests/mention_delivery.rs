@@ -9,12 +9,13 @@
 use attention::WatchTarget;
 use eventstore::{ActorId, EventInput};
 use projections::{
-    advance_subscription_read_cursor, append_discussion_and_project, public_inbox,
+    advance_member_inbox_read_cursor, advance_subscription_read_cursor,
+    append_discussion_and_project, discussion_posts, mute_public_profile, public_inbox,
     rebuild_discussion_stream, subscribe_to_public_target,
 };
 use social::{
-    PrincipalId, ProfileBio, ProfileDisplayName, ProfileHandle, ProfilePresentation,
-    ProfileVisibility,
+    PrincipalId, ProfileBio, ProfileDisplayName, ProfileEdit, ProfileHandle, ProfileId,
+    ProfilePresentation, ProfileRevision, ProfileVisibility,
 };
 use sqlx::Row;
 use uuid::Uuid;
@@ -119,6 +120,71 @@ async fn mention_inbox_rows(
         )
     })
     .collect()
+}
+
+async fn hide_post(pool: &sqlx::PgPool, topic: Uuid, source_seq: i64, moderator: PrincipalId) {
+    sqlx::query(
+        r#"
+        INSERT INTO moderation_target_state (
+            surface_id, source_seq, visibility, reason,
+            moderator_principal_id, updated_seq
+        ) VALUES ($1, $2, 'hidden', 'mention_abuse', $3, $2)
+        "#,
+    )
+    .bind(topic)
+    .bind(source_seq)
+    .bind(moderator.as_uuid())
+    .execute(pool)
+    .await
+    .unwrap();
+    set_publication_visible(pool, topic, source_seq, false).await;
+}
+
+async fn set_publication_visible(pool: &sqlx::PgPool, topic: Uuid, source_seq: i64, visible: bool) {
+    sqlx::query(
+        "UPDATE public_publication SET visible = $3 WHERE surface_id = $1 AND source_seq = $2",
+    )
+    .bind(topic)
+    .bind(source_seq)
+    .bind(visible)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// One mentioning post: `body` addresses `target_profile` over `[0, len)`.
+struct MentioningPost<'a> {
+    topic: Uuid,
+    author: PrincipalId,
+    author_profile: Uuid,
+    target_profile: Uuid,
+    body: &'a str,
+    len: usize,
+    occurred_at: i64,
+}
+
+async fn submit_mentioning_post(pool: &sqlx::PgPool, post: MentioningPost<'_>) -> i64 {
+    append_discussion_and_project(
+        pool,
+        post.topic,
+        &[EventInput::new(
+            "DiscussionPostSubmitted",
+            1,
+            serde_json::json!({
+                "body": post.body,
+                "author_profile_id": post.author_profile,
+                "mentions": [{
+                    "profile_id": post.target_profile,
+                    "span": { "offset": 0, "len": post.len }
+                }]
+            }),
+            ActorId::Principal(post.author),
+            post.occurred_at,
+        )],
+    )
+    .await
+    .unwrap()[0]
+        .seq
 }
 
 #[sqlx::test(migrations = "../database_schema/migrations")]
@@ -289,8 +355,13 @@ async fn watch_and_mention_rows_coexist_and_clear_together(pool: sqlx::PgPool) {
         .iter()
         .any(|row| row.2 == "mention" && row.1 == mentioning[0].seq));
 
+    // Two stored rows, one delivered row: the reader is told once, and told
+    // the more specific reason.
     let page = public_inbox(&pool, member, None, 10).await.unwrap();
-    assert_eq!(page.unread_count, 2);
+    assert_eq!(page.unread_count, 1);
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].reason, "mention");
+    assert!(page.items[0].subscribed);
 
     advance_subscription_read_cursor(&pool, target, member, mentioning[0].seq, 7)
         .await
@@ -298,4 +369,247 @@ async fn watch_and_mention_rows_coexist_and_clear_together(pool: sqlx::PgPool) {
     let cleared = public_inbox(&pool, member, None, 10).await.unwrap();
     assert_eq!(cleared.unread_count, 0);
     assert!(cleared.items.iter().all(|item| !item.unread));
+    assert_eq!(cleared.items[0].reason, "mention");
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn mention_read_resolves_a_public_target_and_unlinks_an_unresolvable_one(pool: sqlx::PgPool) {
+    let area = Uuid::from_u128(207);
+    let topic = Uuid::from_u128(208);
+    let author = test_principal(16);
+    let mentioned = test_principal(17);
+    ensure_test_principal(&pool, author).await;
+    ensure_test_principal(&pool, mentioned).await;
+    let author_profile = create_test_profile(&pool, author, "read_author", 1).await;
+    let mentioned_profile = create_test_profile(&pool, mentioned, "read_target", 2).await;
+    create_topic_with_opening_post(&pool, area, topic, author, author_profile, 3).await;
+    let seq = submit_mentioning_post(
+        &pool,
+        MentioningPost {
+            topic,
+            author,
+            author_profile,
+            target_profile: mentioned_profile,
+            body: "@read_target consider this",
+            len: 12,
+            occurred_at: 6,
+        },
+    )
+    .await;
+
+    let page = discussion_posts(&pool, topic, None, 10, None)
+        .await
+        .unwrap();
+    let post = page
+        .posts
+        .iter()
+        .find(|post| post.source_seq == seq)
+        .unwrap();
+    assert_eq!(post.mentions.len(), 1);
+    assert_eq!(post.mentions[0].offset, 0);
+    assert_eq!(post.mentions[0].len, 12);
+    let profile = post.mentions[0].profile.as_ref().unwrap();
+    assert_eq!(profile.handle, "read_target");
+    assert_eq!(profile.profile_id, mentioned_profile);
+
+    // Going private removes the public row, which is the only thing the read
+    // resolves through. The span survives; the link does not.
+    profile_application::update_profile(
+        &pool,
+        ProfileId::from_uuid(mentioned_profile),
+        mentioned,
+        ProfileRevision::new(1),
+        ProfileEdit::new(
+            ProfileDisplayName::new("read_target").unwrap(),
+            ProfileBio::new("mention proofs").unwrap(),
+            ProfileVisibility::Private,
+        ),
+        7,
+    )
+    .await
+    .unwrap();
+
+    let page = discussion_posts(&pool, topic, None, 10, None)
+        .await
+        .unwrap();
+    let post = page
+        .posts
+        .iter()
+        .find(|post| post.source_seq == seq)
+        .unwrap();
+    assert_eq!(post.mentions.len(), 1);
+    assert_eq!(post.mentions[0].offset, 0);
+    assert_eq!(post.mentions[0].len, 12);
+    assert!(post.mentions[0].profile.is_none());
+    // The stored edge is untouched: only the read collapsed.
+    let stored: serde_json::Value = sqlx::query_scalar(
+        "SELECT mentions FROM discussion_post WHERE topic_id = $1 AND source_seq = $2",
+    )
+    .bind(topic)
+    .bind(seq)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        stored[0]["profile_id"],
+        serde_json::json!(mentioned_profile)
+    );
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn muting_the_author_suppresses_a_mention_row_without_changing_the_write(pool: sqlx::PgPool) {
+    let area = Uuid::from_u128(209);
+    let topic = Uuid::from_u128(210);
+    let author = test_principal(18);
+    let mentioned = test_principal(19);
+    ensure_test_principal(&pool, author).await;
+    ensure_test_principal(&pool, mentioned).await;
+    let author_profile = create_test_profile(&pool, author, "muted_author", 1).await;
+    let mentioned_profile = create_test_profile(&pool, mentioned, "muting_reader", 2).await;
+    create_topic_with_opening_post(&pool, area, topic, author, author_profile, 3).await;
+    mute_public_profile(&pool, mentioned, "muted_author", 4)
+        .await
+        .unwrap();
+
+    let seq = submit_mentioning_post(
+        &pool,
+        MentioningPost {
+            topic,
+            author,
+            author_profile,
+            target_profile: mentioned_profile,
+            body: "@muting_reader look",
+            len: 14,
+            occurred_at: 6,
+        },
+    )
+    .await;
+
+    // Mute is a read overlay, never a write reject: the author's post is
+    // written and the delivery row exists, but it does not reach the muter.
+    let rows = mention_inbox_rows(&pool, mentioned).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].2, "mention");
+    let page = public_inbox(&pool, mentioned, None, 10).await.unwrap();
+    assert_eq!(page.unread_count, 0);
+    assert!(page.items.is_empty());
+    assert_eq!(seq, rows[0].1);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn hiding_the_mentioning_post_suppresses_delivery_and_restoring_reveals_the_same_row(
+    pool: sqlx::PgPool,
+) {
+    let area = Uuid::from_u128(211);
+    let topic = Uuid::from_u128(212);
+    let author = test_principal(20);
+    let mentioned = test_principal(21);
+    let moderator = test_principal(22);
+    ensure_test_principal(&pool, author).await;
+    ensure_test_principal(&pool, mentioned).await;
+    ensure_test_principal(&pool, moderator).await;
+    let author_profile = create_test_profile(&pool, author, "hidden_author", 1).await;
+    let mentioned_profile = create_test_profile(&pool, mentioned, "hidden_reader", 2).await;
+    create_topic_with_opening_post(&pool, area, topic, author, author_profile, 3).await;
+    let seq = submit_mentioning_post(
+        &pool,
+        MentioningPost {
+            topic,
+            author,
+            author_profile,
+            target_profile: mentioned_profile,
+            body: "@hidden_reader look",
+            len: 14,
+            occurred_at: 6,
+        },
+    )
+    .await;
+
+    let before = public_inbox(&pool, mentioned, None, 10).await.unwrap();
+    assert_eq!(before.items.len(), 1);
+    assert_eq!(before.unread_count, 1);
+
+    hide_post(&pool, topic, seq, moderator).await;
+    let hidden = public_inbox(&pool, mentioned, None, 10).await.unwrap();
+    assert!(hidden.items.is_empty());
+    assert_eq!(hidden.unread_count, 0);
+    // The immutable reference is untouched by the overlay.
+    assert_eq!(mention_inbox_rows(&pool, mentioned).await.len(), 1);
+
+    set_publication_visible(&pool, topic, seq, true).await;
+    let restored = public_inbox(&pool, mentioned, None, 10).await.unwrap();
+    assert_eq!(restored.items, before.items);
+    assert_eq!(restored.unread_count, 1);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn inbox_cursor_clears_a_mention_on_an_unwatched_surface_and_must_advance(
+    pool: sqlx::PgPool,
+) {
+    let area = Uuid::from_u128(213);
+    let topic = Uuid::from_u128(214);
+    let author = test_principal(23);
+    let mentioned = test_principal(24);
+    ensure_test_principal(&pool, author).await;
+    ensure_test_principal(&pool, mentioned).await;
+    let author_profile = create_test_profile(&pool, author, "cursor_author", 1).await;
+    let mentioned_profile = create_test_profile(&pool, mentioned, "cursor_reader", 2).await;
+    create_topic_with_opening_post(&pool, area, topic, author, author_profile, 3).await;
+    let seq = submit_mentioning_post(
+        &pool,
+        MentioningPost {
+            topic,
+            author,
+            author_profile,
+            target_profile: mentioned_profile,
+            body: "@cursor_reader look",
+            len: 14,
+            occurred_at: 6,
+        },
+    )
+    .await;
+
+    // No watch exists on this surface, so only the principal cursor can clear
+    // the row.
+    let page = public_inbox(&pool, mentioned, None, 10).await.unwrap();
+    assert_eq!(page.unread_count, 1);
+    assert!(!page.items[0].subscribed);
+    assert_eq!(page.items[0].reason, "mention");
+
+    let cleared = advance_member_inbox_read_cursor(&pool, mentioned, seq, 7)
+        .await
+        .unwrap();
+    assert_eq!(cleared.unread_count, 0);
+    assert!(!cleared.items[0].unread);
+
+    assert!(advance_member_inbox_read_cursor(&pool, mentioned, seq, 8)
+        .await
+        .is_err());
+    assert!(advance_member_inbox_read_cursor(&pool, mentioned, 0, 9)
+        .await
+        .is_err());
+    // The rejected advances left the durable cursor exactly where it was.
+    let read_through: i64 = sqlx::query_scalar(
+        "SELECT read_through_seq FROM member_inbox_cursor WHERE principal_id = $1",
+    )
+    .bind(mentioned.as_uuid())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(read_through, seq);
+
+    projections::rebuild_member_inbox_cursor_stream(
+        &pool,
+        attention::inbox_cursor_stream_id(mentioned),
+    )
+    .await
+    .unwrap();
+    let rebuilt: i64 = sqlx::query_scalar(
+        "SELECT read_through_seq FROM member_inbox_cursor WHERE principal_id = $1",
+    )
+    .bind(mentioned.as_uuid())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rebuilt, seq);
 }

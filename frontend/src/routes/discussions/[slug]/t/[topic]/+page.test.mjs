@@ -172,10 +172,15 @@ test("quote query seeds composer chips without copying excerpt into the body fie
             {
               source_seq: 80,
               author: { handle: "member_b", display_name: "Member B" },
-              body: "Answering that claim",
+              body: "@member_a answering that claim",
               quotations: [{
                 target: { kind: "discussion_post", scope_id: topic, source_seq: 40 },
                 excerpt: "Older opening",
+              }],
+              mentions: [{
+                profile: { handle: "member_a", display_name: "Member A" },
+                offset: 0,
+                len: 9,
               }],
               citation_count: 0,
               created_at: 1_800_000_100,
@@ -196,6 +201,14 @@ test("quote query seeds composer chips without copying excerpt into the body fie
   assert.equal(data.discussion.posts[0].incomingCitations[0].sourceSeq, 80);
   assert.equal(data.discussion.posts[1].quotations[0].excerpt, "Older opening");
   assert.equal(data.discussion.posts[1].quotations[0].originalUnavailable, false);
+  assert.deepEqual(
+    data.discussion.posts[1].bodySegments.map((segment) => [segment.kind, segment.text, segment.href]),
+    [
+      ["mention", "@member_a", "/u/member_a"],
+      ["text", " answering that claim", null],
+    ],
+  );
+  assert.deepEqual(data.discussion.posts[0].bodySegments.map((segment) => segment.kind), ["text"]);
   assert.equal(data.discussion.attachedQuotations[0].sourceSeq, 40);
   assert.equal(data.discussion.attachedQuotations[0].excerpt, "Older opening");
   assert.match(data.discussion.posts[0].quoteHref, /quote=40/);
@@ -204,7 +217,7 @@ test("quote query seeds composer chips without copying excerpt into the body fie
   assert.ok(requests.some((url) => String(url).includes("/citations?limit=5")));
 });
 
-test("createPost submits structured quotations instead of pasted body text", async () => {
+test("createPost submits decided mentions alongside structured quotations", async () => {
   let mutation;
   await assert.rejects(
     () => actions.createPost({
@@ -218,6 +231,10 @@ test("createPost submits structured quotations instead of pasted body text", asy
             target: { kind: "discussion_post", scope_id: topic, source_seq: 40 },
             excerpt: "Older opening",
           }]),
+          mentions: JSON.stringify([
+            { handle: "member_a", offset: 0, len: 9 },
+            { handle: "no", offset: 0, len: 3 },
+          ]),
         }),
       }),
       fetch: async (url, options) => {
@@ -234,6 +251,7 @@ test("createPost submits structured quotations instead of pasted body text", asy
       target: { kind: "discussion_post", scope_id: topic, source_seq: 40 },
       excerpt: "Older opening",
     }],
+    mentions: [{ handle: "member_a", offset: 0, len: 9 }],
   });
 });
 

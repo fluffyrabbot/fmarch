@@ -18,22 +18,28 @@
   <AppSurfaceHeader header={data.surfaceHeader} />
   <section class="fm-panel inbox-summary" data-testid="community-inbox-summary">
     <strong>{data.inbox.unreadCount} unread</strong>
-    <span>Only public posts from watches active when the post was published appear here.</span>
+    <span>Posts from watches active when the post was published, plus posts that address you by name.</span>
+    {#if data.inbox.unreadCount > 0 && data.inbox.readThroughSeq !== null}
+      <form method="POST" action="?/markAllRead">
+        <input type="hidden" name="read_through_seq" value={data.inbox.readThroughSeq} />
+        <button type="submit" class="fm-touch-button" data-testid="community-inbox-mark-all-read">Mark all read</button>
+      </form>
+    {/if}
   </section>
 
   {#if data.inbox.items.length === 0}
-    <p class="fm-panel" data-testid="community-inbox-empty">No watched updates yet. Watch a public discussion or game thread to begin.</p>
+    <p class="fm-panel" data-testid="community-inbox-empty">Nothing here yet. Watch a public discussion or game thread, or wait for someone to address you by name.</p>
   {:else}
     <ol class="inbox-list" data-testid="community-inbox-list">
       {#each data.inbox.items as item}
         <li class:unread={item.unread} class="fm-panel inbox-item" data-testid={`community-inbox-item-${item.source_seq}`}>
           <div>
-            <p class="fm-eyebrow">Public update{item.unread ? " · Unread" : ""}</p>
+            <p class="fm-eyebrow" data-testid={`community-inbox-reason-${item.source_seq}`}>{item.reasonLabel}{item.unread ? " · Unread" : ""}</p>
             <h2><a href={item.href}>{item.title}</a></h2>
             <p>Update #{item.source_seq} · {occurredAt(item.occurred_at)}</p>
           </div>
           <div class="inbox-actions">
-            {#if item.unread}
+            {#if item.unread && item.subscribed}
               <form method="POST" action="?/markRead">
                 <input type="hidden" name="surface_id" value={item.surface_id} />
                 <input type="hidden" name="source_seq" value={item.source_seq} />

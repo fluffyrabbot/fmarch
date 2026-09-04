@@ -40,6 +40,10 @@ pub enum ReportReasonFamily {
     Hate,
     SexualContent,
     SelfHarm,
+    /// Mass-addressing through mentions. Mentions push into an inbox nobody
+    /// subscribed to, so abuse of the channel is reportable in its own right
+    /// rather than folded into `Other`.
+    MentionAbuse,
     Other,
 }
 
@@ -51,6 +55,7 @@ impl ReportReasonFamily {
             Self::Hate => "hate",
             Self::SexualContent => "sexual_content",
             Self::SelfHarm => "self_harm",
+            Self::MentionAbuse => "mention_abuse",
             Self::Other => "other",
         }
     }
@@ -61,6 +66,7 @@ impl ReportReasonFamily {
             "hate" => Ok(Self::Hate),
             "sexual_content" => Ok(Self::SexualContent),
             "self_harm" => Ok(Self::SelfHarm),
+            "mention_abuse" => Ok(Self::MentionAbuse),
             "other" => Ok(Self::Other),
             _ => Err(TrustSafetyReject::InvalidReportReason),
         }
@@ -250,6 +256,25 @@ mod tests {
             status,
             version: 1,
         }
+    }
+
+    #[test]
+    fn every_report_reason_round_trips_through_its_wire_string() {
+        for reason in [
+            ReportReasonFamily::Spam,
+            ReportReasonFamily::Harassment,
+            ReportReasonFamily::Hate,
+            ReportReasonFamily::SexualContent,
+            ReportReasonFamily::SelfHarm,
+            ReportReasonFamily::MentionAbuse,
+            ReportReasonFamily::Other,
+        ] {
+            assert_eq!(ReportReasonFamily::parse(reason.as_str()), Ok(reason));
+        }
+        assert_eq!(
+            ReportReasonFamily::parse("mention"),
+            Err(TrustSafetyReject::InvalidReportReason),
+        );
     }
 
     #[test]

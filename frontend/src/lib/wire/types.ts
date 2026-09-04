@@ -274,7 +274,11 @@ export type DiscussionTopic = { topic: string, title: string, author: Discussion
 
 export type DiscussionTopicPage = { area: DiscussionArea, topics: Array<DiscussionTopic>, next_cursor: string | null, };
 
-export type DiscussionPost = { source_seq: bigint, author: DiscussionAuthor | null, body: string, quotations: Array<Quotation>, citation_count: bigint, created_at: bigint, };
+export type MentionSuggestionPage = { suggestions: Array<DiscussionAuthor>, };
+
+export type DiscussionPostMention = { profile: DiscussionAuthor | null, offset: bigint, len: bigint, };
+
+export type DiscussionPost = { source_seq: bigint, author: DiscussionAuthor | null, body: string, quotations: Array<Quotation>, mentions: Array<DiscussionPostMention>, citation_count: bigint, created_at: bigint, };
 
 export type DiscussionThreadPage = { area: DiscussionArea, topic: DiscussionTopic, posts: Array<DiscussionPost>, next_before_seq: bigint | null, };
 
@@ -282,7 +286,13 @@ export type SubscriptionTargetState = { surface_id: string, subscribed: boolean,
 
 export type AdvanceSubscriptionReadRequest = { read_through_seq: bigint, };
 
-export type PublicInboxItem = { surface_id: string, source_seq: bigint, title: string, href: string, occurred_at: bigint, unread: boolean, subscribed: boolean, };
+export type AdvanceInboxReadRequest = { read_through_seq: bigint, };
+
+export type PublicInboxItem = { surface_id: string, source_seq: bigint, title: string, href: string,
+/**
+ * `watch` | `mention`. One list, one badge, rows labelled by reason.
+ */
+reason: string, occurred_at: bigint, unread: boolean, subscribed: boolean, };
 
 export type PublicInboxPage = { items: Array<PublicInboxItem>, unread_count: bigint, next_cursor: bigint | null, };
 

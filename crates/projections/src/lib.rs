@@ -83,7 +83,7 @@ use sha2::{Digest, Sha256};
 use social::{self, ProfilePresentation, ProfileVisibility, RedactedProfileAlias};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use trust_safety::{
     self, ModerationCaseState, ModerationCaseStatus, ModerationTarget, ReportReasonFamily,
 };
@@ -96,7 +96,8 @@ mod private_channel_projection;
 mod publications;
 mod social_writes;
 pub use attention_writes::{
-    advance_subscription_read_cursor, subscribe_to_public_target, unsubscribe_from_public_target,
+    advance_member_inbox_read_cursor, advance_subscription_read_cursor, subscribe_to_public_target,
+    unsubscribe_from_public_target,
 };
 pub use effect_projection::{slot_effects, slot_effects_for_slot, SlotEffectRow};
 pub use moderation_writes::{append_moderation_and_project_expected, submit_moderation_report};
@@ -708,12 +709,24 @@ pub struct DiscussionTopicPage {
     pub next_cursor: Option<DiscussionTopicCursor>,
 }
 
+/// One decided mention as it reads today. The span is the immutable fact; the
+/// identity is resolved fresh on every read, so `profile` is `None` once the
+/// target is no longer publicly resolvable (private, redacted, or erased). The
+/// edge stays, the link goes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscussionPostMentionRow {
+    pub profile: Option<DiscussionAuthorRow>,
+    pub offset: i64,
+    pub len: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiscussionPostRow {
     pub source_seq: i64,
     pub author: Option<DiscussionAuthorRow>,
     pub body: String,
     pub quotations: Vec<Quotation>,
+    pub mentions: Vec<DiscussionPostMentionRow>,
     pub citation_count: i64,
     pub created_at: i64,
 }
@@ -830,6 +843,10 @@ pub struct PublicInboxItemRow {
     pub source_seq: i64,
     pub title: String,
     pub href: String,
+    /// Why this row was delivered. One post can be both watched and mentioned;
+    /// the reader sees one row carrying the more specific reason, so the list
+    /// stays one list and the badge stays one badge.
+    pub reason: String,
     pub occurred_at: i64,
     pub unread: bool,
     pub subscribed: bool,
@@ -3941,7 +3958,7 @@ async fn backfill_subscription_inbox(
     Ok(())
 }
 
-async fn fold_member_inbox_cursor_event(
+pub(crate) async fn fold_member_inbox_cursor_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     event: &StoredEvent,
 ) -> Result<(), ProjectionError> {
@@ -7720,7 +7737,8 @@ pub async fn discussion_posts(
     let viewer_principal_id = viewer_principal_id.map(PrincipalId::as_uuid);
     let rows = sqlx::query(
         r#"
-        SELECT post.source_seq, post.body, post.quotations, post.created_at,
+        SELECT post.source_seq, post.body, post.quotations, post.mentions,
+               post.created_at,
                author.profile_id AS author_profile_id,
                author.handle AS author_handle, author.display_name AS author_display_name,
                (
@@ -7768,15 +7786,25 @@ pub async fn discussion_posts(
     .fetch_all(pool)
     .await?;
     let has_more = rows.len() as i64 > limit;
+    let rows: Vec<_> = rows.into_iter().take(limit as usize).collect();
+    let mentions: Vec<Vec<ProfileMention>> = rows
+        .iter()
+        .map(|row| mentions_from_json(row.get("mentions"), "DiscussionPostSubmitted"))
+        .collect::<Result<Vec<_>, ProjectionError>>()?;
+    let directory = mention_target_directory(pool, mentions.iter().flatten()).await?;
     let mut posts: Vec<_> = rows
         .into_iter()
-        .take(limit as usize)
-        .map(|row| {
+        .zip(mentions)
+        .map(|(row, mentions)| {
             Ok(DiscussionPostRow {
                 source_seq: row.get("source_seq"),
                 author: discussion_author_row(&row),
                 body: row.get("body"),
                 quotations: quotations_from_json(row.get("quotations"), "DiscussionPostSubmitted")?,
+                mentions: mentions
+                    .into_iter()
+                    .map(|mention| resolve_mention_row(&mention, &directory))
+                    .collect(),
                 citation_count: row.get("citation_count"),
                 created_at: row.get("created_at"),
             })
@@ -8268,7 +8296,7 @@ async fn visible_subscription_inbox_count(
 ) -> Result<i64, ProjectionError> {
     Ok(sqlx::query_scalar(
         r#"
-        SELECT COUNT(*)
+        SELECT COUNT(DISTINCT (item.surface_id, item.source_seq))
         FROM member_inbox_item AS item
         JOIN public_publication AS publication
           ON publication.surface_id = item.surface_id
@@ -8308,7 +8336,8 @@ pub async fn public_inbox(
     let fetch_limit = limit + 1;
     let rows = sqlx::query(
         r#"
-        SELECT item.surface_id, item.source_seq, item.occurred_at,
+        SELECT DISTINCT ON (item.source_seq, item.surface_id)
+               item.surface_id, item.source_seq, item.occurred_at, item.reason,
                item.source_seq > COALESCE(cursor.read_through_seq, 0)
                  AND (subscription.read_through_seq IS NULL
                       OR item.source_seq > subscription.read_through_seq) AS unread,
@@ -8332,7 +8361,8 @@ pub async fn public_inbox(
               AND mute.active
               AND mute.target_profile_id = publication.author_profile_id
           )
-        ORDER BY item.source_seq DESC
+        ORDER BY item.source_seq DESC, item.surface_id,
+                 (item.reason = 'mention') DESC
         LIMIT $3
         "#,
     )
@@ -8350,6 +8380,7 @@ pub async fn public_inbox(
             source_seq: row.get("source_seq"),
             title: row.get("title"),
             href: row.get("href"),
+            reason: row.get("reason"),
             occurred_at: row.get("occurred_at"),
             unread: row.get("unread"),
             subscribed: row.get("subscribed"),
@@ -8357,7 +8388,7 @@ pub async fn public_inbox(
         .collect();
     let unread_count: i64 = sqlx::query_scalar(
         r#"
-        SELECT COUNT(*)
+        SELECT COUNT(DISTINCT (item.surface_id, item.source_seq))
         FROM member_inbox_item AS item
         LEFT JOIN member_inbox_cursor AS cursor ON cursor.principal_id = $1
         LEFT JOIN public_watch AS subscription
@@ -8622,6 +8653,51 @@ pub async fn public_profile_by_handle(
     .fetch_optional(pool)
     .await?;
     Ok(row.map(public_profile_row))
+}
+
+/// Bounded handle-prefix suggestions for the composer mention typeahead.
+///
+/// The corpus is `public_profile` joined to an active `member_profile`, which
+/// is exactly the set a mention may address: a private, redacted, or erased
+/// handle has no row, so probing this list can neither confirm nor deny one.
+/// The prefix is matched literally — `%` and `_` are escaped — so a caller
+/// cannot turn the typeahead into a wildcard enumeration of the corpus.
+pub async fn public_profile_mention_suggestions(
+    pool: &PgPool,
+    handle_prefix: &str,
+    limit: i64,
+) -> Result<Vec<DiscussionAuthorRow>, ProjectionError> {
+    let prefix = handle_prefix.trim().to_ascii_lowercase();
+    if prefix.is_empty() {
+        return Ok(Vec::new());
+    }
+    let escaped = prefix
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let rows = sqlx::query(
+        r#"
+        SELECT public.profile_id, public.handle, public.display_name
+        FROM public_profile AS public
+        JOIN member_profile AS profile ON profile.profile_id = public.profile_id
+        WHERE profile.lifecycle = 'active'
+          AND public.handle LIKE $1 || '%' ESCAPE '\'
+        ORDER BY public.handle
+        LIMIT $2
+        "#,
+    )
+    .bind(escaped)
+    .bind(limit.clamp(1, 10))
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| DiscussionAuthorRow {
+            profile_id: row.get("profile_id"),
+            handle: row.get("handle"),
+            display_name: row.get("display_name"),
+        })
+        .collect())
 }
 
 /// Resolve only the public-attribution identifier for an active principal.
@@ -10066,6 +10142,66 @@ async fn fan_out_profile_mentions(
         .await?;
     }
     Ok(())
+}
+
+fn mentions_from_json(
+    value: serde_json::Value,
+    kind: &str,
+) -> Result<Vec<ProfileMention>, ProjectionError> {
+    if value.is_null() {
+        return Ok(Vec::new());
+    }
+    serde_json::from_value(value).map_err(|source| ProjectionError::Payload {
+        kind: kind.to_string(),
+        source,
+    })
+}
+
+/// Resolve every mentioned profile on a page in one read. `public_profile` is
+/// the publicity proof: an id absent from the table is not currently public,
+/// and every non-public reason collapses to the same missing row, so the read
+/// cannot distinguish private from redacted from erased.
+async fn mention_target_directory<'a>(
+    pool: &PgPool,
+    mentions: impl Iterator<Item = &'a ProfileMention>,
+) -> Result<HashMap<Uuid, DiscussionAuthorRow>, ProjectionError> {
+    let mut profile_ids: Vec<Uuid> = mentions.map(|mention| mention.profile_id).collect();
+    profile_ids.sort_unstable();
+    profile_ids.dedup();
+    if profile_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let rows = sqlx::query(
+        "SELECT profile_id, handle, display_name FROM public_profile WHERE profile_id = ANY($1)",
+    )
+    .bind(&profile_ids)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let profile_id: Uuid = row.get("profile_id");
+            (
+                profile_id,
+                DiscussionAuthorRow {
+                    profile_id,
+                    handle: row.get("handle"),
+                    display_name: row.get("display_name"),
+                },
+            )
+        })
+        .collect())
+}
+
+fn resolve_mention_row(
+    mention: &ProfileMention,
+    directory: &HashMap<Uuid, DiscussionAuthorRow>,
+) -> DiscussionPostMentionRow {
+    DiscussionPostMentionRow {
+        profile: directory.get(&mention.profile_id).cloned(),
+        offset: mention.span.offset as i64,
+        len: mention.span.len as i64,
+    }
 }
 
 fn quotations_from_json(

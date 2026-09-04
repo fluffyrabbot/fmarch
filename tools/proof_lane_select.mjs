@@ -85,8 +85,17 @@ export function requiresHostHeavyBuildLock(argv) {
   return argv.some((argument) => HOST_LOCKED_OPERATIONS.has(argument));
 }
 
+// The worktree fingerprint reads a whole-tree patch, which routinely exceeds
+// Node's 1 MiB default and would otherwise fail the run with ENOBUFS rather
+// than a proof result.
+const GIT_READ_MAX_BUFFER = 64 * 1024 * 1024;
+
 function gitFile(args, options = {}) {
-  return execFileSync('git', args, { cwd: REPO_ROOT, ...options });
+  return execFileSync('git', args, {
+    cwd: REPO_ROOT,
+    maxBuffer: GIT_READ_MAX_BUFFER,
+    ...options,
+  });
 }
 
 export function currentProofContext({ env = process.env } = {}) {

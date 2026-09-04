@@ -258,10 +258,12 @@ Public discussion post folds synchronously fan out a `watch` reference into
 `member_inbox_item` for every subscription period active at that global event sequence. Authors
 do not receive their own update. A row is unread while it is beyond the principal inbox cursor
 and, where a watch exists for that surface, beyond that watch's cursor, so a row can be cleared
-from either end. Only the per-target watch cursor has a write path today; the per-principal
-cursor is durable and folded but not yet advanceable, so reading the thread is currently the
-only way a row clears, and "mark all read" arrives with the mention surface
-([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md)). Inbox rows contain no
+from either end. Both cursors now have a write path: reading the thread advances the per-target
+watch cursor, and "mark all read" advances the per-principal cursor, which is the only cursor a
+mention on an unwatched surface can clear
+([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md)). A post that is both
+watched and mentioned stores one row per reason and reads as a single row carrying the more
+specific reason, so the list stays one list and the badge stays one badge. Inbox rows contain no
 post body, author identity, credential principal, private audience, or engagement signal:
 presentation resolves only the public target title and canonical post URL. Topic/game
 visibility and `moderation_target_state` are applied at

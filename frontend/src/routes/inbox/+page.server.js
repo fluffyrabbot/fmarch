@@ -34,15 +34,55 @@ export async function load({ cookies, locals, fetch, url }) {
       summary: "Durable updates from public topics and game threads you watch.",
     }),
     inbox: {
-      items: Array.isArray(page?.items) ? page.items : [],
+      items: inboxItems(page),
       unreadCount: Number.isSafeInteger(page?.unread_count) ? page.unread_count : 0,
       nextCursor: positiveSequence(page?.next_cursor),
+      // "Mark all read" advances the principal cursor to the highest sequence
+      // this page actually showed, never to a fabricated "now".
+      readThroughSeq: highestSourceSeq(page),
     },
     mutedMembers: Array.isArray(mutePage?.members) ? mutePage.members : [],
   };
 }
 
+/**
+ * One list, rows labelled by reason. A mention arrives without a subscription
+ * behind it, so its row offers no per-surface cursor: only the principal
+ * cursor can clear it.
+ */
+function inboxItems(page) {
+  return (Array.isArray(page?.items) ? page.items : []).map((item) => ({
+    ...item,
+    reason: item?.reason === "mention" ? "mention" : "watch",
+    reasonLabel: item?.reason === "mention" ? "Mention" : "Public update",
+  }));
+}
+
+function highestSourceSeq(page) {
+  const sequences = (Array.isArray(page?.items) ? page.items : [])
+    .map((item) => Number(item?.source_seq))
+    .filter((seq) => Number.isSafeInteger(seq) && seq > 0);
+  return sequences.length === 0 ? null : Math.max(...sequences);
+}
+
 export const actions = {
+  markAllRead: async ({ locals, cookies, fetch, request }) => {
+    const form = await request.formData();
+    const readThroughSeq = positiveSequence(form.get("read_through_seq"));
+    if (readThroughSeq === null) {
+      return fail(400, { id: "inbox-read-all", state: "reject", message: "Nothing to mark read" });
+    }
+    const response = await mutation({
+      cookies,
+      locals,
+      fetch,
+      path: "/inbox/read",
+      method: "POST",
+      body: { read_through_seq: Number(readThroughSeq) },
+    });
+    if (!response.ok) return mutationFailure(response, "Unable to mark this inbox read");
+    throw redirect(303, "/inbox");
+  },
   markRead: async ({ locals, cookies, fetch, request }) => {
     const form = await request.formData();
     const surfaceId = text(form.get("surface_id"));

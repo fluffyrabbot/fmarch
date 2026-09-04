@@ -22,12 +22,22 @@ test("community inbox loads the authenticated update page and private mute contr
           source_seq: 80,
           title: "Watched topic",
           href: "/discussions/general/t/00000000-0000-0000-0000-000000000111#post-80",
+          reason: "watch",
           occurred_at: 1_800_000_000,
           unread: true,
           subscribed: true,
+        }, {
+          surface_id: "00000000-0000-0000-0000-000000000112",
+          source_seq: 79,
+          title: "Topic that named you",
+          href: "/discussions/general/t/00000000-0000-0000-0000-000000000112#post-79",
+          reason: "mention",
+          occurred_at: 1_800_000_100,
+          unread: true,
+          subscribed: false,
         }],
-        unread_count: 1,
-        next_cursor: 80,
+        unread_count: 2,
+        next_cursor: 79,
       });
     },
   });
@@ -36,9 +46,14 @@ test("community inbox loads the authenticated update page and private mute contr
     { url: "/mutes?limit=50", authorization: "Bearer member-session" },
   ]);
   assert.equal(data.shell.activeSurface, "inbox");
-  assert.equal(data.inbox.unreadCount, 1);
+  assert.equal(data.inbox.unreadCount, 2);
   assert.equal(data.inbox.items[0].title, "Watched topic");
-  assert.equal(data.inbox.nextCursor, "80");
+  assert.deepEqual(
+    data.inbox.items.map((item) => [item.reason, item.reasonLabel]),
+    [["watch", "Public update"], ["mention", "Mention"]],
+  );
+  assert.equal(data.inbox.readThroughSeq, 80);
+  assert.equal(data.inbox.nextCursor, "79");
   assert.equal(data.mutedMembers[0].handle, "quiet-member");
 });
 
@@ -77,6 +92,29 @@ test("mark read advances the typed target cursor", async () => {
     url: "/subscriptions/00000000-0000-0000-0000-000000000222/read",
     method: "POST",
     body: { read_through_seq: 81 },
+  });
+});
+
+test("mark all read advances the principal cursor through the highest listed sequence", async () => {
+  let mutation;
+  await assert.rejects(
+    actions.markAllRead({
+      cookies: { get: () => "member-session" },
+      request: new Request("http://localhost/inbox?/markAllRead", {
+        method: "POST",
+        body: new URLSearchParams({ read_through_seq: "80" }),
+      }),
+      fetch: async (url, options) => {
+        mutation = { url, method: options.method, body: JSON.parse(options.body) };
+        return Response.json({ items: [], unread_count: 0, next_cursor: null });
+      },
+    }),
+    (failure) => failure.status === 303 && failure.location === "/inbox",
+  );
+  assert.deepEqual(mutation, {
+    url: "/inbox/read",
+    method: "POST",
+    body: { read_through_seq: 80 },
   });
 });
 

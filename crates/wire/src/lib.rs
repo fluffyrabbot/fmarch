@@ -2127,6 +2127,24 @@ pub struct DiscussionTopicPage {
     pub next_cursor: Option<String>,
 }
 
+/// Bounded typeahead answer for the composer. The entries are exactly the
+/// currently public profiles a mention may address, so an empty list is the
+/// only thing an unknown, private, or redacted handle can produce.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct MentionSuggestionPage {
+    pub suggestions: Vec<DiscussionAuthor>,
+}
+
+/// One decided community mention over a byte span of the post it annotates.
+/// `profile` is `None` when the target is no longer publicly resolvable, which
+/// the renderer shows as plain text: the span survives, the anchor does not.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DiscussionPostMention {
+    pub profile: Option<DiscussionAuthor>,
+    pub offset: i64,
+    pub len: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct DiscussionPost {
     pub source_seq: i64,
@@ -2134,6 +2152,8 @@ pub struct DiscussionPost {
     pub body: String,
     #[serde(default)]
     pub quotations: Vec<Quotation>,
+    #[serde(default)]
+    pub mentions: Vec<DiscussionPostMention>,
     #[serde(default)]
     pub citation_count: i64,
     pub created_at: i64,
@@ -2173,12 +2193,22 @@ pub struct AdvanceSubscriptionReadRequest {
     pub read_through_seq: i64,
 }
 
+/// "Mark all read" for the member inbox. The client sends the highest sequence
+/// it was actually shown, so the principal cursor never claims to have read
+/// past the page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct AdvanceInboxReadRequest {
+    pub read_through_seq: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PublicInboxItem {
     pub surface_id: Uuid,
     pub source_seq: i64,
     pub title: String,
     pub href: String,
+    /// `watch` | `mention`. One list, one badge, rows labelled by reason.
+    pub reason: String,
     pub occurred_at: i64,
     pub unread: bool,
     pub subscribed: bool,
@@ -2191,6 +2221,7 @@ impl From<projections::PublicInboxItemRow> for PublicInboxItem {
             source_seq: row.source_seq,
             title: row.title,
             href: row.href,
+            reason: row.reason,
             occurred_at: row.occurred_at,
             unread: row.unread,
             subscribed: row.subscribed,
@@ -2277,8 +2308,23 @@ impl From<projections::DiscussionPostRow> for DiscussionPost {
             author: post.author.map(DiscussionAuthor::from),
             body: post.body,
             quotations: post.quotations.into_iter().map(Quotation::from).collect(),
+            mentions: post
+                .mentions
+                .into_iter()
+                .map(DiscussionPostMention::from)
+                .collect(),
             citation_count: post.citation_count,
             created_at: post.created_at,
+        }
+    }
+}
+
+impl From<projections::DiscussionPostMentionRow> for DiscussionPostMention {
+    fn from(mention: projections::DiscussionPostMentionRow) -> Self {
+        DiscussionPostMention {
+            profile: mention.profile.map(DiscussionAuthor::from),
+            offset: mention.offset,
+            len: mention.len,
         }
     }
 }
@@ -2849,11 +2895,12 @@ pub mod typescript {
     use ts_rs::{Config, TS};
 
     use crate::{
-        AckMsg, AdvanceSubscriptionReadRequest, CapabilityGrant, ClientEnvelope, ClientMsg,
-        CohostPermissionClass, Command, CommandMsg, DayEventNarrativeDelta, DayEventRoomDelta,
-        DayEventSchedulerDelta, DayVoteOutcomeDelta, DiscussionArea, DiscussionAuthor,
-        DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, EmbedPoster,
-        EmbedProvider, EmbedSnapshot, GameIndexEntry, GameIndexPage, GameThreadAuthor, Hello,
+        AckMsg, AdvanceInboxReadRequest, AdvanceSubscriptionReadRequest, CapabilityGrant,
+        ClientEnvelope, ClientMsg, CohostPermissionClass, Command, CommandMsg,
+        DayEventNarrativeDelta, DayEventRoomDelta, DayEventSchedulerDelta, DayVoteOutcomeDelta,
+        DiscussionArea, DiscussionAuthor, DiscussionPost, DiscussionPostMention,
+        DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, EmbedPoster, EmbedProvider,
+        EmbedSnapshot, GameIndexEntry, GameIndexPage, GameThreadAuthor, Hello,
         HostConsoleAuthorityDelta, HostConsoleAuthorityKind, HostConsoleDayEventsDelta,
         HostConsoleHeaderDelta, HostConsolePhaseStateDelta, HostConsoleSchedulerDelta,
         HostConsoleSlotOccupancyDelta, HostConsoleSlotsDelta, HostConsoleStateDelta,
@@ -2863,14 +2910,15 @@ pub mod typescript {
         HostPromptRecordedDecision, HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind,
         HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency, InvestigationResultBody,
         InvestigationResultFields, ItaSessionControlKind, JsonAtom, MemberMutePage,
-        MemberMuteState, ModerationCase, ModerationCaseDetail, ModerationCasePage,
-        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
-        PlayerNotification, PostCitation, PostCitationPage, PostCitationsChangedDelta, PostEmbed,
-        PostKind, PostRef, ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicInboxItem,
-        PublicInboxPage, PublicPostCitation, PublicPostCitationPage, PublicProfile,
-        PublicSearchExcerptSegment, PublicSearchFilterValue, PublicSearchPage, PublicSearchResult,
-        PublicSearchResultKind, Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow,
-        ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        MemberMuteState, MentionSuggestionPage, ModerationCase, ModerationCaseDetail,
+        ModerationCasePage, ModerationHistory, ModerationReport, ModerationReportReceipt,
+        PlayerInvestigationResult, PlayerNotification, PostCitation, PostCitationPage,
+        PostCitationsChangedDelta, PostEmbed, PostKind, PostRef, ProfileEditor, ProjectionDelta,
+        PublicGameThreadPage, PublicInboxItem, PublicInboxPage, PublicPostCitation,
+        PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment, PublicSearchFilterValue,
+        PublicSearchPage, PublicSearchResult, PublicSearchResultKind, Quotation, RejectCode,
+        RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
         ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostEmbed,
         SubmitPostMedia, SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia,
@@ -3005,10 +3053,13 @@ pub mod typescript {
         push::<DiscussionAuthor>(&mut out, &config);
         push::<DiscussionTopic>(&mut out, &config);
         push::<DiscussionTopicPage>(&mut out, &config);
+        push::<MentionSuggestionPage>(&mut out, &config);
+        push::<DiscussionPostMention>(&mut out, &config);
         push::<DiscussionPost>(&mut out, &config);
         push::<DiscussionThreadPage>(&mut out, &config);
         push::<SubscriptionTargetState>(&mut out, &config);
         push::<AdvanceSubscriptionReadRequest>(&mut out, &config);
+        push::<AdvanceInboxReadRequest>(&mut out, &config);
         push::<PublicInboxItem>(&mut out, &config);
         push::<PublicInboxPage>(&mut out, &config);
         push::<MemberMuteState>(&mut out, &config);

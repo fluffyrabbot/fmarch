@@ -288,6 +288,24 @@ VALUES (1, '84000000-0000-4000-8000-000000000001', 'hello', 1,
   '40000000-0000-4000-8000-000000000001', 1);
 `;
 
+const mentionAbuseReasonSeedSql = String.raw`
+-- Behavioral fixtures for the 0007 mention-abuse report reason. The report is
+-- written while the CHECK set still excludes 'mention_abuse'; widening a closed
+-- constraint must admit the new value without disturbing any report already
+-- filed under an old one.
+INSERT INTO moderation_case
+  (case_id, surface_id, source_seq, status, report_count, opened_at, updated_at,
+   updated_seq, version)
+VALUES ('85000000-0000-4000-8000-000000000001',
+  '81000000-0000-4000-8000-000000000001', 5, 'open', 1, 1, 1, 1, 1);
+INSERT INTO moderation_report
+  (report_id, case_id, reporter_principal_id, reason_family, details, active,
+   submitted_seq, submitted_at)
+VALUES ('86000000-0000-4000-8000-000000000001',
+  '85000000-0000-4000-8000-000000000001',
+  '60000000-0000-4000-8000-000000000001', 'harassment', 'legacy report', true, 1, 1);
+`;
+
 const migrationFixtures = [
   {
     version: 4,
@@ -385,6 +403,25 @@ const migrationFixtures = [
         expected: "[]:NO:'[]'::jsonb",
         message:
           "0006 must backfill existing discussion posts to the empty mention list with a non-null default",
+      },
+    ],
+  },
+  {
+    version: 7,
+    seed: mentionAbuseReasonSeedSql,
+    assertions: [
+      {
+        sql: String.raw`SELECT pg_get_constraintdef(oid)
+        FROM pg_constraint WHERE conname = 'moderation_report_reason_family_check'`,
+        expected:
+          "CHECK ((reason_family = ANY (ARRAY['spam'::text, 'harassment'::text, 'hate'::text, 'sexual_content'::text, 'self_harm'::text, 'mention_abuse'::text, 'other'::text])))",
+        message: "0007 must admit mention_abuse into the report reason family",
+      },
+      {
+        sql: String.raw`SELECT reason_family || ':' || details FROM moderation_report
+        WHERE report_id = '86000000-0000-4000-8000-000000000001'`,
+        expected: "harassment:legacy report",
+        message: "0007 must leave reports filed under the previous reason set untouched",
       },
     ],
   },

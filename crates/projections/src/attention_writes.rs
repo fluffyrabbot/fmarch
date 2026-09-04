@@ -1,14 +1,17 @@
 //! Attention application service for public watches and read cursors.
 
-use attention::{self, WatchCommand, WatchEvent, WatchTarget};
+use attention::{
+    self, InboxCursorCommand, InboxCursorEvent, WatchCommand, WatchEvent, WatchTarget,
+};
 use eventstore::EventInput;
 use principal::PrincipalId;
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    fold_subscription_event, public_subscription_target_latest_seq, subscription_domain_state,
-    subscription_target_state, ProjectionError, SubscriptionTargetStateRow,
+    fold_member_inbox_cursor_event, fold_subscription_event, public_inbox,
+    public_subscription_target_latest_seq, subscription_domain_state, subscription_target_state,
+    ProjectionError, PublicInboxPage, SubscriptionTargetStateRow,
 };
 
 pub async fn subscribe_to_public_target(
@@ -105,6 +108,91 @@ pub async fn advance_subscription_read_cursor(
     .await?;
     tx.commit().await?;
     subscription_target_state(pool, principal_id, target).await
+}
+
+/// Advance the per-principal inbox cursor and return the inbox as it now
+/// reads. This is the only cursor a mention row on an unwatched surface can
+/// clear, so "mark all read" targets it rather than any watch. The caller
+/// supplies the sequence it saw, not a fabricated "now": the cursor never
+/// exceeds a row the reader was actually shown.
+pub async fn advance_member_inbox_read_cursor(
+    pool: &PgPool,
+    principal_id: PrincipalId,
+    read_through_seq: i64,
+    occurred_at: i64,
+) -> Result<PublicInboxPage, ProjectionError> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("member-inbox-cursor:{principal_id}"))
+        .execute(&mut *tx)
+        .await?;
+    if read_through_seq <= 0 {
+        return Err(ProjectionError::InvalidSubscriptionReadCursor);
+    }
+    let state = inbox_cursor_domain_state(&mut tx, principal_id).await?;
+    let events = attention::decide_inbox_cursor(
+        state.as_ref(),
+        InboxCursorCommand::AdvanceRead { read_through_seq },
+    )
+    .map_err(subscription_domain_error)?;
+    append_inbox_cursor_events(
+        &mut tx,
+        attention::inbox_cursor_stream_id(principal_id),
+        state.as_ref().map_or(0, |state| state.version),
+        events,
+        principal_id,
+        occurred_at,
+    )
+    .await?;
+    tx.commit().await?;
+    public_inbox(pool, principal_id, None, 50).await
+}
+
+async fn inbox_cursor_domain_state(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal_id: PrincipalId,
+) -> Result<Option<attention::InboxCursorState>, ProjectionError> {
+    let row = sqlx::query_as::<_, (i64, i64)>(
+        "SELECT read_through_seq, version FROM member_inbox_cursor WHERE principal_id = $1",
+    )
+    .bind(principal_id.as_uuid())
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(
+        row.map(|(read_through_seq, version)| attention::InboxCursorState {
+            principal_id,
+            read_through_seq,
+            version,
+        }),
+    )
+}
+
+async fn append_inbox_cursor_events(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    expected_stream_seq: i64,
+    events: Vec<InboxCursorEvent>,
+    principal_id: PrincipalId,
+    occurred_at: i64,
+) -> Result<(), ProjectionError> {
+    let inputs: Vec<_> = events
+        .into_iter()
+        .map(|event| {
+            EventInput::new(
+                event.kind(),
+                1,
+                event.payload(),
+                eventstore::ActorId::Principal(principal_id),
+                occurred_at,
+            )
+        })
+        .collect();
+    let stored =
+        eventstore::append_expected_in_tx(tx, stream_id, expected_stream_seq, &inputs).await?;
+    for event in &stored {
+        fold_member_inbox_cursor_event(tx, event).await?;
+    }
+    Ok(())
 }
 
 async fn lock_subscription_target(

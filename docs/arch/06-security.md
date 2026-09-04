@@ -326,6 +326,11 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   blinded handle index. Slot mentions inherit channel read capability — naming a slot
   that cannot read the posting channel rejects without disclosing which side is missing
   ([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md)).
+- The same boundary governs both directions of the read. The member-only composer
+  typeahead answers from `public_profile` alone, so a private, redacted, or unheld handle
+  is one empty answer; and a stored mention whose target stops being public reads back as
+  a span without a link rather than as a resurrected handle
+  ([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md)).
 
 ## Encryption at rest and subject-owned private data
 

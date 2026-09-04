@@ -33,11 +33,12 @@ use trust_safety::{
 };
 use uuid::Uuid;
 use wire::{
-    AdvanceSubscriptionReadRequest, DiscussionArea, DiscussionPost, DiscussionThreadPage,
-    DiscussionTopic, DiscussionTopicPage, MemberMutePage, MemberMuteState, ModerationCase,
-    ModerationCaseDetail, ModerationCasePage, ModerationReportReceipt, ProfileEditor,
-    PublicInboxPage, PublicPostCitationPage, PublicProfile, PublicSearchFilterValue,
-    PublicSearchPage, PublicSearchResult, RejectCode, SubscriptionTargetState,
+    AdvanceInboxReadRequest, AdvanceSubscriptionReadRequest, DiscussionArea, DiscussionAuthor,
+    DiscussionPost, DiscussionThreadPage, DiscussionTopic, DiscussionTopicPage, MemberMutePage,
+    MemberMuteState, MentionSuggestionPage, ModerationCase, ModerationCaseDetail,
+    ModerationCasePage, ModerationReportReceipt, ProfileEditor, PublicInboxPage,
+    PublicPostCitationPage, PublicProfile, PublicSearchFilterValue, PublicSearchPage,
+    PublicSearchResult, RejectCode, SubscriptionTargetState,
 };
 
 #[derive(Clone)]
@@ -62,6 +63,7 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
     Router::new()
         .route("/search", get(public_search))
         .route("/inbox", get(public_inbox))
+        .route("/inbox/read", post(advance_inbox_read))
         .route("/mutes", get(member_mutes))
         .route(
             "/mutes/profiles/{handle}",
@@ -116,6 +118,7 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
         .route("/profiles/me/editor", get(current_member_profile))
         .route("/profiles/me", axum::routing::put(update_profile))
         .route("/profiles/{handle}", get(public_profile))
+        .route("/profiles/mention-suggestions", get(mention_suggestions))
         .with_state(PublicPlatformHttpState::new(
             state.pool.clone(),
             state.auth.clone(),
@@ -145,6 +148,11 @@ struct PublicSearchHttpCursor {
 struct PublicInboxQuery {
     before_seq: Option<i64>,
     limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct MentionSuggestionQuery {
+    q: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -218,6 +226,50 @@ async fn advance_subscription_read(
     .await
     .map_err(subscription_projection_api_error)?;
     Ok(Json(state.into()))
+}
+
+/// Advance the per-principal inbox cursor. A mention can land on a surface the
+/// member does not watch, so this is the only cursor that clears it; the watch
+/// endpoint stays scoped to one surface and is unchanged.
+async fn advance_inbox_read(
+    State(state): State<PublicPlatformHttpState>,
+    MemberAuthentication(principal_id): MemberAuthentication,
+    Json(request): Json<AdvanceInboxReadRequest>,
+) -> Result<Json<PublicInboxPage>, ApiError> {
+    Ok(Json(
+        projections::advance_member_inbox_read_cursor(
+            &state.pool,
+            principal_id,
+            request.read_through_seq,
+            unix_now_seconds(),
+        )
+        .await
+        .map_err(subscription_projection_api_error)?
+        .into(),
+    ))
+}
+
+/// Composer typeahead over the public profile corpus. Members only: the
+/// suggestion list is a posting affordance, not public data, and a signed-out
+/// visitor has no composer to fill. The answer is bounded and prefix-only, so
+/// it enumerates nothing a profile page does not already publish.
+async fn mention_suggestions(
+    State(state): State<PublicPlatformHttpState>,
+    Query(query): Query<MentionSuggestionQuery>,
+    MemberAuthentication(_principal_id): MemberAuthentication,
+) -> Result<Json<MentionSuggestionPage>, ApiError> {
+    let prefix = query.q.trim();
+    if prefix.is_empty() {
+        return Ok(Json(MentionSuggestionPage {
+            suggestions: Vec::new(),
+        }));
+    }
+    let suggestions = projections::public_profile_mention_suggestions(&state.pool, prefix, 8)
+        .await?
+        .into_iter()
+        .map(DiscussionAuthor::from)
+        .collect();
+    Ok(Json(MentionSuggestionPage { suggestions }))
 }
 
 async fn public_inbox(
