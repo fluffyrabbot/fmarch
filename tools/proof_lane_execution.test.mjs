@@ -10,10 +10,13 @@ import {
   PREEMPTED_EXIT_CODE,
   createRepoLocalPostgresProvider,
   createRunContext,
+  defaultPreemptionSignalPath,
   disposableDatabaseName,
   expandHardDependencies,
   prepareLaneInvocation,
+  readPreemptedRunReceiptPath,
   runExecutionPlan,
+  summarizeLaneStates,
   validateExecutionManifest,
   validateQuarantine,
 } from './proof_lane_execution.mjs';
@@ -1052,4 +1055,111 @@ test('the host build lock and executor agree on the preemption exit code', async
   const lockScript = await readFile(new URL('../scripts/with-heavy-build-lock.py', import.meta.url), 'utf8');
   assert.match(lockScript, /PREEMPTED_EXIT_CODE = 69/);
   assert.match(lockScript, /write_preemption_signal\(process\.pid, competitors\)/);
+});
+
+test('a run whose quarantined lane strands a dependent reports the dependent as unproven', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({
+    known_red: lane(['known_red'], []),
+    dependent: { ...lane(['dependent'], []), depends_on: ['known_red'] },
+    healthy: lane(['healthy'], []),
+  });
+  const result = await runExecutionPlan(['known_red', 'dependent', 'healthy'], manifest, {
+    jobs: 1,
+    root,
+    keepGoing: true,
+    quarantinedLaneIds: new Set(['known_red']),
+    spawn: (file) => childThatCloses(file === 'known_red' ? 1 : 0, 3),
+    log: () => {},
+  });
+  assert.equal(result.receipt.lanes.dependent.state, 'blocked');
+  assert.equal(result.receipt.lanes.dependent.blocked_by, 'known_red');
+  const summary = summarizeLaneStates(result.receipt);
+  assert.equal(summary.total, 3);
+  assert.equal(summary.passed, 1);
+  assert.deepEqual({ ...summary.counts }, { quarantined: 1, blocked: 1, passed: 1 });
+  assert.deepEqual(summary.unproven, [
+    { laneId: 'known_red', state: 'quarantined', blockedBy: null },
+    { laneId: 'dependent', state: 'blocked', blockedBy: 'known_red' },
+  ]);
+});
+
+test('quarantine absorbs a plain assertion red but never an infrastructure failure', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({ known_red: lane(['known_red'], []) });
+  const timedOut = await runExecutionPlan(['known_red'], manifest, {
+    root,
+    quarantinedLaneIds: new Set(['known_red']),
+    spawn: () => {
+      const child = new EventEmitter();
+      child.kill = (signal) => { queueMicrotask(() => child.emit('close', null, signal ?? 'SIGKILL')); return true; };
+      return child;
+    },
+    terminationGraceMilliseconds: 5,
+    log: () => {},
+    setTimeoutFn: (fn, ms) => setTimeout(fn, Math.min(ms, 20)),
+  });
+  assert.equal(timedOut.receipt.lanes.known_red.timed_out, true);
+  assert.equal(timedOut.receipt.lanes.known_red.state, 'failed', 'a timeout is not the declared red');
+  assert.equal(timedOut.success, false);
+
+  const spawnFailed = await runExecutionPlan(['known_red'], manifest, {
+    root,
+    quarantinedLaneIds: new Set(['known_red']),
+    spawn: () => { throw new Error('spawn EACCES'); },
+    log: () => {},
+  });
+  assert.equal(spawnFailed.receipt.lanes.known_red.state, 'failed', 'a spawn failure is not the declared red');
+  assert.equal(spawnFailed.success, false);
+});
+
+test('a lane child that closes before the runner sees SIGTERM is still labelled preempted', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const signalPath = join(root, 'preemption-signal.json');
+  const manifest = fixture({ slow: lane(['slow'], []) });
+  const signalSource = new EventEmitter();
+  const result = await runExecutionPlan(['slow'], manifest, {
+    root,
+    signalSource,
+    preemptionSignalPath: signalPath,
+    spawn: () => {
+      const child = new EventEmitter();
+      child.kill = () => true;
+      // The marker lands and the group dies, but this run's own signal handler
+      // has not fired yet: the lane must not be recorded as an ordinary red.
+      setTimeout(async () => {
+        await writeFile(signalPath, JSON.stringify({ pid: process.pid, competitors: ['rustc'], at: Date.now() }));
+        child.emit('close', null, 'SIGTERM');
+      }, 5);
+      return child;
+    },
+    log: () => {},
+  });
+  assert.equal(result.receipt.lanes.slow.state, 'preempted');
+  assert.equal(result.preempted, true);
+  signalSource.removeAllListeners();
+});
+
+test('the preempted-run pointer is only actionable when it names the pid the lock killed', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const pointerPath = join(root, 'target', 'proof-lanes', 'last-run.json');
+  const signalPath = defaultPreemptionSignalPath(root);
+  await mkdir(join(root, 'target', 'proof-lanes'), { recursive: true });
+  await writeFile(pointerPath, JSON.stringify({ run_id: 'run-old', receipt: '/tmp/old/receipt.json', pid: 4242 }));
+
+  assert.equal(readPreemptedRunReceiptPath(root), null, 'no marker means nothing was preempted');
+
+  await writeFile(signalPath, JSON.stringify({ pid: 9999, competitors: ['cargo'], at: Date.now() }));
+  assert.equal(
+    readPreemptedRunReceiptPath(root),
+    null,
+    'a pointer from a run the lock did not kill must not be resumed',
+  );
+
+  await writeFile(signalPath, JSON.stringify({ pid: 4242, competitors: ['cargo'], at: Date.now() }));
+  assert.equal(readPreemptedRunReceiptPath(root), '/tmp/old/receipt.json');
 });

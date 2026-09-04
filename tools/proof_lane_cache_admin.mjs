@@ -327,8 +327,12 @@ export function planProofCacheGc({
       addProtection(protectedEntries, laneId, proofKey, `receipt:${receipt.id}`);
     }
   }
+  // `preempted` is terminal-looking but resumable: the sweep supervisor, or an
+  // operator, will re-enter that receipt and reuse its passed lanes. Evicting
+  // what it references between the preemption and the resume would silently
+  // force those lanes to re-run.
   const inFlight = receipts
-    .filter(({ receipt }) => receipt.state === 'running')
+    .filter(({ receipt }) => receipt.state === 'running' || receipt.state === 'preempted')
     .sort((left, right) => String(left.receipt.id).localeCompare(String(right.receipt.id)));
   for (const { receipt } of inFlight) {
     for (const { laneId, proofKey } of receiptReferences(receipt)) {

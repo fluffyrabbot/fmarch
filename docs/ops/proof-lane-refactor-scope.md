@@ -203,6 +203,50 @@ with the receipt state and `preempted_by`; and the sweep supervisor in
 `proof_lane_select.mjs` auto-resumes the receipt exactly once, so a transient
 preemption self-heals and a persistent one surfaces without looping.
 
+### Orchestration honesty remediation — 2026-09-04
+
+Review of the change above found that the new non-gating states were honest
+about themselves but not about their consequences, and that the auto-resume
+lost the shape of the run it resumed. Six corrections:
+
+- **Stranded dependents are counted.** A quarantined or skipped lane blocks its
+  dependents, and `blocked` never set the run's failure, so a run could exit
+  zero while reporting only the quarantine. With `cargo:api` quarantined the
+  casualty was `check:release-topology-evidence`. The terminal verdict now
+  reads `proof passed: N of M lane(s)` against the plan and names every lane
+  left failed, blocked, skipped, quarantined, or preempted, via the exported
+  `summarizeLaneStates`. Release remains fail-closed independently:
+  `validateProofReceipt` already required every selected lane to be `passed`.
+- **The auto-resume preserves how the sweep runs.** `--jobs`, `--keep-going`,
+  and `--skip` are not recorded in the receipt, so resuming with a bare
+  `--resume` downgraded a parallel keep-going sweep to a serial fail-fast one.
+  `resumeArgv` carries the run-shape flags across; selection flags stay out
+  because the receipt owns the plan.
+- **`--skip` is valid with `--resume`.** It had to be, or the automatic resume
+  would execute the lanes the operator excluded.
+- **Quarantine no longer absorbs infrastructure failures.** Lane stdio is
+  inherited rather than captured, so the runner cannot attribute a red to the
+  entry's named `test`; the attribution it *can* make is that a timeout, spawn
+  failure, leaked child group, or cleanup failure is not the declared red.
+  Those gate. A plain non-zero exit is what quarantine covers.
+- **`--only <lane> --run` gates.** A deliberately focused run is the one case
+  where the operator is asking about that lane, so quarantine does not apply.
+  An expired quarantine on a lane outside the plan now warns on every run,
+  since its hard gate only fires on runs that select it.
+- **Preemption labelling is no longer racy, and the pointer is pid-checked.**
+  `killpg` can deliver a lane child's close event before the runner's own
+  SIGTERM handler, which recorded a phantom red inside a preempted run; the
+  marker is now consulted wherever an abnormal end is observed. The
+  `last-run.json` pointer records the runner pid and is only actionable when it
+  matches the preemption marker, so a preemption during the (not short)
+  selection phase cannot auto-resume a stale receipt. Cache GC also treats
+  `preempted` receipts as in-flight, since evicting what a pending resume
+  references would silently force those lanes to re-run.
+
+Receipts now record `quarantine`, `skipped_lane_ids`, and `keep_going` in their
+context, so a receipt is readable on its own rather than only against the
+manifest it was run from.
+
 ## Delivered foundation
 
 The manifest now contains executable leaves only. The human-facing

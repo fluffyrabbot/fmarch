@@ -35,9 +35,12 @@ const RESERVED_ENV = new Set([
   'FMARCH_PROOF_ARTIFACT_DIR',
 ]);
 
-// Terminal lane states that are not a pass. A dependent of any of these cannot
-// run, so it is blocked rather than admitted.
-const NON_PASSING_TERMINAL = new Set(['failed', 'blocked', 'skipped', 'quarantined', 'preempted']);
+// Terminal lane states that mean the lane was never proven in this run. A
+// dependent of any of these cannot run, so it is blocked rather than admitted;
+// and a run containing any of them is not fully green even when it does not
+// gate, so every reporting surface must count them rather than the plan length.
+const UNPROVEN_TERMINAL = ['failed', 'blocked', 'skipped', 'quarantined', 'preempted'];
+const NON_PASSING_TERMINAL = new Set(UNPROVEN_TERMINAL);
 
 // Exit code the host build lock returns when it aborts an already-running lane
 // because unregistered Cargo/rustc work appeared. It is deliberately distinct
@@ -55,16 +58,21 @@ export function defaultPreemptionSignalPath(root = REPO_ROOT) {
 
 // The host build lock writes this marker for the exact wrapped runner pid before
 // it terminates the group, so a preemption is distinguishable from an ordinary
-// Ctrl-C. Reading it is best-effort and pid-scoped so a stale marker from an
-// earlier run can never mislabel a later interrupt.
-function readMatchingPreemptionSignal(path, pid) {
+// Ctrl-C. Reading it is best-effort; every consumer below is pid-scoped so a
+// stale marker from an earlier run can never mislabel a later interrupt.
+function readPreemptionSignal(path) {
   try {
     if (!existsSync(path)) return null;
     const marker = JSON.parse(readFileSync(path, 'utf8'));
-    return marker && marker.pid === pid ? marker : null;
+    return marker && Number.isInteger(marker.pid) ? marker : null;
   } catch {
     return null;
   }
+}
+
+function readMatchingPreemptionSignal(path, pid) {
+  const marker = readPreemptionSignal(path);
+  return marker && marker.pid === pid ? marker : null;
 }
 
 function preemptionSignalMatches(path, pid) {
@@ -80,26 +88,66 @@ async function clearPreemptionSignal(path) {
   }
 }
 
-// Records where the current run's receipt lives so the sweep supervisor can
-// find it to auto-resume after a preemption, even if the runner was killed
-// before it could print the path.
+// Records where the current run's receipt lives, and under which pid, so the
+// sweep supervisor can find it to auto-resume after a preemption even if the
+// runner was killed before it could print the path. The pid is what makes the
+// pointer safe to act on: it is cross-checked against the preemption marker so
+// a pointer left behind by an earlier, unrelated run can never be resumed.
 async function writeLastRunPointer(root, run) {
   try {
     const pointerPath = join(root, ...LAST_RUN_POINTER_RELATIVE);
     await mkdir(dirname(pointerPath), { recursive: true });
-    await writeFile(pointerPath, `${JSON.stringify({ run_id: run.id, receipt: run.receiptPath }, null, 2)}\n`);
+    await writeFile(
+      pointerPath,
+      `${JSON.stringify({ run_id: run.id, receipt: run.receiptPath, pid: process.pid }, null, 2)}\n`,
+    );
   } catch {
     // Best-effort; absence only disables the preemption auto-resume convenience.
   }
 }
 
-export function readLastRunReceiptPath(root = REPO_ROOT) {
+function readLastRunPointer(root) {
   try {
-    const pointer = JSON.parse(readFileSync(join(root, ...LAST_RUN_POINTER_RELATIVE), 'utf8'));
-    return typeof pointer.receipt === 'string' ? pointer.receipt : null;
+    return JSON.parse(readFileSync(join(root, ...LAST_RUN_POINTER_RELATIVE), 'utf8'));
   } catch {
     return null;
   }
+}
+
+// The receipt of the run the host lock actually preempted, or null.
+//
+// Both halves must agree: the preemption marker names the pid the lock killed,
+// and the pointer names the pid that owned the receipt. A preemption that lands
+// before `runExecutionPlan` writes its pointer -- the selection phase
+// fingerprints the whole worktree and is not short -- leaves a pointer from an
+// *earlier* run on disk. Resuming that would either replay a stale plan or die
+// with "proof receipt already passed", so the pid cross-check refuses instead.
+export function readPreemptedRunReceiptPath(root = REPO_ROOT) {
+  const pointer = readLastRunPointer(root);
+  if (!pointer || typeof pointer.receipt !== 'string' || !Number.isInteger(pointer.pid)) return null;
+  const marker = readPreemptionSignal(defaultPreemptionSignalPath(root));
+  if (!marker || marker.pid !== pointer.pid) return null;
+  return pointer.receipt;
+}
+
+// The honest shape of a finished run: what actually passed, and every lane that
+// did not, with why. `blocked` is the load-bearing entry -- a quarantined or
+// skipped lane strands its dependents without gating, and those dependents are
+// unproven even though the run exits zero.
+export function summarizeLaneStates(receipt) {
+  const counts = Object.create(null);
+  const unproven = [];
+  for (const [laneId, lane] of Object.entries(receipt.lanes ?? {})) {
+    const state = lane?.state ?? 'unknown';
+    counts[state] = (counts[state] ?? 0) + 1;
+    if (state !== 'passed') unproven.push({ laneId, state, blockedBy: lane?.blocked_by ?? null });
+  }
+  return {
+    total: Object.keys(receipt.lanes ?? {}).length,
+    passed: counts.passed ?? 0,
+    counts,
+    unproven,
+  };
 }
 
 function positiveInteger(value, label) {
@@ -1053,10 +1101,17 @@ export async function runExecutionPlan(
   const runnerAbort = new AbortController();
   let interruptedSignal = null;
   let preemptionDetected = false;
-  const interrupt = (signal) => {
+  // The marker is written by the host lock for this exact pid immediately before
+  // it kills the group, so any code path that observes an abnormal end can ask
+  // whether this run was preempted -- not only the signal handler.
+  const detectPreemption = () => {
     if (!preemptionDetected && preemptionSignalMatches(preemptionSignalPath, process.pid)) {
       preemptionDetected = true;
     }
+    return preemptionDetected;
+  };
+  const interrupt = (signal) => {
+    detectPreemption();
     interruptedSignal ??= signal;
     failureSeen = true;
     if (!runnerAbort.signal.aborted) {
@@ -1080,6 +1135,13 @@ export async function runExecutionPlan(
     for (const [signal, handler] of signalHandlers) signalSource.off(signal, handler);
   };
   let failureSeen = false;
+  // A lane failed for a reason other than running its assertions and losing:
+  // it timed out, could not be spawned, leaked a child group, or its resources
+  // could not be released. None of those are the declared red a quarantine
+  // covers, so quarantine must not absorb them.
+  const infrastructureFailure = (record) =>
+    Boolean(record.timedOut || record.spawnError || record.cleanupError || record.groupTerminatedAfterLeaderExit);
+
   // Centralizes how a non-zero lane outcome is labeled: a preemption is not a
   // red, a quarantined lane is a known red that must not gate, and everything
   // else is an ordinary failure that gates the run.
@@ -1088,12 +1150,19 @@ export async function runExecutionPlan(
       record.state = 'passed';
       return;
     }
-    if (preemptionDetected && interruptedSignal) {
+    // Do not wait for our own SIGTERM handler to run first: killpg can deliver
+    // the lane child's close event ahead of it, which would otherwise label the
+    // in-flight lane a red inside a run the receipt calls preempted.
+    if (detectPreemption()) {
       record.state = 'preempted';
       record.preemptedBy ??= 'unregistered Cargo/rustc build work';
       return;
     }
-    if (quarantinedLaneIds.has(laneId) && !interruptedSignal) {
+    // Quarantine is declared per lane because lane stdio is inherited rather
+    // than captured, so the runner cannot attribute a red to the named test.
+    // Narrowing it to a plain non-zero exit is the attribution it can make:
+    // an undeclared infrastructure failure still gates.
+    if (quarantinedLaneIds.has(laneId) && !interruptedSignal && !infrastructureFailure(record)) {
       record.state = 'quarantined';
       return;
     }

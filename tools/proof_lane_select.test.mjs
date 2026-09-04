@@ -28,6 +28,7 @@ import {
   pruneUnknownLanes,
   quarantineEntries,
   expiredQuarantineEntries,
+  resumeArgv,
   shouldAutoResumeAfterPreemption,
   requiresHostHeavyBuildLock,
   runLanes,
@@ -1778,4 +1779,49 @@ test('preemption auto-resume fires once for a non-resume run and never loops', (
   assert.equal(shouldAutoResumeAfterPreemption(1, ['--mode', 'full', '--run']), false);
   assert.equal(shouldAutoResumeAfterPreemption(0, ['--mode', 'full', '--run']), false);
   assert.equal(shouldAutoResumeAfterPreemption(75, ['--mode', 'full', '--run']), false);
+});
+
+test('an auto-resume preserves how the sweep runs, not only what it selected', () => {
+  // The receipt records the plan, never the run shape, so these flags can only
+  // survive by being carried across. Dropping them would quietly downgrade a
+  // parallel keep-going sweep and re-run the lanes the operator excluded.
+  assert.deepEqual(
+    resumeArgv(['--mode', 'full', '--run', '--jobs', '2', '--keep-going'], '/r/receipt.json'),
+    ['--resume', '/r/receipt.json', '--jobs', '2', '--keep-going'],
+  );
+  assert.deepEqual(
+    resumeArgv(['--run', '--skip', 'cargo:api,test:x'], '/r/receipt.json'),
+    ['--resume', '/r/receipt.json', '--skip', 'cargo:api,test:x'],
+  );
+  assert.deepEqual(resumeArgv(['--mode', 'full', '--run'], '/r/receipt.json'), ['--resume', '/r/receipt.json']);
+  // Selection flags must not be carried: the receipt owns the plan.
+  assert.deepEqual(
+    resumeArgv(['--mode', 'full', '--base', 'origin/main', '--run', '--force'], '/r/receipt.json'),
+    ['--resume', '/r/receipt.json'],
+  );
+});
+
+test('--skip survives a resume so a resumed sweep still excludes what the operator excluded', () => {
+  // Auto-resume after a preemption carries --skip forward, so rejecting the
+  // combination would make the supervisor run the very lanes an operator
+  // excluded. Reaching the receipt read proves the combination is accepted.
+  const run = (argv) => {
+    try {
+      execFileSync(process.execPath, [join(REPO_ROOT, 'tools', 'proof_lane_select.mjs'), ...argv], {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, HOST_HEAVY_BUILD_LOCK_HELD: '1' },
+      });
+      return '';
+    } catch (error) {
+      return `${error.stdout ?? ''}${error.stderr ?? ''}`;
+    }
+  };
+  const resumed = run(['--resume', join(REPO_ROOT, 'target', 'proof-lanes', 'no-such-receipt.json'), '--skip', 'cargo:api']);
+  assert.doesNotMatch(resumed, /--skip is only valid/);
+  assert.match(resumed, /ENOENT|no such file/i, 'the run must get as far as reading the receipt');
+
+  const listed = run(['--list', '--skip', 'cargo:api']);
+  assert.match(listed, /--skip is only valid with a selection --run/);
 });

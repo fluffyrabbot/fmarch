@@ -132,6 +132,30 @@ test('cache explanation deterministically identifies every changed input fingerp
   assert.equal(explanation.changes.contract.length, 0);
 });
 
+test('GC protects a preempted receipt because the sweep supervisor will resume it', (t) => {
+  const fixture = fixtureRoot(t);
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'preempted-key');
+  const preemptedKey = store(fixture, 'source-preempted');
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'current-key');
+  const currentKey = store(fixture, 'source-current');
+
+  // `preempted` is terminal-looking but resumable: evicting what it references
+  // between the preemption and the auto-resume silently forces a re-run.
+  writeRunReceipt(fixture.root, 'preempted', {
+    state: 'preempted', updated_at: '2026-08-30T10:01:00.000Z', context: { mode: 'full' },
+    lanes: { audit: { reused_from_proof_key: preemptedKey.proofKey } },
+  });
+
+  const plan = planProofCacheGc({
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', currentKey]]),
+    keepReceipts: 1,
+    receipts: undefined,
+  });
+  assert.deepEqual(plan.in_flight_receipts.map(({ id }) => id), ['preempted']);
+  assert.equal(plan.entries.find((entry) => entry.proofKey === preemptedKey.proofKey).action, 'retain');
+});
+
 test('GC retains current, recent receipt, and in-flight keys while deleting unreachable history', (t) => {
   const fixture = fixtureRoot(t);
   writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'receipt-key');
