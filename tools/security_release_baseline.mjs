@@ -173,7 +173,7 @@ export async function validateSecurityReleaseBaseline() {
   assert.match(source["deny.toml"], /RUSTSEC-2024-0436/);
   assert.match(
     source["package.json"],
-    /"test:dependency-policy": "node tools\/dependency_policy\.mjs/,
+    /"test:dependency-policy:offline": "node tools\/dependency_policy\.mjs/,
   );
 
   for (const relativePath of [

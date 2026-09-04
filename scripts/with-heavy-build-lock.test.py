@@ -107,6 +107,7 @@ class HeavyBuildLockTests(unittest.TestCase):
 
     def test_late_competitor_terminates_registered_lane(self) -> None:
         process = FakeProcess()
+        preemptions: list[tuple[int, list[str]]] = []
 
         def terminate(candidate: FakeProcess) -> None:
             self.assertIs(candidate, process)
@@ -133,12 +134,17 @@ class HeavyBuildLockTests(unittest.TestCase):
         ), mock.patch.object(
             LOCK, "terminate_process_group", side_effect=terminate
         ), mock.patch.object(
+            LOCK,
+            "write_preemption_signal",
+            side_effect=lambda pid, competitors: preemptions.append((pid, list(competitors))),
+        ), mock.patch.object(
             LOCK.time, "sleep", return_value=None
         ), mock.patch.object(
             LOCK.signal, "signal", return_value=LOCK.signal.SIG_DFL
         ):
-            self.assertEqual(LOCK.main(), 75)
+            self.assertEqual(LOCK.main(), LOCK.PREEMPTED_EXIT_CODE)
             self.assertEqual(process.returncode, -15)
+            self.assertEqual(preemptions, [(process.pid, ["pid=99 command=cargo test"])])
 
     def test_signal_termination_escalates_from_term_to_kill(self) -> None:
         process = FakeProcess()

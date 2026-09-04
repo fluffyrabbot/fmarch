@@ -289,13 +289,21 @@
       "method": "isolated",
       "warmup_seconds": 0.5
     },
-    "test:dependency-policy": {
-      "seconds": 1.3,
-      "measured_at": "2026-08-19T07:01:45.525Z",
-      "command": "npm run test:dependency-policy",
+    "test:dependency-policy:offline": {
+      "seconds": 1.2,
+      "measured_at": "2026-09-04T02:50:00.000-07:00",
+      "command": "npm run test:dependency-policy:offline",
       "status": 0,
       "method": "isolated",
-      "warmup_seconds": 2.1
+      "warmup_seconds": 1.2
+    },
+    "test:dependency-policy:audit": {
+      "seconds": 8,
+      "measured_at": "2026-09-04T02:50:00.000-07:00",
+      "command": "npm run test:dependency-policy:audit",
+      "status": 0,
+      "method": "network-boundary-estimate",
+      "warmup_seconds": 8
     },
     "cargo:content-reference": {
       "seconds": 0.7,

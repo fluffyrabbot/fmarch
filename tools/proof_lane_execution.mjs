@@ -6,6 +6,7 @@
 
 import { spawn as spawnChild } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { appendFile, cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +34,73 @@ const RESERVED_ENV = new Set([
   'FMARCH_PROOF_LANE_DIR',
   'FMARCH_PROOF_ARTIFACT_DIR',
 ]);
+
+// Terminal lane states that are not a pass. A dependent of any of these cannot
+// run, so it is blocked rather than admitted.
+const NON_PASSING_TERMINAL = new Set(['failed', 'blocked', 'skipped', 'quarantined', 'preempted']);
+
+// Exit code the host build lock returns when it aborts an already-running lane
+// because unregistered Cargo/rustc work appeared. It is deliberately distinct
+// from the "could not start / busy" code (75): this one means a lane was
+// preempted mid-flight, so the sweep supervisor in proof_lane_select.mjs may
+// auto-resume once. scripts/with-heavy-build-lock.py must keep this in sync.
+export const PREEMPTED_EXIT_CODE = 69;
+
+const PREEMPTION_SIGNAL_RELATIVE = ['target', 'proof-lanes', 'preemption-signal.json'];
+const LAST_RUN_POINTER_RELATIVE = ['target', 'proof-lanes', 'last-run.json'];
+
+export function defaultPreemptionSignalPath(root = REPO_ROOT) {
+  return join(root, ...PREEMPTION_SIGNAL_RELATIVE);
+}
+
+// The host build lock writes this marker for the exact wrapped runner pid before
+// it terminates the group, so a preemption is distinguishable from an ordinary
+// Ctrl-C. Reading it is best-effort and pid-scoped so a stale marker from an
+// earlier run can never mislabel a later interrupt.
+function readMatchingPreemptionSignal(path, pid) {
+  try {
+    if (!existsSync(path)) return null;
+    const marker = JSON.parse(readFileSync(path, 'utf8'));
+    return marker && marker.pid === pid ? marker : null;
+  } catch {
+    return null;
+  }
+}
+
+function preemptionSignalMatches(path, pid) {
+  return readMatchingPreemptionSignal(path, pid) !== null;
+}
+
+async function clearPreemptionSignal(path) {
+  try {
+    await rm(path, { force: true });
+  } catch {
+    // Best-effort; the pid guard already prevents a foreign marker from
+    // matching, so a stale marker that survives cannot mislabel this run.
+  }
+}
+
+// Records where the current run's receipt lives so the sweep supervisor can
+// find it to auto-resume after a preemption, even if the runner was killed
+// before it could print the path.
+async function writeLastRunPointer(root, run) {
+  try {
+    const pointerPath = join(root, ...LAST_RUN_POINTER_RELATIVE);
+    await mkdir(dirname(pointerPath), { recursive: true });
+    await writeFile(pointerPath, `${JSON.stringify({ run_id: run.id, receipt: run.receiptPath }, null, 2)}\n`);
+  } catch {
+    // Best-effort; absence only disables the preemption auto-resume convenience.
+  }
+}
+
+export function readLastRunReceiptPath(root = REPO_ROOT) {
+  try {
+    const pointer = JSON.parse(readFileSync(join(root, ...LAST_RUN_POINTER_RELATIVE), 'utf8'));
+    return typeof pointer.receipt === 'string' ? pointer.receipt : null;
+  } catch {
+    return null;
+  }
+}
 
 function positiveInteger(value, label) {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -232,7 +300,52 @@ export function validateExecutionManifest(manifest) {
     }
   }
 
+  validateQuarantine(manifest);
   expandHardDependencies(Object.keys(manifest.lanes), manifest);
+  return true;
+}
+
+const QUARANTINE_EXPIRES_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// Validates the optional quarantine list shape only. Expiry is deliberately NOT
+// checked against the clock here: that gate is enforced at run time by
+// proof_lane_select.mjs so the contract test cannot rot as dates pass, while a
+// live run still fails loudly the moment a quarantine promise lapses.
+export function validateQuarantine(manifest) {
+  const quarantine = manifest.quarantine;
+  if (quarantine === undefined) return true;
+  if (!Array.isArray(quarantine)) {
+    throw new Error('proof lane manifest quarantine must be an array');
+  }
+  const seenLanes = new Set();
+  for (const entry of quarantine) {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('proof lane quarantine entry must be an object');
+    }
+    if (!manifest.lanes[entry.lane]) {
+      throw new Error(`proof lane quarantine references unknown lane ${entry.lane}`);
+    }
+    if (seenLanes.has(entry.lane)) {
+      throw new Error(`proof lane quarantine lists ${entry.lane} more than once`);
+    }
+    seenLanes.add(entry.lane);
+    if (typeof entry.owner !== 'string' || entry.owner.trim() === '') {
+      throw new Error(`proof lane quarantine ${entry.lane} needs a non-empty owner`);
+    }
+    if (typeof entry.reason !== 'string' || entry.reason.trim() === '') {
+      throw new Error(`proof lane quarantine ${entry.lane} needs a non-empty reason`);
+    }
+    if (
+      typeof entry.expires !== 'string' ||
+      !QUARANTINE_EXPIRES_PATTERN.test(entry.expires) ||
+      !Number.isFinite(Date.parse(entry.expires))
+    ) {
+      throw new Error(`proof lane quarantine ${entry.lane} needs an ISO YYYY-MM-DD expires date`);
+    }
+    if (entry.test !== undefined && (typeof entry.test !== 'string' || entry.test.trim() === '')) {
+      throw new Error(`proof lane quarantine ${entry.lane} test must be a non-empty string when present`);
+    }
+  }
   return true;
 }
 
@@ -794,6 +907,7 @@ function serializableLane(record) {
     group_terminated_after_leader_exit: record.groupTerminatedAfterLeaderExit ?? false,
     spawn_error: record.spawnError ?? null,
     blocked_by: record.blockedBy ?? null,
+    preempted_by: record.preemptedBy ?? null,
     artifact_dir: record.artifactDir ?? null,
     lane_dir: record.laneDir ?? null,
     database: record.database ?? null,
@@ -828,6 +942,10 @@ export async function runExecutionPlan(
     databaseProvider = createRepoLocalPostgresProvider({ env }),
     receiptContext = null,
     reusedLanes = new Map(),
+    keepGoing = false,
+    skippedLaneIds = new Set(),
+    quarantinedLaneIds = new Set(),
+    preemptionSignalPath = defaultPreemptionSignalPath(root),
     onStart = () => {},
     onResult = () => {},
     log = console.log,
@@ -845,8 +963,13 @@ export async function runExecutionPlan(
   const planned = expandHardDependencies(laneIds, manifest);
   const run = createRunContext({ root, runId });
   await mkdir(run.runDir, { recursive: true });
+  await clearPreemptionSignal(preemptionSignalPath);
+  await writeLastRunPointer(root, run);
   const records = new Map(
     planned.map((laneId) => {
+      if (skippedLaneIds.has(laneId)) {
+        return [laneId, { state: 'skipped', command: laneLabel(laneId, manifest.lanes[laneId]) }];
+      }
       const reused = reusedLanes.get(laneId);
       return [laneId, reused
         ? {
@@ -929,7 +1052,11 @@ export async function runExecutionPlan(
   const activePreparations = new Map();
   const runnerAbort = new AbortController();
   let interruptedSignal = null;
+  let preemptionDetected = false;
   const interrupt = (signal) => {
+    if (!preemptionDetected && preemptionSignalMatches(preemptionSignalPath, process.pid)) {
+      preemptionDetected = true;
+    }
     interruptedSignal ??= signal;
     failureSeen = true;
     if (!runnerAbort.signal.aborted) {
@@ -953,6 +1080,26 @@ export async function runExecutionPlan(
     for (const [signal, handler] of signalHandlers) signalSource.off(signal, handler);
   };
   let failureSeen = false;
+  // Centralizes how a non-zero lane outcome is labeled: a preemption is not a
+  // red, a quarantined lane is a known red that must not gate, and everything
+  // else is an ordinary failure that gates the run.
+  const applyTerminalStatus = (record, laneId) => {
+    if (record.status === 0) {
+      record.state = 'passed';
+      return;
+    }
+    if (preemptionDetected && interruptedSignal) {
+      record.state = 'preempted';
+      record.preemptedBy ??= 'unregistered Cargo/rustc build work';
+      return;
+    }
+    if (quarantinedLaneIds.has(laneId) && !interruptedSignal) {
+      record.state = 'quarantined';
+      return;
+    }
+    record.state = 'failed';
+    failureSeen = true;
+  };
 
   const start = async (laneId, claims, externalLocks) => {
     const record = records.get(laneId);
@@ -975,11 +1122,10 @@ export async function runExecutionPlan(
     let resourcesReleased = false;
     const resourceSetupStarted = now();
     const fail = (error) => {
-      record.state = 'failed';
       record.status = 1;
       const detail = error?.message ?? String(error);
       record.spawnError = record.spawnError ? `${record.spawnError}; ${detail}` : detail;
-      failureSeen = true;
+      applyTerminalStatus(record, laneId);
     };
     const releaseInvocation = async (success) => {
       if (!invocation || resourcesReleased) return;
@@ -1092,8 +1238,7 @@ export async function runExecutionPlan(
         record.status = 1;
         record.spawnError ??= `proof runner interrupted by ${interruptedSignal}`;
       }
-      record.state = record.status === 0 ? 'passed' : 'failed';
-      if (record.status !== 0) failureSeen = true;
+      applyTerminalStatus(record, laneId);
       await releaseInvocation(record.status === 0);
       if (record.status === 0) completedArtifacts.set(laneId, invocation.artifactDir);
       await appendFile(join(invocation.laneDir, 'lane.log'), `${record.state} after ${record.seconds}s\n`);
@@ -1150,18 +1295,22 @@ export async function runExecutionPlan(
       const record = records.get(laneId);
       if (record.state !== 'pending') continue;
       const dependencies = dependenciesFor(laneId, manifest);
-      const failedDependency = dependencies.find((dependency) => records.get(dependency)?.state === 'failed' || records.get(dependency)?.state === 'blocked');
+      const failedDependency = dependencies.find((dependency) => NON_PASSING_TERMINAL.has(records.get(dependency)?.state));
       if (failedDependency) {
         record.state = 'blocked';
         record.blockedBy = failedDependency;
         changed = true;
       }
     }
-    if (failureSeen) {
+    // keep-going keeps admitting dependency-satisfied lanes after an unrelated
+    // failure; only an interruption (or a non-keep-going failure) halts the
+    // queue and blanket-blocks the remaining pending lanes.
+    const admissionHalted = failureSeen && (!keepGoing || interruptedSignal !== null);
+    if (admissionHalted) {
       for (const record of records.values()) {
         if (record.state === 'pending') {
           record.state = 'blocked';
-          record.blockedBy = 'another lane failed';
+          record.blockedBy = interruptedSignal ? `runner interrupted by ${interruptedSignal}` : 'another lane failed';
           changed = true;
         }
       }
@@ -1170,7 +1319,7 @@ export async function runExecutionPlan(
 
     let startedAny = false;
     let waitingForCrossRunLock = false;
-    if (!failureSeen) {
+    if (!admissionHalted) {
       for (const laneId of planned) {
         if (running.size >= jobs) break;
         const record = records.get(laneId);
@@ -1229,7 +1378,11 @@ export async function runExecutionPlan(
       failureSeen = true;
       receipt.interrupted_by = interruptedSignal;
     }
-    receipt.state = failureSeen ? 'failed' : 'passed';
+    if (preemptionDetected) {
+      const marker = readMatchingPreemptionSignal(preemptionSignalPath, process.pid);
+      receipt.preempted_by = marker?.competitors ?? 'unregistered Cargo/rustc build work';
+    }
+    receipt.state = preemptionDetected ? 'preempted' : failureSeen ? 'failed' : 'passed';
     receipt.finished_at = new Date(now()).toISOString();
     await refreshReceipt();
   };
@@ -1238,7 +1391,7 @@ export async function runExecutionPlan(
   // Persist a corrected terminal state before returning so cancellation cannot
   // escape as a successful proof run.
   if (interruptedSignal && receipt.state !== 'failed') await finalizeReceipt();
-  return { run, receipt, success: !failureSeen && !interruptedSignal };
+  return { run, receipt, success: !failureSeen && !interruptedSignal, preempted: preemptionDetected };
   } finally {
     removeSignalHandlers();
   }

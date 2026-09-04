@@ -63,12 +63,24 @@ for (const exception of policy.exceptions) {
   assert.ok(exception.reason && exception.scope && exception.remove_when);
 }
 
-const expectedScript =
-  "node tools/dependency_policy.mjs && cargo deny check --hide-inclusion-graph advisories licenses sources bans && npm audit --audit-level=moderate && npm --prefix frontend audit --audit-level=moderate";
+const expectedOfflineScript =
+  "node tools/dependency_policy.mjs && cargo deny check --hide-inclusion-graph advisories licenses sources bans";
+const expectedAuditScript =
+  "npm_config_fetch_timeout=300000 npm_config_fetch_retries=5 npm audit --audit-level=moderate && npm_config_fetch_timeout=300000 npm_config_fetch_retries=5 npm --prefix frontend audit --audit-level=moderate";
+assert.equal(
+  packageJson.scripts?.["test:dependency-policy:offline"],
+  expectedOfflineScript,
+  "offline dependency proof command drifted",
+);
+assert.equal(
+  packageJson.scripts?.["test:dependency-policy:audit"],
+  expectedAuditScript,
+  "dependency audit command drifted",
+);
 assert.equal(
   packageJson.scripts?.["test:dependency-policy"],
-  expectedScript,
-  "dependency proof command drifted",
+  "npm run test:dependency-policy:offline && npm run test:dependency-policy:audit",
+  "dependency policy aggregate drifted",
 );
 
 console.log("dependency policy source contract passed");

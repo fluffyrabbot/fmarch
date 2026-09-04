@@ -4,12 +4,36 @@
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 import pathlib
 import signal
 import subprocess
 import sys
 import time
+
+
+# Distinct exit code returned when an already-running lane is preempted because
+# unregistered Cargo/rustc work appeared. Kept in sync with PREEMPTED_EXIT_CODE
+# in tools/proof_lane_execution.mjs; the proof sweep supervisor auto-resumes
+# once on this code. 75 remains "could not start / busy".
+PREEMPTED_EXIT_CODE = 69
+PREEMPTION_SIGNAL_PATH = pathlib.Path("target/proof-lanes/preemption-signal.json")
+
+
+def write_preemption_signal(target_pid: int, competitors: list[str]) -> None:
+    """Record a pid-scoped marker so the wrapped runner can label the abort as a
+    preemption rather than an ordinary interrupt before its group is killed."""
+    try:
+        PREEMPTION_SIGNAL_PATH.parent.mkdir(parents=True, exist_ok=True)
+        PREEMPTION_SIGNAL_PATH.write_text(
+            json.dumps({"pid": target_pid, "competitors": competitors[:8], "at": time.time()}),
+            encoding="utf-8",
+        )
+    except OSError:
+        # Best-effort; without the marker the runner records an ordinary
+        # interruption, which is safe but simply less precise.
+        pass
 
 
 def ancestor_pids(pid: int, processes: dict[int, tuple[int, str]]) -> set[int]:
@@ -204,8 +228,9 @@ def main() -> int:
                 )
                 if competitors:
                     report_competitors(competitors, appeared_late=True)
+                    write_preemption_signal(process.pid, competitors)
                     terminate_process_group(process)
-                    return 75
+                    return PREEMPTED_EXIT_CODE
             return process.returncode
         except (KeyboardInterrupt, SystemExit):
             terminate_process_group(process)

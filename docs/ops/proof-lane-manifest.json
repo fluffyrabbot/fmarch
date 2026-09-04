@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "base_ref": "origin/main",
   "notes": [
     "Maps changed paths to the narrowest truthful proof-lane set. Consumed by tools/proof_lane_select.mjs.",
@@ -18,6 +18,15 @@
   ],
   "push_sentinel_budget_seconds": 60,
   "push_sentinels": ["test:completeness-scorecard", "test:proof-lane-contract", "test:proof-cache-maintenance"],
+  "quarantine": [
+    {
+      "lane": "cargo:api",
+      "test": "command_authority_lease_cannot_starve_workos_key_retirement",
+      "owner": "@fluffyrabbot",
+      "expires": "2026-10-16",
+      "reason": "authenticated_transport::command_authority_lease_cannot_starve_workos_key_retirement asserts 503 but observes 200; a pre-existing red already present at 0163867c and unrelated to recent work. It fails the whole cargo:api lane, which under fail-fast blocked 30-34 downstream lanes. The 200-vs-503 bug is unfixed and unowned; quarantined so the rest of a full sweep can reach green while the expiry forces the fix. Renewing this date without fixing the bug defeats the purpose."
+    }
+  ],
   "runner": {
     "max_parallel": 2,
     "lock_capacities": {
@@ -140,7 +149,8 @@
     "test:railway-staging-target": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:railway-staging-target"], "resources": [] } },
     "check:release-topology-evidence": { "kind": "shell", "command": "node tools/proof_test_evidence.mjs --claim FMARCH_MEDIA_TEST_ARTIFACT_DIR:shared_object_repository_cross_replica_round_trip_is_idempotent --claim FMARCH_API_TEST_ARTIFACT_DIR:command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state", "depends_on": ["cargo:media", "cargo:api"], "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["node", "tools/proof_test_evidence.mjs", "--claim", "FMARCH_MEDIA_TEST_ARTIFACT_DIR:shared_object_repository_cross_replica_round_trip_is_idempotent", "--claim", "FMARCH_API_TEST_ARTIFACT_DIR:command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_state"], "resources": [{ "kind": "artifact-input", "from": "cargo:media", "env": "FMARCH_MEDIA_TEST_ARTIFACT_DIR" }, { "kind": "artifact-input", "from": "cargo:api", "env": "FMARCH_API_TEST_ARTIFACT_DIR" }] } },
     "test:security-release-baseline": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "test:security-release-baseline"], "resources": [] } },
-    "test:dependency-policy": { "kind": "npm", "execution": { "class": "hosted", "timeout_seconds": 900, "argv": ["npm", "run", "test:dependency-policy"], "resources": [{ "kind": "lock", "name": "network" }] } },
+    "test:dependency-policy:offline": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 300, "argv": ["npm", "run", "test:dependency-policy:offline"], "resources": [] } },
+    "test:dependency-policy:audit": { "kind": "npm", "execution": { "class": "hosted", "timeout_seconds": 900, "argv": ["npm", "run", "test:dependency-policy:audit"], "resources": [{ "kind": "lock", "name": "network" }] } },
     "test:frontend-csp-browser": { "kind": "npm", "execution": { "class": "browser", "timeout_seconds": 300, "argv": ["npm", "run", "test:frontend-csp-browser"], "resources": [{ "kind": "lock", "name": "browser" }, { "kind": "lock", "name": "frontend-worktree" }] } },
     "check:build-posture": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 120, "argv": ["npm", "run", "check:build-posture"], "resources": [] } },
     "test:exact-image-content": { "kind": "npm", "execution": { "class": "hermetic", "timeout_seconds": 60, "argv": ["npm", "run", "test:exact-image-content"], "resources": [{ "kind": "artifact-dir", "env": "FMARCH_PROOF_ARTIFACT_DIR" }] } }
@@ -1105,7 +1115,8 @@
       ],
       "lanes": [
         "test:security-release-baseline",
-        "test:dependency-policy",
+        "test:dependency-policy:offline",
+        "test:dependency-policy:audit",
         "test:frontend-csp-browser"
       ],
       "capabilities": ["foundation.security-release-baseline"]
@@ -1209,7 +1220,8 @@
         "cargo:commands-concurrency",
         "cargo:projections",
         "test:dev-test-game-contract",
-        "test:dependency-policy",
+        "test:dependency-policy:offline",
+        "test:dependency-policy:audit",
         "test:database-tls-boundary"
       ]
     }

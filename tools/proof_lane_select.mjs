@@ -17,11 +17,17 @@
 // CLI:
 //   node tools/proof_lane_select.mjs [--mode inner|push|sprint|full] [--base <ref>]
 //                                    [--changed <path> ...] [--json] [--list] [--run]
-//                                    [--jobs <positive integer>]
+//                                    [--jobs <positive integer>] [--keep-going]
+//                                    [--skip <lane-id>[,<lane-id>...]]
 //                                    [--only <lane-id>] [--resume <receipt>]
 //                                    [--force]
 //                                    [--record <lane-id>] [--regenerate <lane-id>]
 //                                    [--measure <lane-id> ...] [--measure-all]
+//
+// --keep-going runs every dependency-satisfied lane and reports all failures at
+// the end instead of blanket-blocking the queue on the first failure. --skip
+// excludes named lanes from a --run: they appear in the receipt as skipped
+// (never green, never gating), and their dependents block.
 //
 // --changed bypasses git and supplies the changed set explicitly (also used by
 // the contract test). --run executes the selected lanes in cost order. It is
@@ -51,8 +57,10 @@ import { dirname, join, matchesGlob, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  PREEMPTED_EXIT_CODE,
   expandHardDependencies,
   proofDatabaseIdentity,
+  readLastRunReceiptPath,
   runExecutionPlan,
   validateExecutionManifest,
 } from './proof_lane_execution.mjs';
@@ -197,6 +205,27 @@ export function loadTimings(path = TIMINGS_PATH) {
   } catch {
     return { version: 1, lanes: {} };
   }
+}
+
+// Declared known-red lanes that run and report but do not gate the sweep. Each
+// entry carries an owner and an expiry; the expiry is the load-bearing part —
+// quarantine must not become a place reds go to die.
+export function quarantineEntries(manifest) {
+  return Array.isArray(manifest.quarantine) ? manifest.quarantine : [];
+}
+
+// An entry is expired once its calendar day is strictly before the reference
+// day (compared date-only, so a same-day run stays shielded for the whole day).
+export function expiredQuarantineEntries(entries, referenceDate = new Date()) {
+  const referenceDay = Date.parse(referenceDate.toISOString().slice(0, 10));
+  return entries.filter((entry) => Date.parse(entry.expires) < referenceDay);
+}
+
+// The sweep supervisor auto-resumes exactly once after a preemption: only when
+// the host lock reported the distinct preemption exit code and the run was not
+// itself a resume (which would risk an unbounded resume loop).
+export function shouldAutoResumeAfterPreemption(exitStatus, argv) {
+  return exitStatus === PREEMPTED_EXIT_CODE && !argv.includes('--resume');
 }
 
 // A lane that failed still has a duration, but that duration is how long it took
@@ -724,7 +753,7 @@ function formatSeconds(entry) {
 }
 
 async function main(argv) {
-  const args = { mode: 'inner', modeSpecified: false, changed: [], json: false, list: false, run: false, jobs: 1, measure: [] };
+  const args = { mode: 'inner', modeSpecified: false, changed: [], json: false, list: false, run: false, jobs: 1, measure: [], keepGoing: false, skip: [] };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--mode') {
@@ -744,6 +773,8 @@ async function main(argv) {
     else if (arg === '--only') args.only = argv[++i];
     else if (arg === '--resume') args.resume = argv[++i];
     else if (arg === '--force') args.force = true;
+    else if (arg === '--keep-going') args.keepGoing = true;
+    else if (arg === '--skip') args.skip.push(...argv[++i].split(',').map((value) => value.trim()).filter(Boolean));
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!['inner', 'push', 'sprint', 'full'].includes(args.mode)) {
@@ -769,6 +800,12 @@ async function main(argv) {
   }
   if (args.force && (!args.run || args.mode !== 'full' || args.resume || args.only)) {
     throw new Error('--force is valid only with --mode full --run');
+  }
+  if (args.keepGoing && !args.run) {
+    throw new Error('--keep-going is only valid with --run');
+  }
+  if (args.skip.length > 0 && (!args.run || args.only || args.resume || measuring || args.list || args.record || args.regenerate)) {
+    throw new Error('--skip is only valid with a selection --run (not with --only, --resume, --list, --record, --measure, or --regenerate)');
   }
   if (measuring && (args.json || args.list || args.record || args.regenerate)) {
     throw new Error('--measure cannot be combined with --json, --list, --record, or --regenerate');
@@ -954,10 +991,34 @@ async function main(argv) {
     console.log(`frozen areas untouched, lanes skipped: ${selection.frozenSkipped.join(', ')}`);
   }
   if (args.run) {
+    const skippedLaneIds = new Set(args.skip);
+    for (const laneId of skippedLaneIds) {
+      if (!manifest.lanes[laneId]) throw new Error(`--skip references unknown lane ${laneId}`);
+      if (!ordered.includes(laneId)) throw new Error(`--skip ${laneId} is not in the selected plan; nothing to skip`);
+    }
+    const quarantineInPlan = quarantineEntries(manifest)
+      .filter((entry) => ordered.includes(entry.lane) && !skippedLaneIds.has(entry.lane));
+    const expired = expiredQuarantineEntries(quarantineInPlan);
+    if (expired.length > 0) {
+      for (const entry of expired) {
+        console.error(`quarantine expired: lane ${entry.lane} was due ${entry.expires} (owner ${entry.owner}); fix the underlying issue or renew the entry`);
+      }
+      throw new Error(`proof failed: ${expired.length} quarantine entr${expired.length === 1 ? 'y' : 'ies'} past expiry`);
+    }
+    const quarantinedLaneIds = new Set(quarantineInPlan.map((entry) => entry.lane));
+    if (skippedLaneIds.size > 0) {
+      console.log(`skipping ${skippedLaneIds.size} lane(s) (not proven): ${[...skippedLaneIds].join(', ')}`);
+    }
+    for (const entry of quarantineInPlan) {
+      console.log(`quarantined (not gating): ${entry.lane} — expires ${entry.expires}, owner ${entry.owner}`);
+    }
     const observations = new Map();
     context ??= currentProofContext();
     const execution = await runExecutionPlan(ordered, manifest, {
       jobs: args.jobs,
+      keepGoing: args.keepGoing,
+      skippedLaneIds,
+      quarantinedLaneIds,
       receiptContext: {
         ...context,
         mode: selection.mode,
@@ -977,6 +1038,10 @@ async function main(argv) {
     for (const [laneId, entry] of observations) runtimeTimings.lanes[laneId] = entry;
     writeTimings(RUNTIME_TIMINGS_PATH, runtimeTimings);
     if (!execution.success) {
+      if (execution.preempted) {
+        console.error(`proof preempted by unregistered build work; resume: npm run proof:lanes -- --resume ${JSON.stringify(execution.run.receiptPath)}`);
+        throw new Error(`proof preempted: inspect ${execution.run.receiptPath}`);
+      }
       const failed = Object.entries(execution.receipt.lanes)
         .find(([, lane]) => lane.state === 'failed')?.[0];
       console.error(`resume: npm run proof:lanes -- --resume ${JSON.stringify(execution.run.receiptPath)}`);
@@ -996,7 +1061,17 @@ async function main(argv) {
     }
     const reused = cachePlan?.hits.size ?? resume?.reusedLanes.size ?? 0;
     const cacheSummary = cachePlan ? `; reused ${reused}, cached ${stored.length}` : '';
-    console.log(`\nproof passed: ${ordered.length} lane(s)${cacheSummary} — receipt ${execution.run.receiptPath}`);
+    const quarantinedFailures = Object.values(execution.receipt.lanes).filter((lane) => lane.state === 'quarantined').length;
+    const notGreen = [];
+    if (skippedLaneIds.size > 0) notGreen.push(`${skippedLaneIds.size} skipped`);
+    if (quarantinedFailures > 0) notGreen.push(`${quarantinedFailures} quarantined-red`);
+    const notGreenSummary = notGreen.length > 0 ? ` — NOT fully green: ${notGreen.join(', ')}` : '';
+    console.log(`\nproof passed: ${ordered.length} lane(s)${cacheSummary}${notGreenSummary} — receipt ${execution.run.receiptPath}`);
+    for (const entry of quarantineInPlan) {
+      if (execution.receipt.lanes[entry.lane]?.state === 'passed') {
+        console.log(`note: quarantined lane ${entry.lane} passed — consider removing its quarantine entry`);
+      }
+    }
   }
 }
 
@@ -1006,11 +1081,22 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.env.HOST_HEAVY_BUILD_LOCK_HELD === '1' ||
     process.env.MESH_HEAVY_BUILD_LOCK_HELD === '1';
   if (requiresHostHeavyBuildLock(argv) && !lockHeld) {
-    const result = spawnSync(
+    const runUnderHostLock = (lockedArgv) => spawnSync(
       'python3',
-      [HOST_HEAVY_BUILD_LOCK_SCRIPT, '--', process.execPath, fileURLToPath(import.meta.url), ...argv],
+      [HOST_HEAVY_BUILD_LOCK_SCRIPT, '--', process.execPath, fileURLToPath(import.meta.url), ...lockedArgv],
       { cwd: REPO_ROOT, env: process.env, stdio: 'inherit' },
     );
+    let result = runUnderHostLock(argv);
+    // A lane preempted by unregistered build work is not a red; resume the run
+    // once (reusing passed lanes) rather than burning a manual cycle. A second
+    // preemption from the resume surfaces as failure without looping.
+    if (shouldAutoResumeAfterPreemption(result.status, argv)) {
+      const receiptPath = readLastRunReceiptPath();
+      if (receiptPath) {
+        console.error(`proof preempted by unregistered build work; auto-resuming once: ${receiptPath}`);
+        result = runUnderHostLock(['--resume', receiptPath]);
+      }
+    }
     if (result.error) throw result.error;
     process.exitCode = result.status ?? 1;
   } else main(argv).catch((error) => {

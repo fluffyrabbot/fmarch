@@ -26,6 +26,9 @@ import {
   measureLane,
   measureLanes,
   pruneUnknownLanes,
+  quarantineEntries,
+  expiredQuarantineEntries,
+  shouldAutoResumeAfterPreemption,
   requiresHostHeavyBuildLock,
   runLanes,
   selectLanes,
@@ -413,7 +416,7 @@ test('every Rust crate change arms pinned strict workspace Clippy', () => {
 });
 
 test('generated artifacts have one owner, a writer, and exact freshness selection', () => {
-  assert.equal(manifest.version, 8);
+  assert.equal(manifest.version, 9);
   const outputOwners = new Map();
   const artifactLanes = Object.entries(manifest.lanes).filter(
     ([, lane]) => lane.inputs || lane.outputs || lane.write_command,
@@ -667,6 +670,7 @@ test('manifest lanes are executable leaves, while human aggregate aliases stay o
     'test:frontend-role-proof:quick',
     'test:event-key-rotation-rehearsal',
     'test:release-topology',
+    'test:dependency-policy',
   ]) {
     assert.ok(packageScripts[alias], `human aggregate alias ${alias} must remain available`);
     assert.ok(!declared.has(alias), `aggregate alias ${alias} must not be a manifest leaf`);
@@ -1728,4 +1732,53 @@ test('a failed runtime observation falls through to the baseline, not to nothing
     fixtureManifest,
   );
   assert.equal(estimates.lanes['cargo:api'].seconds, 127.1);
+});
+
+test('the dependency policy lane is split on the network boundary', () => {
+  const offline = manifest.lanes['test:dependency-policy:offline'];
+  const audit = manifest.lanes['test:dependency-policy:audit'];
+  assert.ok(offline, 'offline dependency lane exists');
+  assert.ok(audit, 'audit dependency lane exists');
+  assert.equal(manifest.lanes['test:dependency-policy'], undefined, 'the aggregate is not a manifest leaf');
+  assert.deepEqual(offline.execution.resources, []);
+  assert.deepEqual(audit.execution.resources, [{ kind: 'lock', name: 'network' }]);
+  assert.equal(
+    packageScripts['test:dependency-policy'],
+    'npm run test:dependency-policy:offline && npm run test:dependency-policy:audit',
+  );
+  assert.match(packageScripts['test:dependency-policy:offline'], /cargo deny check/);
+  assert.doesNotMatch(packageScripts['test:dependency-policy:offline'], /npm audit/);
+  assert.match(packageScripts['test:dependency-policy:audit'], /npm audit/);
+  assert.match(packageScripts['test:dependency-policy:audit'], /npm --prefix frontend audit/);
+});
+
+test('quarantine declares the known api red with an owner and a not-yet-expired promise', () => {
+  const entries = quarantineEntries(manifest);
+  assert.ok(entries.length >= 1, 'at least one quarantine entry');
+  const first = entries[0];
+  assert.equal(first.lane, 'cargo:api');
+  assert.equal(first.test, 'command_authority_lease_cannot_starve_workos_key_retirement');
+  assert.ok(typeof first.owner === 'string' && first.owner.length > 0);
+  assert.match(first.expires, /^\d{4}-\d{2}-\d{2}$/);
+  for (const entry of entries) {
+    assert.ok(manifest.lanes[entry.lane], `quarantine lane ${entry.lane} must exist`);
+  }
+  assert.deepEqual(expiredQuarantineEntries(entries), []);
+});
+
+test('quarantine expiry is a date-only boundary that shields through the whole due day', () => {
+  const entries = [{ lane: 'cargo:api', owner: '@x', reason: 'r', expires: '2026-10-16' }];
+  assert.deepEqual(expiredQuarantineEntries(entries, new Date('2026-10-16T23:59:59.000Z')), []);
+  assert.deepEqual(
+    expiredQuarantineEntries(entries, new Date('2026-10-17T00:00:00.000Z')).map((entry) => entry.lane),
+    ['cargo:api'],
+  );
+});
+
+test('preemption auto-resume fires once for a non-resume run and never loops', () => {
+  assert.equal(shouldAutoResumeAfterPreemption(69, ['--mode', 'full', '--run']), true);
+  assert.equal(shouldAutoResumeAfterPreemption(69, ['--resume', '/x/receipt.json']), false);
+  assert.equal(shouldAutoResumeAfterPreemption(1, ['--mode', 'full', '--run']), false);
+  assert.equal(shouldAutoResumeAfterPreemption(0, ['--mode', 'full', '--run']), false);
+  assert.equal(shouldAutoResumeAfterPreemption(75, ['--mode', 'full', '--run']), false);
 });

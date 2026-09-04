@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import { loadManifest } from './proof_lane_select.mjs';
 import {
+  PREEMPTED_EXIT_CODE,
   createRepoLocalPostgresProvider,
   createRunContext,
   disposableDatabaseName,
@@ -14,6 +15,7 @@ import {
   prepareLaneInvocation,
   runExecutionPlan,
   validateExecutionManifest,
+  validateQuarantine,
 } from './proof_lane_execution.mjs';
 
 function fixture(lanes, capacities = { cargo: 1, browser: 1 }) {
@@ -862,4 +864,192 @@ test('the real visual lane declares a hard producer dependency and runner-scoped
   for (const source of [staticSource, routeLiveSource, routeStateSource]) {
     assert.match(source, /FMARCH_PROOF_ARTIFACT_DIR/);
   }
+});
+
+test('keep-going runs every dependency-satisfied lane and blocks none on an unrelated failure', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({
+    failA: lane(['failA'], []),
+    failB: lane(['failB'], []),
+    ok: lane(['ok'], []),
+  });
+  const result = await runExecutionPlan(['failA', 'failB', 'ok'], manifest, {
+    jobs: 1,
+    root,
+    keepGoing: true,
+    spawn: (file) => childThatCloses(file === 'ok' ? 0 : 1, 3),
+    log: () => {},
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.receipt.lanes.failA.state, 'failed');
+  assert.equal(result.receipt.lanes.failB.state, 'failed');
+  assert.equal(result.receipt.lanes.ok.state, 'passed');
+  assert.ok(!Object.values(result.receipt.lanes).some((laneRecord) => laneRecord.state === 'blocked'));
+});
+
+test('without keep-going an unrelated failure blanket-blocks the remaining pending lanes', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({
+    failA: lane(['failA'], []),
+    failB: lane(['failB'], []),
+    ok: lane(['ok'], []),
+  });
+  const result = await runExecutionPlan(['failA', 'failB', 'ok'], manifest, {
+    jobs: 1,
+    root,
+    spawn: (file) => childThatCloses(file === 'failA' ? 1 : 0, 3),
+    log: () => {},
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.receipt.lanes.failA.state, 'failed');
+  const blocked = Object.values(result.receipt.lanes).filter((laneRecord) => laneRecord.state === 'blocked').length;
+  assert.equal(blocked, 2);
+});
+
+test('a skipped lane never runs, never passes, and blocks its dependents without gating unrelated work', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const started = [];
+  const manifest = fixture({
+    skipme: lane(['skipme'], []),
+    dependent: { ...lane(['dependent'], []), depends_on: ['skipme'] },
+    other: lane(['other'], []),
+  });
+  const result = await runExecutionPlan(['skipme', 'dependent', 'other'], manifest, {
+    jobs: 2,
+    root,
+    skippedLaneIds: new Set(['skipme']),
+    spawn: (file) => { started.push(file); return childThatCloses(0, 3); },
+    log: () => {},
+  });
+  assert.equal(result.receipt.lanes.skipme.state, 'skipped');
+  assert.notEqual(result.receipt.lanes.skipme.state, 'passed');
+  assert.ok(!started.includes('skipme'));
+  assert.equal(result.receipt.lanes.dependent.state, 'blocked');
+  assert.equal(result.receipt.lanes.other.state, 'passed');
+  assert.equal(result.success, true);
+});
+
+test('a quarantined lane failure is recorded distinctly and does not gate the run', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({ known_red: lane(['known_red'], []), healthy: lane(['healthy'], []) });
+  const result = await runExecutionPlan(['known_red', 'healthy'], manifest, {
+    jobs: 2,
+    root,
+    quarantinedLaneIds: new Set(['known_red']),
+    spawn: (file) => childThatCloses(file === 'known_red' ? 1 : 0, 3),
+    log: () => {},
+  });
+  assert.equal(result.receipt.lanes.known_red.state, 'quarantined');
+  assert.equal(result.receipt.lanes.healthy.state, 'passed');
+  assert.equal(result.success, true);
+  assert.equal(result.receipt.state, 'passed');
+});
+
+test('a genuine failure still gates even when another lane is quarantined', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifest = fixture({ known_red: lane(['known_red'], []), real_red: lane(['real_red'], []) });
+  const result = await runExecutionPlan(['known_red', 'real_red'], manifest, {
+    jobs: 2,
+    root,
+    keepGoing: true,
+    quarantinedLaneIds: new Set(['known_red']),
+    spawn: () => childThatCloses(1, 3),
+    log: () => {},
+  });
+  assert.equal(result.receipt.lanes.known_red.state, 'quarantined');
+  assert.equal(result.receipt.lanes.real_red.state, 'failed');
+  assert.equal(result.success, false);
+  assert.equal(result.receipt.state, 'failed');
+});
+
+test('a preemption marker records the in-flight lane as preempted rather than a red', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const signalSource = new EventEmitter();
+  const preemptionSignalPath = join(root, 'preemption-signal.json');
+  let startedResolve;
+  const started = new Promise((resolve) => { startedResolve = resolve; });
+  const resultPromise = runExecutionPlan(['slow'], fixture({ slow: lane(['slow'], []) }), {
+    root,
+    signalSource,
+    preemptionSignalPath,
+    spawn() {
+      const child = new EventEmitter();
+      child.kill = (sig) => { queueMicrotask(() => child.emit('close', null, sig)); return true; };
+      startedResolve();
+      return child;
+    },
+    log: () => {},
+  });
+  await started;
+  await writeFile(preemptionSignalPath, JSON.stringify({ pid: process.pid, competitors: ['pid=999 cargo build'], at: Date.now() }));
+  signalSource.emit('SIGTERM');
+  const result = await resultPromise;
+  assert.equal(result.success, false);
+  assert.equal(result.preempted, true);
+  assert.equal(result.receipt.lanes.slow.state, 'preempted');
+  assert.equal(result.receipt.state, 'preempted');
+  assert.deepEqual(result.receipt.preempted_by, ['pid=999 cargo build']);
+});
+
+test('an interruption without a preemption marker stays an ordinary red, not a preemption', async (t) => {
+  const root = await temporaryRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const signalSource = new EventEmitter();
+  let startedResolve;
+  const started = new Promise((resolve) => { startedResolve = resolve; });
+  const resultPromise = runExecutionPlan(['slow'], fixture({ slow: lane(['slow'], []) }), {
+    root,
+    signalSource,
+    preemptionSignalPath: join(root, 'absent-marker.json'),
+    spawn() {
+      const child = new EventEmitter();
+      child.kill = (sig) => { queueMicrotask(() => child.emit('close', null, sig)); return true; };
+      startedResolve();
+      return child;
+    },
+    log: () => {},
+  });
+  await started;
+  signalSource.emit('SIGTERM');
+  const result = await resultPromise;
+  assert.equal(result.preempted, false);
+  assert.equal(result.receipt.lanes.slow.state, 'failed');
+  assert.equal(result.receipt.lanes.slow.interrupted_by, 'SIGTERM');
+});
+
+test('quarantine shape validation requires a known lane, owner, reason, ISO expiry, and no duplicates', () => {
+  const base = fixture({ a: lane(['a']), b: lane(['b']) });
+  assert.equal(validateQuarantine(base), true);
+  assert.equal(
+    validateExecutionManifest({ ...base, quarantine: [{ lane: 'a', owner: '@x', reason: 'known red', expires: '2026-10-16' }] }),
+    true,
+  );
+  assert.throws(() => validateQuarantine({ ...base, quarantine: 'nope' }), /must be an array/);
+  assert.throws(() => validateQuarantine({ ...base, quarantine: [{ lane: 'gone', owner: '@x', reason: 'r', expires: '2026-10-16' }] }), /unknown lane gone/);
+  assert.throws(() => validateQuarantine({ ...base, quarantine: [{ lane: 'a', owner: '', reason: 'r', expires: '2026-10-16' }] }), /non-empty owner/);
+  assert.throws(() => validateQuarantine({ ...base, quarantine: [{ lane: 'a', owner: '@x', reason: '', expires: '2026-10-16' }] }), /non-empty reason/);
+  assert.throws(() => validateQuarantine({ ...base, quarantine: [{ lane: 'a', owner: '@x', reason: 'r', expires: 'soon' }] }), /YYYY-MM-DD/);
+  assert.throws(
+    () => validateQuarantine({
+      ...base,
+      quarantine: [
+        { lane: 'a', owner: '@x', reason: 'r', expires: '2026-10-16' },
+        { lane: 'a', owner: '@y', reason: 'r2', expires: '2026-11-01' },
+      ],
+    }),
+    /more than once/,
+  );
+});
+
+test('the host build lock and executor agree on the preemption exit code', async () => {
+  assert.equal(PREEMPTED_EXIT_CODE, 69);
+  const lockScript = await readFile(new URL('../scripts/with-heavy-build-lock.py', import.meta.url), 'utf8');
+  assert.match(lockScript, /PREEMPTED_EXIT_CODE = 69/);
+  assert.match(lockScript, /write_preemption_signal\(process\.pid, competitors\)/);
 });

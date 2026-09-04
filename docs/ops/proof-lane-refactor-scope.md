@@ -151,6 +151,58 @@ four-database topology were removed as a measured no-go; stable case IDs, the
 artifacts remain. Any future optimization must profile the residual critical
 path before proposing another topology change.
 
+### Orchestration honesty — 2026-09-04
+
+A full sweep that took five sequential resume cycles motivated four scheduler
+changes that trade fail-fast for honest, complete reporting, plus one network
+isolation. None touch lane duration; they attack the fail-fast and preemption
+losses that dominated wall clock.
+
+- `--keep-going` runs every dependency-satisfied lane and reports all failures
+  at the end. Without it, one red blanket-blocks the queue and the next problem
+  only surfaces a cycle later; the dependency-aware block is unchanged, so a
+  genuine dependency still blocks its consumer.
+- `--skip <lane,...>` excludes a known-bad lane from a `--run`. Skipped lanes
+  appear in the receipt in a `skipped` state that is never green and never
+  counted as passing, their dependents block, and the run verdict states the
+  skip count. It replaces the `#[ignore]` hack with a recorded, visible
+  exclusion.
+- A declared `quarantine` list carries a lane, an owner, an expiry, and a
+  reason. Quarantined lanes run and report but do not gate: a failure is
+  recorded as `quarantined`, distinct from `failed`, and does not set the run's
+  failure. The expiry is the load-bearing part — a run that relies on an
+  in-plan quarantine past its expiry fails loudly, so quarantine cannot become
+  a place reds go to die. Shape is validated by the proof-lane contract; expiry
+  is enforced at run time so the contract does not rot as dates pass. The first
+  entry quarantines `cargo:api` for its pre-existing
+  `command_authority_lease_cannot_starve_workos_key_retirement` 503-vs-200 red
+  (present at `0163867c`, unfixed and unowned), which under fail-fast blocked
+  30-34 downstream lanes.
+- `test:dependency-policy` is split on the network boundary.
+  `test:dependency-policy:offline` (policy check plus `cargo deny`, measured
+  1.2s, deterministic) declares no network resource; `test:dependency-policy:audit`
+  (the two `npm audit` calls, pinned to a long fetch timeout and retries) is the
+  only half that claims the `network` lock. During this change the audit half
+  ran the full 300s pinned timeout and then failed with an npm registry error —
+  a live demonstration that this outage would otherwise block the deterministic
+  half and, under fail-fast, ~30 lanes. The audit baseline is therefore a
+  labeled `network-boundary-estimate` pending a healthy re-measure via
+  `--measure test:dependency-policy:audit`; the `test:dependency-policy`
+  aggregate remains a human alias outside the lane table.
+
+Preemption disambiguation deviates from a literal per-lane retry by necessity.
+The heavy-build lock wraps the entire sweep: `proof_lane_select.mjs` re-execs
+the whole run under `scripts/with-heavy-build-lock.py`, whose competitor monitor
+watches the whole `node` group and, on a late competitor, must fail closed by
+terminating that group. A per-lane retry inside `proof_lane_execution.mjs` is
+therefore impossible — the executor is the process being killed. Instead the
+lock writes a pid-scoped marker and returns a distinct exit code (69, kept in
+sync with `PREEMPTED_EXIT_CODE`) before terminating; the executor reads the
+marker and records the in-flight lane as `preempted` (distinct from `failed`)
+with the receipt state and `preempted_by`; and the sweep supervisor in
+`proof_lane_select.mjs` auto-resumes the receipt exactly once, so a transient
+preemption self-heals and a persistent one surfaces without looping.
+
 ## Delivered foundation
 
 The manifest now contains executable leaves only. The human-facing
