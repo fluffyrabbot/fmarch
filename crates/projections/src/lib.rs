@@ -67,7 +67,7 @@
 
 use attention::{self, WatchState, WatchTarget};
 use content_reference::{
-    self, PostKind, PostRef, Quotation, QuotationPostState, QuotationThreadState,
+    self, PostKind, PostRef, ProfileMention, Quotation, QuotationPostState, QuotationThreadState,
 };
 use content_registry::{ContentHash, PackArtifactSnapshot, PackRef};
 use domain::phase::PhaseId;
@@ -4081,15 +4081,22 @@ async fn fold_discussion_event(
         forum::POST_SUBMITTED => {
             let body = str_field(&event.payload, "body", &event.kind)?;
             let quotations = quotations_from_event(&event.payload, &event.kind)?;
+            let mentions = mentions_from_event(&event.payload, &event.kind)?;
             let author_profile_id = discussion_author_profile_id(event)?;
             sqlx::query(
-                "INSERT INTO discussion_post (source_seq, topic_id, author_profile_id, body, quotations, created_seq, created_at) VALUES ($1, $2, $3, $4, $5, $1, $6)",
+                "INSERT INTO discussion_post (source_seq, topic_id, author_profile_id, body, quotations, mentions, created_seq, created_at) VALUES ($1, $2, $3, $4, $5, $6, $1, $7)",
             )
             .bind(event.seq)
             .bind(stream_id)
             .bind(author_profile_id)
             .bind(&body)
             .bind(serde_json::to_value(&quotations).map_err(|source| {
+                ProjectionError::Payload {
+                    kind: event.kind.clone(),
+                    source,
+                }
+            })?)
+            .bind(serde_json::to_value(&mentions).map_err(|source| {
                 ProjectionError::Payload {
                     kind: event.kind.clone(),
                     source,
@@ -4149,6 +4156,16 @@ async fn fold_discussion_event(
                 event.seq,
                 event.occurred_at,
                 author_principal_id,
+            )
+            .await?;
+            fan_out_profile_mentions(
+                tx,
+                stream_id,
+                event.seq,
+                event.occurred_at,
+                author_profile_id,
+                author_principal_id,
+                &mentions,
             )
             .await?;
         }
@@ -9988,6 +10005,67 @@ fn quotations_from_event(
         kind: kind.to_string(),
         source,
     })
+}
+
+fn mentions_from_event(
+    payload: &serde_json::Value,
+    kind: &str,
+) -> Result<Vec<ProfileMention>, ProjectionError> {
+    content_reference::mentions_from_payload(payload).map_err(|source| ProjectionError::Payload {
+        kind: kind.to_string(),
+        source,
+    })
+}
+
+/// Fan out decided profile mentions into the reason-derived inbox. Publicity
+/// was decided at write time against `public_profile`; the fold resolves only
+/// the addressed profile's current active principal via `member_profile`, the
+/// same class of cross-family read the watch backfill already performs. A
+/// missing or erased (principal-less) profile keeps its stored edge while the
+/// delivery link is skipped, and a self-mention is accepted but delivers
+/// nothing, matching the author-suppression rule in watch fan-out.
+async fn fan_out_profile_mentions(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    surface_id: Uuid,
+    source_seq: i64,
+    occurred_at: i64,
+    author_profile_id: Option<Uuid>,
+    author_principal_id: Option<PrincipalId>,
+    mentions: &[ProfileMention],
+) -> Result<(), ProjectionError> {
+    for mention in mentions {
+        if Some(mention.profile_id) == author_profile_id {
+            continue;
+        }
+        let target_principal_id: Option<Uuid> = sqlx::query_scalar(
+            "SELECT active_principal_id FROM member_profile WHERE profile_id = $1",
+        )
+        .bind(mention.profile_id)
+        .fetch_optional(&mut **tx)
+        .await?
+        .flatten();
+        let Some(target_principal_id) = target_principal_id else {
+            continue;
+        };
+        if Some(PrincipalId::from_uuid(target_principal_id)) == author_principal_id {
+            continue;
+        }
+        sqlx::query(
+            r#"
+            INSERT INTO member_inbox_item (
+                principal_id, surface_id, source_seq, reason, occurred_at
+            ) VALUES ($1, $2, $3, 'mention', $4)
+            ON CONFLICT (principal_id, surface_id, source_seq, reason) DO NOTHING
+            "#,
+        )
+        .bind(target_principal_id)
+        .bind(surface_id)
+        .bind(source_seq)
+        .bind(occurred_at)
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
 }
 
 fn quotations_from_json(

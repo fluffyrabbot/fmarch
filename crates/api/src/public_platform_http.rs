@@ -701,10 +701,19 @@ struct CreateDiscussionTopicRequest {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct DiscussionPostMentionInput {
+    handle: String,
+    offset: usize,
+    len: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct CreateDiscussionPostRequest {
     body: String,
     #[serde(default)]
     quotations: Vec<Quotation>,
+    #[serde(default)]
+    mentions: Vec<DiscussionPostMentionInput>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -901,20 +910,32 @@ async fn create_discussion_post(
     .await?;
     let quotations = content_reference::decide_quotations(&thread, &request.quotations)
         .map_err(content_reference_reject_api_error)?;
+    if request.mentions.len() > content_reference::MAX_MENTIONS_PER_POST {
+        return Err(content_reference_reject_api_error(
+            content_reference::ContentReferenceReject::TooManyMentions,
+        ));
+    }
     let body = if request.body.trim().is_empty() {
-        if quotations.is_empty() {
+        if quotations.is_empty() && request.mentions.is_empty() {
             validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?;
         }
         String::new()
     } else {
         validate_discussion_text(request.body.as_str(), "discussion post", 10_000)?
     };
+    let mentions = resolve_discussion_mentions(&state.pool, &request.mentions)
+        .await
+        .and_then(|candidates| {
+            content_reference::decide_profile_mentions(body.as_str(), candidates.as_slice())
+        })
+        .map_err(content_reference_reject_api_error)?;
     let events = forum::decide_topic(
         Some(&topic_state),
         TopicCommand::SubmitPost {
             body,
             author_profile_id: profile.profile_id,
             quotations,
+            mentions,
         },
     )
     .map_err(forum_reject_api_error)?;
@@ -1331,6 +1352,31 @@ fn forum_reject_api_error(reject: ForumReject) -> ApiError {
     }
 }
 
+/// Resolve mention handles to currently public profiles inside the posting
+/// path. Unknown, private, and redacted handles all miss `public_profile`,
+/// so they collapse to one non-disclosing reject before the pure span
+/// decision runs.
+async fn resolve_discussion_mentions(
+    pool: &sqlx::PgPool,
+    mentions: &[DiscussionPostMentionInput],
+) -> Result<Vec<content_reference::MentionCandidate>, content_reference::ContentReferenceReject> {
+    let mut candidates = Vec::with_capacity(mentions.len());
+    for mention in mentions {
+        let normalized = mention.handle.trim().to_ascii_lowercase();
+        let resolved = projections::public_profile_by_handle(pool, normalized.as_str())
+            .await
+            .map_err(|_| content_reference::ContentReferenceReject::UnknownMentionTarget)?
+            .ok_or(content_reference::ContentReferenceReject::UnknownMentionTarget)?;
+        candidates.push(content_reference::MentionCandidate {
+            profile_id: resolved.profile_id,
+            handle: resolved.handle,
+            offset: mention.offset,
+            len: mention.len,
+        });
+    }
+    Ok(candidates)
+}
+
 fn content_reference_reject_api_error(
     reject: content_reference::ContentReferenceReject,
 ) -> ApiError {
@@ -1342,6 +1388,10 @@ fn content_reference_reject_api_error(
         | content_reference::ContentReferenceReject::DuplicateQuotation => StatusCode::BAD_REQUEST,
         content_reference::ContentReferenceReject::QuotationNotFound => StatusCode::NOT_FOUND,
         content_reference::ContentReferenceReject::InvalidPostKind => StatusCode::BAD_REQUEST,
+        content_reference::ContentReferenceReject::UnknownMentionTarget
+        | content_reference::ContentReferenceReject::InvalidMentionSpan
+        | content_reference::ContentReferenceReject::DuplicateMention
+        | content_reference::ContentReferenceReject::TooManyMentions => StatusCode::BAD_REQUEST,
     };
     ApiError::Reject {
         status,

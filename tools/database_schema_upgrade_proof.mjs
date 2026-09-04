@@ -271,6 +271,23 @@ VALUES ('82000000-0000-4000-8000-000000000001', 5,
   '81000000-0000-4000-8000-000000000001', 5);
 `;
 
+const discussionPostMentionsSeedSql = String.raw`
+-- Behavioral fixtures for the 0006 discussion-post mention edge. The post is
+-- written before the mentions column exists; the upgrade must backfill it to
+-- the empty list, which is also how pre-mention events upcast.
+INSERT INTO discussion_area (area_id, slug, title, description, created_seq)
+VALUES ('83000000-0000-4000-8000-000000000001', 'mentions', 'Mentions', '', 1);
+INSERT INTO discussion_topic
+  (topic_id, area_id, title, author_profile_id, posting_state, visibility,
+   post_count, created_seq, updated_seq, version, created_at, updated_at)
+VALUES ('84000000-0000-4000-8000-000000000001', '83000000-0000-4000-8000-000000000001',
+  'Mention edges', '40000000-0000-4000-8000-000000000001', 'open', 'visible',
+  1, 1, 1, 1, 1, 1);
+INSERT INTO discussion_post (source_seq, topic_id, body, created_seq, author_profile_id, created_at)
+VALUES (1, '84000000-0000-4000-8000-000000000001', 'hello', 1,
+  '40000000-0000-4000-8000-000000000001', 1);
+`;
+
 const migrationFixtures = [
   {
     version: 4,
@@ -351,6 +368,23 @@ const migrationFixtures = [
         expected: "0:0",
         message:
           "0005 must drop the subscription-keyed inbox table and start with an empty member inbox cursor",
+      },
+    ],
+  },
+  {
+    version: 6,
+    seed: discussionPostMentionsSeedSql,
+    assertions: [
+      {
+        sql: String.raw`SELECT
+        (SELECT mentions::text FROM discussion_post
+         WHERE topic_id = '84000000-0000-4000-8000-000000000001')::text || ':' ||
+        (SELECT is_nullable || ':' || column_default FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'discussion_post'
+           AND column_name = 'mentions')::text`,
+        expected: "[]:NO:'[]'::jsonb",
+        message:
+          "0006 must backfill existing discussion posts to the empty mention list with a non-null default",
       },
     ],
   },

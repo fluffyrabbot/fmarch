@@ -1,6 +1,6 @@
 //! Public forum area/topic lifecycle and profile-authored posting policy.
 
-use content_reference::{quotations_payload, Quotation};
+use content_reference::{mentions_payload, quotations_payload, ProfileMention, Quotation};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -110,6 +110,7 @@ pub enum TopicCommand {
         body: String,
         author_profile_id: Uuid,
         quotations: Vec<Quotation>,
+        mentions: Vec<ProfileMention>,
     },
     SetPostingState {
         posting_state: PostingState,
@@ -130,6 +131,7 @@ pub enum TopicEvent {
         body: String,
         author_profile_id: Uuid,
         quotations: Vec<Quotation>,
+        mentions: Vec<ProfileMention>,
     },
     PostingStateChanged {
         posting_state: PostingState,
@@ -160,11 +162,15 @@ impl TopicEvent {
                 body,
                 author_profile_id,
                 quotations,
+                mentions,
             } => {
                 let mut payload =
                     serde_json::json!({"body": body, "author_profile_id": author_profile_id});
                 if let Some(quotations) = quotations_payload(quotations) {
                     payload["quotations"] = quotations;
+                }
+                if let Some(mentions) = mentions_payload(mentions) {
+                    payload["mentions"] = mentions;
                 }
                 payload
             }
@@ -202,6 +208,7 @@ pub fn decide_topic(
                 body: opening_body,
                 author_profile_id,
                 quotations: Vec::new(),
+                mentions: Vec::new(),
             },
         ]),
         (Some(_), TopicCommand::Create { .. }) => Err(ForumReject::TopicAlreadyExists),
@@ -212,6 +219,7 @@ pub fn decide_topic(
                 body,
                 author_profile_id,
                 quotations,
+                mentions,
             },
         ) => {
             if state.visibility != TopicVisibility::Visible {
@@ -224,6 +232,7 @@ pub fn decide_topic(
                 body,
                 author_profile_id,
                 quotations,
+                mentions,
             }])
         }
         (Some(state), TopicCommand::SetPostingState { posting_state })

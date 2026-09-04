@@ -2521,7 +2521,14 @@ fn quotation_reject(reject: ContentReferenceReject) -> Reject {
         | ContentReferenceReject::TooManyQuotations
         | ContentReferenceReject::QuotationChainTooDeep
         | ContentReferenceReject::DuplicateQuotation => Reject::InvalidTarget,
-        ContentReferenceReject::InvalidPostKind => Reject::Internal(reject.to_string()),
+        // The game path never decides profile mentions (slice 4 adds slot
+        // mentions on its own decision function), so these arms are
+        // unreachable; they exist for exhaustiveness only.
+        ContentReferenceReject::InvalidPostKind
+        | ContentReferenceReject::UnknownMentionTarget
+        | ContentReferenceReject::InvalidMentionSpan
+        | ContentReferenceReject::DuplicateMention
+        | ContentReferenceReject::TooManyMentions => Reject::Internal(reject.to_string()),
     }
 }
 

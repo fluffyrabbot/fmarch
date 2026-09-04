@@ -948,7 +948,8 @@ CREATE TABLE public.discussion_post (
     created_seq bigint NOT NULL,
     author_profile_id uuid,
     created_at bigint DEFAULT 0 NOT NULL,
-    quotations jsonb DEFAULT '[]'::jsonb NOT NULL
+    quotations jsonb DEFAULT '[]'::jsonb NOT NULL,
+    mentions jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
 

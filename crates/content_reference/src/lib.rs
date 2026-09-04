@@ -203,6 +203,107 @@ pub fn quotations_payload(quotations: &[Quotation]) -> Option<serde_json::Value>
         .then(|| serde_json::to_value(quotations).expect("quotations serialize"))
 }
 
+/// Byte range of the mentioning post's immutable body that the address
+/// annotates. There is deliberately no game/community enum over mentions:
+/// [`ProfileMention`] is the community address and the game address will be a
+/// separate type with a separate decide function, so the cross-universe case is
+/// unrepresentable instead of rejected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MentionSpan {
+    pub offset: usize,
+    pub len: usize,
+}
+
+/// Address of a community member inside a profile-authored thread. Carries the
+/// resolved profile id, never the handle string: a later rename must not
+/// re-target the link, and no plaintext handle may reach a durable payload
+/// beyond what the author already typed into their own prose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileMention {
+    pub profile_id: Uuid,
+    pub span: MentionSpan,
+}
+
+/// A handle the API boundary resolved to a currently public profile, awaiting
+/// the pure span decision. Adapters populate this from `public_profile`;
+/// mention validation stays pure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MentionCandidate {
+    pub profile_id: Uuid,
+    pub handle: String,
+    pub offset: usize,
+    pub len: usize,
+}
+
+pub const MAX_MENTIONS_PER_POST: usize = 8;
+
+/// Decide the profile mentions a new community post may carry. The candidates
+/// arrive already resolved to currently public profiles; unknown, private, and
+/// redacted handles all fail resolution upstream, so they collapse to one
+/// non-disclosing reject before this function ever runs.
+pub fn decide_profile_mentions(
+    body: &str,
+    candidates: &[MentionCandidate],
+) -> Result<Vec<ProfileMention>, ContentReferenceReject> {
+    if candidates.is_empty() {
+        return Ok(Vec::new());
+    }
+    if candidates.len() > MAX_MENTIONS_PER_POST {
+        return Err(ContentReferenceReject::TooManyMentions);
+    }
+    let mut seen = Vec::with_capacity(candidates.len());
+    let mut decided = Vec::with_capacity(candidates.len());
+    let mut previous_end = 0usize;
+    for candidate in candidates {
+        let end = candidate.offset.saturating_add(candidate.len);
+        if end > body.len()
+            || !body.is_char_boundary(candidate.offset)
+            || !body.is_char_boundary(end)
+        {
+            return Err(ContentReferenceReject::InvalidMentionSpan);
+        }
+        let span_text = &body[candidate.offset..end];
+        span_text
+            .strip_prefix('@')
+            .filter(|remainder| *remainder == candidate.handle.as_str())
+            .ok_or(ContentReferenceReject::InvalidMentionSpan)?;
+        if candidate.offset < previous_end {
+            return Err(ContentReferenceReject::InvalidMentionSpan);
+        }
+        if seen
+            .iter()
+            .any(|profile_id| profile_id == &candidate.profile_id)
+        {
+            return Err(ContentReferenceReject::DuplicateMention);
+        }
+        seen.push(candidate.profile_id);
+        previous_end = end;
+        decided.push(ProfileMention {
+            profile_id: candidate.profile_id,
+            span: MentionSpan {
+                offset: candidate.offset,
+                len: candidate.len,
+            },
+        });
+    }
+    Ok(decided)
+}
+
+/// Parse the additive `mentions` field. Absent, null, or `[]` is none, which is
+/// how every pre-mention event upcasts.
+pub fn mentions_from_payload(
+    payload: &serde_json::Value,
+) -> Result<Vec<ProfileMention>, serde_json::Error> {
+    match payload.get("mentions") {
+        None | Some(serde_json::Value::Null) => Ok(Vec::new()),
+        Some(value) => serde_json::from_value(value.clone()),
+    }
+}
+
+pub fn mentions_payload(mentions: &[ProfileMention]) -> Option<serde_json::Value> {
+    (!mentions.is_empty()).then(|| serde_json::to_value(mentions).expect("mentions serialize"))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ContentReferenceReject {
     #[error("post kind is invalid")]
@@ -219,4 +320,120 @@ pub enum ContentReferenceReject {
     QuotationChainTooDeep,
     #[error("post quotes the same target more than once")]
     DuplicateQuotation,
+    #[error("unknown mention target")]
+    UnknownMentionTarget,
+    #[error("invalid mention span")]
+    InvalidMentionSpan,
+    #[error("post mentions the same profile more than once")]
+    DuplicateMention,
+    #[error("post carries too many mentions")]
+    TooManyMentions,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn candidate(profile_id: u128, handle: &str, offset: usize, len: usize) -> MentionCandidate {
+        MentionCandidate {
+            profile_id: Uuid::from_u128(profile_id),
+            handle: handle.to_string(),
+            offset,
+            len,
+        }
+    }
+
+    #[test]
+    fn empty_mentions_decide_to_nothing() {
+        assert_eq!(decide_profile_mentions("hello", &[]), Ok(Vec::new()));
+    }
+
+    #[test]
+    fn happy_path_stores_id_and_span() {
+        let decided = decide_profile_mentions("@alice hi", &[candidate(1, "alice", 0, 6)]).unwrap();
+        assert_eq!(
+            decided,
+            vec![ProfileMention {
+                profile_id: Uuid::from_u128(1),
+                span: MentionSpan { offset: 0, len: 6 },
+            }]
+        );
+    }
+
+    #[test]
+    fn over_cap_rejects() {
+        let candidates: Vec<MentionCandidate> = (0..=MAX_MENTIONS_PER_POST)
+            .map(|index| candidate(index as u128, "alice", 0, 6))
+            .collect();
+        assert_eq!(
+            decide_profile_mentions("@alice", &candidates),
+            Err(ContentReferenceReject::TooManyMentions),
+        );
+    }
+
+    #[test]
+    fn span_violations_reject() {
+        // Out of range.
+        assert_eq!(
+            decide_profile_mentions("hi", &[candidate(1, "alice", 0, 6)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Does not start with '@'.
+        assert_eq!(
+            decide_profile_mentions("alice!", &[candidate(1, "alice", 0, 5)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Span text disagrees with the resolved handle.
+        assert_eq!(
+            decide_profile_mentions("@alice", &[candidate(1, "bob", 0, 6)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Mid-character boundary.
+        assert_eq!(
+            decide_profile_mentions("é", &[candidate(1, "alice", 1, 1)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+    }
+
+    #[test]
+    fn ordering_and_duplicate_violations_reject() {
+        // Overlapping spans (same span twice for distinct profiles is still
+        // not ascending).
+        assert_eq!(
+            decide_profile_mentions(
+                "@alice x",
+                &[candidate(1, "alice", 0, 6), candidate(2, "alice", 0, 6),],
+            ),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Descending spans.
+        assert_eq!(
+            decide_profile_mentions(
+                "@alice @bob",
+                &[candidate(2, "bob", 7, 4), candidate(1, "alice", 0, 6),],
+            ),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Duplicate target.
+        assert_eq!(
+            decide_profile_mentions(
+                "@alice @alice",
+                &[candidate(1, "alice", 0, 6), candidate(1, "alice", 7, 6),],
+            ),
+            Err(ContentReferenceReject::DuplicateMention),
+        );
+    }
+
+    #[test]
+    fn missing_mentions_upcast_to_empty() {
+        assert_eq!(
+            mentions_from_payload(&serde_json::json!({})).unwrap(),
+            Vec::new(),
+        );
+        assert_eq!(
+            mentions_from_payload(&serde_json::json!({ "mentions": null })).unwrap(),
+            Vec::new(),
+        );
+        assert_eq!(mentions_payload(&[]), None);
+    }
 }

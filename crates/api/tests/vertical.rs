@@ -12369,3 +12369,283 @@ async fn websocket_hello_announces_protocol(pool: sqlx::PgPool) {
 
     server.abort();
 }
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn discussion_mentions_reject_indistinguishably_and_validate_spans(pool: sqlx::PgPool) {
+    let app = router_with_local_proof_auth(pool.clone());
+    let (author_token, _) =
+        create_media_upload_account_session(&app, "mention-reject-author").await;
+    let (target_token, _) =
+        create_media_upload_account_session(&app, "mention-reject-target").await;
+    let (hidden_token, _) =
+        create_media_upload_account_session(&app, "mention-reject-hidden").await;
+    for (token, handle, visibility) in [
+        (&author_token, "reject_author", "public"),
+        (&target_token, "mentionable_bob", "public"),
+        (&hidden_token, "hidden_carol", "private"),
+    ] {
+        let profile_response = post_bearer_json(
+            &app,
+            "/profiles",
+            serde_json::json!({
+                "handle": handle,
+                "display_name": handle,
+                "bio": "mention reject matrix",
+                "visibility": visibility
+            }),
+            token,
+        )
+        .await;
+        assert_eq!(profile_response.status(), StatusCode::CREATED);
+    }
+
+    let area = Uuid::new_v4();
+    projections::append_discussion_and_project(
+        &pool,
+        area,
+        &[eventstore::EventInput::new(
+            forum::AREA_CREATED,
+            1,
+            serde_json::json!({
+                "slug": "mention-rejects",
+                "title": "Mention Rejects",
+                "description": "reject matrix"
+            }),
+            eventstore::ActorId::Principal(PrincipalId::fixture("moderator")),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    let topic_response = post_bearer_json(
+        &app,
+        "/discussions/areas/mention-rejects/topics",
+        serde_json::json!({ "title": "Rejects", "body": "Opening" }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(topic_response.status(), StatusCode::CREATED);
+    let topic: DiscussionTopic = serde_json::from_slice(
+        &to_bytes(topic_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let posts_uri = format!("/discussions/topics/{}/posts", topic.topic);
+
+    async fn post_mentions(
+        app: &axum::Router,
+        uri: &str,
+        body: serde_json::Value,
+        token: &str,
+    ) -> (StatusCode, String) {
+        let response = post_bearer_json(app, uri, body, token).await;
+        let status = response.status();
+        let text = String::from_utf8(
+            to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        (status, text)
+    }
+
+    let mention = |handle: &str, offset: usize, len: usize| serde_json::json!({ "handle": handle, "offset": offset, "len": len });
+    // Unknown and private handles collapse to the same non-disclosing reject.
+    let (unknown_status, unknown_body) = post_mentions(
+        &app,
+        &posts_uri,
+        serde_json::json!({
+            "body": "@nobody_here hello",
+            "mentions": [mention("nobody_here", 0, 12)]
+        }),
+        &author_token,
+    )
+    .await;
+    let (hidden_status, hidden_body) = post_mentions(
+        &app,
+        &posts_uri,
+        serde_json::json!({
+            "body": "@hidden_carol hello",
+            "mentions": [mention("hidden_carol", 0, 13)]
+        }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(unknown_status, StatusCode::BAD_REQUEST);
+    assert_eq!(hidden_status, StatusCode::BAD_REQUEST);
+    assert_eq!(unknown_body, hidden_body);
+
+    // Span text disagreeing with the resolved handle.
+    let (status, _) = post_mentions(
+        &app,
+        &posts_uri,
+        serde_json::json!({
+            "body": "@mentionable_bob hello",
+            "mentions": [mention("mentionable_bob", 0, 5)]
+        }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    // Duplicate target.
+    let (status, _) = post_mentions(
+        &app,
+        &posts_uri,
+        serde_json::json!({
+            "body": "@mentionable_bob and @mentionable_bob",
+            "mentions": [
+                mention("mentionable_bob", 0, 16),
+                mention("mentionable_bob", 21, 16),
+            ]
+        }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    // Over the per-post cap.
+    let many: Vec<serde_json::Value> = (0..9).map(|_| mention("mentionable_bob", 0, 16)).collect();
+    let (status, _) = post_mentions(
+        &app,
+        &posts_uri,
+        serde_json::json!({ "body": "@mentionable_bob hello", "mentions": many }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    // Happy path still lands.
+    let (status, _) = post_mentions(
+        &app,
+        &posts_uri,
+        serde_json::json!({
+            "body": "@mentionable_bob hello",
+            "mentions": [mention("mentionable_bob", 0, 16)]
+        }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+}
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn discussion_mention_delivers_to_non_watcher_through_api(pool: sqlx::PgPool) {
+    let app = router_with_local_proof_auth(pool.clone());
+    let (author_token, _) =
+        create_media_upload_account_session(&app, "mention-delivery-author").await;
+    let (mentioned_token, _) =
+        create_media_upload_account_session(&app, "mention-delivery-target").await;
+    for (token, handle) in [
+        (&author_token, "delivery_author"),
+        (&mentioned_token, "delivery_target"),
+    ] {
+        let profile_response = post_bearer_json(
+            &app,
+            "/profiles",
+            serde_json::json!({
+                "handle": handle,
+                "display_name": handle,
+                "bio": "mention delivery",
+                "visibility": "public"
+            }),
+            token,
+        )
+        .await;
+        assert_eq!(profile_response.status(), StatusCode::CREATED);
+    }
+
+    let area = Uuid::new_v4();
+    projections::append_discussion_and_project(
+        &pool,
+        area,
+        &[eventstore::EventInput::new(
+            forum::AREA_CREATED,
+            1,
+            serde_json::json!({
+                "slug": "mention-delivery",
+                "title": "Mention Delivery",
+                "description": "delivery proofs"
+            }),
+            eventstore::ActorId::Principal(PrincipalId::fixture("moderator")),
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+    let topic_response = post_bearer_json(
+        &app,
+        "/discussions/areas/mention-delivery/topics",
+        serde_json::json!({ "title": "Delivery", "body": "Opening" }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(topic_response.status(), StatusCode::CREATED);
+    let topic: DiscussionTopic = serde_json::from_slice(
+        &to_bytes(topic_response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let posts_uri = format!("/discussions/topics/{}/posts", topic.topic);
+
+    let reply = post_bearer_json(
+        &app,
+        &posts_uri,
+        serde_json::json!({
+            "body": "@delivery_target consider this",
+            "mentions": [{ "handle": "delivery_target", "offset": 0, "len": 16 }]
+        }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(reply.status(), StatusCode::CREATED);
+
+    let inbox = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/inbox")
+                .header("authorization", format!("Bearer {mentioned_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(inbox.status(), StatusCode::OK);
+    let inbox: PublicInboxPage =
+        serde_json::from_slice(&to_bytes(inbox.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(inbox.unread_count, 1);
+    assert_eq!(inbox.items.len(), 1);
+
+    // Self-mention is accepted and delivers nothing.
+    let self_mention = post_bearer_json(
+        &app,
+        &posts_uri,
+        serde_json::json!({
+            "body": "@delivery_author note to self",
+            "mentions": [{ "handle": "delivery_author", "offset": 0, "len": 16 }]
+        }),
+        &author_token,
+    )
+    .await;
+    assert_eq!(self_mention.status(), StatusCode::CREATED);
+    let author_inbox = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/inbox")
+                .header("authorization", format!("Bearer {author_token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let author_inbox: PublicInboxPage = serde_json::from_slice(
+        &to_bytes(author_inbox.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(author_inbox.items.is_empty());
+}
