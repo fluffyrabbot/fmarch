@@ -4453,3 +4453,53 @@ async fn completed_game_export_import_rebuilds_and_audits_in_an_isolated_databas
     .await
     .unwrap();
 }
+
+#[sqlx::test(migrations = "../database_schema/migrations")]
+async fn member_inbox_cursor_rebuild_is_deterministic(pool: sqlx::PgPool) {
+    let principal = fixture_principal_id("cursor-member");
+    let stream = Uuid::new_v4();
+    eventstore::append(
+        &pool,
+        stream,
+        &[
+            EventInput::new(
+                attention::INBOX_CURSOR_ADVANCED,
+                1,
+                serde_json::json!({ "read_through_seq": 4 }),
+                ActorId::Principal(principal),
+                10,
+            ),
+            EventInput::new(
+                attention::INBOX_CURSOR_ADVANCED,
+                1,
+                serde_json::json!({ "read_through_seq": 9 }),
+                ActorId::Principal(principal),
+                11,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    projections::rebuild_member_inbox_cursor_stream(&pool, stream)
+        .await
+        .unwrap();
+    let row: (i64, i64, i64) = sqlx::query_as(
+        "SELECT read_through_seq, updated_seq, version FROM member_inbox_cursor WHERE principal_id = $1",
+    )
+    .bind(principal.as_uuid())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.0, 9);
+    projections::rebuild_member_inbox_cursor_stream(&pool, stream)
+        .await
+        .unwrap();
+    let replayed: (i64, i64, i64) = sqlx::query_as(
+        "SELECT read_through_seq, updated_seq, version FROM member_inbox_cursor WHERE principal_id = $1",
+    )
+    .bind(principal.as_uuid())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row, replayed);
+}

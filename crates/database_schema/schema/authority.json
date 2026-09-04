@@ -1464,6 +1464,41 @@
       "namespace": "public"
     },
     {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arwd/$schema_owner}",
+      "kind": "relation",
+      "name": "member_inbox_cursor",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "member_inbox_cursor_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ard/$schema_owner}",
+      "kind": "relation",
+      "name": "member_inbox_item",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "member_inbox_item_page_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "member_inbox_item_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
       "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ar/$schema_owner}",
       "kind": "relation",
       "name": "member_lifecycle_event",
@@ -1943,27 +1978,6 @@
       "acl": "",
       "kind": "relation",
       "name": "public_citation_quoted_page_idx",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ard/$schema_owner}",
-      "kind": "relation",
-      "name": "public_inbox_item",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "",
-      "kind": "relation",
-      "name": "public_inbox_item_page_idx",
-      "owner": "$schema_owner",
-      "namespace": "public"
-    },
-    {
-      "acl": "",
-      "kind": "relation",
-      "name": "public_inbox_item_pkey",
       "owner": "$schema_owner",
       "namespace": "public"
     },

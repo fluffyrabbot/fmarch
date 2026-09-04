@@ -1572,6 +1572,33 @@ CREATE TABLE public.media_upload_ledger (
 
 
 --
+-- Name: member_inbox_cursor; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.member_inbox_cursor (
+    principal_id uuid NOT NULL,
+    read_through_seq bigint DEFAULT 0 NOT NULL,
+    updated_seq bigint NOT NULL,
+    version bigint NOT NULL,
+    CONSTRAINT member_inbox_cursor_read_through_seq_check CHECK ((read_through_seq >= 0))
+);
+
+
+--
+-- Name: member_inbox_item; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.member_inbox_item (
+    principal_id uuid NOT NULL,
+    surface_id uuid NOT NULL,
+    source_seq bigint NOT NULL,
+    reason text NOT NULL,
+    occurred_at bigint NOT NULL,
+    CONSTRAINT member_inbox_item_reason_check CHECK ((reason = ANY (ARRAY['watch'::text, 'mention'::text])))
+);
+
+
+--
 -- Name: member_lifecycle_event; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1832,18 +1859,6 @@ CREATE TABLE public.public_citation (
     quoted_source_seq bigint NOT NULL,
     quoting_surface_id uuid NOT NULL,
     quoting_source_seq bigint NOT NULL,
-    occurred_at bigint NOT NULL
-);
-
-
---
--- Name: public_inbox_item; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.public_inbox_item (
-    subscription_id uuid NOT NULL,
-    source_seq bigint NOT NULL,
-    surface_id uuid NOT NULL,
     occurred_at bigint NOT NULL
 );
 
@@ -2764,6 +2779,22 @@ ALTER TABLE ONLY public.media_upload_ledger
 
 
 --
+-- Name: member_inbox_cursor member_inbox_cursor_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.member_inbox_cursor
+    ADD CONSTRAINT member_inbox_cursor_pkey PRIMARY KEY (principal_id);
+
+
+--
+-- Name: member_inbox_item member_inbox_item_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.member_inbox_item
+    ADD CONSTRAINT member_inbox_item_pkey PRIMARY KEY (principal_id, surface_id, source_seq, reason);
+
+
+--
 -- Name: member_lifecycle_event member_lifecycle_event_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2985,14 +3016,6 @@ ALTER TABLE ONLY public.profile_mute
 
 ALTER TABLE ONLY public.public_citation
     ADD CONSTRAINT public_citation_pkey PRIMARY KEY (quoting_surface_id, quoting_source_seq, quoted_surface_id, quoted_source_seq);
-
-
---
--- Name: public_inbox_item public_inbox_item_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.public_inbox_item
-    ADD CONSTRAINT public_inbox_item_pkey PRIMARY KEY (subscription_id, source_seq);
 
 
 --
@@ -3796,6 +3819,13 @@ CREATE INDEX media_upload_ledger_principal_idx ON public.media_upload_ledger USI
 
 
 --
+-- Name: member_inbox_item_page_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX member_inbox_item_page_idx ON public.member_inbox_item USING btree (principal_id, source_seq DESC);
+
+
+--
 -- Name: member_lifecycle_event_principal_seq_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3940,13 +3970,6 @@ CREATE INDEX profile_mute_target_idx ON public.profile_mute USING btree (target_
 --
 
 CREATE INDEX public_citation_quoted_page_idx ON public.public_citation USING btree (quoted_surface_id, quoted_source_seq, quoting_source_seq DESC);
-
-
---
--- Name: public_inbox_item_page_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX public_inbox_item_page_idx ON public.public_inbox_item USING btree (subscription_id, source_seq DESC);
 
 
 --
@@ -4841,14 +4864,6 @@ ALTER TABLE ONLY public.public_citation
 
 ALTER TABLE ONLY public.public_citation
     ADD CONSTRAINT public_citation_quoting_fkey FOREIGN KEY (quoting_surface_id, quoting_source_seq) REFERENCES public.public_publication(surface_id, source_seq) ON DELETE CASCADE;
-
-
---
--- Name: public_inbox_item public_inbox_item_subscription_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.public_inbox_item
-    ADD CONSTRAINT public_inbox_item_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.public_watch(subscription_id) ON DELETE CASCADE;
 
 
 --

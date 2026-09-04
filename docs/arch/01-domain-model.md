@@ -113,7 +113,9 @@ Authored by a **slot** (in a game context) or a **user** (in non-game forum area
 Belongs to exactly one channel and one phase. Content is **immutable**; edits are recorded
 as events so the original is recoverable and "edited" is honest. May carry image
 attachments (see [07-images](07-images.md)). A post may also carry **quotations**:
-typed citations of earlier posts, not markup parsed from `body`.
+typed citations of earlier posts, not markup parsed from `body`. A post may
+also carry **mentions**: directed addresses decided at write time
+([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md)).
 
 ### Quotation
 A directed citation from one post to another. Identity is the same public triple
@@ -123,6 +125,17 @@ does not change; “quoted by” is a rebuildable projection over quoting events
 ([RFC 0002](../rfcs/0002-first-class-quotations.md)). The thread remains a
 linear log. Quotations are not parent pointers and are not parsed from post
 text.
+
+### Mention
+A directed address from one post to an identity inside that post's own
+universe: a community mention addresses a **profile**, a game mention
+addresses a **slot**, and the two never share a type — the cross-universe
+case is unrepresentable, not merely rejected. Like a quotation, a mention is
+a typed fact on the mentioning post (identity plus an immutable body span),
+and mention delivery is a projection: community mentions fan out into the
+reason-derived member inbox, slot mentions into slot-addressed player
+notifications resolved at read time
+([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md)).
 
 ### Vote
 A directed action: a slot votes *for* a slot or for `no-lynch`; a separate typed command

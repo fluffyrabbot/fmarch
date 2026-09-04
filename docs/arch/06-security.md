@@ -321,6 +321,11 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
 - Role data is access-controlled *and* the projection's reveal flag gates it; end-game
   reveal flips the flag ([02](02-event-sourcing.md)). The client UI hiding something is
   never the only line of defense.
+- Mentionability is a public-profile boundary: only currently public profiles can be
+  addressed, resolved through `public_profile` inside the posting transaction, never the
+  blinded handle index. Slot mentions inherit channel read capability — naming a slot
+  that cannot read the posting channel rejects without disclosing which side is missing
+  ([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md)).
 
 ## Encryption at rest and subject-owned private data
 

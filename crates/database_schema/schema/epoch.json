@@ -1,7 +1,7 @@
 {
   "version": 1,
   "epoch": 1,
-  "current_schema_sha256": "e8e34b88c80cab496e45f0e2a0b6e10284dda793443c3fb0625f0b207db0f32d",
+  "current_schema_sha256": "49ea8db1618fe4006f113cc7431f55fffc2e0becc6983472edd059e8b6193d18",
   "migrations": [
     {
       "version": 1,
@@ -22,7 +22,12 @@
       "version": 4,
       "filename": "0004_remove_admin_grant_assurance.sql",
       "sha256": "a243923239fb6a35de130254d65bb85d7dda39dbcff0c00c213dbe07c6c047cc"
+    },
+    {
+      "version": 5,
+      "filename": "0005_reason_derived_member_inbox.sql",
+      "sha256": "6faab1d832908f5b86d745a5a523465232567b17b34403bd106968e76d2bc5c0"
     }
   ],
-  "authority_fingerprint_sha256": "e5444908d1b8cb78d204ab0edf0e99c76b0dd4da515e24e81f5bf7886f11546c"
+  "authority_fingerprint_sha256": "409446bd7759333f0ec2aa09a6f4b75540df321bec3b26ee9cbf5ca8b471358f"
 }

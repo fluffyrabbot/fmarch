@@ -175,7 +175,7 @@ Examples:
 | `moderation_target_state` | reversible public visibility overlay for individually moderated discussion and main-thread posts |
 | `pack_artifact` | immutable content-addressed cache of the canonical typed pack attachment carried by `GameCreated`; recreated from the stream and exact-identity-bound to `game_index` |
 | `public_watch` / `public_watch_period` | one member/target watch stream, current membership, monotonic read cursor, and historical active intervals |
-| `public_inbox_item` | privacy-safe per-member references to public posts published during active watch intervals |
+| `member_inbox_item` / `member_inbox_cursor` | principal-keyed, reason-derived inbox: privacy-safe per-member references (`watch`, `mention`) plus one monotonic per-principal read cursor alongside the per-target watch cursors |
 | `profile_mute` | one private member/profile relationship stream, current active state, replay version, and bounded member-owned list cursor |
 | `public_citation` / `game_private_citation` | rebuildable reverse indexes for public publications and private game-channel posts; folded from quoting events, never written onto the quoted post's stream |
 
@@ -254,14 +254,18 @@ gaps remain meaningful during replay. A watch begins at the target's current lat
 it does not manufacture historical unread work. Read advancement is strictly monotonic and cannot
 move beyond the target's current public sequence.
 
-Public discussion and `main` game-thread post folds synchronously fan out a reference into
-`public_inbox_item` for every subscription period active at that global event sequence. Authors
-do not receive their own update. Inbox rows contain no post body, author identity, credential
+Public discussion post folds synchronously fan out a `watch` reference into
+`member_inbox_item` for every subscription period active at that global event sequence. Authors
+do not receive their own update. A row is unread while it is beyond the principal inbox cursor
+and, where a watch exists for that surface, beyond that watch's cursor, so reading the thread
+and marking the inbox read both clear it. Inbox rows contain no post body, author identity, credential
 principal, private audience, or engagement signal: presentation resolves only the public target
 title and canonical post URL. Topic/game visibility and `moderation_target_state` are applied at
 read time, so hiding a post immediately suppresses its inbox entry and restoring it reveals the
 same immutable reference. Topic, game, and subscription rebuilds use the historical periods to
-reproduce exactly the updates that existed while each watch was active.
+reproduce exactly the updates that existed while each watch was active. Community mentions fan
+out `mention` rows from the same decided facts with no subscription behind them
+([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md)).
 
 Member mutes use one durable relationship stream per authenticated member and target public
 profile. `CommunityMemberMuted` and `CommunityMemberUnmuted` preserve the reversible decision

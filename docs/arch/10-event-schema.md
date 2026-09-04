@@ -81,7 +81,7 @@ enum EventKind {
     RoleAssigned,           // logical body: { slot_id, role_key, alignment, role_effects }; whole body sealed (06)
 
     // ── Posting ──
-    PostSubmitted,          // logical body: { channel_id, author, body, media, phase_id, quotations? }; whole body sealed (06, RFC 0002)
+    PostSubmitted,          // logical body: { channel_id, author, body, media, phase_id, quotations?, mentions? }; whole body sealed (06, RFC 0002, RFC 0007)
     PostEdited,             // { post_id, new_body_ref }   original recoverable
     PostRetracted,          // { post_id }
 

@@ -3486,7 +3486,7 @@ async fn fold_member_mute_event(
     Ok(())
 }
 
-async fn fan_out_public_publication_update(
+async fn fan_out_member_inbox_update(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     surface_id: Uuid,
     source_seq: i64,
@@ -3495,10 +3495,10 @@ async fn fan_out_public_publication_update(
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
-        INSERT INTO public_inbox_item (
-            subscription_id, source_seq, surface_id, occurred_at
+        INSERT INTO member_inbox_item (
+            principal_id, surface_id, source_seq, reason, occurred_at
         )
-        SELECT subscription.subscription_id, $2, $1, $3
+        SELECT subscription.principal_id, $1, $2, 'watch', $3
         FROM public_watch AS subscription
         JOIN public_watch_period AS period
           ON period.subscription_id = subscription.subscription_id
@@ -3506,7 +3506,7 @@ async fn fan_out_public_publication_update(
          AND (period.ended_seq IS NULL OR period.ended_seq > $2)
         WHERE subscription.surface_id = $1
           AND ($4::uuid IS NULL OR subscription.principal_id <> $4)
-        ON CONFLICT (subscription_id, source_seq) DO NOTHING
+        ON CONFLICT (principal_id, surface_id, source_seq, reason) DO NOTHING
         "#,
     )
     .bind(surface_id)
@@ -3771,7 +3771,7 @@ pub async fn rebuild_discussion_stream(
     }
     let mut tx = pool.begin().await?;
     if is_topic_stream {
-        sqlx::query("DELETE FROM public_inbox_item WHERE surface_id = $1")
+        sqlx::query("DELETE FROM member_inbox_item WHERE surface_id = $1")
             .bind(stream_id)
             .execute(&mut *tx)
             .await?;
@@ -3895,11 +3895,11 @@ async fn backfill_subscription_inbox(
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
-        INSERT INTO public_inbox_item (
-            subscription_id, source_seq, surface_id, occurred_at
+        INSERT INTO member_inbox_item (
+            principal_id, surface_id, source_seq, reason, occurred_at
         )
-        SELECT subscription.subscription_id, publication.source_seq,
-               publication.surface_id, publication.occurred_at
+        SELECT subscription.principal_id, publication.surface_id,
+               publication.source_seq, 'watch', publication.occurred_at
         FROM public_watch AS subscription
         JOIN public_watch_period AS period
           ON period.subscription_id = subscription.subscription_id
@@ -3913,12 +3913,105 @@ async fn backfill_subscription_inbox(
               WHERE author.profile_id = publication.author_profile_id
                 AND author.active_principal_id = subscription.principal_id
           )
-        ON CONFLICT (subscription_id, source_seq) DO NOTHING
+        ON CONFLICT (principal_id, surface_id, source_seq, reason) DO NOTHING
         "#,
     )
     .bind(subscription_id)
     .execute(&mut **tx)
     .await?;
+    Ok(())
+}
+
+async fn fold_member_inbox_cursor_event(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event: &StoredEvent,
+) -> Result<(), ProjectionError> {
+    let principal_id = match &event.actor {
+        eventstore::ActorId::Principal(principal) => *principal,
+        _ => {
+            return Err(ProjectionError::Payload {
+                kind: event.kind.clone(),
+                source: serde::de::Error::custom("inbox cursor events require a principal actor"),
+            })
+        }
+    };
+    match event.kind.as_str() {
+        attention::INBOX_CURSOR_ADVANCED => {
+            let read_through_seq = event
+                .payload
+                .get("read_through_seq")
+                .and_then(serde_json::Value::as_i64)
+                .ok_or_else(|| ProjectionError::Payload {
+                    kind: event.kind.clone(),
+                    source: serde::de::Error::custom(
+                        "inbox cursor event requires read_through_seq",
+                    ),
+                })?;
+            sqlx::query(
+                r#"
+                INSERT INTO member_inbox_cursor (
+                    principal_id, read_through_seq, updated_seq, version
+                ) VALUES ($1, $2, $3, $4)
+                ON CONFLICT (principal_id) DO UPDATE SET
+                    read_through_seq = GREATEST(
+                        member_inbox_cursor.read_through_seq,
+                        EXCLUDED.read_through_seq
+                    ),
+                    updated_seq = EXCLUDED.updated_seq,
+                    version = EXCLUDED.version
+                "#,
+            )
+            .bind(principal_id.as_uuid())
+            .bind(read_through_seq)
+            .bind(event.seq)
+            .bind(event.stream_seq)
+            .execute(&mut **tx)
+            .await?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Rebuild one per-principal inbox cursor stream. The stream carries only
+/// `MemberInboxCursorAdvanced` events; the owning principal is the actor that
+/// advanced it, so the rebuild deletes that principal's cursor row and replays.
+pub async fn rebuild_member_inbox_cursor_stream(
+    pool: &PgPool,
+    stream_id: Uuid,
+) -> Result<(), ProjectionError> {
+    let events = eventstore::load_stream(pool, stream_id).await?;
+    if !events
+        .iter()
+        .any(|event| event.kind == attention::INBOX_CURSOR_ADVANCED)
+    {
+        return Ok(());
+    }
+    let principal_id = match &events
+        .iter()
+        .find(|event| event.kind == attention::INBOX_CURSOR_ADVANCED)
+        .expect("inbox cursor stream has an advance event")
+        .actor
+    {
+        eventstore::ActorId::Principal(principal) => *principal,
+        _ => {
+            return Err(ProjectionError::Payload {
+                kind: attention::INBOX_CURSOR_ADVANCED.to_string(),
+                source: serde::de::Error::custom(
+                    "inbox cursor events require a principal actor",
+                ),
+            })
+        }
+    };
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM member_inbox_cursor WHERE principal_id = $1")
+        .bind(principal_id.as_uuid())
+        .execute(&mut *tx)
+        .await?;
+    for event in &events {
+        fold_member_inbox_cursor_event(&mut tx, event).await?;
+    }
+    tx.commit().await?;
     Ok(())
 }
 
@@ -4038,7 +4131,7 @@ async fn fold_discussion_event(
                 event.occurred_at,
             )
             .await?;
-            fan_out_public_publication_update(
+            fan_out_member_inbox_update(
                 tx,
                 stream_id,
                 event.seq,
@@ -4743,7 +4836,7 @@ async fn rebuild_in_tx(
         .bind(game_id)
         .execute(&mut **tx)
         .await?;
-    sqlx::query("DELETE FROM public_inbox_item WHERE surface_id = $1")
+    sqlx::query("DELETE FROM member_inbox_item WHERE surface_id = $1")
         .bind(game_id)
         .execute(&mut **tx)
         .await?;
@@ -8123,13 +8216,9 @@ pub async fn subscription_target_state(
     }
     let (subscribed, read_through_seq, unread_count) = match state {
         Some(state) => {
-            let unread_count = visible_subscription_inbox_count(
-                &mut tx,
-                state.watch_id,
-                state.read_through_seq,
-                principal_id,
-            )
-            .await?;
+            let unread_count =
+                visible_subscription_inbox_count(&mut tx, principal_id, target.surface_id)
+                    .await?;
             (state.active, state.read_through_seq, unread_count)
         }
         None => (false, 0, 0),
@@ -8146,31 +8235,37 @@ pub async fn subscription_target_state(
 
 async fn visible_subscription_inbox_count(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    subscription_id: Uuid,
-    after_seq: i64,
     principal_id: PrincipalId,
+    surface_id: Uuid,
 ) -> Result<i64, ProjectionError> {
     Ok(sqlx::query_scalar(
         r#"
         SELECT COUNT(*)
-        FROM public_inbox_item AS item
+        FROM member_inbox_item AS item
         JOIN public_publication AS publication
           ON publication.surface_id = item.surface_id
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
-        WHERE item.subscription_id = $1 AND item.source_seq > $2
+        LEFT JOIN member_inbox_cursor AS cursor ON cursor.principal_id = $1
+        LEFT JOIN public_watch AS subscription
+          ON subscription.principal_id = $1
+         AND subscription.surface_id = item.surface_id
+        WHERE item.principal_id = $1
+          AND item.surface_id = $2
+          AND item.source_seq > COALESCE(cursor.read_through_seq, 0)
+          AND (subscription.read_through_seq IS NULL
+               OR item.source_seq > subscription.read_through_seq)
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
             SELECT 1 FROM profile_mute AS mute
-            WHERE mute.principal_id = $3
+            WHERE mute.principal_id = $1
               AND mute.active
               AND mute.target_profile_id = publication.author_profile_id
           )
         "#,
     )
-    .bind(subscription_id)
-    .bind(after_seq)
     .bind(principal_id.as_uuid())
+    .bind(surface_id)
     .fetch_one(&mut **tx)
     .await?)
 }
@@ -8186,17 +8281,21 @@ pub async fn public_inbox(
     let rows = sqlx::query(
         r#"
         SELECT item.surface_id, item.source_seq, item.occurred_at,
-               item.source_seq > subscription.read_through_seq AS unread,
-               subscription.active AS subscribed,
+               item.source_seq > COALESCE(cursor.read_through_seq, 0)
+                 AND (subscription.read_through_seq IS NULL
+                      OR item.source_seq > subscription.read_through_seq) AS unread,
+               COALESCE(subscription.active, FALSE) AS subscribed,
                surface.title, publication.href
-        FROM public_inbox_item AS item
-        JOIN public_watch AS subscription
-          ON subscription.subscription_id = item.subscription_id
+        FROM member_inbox_item AS item
+        LEFT JOIN member_inbox_cursor AS cursor ON cursor.principal_id = $1
+        LEFT JOIN public_watch AS subscription
+          ON subscription.principal_id = $1
+         AND subscription.surface_id = item.surface_id
         JOIN public_publication AS publication
           ON publication.surface_id = item.surface_id
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
-        WHERE subscription.principal_id = $1
+        WHERE item.principal_id = $1
           AND ($2::bigint IS NULL OR item.source_seq < $2)
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
@@ -8231,15 +8330,19 @@ pub async fn public_inbox(
     let unread_count: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*)
-        FROM public_inbox_item AS item
-        JOIN public_watch AS subscription
-          ON subscription.subscription_id = item.subscription_id
+        FROM member_inbox_item AS item
+        LEFT JOIN member_inbox_cursor AS cursor ON cursor.principal_id = $1
+        LEFT JOIN public_watch AS subscription
+          ON subscription.principal_id = $1
+         AND subscription.surface_id = item.surface_id
         JOIN public_publication AS publication
           ON publication.surface_id = item.surface_id
          AND publication.source_seq = item.source_seq
         JOIN publication_surface AS surface ON surface.surface_id = item.surface_id
-        WHERE subscription.principal_id = $1
-          AND item.source_seq > subscription.read_through_seq
+        WHERE item.principal_id = $1
+          AND item.source_seq > COALESCE(cursor.read_through_seq, 0)
+          AND (subscription.read_through_seq IS NULL
+               OR item.source_seq > subscription.read_through_seq)
           AND publication.visible AND surface.visible
           AND NOT EXISTS (
             SELECT 1 FROM profile_mute AS mute

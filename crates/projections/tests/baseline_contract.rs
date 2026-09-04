@@ -58,6 +58,8 @@ const EXPECTED_TABLES: &[&str] = &[
     "identity_lifecycle_audit",
     "investigation_memory",
     "media_upload_ledger",
+    "member_inbox_cursor",
+    "member_inbox_item",
     "member_lifecycle_event",
     "member_lifecycle_projection",
     "member_personal_export",
@@ -78,7 +80,6 @@ const EXPECTED_TABLES: &[&str] = &[
     "private_channel_member",
     "profile_mute",
     "public_citation",
-    "public_inbox_item",
     "public_profile",
     "public_publication",
     "public_search_document",
@@ -258,6 +259,8 @@ const EXPECTED_CANONICAL_PRINCIPAL_COLUMNS: &[&str] = &[
     "identity_lifecycle_audit.actor_principal_id:uuid",
     "identity_lifecycle_audit.principal_id:uuid",
     "media_upload_ledger.principal_id:uuid",
+    "member_inbox_cursor.principal_id:uuid",
+    "member_inbox_item.principal_id:uuid",
     "member_lifecycle_event.principal_id:uuid",
     "member_lifecycle_projection.principal_id:uuid",
     "member_personal_export.principal_id:uuid",
@@ -412,6 +415,9 @@ const EXPECTED_INDEXES: &[&str] = &[
     "investigation_memory_result_private_kid_idx",
     "media_upload_ledger_pkey",
     "media_upload_ledger_principal_idx",
+    "member_inbox_cursor_pkey",
+    "member_inbox_item_page_idx",
+    "member_inbox_item_pkey",
     "member_lifecycle_event_pkey",
     "member_lifecycle_event_principal_seq_idx",
     "member_lifecycle_event_subject_idx",
@@ -461,8 +467,6 @@ const EXPECTED_INDEXES: &[&str] = &[
     "profile_mute_target_idx",
     "public_citation_pkey",
     "public_citation_quoted_page_idx",
-    "public_inbox_item_page_idx",
-    "public_inbox_item_pkey",
     "public_profile_handle_key",
     "public_profile_pkey",
     "public_publication_author_idx",
@@ -749,6 +753,10 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "media_upload_ledger_encoded_bytes_check:c",
     "media_upload_ledger_pkey:p",
     "media_upload_ledger_principal_id_fkey:f",
+    "member_inbox_cursor_pkey:p",
+    "member_inbox_cursor_read_through_seq_check:c",
+    "member_inbox_item_pkey:p",
+    "member_inbox_item_reason_check:c",
     "member_lifecycle_event_kind_check:c",
     "member_lifecycle_event_pkey:p",
     "member_lifecycle_event_principal_id_fkey:f",
@@ -824,8 +832,6 @@ const EXPECTED_CONSTRAINTS: &[&str] = &[
     "public_citation_pkey:p",
     "public_citation_quoted_fkey:f",
     "public_citation_quoting_fkey:f",
-    "public_inbox_item_pkey:p",
-    "public_inbox_item_subscription_id_fkey:f",
     "public_profile_handle_key:u",
     "public_profile_pkey:p",
     "public_profile_profile_id_fkey:f",
@@ -1102,6 +1108,8 @@ async fn canonical_authority_principal_columns_are_uuid(pool: PgPool) {
                ('identity_lifecycle_audit', 'actor_principal_id'), \
                ('identity_lifecycle_audit', 'principal_id'), \
                ('media_upload_ledger', 'principal_id'), \
+               ('member_inbox_cursor', 'principal_id'), \
+               ('member_inbox_item', 'principal_id'), \
                ('member_lifecycle_event', 'principal_id'), \
                ('member_lifecycle_projection', 'principal_id'), \
                ('member_personal_export', 'principal_id'), \
