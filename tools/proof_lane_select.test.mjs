@@ -714,6 +714,42 @@ test('Cargo test lanes select only inventoried assertion-bearing targets', () =>
   assert.equal(manifest.lanes['cargo:profile-application'], undefined);
 });
 
+test('every assertion-bearing Cargo target is claimed by some proof lane', () => {
+  const laned = new Set(
+    Object.values(manifest.lanes).flatMap((lane) => lane.assertion_targets ?? []),
+  );
+  const testDeclaration = /#\[(?:(?:tokio|sqlx)::)?test(?:\([^\]]*\))?\]/;
+  const unclaimed = [];
+
+  // The sibling inventory test proves each lane's `assertion_targets` matches
+  // its own Cargo selectors, which stays green when a target and its inventory
+  // entry are dropped together -- the exact shape of silent coverage erosion.
+  // This is the other direction: the workspace, not the manifest, enumerates
+  // what must be claimed. A target carrying no assertion needs no lane (that is
+  // how `crate:profile-application` stays clippy-only), so the escape hatch is
+  // to hold no tests, never to go unlisted.
+  for (const packageMetadata of cargoMetadata.packages) {
+    for (const target of packageMetadata.targets) {
+      const kind = ['test', 'lib', 'bin'].find((candidate) => target.kind.includes(candidate));
+      if (kind === undefined) continue;
+      const targetId = kind === 'lib'
+        ? `${packageMetadata.name}/lib`
+        : `${packageMetadata.name}/${kind}/${target.name}`;
+      if (laned.has(targetId)) continue;
+      const sources = assertionSourceFiles(packageMetadata, kind, kind === 'lib' ? null : target.name);
+      if (sources.some((path) => testDeclaration.test(readFileSync(path, 'utf8')))) {
+        unclaimed.push(targetId);
+      }
+    }
+  }
+
+  assert.deepEqual(
+    unclaimed.sort(),
+    [],
+    'assertion-bearing target(s) run in no proof lane; add them to a lane or the tests never execute',
+  );
+});
+
 test('profile compilation is covered downstream without a zero-test proof leaf', () => {
   const profileArea = manifest.areas.find((area) => area.id === 'crate:profile-application');
   assert.equal(profileArea.tier, 'frozen');

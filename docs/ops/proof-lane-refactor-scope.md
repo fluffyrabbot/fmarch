@@ -247,6 +247,27 @@ Receipts now record `quarantine`, `skipped_lane_ids`, and `keep_going` in their
 context, so a receipt is readable on its own rather than only against the
 manifest it was run from.
 
+### Coverage erosion is now caught by the workspace, not the manifest — 2026-09-04
+
+`Cargo test lanes select only inventoried assertion-bearing targets` proves each
+lane's `assertion_targets` matches its own Cargo selectors. That is a
+self-consistency check: dropping `--test x` *and* its inventory entry together
+leaves it green, which is exactly the shape a landed test takes when it silently
+stops running. `every assertion-bearing Cargo target is claimed by some proof
+lane` closes the loop from the other side — `cargo metadata` enumerates the
+workspace's lib, bin, and test targets, and any target that declares a `#[test]`
+must appear in some lane's inventory.
+
+The escape hatch is to hold no assertions, never to go unlisted; that is how
+`crate:profile-application` legitimately stays covered by
+`cargo:clippy-workspace` alone, and it means no allowlist is needed.
+
+The check found one live instance on landing: `api/test/membership_http_boundary`
+entered the tree with the commit-bound authority work and had never been in a
+lane, so its contract on `membership_http.rs`, `authority.rs`, and
+`membership_application` compiled under clippy but never ran. `cargo:api` now
+selects it.
+
 ## Delivered foundation
 
 The manifest now contains executable leaves only. The human-facing
