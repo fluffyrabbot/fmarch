@@ -5,19 +5,24 @@
 // as proof execution and is planned before any entry is moved or removed.
 
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
+  closeSync,
   existsSync,
+  fsyncSync,
+  linkSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   readlinkSync,
   renameSync,
   rmSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -39,6 +44,7 @@ const PROOF_CACHE_GC_PLAN_KIND = 'fmarch-proof-cache-gc-plan';
 const PROOF_CACHE_GC_APPLICATION_SCHEMA = 1;
 const PROOF_CACHE_GC_RECOVERY_SCHEMA = 1;
 const PROOF_CACHE_GC_RECOVERY_KIND = 'fmarch-proof-cache-gc-recovery';
+const RECEIPT_STAGE_PATTERN = /^\.(.+)\.stage-(\d+)-([0-9a-f-]{36})$/;
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -59,6 +65,59 @@ function stableJson(value) {
 function inside(root, candidate) {
   const path = relative(resolve(root), resolve(candidate));
   return path !== '' && !path.startsWith('..') && !path.startsWith('/');
+}
+
+function fsyncDirectory(directory) {
+  const descriptor = openSync(directory, 'r');
+  try {
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function ensureDurableDirectory(directory) {
+  if (existsSync(directory)) return;
+  mkdirSync(directory, { recursive: true });
+  fsyncDirectory(directory);
+  fsyncDirectory(dirname(directory));
+}
+
+export function writeImmutableReceipt(path, receipt, {
+  onCheckpoint = () => {},
+  stageId = `${process.pid}-${randomUUID()}`,
+} = {}) {
+  const directory = dirname(path);
+  ensureDurableDirectory(directory);
+  if (existsSync(path)) throw new Error(`immutable receipt already exists: ${path}`);
+  const stagePath = join(directory, `.${basename(path)}.stage-${stageId}`);
+  const bytes = Buffer.from(`${JSON.stringify(receipt, null, 2)}\n`);
+  let descriptor = openSync(stagePath, 'wx', 0o600);
+  try {
+    onCheckpoint({ name: 'after-stage-create', path, stage_path: stagePath });
+    fsyncDirectory(directory);
+    onCheckpoint({ name: 'after-stage-directory-sync', path, stage_path: stagePath });
+    writeFileSync(descriptor, bytes);
+    onCheckpoint({ name: 'after-stage-write', path, stage_path: stagePath });
+    fsyncSync(descriptor);
+    onCheckpoint({ name: 'after-file-sync', path, stage_path: stagePath });
+    closeSync(descriptor);
+    descriptor = null;
+
+    // Same-directory hard-link publication is atomic and, unlike rename(2),
+    // preserves O_EXCL semantics by failing if the immutable final name exists.
+    linkSync(stagePath, path);
+    onCheckpoint({ name: 'after-publish', path, stage_path: stagePath });
+    fsyncDirectory(directory);
+    onCheckpoint({ name: 'after-publish-directory-sync', path, stage_path: stagePath });
+    unlinkSync(stagePath);
+    onCheckpoint({ name: 'after-stage-remove', path, stage_path: stagePath });
+    fsyncDirectory(directory);
+    onCheckpoint({ name: 'after-directory-sync', path, stage_path: stagePath });
+    return path;
+  } finally {
+    if (descriptor !== null) closeSync(descriptor);
+  }
 }
 
 function filesystemState(directory) {
@@ -103,6 +162,7 @@ function cacheRoots(root) {
     plans: join(base, 'cache-maintenance', 'plans'),
     applications: join(base, 'cache-maintenance', 'applications'),
     recoveries: join(base, 'cache-maintenance', 'recoveries'),
+    stagingQuarantine: join(base, 'cache-maintenance', 'quarantine', 'staging'),
   };
 }
 
@@ -440,12 +500,11 @@ export function createProofCacheGcPlanReceipt(plan) {
   return { ...base, plan_sha256: sha256(stableJson(base)) };
 }
 
-export function writeProofCacheGcPlan(plan) {
+export function writeProofCacheGcPlan(plan, { onReceiptCheckpoint = () => {} } = {}) {
   const roots = cacheRoots(plan.root);
   const receipt = createProofCacheGcPlanReceipt(plan);
   const path = join(roots.plans, `${receipt.id}.json`);
-  mkdirSync(roots.plans, { recursive: true });
-  writeFileSync(path, `${JSON.stringify(receipt, null, 2)}\n`, { flag: 'wx' });
+  writeImmutableReceipt(path, receipt, { onCheckpoint: onReceiptCheckpoint });
   return { path, receipt };
 }
 
@@ -519,11 +578,11 @@ function expectedPostInventorySha256(plan) {
   return inventorySha256(plan.inventory.filter((entry) => entry.action === 'retain'));
 }
 
-function beginProofCacheGcApplication(planPath, receipt, { root, now }) {
+function beginProofCacheGcApplication(planPath, receipt, { root, now, onReceiptCheckpoint }) {
   const roots = cacheRoots(root);
-  mkdirSync(roots.applications, { recursive: true });
+  ensureDurableDirectory(roots.applications);
   const directory = join(roots.applications, receipt.id);
-  mkdirSync(directory);
+  ensureDurableDirectory(directory);
   const base = {
     schema: PROOF_CACHE_GC_APPLICATION_SCHEMA,
     kind: 'fmarch-proof-cache-gc-application-intent',
@@ -535,11 +594,11 @@ function beginProofCacheGcApplication(planPath, receipt, { root, now }) {
   };
   const intent = { ...base, intent_sha256: sha256(stableJson(base)) };
   const path = join(directory, 'intent.json');
-  writeFileSync(path, `${JSON.stringify(intent, null, 2)}\n`, { flag: 'wx' });
+  writeImmutableReceipt(path, intent, { onCheckpoint: onReceiptCheckpoint });
   return { directory, intent, path };
 }
 
-function finishProofCacheGcApplication(application, { root, state, changed, error, now }) {
+function finishProofCacheGcApplication(application, { root, state, changed, error, now, onReceiptCheckpoint }) {
   const base = {
     schema: PROOF_CACHE_GC_APPLICATION_SCHEMA,
     kind: 'fmarch-proof-cache-gc-application-result',
@@ -553,7 +612,7 @@ function finishProofCacheGcApplication(application, { root, state, changed, erro
   };
   const result = { ...base, result_sha256: sha256(stableJson(base)) };
   const path = join(application.directory, 'result.json');
-  writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`, { flag: 'wx' });
+  writeImmutableReceipt(path, result, { onCheckpoint: onReceiptCheckpoint });
   return { path, receipt: result };
 }
 
@@ -584,6 +643,7 @@ export function applyReviewedProofCacheGcPlan(planPath, {
   receipts = scanProofReceipts({ root }),
   now = new Date(),
   onApplicationCheckpoint = () => {},
+  onReceiptCheckpoint = () => {},
 } = {}) {
   const loaded = readProofCacheGcPlan(planPath, { root });
   const applicationDirectory = join(cacheRoots(root).applications, loaded.receipt.id);
@@ -598,7 +658,9 @@ export function applyReviewedProofCacheGcPlan(planPath, {
   });
   validateProofCacheGcPlan(loaded.receipt, freshPlan);
   if (!freshPlan.budget_satisfied) throw new Error('proof cache GC plan cannot apply because its protected floor exceeds the disk budget');
-  const application = beginProofCacheGcApplication(loaded.path, loaded.receipt, { root, now });
+  const application = beginProofCacheGcApplication(loaded.path, loaded.receipt, {
+    root, now, onReceiptCheckpoint,
+  });
   const changed = [];
   try {
     onApplicationCheckpoint({ name: 'after-intent', plan_id: loaded.receipt.id, changed: [] });
@@ -612,12 +674,16 @@ export function applyReviewedProofCacheGcPlan(planPath, {
       });
     } });
     onApplicationCheckpoint({ name: 'before-result', plan_id: loaded.receipt.id, changed: [...changed] });
-    const result = finishProofCacheGcApplication(application, { root, state: 'applied', changed, error: null, now });
-    return { plan: loaded, gcPlan: freshPlan, application, result, changed };
   } catch (error) {
-    finishProofCacheGcApplication(application, { root, state: 'failed', changed, error: error.message, now });
+    finishProofCacheGcApplication(application, {
+      root, state: 'failed', changed, error: error.message, now, onReceiptCheckpoint,
+    });
     throw error;
   }
+  const result = finishProofCacheGcApplication(application, {
+    root, state: 'applied', changed, error: null, now, onReceiptCheckpoint,
+  });
+  return { plan: loaded, gcPlan: freshPlan, application, result, changed };
 }
 
 function readApplicationReceipt(path, { kind, digestField, states }) {
@@ -642,6 +708,86 @@ function directoryEntries(path) {
     : [];
 }
 
+function isReceiptStageName(name) {
+  return RECEIPT_STAGE_PATTERN.test(name);
+}
+
+function processIsAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === 'ESRCH') return false;
+    if (error.code === 'EPERM') return true;
+    throw error;
+  }
+}
+
+export function scanProofCacheReceiptStaging({ root }) {
+  const roots = cacheRoots(root);
+  const staging = [];
+  const visit = (directory) => {
+    for (const entry of directoryEntries(directory)) {
+      const path = join(directory, entry.name);
+      const match = RECEIPT_STAGE_PATTERN.exec(entry.name);
+      if (match) {
+        const state = filesystemState(path);
+        const metadata = lstatSync(path);
+        staging.push({
+          path,
+          relative_path: relative(roots.maintenance, path).replaceAll('\\', '/'),
+          intended_path: join(directory, match[1]),
+          owner_pid: Number(match[2]),
+          owner_alive: processIsAlive(Number(match[2])),
+          valid: metadata.isFile() && !metadata.isSymbolicLink(),
+          bytes: state.bytes,
+          state_sha256: state.sha256,
+        });
+      } else if (entry.isDirectory() && !entry.isSymbolicLink()) {
+        visit(path);
+      }
+    }
+  };
+  for (const directory of [roots.plans, roots.applications, roots.recoveries]) {
+    if (existsSync(directory)) visit(directory);
+  }
+  return staging.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+export function quarantineProofCacheReceiptStaging({ root, now = new Date() }) {
+  const roots = cacheRoots(root);
+  const staging = scanProofCacheReceiptStaging({ root });
+  if (staging.length === 0) return [];
+  ensureDurableDirectory(roots.stagingQuarantine);
+  const stamp = now.toISOString().replaceAll(/[^0-9A-Za-z.-]/g, '-');
+  const moved = [];
+  for (const entry of staging) {
+    if (entry.owner_alive) continue;
+    if (!inside(roots.maintenance, entry.path)) throw new Error(`refusing staging quarantine outside ${roots.maintenance}`);
+    if (processIsAlive(entry.owner_pid)) {
+      throw new Error(`refusing to quarantine staging whose owner pid became live: ${entry.relative_path}`);
+    }
+    const current = filesystemState(entry.path);
+    if (current.sha256 !== entry.state_sha256 || current.bytes !== entry.bytes) {
+      throw new Error(`receipt staging changed during quarantine: ${entry.relative_path}`);
+    }
+    const identity = sha256(stableJson({ path: entry.relative_path, state_sha256: entry.state_sha256 })).slice(0, 16);
+    const destination = join(roots.stagingQuarantine, `${stamp}-${identity}-${basename(entry.path)}`);
+    if (existsSync(destination)) throw new Error(`staging quarantine destination already exists: ${destination}`);
+    renameSync(entry.path, destination);
+    fsyncDirectory(dirname(entry.path));
+    fsyncDirectory(roots.stagingQuarantine);
+    moved.push({
+      source: entry.path,
+      destination,
+      relative_path: entry.relative_path,
+      state_sha256: entry.state_sha256,
+      bytes: entry.bytes,
+    });
+  }
+  return moved;
+}
+
 function readRecoveryReceipt(path, { root }) {
   const metadata = lstatSync(path);
   if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('recovery receipt must be a real file');
@@ -661,9 +807,18 @@ export function auditProofCacheMaintenance({ root }) {
   const plans = new Map();
   const applications = new Map();
   const recoveries = [];
+  const staging = scanProofCacheReceiptStaging({ root });
+  for (const entry of staging.filter((candidate) => !candidate.owner_alive)) {
+    issues.push(maintenanceIssue(
+      'abandoned-receipt-staging',
+      entry.relative_path,
+      `unpublished receipt staging remains (${entry.bytes} bytes, ${entry.state_sha256})`,
+    ));
+  }
 
   for (const entry of directoryEntries(roots.plans)) {
     const path = join(roots.plans, entry.name);
+    if (isReceiptStageName(entry.name)) continue;
     if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith('.json')) {
       issues.push(maintenanceIssue('unexpected-plan-entry', entry.name, 'plan storage contains an unexpected entry'));
       continue;
@@ -686,7 +841,7 @@ export function auditProofCacheMaintenance({ root }) {
       continue;
     }
     const names = directoryEntries(directory).map((child) => child.name);
-    for (const name of names.filter((name) => !['intent.json', 'result.json'].includes(name))) {
+    for (const name of names.filter((name) => !['intent.json', 'result.json'].includes(name) && !isReceiptStageName(name))) {
       issues.push(maintenanceIssue('unexpected-application-entry', `${entry.name}/${name}`, 'application directory contains an unexpected entry'));
     }
     const plan = plans.get(entry.name);
@@ -744,6 +899,7 @@ export function auditProofCacheMaintenance({ root }) {
     }
     for (const entry of directoryEntries(sourceDirectory)) {
       const path = join(sourceDirectory, entry.name);
+      if (isReceiptStageName(entry.name)) continue;
       if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith('.json')) {
         issues.push(maintenanceIssue('unexpected-recovery-entry', `${sourceEntry.name}/${entry.name}`, 'recovery storage contains an unexpected entry'));
         continue;
@@ -809,11 +965,14 @@ export function auditProofCacheMaintenance({ root }) {
       plan_count: plans.size,
       application_count: applications.size,
       recovery_count: recoveries.length,
+      staging_count: staging.length,
+      active_staging_count: staging.filter((entry) => entry.owner_alive).length,
       issue_count: issues.length,
     },
     plans: [...plans.keys()].sort(),
     applications: [...applications.values()].map(({ plan_id, state }) => ({ plan_id, state })),
     recoveries: recoveries.map(({ source_plan_id, recovery_plan_id }) => ({ source_plan_id, recovery_plan_id })),
+    staging,
     issues,
   };
 }
@@ -825,6 +984,7 @@ export function writeProofCacheGcRecovery(sourcePlanId, {
   maxBytes = Number.POSITIVE_INFINITY,
   now = new Date(),
   receipts = scanProofReceipts({ root }),
+  onReceiptCheckpoint = () => {},
 } = {}) {
   const audit = auditProofCacheMaintenance({ root });
   const source = audit.applications.find((application) => application.plan_id === sourcePlanId);
@@ -840,7 +1000,7 @@ export function writeProofCacheGcRecovery(sourcePlanId, {
     kind: 'fmarch-proof-cache-gc-application-result', digestField: 'result_sha256', states: ['failed'],
   }) : null;
   const plan = planProofCacheGc({ root, currentProofKeys, keepReceipts, maxBytes, now, receipts });
-  const saved = writeProofCacheGcPlan(plan);
+  const saved = writeProofCacheGcPlan(plan, { onReceiptCheckpoint });
   const base = {
     schema: PROOF_CACHE_GC_RECOVERY_SCHEMA,
     kind: PROOF_CACHE_GC_RECOVERY_KIND,
@@ -856,19 +1016,20 @@ export function writeProofCacheGcRecovery(sourcePlanId, {
   };
   const receipt = { ...base, recovery_sha256: sha256(stableJson(base)) };
   const directory = join(cacheRoots(root).recoveries, sourcePlanId);
-  mkdirSync(directory, { recursive: true });
+  ensureDurableDirectory(directory);
   const path = join(directory, `${saved.receipt.id}.json`);
-  writeFileSync(path, `${JSON.stringify(receipt, null, 2)}\n`, { flag: 'wx' });
+  writeImmutableReceipt(path, receipt, { onCheckpoint: onReceiptCheckpoint });
   return { plan, saved, receipt, path };
 }
 
 export function requiresProofCacheMutationLock(argv) {
-  return (argv[0] === 'gc' && argv.includes('--apply')) || (argv[0] === 'audit' && argv.includes('--recover'));
+  return (argv[0] === 'gc' && argv.includes('--apply')) ||
+    (argv[0] === 'audit' && (argv.includes('--recover') || argv.includes('--quarantine-staging')));
 }
 
 export function parseProofCacheArguments(argv) {
   const command = argv[0];
-  const usage = 'usage: proof:cache explain <lane-id> [--json] | proof:cache audit [--json] | proof:cache audit --recover <plan-id> [--keep-receipts N] [--max-bytes N] [--json] | proof:cache gc --dry-run [--keep-receipts N] [--max-bytes N] [--json] | proof:cache gc --apply <plan-path> [--json]';
+  const usage = 'usage: proof:cache explain <lane-id> [--json] | proof:cache audit [--json] | proof:cache audit --quarantine-staging [--json] | proof:cache audit --recover <plan-id> [--keep-receipts N] [--max-bytes N] [--json] | proof:cache gc --dry-run [--keep-receipts N] [--max-bytes N] [--json] | proof:cache gc --apply <plan-path> [--json]';
   if (!['explain', 'audit', 'gc'].includes(command)) throw new Error(usage);
   if (command === 'explain') {
     const subject = argv[1];
@@ -879,11 +1040,15 @@ export function parseProofCacheArguments(argv) {
   }
 
   if (command === 'audit') {
-    const options = { command, json: false, recover: null, keepReceipts: 10, maxBytes: Number.POSITIVE_INFINITY };
+    const options = {
+      command, json: false, recover: null, quarantineStaging: false,
+      keepReceipts: 10, maxBytes: Number.POSITIVE_INFINITY,
+    };
     const args = argv.slice(1);
     for (let index = 0; index < args.length; index += 1) {
       const arg = args[index];
       if (arg === '--json') options.json = true;
+      else if (arg === '--quarantine-staging') options.quarantineStaging = true;
       else if (arg === '--recover') {
         if (options.recover) throw new Error('--recover may be specified only once');
         options.recover = args[++index];
@@ -892,6 +1057,7 @@ export function parseProofCacheArguments(argv) {
       else if (arg === '--max-bytes') options.maxBytes = Number(args[++index]);
       else throw new Error(`unknown proof cache audit option ${arg}`);
     }
+    if (options.recover && options.quarantineStaging) throw new Error('--recover and --quarantine-staging are mutually exclusive');
     if (!options.recover && (options.keepReceipts !== 10 || options.maxBytes !== Number.POSITIVE_INFINITY)) {
       throw new Error('audit recovery policy requires --recover <plan-id>');
     }
@@ -984,7 +1150,7 @@ function formatGc(plan, { planPath = null, applied = null } = {}) {
 function formatMaintenanceAudit(audit) {
   const lines = [
     `proof cache maintenance: ${audit.state}`,
-    `  plans ${audit.summary.plan_count}; applications ${audit.summary.application_count}; recoveries ${audit.summary.recovery_count}; issues ${audit.summary.issue_count}`,
+    `  plans ${audit.summary.plan_count}; applications ${audit.summary.application_count}; recoveries ${audit.summary.recovery_count}; staging ${audit.summary.staging_count} (${audit.summary.active_staging_count} active); issues ${audit.summary.issue_count}`,
   ];
   for (const issue of audit.issues) lines.push(`  ${issue.code} ${issue.subject}: ${issue.message}`);
   return lines.join('\n');
@@ -1001,6 +1167,16 @@ function formatRecovery(recovery) {
 
 export async function main(argv = process.argv.slice(2), { root = REPO_ROOT } = {}) {
   const args = parseProofCacheArguments(argv);
+  if (args.command === 'audit' && args.quarantineStaging) {
+    const moved = quarantineProofCacheReceiptStaging({ root });
+    const audit = auditProofCacheMaintenance({ root });
+    const payload = { moved, audit };
+    console.log(args.json
+      ? JSON.stringify(payload, null, 2)
+      : [`quarantined receipt staging: ${moved.length}`, formatMaintenanceAudit(audit)].join('\n'));
+    if (audit.state !== 'clean') process.exitCode = 2;
+    return payload;
+  }
   if (args.command === 'audit' && !args.recover) {
     const audit = auditProofCacheMaintenance({ root });
     console.log(args.json ? JSON.stringify(audit, null, 2) : formatMaintenanceAudit(audit));

@@ -84,7 +84,13 @@ direct `main` work, and atomic history over PR ceremony.
   interrupted or failed application with
   `npm run proof:cache -- audit --recover <plan-id>`, review the newly written
   current-state plan, then apply that new plan normally. Recovery never replays
-  an attempted plan.
+  an attempted plan. Every maintenance receipt publishes through one durable
+  exclusive protocol: staged write, staging-directory sync, file sync, atomic
+  no-clobber publication, publication-directory sync, staging removal, and
+  final directory sync. Audit reports abandoned staging owned by dead writer
+  PIDs. Quarantine only those revalidated dead-writer stages with
+  `npm run proof:cache -- audit --quarantine-staging`; live-writer staging is
+  never moved.
 - For frontend browser/readiness work, prefer the role proof and artifact
   contract lanes before pushing.
 - For Postgres-backed Rust work, use a local `DATABASE_URL` proof lane and run

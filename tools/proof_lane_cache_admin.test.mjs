@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,9 +16,12 @@ import {
   explainProofCacheLane,
   parseProofCacheArguments,
   planProofCacheGc,
+  quarantineProofCacheReceiptStaging,
   readProofCacheGcPlan,
   requiresProofCacheMutationLock,
   scanProofCache,
+  scanProofCacheReceiptStaging,
+  writeImmutableReceipt,
   writeProofCacheGcRecovery,
   writeProofCacheGcPlan,
 } from './proof_lane_cache_admin.mjs';
@@ -299,9 +302,10 @@ test('disk budget fails closed when protected evidence alone exceeds it', (t) =>
   assert.ok(plan.retained_bytes > 0);
 });
 
-test('only an applying GC requires the proof host mutation lock', () => {
+test('only mutating maintenance commands require the proof host lock', () => {
   assert.equal(requiresProofCacheMutationLock(['gc', '--apply', 'plan.json']), true);
   assert.equal(requiresProofCacheMutationLock(['audit', '--recover', 'plan-id']), true);
+  assert.equal(requiresProofCacheMutationLock(['audit', '--quarantine-staging']), true);
   assert.equal(requiresProofCacheMutationLock(['audit']), false);
   assert.equal(requiresProofCacheMutationLock(['gc', '--dry-run']), false);
   assert.equal(requiresProofCacheMutationLock(['explain', 'audit']), false);
@@ -329,8 +333,14 @@ test('cache CLI rejects contradictory mutation intent and GC flags on explain', 
     /accepts only/,
   );
   assert.deepEqual(parseProofCacheArguments(['audit', '--json']), {
-    command: 'audit', json: true, recover: null, keepReceipts: 10, maxBytes: Number.POSITIVE_INFINITY,
+    command: 'audit', json: true, recover: null, quarantineStaging: false,
+    keepReceipts: 10, maxBytes: Number.POSITIVE_INFINITY,
   });
+  assert.equal(parseProofCacheArguments(['audit', '--quarantine-staging']).quarantineStaging, true);
+  assert.throws(
+    () => parseProofCacheArguments(['audit', '--quarantine-staging', '--recover', 'plan-id']),
+    /mutually exclusive/,
+  );
   assert.throws(() => parseProofCacheArguments(['audit', '--max-bytes', '1']), /requires --recover/);
 });
 
@@ -498,6 +508,110 @@ test('interrupted applications recover through a fresh linked plan and never rep
   audit = auditProofCacheMaintenance({ root: fixture.root });
   assert.equal(audit.state, 'clean');
   assert.deepEqual(audit.recoveries, [{ source_plan_id: source.receipt.id, recovery_plan_id: recovery.saved.receipt.id }]);
+});
+
+test('immutable receipt publication is exclusive and leaves no staging after durable completion', (t) => {
+  const fixture = fixtureRoot(t);
+  const path = join(fixture.root, 'receipt-publication', 'receipt.json');
+  const receipt = { schema: 1, kind: 'publication-proof', payload: 'durable' };
+  assert.equal(writeImmutableReceipt(path, receipt), path);
+  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), receipt);
+  assert.deepEqual(readdirSync(join(fixture.root, 'receipt-publication')), ['receipt.json']);
+  assert.throws(() => writeImmutableReceipt(path, receipt), /already exists/);
+});
+
+test('SIGKILL at every receipt publication stage exposes only absent or complete final receipts', (t) => {
+  const stages = [
+    'after-stage-create',
+    'after-stage-directory-sync',
+    'after-stage-write',
+    'after-file-sync',
+    'after-publish',
+    'after-publish-directory-sync',
+    'after-stage-remove',
+    'after-directory-sync',
+  ];
+  const receipt = { schema: 1, kind: 'publication-proof', payload: 'x'.repeat(4096) };
+  const expectedBytes = `${JSON.stringify(receipt, null, 2)}\n`;
+
+  for (const [index, crashAt] of stages.entries()) {
+    const fixture = fixtureRoot(t);
+    const directory = join(fixture.root, 'receipt-publication');
+    const receiptPath = join(directory, 'receipt.json');
+    const configPath = join(fixture.root, 'publication-crash.json');
+    writeFileSync(configPath, `${JSON.stringify({
+      mode: 'receipt-publication',
+      receipt_path: receiptPath,
+      receipt,
+      crash_at: crashAt,
+    }, null, 2)}\n`);
+
+    const child = spawnSync(process.execPath, [CRASH_FIXTURE, configPath], { encoding: 'utf8' });
+    assert.ifError(child.error);
+    assert.equal(child.signal, 'SIGKILL', `${crashAt}: ${child.stderr}`);
+    assert.equal(child.status, null, `${crashAt}: ${child.stderr}`);
+
+    const finalExpected = index >= stages.indexOf('after-publish');
+    const stageExpected = index <= stages.indexOf('after-publish-directory-sync');
+    assert.equal(existsSync(receiptPath), finalExpected, `${crashAt} final publication state`);
+    if (finalExpected) assert.equal(readFileSync(receiptPath, 'utf8'), expectedBytes, `${crashAt} published torn bytes`);
+    const names = readdirSync(directory);
+    assert.equal(names.some((name) => name.startsWith('.receipt.json.stage-')), stageExpected, `${crashAt} staging state`);
+  }
+});
+
+test('maintenance audit identifies and safely quarantines abandoned receipt staging', (t) => {
+  const fixture = fixtureRoot(t);
+  const receiptPath = join(fixture.root, 'target/proof-lanes/cache-maintenance/plans/probe.json');
+  const receipt = { schema: 1, kind: 'publication-proof', payload: 'staged' };
+  const configPath = join(fixture.root, 'publication-crash.json');
+  writeFileSync(configPath, `${JSON.stringify({
+    mode: 'receipt-publication',
+    receipt_path: receiptPath,
+    receipt,
+    crash_at: 'after-stage-write',
+  }, null, 2)}\n`);
+  const child = spawnSync(process.execPath, [CRASH_FIXTURE, configPath], { encoding: 'utf8' });
+  assert.equal(child.signal, 'SIGKILL');
+
+  let audit = auditProofCacheMaintenance({ root: fixture.root });
+  assert.equal(audit.state, 'attention');
+  assert.equal(audit.summary.staging_count, 1);
+  assert.deepEqual(audit.issues.map(({ code }) => code), ['abandoned-receipt-staging']);
+  const [staging] = scanProofCacheReceiptStaging({ root: fixture.root });
+  assert.equal(staging.valid, true);
+  assert.ok(staging.bytes > 0);
+
+  const [moved] = quarantineProofCacheReceiptStaging({
+    root: fixture.root,
+    now: new Date('2026-08-30T18:00:00.000Z'),
+  });
+  assert.equal(moved.source, staging.path);
+  assert.equal(existsSync(moved.source), false);
+  assert.equal(existsSync(moved.destination), true);
+  assert.deepEqual(JSON.parse(readFileSync(moved.destination, 'utf8')), receipt);
+  audit = auditProofCacheMaintenance({ root: fixture.root });
+  assert.equal(audit.state, 'clean');
+  assert.equal(audit.summary.staging_count, 0);
+});
+
+test('maintenance quarantine never takes staging from a live writer pid', (t) => {
+  const fixture = fixtureRoot(t);
+  const receiptPath = join(fixture.root, 'target/proof-lanes/cache-maintenance/plans/probe.json');
+  assert.throws(
+    () => writeImmutableReceipt(receiptPath, { kind: 'publication-proof' }, {
+      onCheckpoint: ({ name }) => {
+        if (name === 'after-stage-write') throw new Error('hold live staging');
+      },
+    }),
+    /hold live staging/,
+  );
+  const audit = auditProofCacheMaintenance({ root: fixture.root });
+  assert.equal(audit.state, 'clean');
+  assert.equal(audit.summary.staging_count, 1);
+  assert.equal(audit.summary.active_staging_count, 1);
+  assert.deepEqual(quarantineProofCacheReceiptStaging({ root: fixture.root }), []);
+  assert.equal(scanProofCacheReceiptStaging({ root: fixture.root }).length, 1);
 });
 
 test('real process death at every GC persistence boundary recovers without losing protected evidence', (t) => {

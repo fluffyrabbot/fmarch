@@ -1,12 +1,12 @@
 // Abrupt-process fixture for proof-cache maintenance recovery tests.
 //
-// This helper deliberately kills itself without unwinding at one application
-// checkpoint. Production code exposes only the checkpoint callback; process
+// This helper deliberately kills itself without unwinding at one durability
+// checkpoint. Production code exposes only checkpoint callbacks; process
 // termination remains confined to this test executable.
 
 import { readFileSync } from 'node:fs';
 
-import { applyReviewedProofCacheGcPlan } from './proof_lane_cache_admin.mjs';
+import { applyReviewedProofCacheGcPlan, writeImmutableReceipt } from './proof_lane_cache_admin.mjs';
 
 const [configPath] = process.argv.slice(2);
 if (!configPath) throw new Error('usage: proof_lane_cache_crash_fixture.mjs <config-path>');
@@ -16,14 +16,24 @@ const checkpointId = (checkpoint) => checkpoint.name === 'after-action'
   ? `${checkpoint.name}:${checkpoint.action_index}`
   : checkpoint.name;
 
+const killAtConfiguredCheckpoint = (checkpoint) => {
+  if (checkpointId(checkpoint) === config.crash_at) process.kill(process.pid, 'SIGKILL');
+};
+
+if (config.mode === 'receipt-publication') {
+  writeImmutableReceipt(config.receipt_path, config.receipt, {
+    onCheckpoint: killAtConfiguredCheckpoint,
+  });
+  throw new Error(`receipt publication completed without reaching crash checkpoint ${config.crash_at}`);
+}
+
 applyReviewedProofCacheGcPlan(config.plan_path, {
   root: config.root,
   currentProofKeys: new Map(Object.entries(config.current_proof_keys)),
   receipts: [],
   now: new Date(config.now),
-  onApplicationCheckpoint: (checkpoint) => {
-    if (checkpointId(checkpoint) === config.crash_at) process.kill(process.pid, 'SIGKILL');
-  },
+  onApplicationCheckpoint: killAtConfiguredCheckpoint,
+  onReceiptCheckpoint: killAtConfiguredCheckpoint,
 });
 
 throw new Error(`application completed without reaching crash checkpoint ${config.crash_at}`);
