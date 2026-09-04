@@ -3192,9 +3192,45 @@ async fn subscriptions_fan_out_public_updates_suppress_moderation_and_rebuild(po
     .fetch_one(&pool)
     .await
     .unwrap();
+
+    // The reply published while the watch was inactive is justified by no
+    // membership period, so a rebuild must remove it rather than preserve it.
+    let unwatched_seq: i64 =
+        sqlx::query_scalar("SELECT MAX(source_seq) FROM public_publication WHERE surface_id = $1")
+            .bind(topic)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    sqlx::query(
+        "INSERT INTO member_inbox_item (principal_id, surface_id, source_seq, reason, occurred_at) VALUES ($1, $2, $3, 'watch', 0)",
+    )
+    .bind(member.as_uuid())
+    .bind(topic)
+    .bind(unwatched_seq)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let unjustified_row = || async {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM member_inbox_item WHERE principal_id = $1 AND surface_id = $2 AND source_seq = $3",
+        )
+        .bind(member.as_uuid())
+        .bind(topic)
+        .bind(unwatched_seq)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    assert_eq!(unjustified_row().await, 1);
+
     projections::rebuild_subscription_stream(&pool, subscription_id)
         .await
         .unwrap();
+    assert_eq!(
+        unjustified_row().await,
+        0,
+        "subscription rebuild must delete inbox rows the log does not justify"
+    );
     assert_eq!(
         projections::public_inbox(&pool, member, None, 20)
             .await

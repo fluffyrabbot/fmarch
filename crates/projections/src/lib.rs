@@ -3842,6 +3842,12 @@ pub async fn rebuild_moderation_stream(
 /// monotonic cursor, and privacy-safe inbox references derived from public post
 /// projections. The backfill applies the historical membership periods, so a
 /// resubscription never manufactures updates from an inactive interval.
+///
+/// This is a delete-and-replay: the stream's own `watch` inbox references are
+/// cleared before the backfill reproduces them from the log, so a row the log
+/// does not justify does not survive a rebuild. The delete is scoped by reason
+/// because a subscription stream has no authority over `mention` rows, which
+/// carry no subscription and are rebuilt with their own surface.
 pub async fn rebuild_subscription_stream(
     pool: &PgPool,
     subscription_id: Uuid,
@@ -3861,6 +3867,19 @@ pub async fn rebuild_subscription_stream(
     for event in &events {
         fold_subscription_event(&mut tx, subscription_id, event).await?;
     }
+    sqlx::query(
+        r#"
+        DELETE FROM member_inbox_item AS item
+        USING public_watch AS subscription
+        WHERE subscription.subscription_id = $1
+          AND item.principal_id = subscription.principal_id
+          AND item.surface_id = subscription.surface_id
+          AND item.reason = 'watch'
+        "#,
+    )
+    .bind(subscription_id)
+    .execute(&mut *tx)
+    .await?;
     backfill_subscription_inbox(&mut tx, subscription_id).await?;
     tx.commit().await?;
     Ok(())
@@ -3935,20 +3954,17 @@ async fn fold_member_inbox_cursor_event(
             })
         }
     };
-    match event.kind.as_str() {
-        attention::INBOX_CURSOR_ADVANCED => {
-            let read_through_seq = event
-                .payload
-                .get("read_through_seq")
-                .and_then(serde_json::Value::as_i64)
-                .ok_or_else(|| ProjectionError::Payload {
-                    kind: event.kind.clone(),
-                    source: serde::de::Error::custom(
-                        "inbox cursor event requires read_through_seq",
-                    ),
-                })?;
-            sqlx::query(
-                r#"
+    if event.kind.as_str() == attention::INBOX_CURSOR_ADVANCED {
+        let read_through_seq = event
+            .payload
+            .get("read_through_seq")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or_else(|| ProjectionError::Payload {
+                kind: event.kind.clone(),
+                source: serde::de::Error::custom("inbox cursor event requires read_through_seq"),
+            })?;
+        sqlx::query(
+            r#"
                 INSERT INTO member_inbox_cursor (
                     principal_id, read_through_seq, updated_seq, version
                 ) VALUES ($1, $2, $3, $4)
@@ -3960,15 +3976,13 @@ async fn fold_member_inbox_cursor_event(
                     updated_seq = EXCLUDED.updated_seq,
                     version = EXCLUDED.version
                 "#,
-            )
-            .bind(principal_id.as_uuid())
-            .bind(read_through_seq)
-            .bind(event.seq)
-            .bind(event.stream_seq)
-            .execute(&mut **tx)
-            .await?;
-        }
-        _ => {}
+        )
+        .bind(principal_id.as_uuid())
+        .bind(read_through_seq)
+        .bind(event.seq)
+        .bind(event.stream_seq)
+        .execute(&mut **tx)
+        .await?;
     }
     Ok(())
 }
@@ -3997,9 +4011,7 @@ pub async fn rebuild_member_inbox_cursor_stream(
         _ => {
             return Err(ProjectionError::Payload {
                 kind: attention::INBOX_CURSOR_ADVANCED.to_string(),
-                source: serde::de::Error::custom(
-                    "inbox cursor events require a principal actor",
-                ),
+                source: serde::de::Error::custom("inbox cursor events require a principal actor"),
             })
         }
     };
@@ -8217,8 +8229,7 @@ pub async fn subscription_target_state(
     let (subscribed, read_through_seq, unread_count) = match state {
         Some(state) => {
             let unread_count =
-                visible_subscription_inbox_count(&mut tx, principal_id, target.surface_id)
-                    .await?;
+                visible_subscription_inbox_count(&mut tx, principal_id, target.surface_id).await?;
             (state.active, state.read_through_seq, unread_count)
         }
         None => (false, 0, 0),
