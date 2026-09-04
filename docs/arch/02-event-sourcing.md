@@ -257,10 +257,14 @@ move beyond the target's current public sequence.
 Public discussion post folds synchronously fan out a `watch` reference into
 `member_inbox_item` for every subscription period active at that global event sequence. Authors
 do not receive their own update. A row is unread while it is beyond the principal inbox cursor
-and, where a watch exists for that surface, beyond that watch's cursor, so reading the thread
-and marking the inbox read both clear it. Inbox rows contain no post body, author identity, credential
-principal, private audience, or engagement signal: presentation resolves only the public target
-title and canonical post URL. Topic/game visibility and `moderation_target_state` are applied at
+and, where a watch exists for that surface, beyond that watch's cursor, so a row can be cleared
+from either end. Only the per-target watch cursor has a write path today; the per-principal
+cursor is durable and folded but not yet advanceable, so reading the thread is currently the
+only way a row clears, and "mark all read" arrives with the mention surface
+([RFC 0007](../rfcs/0007-first-class-mentions-and-addressed-delivery.md)). Inbox rows contain no
+post body, author identity, credential principal, private audience, or engagement signal:
+presentation resolves only the public target title and canonical post URL. Topic/game
+visibility and `moderation_target_state` are applied at
 read time, so hiding a post immediately suppresses its inbox entry and restoring it reveals the
 same immutable reference. Topic, game, and subscription rebuilds use the historical periods to
 reproduce exactly the updates that existed while each watch was active. Community mentions fan

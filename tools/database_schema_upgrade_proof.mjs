@@ -99,7 +99,14 @@ SELECT COALESCE(jsonb_agg(jsonb_build_object(
 FROM authority_rows;
 `;
 
-const seedSql = String.raw`
+// Behavioral fixtures are keyed by the migration version they prove. Each
+// seed runs against the schema as it stood *before* that version, and its
+// assertions run immediately after that version is applied and again after the
+// whole chain. A single head-minus-one seed could only ever prove the newest
+// migration, so every new migration silently retired its predecessor's
+// data-cut proof; keying by version keeps all of them running.
+
+const sharedSeedSql = String.raw`
 INSERT INTO platform_principal (principal_id, created_at)
 VALUES ('10000000-0000-4000-8000-000000000001', 1);
 INSERT INTO privacy_subject (subject_id, principal_id, created_at)
@@ -125,10 +132,11 @@ INSERT INTO profile_mute
 VALUES
   ('50000000-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000001',
    '40000000-0000-4000-8000-000000000001', true, 1, 1);
+`;
 
--- Behavioral fixtures for the upgrade cut. Sessions use the post-0004 column
--- shape (no capability snapshots, no ticket kinds); the 0004 cleanup itself is
--- enforced by the authority invariants below, not by re-seeding legacy rows.
+const legacyAuthoritySeedSql = String.raw`
+-- Behavioral fixtures for the 0004 authority cut. Ticket kinds are
+-- deliberately mismatched so cleanup must follow the session reference.
 INSERT INTO authentication_method
   (method_id, principal_id, kind, status, created_at, last_authenticated_at)
 VALUES
@@ -149,32 +157,95 @@ VALUES
    '10000000-0000-4000-8000-000000000001',
    '71000000-0000-4000-8000-000000000001', 'active', 1, 1, 100);
 INSERT INTO auth_session
-  (token_hash, principal_id, created_at, expires_at,
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
+   idle_expires_at, assurance, authenticated_at)
+VALUES
+  (repeat('a', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+   ARRAY['GlobalAdmin'], 100, 'admin_grant', 1);
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
+   idle_expires_at, assurance, authenticated_at)
+VALUES
+  (repeat('d', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+   ARRAY[]::text[], 100, 'dev', 1);
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
+   authenticated_via_method_id, idle_expires_at, assurance, authenticated_at,
+   workos_session_id)
+VALUES
+  (repeat('f', 64), '10000000-0000-4000-8000-000000000001', 1, 100,
+   ARRAY[]::text[], '71000000-0000-4000-8000-000000000001', 100,
+   'external_sso', 1, 'session_01HQAG1HENBZMAZD82YRXDFC0B');
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
    authenticated_via_method_id, idle_expires_at, assurance, authenticated_at)
 VALUES
   (repeat('b', 63) || '1', '10000000-0000-4000-8000-000000000001', 1, 100,
-   '71000000-0000-4000-8000-000000000002', 100,
+   ARRAY[]::text[], '71000000-0000-4000-8000-000000000002', 100,
    'password', 1);
--- One-time assertion replay evidence survives with a severed session link.
+-- A password label cannot launder a legacy session-local capability snapshot.
+INSERT INTO auth_session
+  (token_hash, principal_id, created_at, expires_at, global_capabilities,
+   authenticated_via_method_id, idle_expires_at, assurance, authenticated_at)
+VALUES
+  (repeat('b', 63) || '7', '10000000-0000-4000-8000-000000000001', 1, 100,
+   ARRAY['GlobalAdmin'], '71000000-0000-4000-8000-000000000002', 100,
+   'password', 1);
 INSERT INTO workos_session_exchange
   (provider_session_id, access_token_hash, exchanged_at, access_expires_at,
    linking_session_hash)
 VALUES
   ('session_01HQAG1HENBZMAZD82YRXDFC0B', repeat('b', 64), 1, 100,
-   NULL);
+   repeat('a', 64));
 INSERT INTO workos_session_exchange
   (provider_session_id, access_token_hash, exchanged_at, access_expires_at,
    linking_session_hash)
 VALUES
   ('session_01HQAG1HENBZMAZD82YRXDFC0B', repeat('8', 64), 1, 100,
-   NULL);
+   repeat('f', 64));
 INSERT INTO auth_websocket_ticket
-  (token_hash, session_reference, access_expires_at,
+  (token_hash, auth_kind, session_reference, access_expires_at, principal_id,
    audience, game_id, channel_id, after_seq, issued_at, expires_at)
 VALUES
-  (repeat('b', 63) || '2', repeat('b', 63) || '1', 100, 'fmarch-live',
+  (repeat('c', 64), 'classic', repeat('a', 64), 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
    '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+INSERT INTO auth_websocket_ticket
+  (token_hash, auth_kind, session_reference, access_expires_at, principal_id,
+   audience, game_id, channel_id, after_seq, issued_at, expires_at)
+VALUES
+  (repeat('e', 64), 'workos', repeat('d', 64), 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+INSERT INTO auth_websocket_ticket
+  (token_hash, auth_kind, session_reference, access_expires_at, principal_id,
+   audience, game_id, channel_id, after_seq, issued_at, expires_at)
+VALUES
+  (repeat('9', 64), 'classic', repeat('f', 64), 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+INSERT INTO auth_websocket_ticket
+  (token_hash, auth_kind, session_reference, access_expires_at, principal_id,
+   audience, game_id, channel_id, after_seq, issued_at, expires_at)
+VALUES
+  (repeat('b', 63) || '2', 'classic', repeat('b', 63) || '1', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100),
+  (repeat('b', 63) || '3', 'dev', repeat('b', 63) || '1', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100),
+  (repeat('b', 63) || '4', 'admin_grant', repeat('b', 63) || '1', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100),
+  (repeat('b', 63) || '5', 'classic', repeat('b', 63) || '6', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100),
+  (repeat('b', 63) || '8', 'classic', repeat('b', 63) || '7', 100,
+   '10000000-0000-4000-8000-000000000001', 'fmarch-live',
+   '72000000-0000-4000-8000-000000000001', 'main', 0, 1, 100);
+`;
 
+const reasonDerivedInboxSeedSql = String.raw`
 -- Behavioral fixtures for the 0005 reason-derived inbox cut. The watcher is a
 -- different principal than the post author, so the backfill must carry the row.
 INSERT INTO publication_surface
@@ -199,6 +270,91 @@ INSERT INTO public_inbox_item (subscription_id, source_seq, surface_id, occurred
 VALUES ('82000000-0000-4000-8000-000000000001', 5,
   '81000000-0000-4000-8000-000000000001', 5);
 `;
+
+const migrationFixtures = [
+  {
+    version: 4,
+    seed: legacyAuthoritySeedSql,
+    assertions: [
+      {
+        sql: String.raw`SELECT
+        (SELECT count(*) FROM auth_session WHERE token_hash = repeat('a', 64))::text || ':' ||
+        (SELECT count(*) FROM workos_session_exchange WHERE linking_session_hash = repeat('a', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket WHERE session_reference = repeat('a', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_session WHERE token_hash = repeat('d', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket WHERE session_reference = repeat('d', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_session WHERE token_hash = repeat('f', 64))::text || ':' ||
+        (SELECT count(*) FROM workos_session_exchange WHERE linking_session_hash = repeat('f', 64))::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket WHERE session_reference = repeat('f', 64))::text || ':' ||
+        (SELECT count(*) FROM workos_session_exchange WHERE access_token_hash = repeat('b', 64))::text || ':' ||
+        (SELECT count(*) FROM workos_session_exchange WHERE access_token_hash = repeat('8', 64))::text`,
+        expected: "0:0:0:0:0:0:0:0:1:1",
+        message:
+          "0004 must delete unproven AdminGrant, Dev, and WorkOS sessions, sever their references, and preserve one-time assertion replay evidence",
+      },
+      {
+        sql: String.raw`SELECT
+        (SELECT count(*) FROM authentication_method
+         WHERE method_id = '71000000-0000-4000-8000-000000000002'
+           AND kind = 'classic_password')::text || ':' ||
+        (SELECT count(*) FROM auth_session
+         WHERE token_hash = repeat('b', 63) || '1'
+           AND authenticated_via_method_id = '71000000-0000-4000-8000-000000000002'
+           AND assurance = 'password')::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '2'
+           AND session_reference = repeat('b', 63) || '1')::text`,
+        expected: "1:1:1",
+        message: "0004 must preserve a valid password method, its session, and its websocket ticket",
+      },
+      {
+        sql: String.raw`SELECT
+        (SELECT count(*) FROM auth_session
+         WHERE token_hash = repeat('b', 63) || '7')::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '8')::text`,
+        expected: "0:0",
+        message:
+          "0004 must revoke a password-labeled session carrying a legacy capability snapshot and its derivative ticket",
+      },
+      {
+        sql: String.raw`SELECT
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '3')::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '4')::text || ':' ||
+        (SELECT count(*) FROM auth_websocket_ticket
+         WHERE token_hash = repeat('b', 63) || '5')::text || ':' ||
+        (SELECT count(*) FROM auth_session
+         WHERE token_hash = repeat('b', 63) || '1')::text`,
+        expected: "0:0:0:1",
+        message:
+          "0004 must remove Dev/AdminGrant-labeled and orphan tickets without deleting their valid password session",
+      },
+    ],
+  },
+  {
+    version: 5,
+    seed: reasonDerivedInboxSeedSql,
+    assertions: [
+      {
+        sql: "SELECT principal_id::text || ':' || surface_id::text || ':' || source_seq::text || ':' || reason || ':' || occurred_at::text FROM member_inbox_item",
+        expected:
+          "60000000-0000-4000-8000-000000000001:81000000-0000-4000-8000-000000000001:5:watch:5",
+        message: "0005 must backfill watch rows into the reason-derived member inbox",
+      },
+      {
+        sql: String.raw`SELECT
+        (SELECT count(*)::text FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'public_inbox_item')::text || ':' ||
+        (SELECT count(*)::text FROM member_inbox_cursor)::text`,
+        expected: "0:0",
+        message:
+          "0005 must drop the subscription-keyed inbox table and start with an empty member inbox cursor",
+      },
+    ],
+  },
+];
 
 const postMigrationAuthorityInvariantSql = String.raw`
 DO $proof$
@@ -360,33 +516,74 @@ function authorityArtifact(epoch, rawFingerprint, schemaOwner) {
   }, null, 2)}\n`;
 }
 
+function assertMigrationFixture(fixture, url, context) {
+  if (!fixture) return;
+  for (const check of fixture.assertions) {
+    assert.equal(
+      databaseCommand("psql", url, check.sql, { tuplesOnly: true }),
+      check.expected,
+      `${context}${check.message}`,
+    );
+  }
+}
+
 export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAuthority = false }) {
   assert.ok(upgradeUrl && freshUrl, "upgrade and fresh disposable database URLs are required");
   assert.notEqual(upgradeUrl, freshUrl, "upgrade proof databases must be isolated");
   const epoch = JSON.parse(await readFile(epochPath, "utf8"));
   assert.ok(epoch.migrations.length >= 2, "upgrade proof requires a previous and current migration set");
-  const previousDirectory = await mkdtemp(path.join(os.tmpdir(), "fmarch-previous-migrations-"));
+  for (const fixture of migrationFixtures) {
+    assert.ok(
+      epoch.migrations.some((migration) => migration.version === fixture.version),
+      `behavioral fixture claims migration version ${fixture.version}, which the epoch manifest does not list`,
+    );
+  }
+  const stagedDirectory = await mkdtemp(path.join(os.tmpdir(), "fmarch-staged-migrations-"));
   try {
-    for (const migration of epoch.migrations.slice(0, -1)) {
-      await writeFile(
-        path.join(previousDirectory, migration.filename),
-        await readFile(path.join(migrationDirectory, migration.filename)),
-      );
-    }
-    run(commandPath("sqlx"), [
-      "migrate",
-      "run",
-      "--source",
-      previousDirectory,
-      "--database-url",
-      upgradeUrl,
-    ]);
-    databaseCommand("psql", upgradeUrl, seedSql);
-
     run("cargo", ["build", "--quiet", "--locked", "-p", "server", "--bin", "fmarch-migrate"]);
     const migrator = path.join(repoRoot, "target", "debug", "fmarch-migrate");
-    runMigrator(migrator, upgradeUrl);
-    runMigrator(migrator, upgradeUrl);
+    const headVersion = epoch.migrations.at(-1).version;
+    const firstFixtureVersion = Math.min(...migrationFixtures.map((fixture) => fixture.version));
+
+    // Walk the chain one migration at a time so each version's fixtures are
+    // seeded against the schema that version actually upgraded from, and its
+    // assertions run against the schema that version produced.
+    for (const migration of epoch.migrations) {
+      if (migration.version === firstFixtureVersion) {
+        databaseCommand("psql", upgradeUrl, sharedSeedSql);
+      }
+      const fixture = migrationFixtures.find((candidate) => candidate.version === migration.version);
+      if (fixture) {
+        databaseCommand("psql", upgradeUrl, fixture.seed);
+      }
+      if (migration.version === headVersion) {
+        // The shipped migrator, not sqlx, must be what upgrades a populated
+        // database; the second run proves the head migration is idempotent.
+        runMigrator(migrator, upgradeUrl);
+        runMigrator(migrator, upgradeUrl);
+      } else {
+        await writeFile(
+          path.join(stagedDirectory, migration.filename),
+          await readFile(path.join(migrationDirectory, migration.filename)),
+        );
+        run(commandPath("sqlx"), [
+          "migrate",
+          "run",
+          "--source",
+          stagedDirectory,
+          "--database-url",
+          upgradeUrl,
+        ]);
+      }
+      assertMigrationFixture(fixture, upgradeUrl, `${migration.filename}: `);
+    }
+
+    // Re-run every fixture against the fully migrated database: a later
+    // migration must not quietly undo what an earlier one proved.
+    for (const fixture of migrationFixtures) {
+      assertMigrationFixture(fixture, upgradeUrl, "after the full migration chain, ");
+    }
+
     runMigrator(migrator, freshUrl);
 
     const checkedSnapshot = await readFile(snapshotPath, "utf8");
@@ -429,65 +626,6 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
       { tuplesOnly: true },
     );
     assert.equal(preserved, "50000000-0000-4000-8000-000000000001:true:1");
-    const preservedReplayEvidence = databaseCommand(
-      "psql",
-      upgradeUrl,
-      String.raw`SELECT
-        (SELECT count(*) FROM workos_session_exchange WHERE access_token_hash = repeat('b', 64))::text || ':' ||
-        (SELECT count(*) FROM workos_session_exchange WHERE access_token_hash = repeat('8', 64))::text`,
-      { tuplesOnly: true },
-    );
-    assert.equal(
-      preservedReplayEvidence,
-      "1:1",
-      "upgrade must preserve one-time assertion replay evidence",
-    );
-    const preservedPasswordAuthority = databaseCommand(
-      "psql",
-      upgradeUrl,
-      String.raw`SELECT
-        (SELECT count(*) FROM authentication_method
-         WHERE method_id = '71000000-0000-4000-8000-000000000002'
-           AND kind = 'classic_password')::text || ':' ||
-        (SELECT count(*) FROM auth_session
-         WHERE token_hash = repeat('b', 63) || '1'
-           AND authenticated_via_method_id = '71000000-0000-4000-8000-000000000002'
-           AND assurance = 'password')::text || ':' ||
-        (SELECT count(*) FROM auth_websocket_ticket
-         WHERE token_hash = repeat('b', 63) || '2'
-           AND session_reference = repeat('b', 63) || '1')::text`,
-      { tuplesOnly: true },
-    );
-    assert.equal(
-      preservedPasswordAuthority,
-      "1:1:1",
-      "upgrade must preserve a valid password method, its session, and its websocket ticket",
-    );
-    const backfilledMemberInbox = databaseCommand(
-      "psql",
-      upgradeUrl,
-      "SELECT principal_id::text || ':' || surface_id::text || ':' || source_seq::text || ':' || reason || ':' || occurred_at::text FROM member_inbox_item",
-      { tuplesOnly: true },
-    );
-    assert.equal(
-      backfilledMemberInbox,
-      "60000000-0000-4000-8000-000000000001:81000000-0000-4000-8000-000000000001:5:watch:5",
-      "0005 must backfill watch rows into the reason-derived member inbox",
-    );
-    const removedSubscriptionInbox = databaseCommand(
-      "psql",
-      upgradeUrl,
-      String.raw`SELECT
-        (SELECT count(*)::text FROM information_schema.tables
-         WHERE table_schema = 'public' AND table_name = 'public_inbox_item')::text || ':' ||
-        (SELECT count(*)::text FROM member_inbox_cursor)::text`,
-      { tuplesOnly: true },
-    );
-    assert.equal(
-      removedSubscriptionInbox,
-      "0:0",
-      "0005 must drop the subscription-keyed inbox table and start with an empty member inbox cursor",
-    );
     databaseCommand("psql", upgradeUrl, postMigrationAuthorityInvariantSql);
     const targetConstraint = databaseCommand(
       "psql",
@@ -523,15 +661,17 @@ export async function proveDatabaseSchemaUpgrade({ upgradeUrl, freshUrl, writeAu
       authority_equal: true,
       authority_fingerprint_sha256: authoritySha256,
       checksum_mismatch_terminal: true,
-      member_inbox_backfilled: true,
-      subscription_inbox_table_removed: true,
+      migration_behavior_proofs: migrationFixtures.map((fixture) => ({
+        version: fixture.version,
+        assertions: fixture.assertions.length,
+      })),
       workos_signing_key_retirement_monotonic: true,
       websocket_session_reference_enforced: true,
       websocket_redundant_authority_removed: true,
       websocket_session_delete_cascades: true,
     };
   } finally {
-    await rm(previousDirectory, { recursive: true, force: true });
+    await rm(stagedDirectory, { recursive: true, force: true });
   }
 }
 

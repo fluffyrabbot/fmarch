@@ -182,8 +182,10 @@ pub fn decide_inbox_cursor(
     command: InboxCursorCommand,
 ) -> Result<Vec<InboxCursorEvent>, AttentionReject> {
     match (state, command) {
+        // An absent cursor already reads through zero, so bootstrapping *to*
+        // zero advances nothing and must reject like any other non-advance.
         (None, InboxCursorCommand::AdvanceRead { read_through_seq }) => {
-            if read_through_seq < 0 {
+            if read_through_seq <= 0 {
                 return Err(AttentionReject::ReadCursorMustAdvance);
             }
             Ok(vec![InboxCursorEvent::Advanced { read_through_seq }])
@@ -288,16 +290,14 @@ mod tests {
     }
 
     #[test]
-    fn inbox_cursor_rejects_negative_bootstrap() {
-        assert_eq!(
-            decide_inbox_cursor(
-                None,
-                InboxCursorCommand::AdvanceRead {
-                    read_through_seq: -1,
-                },
-            ),
-            Err(AttentionReject::ReadCursorMustAdvance),
-        );
+    fn inbox_cursor_rejects_non_advancing_bootstrap() {
+        for read_through_seq in [-1, 0] {
+            assert_eq!(
+                decide_inbox_cursor(None, InboxCursorCommand::AdvanceRead { read_through_seq }),
+                Err(AttentionReject::ReadCursorMustAdvance),
+                "bootstrapping to {read_through_seq} advances nothing past the default zero",
+            );
+        }
     }
 
     #[test]

@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | Accepted |
 | **Created** | 2026-09-03 |
-| **Accepted** | 2026-09-04 |
+| **Accepted** | 2026-09-03 |
 | **Decision owner** | Project owner |
 | **Target** | Community posting, game-thread posting, member inbox, and slot notification |
 | **Related** | [RFC 0002](0002-first-class-quotations.md), [RFC 0003](0003-community-platform-v2.md), [RFC 0004](0004-principal-profile-privacy-boundary.md), [RFC 0006](0006-executable-bounded-context-architecture.md), [01-domain-model](../arch/01-domain-model.md), [02-event-sourcing](../arch/02-event-sourcing.md), [10-event-schema](../arch/10-event-schema.md) |
@@ -253,6 +253,15 @@ is fabricated and both remain strictly monotonic. This preserves today's
 "I read topic X, its inbox rows are read" behaviour while giving mentions —
 which may arrive on a surface the member does not watch — a cursor that can
 actually clear them.
+
+One consequence is decided here rather than discovered later. Subscribing sets
+the new watch cursor to the surface's *current* latest sequence, so subscribing
+to a thread retroactively clears any earlier mention row on it. This is
+accepted, not worked around: subscribing is an act performed from the thread
+page, so it is the same claim as reading. The alternative — exempting `mention`
+rows from the watch cursor — would leave a member who read and subscribed to a
+thread holding an unread badge for a mention already on their screen, and would
+make the two reasons obey different cursors on the same surface.
 
 ### 7. Game delivery addresses the slot, not the principal
 
