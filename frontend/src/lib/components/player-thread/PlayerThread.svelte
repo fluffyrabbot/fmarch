@@ -118,7 +118,18 @@
           </cite>
         </blockquote>
       {/each}
-      <p class="player-surface__post-body">{post.body}</p>
+      <p class="player-surface__post-body" data-testid={`thread-post-body-${post.seq}`}>
+        {#each post.bodySegments as segment}
+          {#if segment.kind === "mention"}
+            <!-- A seat chip, not a link: a slot has no page, and giving it one
+                 would be the first step toward a slot-to-human directory. -->
+            <span
+              class="player-surface__mention"
+              data-testid={`thread-post-mention-${post.seq}-${segment.slotId}`}
+            >{segment.text}</span>
+          {:else}{segment.text}{/if}
+        {/each}
+      </p>
       {#if post.embed !== null}
         <div class="player-surface__embed" data-testid={`thread-post-embed-${post.seq}`}>
           {#if activeEmbedSeq === post.seq}
@@ -342,6 +353,12 @@
 
   .player-surface__post-body {
     white-space: pre-wrap;
+  }
+
+  /* Matches the community mention weight so one mention reads the same on both
+     surfaces, while staying unlinked: a seat has no page to point at. */
+  .player-surface__mention {
+    font-weight: 600;
   }
 
   .player-surface__embed {

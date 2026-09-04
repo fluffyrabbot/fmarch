@@ -22,11 +22,17 @@ function byteLength(value) {
 }
 
 /**
- * Split a body into render segments over its decided mentions. Spans arrive as
- * byte offsets into UTF-8; a span that does not land on the body it annotates
- * is dropped rather than shifted, so a corrupt list degrades to plain prose.
+ * Split a body into render segments over a decided mention list, whichever
+ * universe decided it. Spans arrive as byte offsets into UTF-8; a span that
+ * does not land on the body it annotates is dropped rather than shifted, so a
+ * corrupt list degrades to plain prose.
+ *
+ * `resolveTarget` turns one decided mention into the chrome its surface shows.
+ * That is the only thing the two universes disagree about: a community mention
+ * resolves to a profile link, a game mention to a slot chip, and neither
+ * renderer ever scans the body for `@`.
  */
-export function buildMentionSegments(body, mentions) {
+export function buildDecidedMentionSegments(body, mentions, resolveTarget) {
   const text = typeof body === "string" ? body : "";
   const bytes = encoder.encode(text);
   const decoder = new TextDecoder();
@@ -34,7 +40,7 @@ export function buildMentionSegments(body, mentions) {
     .map((mention) => ({
       offset: Number(mention?.offset),
       len: Number(mention?.len),
-      author: buildCommunityAuthorView(mention?.profile),
+      target: resolveTarget(mention),
     }))
     .filter(
       (span) =>
@@ -54,22 +60,26 @@ export function buildMentionSegments(body, mentions) {
       segments.push(plainSegment(decoder.decode(bytes.slice(cursor, span.offset))));
     }
     const label = decoder.decode(bytes.slice(span.offset, span.offset + span.len));
-    segments.push(
-      Object.freeze({
-        kind: "mention",
-        text: label,
-        // An unresolvable target keeps its span and loses its link: the edge
-        // stays, the anchor goes.
-        href: span.author.href,
-        displayName: span.author.displayName,
-      }),
-    );
+    segments.push(Object.freeze({ kind: "mention", text: label, ...span.target }));
     cursor = span.offset + span.len;
   }
   if (cursor < bytes.byteLength) {
     segments.push(plainSegment(decoder.decode(bytes.slice(cursor))));
   }
   return Object.freeze(segments.filter((segment) => segment.text !== ""));
+}
+
+/** Community mentions render as a profile anchor over their recorded span. */
+export function buildMentionSegments(body, mentions) {
+  return buildDecidedMentionSegments(body, mentions, (mention) => {
+    const author = buildCommunityAuthorView(mention?.profile);
+    return {
+      // An unresolvable target keeps its span and loses its link: the edge
+      // stays, the anchor goes.
+      href: author.href,
+      displayName: author.displayName,
+    };
+  });
 }
 
 /**

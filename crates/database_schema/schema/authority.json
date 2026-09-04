@@ -2171,6 +2171,27 @@
       "namespace": "public"
     },
     {
+      "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=ard/$schema_owner}",
+      "kind": "relation",
+      "name": "slot_mention_notification",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "slot_mention_notification_audience_idx",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
+      "acl": "",
+      "kind": "relation",
+      "name": "slot_mention_notification_pkey",
+      "owner": "$schema_owner",
+      "namespace": "public"
+    },
+    {
       "acl": "{$schema_owner=arwdDxt/$schema_owner,$schema_owner_application=arwd/$schema_owner}",
       "kind": "relation",
       "name": "slot_occupancy_epoch",

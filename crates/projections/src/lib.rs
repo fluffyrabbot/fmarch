@@ -68,6 +68,7 @@
 use attention::{self, WatchState, WatchTarget};
 use content_reference::{
     self, PostKind, PostRef, ProfileMention, Quotation, QuotationPostState, QuotationThreadState,
+    SlotMention,
 };
 use content_registry::{ContentHash, PackArtifactSnapshot, PackRef};
 use domain::phase::PhaseId;
@@ -498,6 +499,9 @@ pub struct ThreadPostRow {
     pub body: String,
     pub media: serde_json::Value,
     pub quotations: Vec<Quotation>,
+    /// Seats this post addressed, decided at write time. Renderers walk this
+    /// list; they never scan the body for `@`.
+    pub mentions: Vec<SlotMention>,
     pub embed: Option<game_platform::embed::PostEmbed>,
     pub citation_count: i64,
     pub occurred_at: i64,
@@ -1323,9 +1327,13 @@ async fn fold_event(
             let channel_id = str_field(p, "channel_id", &ev.kind)?;
             let author = author_from_payload(p, &ev.kind, &ev.actor)?;
             let phase_id = optional_phase_id_field(p, "phase_id", &ev.kind)?;
+            let delivery_author = author.clone();
+            let delivery_phase_id = phase_id.clone();
+            let delivery_channel_id = channel_id.clone();
             let body = str_field(p, "body", &ev.kind)?;
             let media = thread_media_payload(p);
             let quotations = quotations_from_event(p, &ev.kind)?;
+            let mentions = slot_mentions_from_event(p, &ev.kind)?;
             let embed = game_platform::embed::embed_from_payload(p).map_err(|source| {
                 ProjectionError::Payload {
                     kind: ev.kind.clone(),
@@ -1346,9 +1354,23 @@ async fn fold_event(
                     body,
                     media,
                     quotations: quotations.clone(),
+                    mentions: mentions.clone(),
                     embed,
                     occurred_at: ev.occurred_at,
                 },
+            )
+            .await?;
+            fan_out_slot_mentions(
+                tx,
+                SlotMentionFanOut {
+                    game_id,
+                    source_seq: ev.seq,
+                    channel_id: &delivery_channel_id,
+                    phase_id: delivery_phase_id.as_ref(),
+                    author: &delivery_author,
+                    occurred_at: ev.occurred_at,
+                },
+                &mentions,
             )
             .await?;
             record_game_private_citations(
@@ -1427,6 +1449,7 @@ async fn fold_event(
                         body: body.clone(),
                         media: serde_json::json!([]),
                         quotations: Vec::new(),
+                        mentions: Vec::new(),
                         embed: None,
                         occurred_at: ev.occurred_at,
                     },
@@ -4900,6 +4923,7 @@ async fn rebuild_in_tx(
         "player_info_result",
         "player_investigation_result",
         "player_notification",
+        "slot_mention_notification",
         "sheriff_badge",
         "action_counter",
         "investigation_memory",
@@ -4988,6 +5012,7 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
         "player_notification",
         "phase_id, event_index, audience_slot",
     ),
+    AuditProjection::game("slot_mention_notification", "audience_slot, source_seq"),
     AuditProjection::game("player_info_result", "phase_id, event_index, audience_slot"),
     AuditProjection::game(
         "player_investigation_result",
@@ -6166,6 +6191,51 @@ pub async fn player_notifications_for_slot(
         .collect()
 }
 
+/// A slot mention delivered to one seat. Occupancy is deliberately absent:
+/// this is a fact about the seat, and who is sitting in it is resolved by the
+/// caller's capabilities at read time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlotMentionNotificationRow {
+    pub game_id: Uuid,
+    pub audience_slot: String,
+    pub source_seq: i64,
+    pub channel_id: String,
+    pub phase_id: Option<PhaseId>,
+    pub occurred_at: i64,
+}
+
+/// Read the slot mentions addressed to one seat, ordered deterministically.
+pub async fn slot_mention_notifications_for_slot(
+    pool: &PgPool,
+    game_id: Uuid,
+    audience_slot: &str,
+) -> Result<Vec<SlotMentionNotificationRow>, ProjectionError> {
+    let rows = sqlx::query(
+        "SELECT game_id, audience_slot, source_seq, channel_id, phase_id, occurred_at \
+         FROM slot_mention_notification WHERE game_id = $1 AND audience_slot = $2 \
+         ORDER BY source_seq",
+    )
+    .bind(game_id)
+    .bind(audience_slot)
+    .fetch_all(pool)
+    .await?;
+    rows.into_iter()
+        .map(|r| {
+            Ok(SlotMentionNotificationRow {
+                game_id: r.get("game_id"),
+                audience_slot: r.get("audience_slot"),
+                source_seq: r.get("source_seq"),
+                channel_id: r.get("channel_id"),
+                phase_id: optional_phase_id_from_stored_id(
+                    r.get("phase_id"),
+                    "slot_mention_notification",
+                )?,
+                occurred_at: r.get("occurred_at"),
+            })
+        })
+        .collect()
+}
+
 /// Read folded private investigation results, ordered deterministically.
 pub async fn player_investigation_results(
     pool: &PgPool,
@@ -7094,6 +7164,53 @@ where
 }
 
 /// Whether a slot exists in the game (has a `slot_state` row).
+/// The seats that can read a channel.
+///
+/// `main` is the whole table, `dead` is the graveyard, and a private room is
+/// its declared membership. Hosts, cohosts, and spectators read channels
+/// without holding a seat, so they are deliberately absent: a game mention
+/// addresses a slot or nothing (RFC 0007 §4).
+pub async fn channel_audience_slots<'e, E>(
+    executor: E,
+    game_id: Uuid,
+    channel_id: &str,
+) -> Result<Vec<String>, ProjectionError>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    let rows =
+        match channel_id {
+            "main" => {
+                sqlx::query_scalar::<_, String>(
+                    "SELECT slot_id FROM slot_state WHERE game_id = $1 ORDER BY slot_id",
+                )
+                .bind(game_id)
+                .fetch_all(executor)
+                .await?
+            }
+            "dead" => sqlx::query_scalar::<_, String>(
+                "SELECT slot_id FROM slot_state WHERE game_id = $1 AND NOT alive ORDER BY slot_id",
+            )
+            .bind(game_id)
+            .fetch_all(executor)
+            .await?,
+            // The fixed spectator room has no player-authoring path and seats
+            // nobody, so it addresses nobody.
+            "spectator" => Vec::new(),
+            private => {
+                sqlx::query_scalar::<_, String>(
+                    "SELECT slot_id FROM private_channel_member \
+                 WHERE game_id = $1 AND channel_id = $2 ORDER BY slot_id",
+                )
+                .bind(game_id)
+                .bind(private)
+                .fetch_all(executor)
+                .await?
+            }
+        };
+    Ok(rows)
+}
+
 pub async fn slot_exists<'e, E>(
     executor: E,
     game_id: Uuid,
@@ -8802,7 +8919,8 @@ async fn thread_view_for_channel_with_visibility(
     let rows = sqlx::query(
         r#"
         SELECT game_id, source_seq, stream_seq, channel_id, author_kind,
-               author_slot_id, phase_id, body, body_private, media, quotations, embed, occurred_at,
+               author_slot_id, phase_id, body, body_private, media, quotations, mentions, embed,
+               occurred_at,
                (
                    SELECT COUNT(*)::bigint
                    FROM public_citation AS citation
@@ -8851,10 +8969,11 @@ async fn thread_view_for_channel_with_visibility(
             let row_game_id: Uuid = r.get("game_id");
             let source_seq: i64 = r.get("source_seq");
             let channel_id: String = r.get("channel_id");
-            let (body, quotations) = match r.get::<Option<String>, _>("body") {
+            let (body, quotations, mentions) = match r.get::<Option<String>, _>("body") {
                 Some(body) => (
                     body,
                     quotations_from_json(r.get("quotations"), "PostSubmitted")?,
+                    slot_mentions_from_json(r.get("mentions"), "PostSubmitted")?,
                 ),
                 None => {
                     let envelope: serde_json::Value = r.get("body_private");
@@ -8869,7 +8988,17 @@ async fn thread_view_for_channel_with_visibility(
                         None | Some(serde_json::Value::Null) => Vec::new(),
                         Some(value) => quotations_from_json(value.clone(), "PostSubmitted")?,
                     };
-                    (required_private_string(&private, "body")?, quotations)
+                    // A post sealed before slot mentions existed has no
+                    // `mentions` key, and upcasts to the empty list.
+                    let mentions = match private.get("mentions") {
+                        None | Some(serde_json::Value::Null) => Vec::new(),
+                        Some(value) => slot_mentions_from_json(value.clone(), "PostSubmitted")?,
+                    };
+                    (
+                        required_private_string(&private, "body")?,
+                        quotations,
+                        mentions,
+                    )
                 }
             };
             let phase_id = optional_phase_id_from_stored_id(r.get("phase_id"), "thread_view")?;
@@ -8883,6 +9012,7 @@ async fn thread_view_for_channel_with_visibility(
                 body,
                 media: r.get("media"),
                 quotations,
+                mentions,
                 embed: match r.get::<Option<serde_json::Value>, _>("embed") {
                     None | Some(serde_json::Value::Null) => None,
                     Some(value) => serde_json::from_value(value).map_err(|source| {
@@ -10083,6 +10213,18 @@ fn quotations_from_event(
     })
 }
 
+fn slot_mentions_from_event(
+    payload: &serde_json::Value,
+    kind: &str,
+) -> Result<Vec<SlotMention>, ProjectionError> {
+    content_reference::slot_mentions_from_payload(payload).map_err(|source| {
+        ProjectionError::Payload {
+            kind: kind.to_string(),
+            source,
+        }
+    })
+}
+
 fn mentions_from_event(
     payload: &serde_json::Value,
     kind: &str,
@@ -10204,6 +10346,19 @@ fn resolve_mention_row(
     }
 }
 
+fn slot_mentions_from_json(
+    value: serde_json::Value,
+    kind: &str,
+) -> Result<Vec<SlotMention>, ProjectionError> {
+    if value.is_null() {
+        return Ok(Vec::new());
+    }
+    serde_json::from_value(value).map_err(|source| ProjectionError::Payload {
+        kind: kind.to_string(),
+        source,
+    })
+}
+
 fn quotations_from_json(
     value: serde_json::Value,
     kind: &str,
@@ -10248,6 +10403,63 @@ async fn record_game_private_citations(
     Ok(())
 }
 
+struct SlotMentionFanOut<'a> {
+    game_id: Uuid,
+    source_seq: i64,
+    channel_id: &'a str,
+    phase_id: Option<&'a PhaseId>,
+    author: &'a GameThreadAuthor,
+    occurred_at: i64,
+}
+
+/// Deliver a post's decided slot mentions to the seats they address.
+///
+/// The row names a seat and nothing else: no principal, no persona, no
+/// occupancy. Resolving a slot to a human here would write the `slot -> human`
+/// binding into a delivery fact, which is the conflation `01-domain-model`
+/// warns against; instead the player rail resolves who is sitting there at read
+/// time, so replacement transfers a pending mention with the seat and needs no
+/// event of its own.
+async fn fan_out_slot_mentions(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    delivery: SlotMentionFanOut<'_>,
+    mentions: &[SlotMention],
+) -> Result<(), ProjectionError> {
+    if mentions.is_empty() {
+        return Ok(());
+    }
+    // Self-mention is accepted by the write model and simply delivers nothing,
+    // matching the author suppression watch fan-out already applies.
+    let author_slot = match delivery.author {
+        GameThreadAuthor::Slot { slot_id } => Some(slot_id.as_str()),
+        GameThreadAuthor::HostNarrator | GameThreadAuthor::System => None,
+    };
+    for mention in mentions {
+        if author_slot == Some(mention.slot_id.as_str()) {
+            continue;
+        }
+        ensure_slot(tx, delivery.game_id, &mention.slot_id).await?;
+        sqlx::query(
+            r#"
+            INSERT INTO slot_mention_notification (
+                game_id, audience_slot, source_seq, channel_id, phase_id, occurred_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (game_id, audience_slot, source_seq) DO NOTHING
+            "#,
+        )
+        .bind(delivery.game_id)
+        .bind(&mention.slot_id)
+        .bind(delivery.source_seq)
+        .bind(delivery.channel_id)
+        .bind(delivery.phase_id.map(PhaseId::as_str))
+        .bind(delivery.occurred_at)
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
+}
+
 struct ThreadPostInsert {
     game_id: Uuid,
     source_seq: i64,
@@ -10258,6 +10470,7 @@ struct ThreadPostInsert {
     body: String,
     media: serde_json::Value,
     quotations: Vec<Quotation>,
+    mentions: Vec<SlotMention>,
     embed: Option<game_platform::embed::PostEmbed>,
     occurred_at: i64,
 }
@@ -10273,6 +10486,11 @@ async fn insert_thread_post(
             kind: "PostSubmitted".into(),
             source,
         })?;
+    let mentions =
+        serde_json::to_value(&post.mentions).map_err(|source| ProjectionError::Payload {
+            kind: "PostSubmitted".into(),
+            source,
+        })?;
     let embed = serde_json::to_value(&post.embed).map_err(|source| ProjectionError::Payload {
         kind: "PostSubmitted".into(),
         source,
@@ -10282,8 +10500,12 @@ async fn insert_thread_post(
         GameThreadAuthor::HostNarrator => ("host_narrator", None),
         GameThreadAuthor::System => ("system", None),
     };
-    let (body, body_private, stored_quotations) = if post.channel_id == "main" {
-        (Some(post.body.as_str()), None, quotations)
+    // A private room's addressed seats are as sensitive as its prose: naming
+    // them in a plaintext column would disclose that room's membership to any
+    // surface readable from main, so the decided list travels inside the sealed
+    // envelope exactly as quotations already do.
+    let (body, body_private, stored_quotations, stored_mentions) = if post.channel_id == "main" {
+        (Some(post.body.as_str()), None, quotations, mentions)
     } else {
         (
             None,
@@ -10292,10 +10514,15 @@ async fn insert_thread_post(
                     tx,
                     "thread_view",
                     &[game.as_str(), source.as_str(), post.channel_id.as_str()],
-                    serde_json::json!({ "body": post.body, "quotations": quotations }),
+                    serde_json::json!({
+                        "body": post.body,
+                        "quotations": quotations,
+                        "mentions": mentions,
+                    }),
                 )
                 .await?,
             ),
+            serde_json::json!([]),
             serde_json::json!([]),
         )
     };
@@ -10303,9 +10530,10 @@ async fn insert_thread_post(
         r#"
         INSERT INTO thread_view (
             game_id, source_seq, stream_seq, channel_id, author_kind,
-            author_slot_id, phase_id, body, body_private, media, quotations, embed, occurred_at
+            author_slot_id, phase_id, body, body_private, media, quotations, mentions, embed,
+            occurred_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (game_id, source_seq) DO NOTHING
         "#,
     )
@@ -10320,6 +10548,7 @@ async fn insert_thread_post(
     .bind(body_private)
     .bind(&post.media)
     .bind(&stored_quotations)
+    .bind(&stored_mentions)
     .bind(&embed)
     .bind(post.occurred_at)
     .execute(&mut **tx)

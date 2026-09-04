@@ -26,6 +26,7 @@ export function buildPlayerCommand({
   body,
   media = [],
   quotations = [],
+  mentions = [],
   embedUrl = "",
   target,
   actionConfig = null,
@@ -35,6 +36,7 @@ export function buildPlayerCommand({
     case "submit_post": {
       const normalizedMedia = submitPostMedia(media);
       const normalizedQuotations = submitPostQuotations(quotations);
+      const normalizedMentions = submitPostMentions(mentions);
       const normalizedEmbed = submitPostEmbed(embedUrl);
       return Object.freeze({
         SubmitPost: Object.freeze({
@@ -50,6 +52,7 @@ export function buildPlayerCommand({
           ),
           ...(normalizedMedia.length > 0 ? { media: normalizedMedia } : {}),
           ...(normalizedQuotations.length > 0 ? { quotations: normalizedQuotations } : {}),
+          ...(normalizedMentions.length > 0 ? { mentions: normalizedMentions } : {}),
           ...(normalizedEmbed === undefined ? {} : { embed: normalizedEmbed }),
         }),
       });
@@ -410,6 +413,35 @@ function submitPostQuotations(value) {
           }),
           excerpt,
         });
+      })
+      .filter(Boolean)
+      .slice(0, 8),
+  );
+}
+
+/// Decided slot spans, already re-derived from the submitted body. An empty
+/// list is omitted from the envelope entirely, which is how a post that
+/// addresses nobody has always looked on the wire.
+function submitPostMentions(value) {
+  if (value === undefined || value === null) {
+    return Object.freeze([]);
+  }
+  if (!Array.isArray(value)) {
+    throw new TypeError("mentions must be an array");
+  }
+  return Object.freeze(
+    value
+      .map((item) => {
+        const slotId = String(item?.slot_id ?? item?.slotId ?? "").trim();
+        const offset = Number(item?.offset);
+        const len = Number(item?.len);
+        if (slotId === "" || !Number.isInteger(offset) || !Number.isInteger(len)) {
+          return null;
+        }
+        if (offset < 0 || len <= 0) {
+          return null;
+        }
+        return Object.freeze({ slot_id: slotId, offset, len });
       })
       .filter(Boolean)
       .slice(0, 8),

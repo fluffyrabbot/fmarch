@@ -231,6 +231,7 @@ test("normalizes thread and votecount projection payloads for the player view", 
           author: { kind: "slot", slotId: "slot-7" },
           body: "##vote slot-2",
           quotations: [],
+          mentions: [],
           citationCount: 0,
           meta: "Jun 19, 2026, 9:00 PM",
           media: [
@@ -388,6 +389,7 @@ test("normalizes live and cold thread posts through the same media contract", ()
       author: { kind: "host_narrator" },
       body: "visual receipt",
       quotations: [],
+      mentions: [],
       citationCount: 0,
       meta: "live update",
       media: [
@@ -543,6 +545,10 @@ test("normalizes player command state into route action configs", () => {
           posting_allowed: false,
         }],
         post_policies: [{ channel_id: "main", allow_media_only: true }],
+        mention_targets: [
+          { channel_id: "main", slots: ["slot-2", "slot-3", "slot_4"] },
+          { channel_id: "private:faction:mafia", slots: ["slot_4"] },
+        ],
         boundary: "live command state",
       },
       FALLBACK.commandState,
@@ -609,6 +615,10 @@ test("normalizes player command state into route action configs", () => {
         postingAllowed: false,
       }],
       postPolicies: [{ channelId: "main", allowMediaOnly: true }],
+      mentionTargets: [
+        { channelId: "main", slots: ["slot-2", "slot-3", "slot_4"] },
+        { channelId: "private:faction:mafia", slots: ["slot_4"] },
+      ],
       boundary: "live command state",
     },
   );

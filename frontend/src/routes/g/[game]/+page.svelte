@@ -82,6 +82,7 @@
     removeAttachedQuotation,
     submittedQuotationsPayload,
   } from "$lib/app/game-quotation-model.mjs";
+  import { submittedSlotMentionsPayload } from "$lib/app/slot-mention-model.mjs";
 
   export let data;
 
@@ -91,6 +92,7 @@
   let composerMediaEpoch = 0;
   let composerEmbedUrl = "";
   let attachedQuotations = [];
+  let attachedMentions = [];
   let composerDrafts = Object.freeze({});
   let quoteChannel = data.threadPager.channel;
   let commandStatus = null;
@@ -128,6 +130,7 @@
       commandState,
       data.player.slotId,
       selectedActionTargets,
+      data.threadPager.channel,
     );
   }
   $: {
@@ -169,6 +172,7 @@
       current: {
         body: composerBody,
         quotations: attachedQuotations,
+        mentions: attachedMentions,
         embedUrl: composerEmbedUrl,
       },
     });
@@ -178,6 +182,7 @@
     composerMediaAlt = switched.draft.mediaAlt;
     composerMediaFiles = switched.draft.mediaFiles;
     attachedQuotations = switched.draft.quotations;
+    attachedMentions = [...switched.draft.mentions];
     composerEmbedUrl = switched.draft.embedUrl;
     composerMediaEpoch += 1;
   }
@@ -265,6 +270,7 @@
       commandState,
       data.player.slotId,
       selectedActionTargets,
+      data.threadPager.channel,
     );
     surfaceHeader = Object.freeze({
       ...data.surfaceHeader,
@@ -381,6 +387,14 @@
         composerBody,
         media: dispatchedMedia,
         quotations: submittedQuotationsPayload(attachedQuotations),
+        // Spans are re-derived from the body being submitted, not from the
+        // moment of selection: the server validates the span, so a stale one
+        // must reject rather than mis-anchor.
+        mentions: submittedSlotMentionsPayload(
+          composerBody,
+          attachedMentions,
+          composer.mentionRoster ?? [],
+        ),
         embedUrl: composerEmbedUrl,
         data: dispatchData,
         commandId: commandAttemptId(
@@ -399,6 +413,7 @@
           composerBody: attempt.composerBody,
           media: attempt.media,
           quotations: attempt.quotations ?? [],
+          mentions: attempt.mentions ?? [],
           embedUrl: attempt.embedUrl ?? "",
           commandIdFactory: () => attempt.commandId,
           signal,
@@ -417,6 +432,7 @@
         composerBody: attempt.composerBody,
         media: dispatchedMedia,
         quotations: attempt.quotations ?? [],
+        mentions: attempt.mentions ?? [],
         embedUrl: attempt.embedUrl ?? "",
         optimisticStatus,
         finalStatus: commandStatus,
@@ -430,6 +446,7 @@
       if (action === "submit_post" && commandStatus?.state === "ack") {
         const draft = clearedPlayerComposerDraft();
         attachedQuotations = draft.quotations;
+        attachedMentions = [...draft.mentions];
         composerBody = draft.body;
         composerMediaAlt = draft.mediaAlt;
         composerMediaFiles = draft.mediaFiles;
@@ -476,6 +493,13 @@
         composerBody: attempt?.composerBody ?? composerBody,
         media: dispatchedMedia,
         quotations: attempt?.quotations ?? submittedQuotationsPayload(attachedQuotations),
+        mentions:
+          attempt?.mentions
+          ?? submittedSlotMentionsPayload(
+            composerBody,
+            attachedMentions,
+            composer.mentionRoster ?? [],
+          ),
         optimisticStatus,
         finalStatus: commandStatus,
       });
@@ -631,6 +655,7 @@
       bind:embedUrl={composerEmbedUrl}
       mediaResetKey={composerMediaEpoch}
       {attachedQuotations}
+      bind:attachedMentions
       onCommand={submitPlayerCommand}
       onRemoveQuote={removeQuotedPost}
     />

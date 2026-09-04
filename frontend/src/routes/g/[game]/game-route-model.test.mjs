@@ -119,7 +119,12 @@ test("player route data exposes thread, channel, votecount, and touch command la
     capabilityLabel: "SlotOccupant or ChannelMember(main)",
     href: "/g/midsummer",
   });
-  assert.equal(data.thread.posts[1].body, "##vote slot-2");
+  assert.equal(data.thread.posts[1].body, "@slot-2 \u2014 ##vote slot-2");
+  assert.deepEqual(
+    data.thread.posts[1].mentions,
+    [{ slot_id: "slot-2", offset: 0, len: 7 }],
+    "the fixture post carries a decided slot address, not prose to be re-parsed",
+  );
   assert.equal(data.composer.defaultBody, "");
   assert.equal("canonicalVoteTag" in data.composer, false);
   assert.equal(

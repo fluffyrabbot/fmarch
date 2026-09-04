@@ -338,6 +338,7 @@ export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
     author,
     body: typeof post?.body === "string" ? post.body : "",
     quotations: normalizeQuotations(post?.quotations),
+    mentions: normalizeSlotMentions(post?.mentions),
     citationCount: Number(post?.citation_count ?? post?.citationCount ?? 0),
     meta:
       post?.meta ??
@@ -347,6 +348,27 @@ export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
     ...(media.length === 0 ? {} : { media }),
     ...(post?.embed == null ? {} : { embed: post.embed }),
   });
+}
+
+/// Decided slot addresses over spans of this post's own body. A pre-mention
+/// post carries none, which is how every such post has always looked.
+function normalizeSlotMentions(value) {
+  if (!Array.isArray(value)) {
+    return Object.freeze([]);
+  }
+  return Object.freeze(
+    value
+      .map((item) => {
+        const slotId = String(item?.slot_id ?? item?.slotId ?? "").trim();
+        const offset = Number(item?.offset);
+        const len = Number(item?.len);
+        if (slotId === "" || !Number.isInteger(offset) || !Number.isInteger(len)) {
+          return null;
+        }
+        return Object.freeze({ slot_id: slotId, offset, len });
+      })
+      .filter(Boolean),
+  );
 }
 
 function normalizeQuotations(value) {
@@ -596,6 +618,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   dayEvents: Object.freeze([]),
   dayEventRooms: Object.freeze([]),
   postPolicies: Object.freeze([]),
+  mentionTargets: Object.freeze([]),
   boundary:
     "No live player command-state endpoint was available; the route renders no role action controls.",
 });
@@ -672,7 +695,37 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
         .map(normalizePlayerPostPolicy)
         .filter(Boolean),
     ),
+    mentionTargets: Object.freeze(
+      (Array.isArray(payload.mention_targets)
+        ? payload.mention_targets
+        : Array.isArray(payload.mentionTargets)
+          ? payload.mentionTargets
+          : fallback.mentionTargets ?? []
+      )
+        .map(normalizeChannelMentionTargets)
+        .filter(Boolean),
+    ),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),
+  });
+}
+
+/// The seats a mention may address in one channel. An absent roster is an
+/// empty roster: the composer suggests nothing rather than reaching for
+/// another corpus, and the server still decides.
+function normalizeChannelMentionTargets(entry) {
+  if (entry === null || typeof entry !== "object") {
+    return null;
+  }
+  const channelId = String(entry.channel_id ?? entry.channelId ?? "").trim();
+  if (channelId === "") {
+    return null;
+  }
+  const slots = Array.isArray(entry.slots) ? entry.slots : [];
+  return Object.freeze({
+    channelId,
+    slots: Object.freeze(
+      slots.map((slot) => String(slot ?? "").trim()).filter((slot) => slot !== ""),
+    ),
   });
 }
 

@@ -2097,6 +2097,7 @@ async fn command_on_instance_a_wakes_socket_b_and_reconnect_hydrates_durable_sta
                     alt: "Cross-replica proof".into(),
                 }]),
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         ),

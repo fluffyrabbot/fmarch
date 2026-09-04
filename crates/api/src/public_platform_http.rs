@@ -1443,6 +1443,7 @@ fn content_reference_reject_api_error(
         content_reference::ContentReferenceReject::UnknownMentionTarget
         | content_reference::ContentReferenceReject::InvalidMentionSpan
         | content_reference::ContentReferenceReject::DuplicateMention
+        | content_reference::ContentReferenceReject::DuplicateSlotMention
         | content_reference::ContentReferenceReject::TooManyMentions => StatusCode::BAD_REQUEST,
     };
     ApiError::Reject {

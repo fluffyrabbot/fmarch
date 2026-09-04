@@ -65,11 +65,11 @@ test("checked-in database schema is append-only with a generated current snapsho
   const report = await inspectDatabaseSchema({ baseEpoch: checkedEpoch });
   assert.equal(report.ok, true);
   assert.equal(report.epoch, 1);
-  assert.equal(report.migration_head, "0007_mention_abuse_report_reason.sql");
-  assert.equal(report.migration_file_count, 7);
+  assert.equal(report.migration_head, "0008_game_slot_mentions.sql");
+  assert.equal(report.migration_file_count, 8);
   assert.equal(checkedEpoch.migrations[0].filename, baselineFilename);
   assert.equal(checkedEpoch.migrations[0].sha256, baselineSha256);
-  assert.equal(report.table_count, 100);
+  assert.equal(report.table_count, 101);
   assert.doesNotMatch(checkedSnapshot, /admin_grant/u);
   assert.match(
     checkedMigrations["0004_remove_admin_grant_assurance.sql"],

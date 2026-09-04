@@ -178,6 +178,7 @@ Examples:
 | `member_inbox_item` / `member_inbox_cursor` | principal-keyed, reason-derived inbox: privacy-safe per-member references (`watch`, `mention`) plus one monotonic per-principal read cursor alongside the per-target watch cursors |
 | `profile_mute` | one private member/profile relationship stream, current active state, replay version, and bounded member-owned list cursor |
 | `public_citation` / `game_private_citation` | rebuildable reverse indexes for public publications and private game-channel posts; folded from quoting events, never written onto the quoted post's stream |
+| `slot_mention_notification` | slot-addressed game mention delivery: one row per addressed seat and mentioning post, storing no principal, persona, or occupancy, so replacement transfers a pending mention with the seat |
 
 `game_index` folds `GameCreated`, `GameStarted`, `PhaseAdvanced`, and `GameCompleted`
 synchronously with the game stream. Setup rows remain rebuildable but are excluded from the

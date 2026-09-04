@@ -205,9 +205,10 @@ pub fn quotations_payload(quotations: &[Quotation]) -> Option<serde_json::Value>
 
 /// Byte range of the mentioning post's immutable body that the address
 /// annotates. There is deliberately no game/community enum over mentions:
-/// [`ProfileMention`] is the community address and the game address will be a
-/// separate type with a separate decide function, so the cross-universe case is
-/// unrepresentable instead of rejected.
+/// [`ProfileMention`] is the community address and [`SlotMention`] is the game
+/// address, each with its own decide function, so the cross-universe case is
+/// unrepresentable instead of rejected. A span is a byte range and carries no
+/// identity, which is why both universes may share it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MentionSpan {
     pub offset: usize,
@@ -304,6 +305,127 @@ pub fn mentions_payload(mentions: &[ProfileMention]) -> Option<serde_json::Value
     (!mentions.is_empty()).then(|| serde_json::to_value(mentions).expect("mentions serialize"))
 }
 
+/// Address of a game seat inside a game thread. Slot-stable across
+/// replacement, so a mention of Slot 7 on D2 stays a fact about Slot 7 no
+/// matter who sits there afterwards; it names no profile, persona, principal,
+/// or account.
+///
+/// This is deliberately a sibling of [`ProfileMention`] rather than a variant
+/// of a shared enum. `01-domain-model` calls conflating user and slot the most
+/// unfixable mistake in forum mafia software, so the cross-universe case is
+/// unrepresentable here instead of rejected at run time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlotMention {
+    pub slot_id: String,
+    pub span: MentionSpan,
+}
+
+/// A slot address the composer claimed, awaiting the pure decision. Unlike
+/// [`MentionCandidate`], nothing has been resolved yet: the claim is
+/// client-supplied text and [`decide_slot_mentions`] is what admits it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlotMentionCandidate {
+    pub slot_id: String,
+    pub offset: usize,
+    pub len: usize,
+}
+
+/// The seats that could read the posting channel when the post was decided.
+///
+/// Adapters build this from slot state and private-channel membership; the
+/// mention decision stays pure. Hosts and cohosts read every channel but hold
+/// no seat, so they never appear here — a mention addresses a slot or nothing.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChannelAudience {
+    pub readable_slots: Vec<String>,
+}
+
+impl ChannelAudience {
+    pub fn new(readable_slots: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            readable_slots: readable_slots.into_iter().collect(),
+        }
+    }
+
+    fn admits(&self, slot_id: &str) -> bool {
+        self.readable_slots.iter().any(|slot| slot == slot_id)
+    }
+}
+
+/// Decide the slot mentions a new game post may carry.
+///
+/// The two-sided check RFC 0007 §4 requires — the slot exists in this game and
+/// can read the channel being posted to — is one membership test against
+/// `audience`, because a seat absent from the game is absent from every
+/// channel's audience. Collapsing both into [`ContentReferenceReject::UnknownMentionTarget`]
+/// is the point: naming a non-member slot from inside `scumchat` must not
+/// disclose whether the slot exists, whether the channel exists, or which.
+pub fn decide_slot_mentions(
+    body: &str,
+    audience: &ChannelAudience,
+    candidates: &[SlotMentionCandidate],
+) -> Result<Vec<SlotMention>, ContentReferenceReject> {
+    if candidates.is_empty() {
+        return Ok(Vec::new());
+    }
+    if candidates.len() > MAX_MENTIONS_PER_POST {
+        return Err(ContentReferenceReject::TooManyMentions);
+    }
+    let mut seen: Vec<&str> = Vec::with_capacity(candidates.len());
+    let mut decided = Vec::with_capacity(candidates.len());
+    let mut previous_end = 0usize;
+    for candidate in candidates {
+        // Target before span: an unreadable seat is refused on the same
+        // evidence whether or not the claimed span happens to be well formed.
+        if !audience.admits(&candidate.slot_id) {
+            return Err(ContentReferenceReject::UnknownMentionTarget);
+        }
+        let end = candidate.offset.saturating_add(candidate.len);
+        if end > body.len()
+            || !body.is_char_boundary(candidate.offset)
+            || !body.is_char_boundary(end)
+        {
+            return Err(ContentReferenceReject::InvalidMentionSpan);
+        }
+        let span_text = &body[candidate.offset..end];
+        span_text
+            .strip_prefix('@')
+            .filter(|remainder| *remainder == candidate.slot_id.as_str())
+            .ok_or(ContentReferenceReject::InvalidMentionSpan)?;
+        if candidate.offset < previous_end {
+            return Err(ContentReferenceReject::InvalidMentionSpan);
+        }
+        if seen.iter().any(|slot_id| *slot_id == candidate.slot_id) {
+            return Err(ContentReferenceReject::DuplicateSlotMention);
+        }
+        seen.push(candidate.slot_id.as_str());
+        previous_end = end;
+        decided.push(SlotMention {
+            slot_id: candidate.slot_id.clone(),
+            span: MentionSpan {
+                offset: candidate.offset,
+                len: candidate.len,
+            },
+        });
+    }
+    Ok(decided)
+}
+
+/// Parse the additive `mentions` field of a game post. Absent, null, or `[]`
+/// is none, which is how every pre-mention `PostSubmitted` upcasts.
+pub fn slot_mentions_from_payload(
+    payload: &serde_json::Value,
+) -> Result<Vec<SlotMention>, serde_json::Error> {
+    match payload.get("mentions") {
+        None | Some(serde_json::Value::Null) => Ok(Vec::new()),
+        Some(value) => serde_json::from_value(value.clone()),
+    }
+}
+
+pub fn slot_mentions_payload(mentions: &[SlotMention]) -> Option<serde_json::Value> {
+    (!mentions.is_empty()).then(|| serde_json::to_value(mentions).expect("slot mentions serialize"))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ContentReferenceReject {
     #[error("post kind is invalid")]
@@ -326,6 +448,8 @@ pub enum ContentReferenceReject {
     InvalidMentionSpan,
     #[error("post mentions the same profile more than once")]
     DuplicateMention,
+    #[error("post mentions the same slot more than once")]
+    DuplicateSlotMention,
     #[error("post carries too many mentions")]
     TooManyMentions,
 }
@@ -435,5 +559,186 @@ mod tests {
             Vec::new(),
         );
         assert_eq!(mentions_payload(&[]), None);
+    }
+
+    fn audience(slots: &[&str]) -> ChannelAudience {
+        ChannelAudience::new(slots.iter().map(|slot| slot.to_string()))
+    }
+
+    fn slot_candidate(slot_id: &str, offset: usize, len: usize) -> SlotMentionCandidate {
+        SlotMentionCandidate {
+            slot_id: slot_id.to_string(),
+            offset,
+            len,
+        }
+    }
+
+    #[test]
+    fn empty_slot_mentions_decide_to_nothing() {
+        assert_eq!(
+            decide_slot_mentions("hello", &audience(&["S1"]), &[]),
+            Ok(Vec::new()),
+        );
+    }
+
+    #[test]
+    fn slot_happy_path_stores_slot_and_span() {
+        let decided = decide_slot_mentions(
+            "@S1 you flipped",
+            &audience(&["S1", "S2"]),
+            &[slot_candidate("S1", 0, 3)],
+        )
+        .unwrap();
+        assert_eq!(
+            decided,
+            vec![SlotMention {
+                slot_id: "S1".to_string(),
+                span: MentionSpan { offset: 0, len: 3 },
+            }]
+        );
+    }
+
+    /// Self-mention is accepted; it simply delivers nothing downstream. The
+    /// write model does not know which seat is posting and must not learn.
+    #[test]
+    fn slot_self_mention_is_accepted() {
+        assert_eq!(
+            decide_slot_mentions("@S1 me", &audience(&["S1"]), &[slot_candidate("S1", 0, 3)]),
+            Ok(vec![SlotMention {
+                slot_id: "S1".to_string(),
+                span: MentionSpan { offset: 0, len: 3 },
+            }]),
+        );
+    }
+
+    /// RFC 0007 §4: a seat absent from this game and a seat that merely cannot
+    /// read this channel must be refused on identical evidence, or the reject
+    /// becomes an oracle for private-room membership.
+    #[test]
+    fn foreign_and_non_member_slots_reject_indistinguishably() {
+        let scumchat = audience(&["S1", "S4"]);
+        let foreign = decide_slot_mentions("@S9 hi", &scumchat, &[slot_candidate("S9", 0, 3)]);
+        let non_member = decide_slot_mentions("@S2 hi", &scumchat, &[slot_candidate("S2", 0, 3)]);
+        assert_eq!(foreign, Err(ContentReferenceReject::UnknownMentionTarget));
+        assert_eq!(foreign, non_member);
+        assert_eq!(
+            foreign.unwrap_err().to_string(),
+            non_member.unwrap_err().to_string()
+        );
+    }
+
+    /// A malformed span on an unreadable seat still reports the target reject,
+    /// so span validity cannot be used to probe the audience.
+    #[test]
+    fn unreadable_slot_outranks_a_broken_span() {
+        assert_eq!(
+            decide_slot_mentions("hi", &audience(&["S1"]), &[slot_candidate("S9", 40, 90)]),
+            Err(ContentReferenceReject::UnknownMentionTarget),
+        );
+    }
+
+    #[test]
+    fn slot_over_cap_rejects() {
+        let roster: Vec<String> = (0..=MAX_MENTIONS_PER_POST)
+            .map(|index| format!("S{index}"))
+            .collect();
+        let candidates: Vec<SlotMentionCandidate> = roster
+            .iter()
+            .map(|slot_id| slot_candidate(slot_id, 0, 3))
+            .collect();
+        assert_eq!(
+            decide_slot_mentions("@S0", &ChannelAudience::new(roster), &candidates),
+            Err(ContentReferenceReject::TooManyMentions),
+        );
+    }
+
+    #[test]
+    fn slot_span_violations_reject() {
+        let roster = audience(&["S1", "S2"]);
+        // Out of range.
+        assert_eq!(
+            decide_slot_mentions("hi", &roster, &[slot_candidate("S1", 0, 3)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Does not start with '@'.
+        assert_eq!(
+            decide_slot_mentions("S1 hi", &roster, &[slot_candidate("S1", 0, 2)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Span text disagrees with the claimed slot.
+        assert_eq!(
+            decide_slot_mentions("@S1", &roster, &[slot_candidate("S2", 0, 3)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Mid-character boundary.
+        assert_eq!(
+            decide_slot_mentions("é@S1", &roster, &[slot_candidate("S1", 1, 3)]),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+    }
+
+    #[test]
+    fn slot_ordering_and_duplicate_violations_reject() {
+        let roster = audience(&["S1", "S2"]);
+        // Overlapping spans.
+        assert_eq!(
+            decide_slot_mentions(
+                "@S1 x",
+                &roster,
+                &[slot_candidate("S1", 0, 3), slot_candidate("S2", 0, 3)],
+            ),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Descending spans.
+        assert_eq!(
+            decide_slot_mentions(
+                "@S1 @S2",
+                &roster,
+                &[slot_candidate("S2", 4, 3), slot_candidate("S1", 0, 3)],
+            ),
+            Err(ContentReferenceReject::InvalidMentionSpan),
+        );
+        // Duplicate target.
+        assert_eq!(
+            decide_slot_mentions(
+                "@S1 @S1",
+                &roster,
+                &[slot_candidate("S1", 0, 3), slot_candidate("S1", 4, 3)],
+            ),
+            Err(ContentReferenceReject::DuplicateSlotMention),
+        );
+    }
+
+    #[test]
+    fn missing_slot_mentions_upcast_to_empty() {
+        assert_eq!(
+            slot_mentions_from_payload(&serde_json::json!({})).unwrap(),
+            Vec::new(),
+        );
+        assert_eq!(
+            slot_mentions_from_payload(&serde_json::json!({ "mentions": null })).unwrap(),
+            Vec::new(),
+        );
+        assert_eq!(
+            slot_mentions_from_payload(&serde_json::json!({ "mentions": [] })).unwrap(),
+            Vec::new(),
+        );
+        assert_eq!(slot_mentions_payload(&[]), None);
+    }
+
+    /// A decided slot mention round-trips through the event payload without
+    /// acquiring a profile, persona, principal, or handle on the way.
+    #[test]
+    fn slot_mention_payload_round_trips_identity_free() {
+        let decided = vec![SlotMention {
+            slot_id: "S1".to_string(),
+            span: MentionSpan { offset: 0, len: 3 },
+        }];
+        let payload = serde_json::json!({ "mentions": slot_mentions_payload(&decided).unwrap() });
+        assert_eq!(slot_mentions_from_payload(&payload).unwrap(), decided);
+        assert_eq!(
+            payload["mentions"],
+            serde_json::json!([{ "slot_id": "S1", "span": { "offset": 0, "len": 3 } }]),
+        );
     }
 }

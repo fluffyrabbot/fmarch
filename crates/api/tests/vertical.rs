@@ -1553,6 +1553,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
                     alt: "Private uploaded receipt".into(),
                 }]),
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -1583,6 +1584,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
                 alt: "Missing image".into(),
             }]),
             quotations: None,
+            mentions: None,
             embed: None,
         },
     )
@@ -1617,6 +1619,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
                 body: "stale outgoing Role PM post".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -1674,6 +1677,7 @@ async fn role_pm_media_reloads_transfers_and_denies_stale_outgoing_session(pool:
                 body: "incoming Role PM post".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -2007,6 +2011,7 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                         alt: alt.into(),
                     }]),
                     quotations: None,
+                    mentions: None,
                     embed: None,
                 },
             )
@@ -2072,6 +2077,7 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                     body: "stale outgoing room post".into(),
                     media: None,
                     quotations: None,
+                    mentions: None,
                     embed: None,
                 },
             )
@@ -2107,6 +2113,7 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                     body: body.into(),
                     media: None,
                     quotations: None,
+                    mentions: None,
                     embed: None,
                 },
             )
@@ -2238,6 +2245,7 @@ async fn mason_neighbor_rooms_encrypt_reload_transfer_and_deny_nonmembers(pool: 
                     body: "outsider room post".into(),
                     media: None,
                     quotations: None,
+                    mentions: None,
                     embed: None,
                 },
             )
@@ -2356,6 +2364,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                 body: "alive dead-chat attempt".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -2404,6 +2413,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                     alt: "Dead-chat receipt".into(),
                 }]),
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -2483,6 +2493,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                 body: "incoming dead-chat live delta".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -2602,6 +2613,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                     body: "denied dead-chat append".into(),
                     media: None,
                     quotations: None,
+                    mentions: None,
                     embed: None,
                 },
             )
@@ -2671,6 +2683,7 @@ async fn dead_chat_lifecycle_encrypts_streams_transfers_and_revokes(pool: sqlx::
                 body: "restored-alive dead-chat append".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -2912,6 +2925,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
                 body: "spectator append attempt".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -3010,6 +3024,7 @@ async fn spectator_room_grant_reads_host_notices_and_revokes(pool: sqlx::PgPool)
                 body: "revoked spectator append attempt".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -4589,6 +4604,7 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
                     body: format!("lag burst post {offset}"),
                     media: None,
                     quotations: None,
+                    mentions: None,
                     embed: None,
                 },
             )
@@ -4624,6 +4640,7 @@ async fn websocket_lag_requests_resync_and_keeps_streaming(pool: sqlx::PgPool) {
                 body: continuation_body.clone(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -5586,6 +5603,7 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
                     body: body.into(),
                     media: None,
                     quotations: None,
+                    mentions: None,
                     embed: None,
                 },
             )
@@ -7668,6 +7686,7 @@ async fn vertical_private_day_event_channel_discloses_zero_bytes_after_denial_or
             body: secret.into(),
             media: Vec::new(),
             quotations: Vec::new(),
+            mentions: Vec::new(),
             embed_url: None,
             embed_snapshot: None,
         },
@@ -8002,6 +8021,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
                 body: "private role confirmation".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -8038,6 +8058,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
             body: "not a member".into(),
             media: None,
             quotations: None,
+            mentions: None,
             embed: None,
         },
     )
@@ -8158,6 +8179,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
                 body: "day chat is live".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -8202,6 +8224,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
             body: "traitor should not enter".into(),
             media: None,
             quotations: None,
+            mentions: None,
             embed: None,
         },
     )
@@ -8296,6 +8319,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
                 body: "Slot 7 check-in before replacement".into(),
                 media: None,
                 quotations: None,
+                mentions: None,
                 embed: None,
             },
         )
@@ -11941,6 +11965,7 @@ async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: 
         body: "commit happened; ack vanished".into(),
         media: None,
         quotations: None,
+        mentions: None,
         embed: None,
     };
 

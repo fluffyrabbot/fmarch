@@ -261,6 +261,9 @@ export const fixtureApiRoutes = Object.freeze([
       },
       actions: [],
       vote_targets: [],
+      mention_targets: [
+        { channel_id: "main", slots: ["slot-2", "slot-3", "slot-7"] },
+      ],
     }),
   }),
   Object.freeze({
@@ -970,10 +973,35 @@ export const commandFlows = Object.freeze({
         name: "player-receipt",
         labelPrefix: "player receipt",
       },
+      { type: "wait-visible", target: { testId: "thread-post-443" } },
+      {
+        type: "wait-visible",
+        target: { testId: "thread-post-mention-443-slot-2" },
+      },
+      {
+        type: "read-text",
+        target: { testId: "thread-post-mention-443-slot-2" },
+        resultPath: "mentions.renderedChip",
+      },
+      {
+        type: "fill",
+        target: { testId: "player-composer-body" },
+        value: "@slot-2",
+      },
+      {
+        type: "wait-visible",
+        target: { testId: "player-mention-suggestion-slot-2" },
+      },
+      {
+        type: "read-text",
+        target: { testId: "player-mention-suggestion-slot-2" },
+        resultPath: "mentions.suggestion",
+      },
+      { type: "click", target: { testId: "player-mention-suggestion-slot-2" } },
       {
         type: "fill",
         target: { within: "player-composer", selector: "textarea" },
-        value: "Browser smoke player post",
+        value: "@slot-2 Browser smoke player post",
       },
       {
         type: "capture-geometry-baseline",
@@ -1043,6 +1071,11 @@ export const commandFlows = Object.freeze({
       },
       { type: "wait-visible", target: { testId: "thread-post-445" } },
       { type: "find-request-command", id: "postRequest", commandKey: "SubmitPost" },
+      {
+        type: "set-from-value",
+        from: { id: "postRequest", path: "mentions" },
+        resultPath: "mentions.submitted",
+      },
       { type: "set-from-value", from: { id: "media" }, resultPath: "media" },
       {
         type: "read-text",

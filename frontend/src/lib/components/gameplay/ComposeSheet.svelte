@@ -1,5 +1,10 @@
 <script>
   import {
+    applySlotMentionSelection,
+    slotMentionQueryAtCaret,
+    slotMentionSuggestions,
+  } from "../../app/slot-mention-model.mjs";
+  import {
     applyComposerEmbedToButtons,
     buildComposerEmbedView,
     createComposerEmbedResolver,
@@ -14,8 +19,34 @@
   export let mediaResetKey = 0;
   export let embedUrl = "";
   export let attachedQuotations = [];
+  export let attachedMentions = [];
   export let onCommand = () => {};
   export let onRemoveQuote = () => {};
+
+  // `@` sources the roster this channel already loaded: no round trip, and no
+  // seat that cannot read the room being posted to.
+  let bodyElement = null;
+  let mentionCaret = null;
+  $: mentionRoster = composer?.mentionRoster ?? [];
+  $: mentionQuery = slotMentionQueryAtCaret(body, mentionCaret);
+  $: mentionOptions = slotMentionSuggestions(mentionRoster, mentionQuery);
+
+  function trackMentionCaret(event) {
+    mentionCaret = event.currentTarget?.selectionStart ?? null;
+  }
+
+  function chooseMention(slotId) {
+    const applied = applySlotMentionSelection(body, mentionQuery, slotId);
+    body = applied.body;
+    mentionCaret = applied.caret;
+    if (!attachedMentions.includes(slotId)) {
+      attachedMentions = [...attachedMentions, slotId];
+    }
+    if (bodyElement !== null) {
+      bodyElement.focus();
+      bodyElement.setSelectionRange(applied.caret, applied.caret);
+    }
+  }
 
   const embedResolver = createComposerEmbedResolver({
     endpoint: composer?.embedResolveEndpoint ?? YOUTUBE_EMBED_RESOLVE_ENDPOINT,
@@ -77,8 +108,33 @@
     {/if}
     <label class="fm-field">
       <span>{view.label}</span>
-      <textarea bind:value={body} rows="5"></textarea>
+      <textarea
+        bind:value={body}
+        bind:this={bodyElement}
+        rows="5"
+        data-testid="player-composer-body"
+        on:keyup={trackMentionCaret}
+        on:click={trackMentionCaret}
+        on:select={trackMentionCaret}
+      ></textarea>
     </label>
+    {#if mentionOptions.length > 0}
+      <ul class="compose-sheet__mentions" data-testid="player-mention-suggestions">
+        {#each mentionOptions as slotId}
+          <li>
+            <button
+              type="button"
+              class="fm-touch-button fm-touch-button--secondary"
+              data-min-touch-target-px="44"
+              data-testid={`player-mention-suggestion-${slotId}`}
+              on:click={() => chooseMention(slotId)}
+            >
+              @{slotId}
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
     <details
       class="compose-sheet__media fm-proof-disclosure"
       data-testid="player-media-composer"
@@ -194,6 +250,16 @@
     color: var(--fm-ink-muted);
     font-size: 12px;
     text-align: end;
+  }
+
+  .compose-sheet__mentions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    list-style: none;
+    margin: 0;
+    min-inline-size: 0;
+    padding: 0;
   }
 
   .compose-sheet__quotes {

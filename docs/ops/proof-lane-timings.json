@@ -297,6 +297,14 @@
       "method": "isolated",
       "warmup_seconds": 2.1
     },
+    "cargo:content-reference": {
+      "seconds": 0.7,
+      "measured_at": "2026-09-04T00:00:00.000Z",
+      "command": "cargo test -p content_reference --lib --test universe_boundary",
+      "status": 0,
+      "method": "isolated",
+      "warmup_seconds": 0.1
+    },
     "cargo:content-registry": {
       "seconds": 8,
       "measured_at": "2026-08-19T07:02:16.664Z",

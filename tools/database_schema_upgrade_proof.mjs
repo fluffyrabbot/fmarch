@@ -306,6 +306,19 @@ VALUES ('86000000-0000-4000-8000-000000000001',
   '60000000-0000-4000-8000-000000000001', 'harassment', 'legacy report', true, 1, 1);
 `;
 
+const gameSlotMentionsSeedSql = String.raw`
+-- Behavioral fixtures for the 0008 game slot mention edge and delivery. The
+-- post is written before the mentions column exists; the upgrade must backfill
+-- it to the empty list, which is also how pre-mention PostSubmitted events
+-- upcast. The delivery table is new, so the fixture proves its shape rather
+-- than its contents: it must address a seat and carry no principal.
+INSERT INTO thread_view
+  (game_id, source_seq, stream_seq, channel_id, author_kind, author_slot_id,
+   phase_id, occurred_at, media, body, quotations)
+VALUES ('87000000-0000-4000-8000-000000000001', 1, 1, 'main', 'slot', 'slot_1',
+  'D01', 1, '[]'::jsonb, 'hello', '[]'::jsonb);
+`;
+
 const migrationFixtures = [
   {
     version: 4,
@@ -422,6 +435,45 @@ const migrationFixtures = [
         WHERE report_id = '86000000-0000-4000-8000-000000000001'`,
         expected: "harassment:legacy report",
         message: "0007 must leave reports filed under the previous reason set untouched",
+      },
+    ],
+  },
+  {
+    version: 8,
+    seed: gameSlotMentionsSeedSql,
+    assertions: [
+      {
+        sql: String.raw`SELECT
+        (SELECT mentions::text FROM thread_view
+         WHERE game_id = '87000000-0000-4000-8000-000000000001')::text || ':' ||
+        (SELECT is_nullable || ':' || column_default FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'thread_view'
+           AND column_name = 'mentions')::text`,
+        expected: "[]:NO:'[]'::jsonb",
+        message:
+          "0008 must backfill existing game posts to the empty mention list with a non-null default",
+      },
+      {
+        sql: String.raw`SELECT pg_get_constraintdef(oid)
+        FROM pg_constraint WHERE conname = 'slot_mention_notification_pkey'`,
+        expected: "PRIMARY KEY (game_id, audience_slot, source_seq)",
+        message: "0008 must key slot mention delivery by the seat and the addressing post",
+      },
+      {
+        sql: String.raw`SELECT string_agg(column_name, ',' ORDER BY column_name)
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'slot_mention_notification'`,
+        expected: "audience_slot,channel_id,game_id,occurred_at,phase_id,source_seq",
+        message:
+          "0008 must address a seat and store no principal, persona, or occupancy",
+      },
+      {
+        sql: String.raw`SELECT is_nullable FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'slot_mention_notification'
+          AND column_name = 'phase_id'`,
+        expected: "YES",
+        message:
+          "0008 must let setup discussion, which is deliberately outside a phase, still deliver",
       },
     ],
   },

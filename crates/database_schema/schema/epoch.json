@@ -1,7 +1,7 @@
 {
   "version": 1,
   "epoch": 1,
-  "current_schema_sha256": "455101bad30b5161479043216a9f7724fb890ece5e69a2425c7c104dfde9b221",
+  "current_schema_sha256": "35b0fb5f551fdd215aa8fba84d738364ffcdd9dc932024f7d563a28995699c2a",
   "migrations": [
     {
       "version": 1,
@@ -37,7 +37,12 @@
       "version": 7,
       "filename": "0007_mention_abuse_report_reason.sql",
       "sha256": "e8366446231016f1f5157b2505ea9950b511f8cda04e55282002749fc02a7192"
+    },
+    {
+      "version": 8,
+      "filename": "0008_game_slot_mentions.sql",
+      "sha256": "cc94f587717917f9520b3fa4256fae45057c7236667e155744913b838d1e9ec8"
     }
   ],
-  "authority_fingerprint_sha256": "409446bd7759333f0ec2aa09a6f4b75540df321bec3b26ee9cbf5ca8b471358f"
+  "authority_fingerprint_sha256": "7f878248b14024f499489fa1012341ccdda175caa2a28146c9b34e539ae09372"
 }

@@ -638,6 +638,35 @@ pub(super) async fn current_post_citations_deltas(
         .collect())
 }
 
+/// The addressable roster for every channel this principal can read.
+///
+/// Read capability is the whole authorisation: a room the actor cannot read
+/// contributes no roster, so the composer can never suggest a seat the write
+/// model would refuse, and a suggestion list can never become an oracle for a
+/// room the actor is outside of.
+async fn channel_mention_targets(
+    pool: &PgPool,
+    game: Uuid,
+    caps: &caps::CapabilitySet,
+) -> Result<Vec<ChannelMentionTargets>, ApiError> {
+    let mut channels: BTreeSet<String> = BTreeSet::new();
+    channels.insert("main".to_string());
+    if caps.grants(&Capability::DeadViewer(game)) {
+        channels.insert("dead".to_string());
+    }
+    for cap in caps.iter() {
+        if let Capability::ChannelMember(channel) = cap {
+            channels.insert(channel.clone());
+        }
+    }
+    let mut targets = Vec::with_capacity(channels.len());
+    for channel_id in channels {
+        let slots = projections::channel_audience_slots(pool, game, &channel_id).await?;
+        targets.push(ChannelMentionTargets { channel_id, slots });
+    }
+    Ok(targets)
+}
+
 pub(super) async fn require_channel_thread_access(
     pool: &PgPool,
     game: Uuid,
@@ -788,7 +817,19 @@ pub struct PlayerCommandStateResponse {
     pub day_event_rooms: Vec<DayEventRoomDelta>,
     #[serde(default)]
     pub post_policies: Vec<HostSetupPostPolicyState>,
+    /// The seats a mention may address in each channel this actor can read.
+    /// It rides along with the command state the composer already loads, so
+    /// typing `@` costs no round trip and reaches no profile corpus: a game
+    /// thread addresses a seat, and only a seat that can read the room.
+    #[serde(default)]
+    pub mention_targets: Vec<ChannelMentionTargets>,
     pub boundary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChannelMentionTargets {
+    pub channel_id: String,
+    pub slots: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -969,6 +1010,7 @@ async fn player_command_state(
     };
     let day_event_workspace =
         load_player_day_event_workspace(&state.pool, game, actor, game_completed).await?;
+    let mention_targets = channel_mention_targets(&state.pool, game, &caps).await?;
     let post_policies = projections::post_policies(&state.pool, game)
         .await?
         .into_iter()
@@ -994,6 +1036,7 @@ async fn player_command_state(
         day_events: day_event_workspace.attention,
         day_event_rooms: day_event_workspace.rooms,
         post_policies,
+        mention_targets,
         boundary: if game_completed {
             "The game is complete; role actions, votes, and posts are closed while final role and alignment facts are public.".to_string()
         } else {

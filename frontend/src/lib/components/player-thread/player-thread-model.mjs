@@ -7,6 +7,7 @@ import {
   isHostNarrator,
   normalizeGameThreadAuthor,
 } from "../../app/game-thread-author.mjs";
+import { buildSlotMentionSegments } from "../../app/slot-mention-model.mjs";
 import { buildPlayerThreadEmbedView } from "../../app/youtube-embed.mjs";
 
 export const PLAYER_THREAD_MEDIA_CONTRACT = Object.freeze({
@@ -145,6 +146,8 @@ export function buildPlayerThreadPostViewModel(
     incomingCitations: quote.incomingCitations,
     moreCitationCount: quote.moreCitationCount,
     quoteEnabled: quoteEnabled === true && excerpt !== "",
+    // The renderer walks the decided list; it never scans the body for `@`.
+    bodySegments: buildSlotMentionSegments(post.body, post.mentions),
     media,
     mediaBoundary: Object.freeze({
       status:

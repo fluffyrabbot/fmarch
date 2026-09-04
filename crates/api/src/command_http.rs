@@ -1087,6 +1087,7 @@ mod tests {
             body: "hi".to_string(),
             media: None,
             quotations: None,
+            mentions: None,
             embed: None,
         });
         assert_eq!(

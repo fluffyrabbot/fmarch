@@ -846,6 +846,7 @@ async fn handle_command(
             body,
             media,
             quotations,
+            mentions,
             embed_url,
             embed_snapshot,
         } => {
@@ -859,6 +860,7 @@ async fn handle_command(
                     body,
                     media,
                     quotations,
+                    mentions,
                     embed_url,
                     embed_snapshot,
                 },
@@ -2406,6 +2408,7 @@ struct SubmitPostRequest {
     body: String,
     media: Vec<model::ThreadPostMedia>,
     quotations: Vec<content_reference::Quotation>,
+    mentions: Vec<content_reference::SlotMentionCandidate>,
     embed_url: Option<String>,
     embed_snapshot: Option<game_platform::embed::EmbedSnapshot>,
 }
@@ -2513,6 +2516,50 @@ async fn decide_game_quotations(
     content_reference::decide_quotations(&thread, &quotations).map_err(quotation_reject)
 }
 
+/// Resolve the seats that could read the posting channel, then let the pure
+/// decision admit the claims. RFC 0007 §4 makes a slot mention a two-sided
+/// check — a read of the addressed seat plus a write of a new post — and both
+/// sides are answered by one membership test, because a seat absent from this
+/// game is absent from every channel's audience.
+async fn decide_game_mentions(
+    tx: &mut Transaction<'_, Postgres>,
+    game: Uuid,
+    channel_id: &str,
+    body: &str,
+    candidates: Vec<content_reference::SlotMentionCandidate>,
+) -> Result<Vec<content_reference::SlotMention>, Reject> {
+    if candidates.is_empty() {
+        return Ok(Vec::new());
+    }
+    let audience = content_reference::ChannelAudience::new(
+        projections::channel_audience_slots(&mut **tx, game, channel_id).await?,
+    );
+    content_reference::decide_slot_mentions(body, &audience, &candidates)
+        .map_err(slot_mention_reject)
+}
+
+/// Every mention refusal is the same reject to the author. Distinguishing an
+/// unreadable seat from a malformed span would turn the write path into an
+/// oracle for private-room membership.
+fn slot_mention_reject(reject: ContentReferenceReject) -> Reject {
+    match reject {
+        ContentReferenceReject::UnknownMentionTarget
+        | ContentReferenceReject::InvalidMentionSpan
+        | ContentReferenceReject::DuplicateSlotMention
+        | ContentReferenceReject::TooManyMentions => Reject::InvalidTarget,
+        // The game path never decides profile mentions or quotations here, so
+        // these arms are unreachable; they exist for exhaustiveness only.
+        ContentReferenceReject::InvalidPostKind
+        | ContentReferenceReject::InvalidQuotationTarget
+        | ContentReferenceReject::QuotationNotFound
+        | ContentReferenceReject::InvalidQuotationExcerpt
+        | ContentReferenceReject::TooManyQuotations
+        | ContentReferenceReject::QuotationChainTooDeep
+        | ContentReferenceReject::DuplicateQuotation
+        | ContentReferenceReject::DuplicateMention => Reject::Internal(reject.to_string()),
+    }
+}
+
 fn quotation_reject(reject: ContentReferenceReject) -> Reject {
     match reject {
         ContentReferenceReject::QuotationNotFound
@@ -2528,6 +2575,7 @@ fn quotation_reject(reject: ContentReferenceReject) -> Reject {
         | ContentReferenceReject::UnknownMentionTarget
         | ContentReferenceReject::InvalidMentionSpan
         | ContentReferenceReject::DuplicateMention
+        | ContentReferenceReject::DuplicateSlotMention
         | ContentReferenceReject::TooManyMentions => Reject::Internal(reject.to_string()),
     }
 }
@@ -2544,6 +2592,7 @@ async fn submit_post(
         body,
         media,
         quotations,
+        mentions,
         embed_url,
         embed_snapshot,
     } = request;
@@ -2561,6 +2610,7 @@ async fn submit_post(
     validate_thread_post_media(&media)?;
     validate_game_post_body(&body)?;
     let quotations = decide_game_quotations(tx, game, &channel_id, quotations).await?;
+    let mentions = decide_game_mentions(tx, game, &channel_id, &body, mentions).await?;
     let embed = game_platform::embed::attach_embed_snapshot(
         game_platform::embed::decide_post_embed(&channel_id, embed_url.as_deref())
             .map_err(|_| Reject::InvalidTarget)?,
@@ -2591,6 +2641,9 @@ async fn submit_post(
     }
     if let Some(quotations) = content_reference::quotations_payload(&quotations) {
         payload["quotations"] = quotations;
+    }
+    if let Some(mentions) = content_reference::slot_mentions_payload(&mentions) {
+        payload["mentions"] = mentions;
     }
     if let Some(embed) = game_platform::embed::embed_payload(&embed) {
         payload["embed"] = embed;

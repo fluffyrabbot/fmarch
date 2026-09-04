@@ -34,17 +34,18 @@ import {
 } from "./player-route-controller.mjs";
 import { CommandInterruptedError } from "../../../lib/app/command-interruption.mjs";
 
-test("player composer draft clears body, media, and quotations after ack", () => {
+test("player composer draft clears body, media, quotations, and mentions after ack", () => {
   assert.deepEqual(clearedPlayerComposerDraft(), {
     body: "",
     mediaAlt: "",
     mediaFiles: undefined,
     quotations: [],
+    mentions: [],
     embedUrl: "",
   });
 });
 
-test("player composer draft stashes body and quotations per channel", () => {
+test("player composer draft stashes body, quotations, and mentions per channel", () => {
   const first = applyPlayerComposerChannelDraft({
     previousChannel: "main",
     nextChannel: "private:mafia",
@@ -53,6 +54,7 @@ test("player composer draft stashes body and quotations per channel", () => {
       mediaAlt: "receipt",
       mediaFiles: { length: 1 },
       quotations: [{ sourceSeq: 12 }],
+      mentions: ["slot_2"],
       embedUrl: "https://youtu.be/dQw4w9WgXcQ",
     },
   });
@@ -61,9 +63,15 @@ test("player composer draft stashes body and quotations per channel", () => {
     mediaAlt: "",
     mediaFiles: undefined,
     quotations: [{ sourceSeq: 12 }],
+    mentions: ["slot_2"],
     embedUrl: "https://youtu.be/dQw4w9WgXcQ",
   });
   assert.deepEqual(first.draft, clearedPlayerComposerDraft());
+  assert.deepEqual(
+    first.draft.mentions,
+    [],
+    "a room's roster does not follow the author into another room",
+  );
 
   const back = applyPlayerComposerChannelDraft({
     drafts: first.drafts,
@@ -73,6 +81,7 @@ test("player composer draft stashes body and quotations per channel", () => {
   });
   assert.equal(back.draft.body, "town read");
   assert.deepEqual(back.draft.quotations, [{ sourceSeq: 12 }]);
+  assert.deepEqual(back.draft.mentions, ["slot_2"]);
   assert.equal(back.drafts["private:mafia"].body, "scum note");
 });
 

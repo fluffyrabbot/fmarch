@@ -349,6 +349,11 @@ pub enum Command {
         media: Vec<ThreadPostMedia>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         quotations: Vec<content_reference::Quotation>,
+        /// Slot addresses claimed by the composer. Absent or empty means this
+        /// post addresses nobody, which is valid forever and is how every
+        /// pre-mention command upcasts.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mentions: Vec<content_reference::SlotMentionCandidate>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         embed_url: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]

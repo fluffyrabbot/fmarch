@@ -358,10 +358,12 @@ export function buildPlayerComposerView(
   commandState,
   actorSlot,
   selectedActionTargets = {},
+  channelId = "main",
 ) {
   const withdrawState = playerWithdrawVoteState(commandState);
   return Object.freeze({
     ...baseComposer,
+    mentionRoster: playerMentionRoster(commandState, channelId),
     voteCommands: buildPlayerVoteCommands(baseComposer, commandState),
     currentVoteLabel: playerCurrentVoteLabel(commandState?.currentVote ?? null),
     hasCurrentVote: commandState?.currentVote != null,
@@ -374,6 +376,17 @@ export function buildPlayerComposerView(
     ),
     dayEventCommands: buildPlayerDayEventCommands(commandState),
   });
+}
+
+/// The seats `@` may address in the channel being posted to. An unknown
+/// channel has an empty roster rather than a fallback one: suggesting a seat
+/// the write model would refuse is worse than suggesting nothing.
+export function playerMentionRoster(commandState, channelId) {
+  const targets = Array.isArray(commandState?.mentionTargets)
+    ? commandState.mentionTargets
+    : [];
+  const match = targets.find((entry) => entry?.channelId === channelId);
+  return Object.freeze(Array.isArray(match?.slots) ? [...match.slots] : []);
 }
 
 export function buildPlayerDayEventCommands(commandState) {
@@ -668,6 +681,15 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
       Object.freeze({ kind: "no_lynch", slotId: null, label: "No lynch" }),
     ]),
     currentVote: null,
+    // The seats `@` may address in each room this actor reads. It rides with
+    // the command state, so the composer needs no round trip and can never
+    // suggest a seat outside the room being posted to.
+    mentionTargets: Object.freeze([
+      Object.freeze({
+        channelId: "main",
+        slots: Object.freeze(["slot-2", "slot-3", "slot-7"]),
+      }),
+    ]),
     boundary:
       "Fixture player route data does not invent role action availability.",
   }),
@@ -721,8 +743,13 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
       Object.freeze({
         seq: 443,
         author: Object.freeze({ kind: "slot", slotId: "slot-7" }),
-        body: "##vote slot-2",
+        body: "@slot-2 \u2014 ##vote slot-2",
         meta: "1 min ago",
+        // A decided slot address over an immutable span of this body. The
+        // renderer walks the list; it never re-reads the prose for `@`.
+        mentions: Object.freeze([
+          Object.freeze({ slot_id: "slot-2", offset: 0, len: 7 }),
+        ]),
       }),
     ]),
   }),

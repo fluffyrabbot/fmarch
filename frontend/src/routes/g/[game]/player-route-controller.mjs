@@ -36,6 +36,7 @@ export function playerComposerDraftFromState({
   mediaAlt = "",
   mediaFiles,
   quotations = [],
+  mentions = [],
   embedUrl = "",
 } = {}) {
   return Object.freeze({
@@ -43,6 +44,10 @@ export function playerComposerDraftFromState({
     mediaAlt: String(mediaAlt ?? ""),
     mediaFiles,
     quotations: Object.freeze([...(Array.isArray(quotations) ? quotations : [])]),
+    // Seats are attached per channel: a roster is a property of the room, so
+    // an address carried into another room would name a seat that cannot read
+    // it.
+    mentions: Object.freeze([...(Array.isArray(mentions) ? mentions : [])]),
     embedUrl: String(embedUrl ?? ""),
   });
 }
@@ -64,6 +69,7 @@ export function applyPlayerComposerChannelDraft({
     nextDrafts[previous] = playerComposerDraftFromState({
       body: current.body,
       quotations: current.quotations,
+      mentions: current.mentions,
       embedUrl: current.embedUrl,
     });
   }
@@ -379,6 +385,7 @@ export function buildPlayerCommandRequest({
   composerBody,
   media = [],
   quotations = [],
+  mentions = [],
   embedUrl = "",
 }) {
   const actionConfig = playerActionConfig(data, action);
@@ -392,6 +399,7 @@ export function buildPlayerCommandRequest({
       body: composerBody,
       media,
       quotations,
+      mentions,
       embedUrl,
       target: data.composer.voteTargetSlot,
       actionConfig,
@@ -405,6 +413,7 @@ export function buildPlayerCommandDispatchBridgePlan({
   composerBody,
   media = [],
   quotations = [],
+  mentions = [],
   embedUrl = "",
   optimisticStatus,
   finalStatus,
@@ -420,6 +429,7 @@ export function buildPlayerCommandDispatchBridgePlan({
     composerBody,
     media,
     quotations,
+    mentions,
     embedUrl,
   });
   return buildDispatchBridgePlanFromRequest({
@@ -441,6 +451,7 @@ export async function submitPlayerRouteCommand({
   composerBody,
   media = [],
   quotations = [],
+  mentions = [],
   embedUrl = "",
   commandIdFactory,
   signal,
@@ -450,7 +461,15 @@ export async function submitPlayerRouteCommand({
   sendCommandImpl = sendCommand,
 }) {
   const commandStatus = await sendCommandImpl({
-    ...buildPlayerCommandRequest({ data, action, composerBody, media, quotations, embedUrl }),
+    ...buildPlayerCommandRequest({
+      data,
+      action,
+      composerBody,
+      media,
+      quotations,
+      mentions,
+      embedUrl,
+    }),
     commandIdFactory,
     fetchImpl,
     signal,

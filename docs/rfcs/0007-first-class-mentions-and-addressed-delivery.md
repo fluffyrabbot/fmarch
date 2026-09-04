@@ -276,6 +276,19 @@ player rail resolves current occupancy at read time. Replacement therefore
 transfers a pending mention with the seat, for free, and a mention of Slot 7 on
 D2 stays a fact about Slot 7 regardless of who sat there.
 
+**Implementation note (slice 4).** That family is realised as a sibling table,
+`slot_mention_notification`, rather than as rows inside `player_notification`
+itself. Two facts about the existing table forced the split, and neither
+touches the addressing property this section argues for. Its real key is
+`(game_id, phase_id, event_index, audience_slot)` — the coordinates of an inner
+engine event inside a resolution — so it cannot distinguish two mentions of one
+seat within one phase. And its `phase_id` is `NOT NULL`, while setup discussion
+is deliberately outside a phase, so a mention made there would have no row to
+occupy. The sibling is keyed `(game_id, audience_slot, source_seq)` with a
+nullable phase. It still names a seat and nothing else, and the player rail
+still resolves occupancy at read time, so replacement transfers a pending
+mention exactly as described above.
+
 ### 8. Overlays stay at read time
 
 The edge is stored; the decision to show it is not. Mention rows are filtered at

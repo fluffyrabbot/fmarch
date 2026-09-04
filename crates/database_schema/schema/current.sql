@@ -1101,6 +1101,7 @@ CREATE TABLE public.thread_view (
     quotations jsonb DEFAULT '[]'::jsonb NOT NULL,
     body_private_kid text GENERATED ALWAYS AS ((body_private ->> 'kid'::text)) STORED,
     embed jsonb,
+    mentions jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT thread_view_author_shape CHECK ((((author_kind = 'slot'::text) AND (author_slot_id IS NOT NULL) AND (btrim(author_slot_id) <> ''::text)) OR ((author_kind = ANY (ARRAY['host_narrator'::text, 'system'::text])) AND (author_slot_id IS NULL)))),
     CONSTRAINT thread_view_body_private_kid_shape CHECK ((((body_private IS NULL) AND (body_private_kid IS NULL)) OR ((body_private IS NOT NULL) AND (body_private_kid IS NOT NULL)))),
     CONSTRAINT thread_view_body_storage CHECK ((((channel_id = 'main'::text) AND (body IS NOT NULL) AND (body_private IS NULL)) OR ((channel_id <> 'main'::text) AND (body IS NULL) AND (body_private IS NOT NULL))))
@@ -1993,6 +1994,20 @@ CREATE TABLE public.slot_effect (
     phase_number integer,
     duration text DEFAULT 'Persistent'::text NOT NULL,
     visibility text DEFAULT 'Hidden'::text NOT NULL
+);
+
+
+--
+-- Name: slot_mention_notification; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.slot_mention_notification (
+    game_id uuid NOT NULL,
+    audience_slot text NOT NULL,
+    source_seq bigint NOT NULL,
+    channel_id text NOT NULL,
+    phase_id text,
+    occurred_at bigint NOT NULL
 );
 
 
@@ -3100,6 +3115,14 @@ ALTER TABLE ONLY public.slot_effect
 
 
 --
+-- Name: slot_mention_notification slot_mention_notification_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.slot_mention_notification
+    ADD CONSTRAINT slot_mention_notification_pkey PRIMARY KEY (game_id, audience_slot, source_seq);
+
+
+--
 -- Name: slot_occupancy_epoch slot_occupancy_epoch_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4034,6 +4057,13 @@ CREATE INDEX sheriff_badge_owner_idx ON public.sheriff_badge USING btree (game_i
 --
 
 CREATE INDEX slot_effect_by_effect_idx ON public.slot_effect USING btree (game_id, effect, slot_id);
+
+
+--
+-- Name: slot_mention_notification_audience_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX slot_mention_notification_audience_idx ON public.slot_mention_notification USING btree (game_id, audience_slot, source_seq DESC);
 
 
 --
