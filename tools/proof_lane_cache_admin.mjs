@@ -327,13 +327,26 @@ export function planProofCacheGc({
       addProtection(protectedEntries, laneId, proofKey, `receipt:${receipt.id}`);
     }
   }
-  // `preempted` is terminal-looking but resumable: the sweep supervisor, or an
-  // operator, will re-enter that receipt and reuse its passed lanes. Evicting
-  // what it references between the preemption and the resume would silently
-  // force those lanes to re-run.
+  // In-flight protection is about concurrency, not resume: a `--resume` never
+  // reads the proof cache (`proof_lane_select.mjs` builds a cache plan only when
+  // `!resume`, and reuse comes from the receipt's own lane records), so eviction
+  // cannot cost a resume its work. What it can cost is a runner still touching
+  // those entries -- and `preempted` is such a runner, given the 5s the host
+  // lock allows between SIGTERM and SIGKILL. `failed` is excluded for the same
+  // reason it always was, now stated: nothing is still writing.
+  //
+  // Neither state is ever left behind: a SIGKILLed runner stays `running`
+  // forever and every preemption leaves a permanent `preempted` receipt. Unbounded
+  // protection is not merely wasteful -- it raises the protected floor until
+  // `applyReviewedProofCacheGcPlan` refuses to apply any plan at all. So in-flight
+  // receipts are capped by recency exactly like terminal ones; a live runner is
+  // by construction among the most recently updated.
   const inFlight = receipts
     .filter(({ receipt }) => receipt.state === 'running' || receipt.state === 'preempted')
-    .sort((left, right) => String(left.receipt.id).localeCompare(String(right.receipt.id)));
+    .sort((left, right) =>
+      timestamp(right.receipt.updated_at ?? right.receipt.started_at) - timestamp(left.receipt.updated_at ?? left.receipt.started_at) ||
+      String(left.receipt.id).localeCompare(String(right.receipt.id)))
+    .slice(0, keepReceipts);
   for (const { receipt } of inFlight) {
     for (const { laneId, proofKey } of receiptReferences(receipt)) {
       addProtection(protectedEntries, laneId, proofKey, `in-flight:${receipt.id}`);

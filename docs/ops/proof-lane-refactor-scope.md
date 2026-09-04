@@ -240,8 +240,7 @@ lost the shape of the run it resumed. Six corrections:
   `last-run.json` pointer records the runner pid and is only actionable when it
   matches the preemption marker, so a preemption during the (not short)
   selection phase cannot auto-resume a stale receipt. Cache GC also treats
-  `preempted` receipts as in-flight, since evicting what a pending resume
-  references would silently force those lanes to re-run.
+  `preempted` receipts as in-flight (see the correction below for why).
 
 Receipts now record `quarantine`, `skipped_lane_ids`, and `keep_going` in their
 context, so a receipt is readable on its own rather than only against the
@@ -267,6 +266,35 @@ entered the tree with the commit-bound authority work and had never been in a
 lane, so its contract on `membership_http.rs`, `authority.rs`, and
 `membership_application` compiled under clippy but never ran. `cargo:api` now
 selects it.
+
+### What in-flight cache protection is actually for — 2026-09-04
+
+The remediation above added `preempted` to the GC's in-flight bucket on the
+grounds that a pending resume would otherwise be forced to re-run those lanes.
+That reason is wrong, and stating it correctly resolves the open question about
+`failed` receipts too.
+
+**A `--resume` never touches the proof cache.** `proof_lane_select.mjs` builds a
+cache plan only when `!resume`, and `planReceiptResume` rebuilds reuse from the
+receipt's own lane records — it reads no cache entry, and persists none. A
+resumed run therefore cannot lose work to an eviction. (A resumed run also
+cannot reuse a lane whose artifacts a rerun lane consumes: `planReceiptResume`
+pulls every `artifact-input` producer into the rerun set.)
+
+What in-flight protection actually guards is **concurrency**: a runner still
+writing must not have entries deleted underneath it. `preempted` qualifies, at
+least for the 5s the host lock allows between SIGTERM and SIGKILL. `failed`
+does not — nothing is still writing — so a failed receipt awaiting a manual
+`--resume` is deliberately unprotected, and that closes the question.
+
+**The protection had to be bounded.** Nothing reaps these receipts: a SIGKILLed
+runner stays `running` forever and every preemption leaves a permanent
+`preempted` receipt. Unbounded protection is worse than wasteful — the protected
+floor climbs until `applyReviewedProofCacheGcPlan` refuses to apply *any* plan
+("protected floor exceeds the disk budget"), i.e. abandoned runners silently
+disable GC. In-flight receipts are now capped by recency at `keepReceipts`,
+exactly like terminal ones; a genuinely live runner is by construction among the
+most recently updated.
 
 ## Delivered foundation
 

@@ -156,6 +156,73 @@ test('GC protects a preempted receipt because the sweep supervisor will resume i
   assert.equal(plan.entries.find((entry) => entry.proofKey === preemptedKey.proofKey).action, 'retain');
 });
 
+test('in-flight protection is bounded by recency so abandoned runners cannot wedge GC', (t) => {
+  const fixture = fixtureRoot(t);
+  const stale = [];
+  // Nothing ever reaps these: a SIGKILLed runner stays `running` and every
+  // preemption leaves a permanent `preempted` receipt. Protecting all of them
+  // would raise the protected floor until no plan can satisfy a disk budget.
+  for (const [index, state] of ['running', 'preempted', 'running', 'preempted'].entries()) {
+    writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), `abandoned-${index}`);
+    const key = store(fixture, `abandoned-${index}`);
+    stale.push(key);
+    writeRunReceipt(fixture.root, `abandoned-${index}`, {
+      state, updated_at: `2026-08-2${index}T10:00:00.000Z`, context: { mode: 'full' },
+      lanes: { audit: { reused_from_proof_key: key.proofKey } },
+    });
+  }
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'live-key');
+  const liveKey = store(fixture, 'live');
+  writeRunReceipt(fixture.root, 'live', {
+    state: 'running', updated_at: '2026-09-04T10:00:00.000Z', context: { mode: 'full' },
+    lanes: { audit: { reused_from_proof_key: liveKey.proofKey } },
+  });
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'current-key');
+  const currentKey = store(fixture, 'source-current');
+
+  const plan = planProofCacheGc({
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', currentKey]]),
+    keepReceipts: 2,
+    receipts: undefined,
+  });
+  // The two most recently updated in-flight receipts keep their keys; the
+  // older abandoned pair is reclaimable like any other unreachable history.
+  assert.deepEqual(plan.in_flight_receipts.map(({ id }) => id), ['live', 'abandoned-3']);
+  const action = (key) => plan.entries.find((entry) => entry.proofKey === key.proofKey).action;
+  assert.equal(action(liveKey), 'retain');
+  assert.equal(action(stale[3]), 'retain');
+  assert.equal(action(stale[0]), 'delete');
+  assert.equal(action(stale[1]), 'delete');
+  assert.equal(action(stale[2]), 'delete');
+});
+
+test('a failed receipt awaiting --resume is not protected, because a resume never reads the cache', (t) => {
+  const fixture = fixtureRoot(t);
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'failed-key');
+  const failedKey = store(fixture, 'source-failed');
+  writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'current-key');
+  const currentKey = store(fixture, 'source-current');
+
+  // `--resume` rebuilds reuse from the receipt's own lane records and builds no
+  // cache plan at all, so an evicted entry costs a pending resume nothing. The
+  // set of resumable failed receipts is unbounded, so protecting them would
+  // eventually make the protected floor unsatisfiable.
+  writeRunReceipt(fixture.root, 'failed', {
+    state: 'failed', updated_at: '2026-09-04T10:00:00.000Z', context: { mode: 'full' },
+    lanes: { audit: { reused_from_proof_key: failedKey.proofKey } },
+  });
+
+  const plan = planProofCacheGc({
+    root: fixture.root,
+    currentProofKeys: new Map([['audit', currentKey]]),
+    keepReceipts: 10,
+    receipts: undefined,
+  });
+  assert.deepEqual(plan.in_flight_receipts, []);
+  assert.equal(plan.entries.find((entry) => entry.proofKey === failedKey.proofKey).action, 'delete');
+});
+
 test('GC retains current, recent receipt, and in-flight keys while deleting unreachable history', (t) => {
   const fixture = fixtureRoot(t);
   writeFileSync(join(fixture.root, 'crates/commands/src/lib.rs'), 'receipt-key');
