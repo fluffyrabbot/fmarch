@@ -21,7 +21,7 @@ import {
   buildPlayerProjectionColdLoads,
   buildPlayerProjectionInitialSnapshot,
   persistPlayerInterruptedCommands,
-  playerResyncKeys,
+  playerReconnectRefreshKeys,
   restorePlayerInterruptedCommands,
 } from "../frontend/src/routes/g/[game]/player-route-controller.mjs";
 import {
@@ -33,7 +33,7 @@ import {
 import {
   buildHostProjectionColdLoads,
   buildHostProjectionInitialSnapshot,
-  hostProjectionResyncKeys,
+  hostReconnectRefreshKeys,
   persistHostInterruptedCommands,
   restoreHostInterruptedCommands,
 } from "../frontend/src/routes/g/[game]/host/host-route-controller.mjs";
@@ -107,18 +107,27 @@ async function provePlayerRouteSource() {
     role: "player",
     endpointExpression: "data.liveProjection.endpoint",
     eventRecorder: "recordPlayerLiveProjectionEvent",
-    resyncTrigger: "triggerPlayerLiveProjectionResync",
-    windowTrigger: "__fmarchTriggerPlayerResync",
+    reconnectBridge: "createLiveRouteBrowserReconnect",
+    windowTrigger: "__fmarchReconnectPlayerLiveProjectionNow",
     metricsGetter: "__fmarchGetPlayerLiveProjectionMetrics",
   });
   assert.match(source, /buildPlayerProjectionInitialSnapshot\(data\)/);
   assert.match(source, /buildPlayerProjectionColdLoads\(data\)/);
-  assert.match(source, /playerResyncKeys\(data\)/);
+  assert.match(source, /playerReconnectRefreshKeys\(data\)/);
   assert.match(source, /endgameSummary = snapshot\.endgameSummary/);
   assert.match(source, /attachLiveProjectionPageLifecycle/);
   assert.match(source, /restorePlayerInterruptedCommands/);
   assert.match(source, /persistPlayerInterruptedCommands/);
-  assert.match(source, /window\.sessionStorage/);
+  assert.match(source, /resolveCommandRecoveryStorage\(window\)/);
+  assert.match(source, /player-command-recovery-storage-warning/);
+  assert.ok(
+    source.indexOf("const connection = connectLiveProjection") <
+      source.indexOf("restorePlayerCommandRecovery();"),
+  );
+  assert.match(
+    source,
+    /const recoveryPersisted = commitPlayerCommandRecovery\(\{[\s\S]*?\[action\]:[\s\S]*?attempt[\s\S]*?\}\);\s*if \(recoveryPersisted !== true\) \{[\s\S]*?same-ID reload recovery is unavailable[\s\S]*?\}\s*const confirmedStatus = await executeCommandAttempt[\s\S]*?delete nextAttempts\[action\];\s*commitPlayerCommandRecovery\(nextAttempts\);\s*const result = await recoverPlayerRouteCommand/u,
+  );
   return {
     route: "frontend/src/routes/g/[game]/+page.svelte",
     onMountConnects: true,
@@ -126,7 +135,7 @@ async function provePlayerRouteSource() {
     commandRecoveryRestore: "restorePlayerInterruptedCommands",
     endpointExpression: "data.liveProjection.endpoint",
     projectionStoreFactory: "createProjectionStore",
-    resyncWindowHook: "__fmarchTriggerPlayerResync",
+    reconnectWindowHook: "__fmarchReconnectPlayerLiveProjectionNow",
   };
 }
 
@@ -136,18 +145,27 @@ async function proveModeratorRouteSource() {
     role: "moderator",
     endpointExpression: "data.liveProjection.endpoint",
     eventRecorder: "recordHostLiveProjectionEvent",
-    resyncTrigger: "triggerHostLiveProjectionResync",
-    windowTrigger: "__fmarchTriggerHostResync",
+    reconnectBridge: "createLiveRouteBrowserReconnect",
+    windowTrigger: "__fmarchReconnectHostLiveProjectionNow",
     metricsGetter: "__fmarchGetHostLiveProjectionMetrics",
   });
   assert.match(source, /buildHostProjectionInitialSnapshot\(data\)/);
   assert.match(source, /buildHostProjectionColdLoads\(data\)/);
-  assert.match(source, /hostProjectionResyncKeys\(\)/);
+  assert.match(source, /hostReconnectRefreshKeys\(\)/);
   assert.match(source, /exposeHostLiveProjectionEndpoint/);
   assert.match(source, /attachLiveProjectionPageLifecycle/);
   assert.match(source, /restoreHostInterruptedCommands/);
   assert.match(source, /persistHostInterruptedCommands/);
-  assert.match(source, /window\.sessionStorage/);
+  assert.match(source, /resolveCommandRecoveryStorage\(window\)/);
+  assert.match(source, /host-command-recovery-storage-warning/);
+  assert.ok(
+    source.indexOf("const connection = connectLiveProjection") <
+      source.indexOf("restoreHostCommandRecovery();"),
+  );
+  assert.match(
+    source,
+    /const recoveryPersisted = commitHostCommandRecovery\(\{[\s\S]*?\[event\.actionId\]:[\s\S]*?attempt[\s\S]*?\}\);\s*if \(recoveryPersisted !== true\) \{[\s\S]*?same-ID reload recovery is unavailable[\s\S]*?return;\s*\}\s*try \{\s*const confirmedOutcome = await executeCommandAttempt[\s\S]*?delete nextAttempts\[event\.actionId\];\s*commitHostCommandRecovery\(nextAttempts\);\s*const result = await recoverHostRouteAction/u,
+  );
   return {
     route: "frontend/src/routes/g/[game]/host/+page.svelte",
     onMountConnects: true,
@@ -155,14 +173,14 @@ async function proveModeratorRouteSource() {
     commandRecoveryRestore: "restoreHostInterruptedCommands",
     endpointExpression: "data.liveProjection.endpoint",
     projectionStoreFactory: "createProjectionStore",
-    resyncWindowHook: "__fmarchTriggerHostResync",
+    reconnectWindowHook: "__fmarchReconnectHostLiveProjectionNow",
     endpointExposedForSmoke: "__fmarchHostLiveProjectionEndpoint",
   };
 }
 
 function assertSourceOwnsLiveConnection(
   source,
-  { endpointExpression, eventRecorder, resyncTrigger, windowTrigger, metricsGetter },
+  { endpointExpression, eventRecorder, reconnectBridge, windowTrigger, metricsGetter },
 ) {
   assert.match(source, /import \{ onMount \} from "svelte"/);
   assert.match(source, /connectLiveProjection/);
@@ -170,7 +188,7 @@ function assertSourceOwnsLiveConnection(
   assert.match(source, /createProjectionStore/);
   assert.match(source, new RegExp(escapeRegExp(`url: ${endpointExpression}`)));
   assert.match(source, new RegExp(`${eventRecorder}\\(`));
-  assert.match(source, new RegExp(`${resyncTrigger}\\(`));
+  assert.match(source, new RegExp(`${reconnectBridge}\\(`));
   assert.match(source, new RegExp(`window\\.${escapeRegExp(windowTrigger)}`));
   assert.match(source, new RegExp(`window\\.${escapeRegExp(metricsGetter)}`));
   assert.match(source, /return \(\) => \{/);
@@ -180,8 +198,10 @@ function assertSourceOwnsLiveConnection(
 
 async function provePlayerLiveRuntime() {
   FakeWebSocket.last = null;
+  FakeWebSocket.instances = [];
   const data = await buildGameRouteData({
     game: "midsummer",
+    fixtureMode: true,
     principalId: "player_mira",
     capabilities: [
       { kind: "SlotOccupant", game: "midsummer", slot: "slot-7" },
@@ -196,6 +216,7 @@ async function provePlayerLiveRuntime() {
   const windowRef = {};
   let liveStatus = { state: "connecting", message: "Connecting live projection" };
   const events = [];
+  const reconnects = [];
   const connection = connectLiveProjection({
     url: data.liveProjection.endpoint,
     projectionStore: store,
@@ -208,17 +229,26 @@ async function provePlayerLiveRuntime() {
         next_before_seq: 449,
         posts: [
           {
+            game: "midsummer",
             source_seq: 450,
             stream_seq: 50,
+            channel_id: "main",
             author: { kind: "host_narrator" },
+            phase_id: "D02",
             body: "Recovered official update",
+            media: [],
+            quotations: [],
+            citation_count: 0,
             occurred_at: 1781928000,
           },
         ],
       },
       [data.coldLoad.votecountEndpoint]: [
         {
-          VoteCountChanged: {
+          kind: "VoteCountChanged",
+          body: {
+            game: "midsummer",
+            phase_id: "D02",
             candidate_slot: "slot-2",
             count: 5,
             majority: 7,
@@ -227,6 +257,7 @@ async function provePlayerLiveRuntime() {
       ],
       [data.coldLoad.dayVoteOutcomesEndpoint]: [],
       [data.coldLoad.endgameSummaryEndpoint]: {
+        game: "midsummer",
         completed: true,
         winner: null,
         slots: [
@@ -253,26 +284,56 @@ async function provePlayerLiveRuntime() {
             reason: null,
           },
         ],
-        boundary: "Completed summary recovered through live resync.",
+        boundary: "Completed summary recovered through a fresh live generation.",
       },
       [data.coldLoad.notificationsEndpoint]: [
-        { effect: "Commuted", phase_id: "N02", status: "Delivered" },
+        {
+          game: "midsummer",
+          audience_slot: "slot-7",
+          phase_id: "N02",
+          event_index: 0,
+          effect: "Commuted",
+          status: "Delivered",
+        },
       ],
       [data.coldLoad.investigationResultsEndpoint]: [],
+      [data.coldLoad.slotMentionsEndpoint]: [
+        {
+          game: "midsummer",
+          audience_slot: "slot-7",
+          channel_id: "main",
+          source_seq: 451,
+          phase_id: "D02",
+          occurred_at: 1781928000,
+        },
+      ],
       [data.coldLoad.commandStateEndpoint]: {
         game: "midsummer",
         actor_slot: "slot-7",
         actor_alive: true,
         actor_status: "alive",
+        game_completed: false,
+        role: null,
         phase: {
           phase_id: "D02",
           locked: false,
+          deadline: null,
         },
         actions: [],
+        current_actions: [],
         vote_targets: [],
+        current_vote: null,
+        day_events: [],
+        day_event_rooms: [],
+        post_policies: [],
+        boundary: "Authoritative command state recovered through a fresh live generation.",
       },
     }),
-    resyncKeys: playerResyncKeys(data),
+    resyncKeys: playerReconnectRefreshKeys(data),
+    scheduleReconnect(callback, delayMs) {
+      reconnects.push({ callback, delayMs });
+      return reconnects.length;
+    },
     onEvent(message, snapshot) {
       events.push(message);
       liveStatus = recordPlayerLiveProjectionEvent({
@@ -287,75 +348,121 @@ async function provePlayerLiveRuntime() {
   assert.notEqual(connection, null);
   await waitForFakeSocket();
   await FakeWebSocket.last.emit("open");
-  await FakeWebSocket.last.emit("message", liveEnvelope("Hello", { protocol_v: 2 }));
   await FakeWebSocket.last.emit(
     "message",
-    liveEnvelope("Delta", {
-      kind: "ThreadPostsChanged",
-      body: {
-        posts: [
-          {
-            source_seq: 445,
-            stream_seq: 45,
-            author: { kind: "host_narrator" },
-            body: "Live official votecount",
-            occurred_at: 1781928000,
-          },
-        ],
+    liveEnvelope(0, "Hello", {
+      protocol_v: 3,
+      server: "fmarch-route-proof",
+      scope: {
+        game: "midsummer",
+        channel: "main",
+        slot_id: "slot-7",
+      },
+      caps: [
+        { kind: "SlotOccupant", body: { game: "midsummer", slot: "slot-7" } },
+      ],
+    }),
+  );
+  await FakeWebSocket.last.emit(
+    "message",
+    liveEnvelope(1, "Delta", {
+      audience: { Thread: { game: "midsummer", channel: "main" } },
+      delta: {
+        kind: "ThreadPostsChanged",
+        body: {
+          game: "midsummer",
+          posts: [
+            {
+              game: "midsummer",
+              channel_id: "main",
+              source_seq: 445,
+              stream_seq: 45,
+              author: { kind: "host_narrator" },
+              phase_id: "D02",
+              body: "Live official votecount",
+              media: [],
+              quotations: [],
+              citation_count: 0,
+              occurred_at: 1781928000,
+            },
+          ],
+        },
       },
     }),
   );
   await FakeWebSocket.last.emit(
     "message",
-    liveEnvelope("Delta", {
-      kind: "ResyncRequired",
-      body: { from_seq: 44 },
+    liveEnvelope(2, "ResyncRequired", {
+      scope: {
+        game: "midsummer",
+        channel: "main",
+        slot_id: "slot-7",
+      },
+      audiences: [
+        { Thread: { game: "midsummer", channel: "main" } },
+        { Game: { game: "midsummer" } },
+        { PlayerSlot: { game: "midsummer", slot_id: "slot-7" } },
+      ],
+      from_event_seq: 44,
     }),
   );
-  connection.close();
+  await waitFor(() => reconnects.length === 1);
+  reconnects[0].callback();
+  await waitFor(() => FakeWebSocket.instances.length === 2);
+  await FakeWebSocket.last.emit("open");
+  await emitRoleHello(FakeWebSocket.last, "player", "fmarch-route-proof");
+  const eventKinds = events.map((event) => event?.kind);
+  const finalStatus = windowRef.__fmarchLiveProjectionStatus;
+  const recoveredThreadSeq = windowRef.__fmarchPlayerProjection.thread.posts[0].seq;
+  const recoveredEndgameSummary = windowRef.__fmarchPlayerProjection.endgameSummary;
 
   assert.deepEqual(
-    events.map((event) => event?.kind),
-    ["open", "hello", "delta", "resync-required"],
+    eventKinds,
+    ["hello", "delta", "resync-required", "close", "reconnecting", "reconnect"],
+    `player live event sequence: ${JSON.stringify(events)}`,
   );
-  assert.equal(windowRef.__fmarchLiveProjectionStatus.state, "recovered");
-  assert.equal(windowRef.__fmarchPlayerProjection.thread.posts[0].seq, 450);
-  assert.equal(windowRef.__fmarchPlayerProjection.endgameSummary.completed, true);
+  assert.equal(finalStatus.state, "recovered");
+  assert.equal(recoveredThreadSeq, 450);
+  assert.equal(recoveredEndgameSummary.completed, true);
   assert.equal(
-    windowRef.__fmarchPlayerProjection.endgameSummary.slots[0].roleKey,
+    recoveredEndgameSummary.slots[0].roleKey,
     "godfather",
   );
   assert.deepEqual(
-    windowRef.__fmarchPlayerProjection.endgameSummary.voteHistory[0].votes,
+    recoveredEndgameSummary.voteHistory[0].votes,
     { "slot-2": "no_lynch", "slot-3": "no_lynch" },
   );
-  assert.deepEqual(playerResyncKeys(data), [
+  assert.deepEqual(playerReconnectRefreshKeys(data), [
     "thread",
     "votecount",
     "dayVoteOutcomes",
     "endgameSummary",
     "notifications",
     "investigationResults",
+    "slotMentions",
     "commandState",
   ]);
-
-  return {
+  const result = {
     endpoint: data.liveProjection.endpoint,
     websocketUrl: FakeWebSocket.last.url,
     liveTransportStatus: store.liveTransport.status,
-    resyncKeys: playerResyncKeys(data),
-    eventKinds: events.map((event) => event?.kind),
-    finalStatus: windowRef.__fmarchLiveProjectionStatus,
-    recoveredThreadSeq: windowRef.__fmarchPlayerProjection.thread.posts[0].seq,
-    recoveredEndgameSummary: windowRef.__fmarchPlayerProjection.endgameSummary,
+    reconnectRefreshKeys: playerReconnectRefreshKeys(data),
+    eventKinds,
+    finalStatus,
+    recoveredThreadSeq,
+    recoveredEndgameSummary,
     exposureKey: "__fmarchPlayerProjection",
   };
+  connection.close();
+  return result;
 }
 
 async function proveModeratorLiveRuntime() {
   FakeWebSocket.last = null;
+  FakeWebSocket.instances = [];
   const data = await buildHostConsoleRouteData({
     game: "midsummer",
+    fixtureMode: true,
     principalId: FIXTURE_PRINCIPAL_IDS.hostH,
     capabilities: [{ kind: "HostOf", game: "midsummer" }],
   });
@@ -367,6 +474,7 @@ async function proveModeratorLiveRuntime() {
   const windowRef = {};
   let liveStatus = { state: "connecting", message: "Connecting live projection" };
   const events = [];
+  const reconnects = [];
   const connection = connectLiveProjection({
     url: data.liveProjection.endpoint,
     projectionStore: store,
@@ -376,20 +484,27 @@ async function proveModeratorLiveRuntime() {
         url: "ws://fmarch.local/ws?ticket=host-proof&audience=fmarch-live",
       },
       [data.hostConsoleStateEndpoint]: {
-        phase: { phase_id: "D02", locked: true },
-        slots: [
-          {
-            slot_id: "slot-7",
-            assigned_principal_id: "Mira",
-            status: "modkilled",
-            alive: false,
-          },
-        ],
-        thread_posts: [{ author: { kind: "slot", slot_id: "slot-7" } }],
+        game: "midsummer",
+        authority: {
+          principal_id: FIXTURE_PRINCIPAL_IDS.hostH,
+          capability: "HostOf",
+          allowed_classes: ["phase_resolve"],
+          denied_classes: [],
+        },
+        completed: false,
+        phase: null,
+        slots: [],
+        thread_posts: [],
+        day_event_scheduler: null,
+        day_events: [],
+        tasks: [],
       },
       [data.hostVotecountEndpoint]: [
         {
-          VoteCountChanged: {
+          kind: "VoteCountChanged",
+          body: {
+            game: "midsummer",
+            phase_id: "D01",
             candidate_slot: "slot-7",
             count: 0,
             majority: 7,
@@ -399,7 +514,11 @@ async function proveModeratorLiveRuntime() {
       [data.dayVoteOutcomesEndpoint]: [],
       [data.hostPromptEndpoint]: [],
     }),
-    resyncKeys: hostProjectionResyncKeys(),
+    resyncKeys: hostReconnectRefreshKeys(),
+    scheduleReconnect(callback, delayMs) {
+      reconnects.push({ callback, delayMs });
+      return reconnects.length;
+    },
     onEvent(message, snapshot) {
       events.push(message);
       liveStatus = recordHostLiveProjectionEvent({
@@ -414,46 +533,66 @@ async function proveModeratorLiveRuntime() {
   assert.notEqual(connection, null);
   await waitForFakeSocket();
   await FakeWebSocket.last.emit("open");
-  await FakeWebSocket.last.emit("message", liveEnvelope("Hello", { protocol_v: 2 }));
+  await emitRoleHello(FakeWebSocket.last, "moderator", "fmarch-route-proof");
   await FakeWebSocket.last.emit(
     "message",
-    liveEnvelope("Delta", {
-      kind: "HostPromptsChanged",
-      body: { prompts: [] },
+    liveEnvelope(1, "Delta", {
+      audience: { Host: { game: "midsummer" } },
+      delta: {
+        kind: "HostPromptsChanged",
+        body: { game: "midsummer", prompts: [] },
+      },
     }),
   );
   await FakeWebSocket.last.emit(
     "message",
-    liveEnvelope("Delta", {
-      kind: "ResyncRequired",
-      body: { from_seq: 88 },
+    liveEnvelope(2, "ResyncRequired", {
+      scope: {
+        game: "midsummer",
+        channel: "main",
+        slot_id: null,
+      },
+      audiences: [
+        { Host: { game: "midsummer" } },
+        { Game: { game: "midsummer" } },
+      ],
+      from_event_seq: 88,
     }),
   );
-  connection.close();
+  await waitFor(() => reconnects.length === 1);
+  reconnects[0].callback();
+  await waitFor(() => FakeWebSocket.instances.length === 2);
+  await FakeWebSocket.last.emit("open");
+  await emitRoleHello(FakeWebSocket.last, "moderator", "fmarch-route-proof");
+  const eventKinds = events.map((event) => event?.kind);
+  const finalStatus = windowRef.__fmarchHostLiveProjectionStatus;
+  const recoveredPromptCount = windowRef.__fmarchHostPromptsProjection.length;
 
   assert.deepEqual(
-    events.map((event) => event?.kind),
-    ["open", "hello", "delta", "resync-required"],
+    eventKinds,
+    ["hello", "delta", "resync-required", "close", "reconnecting", "reconnect"],
+    `host live event sequence: ${JSON.stringify(events)}`,
   );
-  assert.equal(windowRef.__fmarchHostLiveProjectionStatus.state, "recovered");
-  assert.deepEqual(hostProjectionResyncKeys(), [
+  assert.equal(finalStatus.state, "recovered");
+  assert.deepEqual(hostReconnectRefreshKeys(), [
     "host",
     "votecount",
     "dayVoteOutcomes",
     "hostPrompts",
   ]);
   assert.deepEqual(windowRef.__fmarchHostPromptsProjection, []);
-
-  return {
+  const result = {
     endpoint: data.liveProjection.endpoint,
     websocketUrl: FakeWebSocket.last.url,
     liveTransportStatus: store.liveTransport.status,
-    resyncKeys: hostProjectionResyncKeys(),
-    eventKinds: events.map((event) => event?.kind),
-    finalStatus: windowRef.__fmarchHostLiveProjectionStatus,
-    recoveredPromptCount: windowRef.__fmarchHostPromptsProjection.length,
+    reconnectRefreshKeys: hostReconnectRefreshKeys(),
+    eventKinds,
+    finalStatus,
+    recoveredPromptCount,
     exposureKey: "__fmarchHostLiveProjectionEvents",
   };
+  connection.close();
+  return result;
 }
 
 async function provePlayerPageLifecycle() {
@@ -461,8 +600,9 @@ async function provePlayerPageLifecycle() {
     role: "player",
     game: "midsummer",
     endpoint: "/live/tickets?game=midsummer",
-    resyncKeys: ["thread"],
+    reconnectRefreshKeys: ["thread"],
     ticketUrl: "wss://fmarch.local/ws?ticket=player-wake&audience=fmarch-live",
+    helloCaps: [{ kind: "SpectatorOf", body: { game: "midsummer" } }],
     refreshBody: {
       next_before_seq: 449,
       posts: [
@@ -481,9 +621,10 @@ async function proveModeratorPageLifecycle() {
   return await proveRolePageLifecycle({
     role: "moderator",
     game: "midsummer",
-    endpoint: "/live/tickets?game=midsummer&slot_id=slot-7",
-    resyncKeys: ["host"],
+    endpoint: "/live/tickets?game=midsummer",
+    reconnectRefreshKeys: ["host"],
     ticketUrl: "wss://fmarch.local/ws?ticket=host-wake&audience=fmarch-live",
+    helloCaps: [{ kind: "HostOf", body: { game: "midsummer" } }],
     refreshBody: {
       phase: { phase_id: "D02", locked: true },
       slots: [],
@@ -496,8 +637,9 @@ async function proveModeratorPageLifecycle() {
 async function proveRolePageLifecycle({
   role,
   endpoint,
-  resyncKeys,
+  reconnectRefreshKeys,
   ticketUrl,
+  helloCaps,
   refreshBody,
   recoveredSeq,
 }) {
@@ -538,7 +680,7 @@ async function proveRolePageLifecycle({
       }
       return jsonResponse(refreshBody);
     },
-    resyncKeys,
+    resyncKeys: reconnectRefreshKeys,
     reconnectDelayMs: 42,
     scheduleReconnect(callback, delayMs) {
       scheduled.push({ callback, delayMs });
@@ -550,6 +692,7 @@ async function proveRolePageLifecycle({
   });
   await waitForFakeSocket();
   await FakeWebSocket.last.emit("open");
+  await emitRoleHello(FakeWebSocket.last, role, undefined, helloCaps);
 
   const lifecycle = attachLiveProjectionPageLifecycle({
     connection,
@@ -563,14 +706,17 @@ async function proveRolePageLifecycle({
   documentRef.emit("visibilitychange");
   await waitFor(() => FakeWebSocket.instances.length === 2);
   await FakeWebSocket.last.emit("open");
+  await emitRoleHello(FakeWebSocket.last, role, undefined, helloCaps);
   windowRef.emit("online");
   await waitFor(() => FakeWebSocket.instances.length === 3);
   await FakeWebSocket.last.emit("open");
+  await emitRoleHello(FakeWebSocket.last, role, undefined, helloCaps);
   windowRef.emit("pageshow", { persisted: false });
   assert.equal(FakeWebSocket.instances.length, 3);
   windowRef.emit("pageshow", { persisted: true });
   await waitFor(() => FakeWebSocket.instances.length === 4);
   await FakeWebSocket.last.emit("open");
+  await emitRoleHello(FakeWebSocket.last, role, undefined, helloCaps);
 
   FakeWebSocket.last.emit("close");
   assert.equal(scheduled[0].delayMs, 42);
@@ -604,11 +750,20 @@ async function provePlayerCommandRecovery() {
   persistPlayerInterruptedCommands({
     storage,
     game: "midsummer",
+    principalId: "player_mira",
+    actorSlot: "slot-7",
     attempts: {
       submit_vote: {
         commandId: "player-live-command-1",
         action: "submit_vote",
         interruption: "connection_lost",
+        command: {
+          SubmitVote: {
+            game: "midsummer",
+            actor_slot: "slot-7",
+            target: { Slot: "slot-2" },
+          },
+        },
         data: { staleRoute: true },
       },
     },
@@ -616,6 +771,8 @@ async function provePlayerCommandRecovery() {
   const restored = restorePlayerInterruptedCommands({
     storage,
     game: "midsummer",
+    principalId: "player_mira",
+    actorSlot: "slot-7",
   });
   assert.equal(restored.attempts.submit_vote.commandId, "player-live-command-1");
   assert.equal(restored.attempts.submit_vote.data, undefined);
@@ -633,11 +790,19 @@ async function proveModeratorCommandRecovery() {
   persistHostInterruptedCommands({
     storage,
     game: "midsummer",
+    principalId: FIXTURE_PRINCIPAL_IDS.hostH,
     attempts: {
       extend_deadline: {
         commandId: "host-live-command-1",
         actionId: "extend_deadline",
         interruption: "timeout",
+        command: {
+          ExtendDeadline: {
+            game: "midsummer",
+            phase: "D01",
+            at: 1_800_000_000,
+          },
+        },
         event: { actionId: "extend_deadline", hours: 12 },
       },
     },
@@ -645,16 +810,25 @@ async function proveModeratorCommandRecovery() {
   const restored = restoreHostInterruptedCommands({
     storage,
     game: "midsummer",
+    principalId: FIXTURE_PRINCIPAL_IDS.hostH,
   });
   assert.equal(
     restored.commandStatuses.extend_deadline.commandId,
     "host-live-command-1",
   );
+  assert.deepEqual(restored.attempts.extend_deadline.command, {
+    ExtendDeadline: {
+      game: "midsummer",
+      phase: "D01",
+      at: 1_800_000_000,
+    },
+  });
   return {
     surface: "moderator",
     persistedCommandId: "host-live-command-1",
     restoredCommandId: restored.commandStatuses.extend_deadline.commandId,
     restoredActionId: restored.attempts.extend_deadline.event.actionId,
+    restoredExactCommandBody: true,
   };
 }
 
@@ -666,12 +840,7 @@ function responseMap(bodiesByUrl) {
   return async (url) => {
     const body = bodiesByUrl[stripProjectionRefreshParam(url)];
     assert.notEqual(body, undefined, `unexpected refresh URL ${url}`);
-    return {
-      ok: true,
-      async json() {
-        return body;
-      },
-    };
+    return jsonResponse(body);
   };
 }
 
@@ -689,12 +858,10 @@ async function waitForFakeSocket() {
 }
 
 function jsonResponse(body) {
-  return {
-    ok: true,
-    async json() {
-      return body;
-    },
-  };
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 function fakeEventTarget(extra = {}) {
@@ -738,17 +905,46 @@ async function waitFor(predicate) {
   throw new Error("condition did not settle");
 }
 
-function liveEnvelope(kind, body) {
+function liveEnvelope(id, kind, body) {
   return {
     data: encodeServerEnvelopeFrame({
-      v: 2,
-      id: 1,
+      v: 3,
+      id,
       body: {
         kind,
         body,
       },
     }),
   };
+}
+
+async function emitRoleHello(
+  socket,
+  role,
+  server = "frontend-route-live-contract",
+  caps = role === "player"
+    ? [
+        {
+          kind: "SlotOccupant",
+          body: { game: "midsummer", slot: "slot-7" },
+        },
+      ]
+    : [{ kind: "HostOf", body: { game: "midsummer" } }],
+) {
+  const slotId = caps.find((cap) => cap?.kind === "SlotOccupant")?.body?.slot ?? null;
+  await socket.emit(
+    "message",
+    liveEnvelope(0, "Hello", {
+      protocol_v: 3,
+      server,
+      scope: {
+        game: "midsummer",
+        channel: "main",
+        slot_id: slotId,
+      },
+      caps,
+    }),
+  );
 }
 
 function escapeRegExp(value) {

@@ -48,35 +48,40 @@
     exposePlayerProjection,
     exposePlayerThreadPageStatus,
     recordPlayerLiveProjectionEvent,
-    triggerPlayerLiveProjectionResync,
   } from "./player-route-browser-bridge.mjs";
+  import { createLiveRouteBrowserReconnect } from "./live-route-browser-reconnect.mjs";
   import {
     buildPlayerCommandDispatchBridgePlan,
+    buildPlayerCommandRequest,
     buildPlayerProjectionColdLoads,
     buildPlayerProjectionInitialSnapshot,
     loadOlderPlayerThreadPage,
     playerCommandErrorStatus,
     playerCommandInterruptedStatus,
     playerCommandPendingStatus,
+    playerCommandAuthorityIsCurrent,
     recordPlayerCommandReceipt,
     clearPlayerCommandReceipt,
     persistPlayerInterruptedCommands,
     applyPlayerComposerChannelDraft,
     clearedPlayerComposerDraft,
     playerRefreshKeysForLiveDelta,
-    playerResyncKeys,
+    playerReconnectRefreshKeys,
     restorePlayerInterruptedCommands,
     playerThreadErrorStatus,
     playerThreadPendingStatus,
-    submitPlayerRouteCommand,
+    dispatchPlayerRouteCommand,
+    recoverPlayerRouteCommand,
     togglePrivateItemExpansion,
     uploadPlayerPostMedia,
   } from "./player-route-controller.mjs";
   import {
     commandAttemptId,
     commandAttemptTimeoutMs,
+    commandProjectionRecoveryTimeoutMs,
     executeCommandAttempt,
   } from "$lib/app/command-interruption.mjs";
+  import { resolveCommandRecoveryStorage } from "$lib/app/command-recovery-storage.mjs";
   import {
     attachQuotation,
     removeAttachedQuotation,
@@ -100,6 +105,8 @@
   $: commandInterrupted = commandStatus?.state === "interrupted";
   let commandReceipts = [];
   let commandRecoveryAttempts = {};
+  let commandRecoveryStorage = null;
+  let commandRecoveryStorageAvailable = true;
   let thread = data.thread;
   let votecount = data.votecount;
   let dayVoteOutcomes = data.dayVoteOutcomes;
@@ -115,6 +122,12 @@
   let privateQueueBoundary = data.privateQueueBoundary;
   let liveOfficialPost = data.liveOfficialPost;
   let liveStatus = LIVE_PROJECTION_CONNECTING_STATUS;
+  let projectionHealth = null;
+  $: projectionCommandsReady =
+    data.commandsEnabled === true &&
+    commandRecoveryStorageAvailable === true &&
+    projectionHealth?.ready === true &&
+    playerCommandAuthorityIsCurrent({ data, commandState });
   let threadPageStatus = null;
   let expandedPrivateItems = data.privateQueueExpandedItems;
   let expandedPrivateRouteKey = JSON.stringify(data.privateQueueExpandedItems);
@@ -192,10 +205,11 @@
     votecount,
     channel,
     player,
-    commandPending,
+    commandPending: commandPending || !projectionCommandsReady,
     commandInterrupted,
   });
   $: quoteEnabled =
+    projectionCommandsReady &&
     player.readOnly !== true &&
     player.gameCompleted !== true &&
     playerActionView.composer?.readOnly !== true;
@@ -284,20 +298,26 @@
     });
     privateQueueBoundary = buildPrivateQueueBoundary(snapshot);
   });
+  projectionStore.subscribeHealth((health) => {
+    projectionHealth = health;
+  });
 
-  const playerProjectionResyncKeys = playerResyncKeys(data);
+  const playerProjectionRefreshKeys = playerReconnectRefreshKeys(data);
 
   onMount(() => {
-    exposePlayerProjection({
-      windowRef: window,
-      snapshot: projectionStore.getSnapshot(),
-    });
-    restorePlayerCommandRecovery();
+    if (
+      data.liveProjectionEnabled !== true ||
+      typeof data.liveProjection?.endpoint !== "string"
+    ) {
+      activePhaseTheme.set(null);
+      return;
+    }
+    let browserReconnect = null;
     const connection = connectLiveProjection({
       url: data.liveProjection.endpoint,
       projectionStore,
       fetchImpl: fetch,
-      resyncKeys: playerProjectionResyncKeys,
+      resyncKeys: playerProjectionRefreshKeys,
       authorizationLossRefreshKeys:
         data.coldLoad.commandStateEndpoint == null ? [] : ["commandState"],
       reconnectDelayMs: 1500,
@@ -310,27 +330,31 @@
           snapshot,
           currentStatus: liveStatus,
         });
+        browserReconnect?.observe(message, snapshot);
       },
     });
+    browserReconnect = createLiveRouteBrowserReconnect({
+      connection,
+      role: "player",
+    });
+    commandRecoveryStorage = resolveCommandRecoveryStorage(window);
+    commandRecoveryStorageAvailable = commandRecoveryStorage !== null;
+    exposePlayerProjection({
+      windowRef: window,
+      snapshot: projectionStore.getSnapshot(),
+    });
+    if (data.commandsEnabled === true) {
+      restorePlayerCommandRecovery();
+    }
     const pageLifecycle = attachLiveProjectionPageLifecycle({
       connection,
       target: window,
     });
     window.__fmarchPlayerColdLoadEndpoints = data.coldLoad;
-    window.__fmarchPlayerResyncKeys = playerProjectionResyncKeys;
+    window.__fmarchPlayerReconnectRefreshKeys = playerProjectionRefreshKeys;
     window.__fmarchGetPlayerLiveProjectionMetrics = () => connection?.metrics?.() ?? null;
-    window.__fmarchTriggerPlayerResync = async (fromSeq = 0) => {
-      const recovery = await triggerPlayerLiveProjectionResync({
-        windowRef: window,
-        projectionStore,
-        resyncKeys: playerProjectionResyncKeys,
-        fetchImpl: fetch,
-        fromSeq,
-        currentStatus: liveStatus,
-      });
-      liveStatus = recovery.liveStatus;
-      return recovery.snapshot;
-    };
+    window.__fmarchReconnectPlayerLiveProjectionNow = () =>
+      browserReconnect.reconnectNow();
     window.__fmarchClosePlayerLiveProjection = () => {
       connection?.close();
       liveStatus = recordPlayerLiveProjectionEvent({
@@ -345,23 +369,28 @@
       connection?.drop?.();
     };
     return () => {
-      delete window.__fmarchTriggerPlayerResync;
+      delete window.__fmarchReconnectPlayerLiveProjectionNow;
       delete window.__fmarchClosePlayerLiveProjection;
       delete window.__fmarchDropPlayerLiveProjection;
       delete window.__fmarchPlayerColdLoadEndpoints;
-      delete window.__fmarchPlayerResyncKeys;
+      delete window.__fmarchPlayerReconnectRefreshKeys;
       delete window.__fmarchGetPlayerLiveProjectionMetrics;
       activePhaseTheme.set(null);
+      browserReconnect.rejectPending();
       pageLifecycle?.detach();
       connection?.close();
     };
   });
 
   async function submitPlayerCommand(action, recoveredAttempt = null) {
-    if (commandPending || (commandInterrupted && recoveredAttempt === null)) {
+    if (
+      !projectionCommandsReady ||
+      commandPending ||
+      (commandInterrupted && recoveredAttempt === null)
+    ) {
       return;
     }
-    const dispatchData = recoveredAttempt?.data ?? currentData;
+    const dispatchData = currentData;
     let dispatchedMedia = recoveredAttempt?.media ?? [];
     let attempt = recoveredAttempt;
     const optimisticStatus = playerCommandPendingStatus(action);
@@ -382,33 +411,58 @@
           });
         }
       }
-      attempt = attempt ?? Object.freeze({
-        action,
-        composerBody,
-        media: dispatchedMedia,
-        quotations: submittedQuotationsPayload(attachedQuotations),
+      if (attempt === null) {
+        const quotations = submittedQuotationsPayload(attachedQuotations);
         // Spans are re-derived from the body being submitted, not from the
         // moment of selection: the server validates the span, so a stale one
         // must reject rather than mis-anchor.
-        mentions: submittedSlotMentionsPayload(
+        const mentions = submittedSlotMentionsPayload(
           composerBody,
           attachedMentions,
           composer.mentionRoster ?? [],
-        ),
-        embedUrl: composerEmbedUrl,
-        data: dispatchData,
-        commandId: commandAttemptId(
-          typeof window !== "undefined" &&
-            typeof window.__fmarchPlayerCommandIdFactory === "function"
-            ? window.__fmarchPlayerCommandIdFactory
-            : undefined,
-        ),
+        );
+        const prepared = buildPlayerCommandRequest({
+          data: dispatchData,
+          action,
+          composerBody,
+          media: dispatchedMedia,
+          quotations,
+          mentions,
+          embedUrl: composerEmbedUrl,
+        });
+        attempt = Object.freeze({
+          action,
+          composerBody,
+          media: dispatchedMedia,
+          quotations,
+          mentions,
+          embedUrl: composerEmbedUrl,
+          command: prepared.command,
+          commandId: commandAttemptId(
+            typeof window !== "undefined" &&
+              typeof window.__fmarchPlayerCommandIdFactory === "function"
+              ? window.__fmarchPlayerCommandIdFactory
+              : undefined,
+          ),
+        });
+      }
+      const recoveryPersisted = commitPlayerCommandRecovery({
+        ...commandRecoveryAttempts,
+        [action]: Object.freeze({
+          ...attempt,
+          interruption: attempt.interruption ?? "connection_lost",
+        }),
       });
-      const result = await executeCommandAttempt({
+      if (recoveryPersisted !== true) {
+        throw new Error(
+          "Command was not sent because same-ID reload recovery is unavailable.",
+        );
+      }
+      const confirmedStatus = await executeCommandAttempt({
         timeoutMs: commandAttemptTimeoutMs(
           typeof window === "undefined" ? null : window,
         ),
-        operation: ({ signal }) => submitPlayerRouteCommand({
+        operation: ({ signal }) => dispatchPlayerRouteCommand({
           action,
           composerBody: attempt.composerBody,
           media: attempt.media,
@@ -420,11 +474,22 @@
           data: dispatchData,
           fetchImpl: fetch,
           projectionStore,
+          preparedCommand: attempt.command,
         }),
       });
       const nextAttempts = { ...commandRecoveryAttempts };
       delete nextAttempts[action];
       commitPlayerCommandRecovery(nextAttempts);
+      const result = await recoverPlayerRouteCommand({
+        action,
+        data: dispatchData,
+        fetchImpl: fetch,
+        projectionStore,
+        commandStatus: confirmedStatus,
+        projectionRecoveryTimeoutMs: commandProjectionRecoveryTimeoutMs(
+          typeof window === "undefined" ? null : window,
+        ),
+      });
       commandStatus = result.commandStatus;
       const bridgePlan = buildPlayerCommandDispatchBridgePlan({
         data: dispatchData,
@@ -537,8 +602,10 @@
 
   function restorePlayerCommandRecovery() {
     const restored = restorePlayerInterruptedCommands({
-      storage: window.sessionStorage,
+      storage: commandRecoveryStorage,
       game: data.game.id,
+      principalId: data.player.principalId,
+      actorSlot: data.player.slotId,
     });
     commandRecoveryAttempts = restored.attempts;
     if (restored.commandStatus !== null) {
@@ -551,11 +618,17 @@
 
   function commitPlayerCommandRecovery(nextAttempts) {
     commandRecoveryAttempts = nextAttempts;
-    persistPlayerInterruptedCommands({
-      storage: window.sessionStorage,
+    const persisted = persistPlayerInterruptedCommands({
+      storage: commandRecoveryStorage,
       game: data.game.id,
+      principalId: data.player.principalId,
+      actorSlot: data.player.slotId,
       attempts: nextAttempts,
     });
+    if (persisted !== true) {
+      commandRecoveryStorageAvailable = false;
+    }
+    return persisted;
   }
 
   async function loadOlderThread() {
@@ -637,6 +710,17 @@
       </section>
     {/if}
 
+    {#if data.commandsEnabled === true && !commandRecoveryStorageAvailable}
+      <section
+        class="fm-section"
+        data-testid="player-command-recovery-storage-warning"
+        role="status"
+      >
+        <strong>Reload recovery unavailable</strong>
+        <p>Keep this page open while a command is pending; browser storage is unavailable.</p>
+      </section>
+    {/if}
+
     <PlayerThread
       {thread}
       {liveOfficialPost}
@@ -646,32 +730,46 @@
       onQuote={quotePlayerPost}
     />
 
-    <ComposeSheet
-      view={playerActionView.composer}
-      {composer}
-      bind:body={composerBody}
-      bind:mediaFiles={composerMediaFiles}
-      bind:mediaAlt={composerMediaAlt}
-      bind:embedUrl={composerEmbedUrl}
-      mediaResetKey={composerMediaEpoch}
-      {attachedQuotations}
-      bind:attachedMentions
-      onCommand={submitPlayerCommand}
-      onRemoveQuote={removeQuotedPost}
-    />
+    {#if projectionCommandsReady}
+      <ComposeSheet
+        view={playerActionView.composer}
+        {composer}
+        bind:body={composerBody}
+        bind:mediaFiles={composerMediaFiles}
+        bind:mediaAlt={composerMediaAlt}
+        bind:embedUrl={composerEmbedUrl}
+        mediaResetKey={composerMediaEpoch}
+        {attachedQuotations}
+        bind:attachedMentions
+        onCommand={submitPlayerCommand}
+        onRemoveQuote={removeQuotedPost}
+      />
+
+      <PlayerDayEventRail
+        commands={composer.dayEventCommands ?? []}
+        {commandPending}
+        {commandInterrupted}
+        {player}
+        onCommand={submitPlayerCommand}
+      />
+    {:else if data.commandsEnabled === true}
+      <section
+        class="fm-section"
+        data-testid="player-projection-command-health"
+        role="status"
+      >
+        <strong>Player commands paused</strong>
+        <p>
+          Authoritative game state is {projectionHealth?.state ?? "unavailable"}.
+          Controls return after a validated refresh.
+        </p>
+      </section>
+    {/if}
 
     <VoteSheet
       view={playerActionView}
       onCommand={submitPlayerCommand}
       onSelectTarget={selectActionTarget}
-    />
-
-    <PlayerDayEventRail
-      commands={composer.dayEventCommands ?? []}
-      {commandPending}
-      {commandInterrupted}
-      {player}
-      onCommand={submitPlayerCommand}
     />
 
     <ContextSheet>
@@ -684,9 +782,11 @@
 
       {#if player.readOnly !== true}
         <PlayerRoleCard card={playerRoleCard} />
-        <PlayerActionSubmissionCheckpoint
-          checkpoint={playerActionSubmissionCheckpoint}
-        />
+        {#if projectionCommandsReady}
+          <PlayerActionSubmissionCheckpoint
+            checkpoint={playerActionSubmissionCheckpoint}
+          />
+        {/if}
       {/if}
 
       <details class="fm-surface-drawer player-surface__drawer" data-testid="player-game-record">
@@ -707,7 +807,7 @@
       </details>
     </ContextSheet>
 
-    {#if player.readOnly !== true && commandReceipts.length > 0}
+    {#if commandReceipts.length > 0}
       <div class="player-command-feedback">
         <PlayerCommandReceipt
           receipts={commandReceipts}
@@ -718,13 +818,15 @@
       </div>
     {/if}
 
-    <ActionDock
-      slot="dock"
-      view={playerActionView}
-      privateCount={privateQueueBoundary.count ?? privateQueue.length}
-      dayEventCount={composer.dayEventCommands?.length ?? 0}
-      onCommand={submitPlayerCommand}
-    />
+    {#if projectionCommandsReady}
+      <ActionDock
+        slot="dock"
+        view={playerActionView}
+        privateCount={privateQueueBoundary.count ?? privateQueue.length}
+        dayEventCount={composer.dayEventCommands?.length ?? 0}
+        onCommand={submitPlayerCommand}
+      />
+    {/if}
   </GameFrame>
 {/if}
 

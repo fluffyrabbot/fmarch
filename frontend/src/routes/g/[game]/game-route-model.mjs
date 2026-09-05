@@ -6,12 +6,17 @@ import {
   resolveSurfaceAccess,
 } from "../../../lib/app/capabilities.mjs";
 import {
-  loadPlayerColdData,
   dayVoteOutcomesUrl,
   endgameSummaryUrl,
+  normalizeDayVoteOutcomes,
+  normalizeEndgameSummary,
+  normalizePlayerCommandState,
+  normalizeThreadPage,
+  normalizeVotecount,
   playerCommandStateUrl,
   playerThreadUrl,
   playerVotecountUrl,
+  slotMentionsUrl,
   authenticatedGameReadUrl,
 } from "../../../lib/app/cold-load.mjs";
 import {
@@ -50,14 +55,11 @@ export const PLAYER_ROUTE_CONTRACT = Object.freeze({
   requiredText: "Full votecount",
 });
 
-export async function buildGameRouteData({
+export function resolvePlayerRouteContext({
   game,
   principalId,
   capabilities = [],
-  fetchImpl = null,
-  apiBaseUrl = "",
   activeChannel = "main",
-  privateItem = null,
 }) {
   const gameId = normalizeGame(game);
   const channelId = normalizeChannel(activeChannel);
@@ -82,28 +84,62 @@ export async function buildGameRouteData({
   const slotCapability = normalizedCapabilities.find(
     (capability) =>
       capability.kind === "SlotOccupant" &&
-      (capability.game === gameId || capability.game === undefined),
+      capability.game === gameId,
   );
   const spectator = normalizedCapabilities.some(
     (capability) => capability.kind === "SpectatorOf" && capability.game === gameId,
   );
-  const playerSlotId = slotCapability?.slot ?? (spectator ? null : "slot-7");
+  const playerSlotId = slotCapability?.slot ?? null;
   const playerCommandStateSlot = slotCapability === undefined ? null : playerSlotId;
-  const coldLoadFallback = pendingReplacement
-    ? pendingReplacementColdLoad(gameId, playerSlotId)
-    : spectator
-      ? spectatorColdLoad(gameId)
-      : playerFixtureColdLoad(gameId);
-
-  const coldLoad = await loadPlayerColdData({
-    game: gameId,
-    activeChannel: channelId,
-    principalId,
-    actorSlot: playerCommandStateSlot,
-    fetchImpl: canColdLoadActiveChannel ? fetchImpl : null,
-    apiBaseUrl,
-    fallback: coldLoadFallback,
+  return Object.freeze({
+    gameId,
+    channelId,
+    hasPrincipal,
+    normalizedCapabilities,
+    pendingReplacement,
+    access,
+    initialChannelAccess,
+    canColdLoadActiveChannel,
+    slotCapability,
+    spectator,
+    playerSlotId,
+    playerCommandStateSlot,
   });
+}
+
+export function buildGameRouteData({
+  game,
+  principalId,
+  capabilities = [],
+  coldLoad = null,
+  fixtureMode = false,
+  activeChannel = "main",
+  privateItem = null,
+}) {
+  const context = resolvePlayerRouteContext({
+    game,
+    principalId,
+    capabilities,
+    activeChannel,
+  });
+  const {
+    gameId,
+    channelId,
+    hasPrincipal,
+    normalizedCapabilities,
+    pendingReplacement,
+    access,
+    slotCapability,
+    spectator,
+    playerSlotId,
+    playerCommandStateSlot,
+  } = context;
+  const authoritativeColdLoad = pendingReplacement
+    ? pendingReplacementColdLoad(gameId, playerSlotId)
+    : fixtureMode
+      ? playerFixtureColdLoadForContext({ gameId, spectator })
+      : requirePlayerColdLoad(coldLoad);
+  coldLoad = authoritativeColdLoad;
   const dayEventRooms = coldLoad.commandState.dayEventRooms;
   const channelAccess = resolvePlayerChannelAccess({
     game: gameId,
@@ -136,6 +172,14 @@ export async function buildGameRouteData({
     coldLoad.commandState,
     playerSlotId,
   );
+  const verifiedActorSlotAuthority =
+    hasPrincipalId(playerSlotId) &&
+    coldLoad.commandState.actorSlot === playerSlotId;
+  const commandsEnabled =
+    access.allowed === true &&
+    pendingReplacement === false &&
+    spectator === false &&
+    verifiedActorSlotAuthority;
 
   return Object.freeze({
     shell: buildAppShell({
@@ -150,6 +194,9 @@ export async function buildGameRouteData({
       label: "Midsummer Invitational",
     }),
     access,
+    commandsEnabled,
+    liveProjectionEnabled:
+      access.allowed === true && pendingReplacement === false,
     pendingReplacement,
     emptyState: pendingReplacement
       ? Object.freeze({
@@ -165,7 +212,7 @@ export async function buildGameRouteData({
       status: coldLoad.commandState.actorStatus,
       gameCompleted: coldLoad.commandState.gameCompleted === true,
       capabilityLabel: playerCapabilityLabel,
-      readOnly: spectator && slotCapability === undefined,
+      readOnly: !commandsEnabled,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "player",
@@ -234,6 +281,9 @@ export async function buildGameRouteData({
             path: "investigation-results",
           })
         : null,
+      slotMentionsEndpoint: hasPrincipal && playerCommandStateSlot !== null
+        ? slotMentionsUrl({ game: gameId })
+        : null,
       commandStateEndpoint:
         hasPrincipal && playerCommandStateSlot !== null
           ? playerCommandStateUrl({
@@ -247,11 +297,12 @@ export async function buildGameRouteData({
         ? buildLiveProjectionUrl({
             game: gameId,
             channel: channelId,
+            slotId: playerCommandStateSlot,
           })
         : null,
     }),
     projectionBoundary: LIVE_TRANSPORT_BOUNDARY,
-    composer: Object.freeze({ ...composer, readOnly: spectator && slotCapability === undefined }),
+    composer: Object.freeze({ ...composer, readOnly: !commandsEnabled }),
   });
 }
 
@@ -295,6 +346,7 @@ function pendingReplacementColdLoad(game, slotId) {
     }),
     notifications: Object.freeze([]),
     investigationResults: Object.freeze([]),
+    slotMentions: Object.freeze([]),
   });
 }
 
@@ -324,6 +376,39 @@ function spectatorColdLoad(game) {
     }),
     notifications: Object.freeze([]),
     investigationResults: Object.freeze([]),
+    slotMentions: Object.freeze([]),
+  });
+}
+
+function requirePlayerColdLoad(coldLoad) {
+  if (coldLoad === null || typeof coldLoad !== "object") {
+    throw new TypeError(
+      "player route data requires an authoritative cold-load snapshot outside fixture mode",
+    );
+  }
+  return coldLoad;
+}
+
+function playerFixtureColdLoadForContext({ gameId, spectator }) {
+  const fixture = spectator ? spectatorColdLoad(gameId) : playerFixtureColdLoad(gameId);
+  return Object.freeze({
+    thread: normalizeThreadPage(fixture.thread, fixture.thread),
+    votecount: normalizeVotecount(fixture.votecount, fixture.votecount),
+    dayVoteOutcomes: normalizeDayVoteOutcomes(
+      fixture.dayVoteOutcomes,
+      fixture.dayVoteOutcomes,
+    ),
+    endgameSummary: normalizeEndgameSummary(
+      fixture.endgameSummary,
+      fixture.endgameSummary,
+    ),
+    notifications: fixture.notifications,
+    investigationResults: fixture.investigationResults,
+    slotMentions: fixture.slotMentions ?? Object.freeze([]),
+    commandState: normalizePlayerCommandState(
+      fixture.commandState,
+      fixture.commandState,
+    ),
   });
 }
 
@@ -758,6 +843,18 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
   ]),
   investigationResults: Object.freeze([
     Object.freeze({ mode: "tracker", target_slot: "slot-4", result: "No visit" }),
+  ]),
+  // Delivered to the seat, not to a person: the fixture names slot-7 and says
+  // nothing about who occupies it (RFC 0007 §7).
+  slotMentions: Object.freeze([
+    Object.freeze({
+      game: "midsummer",
+      audience_slot: "slot-7",
+      channel_id: "main",
+      source_seq: 443,
+      phase_id: "D02",
+      occurred_at: 1781928000,
+    }),
   ]),
 });
 

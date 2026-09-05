@@ -5,10 +5,9 @@ import { canonicalPhaseId } from "../phase-id.mjs";
 
 export const DEFAULT_SSR_FETCH_TIMEOUT_MS = 2000;
 
-// Budget for one server-side projection fetch. Every cold-load call has a
-// fallback payload, so a slow or dead API must degrade the page quickly
-// instead of holding SSR until the upstream (or the Railway edge, ~15s)
-// gives up. 0 disables the budget.
+// Budget for one server-side projection fetch. The typed server boundaries use
+// it to stop waiting without substituting fixture state. The legacy admin read
+// still degrades to its explicit unavailable row. 0 disables the budget.
 export function ssrFetchTimeoutMs(env = globalThis.process?.env) {
   const raw = env?.FMARCH_SSR_FETCH_TIMEOUT_MS;
   if (raw === undefined || raw === null || String(raw).trim() === "") {
@@ -29,121 +28,6 @@ export function fetchTimeoutSignal(timeoutMs) {
     return undefined;
   }
   return AbortSignal.timeout(timeoutMs);
-}
-
-export async function loadPlayerColdData({
-  game,
-  activeChannel = "main",
-  principalId,
-  actorSlot = null,
-  fetchImpl,
-  apiBaseUrl = "",
-  fallback,
-  timeoutMs = ssrFetchTimeoutMs(),
-}) {
-  const canLoadPrivate =
-    typeof principalId === "string" && principalId.trim() !== "";
-  const canLoadCommandState =
-    canLoadPrivate && typeof actorSlot === "string" && actorSlot.trim() !== "";
-  const canLoadPlayerPrivate = canLoadCommandState;
-  const [
-    thread,
-    votecount,
-    dayVoteOutcomes,
-    endgameSummary,
-    notifications,
-    investigationResults,
-    commandState,
-  ] = await Promise.all([
-    fetchJson({
-      fetchImpl,
-      timeoutMs,
-      fallback: fallback.thread,
-      url: playerThreadUrl({
-        apiBaseUrl,
-        game,
-        channel: activeChannel,
-        limit: 50,
-      }),
-    }),
-    fetchJson({
-      fetchImpl,
-      timeoutMs,
-      fallback: fallback.votecount,
-      url: playerVotecountUrl({ apiBaseUrl, game }),
-    }),
-    fetchJson({
-      fetchImpl,
-      timeoutMs,
-      fallback: fallback.dayVoteOutcomes ?? [],
-      url: dayVoteOutcomesUrl({ apiBaseUrl, game }),
-    }),
-    fetchJson({
-      fetchImpl,
-      timeoutMs,
-      fallback: fallback.endgameSummary ?? null,
-      url: endgameSummaryUrl({ apiBaseUrl, game }),
-    }),
-    canLoadPlayerPrivate
-      ? fetchJson({
-          fetchImpl,
-          timeoutMs,
-          fallback: fallback.notifications ?? [],
-          url: authenticatedGameReadUrl({
-            apiBaseUrl,
-            game,
-            path: "notifications",
-          }),
-        })
-      : [],
-    canLoadPlayerPrivate
-      ? fetchJson({
-          fetchImpl,
-          timeoutMs,
-          fallback: fallback.investigationResults ?? [],
-          url: authenticatedGameReadUrl({
-            apiBaseUrl,
-            game,
-            path: "investigation-results",
-          }),
-        })
-      : [],
-    canLoadCommandState
-      ? fetchJson({
-          fetchImpl,
-          timeoutMs,
-          fallback: fallback.commandState ?? EMPTY_PLAYER_COMMAND_STATE,
-          url: playerCommandStateUrl({
-            apiBaseUrl,
-            game,
-            slotId: actorSlot,
-          }),
-        })
-      : fallback.commandState ?? EMPTY_PLAYER_COMMAND_STATE,
-  ]);
-
-  return Object.freeze({
-    thread: normalizeThreadPage(thread, fallback.thread),
-    votecount: normalizeVotecount(votecount, fallback.votecount),
-    dayVoteOutcomes: normalizeDayVoteOutcomes(
-      dayVoteOutcomes,
-      fallback.dayVoteOutcomes ?? [],
-    ),
-    endgameSummary: normalizeEndgameSummary(
-      endgameSummary,
-      fallback.endgameSummary ?? null,
-    ),
-    notifications: Object.freeze(
-      Array.isArray(notifications) ? notifications : [],
-    ),
-    investigationResults: Object.freeze(
-      Array.isArray(investigationResults) ? investigationResults : [],
-    ),
-    commandState: normalizePlayerCommandState(
-      commandState,
-      fallback.commandState ?? EMPTY_PLAYER_COMMAND_STATE,
-    ),
-  });
 }
 
 export async function loadAdminColdData({
@@ -198,57 +82,6 @@ export async function loadAdminColdData({
       game,
       identityPrincipalId: auditPrincipalId,
     }),
-  });
-}
-
-export async function loadHostColdData({
-  game,
-  fetchImpl,
-  apiBaseUrl = "",
-  hostConsoleStateEndpoint = null,
-  fallback,
-  timeoutMs = ssrFetchTimeoutMs(),
-}) {
-  const [hostPrompts, votecount, dayVoteOutcomes, hostConsoleState] = await Promise.all([
-    fetchJson({
-      fetchImpl,
-      timeoutMs,
-      fallback: fallback.hostPrompts,
-      url: hostPromptsUrl({
-        apiBaseUrl,
-        game,
-      }),
-    }),
-    fetchJson({
-      fetchImpl,
-      timeoutMs,
-      fallback: fallback.votecount,
-      url: hostVotecountUrl({ apiBaseUrl, game }),
-    }),
-    fetchJson({
-      fetchImpl,
-      timeoutMs,
-      fallback: fallback.dayVoteOutcomes ?? [],
-      url: dayVoteOutcomesUrl({ apiBaseUrl, game }),
-    }),
-    hostConsoleStateEndpoint === null
-      ? Promise.resolve(fallback.hostConsoleState ?? null)
-      : fetchJson({
-          fetchImpl,
-          timeoutMs,
-          fallback: fallback.hostConsoleState ?? null,
-          url: hostConsoleStateEndpoint,
-        }),
-  ]);
-
-  return Object.freeze({
-    hostPrompts: normalizeHostPrompts(hostPrompts, fallback.hostPrompts),
-    votecount: normalizeVotecount(votecount, fallback.votecount),
-    dayVoteOutcomes: normalizeDayVoteOutcomes(
-      dayVoteOutcomes,
-      fallback.dayVoteOutcomes ?? [],
-    ),
-    hostConsoleState,
   });
 }
 
@@ -1250,6 +1083,17 @@ export function authenticatedGameReadUrl({
 
 function privateGameplayBase(apiBaseUrl) {
   return apiBaseUrl === "" ? "/api/gameplay" : apiBaseUrl;
+}
+
+/// The game mentions addressed to the seats this session occupies. Occupancy
+/// is resolved by the API from the caller's own capabilities at read time, so
+/// this URL names a game and never a seat (RFC 0007 §7).
+export function slotMentionsUrl({ apiBaseUrl = "", game }) {
+  return authenticatedGameReadUrl({
+    apiBaseUrl,
+    game,
+    path: "slot-mentions",
+  });
 }
 
 export function hostPromptsUrl({ apiBaseUrl = "", game }) {

@@ -25,11 +25,23 @@ import {
 import {
   CommandInterruptedError,
   commandInterruptionStatus,
+  executeCommandProjectionRecovery,
 } from "../../../lib/app/command-interruption.mjs";
 import {
   persistInterruptedCommandAttempts,
   readInterruptedCommandAttempts,
 } from "../../../lib/app/command-recovery-storage.mjs";
+import {
+  validateDayVoteOutcomesResponse,
+  validateEndgameSummaryResponse,
+  validateGameplayThreadPageResponse,
+  validatePlayerInvestigationResultsResponse,
+  validatePlayerNotificationsResponse,
+  validatePlayerPrivateLiveDelta,
+  validatePlayerCommandStateResponse,
+  validateSlotMentionsResponse,
+  validateVotecountResponse,
+} from "../../../lib/app/gameplay-response-schema.mjs";
 
 export function playerComposerDraftFromState({
   body = "",
@@ -103,26 +115,47 @@ export function buildPlayerProjectionInitialSnapshot(data) {
     endgameSummary: data.endgameSummary,
     notifications: data.notifications,
     investigationResults: data.investigationResults,
+    slotMentions: data.slotMentions,
     commandState: data.commandState,
   });
 }
 
 export function buildPlayerProjectionColdLoads(data) {
+  const privateThread = String(data.threadPager?.channel ?? "main") !== "main";
   return Object.freeze({
     thread: Object.freeze({
       url: data.coldLoad.threadEndpoint,
+      validate: (payload) =>
+        validateGameplayThreadPageResponse(payload, {
+          game: data.game.id,
+          channel: data.threadPager?.channel ?? "main",
+        }),
       normalize: normalizeThreadPage,
+      ...(privateThread
+        ? {
+            revoke: () => Object.freeze({
+              posts: Object.freeze([]),
+              nextBeforeSeq: null,
+            }),
+          }
+        : {}),
     }),
     votecount: Object.freeze({
       url: data.coldLoad.votecountEndpoint,
+      validate: (payload) =>
+        validateVotecountResponse(payload, { game: data.game.id }),
       normalize: normalizeVotecount,
     }),
     dayVoteOutcomes: Object.freeze({
       url: data.coldLoad.dayVoteOutcomesEndpoint,
+      validate: (payload) =>
+        validateDayVoteOutcomesResponse(payload, { game: data.game.id }),
       normalize: normalizeDayVoteOutcomes,
     }),
     endgameSummary: Object.freeze({
       url: data.coldLoad.endgameSummaryEndpoint,
+      validate: (payload) =>
+        validateEndgameSummaryResponse(payload, { game: data.game.id }),
       normalize: normalizeEndgameSummary,
     }),
     ...(data.coldLoad.notificationsEndpoint === null
@@ -130,7 +163,18 @@ export function buildPlayerProjectionColdLoads(data) {
       : {
           notifications: Object.freeze({
             url: data.coldLoad.notificationsEndpoint,
+            validate: (payload) =>
+              validatePlayerNotificationsResponse(payload, {
+                game: data.game.id,
+                actorSlot: data.player.slotId,
+              }),
+            validateLiveDelta: (delta) =>
+              validatePlayerPrivateLiveDelta(delta, {
+                game: data.game.id,
+                actorSlot: data.player.slotId,
+              }),
             normalize: normalizePrivateRows,
+            revoke: Object.freeze([]),
           }),
         }),
     ...(data.coldLoad.investigationResultsEndpoint === null
@@ -138,7 +182,37 @@ export function buildPlayerProjectionColdLoads(data) {
       : {
           investigationResults: Object.freeze({
             url: data.coldLoad.investigationResultsEndpoint,
+            validate: (payload) =>
+              validatePlayerInvestigationResultsResponse(payload, {
+                game: data.game.id,
+                actorSlot: data.player.slotId,
+              }),
+            validateLiveDelta: (delta) =>
+              validatePlayerPrivateLiveDelta(delta, {
+                game: data.game.id,
+                actorSlot: data.player.slotId,
+              }),
             normalize: normalizePrivateRows,
+            revoke: Object.freeze([]),
+          }),
+        }),
+    ...(data.coldLoad.slotMentionsEndpoint === null
+      ? {}
+      : {
+          slotMentions: Object.freeze({
+            url: data.coldLoad.slotMentionsEndpoint,
+            validate: (payload) =>
+              validateSlotMentionsResponse(payload, {
+                game: data.game.id,
+                actorSlot: data.player.slotId,
+              }),
+            validateLiveDelta: (delta) =>
+              validatePlayerPrivateLiveDelta(delta, {
+                game: data.game.id,
+                actorSlot: data.player.slotId,
+              }),
+            normalize: normalizePrivateRows,
+            revoke: Object.freeze([]),
           }),
         }),
     ...(data.coldLoad.commandStateEndpoint == null
@@ -146,16 +220,47 @@ export function buildPlayerProjectionColdLoads(data) {
       : {
           commandState: Object.freeze({
             url: data.coldLoad.commandStateEndpoint,
+            validate: (payload) =>
+              validatePlayerCommandStateResponse(payload, {
+                game: data.game.id,
+                actorSlot: data.player.slotId,
+              }),
             normalize: normalizePlayerCommandState,
             normalizeError: normalizePlayerCommandStateRefreshError,
+            revoke: () => revokedPlayerCommandState({
+              game: data.game.id,
+              actorSlot: data.player.slotId,
+            }),
           }),
         }),
   });
 }
 
+export function revokedPlayerCommandState({ game, actorSlot }) {
+  return Object.freeze({
+    game,
+    actorSlot,
+    actorAlive: false,
+    actorStatus: "replaced",
+    roleKey: null,
+    role: null,
+    gameCompleted: false,
+    phase: null,
+    actions: Object.freeze([]),
+    currentActions: Object.freeze([]),
+    voteTargets: Object.freeze([]),
+    currentVote: null,
+    dayEvents: Object.freeze([]),
+    dayEventRooms: Object.freeze([]),
+    postPolicies: Object.freeze([]),
+    boundary:
+      "Live ticket authority was denied. Player-private state and commands were revoked.",
+  });
+}
+
 export function normalizePlayerCommandStateRefreshError({ status, previous }) {
   if (status !== 403 || previous === null || typeof previous !== "object") {
-    return previous;
+    return undefined;
   }
   return Object.freeze({
     ...previous,
@@ -174,7 +279,7 @@ export function normalizePlayerCommandStateRefreshError({ status, previous }) {
   });
 }
 
-export function playerResyncKeys(data) {
+export function playerReconnectRefreshKeys(data) {
   return Object.freeze([
     "thread",
     "votecount",
@@ -184,6 +289,7 @@ export function playerResyncKeys(data) {
     ...(data.coldLoad.investigationResultsEndpoint === null
       ? []
       : ["investigationResults"]),
+    ...(data.coldLoad.slotMentionsEndpoint === null ? [] : ["slotMentions"]),
     ...(data.coldLoad.commandStateEndpoint == null ? [] : ["commandState"]),
   ]);
 }
@@ -242,20 +348,33 @@ export function playerCommandInterruptedStatus(error, { action, commandId }) {
     : attachCommandTrace(status, playerCommandTrace(action));
 }
 
-export function persistPlayerInterruptedCommands({ storage, game, attempts }) {
+export function persistPlayerInterruptedCommands({
+  storage,
+  game,
+  principalId,
+  actorSlot,
+  attempts,
+}) {
   return persistInterruptedCommandAttempts({
     storage,
     game,
     surface: "player",
+    authority: playerRecoveryAuthority({ principalId, actorSlot }),
     attempts,
   });
 }
 
-export function restorePlayerInterruptedCommands({ storage, game }) {
+export function restorePlayerInterruptedCommands({
+  storage,
+  game,
+  principalId,
+  actorSlot,
+}) {
   const attempts = readInterruptedCommandAttempts({
     storage,
     game,
     surface: "player",
+    authority: playerRecoveryAuthority({ principalId, actorSlot }),
   });
   let commandStatus = null;
   let commandReceipts = Object.freeze([]);
@@ -371,7 +490,15 @@ export function playerRefreshKeysForAction(action) {
   }
   switch (normalizedAction) {
     case "submit_post":
-      return Object.freeze(["thread", "votecount", "commandState", "dayVoteOutcomes"]);
+      // A post can address a seat, and that delivery lands in the author's own
+      // rail too when they addressed themselves out of a room they still read.
+      return Object.freeze([
+        "thread",
+        "votecount",
+        "commandState",
+        "dayVoteOutcomes",
+        "slotMentions",
+      ]);
     case "withdraw_vote":
       return Object.freeze(["votecount", "commandState"]);
     default:
@@ -458,22 +585,111 @@ export async function submitPlayerRouteCommand({
   data,
   fetchImpl,
   projectionStore,
+  preparedCommand = null,
+  sendCommandImpl = sendCommand,
+  projectionRecoveryTimeoutMs,
+}) {
+  const commandStatus = await dispatchPlayerRouteCommand({
+    action,
+    composerBody,
+    media,
+    quotations,
+    mentions,
+    embedUrl,
+    commandIdFactory,
+    signal,
+    data,
+    fetchImpl,
+    projectionStore,
+    preparedCommand,
+    sendCommandImpl,
+  });
+  return recoverPlayerRouteCommand({
+    action,
+    data,
+    fetchImpl,
+    projectionStore,
+    commandStatus,
+    projectionRecoveryTimeoutMs,
+  });
+}
+
+export async function dispatchPlayerRouteCommand({
+  action,
+  composerBody,
+  media = [],
+  quotations = [],
+  mentions = [],
+  embedUrl = "",
+  commandIdFactory,
+  signal,
+  data,
+  fetchImpl,
+  projectionStore,
+  preparedCommand = null,
   sendCommandImpl = sendCommand,
 }) {
-  const commandStatus = await sendCommandImpl({
-    ...buildPlayerCommandRequest({
-      data,
-      action,
-      composerBody,
-      media,
-      quotations,
-      mentions,
-      embedUrl,
-    }),
+  if (data?.commandsEnabled !== true) {
+    throw new Error("player commands are disabled without an authoritative route snapshot");
+  }
+  if (projectionStore?.isReady?.() !== true) {
+    throw new Error(
+      "player commands are disabled until authoritative projection freshness is restored",
+    );
+  }
+  const currentCommandState = projectionStore.getSnapshot()?.commandState;
+  const dispatchData = Object.freeze({
+    ...data,
+    commandState: currentCommandState,
+  });
+  if (!playerCommandAuthorityIsCurrent({
+    data: dispatchData,
+    commandState: currentCommandState,
+  })) {
+    throw new Error("player command authority changed before dispatch");
+  }
+  if (!playerActionIsCurrentlyAfforded({
+    data: dispatchData,
+    commandState: currentCommandState,
+    action,
+  })) {
+    throw new Error(`player action ${String(action)} is no longer authoritative`);
+  }
+  const currentRequest = buildPlayerCommandRequest({
+    data: dispatchData,
+    action,
+    composerBody,
+    media,
+    quotations,
+    mentions,
+    embedUrl,
+  });
+  if (
+    preparedCommand !== null &&
+    canonicalJson(preparedCommand) !== canonicalJson(currentRequest.command)
+  ) {
+    throw new Error(
+      `player action ${String(action)} no longer matches the interrupted command body`,
+    );
+  }
+  return sendCommandImpl({
+    endpoint: currentRequest.endpoint,
+    command: preparedCommand ?? currentRequest.command,
     commandIdFactory,
     fetchImpl,
     signal,
   });
+}
+
+export async function recoverPlayerRouteCommand({
+  action,
+  data,
+  fetchImpl,
+  projectionStore,
+  commandStatus,
+  projectionRecoveryTimeoutMs,
+  executeProjectionRecoveryImpl = executeCommandProjectionRecovery,
+}) {
   if (commandStatus?.state === "reject" && commandStatus?.error === "NotYourSlot") {
     projectionStore.applySnapshot({
       commandState: staleSlotOwnershipCommandState({ data, commandStatus }),
@@ -489,11 +705,105 @@ export async function submitPlayerRouteCommand({
     commandStatus,
   });
   if (refreshKeys.length > 0) {
-    await projectionStore.refresh(refreshKeys, { fetchImpl, signal });
+    try {
+      await executeProjectionRecoveryImpl({
+        timeoutMs: projectionRecoveryTimeoutMs,
+        operation: ({ signal }) =>
+          projectionStore.refresh(refreshKeys, { fetchImpl, signal }),
+      });
+    } catch (error) {
+      projectionStore.invalidate?.(undefined, {
+        reason: "confirmed_player_command_projection_recovery_failed",
+      });
+      return Object.freeze({
+        commandStatus: projectionUnavailablePlayerCommandStatus(
+          commandStatus,
+          error,
+        ),
+        snapshot: projectionStore.getSnapshot(),
+      });
+    }
   }
   return Object.freeze({
     commandStatus,
     snapshot: projectionStore.getSnapshot(),
+  });
+}
+
+export function playerCommandAuthorityIsCurrent({ data, commandState }) {
+  return (
+    commandState !== null &&
+    typeof commandState === "object" &&
+    commandState.actorSlot === data?.player?.slotId &&
+    commandState.actorStatus !== "replaced" &&
+    commandState.actorStatus !== "pending_replacement" &&
+    commandState.gameCompleted !== true
+  );
+}
+
+function playerActionIsCurrentlyAfforded({ data, commandState, action }) {
+  const normalizedAction = String(action);
+  if (normalizedAction === "submit_post") {
+    return data?.channel?.allowed === true;
+  }
+  if (normalizedAction === "withdraw_vote") {
+    return commandState.currentVote !== null && commandState.phase?.locked !== true;
+  }
+  if (normalizedAction === "submit_vote" || normalizedAction.startsWith("submit_vote:")) {
+    const voteTarget = playerActionConfig(data, action)?.voteTarget;
+    return commandState.voteTargets?.some((target) =>
+      voteTarget === "NoLynch"
+        ? target.kind === "no_lynch"
+        : target.kind === "slot" && target.slotId === voteTarget?.Slot,
+    ) === true;
+  }
+  if (
+    normalizedAction.startsWith("submit_action") ||
+    normalizedAction.startsWith("submit_invalid_action")
+  ) {
+    const requested = playerActionConfig(data, action);
+    return commandState.actions?.some(
+      (current) =>
+        current.templateId === requested?.templateId &&
+        current.actionId === requested?.actionId &&
+        requested.targets?.every((target) =>
+          current.targets?.includes(target) || current.targetOptions?.includes(target),
+        ) === true,
+    ) === true;
+  }
+  if (normalizedAction.startsWith("withdraw_action:")) {
+    const requested = playerActionConfig(data, action);
+    return commandState.currentActions?.some(
+      (current) =>
+        current.templateId === requested?.templateId &&
+        current.actionId === requested?.actionId,
+    ) === true;
+  }
+  if (
+    normalizedAction.startsWith("submit_day_event:") ||
+    normalizedAction.startsWith("withdraw_day_event:")
+  ) {
+    const eventId = normalizedAction.slice(normalizedAction.indexOf(":") + 1);
+    return commandState.dayEvents?.some(
+      (event) =>
+        event.eventId === eventId &&
+        (normalizedAction.startsWith("submit_")
+          ? event.canSubmit === true
+          : event.canWithdraw === true),
+    ) === true;
+  }
+  return false;
+}
+
+function projectionUnavailablePlayerCommandStatus(commandStatus, error) {
+  const committed = commandStatus?.state === "ack";
+  return Object.freeze({
+    ...commandStatus,
+    retryable: false,
+    projectionUnavailable: true,
+    message: committed
+      ? `${commandStatus.message}. Command committed; authoritative state refresh is unavailable. Do not retry.`
+      : `${commandStatus?.message ?? errorMessage(error)}. Authoritative state refresh is unavailable.`,
   });
 }
 
@@ -718,6 +1028,28 @@ export function normalizePrivateRows(payload, previous) {
     return Object.freeze(payload);
   }
   return previous;
+}
+
+function playerRecoveryAuthority({ principalId, actorSlot }) {
+  const principal = String(principalId ?? "").trim();
+  const slot = String(actorSlot ?? "").trim();
+  if (principal === "" || slot === "") {
+    throw new TypeError("player command recovery requires principal and actor slot");
+  }
+  return `player:${principal}:${slot}`;
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function errorMessage(error) {

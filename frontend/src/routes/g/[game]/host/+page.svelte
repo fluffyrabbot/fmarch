@@ -28,12 +28,13 @@
     exposeHostLiveProjectionEndpoint,
     exposeHostRouteWindowState,
     recordHostLiveProjectionEvent,
-    triggerHostLiveProjectionResync,
   } from "./host-route-browser-bridge.mjs";
+  import { createLiveRouteBrowserReconnect } from "../live-route-browser-reconnect.mjs";
   import {
     appendHostActionEvent,
     appendHostCommandOutcome,
     attachEventConfirmationTrace,
+    buildHostCommandRequest,
     buildHostDerivedState,
     buildHostCommandDispatchBridgePlan,
     buildHostProjectionColdLoads,
@@ -41,12 +42,13 @@
     hostCommandErrorOutcome,
     hostCommandInterruptedOutcome,
     hostCommandPendingStatus,
-    hostProjectionResyncKeys,
+    hostReconnectRefreshKeys,
     persistHostInterruptedCommands,
     restoreHostInterruptedCommands,
     recordHostCommandStatus,
     clearHostCommandStatus,
-    sendHostRouteAction,
+    dispatchHostRouteAction,
+    recoverHostRouteAction,
   } from "./host-route-controller.mjs";
   import {
     HOST_CONSOLE_ROUTE_CONTRACT,
@@ -58,8 +60,10 @@
   import {
     commandAttemptId,
     commandAttemptTimeoutMs,
+    commandProjectionRecoveryTimeoutMs,
     executeCommandAttempt,
   } from "$lib/app/command-interruption.mjs";
+  import { resolveCommandRecoveryStorage } from "$lib/app/command-recovery-storage.mjs";
   import "$lib/components/host-action/host-console-critical-path.css";
 
   export let data;
@@ -69,6 +73,8 @@
   let commandOutcomes = [];
   let commandStatuses = {};
   let commandRecoveryAttempts = {};
+  let commandRecoveryStorage = null;
+  let commandRecoveryStorageAvailable = true;
   let projection = {
     phase: data.phase,
     replacement: data.replacement,
@@ -82,6 +88,11 @@
   let dayEventScheduler = data.dayEventScheduler;
   let moderatorActionGroups = data.moderatorActionGroups;
   let liveStatus = LIVE_PROJECTION_CONNECTING_STATUS;
+  let projectionHealth = null;
+  $: projectionCommandsReady =
+    data.commandsEnabled === true &&
+    commandRecoveryStorageAvailable === true &&
+    projectionHealth?.ready === true;
   $: moderatorSurfaceEmpty = isModeratorRouteEmpty({
     workQueues: data.workQueues,
     votecount,
@@ -96,9 +107,10 @@
     surface: "moderator",
     state: "empty",
   });
-  $: inviteTargets = buildHostInviteTargets({
-    replacement: projection.replacement,
-  });
+  $: inviteTargets = gateHostInviteTargets(
+    buildHostInviteTargets({ replacement: projection.replacement }),
+    projectionCommandsReady,
+  );
   $: workQueues = buildHostWorkQueues({
     phase: currentPhase,
     replacement: projection.replacement,
@@ -117,7 +129,7 @@
     actionGroups: moderatorActionGroups,
     commandContext: data.commandContext,
   });
-  const resyncKeys = hostProjectionResyncKeys();
+  const reconnectRefreshKeys = hostReconnectRefreshKeys();
   const projectionStore = createProjectionStore({
     initialSnapshot: buildHostProjectionInitialSnapshot(data),
     coldLoads: buildHostProjectionColdLoads(data),
@@ -140,6 +152,9 @@
     dayEventScheduler = derived.dayEventScheduler;
     moderatorActionGroups = derived.moderatorActionGroups;
   });
+  projectionStore.subscribeHealth((health) => {
+    projectionHealth = health;
+  });
 
   $: if (typeof window !== "undefined") {
     exposeHostRouteWindowState({
@@ -155,16 +170,16 @@
   }
 
   onMount(() => {
-    exposeHostLiveProjectionEndpoint({
-      windowRef: window,
-      endpoint: data.liveProjection.endpoint,
-    });
-    restoreHostCommandRecovery();
+    if (typeof data.liveProjection?.endpoint !== "string") {
+      activePhaseTheme.set(null);
+      return;
+    }
+    let browserReconnect = null;
     const connection = connectLiveProjection({
       url: data.liveProjection.endpoint,
       projectionStore,
       fetchImpl: fetch,
-      resyncKeys,
+      resyncKeys: reconnectRefreshKeys,
       onEvent(message, snapshot) {
         liveStatus = recordHostLiveProjectionEvent({
           windowRef: window,
@@ -172,25 +187,27 @@
           snapshot,
           currentStatus: liveStatus,
         });
+        browserReconnect?.observe(message, snapshot);
       },
     });
+    browserReconnect = createLiveRouteBrowserReconnect({
+      connection,
+      role: "host",
+    });
+    commandRecoveryStorage = resolveCommandRecoveryStorage(window);
+    commandRecoveryStorageAvailable = commandRecoveryStorage !== null;
+    exposeHostLiveProjectionEndpoint({
+      windowRef: window,
+      endpoint: data.liveProjection.endpoint,
+    });
+    restoreHostCommandRecovery();
     const pageLifecycle = attachLiveProjectionPageLifecycle({
       connection,
       target: window,
     });
     window.__fmarchGetHostLiveProjectionMetrics = () => connection?.metrics?.() ?? null;
-    window.__fmarchTriggerHostResync = async (fromSeq = 0) => {
-      const recovery = await triggerHostLiveProjectionResync({
-        windowRef: window,
-        projectionStore,
-        resyncKeys,
-        fetchImpl: fetch,
-        fromSeq,
-        currentStatus: liveStatus,
-      });
-      liveStatus = recovery.liveStatus;
-      return recovery.snapshot;
-    };
+    window.__fmarchReconnectHostLiveProjectionNow = () =>
+      browserReconnect.reconnectNow();
     window.__fmarchCloseHostLiveProjection = () => {
       connection?.close();
       liveStatus = recordHostLiveProjectionEvent({
@@ -206,19 +223,23 @@
     };
     window.__fmarchDispatchHostAction = handleDispatch;
     return () => {
-      delete window.__fmarchTriggerHostResync;
+      delete window.__fmarchReconnectHostLiveProjectionNow;
       delete window.__fmarchGetHostLiveProjectionMetrics;
       delete window.__fmarchCloseHostLiveProjection;
       delete window.__fmarchDropHostLiveProjection;
       delete window.__fmarchDispatchHostAction;
       activePhaseTheme.set(null);
+      browserReconnect.rejectPending();
       pageLifecycle?.detach();
       connection?.close();
     };
   });
 
   async function handleDispatch(event, recoveredAttempt = null) {
-    if (commandStatuses[event.actionId]?.state === "pending") {
+    if (
+      !projectionCommandsReady ||
+      commandStatuses[event.actionId]?.state === "pending"
+    ) {
       return;
     }
     if (recoveredAttempt === null) {
@@ -226,28 +247,58 @@
     }
     const attempt = recoveredAttempt ?? Object.freeze({
       event,
+      command: buildHostCommandRequest({ event, data }).command,
       commandId: commandAttemptId(),
     });
     const optimisticStatus = hostCommandPendingStatus(event);
     recordCommandStatus(event.actionId, optimisticStatus);
+    const recoveryPersisted = commitHostCommandRecovery({
+      ...commandRecoveryAttempts,
+      [event.actionId]: Object.freeze({
+        ...attempt,
+        interruption: attempt.interruption ?? "connection_lost",
+      }),
+    });
+    if (recoveryPersisted !== true) {
+      const outcome = hostCommandErrorOutcome({
+        actionId: event.actionId,
+        error: new Error(
+          "Command was not sent because same-ID reload recovery is unavailable.",
+        ),
+        event,
+      });
+      recordCommandStatus(event.actionId, outcome);
+      commandOutcomes = appendHostCommandOutcome(commandOutcomes, outcome);
+      return;
+    }
 
     try {
-      const result = await executeCommandAttempt({
+      const confirmedOutcome = await executeCommandAttempt({
         timeoutMs: commandAttemptTimeoutMs(
           typeof window === "undefined" ? null : window,
         ),
-        operation: ({ signal }) => sendHostRouteAction({
+        operation: ({ signal }) => dispatchHostRouteAction({
           event,
           data,
           fetchImpl: fetch,
           commandIdFactory: () => attempt.commandId,
           signal,
           projectionStore,
+          preparedCommand: attempt.command,
         }),
       });
       const nextAttempts = { ...commandRecoveryAttempts };
       delete nextAttempts[event.actionId];
       commitHostCommandRecovery(nextAttempts);
+      const result = await recoverHostRouteAction({
+        event,
+        outcome: confirmedOutcome,
+        fetchImpl: fetch,
+        projectionStore,
+        projectionRecoveryTimeoutMs: commandProjectionRecoveryTimeoutMs(
+          typeof window === "undefined" ? null : window,
+        ),
+      });
       const outcome = result.outcome;
       const tracedOutcome = attachEventConfirmationTrace(outcome, event);
       commandOutcomes = appendHostCommandOutcome(commandOutcomes, tracedOutcome);
@@ -262,6 +313,7 @@
           plan: buildHostCommandDispatchBridgePlan({
             event,
             data,
+            preparedCommand: attempt.command,
             optimisticStatus,
             finalStatus: tracedOutcome,
           }),
@@ -308,6 +360,7 @@
           plan: buildHostCommandDispatchBridgePlan({
             event,
             data,
+            preparedCommand: attempt?.command ?? null,
             optimisticStatus,
             finalStatus: outcome,
           }),
@@ -332,8 +385,9 @@
 
   function restoreHostCommandRecovery() {
     const restored = restoreHostInterruptedCommands({
-      storage: window.sessionStorage,
+      storage: commandRecoveryStorage,
       game: data.game.id,
+      principalId: data.commandPrincipalId,
     });
     commandRecoveryAttempts = restored.attempts;
     if (Object.keys(restored.commandStatuses).length > 0) {
@@ -343,11 +397,16 @@
 
   function commitHostCommandRecovery(nextAttempts) {
     commandRecoveryAttempts = nextAttempts;
-    persistHostInterruptedCommands({
-      storage: window.sessionStorage,
+    const persisted = persistHostInterruptedCommands({
+      storage: commandRecoveryStorage,
       game: data.game.id,
+      principalId: data.commandPrincipalId,
       attempts: nextAttempts,
     });
+    if (persisted !== true) {
+      commandRecoveryStorageAvailable = false;
+    }
+    return persisted;
   }
 
   function recordCommandStatus(actionId, status) {
@@ -393,6 +452,20 @@
       ? "open for posting"
       : `${room?.state ?? "closed"} · read-only`;
   }
+
+  function gateHostInviteTargets(targets, ready) {
+    return Object.freeze(
+      Object.fromEntries(
+        Object.entries(targets).map(([key, target]) => [
+          key,
+          Object.freeze({
+            ...target,
+            available: ready === true && target.available === true,
+          }),
+        ]),
+      ),
+    );
+  }
 </script>
 
 <svelte:head>
@@ -413,26 +486,51 @@
     attentionCount={hostAttentionCount}
   />
 
+  {#if data.commandsEnabled === true && !commandRecoveryStorageAvailable}
+    <section
+      class="fm-section"
+      data-testid="host-command-recovery-storage-warning"
+      role="status"
+    >
+      <strong>Reload recovery unavailable</strong>
+      <p>Keep this page open while a command is pending; browser storage is unavailable.</p>
+    </section>
+  {/if}
+
   <div class="host-console-critical-path__body">
     {#if moderatorForcedRouteState}
       <RouteState view={moderatorForcedRouteState} />
     {:else if moderatorSurfaceEmpty}
       <RouteState view={moderatorEmptyState} />
     {:else}
-      <HostTaskWorkspace
-        groups={moderatorActionGroups}
-        {commandStatuses}
-        commandContext={data.commandContext}
-        phase={currentPhase}
-        replacement={projection.replacement ?? data.replacement}
-        {hostPrompts}
-        {hostTasks}
-        {hostDayEvents}
-        {votecount}
-        onDispatch={handleDispatch}
-        onRetry={retryHostCommand}
-        onCancel={cancelHostCommandRecovery}
-      />
+      {#if projectionCommandsReady}
+        <HostTaskWorkspace
+          groups={moderatorActionGroups}
+          {commandStatuses}
+          commandContext={data.commandContext}
+          phase={currentPhase}
+          replacement={projection.replacement ?? data.replacement}
+          {hostPrompts}
+          {hostTasks}
+          {hostDayEvents}
+          {votecount}
+          onDispatch={handleDispatch}
+          onRetry={retryHostCommand}
+          onCancel={cancelHostCommandRecovery}
+        />
+      {:else if data.commandsEnabled === true}
+        <section
+          class="fm-section"
+          data-testid="host-projection-command-health"
+          role="status"
+        >
+          <strong>Host commands paused</strong>
+          <p>
+            Authoritative host state is {projectionHealth?.state ?? "unavailable"}.
+            Controls return after a validated refresh.
+          </p>
+        </section>
+      {/if}
 
       <details
         class="host-console-critical-path__drawer"
@@ -639,7 +737,7 @@
                 >
                   {inviteResult.loginUrl}
                 </a>
-              {:else if inviteTarget.id === "player" && inviteResult.currentOccupantPrincipalId}
+              {:else if projectionCommandsReady && inviteTarget.id === "player" && inviteResult.currentOccupantPrincipalId}
                 <form
                   class="host-console-critical-path__invite-retry"
                   method="POST"
