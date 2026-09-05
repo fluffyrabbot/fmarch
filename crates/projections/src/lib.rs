@@ -1722,7 +1722,15 @@ async fn fold_event(
             let auto_seed = ev
                 .payload
                 .get("auto_seed")
-                .and_then(serde_json::Value::as_u64);
+                .filter(|value| !value.is_null())
+                .cloned()
+                .map(serde_json::from_value::<game_platform::DayEventAuditSeed>)
+                .transpose()
+                .map_err(|source| ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source,
+                })?
+                .map(game_platform::DayEventAuditSeed::get);
             let auto_seed =
                 auto_seed
                     .map(i64::try_from)

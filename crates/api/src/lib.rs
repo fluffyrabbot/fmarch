@@ -87,6 +87,7 @@ pub struct ApiState {
     media_slots: Arc<Semaphore>,
     media_account_quota_bytes: i64,
     websocket_poll_interval: Duration,
+    websocket_heartbeat_interval: Duration,
     live_event_wake: GameEventWakeHub,
     embed_lookup: embed_http::YoutubeSnapshotLookup,
 }
@@ -185,6 +186,12 @@ impl ApiState {
                 5_000,
                 25,
                 5_000,
+            ) as u64),
+            websocket_heartbeat_interval: Duration::from_millis(env_i64(
+                "FMARCH_WS_HEARTBEAT_INTERVAL_MS",
+                10_000,
+                100,
+                60_000,
             ) as u64),
             live_event_wake,
             embed_lookup: embed_http::YoutubeSnapshotLookup::http().expect("youtube oembed client"),
@@ -367,6 +374,12 @@ impl ApiState {
     pub fn with_websocket_poll_interval(mut self, interval: Duration) -> Self {
         self.websocket_poll_interval =
             interval.clamp(Duration::from_millis(10), Duration::from_secs(5));
+        self
+    }
+
+    pub fn with_websocket_heartbeat_interval(mut self, interval: Duration) -> Self {
+        self.websocket_heartbeat_interval =
+            interval.clamp(Duration::from_millis(10), Duration::from_secs(60));
         self
     }
 

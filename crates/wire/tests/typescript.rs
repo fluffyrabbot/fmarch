@@ -9,6 +9,21 @@ fn generated_typescript_contract_is_current() {
 }
 
 #[test]
+fn day_event_audit_seed_is_decimal_text_in_wire_json_and_typescript() {
+    let seed = game_platform::DayEventAuditSeed::new(9_007_199_254_740_993);
+    assert_eq!(
+        serde_json::to_value(seed).unwrap(),
+        serde_json::json!("9007199254740993")
+    );
+
+    let typescript = wire::typescript::render();
+    assert!(typescript.contains("export type DayEventAuditSeed = string;"));
+    assert!(typescript.contains("auto_seed: DayEventAuditSeed | null"));
+    assert!(typescript.contains("seed: DayEventAuditSeed | null"));
+    assert!(!typescript.contains("auto_seed: bigint | null"));
+}
+
+#[test]
 fn create_game_cohost_policy_is_omittable_in_both_wire_directions_and_typescript() {
     let game = uuid::Uuid::nil();
     let parsed = serde_json::from_value::<wire::Command>(serde_json::json!({

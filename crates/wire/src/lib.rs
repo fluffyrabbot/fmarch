@@ -6,7 +6,7 @@
 use domain::phase::PhaseId;
 use principal::PrincipalId;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -33,7 +33,119 @@ pub fn fixture_principal_id(label: impl AsRef<str>) -> PrincipalId {
     commands::fixture_principal_id(label)
 }
 
-pub const PROTOCOL_VERSION: u16 = 2;
+/// Current fail-closed live transport generation protocol.
+pub const PROTOCOL_VERSION: u16 = 3;
+pub const LIVE_HEARTBEAT_ENVELOPE_ID: u64 = 0;
+/// Largest integer that the JavaScript client can compare without losing precision.
+pub const MAX_SAFE_LIVE_ENVELOPE_ID: u64 = (1_u64 << 53) - 1;
+pub const MAX_SAFE_LIVE_INTEGER: i64 = (1_i64 << 53) - 1;
+
+pub const fn is_valid_live_data_envelope_id(id: u64) -> bool {
+    id > LIVE_HEARTBEAT_ENVELOPE_ID && id <= MAX_SAFE_LIVE_ENVELOPE_ID
+}
+
+pub const fn next_live_data_envelope_id(current: u64) -> Option<u64> {
+    if current < MAX_SAFE_LIVE_ENVELOPE_ID {
+        Some(current + 1)
+    } else {
+        None
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LiveWireError {
+    UnsupportedProtocolVersion {
+        expected: u16,
+        actual: u16,
+    },
+    InvalidLiveEnvelopeId(u64),
+    EmptyIdentifier(&'static str),
+    AudienceDeltaMismatch {
+        audience: &'static str,
+        delta: &'static str,
+    },
+    GameMismatch {
+        expected: Uuid,
+        actual: Uuid,
+    },
+    ChannelMismatch {
+        expected: String,
+        actual: String,
+    },
+    SlotMismatch {
+        expected: String,
+        actual: String,
+    },
+    InvalidGamePostCitation,
+    InvalidLiveInteger {
+        field: &'static str,
+        value: i64,
+        minimum: i64,
+    },
+    InvalidLiveNumber(&'static str),
+    EmptyResyncAudiences,
+    DuplicateResyncAudience,
+    ResyncAudienceScopeMismatch,
+    UnsupportedLiveServerMessage(&'static str),
+}
+
+impl std::fmt::Display for LiveWireError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedProtocolVersion { expected, actual } => write!(
+                formatter,
+                "unsupported protocol version {actual}; expected {expected}"
+            ),
+            Self::InvalidLiveEnvelopeId(id) => {
+                write!(formatter, "invalid live data envelope id {id}")
+            }
+            Self::EmptyIdentifier(field) => write!(formatter, "{field} must not be empty"),
+            Self::AudienceDeltaMismatch { audience, delta } => {
+                write!(formatter, "live {audience} audience cannot carry {delta}")
+            }
+            Self::GameMismatch { expected, actual } => write!(
+                formatter,
+                "live projection game {actual} does not match audience game {expected}"
+            ),
+            Self::ChannelMismatch { expected, actual } => write!(
+                formatter,
+                "live projection channel {actual:?} does not match audience channel {expected:?}"
+            ),
+            Self::SlotMismatch { expected, actual } => write!(
+                formatter,
+                "live projection slot {actual:?} does not match audience slot {expected:?}"
+            ),
+            Self::InvalidGamePostCitation => {
+                formatter.write_str("live thread citation must reference a game post")
+            }
+            Self::InvalidLiveInteger {
+                field,
+                value,
+                minimum,
+            } => write!(
+                formatter,
+                "{field} must be a JavaScript-safe integer in {minimum}..={MAX_SAFE_LIVE_INTEGER}, got {value}"
+            ),
+            Self::InvalidLiveNumber(field) => {
+                write!(formatter, "{field} must be a finite nonnegative number")
+            }
+            Self::EmptyResyncAudiences => {
+                formatter.write_str("live resync audiences must not be empty")
+            }
+            Self::DuplicateResyncAudience => {
+                formatter.write_str("live resync audiences must be unique")
+            }
+            Self::ResyncAudienceScopeMismatch => {
+                formatter.write_str("live resync audience does not match connection scope")
+            }
+            Self::UnsupportedLiveServerMessage(kind) => {
+                write!(formatter, "{kind} is not a live server message")
+            }
+        }
+    }
+}
+
+impl std::error::Error for LiveWireError {}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct Envelope<T> {
@@ -104,6 +216,38 @@ impl ServerEnvelope {
             body,
         }
     }
+
+    pub fn validate_protocol(&self) -> Result<(), LiveWireError> {
+        if self.v == PROTOCOL_VERSION {
+            Ok(())
+        } else {
+            Err(LiveWireError::UnsupportedProtocolVersion {
+                expected: PROTOCOL_VERSION,
+                actual: self.v,
+            })
+        }
+    }
+
+    pub fn validate_live(&self) -> Result<(), LiveWireError> {
+        self.validate_protocol()?;
+        match &self.body {
+            ServerMsg::Hello(hello) => {
+                if self.id != LIVE_HEARTBEAT_ENVELOPE_ID {
+                    return Err(LiveWireError::InvalidLiveEnvelopeId(self.id));
+                }
+                hello.validate()
+            }
+            ServerMsg::Delta(_) | ServerMsg::ResyncRequired(_) => {
+                if is_valid_live_data_envelope_id(self.id) {
+                    Ok(())
+                } else {
+                    Err(LiveWireError::InvalidLiveEnvelopeId(self.id))
+                }
+            }
+            ServerMsg::Ack(_) => Err(LiveWireError::UnsupportedLiveServerMessage("Ack")),
+            ServerMsg::Reject(_) => Err(LiveWireError::UnsupportedLiveServerMessage("Reject")),
+        }
+    }
 }
 
 impl From<ServerEnvelope> for Envelope<ServerMsg> {
@@ -147,14 +291,449 @@ pub enum ServerMsg {
     Hello(Hello),
     Ack(AckMsg),
     Reject(RejectMsg),
-    Delta(ProjectionDelta),
+    Delta(LiveProjectionDelta),
+    ResyncRequired(LiveResyncRequired),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct Hello {
-    pub protocol_v: u16,
-    pub server: String,
-    pub caps: Vec<CapabilityGrant>,
+    protocol_v: u16,
+    server: String,
+    scope: LiveScope,
+    caps: Vec<CapabilityGrant>,
+}
+
+impl Hello {
+    pub fn new(
+        server: impl Into<String>,
+        scope: LiveScope,
+        caps: Vec<CapabilityGrant>,
+    ) -> Result<Self, LiveWireError> {
+        let mut caps = caps;
+        canonicalize_capabilities(&mut caps)?;
+        let hello = Self {
+            protocol_v: PROTOCOL_VERSION,
+            server: server.into(),
+            scope,
+            caps,
+        };
+        hello.validate()?;
+        Ok(hello)
+    }
+
+    pub fn validate(&self) -> Result<(), LiveWireError> {
+        if self.protocol_v != PROTOCOL_VERSION {
+            return Err(LiveWireError::UnsupportedProtocolVersion {
+                expected: PROTOCOL_VERSION,
+                actual: self.protocol_v,
+            });
+        }
+        require_nonempty_identifier(self.server.as_str(), "server")?;
+        self.scope.validate()?;
+        Ok(())
+    }
+
+    pub fn protocol_v(&self) -> u16 {
+        self.protocol_v
+    }
+
+    pub fn server(&self) -> &str {
+        self.server.as_str()
+    }
+
+    pub fn scope(&self) -> &LiveScope {
+        &self.scope
+    }
+
+    pub fn caps(&self) -> &[CapabilityGrant] {
+        self.caps.as_slice()
+    }
+
+    pub fn into_parts(self) -> (u16, String, LiveScope, Vec<CapabilityGrant>) {
+        (self.protocol_v, self.server, self.scope, self.caps)
+    }
+}
+
+impl<'de> Deserialize<'de> for Hello {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct RawHello {
+            protocol_v: u16,
+            server: String,
+            scope: LiveScope,
+            caps: Vec<CapabilityGrant>,
+        }
+
+        let raw = RawHello::deserialize(deserializer)?;
+        let mut caps = raw.caps;
+        canonicalize_capabilities(&mut caps).map_err(serde::de::Error::custom)?;
+        let hello = Self {
+            protocol_v: raw.protocol_v,
+            server: raw.server,
+            scope: raw.scope,
+            caps,
+        };
+        hello.validate().map_err(serde::de::Error::custom)?;
+        Ok(hello)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, TS)]
+pub struct LiveScope {
+    game: Uuid,
+    channel: String,
+    slot_id: Option<String>,
+}
+
+impl LiveScope {
+    pub fn new(
+        game: Uuid,
+        channel: impl Into<String>,
+        slot_id: Option<String>,
+    ) -> Result<Self, LiveWireError> {
+        let scope = Self {
+            game,
+            channel: channel.into(),
+            slot_id,
+        };
+        scope.validate()?;
+        Ok(scope)
+    }
+
+    pub fn game(&self) -> Uuid {
+        self.game
+    }
+
+    pub fn channel(&self) -> &str {
+        self.channel.as_str()
+    }
+
+    pub fn slot_id(&self) -> Option<&str> {
+        self.slot_id.as_deref()
+    }
+
+    pub fn into_parts(self) -> (Uuid, String, Option<String>) {
+        (self.game, self.channel, self.slot_id)
+    }
+
+    pub fn validate(&self) -> Result<(), LiveWireError> {
+        require_non_nil_game(self.game)?;
+        require_nonempty_identifier(self.channel.as_str(), "channel")?;
+        if let Some(slot_id) = self.slot_id.as_deref() {
+            require_nonempty_identifier(slot_id, "slot_id")?;
+        }
+        Ok(())
+    }
+}
+
+impl<'de> Deserialize<'de> for LiveScope {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct RawLiveScope {
+            game: Uuid,
+            channel: String,
+            slot_id: Option<String>,
+        }
+
+        let raw = RawLiveScope::deserialize(deserializer)?;
+        Self::new(raw.game, raw.channel, raw.slot_id).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Audience of one projection mutation. Serde's default external tagging is
+/// deliberate: the authority class and its exact immutable identifiers are a
+/// single closed value.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, TS)]
+pub enum LiveAudience {
+    Game { game: Uuid },
+    Thread { game: Uuid, channel: String },
+    Host { game: Uuid },
+    PlayerSlot { game: Uuid, slot_id: String },
+}
+
+impl<'de> Deserialize<'de> for LiveAudience {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        enum RawLiveAudience {
+            Game { game: Uuid },
+            Thread { game: Uuid, channel: String },
+            Host { game: Uuid },
+            PlayerSlot { game: Uuid, slot_id: String },
+        }
+
+        let audience = match RawLiveAudience::deserialize(deserializer)? {
+            RawLiveAudience::Game { game } => Self::Game { game },
+            RawLiveAudience::Thread { game, channel } => Self::Thread { game, channel },
+            RawLiveAudience::Host { game } => Self::Host { game },
+            RawLiveAudience::PlayerSlot { game, slot_id } => Self::PlayerSlot { game, slot_id },
+        };
+        audience
+            .validate_identifiers()
+            .map_err(serde::de::Error::custom)?;
+        Ok(audience)
+    }
+}
+
+impl LiveAudience {
+    pub fn game_id(&self) -> Uuid {
+        match self {
+            Self::Game { game }
+            | Self::Thread { game, .. }
+            | Self::Host { game }
+            | Self::PlayerSlot { game, .. } => *game,
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Game { .. } => "Game",
+            Self::Thread { .. } => "Thread",
+            Self::Host { .. } => "Host",
+            Self::PlayerSlot { .. } => "PlayerSlot",
+        }
+    }
+
+    fn validate_identifiers(&self) -> Result<(), LiveWireError> {
+        require_non_nil_game(self.game_id())?;
+        match self {
+            Self::Thread { channel, .. } => {
+                require_nonempty_identifier(channel.as_str(), "channel")
+            }
+            Self::PlayerSlot { slot_id, .. } => {
+                require_nonempty_identifier(slot_id.as_str(), "slot_id")
+            }
+            Self::Game { .. } | Self::Host { .. } => Ok(()),
+        }
+    }
+
+    fn matches_scope(&self, scope: &LiveScope) -> bool {
+        match self {
+            Self::Game { game } => *game == scope.game,
+            Self::Thread { game, channel } => *game == scope.game && channel == &scope.channel,
+            Self::Host { game } => *game == scope.game && scope.slot_id.is_none(),
+            Self::PlayerSlot { game, slot_id } => {
+                *game == scope.game && scope.slot_id.as_deref() == Some(slot_id.as_str())
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+pub struct LiveProjectionDelta {
+    audience: LiveAudience,
+    delta: ProjectionDelta,
+}
+
+impl LiveProjectionDelta {
+    pub fn new(audience: LiveAudience, delta: ProjectionDelta) -> Result<Self, LiveWireError> {
+        audience.validate_identifiers()?;
+        validate_live_projection_audience(&audience, &delta)?;
+        Ok(Self { audience, delta })
+    }
+
+    pub fn game(game: Uuid, delta: ProjectionDelta) -> Result<Self, LiveWireError> {
+        Self::new(LiveAudience::Game { game }, delta)
+    }
+
+    pub fn thread(
+        game: Uuid,
+        channel: impl Into<String>,
+        delta: ProjectionDelta,
+    ) -> Result<Self, LiveWireError> {
+        Self::new(
+            LiveAudience::Thread {
+                game,
+                channel: channel.into(),
+            },
+            delta,
+        )
+    }
+
+    pub fn host(game: Uuid, delta: ProjectionDelta) -> Result<Self, LiveWireError> {
+        Self::new(LiveAudience::Host { game }, delta)
+    }
+
+    pub fn player_slot(
+        game: Uuid,
+        slot_id: impl Into<String>,
+        delta: ProjectionDelta,
+    ) -> Result<Self, LiveWireError> {
+        Self::new(
+            LiveAudience::PlayerSlot {
+                game,
+                slot_id: slot_id.into(),
+            },
+            delta,
+        )
+    }
+
+    pub fn audience(&self) -> &LiveAudience {
+        &self.audience
+    }
+
+    pub fn delta(&self) -> &ProjectionDelta {
+        &self.delta
+    }
+
+    pub fn into_parts(self) -> (LiveAudience, ProjectionDelta) {
+        (self.audience, self.delta)
+    }
+}
+
+impl<'de> Deserialize<'de> for LiveProjectionDelta {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct RawLiveProjectionDelta {
+            audience: LiveAudience,
+            delta: ProjectionDelta,
+        }
+
+        let raw = RawLiveProjectionDelta::deserialize(deserializer)?;
+        Self::new(raw.audience, raw.delta).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+pub struct LiveResyncRequired {
+    scope: LiveScope,
+    audiences: Vec<LiveAudience>,
+    from_event_seq: i64,
+}
+
+impl LiveResyncRequired {
+    pub fn new(
+        scope: LiveScope,
+        mut audiences: Vec<LiveAudience>,
+        from_event_seq: i64,
+    ) -> Result<Self, LiveWireError> {
+        scope.validate()?;
+        require_nonnegative_safe_integer(from_event_seq, "from_event_seq")?;
+        if audiences.is_empty() {
+            return Err(LiveWireError::EmptyResyncAudiences);
+        }
+        for audience in &audiences {
+            audience.validate_identifiers()?;
+            if !audience.matches_scope(&scope) {
+                return Err(LiveWireError::ResyncAudienceScopeMismatch);
+            }
+        }
+        let unique = audiences.iter().cloned().collect::<BTreeSet<_>>();
+        if unique.len() != audiences.len() {
+            return Err(LiveWireError::DuplicateResyncAudience);
+        }
+        audiences.sort();
+        Ok(Self {
+            scope,
+            audiences,
+            from_event_seq,
+        })
+    }
+
+    pub fn scope(&self) -> &LiveScope {
+        &self.scope
+    }
+
+    pub fn audiences(&self) -> &[LiveAudience] {
+        self.audiences.as_slice()
+    }
+
+    pub fn from_event_seq(&self) -> i64 {
+        self.from_event_seq
+    }
+
+    pub fn into_parts(self) -> (LiveScope, Vec<LiveAudience>, i64) {
+        (self.scope, self.audiences, self.from_event_seq)
+    }
+}
+
+impl<'de> Deserialize<'de> for LiveResyncRequired {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct RawLiveResyncRequired {
+            scope: LiveScope,
+            audiences: Vec<LiveAudience>,
+            from_event_seq: i64,
+        }
+
+        let raw = RawLiveResyncRequired::deserialize(deserializer)?;
+        Self::new(raw.scope, raw.audiences, raw.from_event_seq).map_err(serde::de::Error::custom)
+    }
+}
+
+fn require_nonempty_identifier(identifier: &str, field: &'static str) -> Result<(), LiveWireError> {
+    if identifier.is_empty()
+        || identifier.chars().next().is_some_and(char::is_whitespace)
+        || identifier
+            .chars()
+            .next_back()
+            .is_some_and(char::is_whitespace)
+        || identifier.chars().any(char::is_control)
+    {
+        Err(LiveWireError::EmptyIdentifier(field))
+    } else {
+        Ok(())
+    }
+}
+
+fn require_positive_safe_integer(value: i64, field: &'static str) -> Result<(), LiveWireError> {
+    require_safe_integer(value, field, 1)
+}
+
+fn require_nonnegative_safe_integer(value: i64, field: &'static str) -> Result<(), LiveWireError> {
+    require_safe_integer(value, field, 0)
+}
+
+fn require_safe_integer(
+    value: i64,
+    field: &'static str,
+    minimum: i64,
+) -> Result<(), LiveWireError> {
+    if value < minimum || value > MAX_SAFE_LIVE_INTEGER {
+        Err(LiveWireError::InvalidLiveInteger {
+            field,
+            value,
+            minimum,
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn require_optional_nonnegative_safe_integer(
+    value: Option<i64>,
+    field: &'static str,
+) -> Result<(), LiveWireError> {
+    value.map_or(Ok(()), |value| {
+        require_nonnegative_safe_integer(value, field)
+    })
+}
+
+fn require_non_nil_game(game: Uuid) -> Result<(), LiveWireError> {
+    if game.is_nil() {
+        Err(LiveWireError::EmptyIdentifier("game"))
+    } else {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -925,8 +1504,444 @@ pub enum ProjectionDelta {
     HostPromptsChanged(HostPromptsDelta),
     PlayerNotificationsChanged(PlayerNotificationsDelta),
     PlayerInvestigationResultsChanged(PlayerInvestigationResultsDelta),
+    SlotMentionsChanged(SlotMentionsDelta),
     DayVoteOutcomeApplied(DayVoteOutcomeDelta),
-    ResyncRequired { from_seq: i64 },
+}
+
+fn validate_live_projection_audience(
+    audience: &LiveAudience,
+    delta: &ProjectionDelta,
+) -> Result<(), LiveWireError> {
+    validate_live_projection_payload(delta)?;
+    let expected_audience = live_projection_audience_kind(delta);
+    if audience.kind() != expected_audience {
+        return Err(LiveWireError::AudienceDeltaMismatch {
+            audience: audience.kind(),
+            delta: projection_delta_kind(delta),
+        });
+    }
+
+    let expected_game = audience.game_id();
+    let actual_game = projection_delta_game(delta)?;
+    require_matching_game(expected_game, actual_game)?;
+
+    match (audience, delta) {
+        (LiveAudience::Thread { channel, .. }, ProjectionDelta::ThreadPostsChanged(body)) => {
+            for post in &body.posts {
+                require_matching_game(expected_game, post.game)?;
+                require_matching_channel(channel.as_str(), post.channel_id.as_str())?;
+            }
+        }
+        (LiveAudience::Thread { channel, .. }, ProjectionDelta::ThreadPostRemoved(body)) => {
+            require_matching_channel(channel.as_str(), body.channel.as_str())?;
+        }
+        (LiveAudience::Thread { channel, .. }, ProjectionDelta::PostCitationsChanged(body)) => {
+            require_matching_channel(channel.as_str(), body.channel.as_str())?;
+        }
+        (
+            LiveAudience::Host { .. },
+            ProjectionDelta::HostPromptsChanged(HostPromptsDelta { prompts, .. }),
+        ) => {
+            for prompt in prompts {
+                require_matching_game(expected_game, prompt.game)?;
+            }
+        }
+        (
+            LiveAudience::PlayerSlot { slot_id, .. },
+            ProjectionDelta::PlayerNotificationsChanged(body),
+        ) => {
+            for notification in &body.notifications {
+                require_matching_game(expected_game, notification.game)?;
+                require_matching_slot(slot_id.as_str(), notification.audience_slot.as_str())?;
+            }
+        }
+        (
+            LiveAudience::PlayerSlot { slot_id, .. },
+            ProjectionDelta::PlayerInvestigationResultsChanged(body),
+        ) => {
+            for result in &body.results {
+                require_matching_game(expected_game, result.game)?;
+                require_matching_slot(slot_id.as_str(), result.audience_slot.as_str())?;
+            }
+        }
+        (LiveAudience::PlayerSlot { slot_id, .. }, ProjectionDelta::SlotMentionsChanged(body)) => {
+            for mention in &body.mentions {
+                require_matching_game(expected_game, mention.game)?;
+                require_matching_slot(slot_id.as_str(), mention.audience_slot.as_str())?;
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn live_projection_audience_kind(delta: &ProjectionDelta) -> &'static str {
+    match delta {
+        ProjectionDelta::VoteCountChanged(_)
+        | ProjectionDelta::VoteCountCleared(_)
+        | ProjectionDelta::DayVoteOutcomeApplied(_) => "Game",
+        ProjectionDelta::ThreadPostsChanged(_)
+        | ProjectionDelta::ThreadPostRemoved(_)
+        | ProjectionDelta::PostCitationsChanged(_) => "Thread",
+        ProjectionDelta::HostConsoleStateChanged(_)
+        | ProjectionDelta::HostConsoleHeaderChanged(_)
+        | ProjectionDelta::HostConsoleSlotsChanged(_)
+        | ProjectionDelta::HostConsoleThreadPostsChanged(_)
+        | ProjectionDelta::HostConsoleThreadPostRemoved(_)
+        | ProjectionDelta::HostConsoleDayEventsChanged(_)
+        | ProjectionDelta::HostConsoleSchedulerChanged(_)
+        | ProjectionDelta::HostConsoleTasksChanged(_)
+        | ProjectionDelta::HostPromptsChanged(_) => "Host",
+        ProjectionDelta::PlayerNotificationsChanged(_)
+        | ProjectionDelta::PlayerInvestigationResultsChanged(_)
+        | ProjectionDelta::SlotMentionsChanged(_) => "PlayerSlot",
+    }
+}
+
+fn projection_delta_kind(delta: &ProjectionDelta) -> &'static str {
+    match delta {
+        ProjectionDelta::VoteCountChanged(_) => "VoteCountChanged",
+        ProjectionDelta::VoteCountCleared(_) => "VoteCountCleared",
+        ProjectionDelta::ThreadPostsChanged(_) => "ThreadPostsChanged",
+        ProjectionDelta::ThreadPostRemoved(_) => "ThreadPostRemoved",
+        ProjectionDelta::PostCitationsChanged(_) => "PostCitationsChanged",
+        ProjectionDelta::HostConsoleStateChanged(_) => "HostConsoleStateChanged",
+        ProjectionDelta::HostConsoleHeaderChanged(_) => "HostConsoleHeaderChanged",
+        ProjectionDelta::HostConsoleSlotsChanged(_) => "HostConsoleSlotsChanged",
+        ProjectionDelta::HostConsoleThreadPostsChanged(_) => "HostConsoleThreadPostsChanged",
+        ProjectionDelta::HostConsoleThreadPostRemoved(_) => "HostConsoleThreadPostRemoved",
+        ProjectionDelta::HostConsoleDayEventsChanged(_) => "HostConsoleDayEventsChanged",
+        ProjectionDelta::HostConsoleSchedulerChanged(_) => "HostConsoleSchedulerChanged",
+        ProjectionDelta::HostConsoleTasksChanged(_) => "HostConsoleTasksChanged",
+        ProjectionDelta::HostPromptsChanged(_) => "HostPromptsChanged",
+        ProjectionDelta::PlayerNotificationsChanged(_) => "PlayerNotificationsChanged",
+        ProjectionDelta::PlayerInvestigationResultsChanged(_) => {
+            "PlayerInvestigationResultsChanged"
+        }
+        ProjectionDelta::SlotMentionsChanged(_) => "SlotMentionsChanged",
+        ProjectionDelta::DayVoteOutcomeApplied(_) => "DayVoteOutcomeApplied",
+    }
+}
+
+fn projection_delta_game(delta: &ProjectionDelta) -> Result<Uuid, LiveWireError> {
+    match delta {
+        ProjectionDelta::VoteCountChanged(body) => Ok(body.game),
+        ProjectionDelta::VoteCountCleared(body) => Ok(body.game),
+        ProjectionDelta::ThreadPostsChanged(body) => Ok(body.game),
+        ProjectionDelta::ThreadPostRemoved(body) => Ok(body.game),
+        ProjectionDelta::PostCitationsChanged(body) => {
+            if body.quoted.kind != PostKind::GamePost {
+                return Err(LiveWireError::InvalidGamePostCitation);
+            }
+            Ok(body.quoted.scope_id)
+        }
+        ProjectionDelta::HostConsoleStateChanged(body) => Ok(body.game),
+        ProjectionDelta::HostConsoleHeaderChanged(body) => Ok(body.game),
+        ProjectionDelta::HostConsoleSlotsChanged(body) => Ok(body.game),
+        ProjectionDelta::HostConsoleThreadPostsChanged(body) => Ok(body.game),
+        ProjectionDelta::HostConsoleThreadPostRemoved(body) => Ok(body.game),
+        ProjectionDelta::HostConsoleDayEventsChanged(body) => Ok(body.game),
+        ProjectionDelta::HostConsoleSchedulerChanged(body) => Ok(body.game),
+        ProjectionDelta::HostConsoleTasksChanged(body) => Ok(body.game),
+        ProjectionDelta::HostPromptsChanged(body) => Ok(body.game),
+        ProjectionDelta::PlayerNotificationsChanged(body) => Ok(body.game),
+        ProjectionDelta::PlayerInvestigationResultsChanged(body) => Ok(body.game),
+        ProjectionDelta::SlotMentionsChanged(body) => Ok(body.game),
+        ProjectionDelta::DayVoteOutcomeApplied(body) => Ok(body.game),
+    }
+}
+
+fn require_matching_game(expected: Uuid, actual: Uuid) -> Result<(), LiveWireError> {
+    if expected == actual {
+        Ok(())
+    } else {
+        Err(LiveWireError::GameMismatch { expected, actual })
+    }
+}
+
+fn require_matching_channel(expected: &str, actual: &str) -> Result<(), LiveWireError> {
+    if expected == actual {
+        Ok(())
+    } else {
+        Err(LiveWireError::ChannelMismatch {
+            expected: expected.to_string(),
+            actual: actual.to_string(),
+        })
+    }
+}
+
+fn require_matching_slot(expected: &str, actual: &str) -> Result<(), LiveWireError> {
+    if expected == actual {
+        Ok(())
+    } else {
+        Err(LiveWireError::SlotMismatch {
+            expected: expected.to_string(),
+            actual: actual.to_string(),
+        })
+    }
+}
+
+fn validate_live_projection_payload(delta: &ProjectionDelta) -> Result<(), LiveWireError> {
+    match delta {
+        ProjectionDelta::VoteCountChanged(body) => {
+            require_nonempty_identifier(body.candidate_slot.as_str(), "candidate_slot")?;
+            require_nonnegative_safe_integer(body.count, "count")?;
+        }
+        ProjectionDelta::VoteCountCleared(body) => {
+            require_nonempty_identifier(body.candidate_slot.as_str(), "candidate_slot")?;
+        }
+        ProjectionDelta::ThreadPostsChanged(body) => {
+            for post in &body.posts {
+                validate_thread_post(post)?;
+            }
+        }
+        ProjectionDelta::ThreadPostRemoved(body) => {
+            require_nonempty_identifier(body.channel.as_str(), "channel")?;
+            require_positive_safe_integer(body.source_seq, "source_seq")?;
+        }
+        ProjectionDelta::PostCitationsChanged(body) => {
+            require_nonempty_identifier(body.channel.as_str(), "channel")?;
+            validate_post_ref(&body.quoted)?;
+            require_nonnegative_safe_integer(body.citation_count, "citation_count")?;
+        }
+        ProjectionDelta::HostConsoleStateChanged(body) => {
+            validate_host_authority(&body.authority)?;
+            validate_host_phase(body.phase.as_ref())?;
+            for slot in &body.slots {
+                validate_host_slot(slot)?;
+            }
+            for post in &body.thread_posts {
+                validate_host_thread_post(post)?;
+            }
+            validate_scheduler(body.day_event_scheduler.as_ref())?;
+        }
+        ProjectionDelta::HostConsoleHeaderChanged(body) => {
+            validate_host_authority(&body.authority)?;
+            validate_host_phase(body.phase.as_ref())?;
+        }
+        ProjectionDelta::HostConsoleSlotsChanged(body) => {
+            for slot in &body.slots {
+                validate_host_slot(slot)?;
+            }
+            for slot_id in &body.removed_slot_ids {
+                require_nonempty_identifier(slot_id.as_str(), "removed_slot_id")?;
+            }
+        }
+        ProjectionDelta::HostConsoleThreadPostsChanged(body) => {
+            for post in &body.posts {
+                validate_host_thread_post(post)?;
+            }
+        }
+        ProjectionDelta::HostConsoleThreadPostRemoved(body) => {
+            require_positive_safe_integer(body.stream_seq, "stream_seq")?;
+        }
+        ProjectionDelta::HostConsoleDayEventsChanged(body) => {
+            for event_id in &body.removed_event_ids {
+                require_nonempty_identifier(event_id.as_str(), "removed_event_id")?;
+            }
+        }
+        ProjectionDelta::HostConsoleSchedulerChanged(body) => {
+            validate_scheduler(body.day_event_scheduler.as_ref())?;
+        }
+        ProjectionDelta::HostConsoleTasksChanged(_) | ProjectionDelta::HostPromptsChanged(_) => {}
+        ProjectionDelta::PlayerNotificationsChanged(body) => {
+            for notification in &body.notifications {
+                require_nonnegative_safe_integer(
+                    i64::from(notification.event_index),
+                    "event_index",
+                )?;
+                require_nonempty_identifier(notification.audience_slot.as_str(), "audience_slot")?;
+                require_nonempty_identifier(notification.effect.as_str(), "effect")?;
+                require_nonempty_identifier(notification.status.as_str(), "status")?;
+            }
+        }
+        ProjectionDelta::PlayerInvestigationResultsChanged(body) => {
+            for result in &body.results {
+                require_nonnegative_safe_integer(i64::from(result.event_index), "event_index")?;
+                require_nonempty_identifier(result.audience_slot.as_str(), "audience_slot")?;
+                require_nonempty_identifier(result.mode.as_str(), "mode")?;
+                require_nonempty_identifier(result.target_slot.as_str(), "target_slot")?;
+            }
+        }
+        ProjectionDelta::SlotMentionsChanged(body) => {
+            for mention in &body.mentions {
+                require_nonempty_identifier(mention.audience_slot.as_str(), "audience_slot")?;
+                require_nonempty_identifier(mention.channel_id.as_str(), "channel_id")?;
+                require_positive_safe_integer(mention.source_seq, "source_seq")?;
+                require_nonnegative_safe_integer(mention.occurred_at, "occurred_at")?;
+            }
+        }
+        ProjectionDelta::DayVoteOutcomeApplied(body) => {
+            require_positive_safe_integer(body.source_seq, "source_seq")?;
+            require_nonnegative_safe_integer(i64::from(body.event_index), "event_index")?;
+            require_nonempty_identifier(body.status.as_str(), "status")?;
+            validate_optional_identifier(body.winner_slot.as_deref(), "winner_slot")?;
+            validate_identifiers(&body.contenders, "contender")?;
+            validate_nonnegative_number_map(&body.tallies, "tallies")?;
+            validate_identifier_map(&body.votes, "votes")?;
+            validate_nonnegative_number_map(&body.weights, "weights")?;
+            if body
+                .majority
+                .is_some_and(|value| !value.is_finite() || value < 0.0)
+            {
+                return Err(LiveWireError::InvalidLiveNumber("majority"));
+            }
+            validate_nonnegative_number_map(&body.thresholds, "thresholds")?;
+            if !body.total_weight.is_finite() || body.total_weight < 0.0 {
+                return Err(LiveWireError::InvalidLiveNumber("total_weight"));
+            }
+            validate_optional_identifier(body.tiebreak.as_deref(), "tiebreak")?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_thread_post(post: &ThreadPost) -> Result<(), LiveWireError> {
+    require_positive_safe_integer(post.source_seq, "source_seq")?;
+    require_positive_safe_integer(post.stream_seq, "stream_seq")?;
+    require_nonempty_identifier(post.channel_id.as_str(), "channel_id")?;
+    validate_thread_author(&post.author)?;
+    for media in &post.media {
+        require_nonempty_identifier(media.content_id.as_str(), "content_id")?;
+        for variant in media.variants.values() {
+            require_nonempty_identifier(variant.avif_url.as_str(), "avif_url")?;
+            require_nonempty_identifier(variant.webp_url.as_str(), "webp_url")?;
+            if variant.width == 0 {
+                return Err(LiveWireError::InvalidLiveInteger {
+                    field: "width",
+                    value: 0,
+                    minimum: 1,
+                });
+            }
+            if variant.height == 0 {
+                return Err(LiveWireError::InvalidLiveInteger {
+                    field: "height",
+                    value: 0,
+                    minimum: 1,
+                });
+            }
+        }
+    }
+    for quotation in &post.quotations {
+        validate_post_ref(&quotation.target)?;
+    }
+    for mention in &post.mentions {
+        mention.validate()?;
+    }
+    if let Some(embed) = post.embed.as_ref() {
+        require_nonempty_identifier(embed.provider_id.as_str(), "provider_id")?;
+        if let Some(poster) = embed
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.poster.as_ref())
+        {
+            require_nonempty_identifier(poster.content_id.as_str(), "poster.content_id")?;
+        }
+    }
+    require_nonnegative_safe_integer(post.citation_count, "citation_count")?;
+    require_nonnegative_safe_integer(post.occurred_at, "occurred_at")
+}
+
+fn validate_post_ref(reference: &PostRef) -> Result<(), LiveWireError> {
+    require_positive_safe_integer(reference.source_seq, "post_ref.source_seq")
+}
+
+fn validate_thread_author(author: &GameThreadAuthor) -> Result<(), LiveWireError> {
+    match author {
+        GameThreadAuthor::Slot { slot_id } => {
+            require_nonempty_identifier(slot_id.as_str(), "author.slot_id")
+        }
+        GameThreadAuthor::HostNarrator | GameThreadAuthor::System => Ok(()),
+    }
+}
+
+fn validate_host_authority(_authority: &HostConsoleAuthorityDelta) -> Result<(), LiveWireError> {
+    Ok(())
+}
+
+fn validate_host_phase(phase: Option<&HostConsolePhaseStateDelta>) -> Result<(), LiveWireError> {
+    if let Some(phase) = phase {
+        require_optional_nonnegative_safe_integer(phase.deadline, "phase.deadline")?;
+    }
+    Ok(())
+}
+
+fn validate_host_slot(slot: &HostConsoleSlotOccupancyDelta) -> Result<(), LiveWireError> {
+    require_nonempty_identifier(slot.slot_id.as_str(), "slot_id")?;
+    require_nonempty_identifier(slot.occupancy_id.as_str(), "occupancy_id")?;
+    require_nonempty_identifier(slot.persona_id.as_str(), "persona_id")?;
+    require_nonempty_identifier(slot.public_name.as_str(), "public_name")?;
+    require_nonempty_identifier(slot.status.as_str(), "status")?;
+    validate_identifiers(&slot.status_tags, "status_tag")?;
+    validate_optional_identifier(slot.role_key.as_deref(), "role_key")?;
+    validate_optional_identifier(slot.alignment.as_deref(), "alignment")
+}
+
+fn validate_host_thread_post(post: &HostConsoleThreadPostDelta) -> Result<(), LiveWireError> {
+    require_positive_safe_integer(post.stream_seq, "stream_seq")?;
+    validate_thread_author(&post.author)?;
+    for quotation in &post.quotations {
+        validate_post_ref(&quotation.target)?;
+    }
+    Ok(())
+}
+
+fn validate_scheduler(scheduler: Option<&DayEventSchedulerDelta>) -> Result<(), LiveWireError> {
+    let Some(scheduler) = scheduler else {
+        return Ok(());
+    };
+    require_optional_nonnegative_safe_integer(scheduler.next_due_at, "next_due_at")?;
+    require_nonnegative_safe_integer(scheduler.wake_seq, "wake_seq")?;
+    require_nonnegative_safe_integer(scheduler.last_observed_wake_seq, "last_observed_wake_seq")?;
+    require_optional_nonnegative_safe_integer(scheduler.lease_until, "lease_until")?;
+    require_optional_nonnegative_safe_integer(scheduler.retry_not_before, "retry_not_before")?;
+    require_optional_nonnegative_safe_integer(scheduler.last_attempt_at, "last_attempt_at")?;
+    require_optional_nonnegative_safe_integer(scheduler.last_success_at, "last_success_at")?;
+    require_optional_nonnegative_safe_integer(scheduler.last_failure_at, "last_failure_at")?;
+    require_nonnegative_safe_integer(
+        i64::from(scheduler.consecutive_failures),
+        "consecutive_failures",
+    )?;
+    require_nonnegative_safe_integer(scheduler.total_attempts, "total_attempts")?;
+    require_nonnegative_safe_integer(scheduler.total_successes, "total_successes")
+}
+
+fn validate_optional_identifier(
+    value: Option<&str>,
+    field: &'static str,
+) -> Result<(), LiveWireError> {
+    value.map_or(Ok(()), |value| require_nonempty_identifier(value, field))
+}
+
+fn validate_identifiers(values: &[String], field: &'static str) -> Result<(), LiveWireError> {
+    values
+        .iter()
+        .try_for_each(|value| require_nonempty_identifier(value.as_str(), field))
+}
+
+fn validate_identifier_map(
+    values: &BTreeMap<String, String>,
+    field: &'static str,
+) -> Result<(), LiveWireError> {
+    for (key, value) in values {
+        require_nonempty_identifier(key.as_str(), field)?;
+        require_nonempty_identifier(value.as_str(), field)?;
+    }
+    Ok(())
+}
+
+fn validate_nonnegative_number_map(
+    values: &BTreeMap<String, f64>,
+    field: &'static str,
+) -> Result<(), LiveWireError> {
+    for (key, value) in values {
+        require_nonempty_identifier(key.as_str(), field)?;
+        if !value.is_finite() || *value < 0.0 {
+            return Err(LiveWireError::InvalidLiveNumber(field));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -974,11 +1989,13 @@ pub struct ThreadPostsDelta {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct ThreadPostRemovedDelta {
     pub game: Uuid,
+    pub channel: String,
     pub source_seq: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PostCitationsChangedDelta {
+    pub channel: String,
     pub quoted: PostRef,
     pub citation_count: i64,
 }
@@ -1229,7 +2246,7 @@ pub struct HostDayEventDelta {
     pub open_observed_at: Option<i64>,
     pub lock_due_at: Option<i64>,
     pub lock_observed_at: Option<i64>,
-    pub auto_seed: Option<u64>,
+    pub auto_seed: Option<game_platform::DayEventAuditSeed>,
     pub resolution_evidence: Option<game_platform::DayEventResolutionEvidence>,
     pub winner_slots: Vec<String>,
     pub reward_keys_applied: Vec<String>,
@@ -1573,6 +2590,8 @@ pub struct ThreadPost {
     pub media: Vec<ThreadPostMedia>,
     #[serde(default)]
     pub quotations: Vec<Quotation>,
+    /// Seats this post addressed, decided at write time. Renderers walk this
+    /// list; they never scan the body for `@`.
     #[serde(default)]
     pub mentions: Vec<ThreadPostMention>,
     #[serde(default)]
@@ -1586,14 +2605,76 @@ pub struct ThreadPost {
 /// One decided game mention over a byte span of the post it annotates. It names
 /// the seat and nothing else: the reader's own roster supplies the label, so no
 /// persona, profile, or principal crosses this boundary.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+///
+/// The fields are private and the span is checked on construction and on
+/// deserialization, so a mention that could not annotate any body — an unnamed
+/// seat, a negative offset, an empty span — is not representable on this wire.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct ThreadPostMention {
-    pub slot_id: String,
-    pub offset: i64,
-    pub len: i64,
+    slot_id: String,
+    offset: i64,
+    len: i64,
+}
+
+impl ThreadPostMention {
+    pub fn new(slot_id: impl Into<String>, offset: i64, len: i64) -> Result<Self, LiveWireError> {
+        let mention = Self {
+            slot_id: slot_id.into(),
+            offset,
+            len,
+        };
+        mention.validate()?;
+        Ok(mention)
+    }
+
+    pub fn validate(&self) -> Result<(), LiveWireError> {
+        validate_mention_span(self.slot_id.as_str(), self.offset, self.len)
+    }
+
+    pub fn slot_id(&self) -> &str {
+        self.slot_id.as_str()
+    }
+
+    /// Byte offset of the annotated span, not a container index. Named for the
+    /// span it describes so it does not read as a collection accessor.
+    pub fn span_offset(&self) -> i64 {
+        self.offset
+    }
+
+    pub fn span_len(&self) -> i64 {
+        self.len
+    }
+
+    pub fn into_parts(self) -> (String, i64, i64) {
+        (self.slot_id, self.offset, self.len)
+    }
+}
+
+impl<'de> Deserialize<'de> for ThreadPostMention {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct RawThreadPostMention {
+            slot_id: String,
+            offset: i64,
+            len: i64,
+        }
+
+        let raw = RawThreadPostMention::deserialize(deserializer)?;
+        Self::new(raw.slot_id, raw.offset, raw.len).map_err(serde::de::Error::custom)
+    }
 }
 
 impl From<content_reference::SlotMention> for ThreadPostMention {
+    /// A decided `SlotMention` already names a seat drawn from the posting
+    /// channel's audience over a span checked against the body, so this
+    /// conversion carries the guarantee rather than re-deriving it. Anything
+    /// arriving from outside the process goes through `Deserialize`, and
+    /// `validate_thread_post` re-checks the value before it reaches the live
+    /// boundary.
     fn from(value: content_reference::SlotMention) -> Self {
         ThreadPostMention {
             slot_id: value.slot_id,
@@ -1613,22 +2694,82 @@ pub struct SubmitPostMedia {
 /// A slot address the game composer claimed, over a byte span of the body it
 /// is submitting. The client sends `slot_id` because a game thread addresses a
 /// seat; there is deliberately no shape here that could carry a profile.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(deny_unknown_fields)]
+///
+/// The span is checked on the way in, so a claim that cannot annotate any body
+/// is refused at the wire boundary rather than reaching the write model as a
+/// coerced value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct SubmitPostMention {
-    pub slot_id: String,
-    pub offset: i64,
-    pub len: i64,
+    slot_id: String,
+    offset: i64,
+    len: i64,
+}
+
+impl SubmitPostMention {
+    pub fn new(slot_id: impl Into<String>, offset: i64, len: i64) -> Result<Self, LiveWireError> {
+        let mention = Self {
+            slot_id: slot_id.into(),
+            offset,
+            len,
+        };
+        mention.validate()?;
+        Ok(mention)
+    }
+
+    pub fn validate(&self) -> Result<(), LiveWireError> {
+        validate_mention_span(self.slot_id.as_str(), self.offset, self.len)
+    }
+
+    pub fn slot_id(&self) -> &str {
+        self.slot_id.as_str()
+    }
+
+    /// Byte offset of the claimed span, not a container index.
+    pub fn span_offset(&self) -> i64 {
+        self.offset
+    }
+
+    pub fn span_len(&self) -> i64 {
+        self.len
+    }
+}
+
+impl<'de> Deserialize<'de> for SubmitPostMention {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct RawSubmitPostMention {
+            slot_id: String,
+            offset: i64,
+            len: i64,
+        }
+
+        let raw = RawSubmitPostMention::deserialize(deserializer)?;
+        Self::new(raw.slot_id, raw.offset, raw.len).map_err(serde::de::Error::custom)
+    }
 }
 
 impl From<SubmitPostMention> for content_reference::SlotMentionCandidate {
     fn from(value: SubmitPostMention) -> Self {
         content_reference::SlotMentionCandidate {
             slot_id: value.slot_id,
-            offset: value.offset.max(0) as usize,
-            len: value.len.max(0) as usize,
+            offset: value.offset as usize,
+            len: value.len as usize,
         }
     }
+}
+
+/// A mention span names a seat and covers at least the `@` that opens it. Both
+/// wire mention shapes answer to this one rule so a claim and the decided fact
+/// it becomes cannot disagree about what a representable span is.
+fn validate_mention_span(slot_id: &str, offset: i64, len: i64) -> Result<(), LiveWireError> {
+    require_nonempty_identifier(slot_id, "slot_id")?;
+    require_nonnegative_safe_integer(offset, "offset")?;
+    require_positive_safe_integer(len, "len")?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2622,6 +3763,31 @@ pub struct PlayerInvestigationResultsDelta {
     pub results: Vec<PlayerInvestigationResult>,
 }
 
+/// One game mention delivered to a seat (RFC 0007 §7).
+///
+/// The row names the seat and the room it was addressed in, and nothing about
+/// who is sitting there: no principal, persona, or occupancy. The reader's own
+/// capabilities decide which seats this list can be assembled for, so
+/// replacement transfers a pending mention with the seat and needs no event of
+/// its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SlotMentionNotification {
+    pub game: Uuid,
+    pub audience_slot: String,
+    pub channel_id: String,
+    pub source_seq: i64,
+    /// Setup discussion is deliberately outside a phase, so a mention made
+    /// there names no phase rather than being forced into one.
+    pub phase_id: Option<PhaseId>,
+    pub occurred_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct SlotMentionsDelta {
+    pub game: Uuid,
+    pub mentions: Vec<SlotMentionNotification>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct HostPhaseControl {
     pub game: Uuid,
@@ -2907,6 +4073,19 @@ impl From<projections::PlayerNotificationRow> for PlayerNotification {
     }
 }
 
+impl From<projections::SlotMentionNotificationRow> for SlotMentionNotification {
+    fn from(row: projections::SlotMentionNotificationRow) -> Self {
+        SlotMentionNotification {
+            game: row.game_id,
+            audience_slot: row.audience_slot,
+            channel_id: row.channel_id,
+            source_seq: row.source_seq,
+            phase_id: row.phase_id,
+            occurred_at: row.occurred_at,
+        }
+    }
+}
+
 impl TryFrom<projections::PlayerInvestigationResultRow> for PlayerInvestigationResult {
     type Error = ProjectionAdapterError;
 
@@ -2923,31 +4102,94 @@ impl TryFrom<projections::PlayerInvestigationResultRow> for PlayerInvestigationR
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "body")]
 pub enum CapabilityGrant {
     GlobalAdmin,
     GlobalMod,
     HostOf { game: Uuid },
     CohostOf { game: Uuid },
-    SlotOccupant { slot: String },
-    ChannelMember { channel: String },
+    SlotOccupant { game: Uuid, slot: String },
+    ChannelMember { game: Uuid, channel: String },
     DeadViewer { game: Uuid },
     SpectatorOf { game: Uuid },
+}
+
+impl CapabilityGrant {
+    pub fn for_game(capability: &caps::Capability, game: Uuid) -> Result<Self, LiveWireError> {
+        let grant = match capability {
+            caps::Capability::GlobalAdmin => Self::GlobalAdmin,
+            caps::Capability::GlobalMod => Self::GlobalMod,
+            caps::Capability::HostOf(actual) => {
+                require_matching_game(game, *actual)?;
+                Self::HostOf { game }
+            }
+            caps::Capability::CohostOf(actual) => {
+                require_matching_game(game, *actual)?;
+                Self::CohostOf { game }
+            }
+            caps::Capability::SlotOccupant(slot) => Self::SlotOccupant {
+                game,
+                slot: slot.clone(),
+            },
+            caps::Capability::ChannelMember(channel) => Self::ChannelMember {
+                game,
+                channel: channel.clone(),
+            },
+            caps::Capability::DeadViewer(actual) => {
+                require_matching_game(game, *actual)?;
+                Self::DeadViewer { game }
+            }
+            caps::Capability::SpectatorOf(actual) => {
+                require_matching_game(game, *actual)?;
+                Self::SpectatorOf { game }
+            }
+        };
+        let mut checked = vec![grant];
+        canonicalize_capabilities(&mut checked)?;
+        Ok(checked.pop().expect("one checked capability grant"))
+    }
+}
+
+fn canonicalize_capabilities(capabilities: &mut Vec<CapabilityGrant>) -> Result<(), LiveWireError> {
+    for capability in capabilities.iter() {
+        match capability {
+            CapabilityGrant::GlobalAdmin | CapabilityGrant::GlobalMod => {}
+            CapabilityGrant::HostOf { game }
+            | CapabilityGrant::CohostOf { game }
+            | CapabilityGrant::SlotOccupant { game, .. }
+            | CapabilityGrant::ChannelMember { game, .. }
+            | CapabilityGrant::DeadViewer { game }
+            | CapabilityGrant::SpectatorOf { game } => require_non_nil_game(*game)?,
+        }
+        match capability {
+            CapabilityGrant::SlotOccupant { slot, .. } => {
+                require_nonempty_identifier(slot.as_str(), "capability.slot")?;
+            }
+            CapabilityGrant::ChannelMember { channel, .. } => {
+                require_nonempty_identifier(channel.as_str(), "capability.channel")?;
+            }
+            _ => {}
+        }
+    }
+    capabilities.sort();
+    capabilities.dedup();
+    Ok(())
 }
 
 pub mod typescript {
     use domain::phase::PhaseId;
     use game_platform::{
-        ChannelId, ConcreteEffect, ContentRef, DayEvent, DayEventDecision, DayEventEvent,
-        DayEventId, DayEventResolutionMode, DayEventSchedule, DayEventState, DayEventTemplate,
-        DayProgram, DurationSeconds, EffectOperationTemplate, EffectOrigin, EffectPlan,
-        EffectVisibility, EventChannelMembership, EventChannelPolicy, GrantKind, GrantSpec,
-        NarrativeLifecycle, NarrativeTemplate, NarrativeTemplates, OptionId, ParticipantFilter,
-        ParticipationLimits, ParticipationMode, ParticipationPayload, ParticipationSpec,
-        PhaseScope, PrincipalId, ProgramContentHash, ProgramId, ProgramTrigger, RecipientBindings,
-        RecipientSelector, RewardAssignment, RewardBinding, RewardEffectTemplate, RewardKey,
-        SlotId, SlotLifecycleEffect, Tag, TemplateKey, UnixSeconds,
+        ChannelId, ConcreteEffect, ContentRef, DayEvent, DayEventAuditSeed, DayEventDecision,
+        DayEventEvent, DayEventId, DayEventResolutionEvidence, DayEventResolutionMode,
+        DayEventSchedule, DayEventState, DayEventTemplate, DayProgram, DurationSeconds,
+        EffectOperationTemplate, EffectOrigin, EffectPlan, EffectVisibility,
+        EventChannelMembership, EventChannelPolicy, GrantKind, GrantSpec, NarrativeLifecycle,
+        NarrativeTemplate, NarrativeTemplates, OptionId, ParticipantFilter, ParticipationLimits,
+        ParticipationMode, ParticipationPayload, ParticipationSpec, PhaseScope, PrincipalId,
+        ProgramContentHash, ProgramId, ProgramTrigger, RecipientBindings, RecipientSelector,
+        RewardAssignment, RewardBinding, RewardEffectTemplate, RewardKey, SlotId,
+        SlotLifecycleEffect, Tag, TemplateKey, UnixSeconds,
     };
     use ts_rs::{Config, TS};
 
@@ -2966,20 +4208,22 @@ pub mod typescript {
         HostPromptDelta, HostPromptMetadata, HostPromptPublicResolution,
         HostPromptRecordedDecision, HostPromptsDelta, HostTaskAllowedCommand, HostTaskCommandKind,
         HostTaskDelta, HostTaskKind, HostTaskState, HostTaskUrgency, InvestigationResultBody,
-        InvestigationResultFields, ItaSessionControlKind, JsonAtom, MemberMutePage,
-        MemberMuteState, MentionSuggestionPage, ModerationCase, ModerationCaseDetail,
-        ModerationCasePage, ModerationHistory, ModerationReport, ModerationReportReceipt,
-        PlayerInvestigationResult, PlayerNotification, PostCitation, PostCitationPage,
-        PostCitationsChangedDelta, PostEmbed, PostKind, PostRef, ProfileEditor, ProjectionDelta,
-        PublicGameThreadPage, PublicInboxItem, PublicInboxPage, PublicPostCitation,
-        PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment, PublicSearchFilterValue,
-        PublicSearchPage, PublicSearchResult, PublicSearchResultKind, Quotation, RejectCode,
-        RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        InvestigationResultFields, ItaSessionControlKind, JsonAtom, LiveAudience,
+        LiveProjectionDelta, LiveResyncRequired, LiveScope, MemberMutePage, MemberMuteState,
+        MentionSuggestionPage, ModerationCase, ModerationCaseDetail, ModerationCasePage,
+        ModerationHistory, ModerationReport, ModerationReportReceipt, PlayerInvestigationResult,
+        PlayerInvestigationResultsDelta, PlayerNotification, PlayerNotificationsDelta,
+        PostCitation, PostCitationPage, PostCitationsChangedDelta, PostEmbed, PostKind, PostRef,
+        ProfileEditor, ProjectionDelta, PublicGameThreadPage, PublicInboxItem, PublicInboxPage,
+        PublicPostCitation, PublicPostCitationPage, PublicProfile, PublicSearchExcerptSegment,
+        PublicSearchFilterValue, PublicSearchPage, PublicSearchResult, PublicSearchResultKind,
+        Quotation, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
         ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
         ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
-        ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, SubmitPostEmbed,
-        SubmitPostMedia, SubmitPostMention, SubscriptionTargetState, ThreadPage, ThreadPost,
-        ThreadPostMedia, ThreadPostMediaVariant, ThreadPostMention, ThreadPostsDelta,
+        ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle,
+        SlotMentionNotification, SlotMentionsDelta, SubmitPostEmbed, SubmitPostMedia,
+        SubmitPostMention, SubscriptionTargetState, ThreadPage, ThreadPost, ThreadPostMedia,
+        ThreadPostMediaVariant, ThreadPostMention, ThreadPostRemovedDelta, ThreadPostsDelta,
         VoteCountClearedDelta, VoteCountDelta, VoteTarget,
     };
 
@@ -3034,6 +4278,8 @@ pub mod typescript {
         push::<DayProgram>(&mut out, &config);
         push::<RewardAssignment>(&mut out, &config);
         push::<DayEventDecision>(&mut out, &config);
+        push::<DayEventAuditSeed>(&mut out, &config);
+        push::<DayEventResolutionEvidence>(&mut out, &config);
         push::<DayEventEvent>(&mut out, &config);
         push::<VoteTarget>(&mut out, &config);
         push::<HostPromptDecision>(&mut out, &config);
@@ -3068,6 +4314,7 @@ pub mod typescript {
         push::<VoteCountClearedDelta>(&mut out, &config);
         push::<GameThreadAuthor>(&mut out, &config);
         push::<ThreadPostsDelta>(&mut out, &config);
+        push::<ThreadPostRemovedDelta>(&mut out, &config);
         push::<PostCitationsChangedDelta>(&mut out, &config);
         push::<DayVoteOutcomeDelta>(&mut out, &config);
         push::<HostConsoleAuthorityKind>(&mut out, &config);
@@ -3135,6 +4382,10 @@ pub mod typescript {
         push::<InvestigationResultFields>(&mut out, &config);
         push::<InvestigationResultBody>(&mut out, &config);
         push::<PlayerInvestigationResult>(&mut out, &config);
+        push::<PlayerNotificationsDelta>(&mut out, &config);
+        push::<PlayerInvestigationResultsDelta>(&mut out, &config);
+        push::<SlotMentionNotification>(&mut out, &config);
+        push::<SlotMentionsDelta>(&mut out, &config);
         push::<JsonAtom>(&mut out, &config);
         push::<HostPhaseControl>(&mut out, &config);
         push::<ResolutionTraceDecisionRow>(&mut out, &config);
@@ -3147,6 +4398,10 @@ pub mod typescript {
         push::<ResolutionTraceInspectionReport>(&mut out, &config);
         push::<ProjectionDelta>(&mut out, &config);
         push::<CapabilityGrant>(&mut out, &config);
+        push::<LiveScope>(&mut out, &config);
+        push::<LiveAudience>(&mut out, &config);
+        push::<LiveProjectionDelta>(&mut out, &config);
+        push::<LiveResyncRequired>(&mut out, &config);
         push::<Hello>(&mut out, &config);
         push::<ServerMsg>(&mut out, &config);
         push::<ServerEnvelope>(&mut out, &config);
@@ -3166,25 +4421,6 @@ pub mod typescript {
             out.push_str(line.trim_end());
         }
         out.push_str("\n\n");
-    }
-}
-
-impl From<&caps::Capability> for CapabilityGrant {
-    fn from(cap: &caps::Capability) -> Self {
-        match cap {
-            caps::Capability::GlobalAdmin => CapabilityGrant::GlobalAdmin,
-            caps::Capability::GlobalMod => CapabilityGrant::GlobalMod,
-            caps::Capability::HostOf(game) => CapabilityGrant::HostOf { game: *game },
-            caps::Capability::CohostOf(game) => CapabilityGrant::CohostOf { game: *game },
-            caps::Capability::SlotOccupant(slot) => {
-                CapabilityGrant::SlotOccupant { slot: slot.clone() }
-            }
-            caps::Capability::ChannelMember(channel) => CapabilityGrant::ChannelMember {
-                channel: channel.clone(),
-            },
-            caps::Capability::DeadViewer(game) => CapabilityGrant::DeadViewer { game: *game },
-            caps::Capability::SpectatorOf(game) => CapabilityGrant::SpectatorOf { game: *game },
-        }
     }
 }
 

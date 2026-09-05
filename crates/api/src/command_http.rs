@@ -922,15 +922,25 @@ fn classify_command(command: &wire::Command) -> CommandClassification {
                 ..DirtySurfaces::default()
             },
         },
-        Command::PublishSpectatorPost { game, .. } | Command::SubmitPost { game, .. } => {
-            CommandClassification {
-                game: *game,
-                dirty: DirtySurfaces {
-                    thread: true,
-                    ..DirtySurfaces::default()
-                },
-            }
-        }
+        Command::PublishSpectatorPost { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                thread: true,
+                ..DirtySurfaces::default()
+            },
+        },
+        // A post can address a seat (RFC 0007 §7), and that delivery lands in
+        // the seat's own rail rather than in the thread. Marking only `thread`
+        // would leave the addressed player waiting for a cold load to learn
+        // they were named.
+        Command::SubmitPost { game, .. } => CommandClassification {
+            game: *game,
+            dirty: DirtySurfaces {
+                thread: true,
+                player_private: true,
+                ..DirtySurfaces::default()
+            },
+        },
         Command::SubmitVote { game, .. } | Command::WithdrawVote { game, .. } => {
             CommandClassification {
                 game: *game,
@@ -1104,6 +1114,7 @@ mod tests {
             post.dirty,
             DirtySurfaces {
                 thread: true,
+                player_private: true,
                 ..DirtySurfaces::default()
             }
         );

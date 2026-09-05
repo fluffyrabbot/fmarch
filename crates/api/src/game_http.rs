@@ -33,7 +33,7 @@ use wire::{
     HostTaskAllowedCommand, HostTaskCommandKind, HostTaskDelta, HostTaskKind, HostTaskState,
     HostTaskUrgency, PlayerInvestigationResult, PlayerNotification, PostCitationPage,
     PostCitationsChangedDelta, PostKind, PostRef, ProjectionDelta, PublicGameThreadPage, Quotation,
-    RejectCode, ThreadPage, ThreadPost, ThreadPostsDelta,
+    RejectCode, SlotMentionNotification, ThreadPage, ThreadPost, ThreadPostsDelta,
 };
 
 #[derive(Clone)]
@@ -77,6 +77,10 @@ pub(super) fn routes(state: &ApiState) -> Router<ApiState> {
             get(channel_post_citations),
         )
         .route("/games/{game}/notifications", get(player_notifications))
+        .route(
+            "/games/{game}/slot-mentions",
+            get(slot_mention_notifications),
+        )
         .route(
             "/games/{game}/investigation-results",
             get(player_investigation_results),
@@ -627,6 +631,7 @@ pub(super) async fn current_post_citations_deltas(
         .into_iter()
         .map(|(source_seq, citation_count)| {
             ProjectionDelta::PostCitationsChanged(PostCitationsChangedDelta {
+                channel: channel.to_string(),
                 quoted: PostRef {
                     kind: PostKind::GamePost,
                     scope_id: game,
@@ -711,6 +716,17 @@ async fn player_notifications(
     ))
 }
 
+async fn slot_mention_notifications(
+    State(state): State<GameHttpState>,
+    Path(game): Path<Uuid>,
+    authorization: GameAuthorization,
+) -> Result<Json<Vec<SlotMentionNotification>>, ApiError> {
+    Ok(Json(
+        slot_mention_notifications_for_principal(&state.pool, game, authorization.principal_id())
+            .await?,
+    ))
+}
+
 async fn player_investigation_results(
     State(state): State<GameHttpState>,
     Path(game): Path<Uuid>,
@@ -751,6 +767,47 @@ pub(super) async fn player_notifications_for_principal(
     };
 
     Ok(rows.into_iter().map(PlayerNotification::from).collect())
+}
+
+/// The game mentions addressed to the seats this principal currently occupies
+/// (RFC 0007 §7).
+///
+/// Occupancy is resolved here, at read time, from the caller's own capability
+/// set — the stored row names only a seat. That is the whole point of the
+/// slot-addressed family: a mention of Slot 7 on D2 stays a fact about Slot 7,
+/// and replacement hands the pending mention to whoever holds the seat when
+/// this read runs, without any event or rewrite.
+///
+/// Deliberately seat-scoped and nothing more. A cohost reads the same rooms
+/// through the thread and host surfaces already; widening this read to the
+/// whole game would publish who was addressed in a private room to a surface
+/// that has no seat behind it.
+pub(super) async fn slot_mention_notifications_for_principal(
+    pool: &PgPool,
+    game: Uuid,
+    principal_id: PrincipalId,
+) -> Result<Vec<SlotMentionNotification>, ApiError> {
+    let caps = caps::resolve(pool, &Principal::authenticated(principal_id), game).await?;
+    let mut rows = Vec::new();
+    let mut has_readable_slot = false;
+    for cap in caps.iter() {
+        let Capability::SlotOccupant(slot) = cap else {
+            continue;
+        };
+        has_readable_slot = true;
+        rows.extend(projections::slot_mention_notifications_for_slot(pool, game, slot).await?);
+    }
+    if !has_readable_slot {
+        return Err(ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: "principal cannot read slot mentions for this game".to_string(),
+        });
+    }
+    Ok(rows
+        .into_iter()
+        .map(SlotMentionNotification::from)
+        .collect())
 }
 
 pub(super) async fn player_investigation_results_for_principal(
@@ -1435,6 +1492,17 @@ mod tests {
                 "{invalid} must be rejected"
             );
         }
+    }
+
+    #[test]
+    fn day_event_auto_seed_api_adapter_preserves_values_above_js_safe_integer() {
+        let seed =
+            day_event_audit_seed_for_api(Some(9_007_199_254_740_993)).expect("present audit seed");
+        assert_eq!(seed.get(), 9_007_199_254_740_993);
+        assert_eq!(
+            serde_json::to_value(seed).unwrap(),
+            serde_json::json!("9007199254740993")
+        );
     }
 
     #[test]
@@ -2160,7 +2228,7 @@ pub(super) async fn load_host_console_state(
             open_observed_at: event.open_observed_at,
             lock_due_at: event.lock_due_at,
             lock_observed_at: event.lock_observed_at,
-            auto_seed: event.auto_seed,
+            auto_seed: day_event_audit_seed_for_api(event.auto_seed),
             resolution_evidence: event.resolution_evidence.clone(),
             winner_slots: event.winner_slots.clone(),
             reward_keys_applied: event.reward_keys_applied.clone(),
@@ -2192,6 +2260,10 @@ pub(super) async fn load_host_console_state(
         day_events,
         tasks,
     })
+}
+
+fn day_event_audit_seed_for_api(seed: Option<u64>) -> Option<game_platform::DayEventAuditSeed> {
+    seed.map(game_platform::DayEventAuditSeed::new)
 }
 
 /// HostTasks are permission-aware selectors over authoritative projections,
