@@ -1172,6 +1172,16 @@ async fn automatic_day_event_records_lock_seed_and_resolves_atomically_as_system
     let recorded_seed = locked
         .auto_seed
         .expect("seeded policy captures its seed in the lock fact");
+    let lock_fact = eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| event.kind == "DayEventLocked")
+        .expect("automatic lock fact");
+    assert_eq!(
+        lock_fact.payload["auto_seed"],
+        serde_json::json!(recorded_seed.to_string())
+    );
     assert!(matches!(
         handle(
             &pool,
@@ -1209,7 +1219,7 @@ async fn automatic_day_event_records_lock_seed_and_resolves_atomically_as_system
         resolved.resolution_evidence,
         Some(game_platform::DayEventResolutionEvidence::Auto {
             policy: game_platform::AutoResolvePolicy::SeededRandom { winners: 1 },
-            seed: Some(recorded_seed),
+            seed: Some(game_platform::DayEventAuditSeed::new(recorded_seed)),
             participant_slots: vec![game_platform::SlotId::new("slot_1").unwrap()],
         })
     );
@@ -1226,6 +1236,10 @@ async fn automatic_day_event_records_lock_seed_and_resolves_atomically_as_system
         format!("DayEventAutomation({game})")
     );
     assert_eq!(resolution.meta["resolution_source"], "automatic policy");
+    assert_eq!(
+        resolution.payload["evidence"]["seed"],
+        serde_json::json!(recorded_seed.to_string())
+    );
     assert!(slot_effects(&pool, game)
         .await
         .unwrap()
@@ -1297,7 +1311,7 @@ async fn scheduled_auto_resolution_catches_up_in_seeded_durable_steps(pool: PgPo
         Some(game_platform::DayEventResolutionEvidence::Auto {
             seed: Some(evidence_seed),
             ..
-        }) if evidence_seed == seed
+        }) if evidence_seed.get() == seed
     ));
     let caught_up = day_event_scheduler_status(&pool, game, 226)
         .await

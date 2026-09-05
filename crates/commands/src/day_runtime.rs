@@ -421,7 +421,7 @@ pub(crate) async fn lock_day_event(
                     event.definition.resolution,
                     fresh_auto_seed_root(),
                     event_id.as_str(),
-                ),
+                ).map(game_platform::DayEventAuditSeed::new),
             }),
             ActorId::Host,
             0,
@@ -642,7 +642,7 @@ pub(crate) async fn observe_day_event_schedules_in_tx(
                                 row.definition.resolution,
                                 seed_root,
                                 &row.event_id,
-                            ),
+                            ).map(game_platform::DayEventAuditSeed::new),
                         }),
                         ActorId::System,
                         observed_at,
@@ -949,7 +949,7 @@ async fn resolve_auto_day_event_in_tx(
     };
     let evidence = game_platform::DayEventResolutionEvidence::Auto {
         policy,
-        seed: event.auto_seed,
+        seed: event.auto_seed.map(game_platform::DayEventAuditSeed::new),
         participant_slots: participant_slots.clone(),
     };
     let request = DayEventResolutionRequest {

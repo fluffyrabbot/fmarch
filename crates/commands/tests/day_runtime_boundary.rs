@@ -66,7 +66,7 @@ fn day_event_resolution_application_has_one_immutable_request_boundary() {
         "game_platform::day_auto_resolution::select_winners(",
         "event.auto_seed",
         "let evidence = game_platform::DayEventResolutionEvidence::Auto {",
-        "seed: event.auto_seed",
+        "seed: event.auto_seed.map(game_platform::DayEventAuditSeed::new)",
         "let request = DayEventResolutionRequest {",
         "actor: ActorId::System",
         "apply_day_event_resolution_in_tx(tx, request).await",

@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use domain::phase::PhaseId;
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 pub mod day_auto_resolution;
@@ -44,6 +44,8 @@ pub enum ModelError {
     InsufficientAutoParticipants { required: u32, actual: usize },
     #[error("automatic DayEvent resolution requires a recorded seed")]
     MissingAutoSeed,
+    #[error("DayEvent audit seed must be canonical unsigned 64-bit decimal, got `{0}`")]
+    InvalidDayEventAuditSeed(String),
     #[error("automatic DayEvent resolution received duplicate participant `{0}`")]
     DuplicateAutoParticipant(SlotId),
     #[error("reward {0} must define at least one effect")]
@@ -210,6 +212,72 @@ impl UnixSeconds {
 
     pub const fn get(self) -> i64 {
         self.0
+    }
+}
+
+/// One deterministic DayEvent audit seed at a serialized boundary.
+///
+/// JavaScript cannot represent every `u64` exactly. This value therefore has
+/// one wire and event-store representation: canonical unsigned decimal text.
+/// Rust resolution code unwraps it back to `u64` before doing arithmetic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[cfg_attr(feature = "typescript", ts(type = "string"))]
+pub struct DayEventAuditSeed(u64);
+
+impl DayEventAuditSeed {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    pub fn parse(value: &str) -> Result<Self, ModelError> {
+        let parsed = value
+            .parse::<u64>()
+            .map_err(|_| ModelError::InvalidDayEventAuditSeed(value.to_owned()))?;
+        if parsed.to_string() != value {
+            return Err(ModelError::InvalidDayEventAuditSeed(value.to_owned()));
+        }
+        Ok(Self(parsed))
+    }
+}
+
+impl From<u64> for DayEventAuditSeed {
+    fn from(value: u64) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<DayEventAuditSeed> for u64 {
+    fn from(value: DayEventAuditSeed) -> Self {
+        value.get()
+    }
+}
+
+impl fmt::Display for DayEventAuditSeed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl Serialize for DayEventAuditSeed {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for DayEventAuditSeed {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::parse(&String::deserialize(deserializer)?).map_err(D::Error::custom)
     }
 }
 
@@ -1094,7 +1162,7 @@ pub enum DayEventResolutionEvidence {
     },
     Auto {
         policy: AutoResolvePolicy,
-        seed: Option<u64>,
+        seed: Option<DayEventAuditSeed>,
         participant_slots: Vec<SlotId>,
     },
 }
@@ -1115,6 +1183,7 @@ pub enum DayEventEvent {
     Locked {
         event_id: DayEventId,
         locked_at: UnixSeconds,
+        auto_seed: Option<DayEventAuditSeed>,
     },
     Cancelled {
         event_id: DayEventId,
@@ -1357,6 +1426,57 @@ mod tests {
     fn validated_identifiers_reject_blank_deserialization() {
         let error = serde_json::from_str::<SlotId>("\"  \"").unwrap_err();
         assert!(error.to_string().contains("slot id must not be blank"));
+    }
+
+    #[test]
+    fn day_event_audit_seed_is_canonical_decimal_text_in_json_and_cbor() {
+        let seed = DayEventAuditSeed::new(9_007_199_254_740_993);
+        assert_eq!(
+            serde_json::to_value(seed).unwrap(),
+            serde_json::json!("9007199254740993")
+        );
+        assert_eq!(
+            serde_json::from_value::<DayEventAuditSeed>(serde_json::json!("9007199254740993"))
+                .unwrap(),
+            seed
+        );
+        for invalid in [
+            serde_json::json!(9_007_199_254_740_993_u64),
+            serde_json::json!("09007199254740993"),
+            serde_json::json!("18446744073709551616"),
+        ] {
+            assert!(serde_json::from_value::<DayEventAuditSeed>(invalid).is_err());
+        }
+
+        let mut cbor = Vec::new();
+        ciborium::into_writer(&seed, &mut cbor).unwrap();
+        assert_eq!(
+            ciborium::from_reader::<String, _>(cbor.as_slice()).unwrap(),
+            "9007199254740993"
+        );
+        assert_eq!(
+            ciborium::from_reader::<DayEventAuditSeed, _>(cbor.as_slice()).unwrap(),
+            seed
+        );
+
+        let evidence = DayEventResolutionEvidence::Auto {
+            policy: AutoResolvePolicy::SeededRandom { winners: 1 },
+            seed: Some(seed),
+            participant_slots: vec![id("slot-1")],
+        };
+        assert_eq!(
+            serde_json::to_value(&evidence).unwrap()["seed"],
+            serde_json::json!("9007199254740993")
+        );
+        let locked = DayEventEvent::Locked {
+            event_id: id("event-raffle"),
+            locked_at: UnixSeconds::new(1_800_000_000),
+            auto_seed: Some(seed),
+        };
+        assert_eq!(
+            serde_json::to_value(&locked).unwrap()["auto_seed"],
+            serde_json::json!("9007199254740993")
+        );
     }
 
     #[test]

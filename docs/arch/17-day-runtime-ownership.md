@@ -34,7 +34,7 @@ Only `commands::day_runtime` appends these on the write path:
 | `DayEventOpenDue` | Scheduler observation | Inert evidence before open transition |
 | `DayEventOpened` | Host `OpenDayEvent` or scheduler observation | HostOpened vs scheduled open |
 | `DayEventLockDue` | Scheduler observation | Inert evidence before lock transition |
-| `DayEventLocked` | Host `LockDayEvent` or scheduler observation | May carry `auto_seed` for Auto resolution |
+| `DayEventLocked` | Host `LockDayEvent` or scheduler observation | May carry `auto_seed` for Auto resolution; serialized seeds are canonical unsigned-decimal text so REST and CBOR preserve the same `u64` exactly |
 | `DayEventParticipationSubmitted` | Player submit | May grant private event channel membership |
 | `DayEventParticipationWithdrawn` | Player withdraw | May revoke participant channel membership |
 | `DayEventResolved` | Host `ResolveDayEvent` or auto-resolve | Same reward planners as host fiat effects |
